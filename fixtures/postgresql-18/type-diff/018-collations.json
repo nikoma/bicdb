@@ -1,0 +1,22 @@
+{
+  "id": "type_matrix_collations",
+  "description": "PostgreSQL 18 database, column, expression, index, and catalog collation identity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_collations;",
+    "DROP TABLE IF EXISTS type_matrix_invalid_collation;"
+  ],
+  "sql": [
+    "SELECT datcollate = datctype AS locale_categories_agree, datcollate IS NOT NULL AS has_database_collation FROM pg_database WHERE datname = current_database();",
+    "SELECT oid, collname, collprovider, collencoding FROM pg_collation WHERE oid IN (100, 950, 951, 962) ORDER BY oid;",
+    "CREATE TABLE type_matrix_collations (plain TEXT, c_text TEXT COLLATE \"C\", posix_text VARCHAR(8) COLLATE \"POSIX\");",
+    "INSERT INTO type_matrix_collations (plain, c_text, posix_text) VALUES ('z', 'z', 'z'), ('A', 'A', 'A'), ('a', 'a', 'a');",
+    "SELECT column_name, collation_schema, collation_name FROM information_schema.columns WHERE table_name = 'type_matrix_collations' ORDER BY ordinal_position;",
+    "SELECT a.attname, a.attcollation FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid WHERE c.relname = 'type_matrix_collations' AND a.attnum > 0 ORDER BY a.attnum;",
+    "SELECT c_text COLLATE \"C\" FROM type_matrix_collations ORDER BY c_text COLLATE \"C\";",
+    "CREATE INDEX type_matrix_collations_c_idx ON type_matrix_collations ((c_text COLLATE \"C\"));",
+    "SELECT i.indcollation::TEXT FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = 'type_matrix_collations_c_idx';",
+    "SELECT 'value' COLLATE \"missing_collation\";",
+    "CREATE TABLE type_matrix_invalid_collation (value INTEGER COLLATE \"C\");"
+  ],
+  "expectation": "match"
+}

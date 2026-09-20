@@ -1,0 +1,138 @@
+/target/
+/target-pgo-use/
+/target-pgo-train/
+**/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock.bak
+
+# Criterion / benchmarks
+/criterion/
+**/criterion/
+# Coverage / profiling
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+/coverage/
+/lcov.info
+/tarpaulin-report.html
+cobertura.xml
+flamegraph.svg
+perf.data
+perf.data.old
+
+# ---------- bicdb runtime artefacts ----------
+/tmp/
+**/tmp/
+*.db/
+*.seg
+*.wal
+*.snapshot
+*.log
+
+# Performance campaign runtime artifacts. Curated manifests, summaries, and
+# per-trial metadata/results remain eligible for version control.
+/reports/performance/**/campaign.log
+/reports/performance/**/logs/
+/reports/performance/**/trials/**/raw/
+
+  # Local scratch dirs
+/scratch/
+/.cache/
+/data/
+
+  # ---------- Secrets / env ----------
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+.secrets/
+
+  # ---------- OS junk ----------
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+
+*.iml
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+*.swp
+*.swo
+*.swn
+*.sublime-workspace
+*.sublime-project
+.fleet/
+
+# rust-analyzer
+rust-project.json
+
+# ---------- Direnv / asdf / tooling ----------
+.envrc.local
+.direnv/
+.tool-versions.local
+
+# ---------- Node ----------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.ipynb_checkpoints/
+
+  # ---------- Build / packaging ----------
+# Swift Package Manager
+.build/
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+dist/
+out/
+# ---------- Misc ----------
+*.bak
+*.orig
+*.rej
+*.tmp
+
+# Node (web/bicdb-client)
+node_modules/
+
+# ---------- audit / agent scratch ----------
+# Ad-hoc security probes are written into the SQL test directory during audits.
+# They are throwaway reproductions, not regression tests: a confirmed finding
+# graduates into a named `*_authorization.rs` suite instead. Ignored so a
+# `git add -A` before a release cannot publish them. Tracked probes all live in
+# `crates/*/examples/` and are unaffected.
+/crates/*/tests/*_probe.rs
+/.audit/
+/.opencode/
+target-fp*/
+
+# Local database artifacts are not source-distribution fixtures.
+/testdb/
+/testdb-full.bicbackup

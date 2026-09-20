@@ -1,0 +1,22 @@
+{
+  "id": "type_matrix_regclass_dependencies",
+  "description": "regclass defaults retain OID identity across rename and enforce PostgreSQL drop dependencies",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_regclass_reference CASCADE;",
+    "DROP TABLE IF EXISTS type_matrix_regclass_renamed CASCADE;",
+    "DROP TABLE IF EXISTS type_matrix_regclass_target CASCADE;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_regclass_target (id INTEGER PRIMARY KEY);",
+    "CREATE TABLE type_matrix_regclass_reference (id INTEGER PRIMARY KEY, target REGCLASS DEFAULT 'type_matrix_regclass_target'::REGCLASS, targets REGCLASS[] DEFAULT '{type_matrix_regclass_target}'::REGCLASS[]);",
+    "INSERT INTO type_matrix_regclass_reference (id) VALUES (1);",
+    "ALTER TABLE type_matrix_regclass_target RENAME TO type_matrix_regclass_renamed;",
+    "INSERT INTO type_matrix_regclass_reference (id) VALUES (2);",
+    "SELECT target, targets FROM type_matrix_regclass_reference ORDER BY id;",
+    "DROP TABLE type_matrix_regclass_renamed;",
+    "DROP TABLE type_matrix_regclass_renamed CASCADE;",
+    "INSERT INTO type_matrix_regclass_reference (id) VALUES (3);",
+    "SELECT target IS NULL AS scalar_default_removed, targets IS NOT NULL AS array_default_retained, targets[1]::TEXT <> 'type_matrix_regclass_renamed' AS dropped_name_unresolved FROM type_matrix_regclass_reference WHERE id = 3;"
+  ],
+  "expectation": "match"
+}

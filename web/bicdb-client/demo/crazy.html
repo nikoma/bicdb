@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BicDB Chaos Lab</title>
+<style>
+  /* Deliberately dark-only: this is a lab bench. Palette = dataviz reference
+     dark steps; text wears text tokens, marks carry the color. */
+  :root {
+    --surface-0: #111110;
+    --surface-1: #1a1a19;
+    --surface-2: #242422;
+    --border: #34342f;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8a897e;
+    --series-1: #3987e5;   /* ops line + meter fill */
+    --good: #199e70;
+    --warning: #c98500;
+    --critical: #e66767;
+    --mono: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface-0); color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 20px; max-width: 1180px; margin-inline: auto;
+  }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: .3px; }
+  h1 .zap { color: var(--series-1); }
+  #boot { color: var(--text-muted); font-family: var(--mono); font-size: 12px; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 14px 0; }
+  .tile {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .tile .label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
+  .tile .value { font-family: var(--mono); font-size: 26px; font-weight: 650; margin-top: 2px; }
+  .tile .sub { color: var(--text-secondary); font-size: 11px; font-family: var(--mono); }
+  .row { display: grid; gap: 12px; grid-template-columns: 1.2fr .8fr; align-items: stretch; }
+  @media (max-width: 860px) { .row { grid-template-columns: 1fr; } }
+  .panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .panel h2 { margin: 0 0 8px; font-size: 13px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .8px; }
+  button {
+    background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 14px; font: 600 13px system-ui; cursor: pointer;
+  }
+  button:hover { border-color: var(--series-1); }
+  button:disabled { opacity: .45; cursor: wait; }
+  button.primary { background: var(--series-1); border-color: var(--series-1); color: #08131f; }
+  button.danger  { background: transparent; border-color: var(--critical); color: var(--critical); }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  #chaosBtn.on { background: var(--warning); border-color: var(--warning); color: #1f1400; }
+  /* single-series line chart: 2px line, no legend (title names it) */
+  #spark { width: 100%; height: 120px; display: block; }
+  .meter { height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; margin-top: 6px; }
+  .meter > div { height: 100%; width: 0%; background: var(--series-1); border-radius: 5px 0 0 5px; transition: width .4s; }
+  textarea {
+    width: 100%; min-height: 74px; background: var(--surface-0); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px; font: 13px var(--mono); resize: vertical;
+  }
+  #results { overflow-x: auto; margin-top: 8px; }
+  table { border-collapse: collapse; font: 12px var(--mono); width: 100%; }
+  th, td { border: 1px solid var(--border); padding: 4px 9px; text-align: left; white-space: nowrap; }
+  th { color: var(--text-secondary); background: var(--surface-2); position: sticky; top: 0; }
+  #log {
+    font: 11.5px var(--mono); color: var(--text-secondary); background: var(--surface-0);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    height: 190px; overflow-y: auto; white-space: pre-wrap;
+  }
+  #log .ok { color: var(--good); } #log .err { color: var(--critical); } #log .warn { color: var(--warning); }
+  .statusdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); margin-right: 6px; }
+  .statusdot.live { background: var(--good); }
+  .hint { color: var(--text-muted); font-size: 12px; margin-top: 6px; }
+  kbd { font-family: var(--mono); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; font-size: 11px; }
+</style>
+<body>
+<header>
+  <h1><span class="zap">⚡</span> BicDB Chaos Lab</h1>
+  <span id="boot"><span class="statusdot"></span>booting wasm…</span>
+</header>
+<div class="hint">A full SQL database engine (Rust → WebAssembly) running <em>in this tab</em>, persisting to your browser's private
+origin filesystem. Nothing you do here leaves your machine. Reload the page — everything survives.</div>
+
+<div class="grid">
+  <div class="tile"><div class="label">Rows</div><div class="value" id="tRows">–</div><div class="sub" id="tTables">–</div></div>
+  <div class="tile"><div class="label">Ops / sec</div><div class="value" id="tOps">0</div><div class="sub" id="tTotalOps">0 total</div></div>
+  <div class="tile"><div class="label">Last query</div><div class="value" id="tMs">–</div><div class="sub">milliseconds</div></div>
+  <div class="tile"><div class="label">DB on disk</div><div class="value" id="tBytes">–</div><div class="sub" id="tSlots">–</div></div>
+  <div class="tile"><div class="label">Browser quota</div><div class="value" id="tQuota">–</div>
+    <div class="meter"><div id="quotaBar"></div></div></div>
+  <div class="tile"><div class="label">Live sync</div><div class="value" id="tSync">off</div><div class="sub" id="tSyncSub">shared world: scope “lab”</div></div>
+</div>
+
+<div class="row">
+  <div class="panel">
+    <h2>Throughput — SQL ops/sec (live)</h2>
+    <canvas id="spark" width="640" height="120" role="img" aria-label="Live line chart of SQL operations per second"></canvas>
+    <div class="btns" style="margin-top:10px">
+      <button class="primary" id="chaosBtn" disabled>🌀 CHAOS MODE</button>
+      <button id="storm1k" disabled>🌩 +1,000 rows</button>
+      <button id="storm10k" disabled>⛈ +10,000 rows</button>
+      <button id="torture" disabled>🔥 churn torture</button>
+      <button id="compactBtn" disabled>🗜 compact</button>
+      <button id="reloadBtn">♻️ reload (survives!)</button>
+      <button id="syncBtn" disabled>🌐 LIVE SYNC</button>
+      <button class="danger" id="nukeBtn" disabled>☢️ NUKE DB</button>
+    </div>
+    <div class="hint">🌐 LIVE SYNC shares one world across every synced device: open this page in a
+    second browser or on your phone, enable sync on both, and watch each other's chaos arrive.
+    (One tab per browser — a second tab queues on the database lock.)</div>
+  </div>
+  <div class="panel">
+    <h2>Event log</h2>
+    <div id="log"></div>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:12px">
+  <h2>🌍 Global sightings radar — <span style="text-transform:none">click anywhere to run a 1,500&nbsp;km <code>ST_DWithin</code> radius query</span></h2>
+  <canvas id="map" style="width:100%; display:block; border-radius:8px; background:#0d0d0c; cursor: crosshair;" height="420"
+    role="img" aria-label="World map of creature sightings; click to run a spatial radius query"></canvas>
+  <div class="btns" style="margin-top:10px">
+    <button id="geoStorm" disabled>🌍 geo storm (+500 sightings)</button>
+    <button id="migrateBtn" disabled>🛸 migration mode</button>
+    <span class="hint" id="geoMeta">the dots are rows — lon/lat FLOAT columns queried with ST_Point / ST_DWithin (Haversine, in wasm)</span>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:12px">
+  <h2>SQL console — talk to it yourself (<kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs)</h2>
+  <textarea id="sql">SELECT species, COUNT(*) AS herd, AVG(rating) AS avg_rating
+FROM creatures GROUP BY species ORDER BY herd DESC LIMIT 10</textarea>
+  <div class="btns" style="margin-top:8px">
+    <button class="primary" id="runSql" disabled>▶ run</button>
+    <span class="hint" id="sqlMeta"></span>
+  </div>
+  <div id="results"></div>
+</div>
+
+<script type="module">
+  import {
+    BicDbClient,
+    SyncManager,
+    HttpSyncEndpoint,
+  } from "../src/index.js";
+
+  const $ = (id) => document.getElementById(id);
+  const log = (msg, cls = "") => {
+    const el = $("log");
+    const line = document.createElement("div");
+    if (cls) line.className = cls;
+    line.textContent = `${new Date().toTimeString().slice(0, 8)}  ${msg}`;
+    el.prepend(line);
+    while (el.childElementCount > 300) el.lastChild.remove();
+  };
+  const fmtBytes = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : (n / 1024).toFixed(0) + " KB";
+
+  const SPECIES = ["axolotl","kraken","wombat","basilisk","capybara","moth","yeti","heron"];
+  const MOODS = ["feral","sleepy","electric","smug","cryptic","zoomies","majestic"];
+  const rnd = (arr) => arr[(Math.random() * arr.length) | 0];
+  const esc = (s) => s.replaceAll("'", "''");
+
+  let db = null, totalOps = 0, opsThisSecond = 0, chaos = false, busy = false;
+  const opsHistory = new Array(120).fill(0);
+
+  const ACTION_BUTTONS = ["chaosBtn", "storm1k", "storm10k", "torture", "compactBtn", "nukeBtn", "runSql", "geoStorm", "migrateBtn", "syncBtn"];
+  const setEngineReady = (ready) => ACTION_BUTTONS.forEach((id) => { $(id).disabled = !ready; });
+
+  async function open() {
+    setEngineReady(false);
+    const t0 = performance.now();
+    let lastStage = "";
+    // Live boot feedback: lock wait, download %, compile, OPFS, db open.
+    const onProgress = ({ stage, loadedBytes, totalBytes }) => {
+      let text = stage;
+      if (stage === "downloading engine" && loadedBytes !== undefined) {
+        text = totalBytes
+          ? `downloading engine ${((loadedBytes / totalBytes) * 100).toFixed(0)}% (${fmtBytes(loadedBytes)} / ${fmtBytes(totalBytes)})`
+          : `downloading engine (${fmtBytes(loadedBytes)})`;
+      }
+      $("boot").innerHTML = `<span class="statusdot" style="background:var(--warning)"></span>${text}`;
+      if (stage !== lastStage) {
+        lastStage = stage;
+        log(`boot: ${stage}`);
+        if (stage === "waiting for lock") {
+          setTimeout(() => {
+            if (db === null && lastStage === "waiting for lock") {
+              log("still waiting for the database lock — this database is open in ANOTHER TAB; close the other Chaos Lab tab", "warn");
+            }
+          }, 3000);
+        }
+      }
+    };
+    db = await BicDbClient.open({
+      database: "crazylab",
+      wasmUrl: new URL("/wasm/bicdb_wasm.wasm", location.href),
+      onProgress,
+    });
+    await db.query(`CREATE TABLE IF NOT EXISTS creatures
+      (id INT PRIMARY KEY, species TEXT, mood TEXT, rating INT, note TEXT)`).catch(() => {});
+    await db.query(`CREATE TABLE IF NOT EXISTS sightings
+      (id INT PRIMARY KEY, species TEXT, lon FLOAT, lat FLOAT)`).catch(() => {});
+    const count = await q("SELECT COUNT(*) AS c FROM creatures");
+    const recovered = count.rows[0][0];
+    $("boot").innerHTML = `<span class="statusdot live"></span>wasm engine up in ${(performance.now() - t0).toFixed(0)}ms`;
+    log(`engine online — recovered ${recovered} rows from OPFS in ${(performance.now() - t0).toFixed(0)}ms`, "ok");
+    setEngineReady(true);
+    refreshStats();
+    const sightCount = (await q("SELECT COUNT(*) AS c FROM sightings")).rows[0][0];
+    if (sightCount === 0) {
+      geoStorm(400); // first visit: give the radar something to see
+    } else {
+      await refreshMap();
+      log(`radar: ${sightCount} sightings on the map`, "ok");
+    }
+  }
+
+  async function q(sql) {
+    if (db === null) throw new Error("engine is still booting — hang on a moment");
+    const t0 = performance.now();
+    const result = await db.query(sql);
+    const ms = performance.now() - t0;
+    $("tMs").textContent = ms < 10 ? ms.toFixed(1) : ms.toFixed(0);
+    totalOps++; opsThisSecond++;
+    return result;
+  }
+
+  let nextId = null;
+  async function ensureNextId() {
+    if (nextId === null) {
+      const r = await q("SELECT MAX(id) AS m FROM creatures");
+      nextId = (r.rows[0][0] ?? 0) + 1;
+    }
+    return nextId;
+  }
+
+  function randomRowValues(id) {
+    return `(${id}, '${rnd(SPECIES)}', '${rnd(MOODS)}', ${1 + ((Math.random() * 10) | 0)}, '${esc(rnd(MOODS))} ${rnd(SPECIES)} #${id}')`;
+  }
+
+  async function insertBatch(n) {
+    await ensureNextId();
+    const values = [];
+    for (let i = 0; i < n; i++) values.push(randomRowValues(nextId++));
+    await q(`INSERT INTO creatures (id, species, mood, rating, note) VALUES ${values.join(",")}`);
+  }
+
+  async function storm(total, label) {
+    if (busy) return; busy = true;
+    log(`${label}: inserting ${total} rows…`, "warn");
+    const t0 = performance.now();
+    try {
+      for (let done = 0; done < total; done += 250) {
+        await insertBatch(Math.min(250, total - done));
+      }
+      const secs = ((performance.now() - t0) / 1000).toFixed(2);
+      log(`${label}: ${total} rows in ${secs}s (${(total / secs).toFixed(0)} rows/s)`, "ok");
+    } catch (e) { log(`${label} failed: ${e.message}`, "err"); }
+    busy = false; refreshStats(); eagerSync();
+  }
+
+  async function chaosStep() {
+    if (!chaos) return;
+    try {
+      const roll = Math.random();
+      await ensureNextId();
+      if (roll < 0.45) await insertBatch(1 + ((Math.random() * 20) | 0));
+      else if (roll < 0.6) await q(`UPDATE creatures SET mood = '${rnd(MOODS)}', rating = ${1 + ((Math.random() * 10) | 0)} WHERE id = ${1 + ((Math.random() * nextId) | 0)}`);
+      else if (roll < 0.7) await q(`DELETE FROM creatures WHERE id = ${1 + ((Math.random() * nextId) | 0)}`);
+      else if (roll < 0.8) await q(`SELECT species, COUNT(*) AS n FROM creatures WHERE mood = '${rnd(MOODS)}' GROUP BY species`);
+      else if (roll < 0.9) await q(`SELECT * FROM creatures WHERE rating >= ${1 + ((Math.random() * 9) | 0)} ORDER BY id DESC LIMIT 20`);
+      else {
+        await ensureSightId();
+        const [hlon, hlat] = rnd(HUBS);
+        await q(`INSERT INTO sightings (id, species, lon, lat) VALUES (${nextSightId++}, '${rnd(SPECIES)}', ${(hlon + gauss() * 4).toFixed(3)}, ${Math.max(-84, Math.min(84, hlat + gauss() * 3)).toFixed(3)})`);
+      }
+    } catch (e) { log(`chaos op failed: ${e.message}`, "err"); }
+    setTimeout(chaosStep, 0);
+  }
+
+  $("chaosBtn").onclick = () => {
+    chaos = !chaos;
+    $("chaosBtn").classList.toggle("on", chaos);
+    $("chaosBtn").textContent = chaos ? "🛑 STOP CHAOS" : "🌀 CHAOS MODE";
+    log(chaos ? "CHAOS MODE ENGAGED — random inserts/updates/deletes/queries at full tilt" : "chaos stopped", chaos ? "warn" : "ok");
+    if (chaos) chaosStep();
+  };
+  $("storm1k").onclick = () => storm(1000, "storm");
+  $("storm10k").onclick = () => storm(10000, "big storm");
+
+  $("torture").onclick = async () => {
+    if (busy) return; busy = true;
+    try {
+      log("churn torture: 1000 inserts, 900 deletes, then compact…", "warn");
+      await insertBatch(1000);
+      const first = nextId - 1000;
+      for (let i = 0; i < 9; i++) {
+        await q(`DELETE FROM creatures WHERE id >= ${first + i * 100} AND id < ${first + i * 100 + 100}`);
+      }
+      const before = (await db.stats()).pool.poolBytes;
+      const report = await db.compact();
+      const after = (await db.stats()).pool.poolBytes;
+      log(`torture done — compaction ${fmtBytes(before)} → ${fmtBytes(after)} (reclaimed ${fmtBytes(Math.max(0, before - after))})`, "ok");
+      void report;
+    } catch (e) { log(`torture failed: ${e.message}`, "err"); }
+    busy = false; refreshStats();
+  };
+
+  $("compactBtn").onclick = async () => {
+    if (busy) return; busy = true;
+    try {
+      const before = (await db.stats()).pool.poolBytes;
+      await db.compact();
+      const after = (await db.stats()).pool.poolBytes;
+      log(`compacted: ${fmtBytes(before)} → ${fmtBytes(after)}`, "ok");
+    } catch (e) { log(`compact failed: ${e.message}`, "err"); }
+    busy = false; refreshStats();
+  };
+
+  $("reloadBtn").onclick = () => location.reload();
+
+  $("nukeBtn").onclick = async () => {
+    if (!confirm("Wipe the whole database from this browser?")) return;
+    chaos = false; $("chaosBtn").classList.remove("on"); $("chaosBtn").textContent = "🌀 CHAOS MODE";
+    if (syncOn) {
+      sync?.stop();
+      log("sync stopped for the nuke — re-enable it afterwards and the shared world re-bootstraps from the server", "warn");
+    }
+    sync = null; syncOn = false;
+    $("syncBtn").classList.remove("on"); $("syncBtn").textContent = "🌐 LIVE SYNC";
+    $("tSync").textContent = "off";
+    setEngineReady(false);
+    const doomed = db;
+    db = null; // q() refuses cleanly while we tear down
+    await doomed.close();
+    await BicDbClient.destroy("crazylab");
+    log("☢️ database destroyed — rebooting fresh", "err");
+    nextId = null;
+    nextSightId = null;
+    sightPoints = [];
+    migrate = false;
+    $("migrateBtn").textContent = "🛸 migration mode";
+    await open();
+  };
+
+  $("runSql").onclick = runSql;
+  $("sql").addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") runSql();
+  });
+  async function runSql() {
+    const sql = $("sql").value.trim();
+    if (!sql) return;
+    try {
+      const t0 = performance.now();
+      const r = await q(sql);
+      $("sqlMeta").textContent = `${r.rows.length} row(s) · ${(performance.now() - t0).toFixed(1)}ms · ${r.commandTag ?? ""}`;
+      renderTable(r);
+      refreshStats();
+    } catch (e) {
+      $("sqlMeta").textContent = "";
+      $("results").innerHTML = `<div style="color:var(--critical);font-family:var(--mono);font-size:12px;padding:8px 0">✗ ${e.message}</div>`;
+    }
+  }
+  function renderTable(r) {
+    if (r.rows.length === 0) { $("results").innerHTML = `<div class="hint">no rows · ${r.commandTag ?? "ok"}</div>`; return; }
+    const head = r.columns.map((c) => `<th>${c}</th>`).join("");
+    const body = r.rows.slice(0, 500).map((row) =>
+      `<tr>${row.map((v) => `<td>${v === null ? "∅" : String(v)}</td>`).join("")}</tr>`).join("");
+    $("results").innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` +
+      (r.rows.length > 500 ? `<div class="hint">…showing 500 of ${r.rows.length}</div>` : "");
+  }
+
+  // --- 🌐 live sync -----------------------------------------------------------
+  let sync = null, syncOn = false;
+  function buildSync() {
+    return new SyncManager(
+      db,
+      new HttpSyncEndpoint({ url: new URL("/sync", location.href), scope: "lab" }),
+      {
+        intervalMs: 2500,
+        onReport: async (r) => {
+          $("tSync").textContent = "live";
+          $("tSyncSub").textContent = `↑${r.pushedEvents} ↓${r.importedEvents} last round`;
+          if (r.importedEvents > 0) {
+            log(`🌐 sync: received ${r.importedEvents} events from other devices (${r.recordsMerged} rows merged)`, "ok");
+            // Remote rows change MAX(id); re-derive id cursors to avoid collisions.
+            nextId = null;
+            nextSightId = null;
+            refreshMap().catch(() => {});
+            refreshStats();
+          } else if (r.pushedEvents > 0) {
+            log(`🌐 sync: pushed ${r.pushedEvents} events to the shared world`);
+          }
+        },
+        onError: (e) => {
+          $("tSync").textContent = "retry";
+          log(`sync error: ${e.message}`, "err");
+        },
+      },
+    );
+  }
+  $("syncBtn").onclick = () => {
+    syncOn = !syncOn;
+    $("syncBtn").classList.toggle("on", syncOn);
+    $("syncBtn").textContent = syncOn ? "🛑 stop sync" : "🌐 LIVE SYNC";
+    if (syncOn) {
+      sync ??= buildSync();
+      sync.start();
+      log("🌐 LIVE SYNC engaged — this browser now shares world “lab” with every synced device", "warn");
+    } else {
+      sync?.stop();
+      $("tSync").textContent = "off";
+      log("sync stopped (local-only again)", "ok");
+    }
+  };
+  const eagerSync = () => { if (syncOn) sync?.syncOnce().catch(() => {}); };
+
+  // --- 🌍 sightings radar ----------------------------------------------------
+  const HUBS = [
+    [13.4,52.5],[-122.4,37.8],[-74.0,40.7],[-0.13,51.5],[139.7,35.7],[151.2,-33.9],
+    [-46.6,-23.55],[3.4,6.45],[36.8,-1.3],[72.9,19.1],[103.85,1.29],[37.6,55.75],
+    [-99.1,19.4],[-79.4,43.65],[-21.9,64.15],[18.4,-33.9],[-58.4,-34.6],[31.2,30.05],
+    [116.4,39.9],[127.0,37.6],[106.8,-6.2],[174.8,-36.85],[-157.85,21.3],
+    [-149.9,61.2],[-77.0,-12.05],[-3.7,40.4],[18.07,59.33],[-68.3,-54.8],
+  ];
+  const CITY_LABELS = [["SF",-122.4,37.8],["NYC",-74,40.7],["London",-0.13,51.5],
+    ["Lagos",3.4,6.45],["Mumbai",72.9,19.1],["Tokyo",139.7,35.7],["Sydney",151.2,-33.9],
+    ["São Paulo",-46.6,-23.55]];
+  const map = $("map"), mctx = map.getContext("2d");
+  let sightPoints = [];   // [id, lon, lat] snapshot for drawing
+  let nextSightId = null;
+  let pulse = null;       // {lon, lat, started, matched}
+  let migrate = false;
+
+  const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2;
+  async function ensureSightId() {
+    if (nextSightId === null) {
+      const r = await q("SELECT MAX(id) AS m FROM sightings");
+      nextSightId = (r.rows[0][0] ?? 0) + 1;
+    }
+  }
+
+  async function geoStorm(total = 500) {
+    if (busy) return; busy = true;
+    try {
+      await ensureSightId();
+      log(`geo storm: ${total} sightings incoming…`, "warn");
+      for (let done = 0; done < total; done += 250) {
+        const values = [];
+        for (let i = 0; i < Math.min(250, total - done); i++) {
+          const [hlon, hlat] = rnd(HUBS);
+          const lon = Math.max(-179.9, Math.min(179.9, hlon + gauss() * 4));
+          const lat = Math.max(-84, Math.min(84, hlat + gauss() * 3));
+          values.push(`(${nextSightId++}, '${rnd(SPECIES)}', ${lon.toFixed(4)}, ${lat.toFixed(4)})`);
+        }
+        await q(`INSERT INTO sightings (id, species, lon, lat) VALUES ${values.join(",")}`);
+      }
+      log(`geo storm: done`, "ok");
+      await refreshMap();
+    } catch (e) { log(`geo storm failed: ${e.message}`, "err"); }
+    busy = false; refreshStats(); eagerSync();
+  }
+  $("geoStorm").onclick = () => geoStorm(500);
+
+  $("migrateBtn").onclick = () => {
+    migrate = !migrate;
+    $("migrateBtn").textContent = migrate ? "🛑 stop migration" : "🛸 migration mode";
+    log(migrate ? "migration engaged — herds are drifting (bulk UPDATEs on lon/lat)" : "migration stopped", migrate ? "warn" : "ok");
+    if (migrate) migrateStep();
+  };
+  async function migrateStep() {
+    if (!migrate) return;
+    try {
+      await ensureSightId();
+      const a = 1 + ((Math.random() * Math.max(1, nextSightId - 80)) | 0);
+      const dx = (Math.random() - 0.5) * 6, dy = (Math.random() - 0.5) * 4;
+      await q(`UPDATE sightings SET lon = lon + ${dx.toFixed(3)}, lat = lat + ${dy.toFixed(3)} WHERE id >= ${a} AND id < ${a + 80} AND lat + ${dy.toFixed(3)} < 84 AND lat + ${dy.toFixed(3)} > -84`);
+      await refreshMap();
+    } catch (e) { log(`migration op failed: ${e.message}`, "err"); }
+    setTimeout(migrateStep, 350);
+  }
+
+  async function refreshMap() {
+    const r = await q("SELECT id, lon, lat FROM sightings LIMIT 6000");
+    sightPoints = r.rows;
+    drawMap();
+  }
+
+  const project = (lon, lat, w, h) => [((lon + 180) / 360) * w, ((90 - lat) / 180) * h];
+  function drawMap() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = map.clientWidth * dpr, h = map.clientHeight * dpr;
+    if (map.width !== w) { map.width = w; map.height = h; }
+    mctx.clearRect(0, 0, w, h);
+    // graticule (recessive)
+    mctx.strokeStyle = "#22221f"; mctx.lineWidth = 1;
+    for (let lon = -150; lon <= 150; lon += 30) {
+      const [x] = project(lon, 0, w, h);
+      mctx.beginPath(); mctx.moveTo(x, 0); mctx.lineTo(x, h); mctx.stroke();
+    }
+    for (let lat = -60; lat <= 60; lat += 30) {
+      const [, y] = project(0, lat, w, h);
+      mctx.beginPath(); mctx.moveTo(0, y); mctx.lineTo(w, y); mctx.stroke();
+    }
+    // equator slightly brighter
+    mctx.strokeStyle = "#34342f";
+    const [, eq] = project(0, 0, w, h);
+    mctx.beginPath(); mctx.moveTo(0, eq); mctx.lineTo(w, eq); mctx.stroke();
+    // city hubs
+    mctx.fillStyle = "#8a897e"; mctx.font = `${10 * dpr}px ui-monospace, monospace`;
+    for (const [name, lon, lat] of CITY_LABELS) {
+      const [x, y] = project(lon, lat, w, h);
+      mctx.fillRect(x - 1.5 * dpr, y - 1.5 * dpr, 3 * dpr, 3 * dpr);
+      mctx.fillText(name, x + 5 * dpr, y + 3 * dpr);
+    }
+    // sightings — series-1 blue, matched flash in warning yellow
+    const now = performance.now();
+    const active = pulse && now - pulse.started < 1600 ? pulse : null;
+    for (const [, lon, lat] of sightPoints) {
+      const [x, y] = project(lon, lat, w, h);
+      let hot = false;
+      if (active) {
+        hot = haversineKm(lat, lon, active.lat, active.lon) <= 1500;
+      }
+      mctx.fillStyle = hot ? "#c98500" : "#3987e5";
+      mctx.globalAlpha = hot ? 1 : 0.8;
+      mctx.beginPath(); mctx.arc(x, y, (hot ? 2.6 : 1.7) * dpr, 0, Math.PI * 2); mctx.fill();
+    }
+    mctx.globalAlpha = 1;
+    // expanding pulse ring for the active query
+    if (active) {
+      const t = (now - pulse.started) / 1600;
+      const [x, y] = project(pulse.lon, pulse.lat, w, h);
+      const radiusPx = ((1500 / 111) / 360) * w; // ~deg -> px at equator
+      mctx.strokeStyle = "#c98500"; mctx.lineWidth = 2 * dpr;
+      mctx.globalAlpha = 1 - t;
+      mctx.beginPath(); mctx.arc(x, y, radiusPx * t, 0, Math.PI * 2); mctx.stroke();
+      mctx.globalAlpha = 1;
+      requestAnimationFrame(drawMap);
+    }
+  }
+  function haversineKm(lat1, lon1, lat2, lon2) {
+    const rad = Math.PI / 180, dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+    return 6371 * 2 * Math.asin(Math.sqrt(a));
+  }
+
+  map.addEventListener("click", async (event) => {
+    if (db === null) return;
+    const rect = map.getBoundingClientRect();
+    const lon = ((event.clientX - rect.left) / rect.width) * 360 - 180;
+    const lat = 90 - ((event.clientY - rect.top) / rect.height) * 180;
+    pulse = { lon, lat, started: performance.now() };
+    drawMap();
+    try {
+      const t0 = performance.now();
+      const r = await q(
+        `SELECT species, COUNT(*) AS n FROM sightings ` +
+        `WHERE ST_DWithin(ST_Point(lon, lat), ST_Point(${lon.toFixed(3)}, ${lat.toFixed(3)}), 1500000) ` +
+        `GROUP BY species ORDER BY n DESC`,
+      );
+      const ms = (performance.now() - t0).toFixed(1);
+      const total = r.rows.reduce((s, row) => s + row[1], 0);
+      const breakdown = r.rows.slice(0, 4).map((row) => `${row[0]} ${row[1]}`).join(", ");
+      log(`radar sweep @ ${lat.toFixed(1)}°, ${lon.toFixed(1)}° → ${total} creatures within 1,500km in ${ms}ms${breakdown ? ` (${breakdown})` : ""}`, "ok");
+      $("geoMeta").textContent = `last sweep: ${total} creatures in ${ms}ms — ST_DWithin over ${sightPoints.length} rows`;
+    } catch (e) { log(`radar sweep failed: ${e.message}`, "err"); }
+  });
+
+  // --- live tiles + single-series ops/sec line ------------------------------
+  async function refreshStats() {
+    try {
+      const { db: s, pool, quota } = await db.stats();
+      $("tRows").textContent = s.record_count.toLocaleString();
+      $("tTables").textContent = `${s.collection_count} collections`;
+      $("tBytes").textContent = fmtBytes(pool.poolBytes);
+      $("tSlots").textContent = `${pool.usedSlots}/${pool.capacity} OPFS slots`;
+      if (quota?.quotaBytes) {
+        const pct = (quota.usageBytes / quota.quotaBytes) * 100;
+        $("tQuota").textContent = pct < 1 ? pct.toFixed(2) + "%" : pct.toFixed(1) + "%";
+        $("quotaBar").style.width = Math.max(0.5, pct) + "%";
+      }
+    } catch { /* between close/open */ }
+  }
+
+  const canvas = $("spark"), ctx = canvas.getContext("2d");
+  function drawSpark() {
+    const w = canvas.width, h = canvas.height, pad = 4;
+    ctx.clearRect(0, 0, w, h);
+    const max = Math.max(10, ...opsHistory);
+    // recessive gridline at max
+    ctx.strokeStyle = "#34342f"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, pad + 8); ctx.lineTo(w, pad + 8); ctx.stroke();
+    ctx.fillStyle = "#8a897e"; ctx.font = "10px ui-monospace, monospace";
+    ctx.fillText(`${max} op/s`, 4, pad + 6);
+    ctx.strokeStyle = "#3987e5"; ctx.lineWidth = 2; ctx.lineJoin = "round";
+    ctx.beginPath();
+    opsHistory.forEach((v, i) => {
+      const x = (i / (opsHistory.length - 1)) * w;
+      const y = h - pad - (v / max) * (h - pad * 2 - 12);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    // direct label on the latest value
+    const last = opsHistory[opsHistory.length - 1];
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(String(last), w - 8 - ctx.measureText(String(last)).width, 12);
+  }
+
+  setInterval(() => {
+    opsHistory.push(opsThisSecond); opsHistory.shift();
+    $("tOps").textContent = opsThisSecond.toLocaleString();
+    $("tTotalOps").textContent = `${totalOps.toLocaleString()} total`;
+    opsThisSecond = 0;
+    drawSpark();
+  }, 1000);
+  setInterval(refreshStats, 2500);
+  setInterval(() => {
+    if (chaos && db !== null && !document.hidden) refreshMap().catch(() => {});
+  }, 2500);
+
+  try {
+    await open();
+  } catch (e) {
+    $("boot").innerHTML = `<span class="statusdot" style="background:var(--critical)"></span>boot failed: ${e.message}`;
+    log(`boot failed: ${e.message} — this page needs a browser with OPFS sync access handles (Chrome/Edge 102+, Safari 16.4+, Firefox 111+) and a secure context`, "err");
+  }
+</script>
+</body>
+</html>

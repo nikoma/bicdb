@@ -1,0 +1,34 @@
+{
+  "id": "type_matrix_user_defined_ranges",
+  "description": "PostgreSQL 18 user-defined range DDL, automatic multiranges, catalogs, constructors, canonical hooks, arrays, and dependencies",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_user_ranges CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_canonical_span CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_exact_span CASCADE;"
+  ],
+  "sql": [
+    "CREATE TYPE type_matrix_exact_span AS RANGE (SUBTYPE = int4, MULTIRANGE_TYPE_NAME = type_matrix_exact_spans);",
+    "SELECT range_type.typtype, range_type.typcategory, multirange_type.typname, multirange_type.typtype, subtype.typname, opclass.opcname, range_catalog.rngcanonical = 0 AS no_canonical, range_catalog.rngsubdiff = 0 AS no_subdiff FROM pg_range AS range_catalog JOIN pg_type AS range_type ON range_type.oid = range_catalog.rngtypid JOIN pg_type AS multirange_type ON multirange_type.oid = range_catalog.rngmultitypid JOIN pg_type AS subtype ON subtype.oid = range_catalog.rngsubtype JOIN pg_opclass AS opclass ON opclass.oid = range_catalog.rngsubopc WHERE range_type.typname = 'type_matrix_exact_span';",
+    "SELECT proname, pronargs, prosrc FROM pg_proc WHERE proname IN ('type_matrix_exact_span', 'type_matrix_exact_spans') ORDER BY proname, pronargs, prosrc;",
+    "SELECT '[1,3]'::type_matrix_exact_span AS preserved_bounds, type_matrix_exact_span(1, 3, '[]') AS constructed_range, type_matrix_exact_spans() AS empty_multirange, type_matrix_exact_spans(type_matrix_exact_span(1, 3, '[]')) AS constructed_multirange;",
+    "SELECT lower('[1,3]'::type_matrix_exact_span), upper('[1,3]'::type_matrix_exact_span), lower_inc('[1,3]'::type_matrix_exact_span), upper_inc('[1,3]'::type_matrix_exact_span), isempty('empty'::type_matrix_exact_span), range_merge('{[1,2],[5,8]}'::type_matrix_exact_spans);",
+    "SELECT '[1,4]'::type_matrix_exact_span && '[3,6]'::type_matrix_exact_span AS overlaps, '[1,4]'::type_matrix_exact_span @> 3 AS contains_element, 3 <@ '[1,4]'::type_matrix_exact_span AS element_contained, '[1,2]'::type_matrix_exact_span -|- '(2,3]'::type_matrix_exact_span AS adjacent, '[1,3]'::type_matrix_exact_span + '[3,5]'::type_matrix_exact_span AS range_union, '[1,3]'::type_matrix_exact_span * '[3,5]'::type_matrix_exact_span AS range_intersection, '[1,5]'::type_matrix_exact_span - '[1,3)'::type_matrix_exact_span AS range_difference, '{[1,2]}'::type_matrix_exact_spans + '{[5,6]}'::type_matrix_exact_spans AS multirange_union;",
+    "CREATE TABLE type_matrix_user_ranges (id int4 PRIMARY KEY, span type_matrix_exact_span, spans type_matrix_exact_spans, history type_matrix_exact_span[]);",
+    "INSERT INTO type_matrix_user_ranges VALUES (1, '[1,3]', '{[1,2],[2,3]}', '{\"[1,3]\",empty}'), (2, '[10,20)', '{}', '{}');",
+    "CREATE INDEX type_matrix_user_ranges_span_idx ON type_matrix_user_ranges (span);",
+    "SELECT id, span, spans, history, pg_typeof(span), pg_typeof(spans), pg_typeof(history) FROM type_matrix_user_ranges ORDER BY span;",
+    "CREATE TYPE type_matrix_canonical_span;",
+    "CREATE FUNCTION type_matrix_canonical_span_canonical(type_matrix_canonical_span) RETURNS type_matrix_canonical_span AS 'int4range_canonical' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE TYPE type_matrix_canonical_span AS RANGE (SUBTYPE = int4, CANONICAL = type_matrix_canonical_span_canonical);",
+    "SELECT '[1,3]'::type_matrix_canonical_span AS canonicalized, range_catalog.rngcanonical <> 0 AS has_canonical FROM pg_range AS range_catalog JOIN pg_type AS range_type ON range_type.oid = range_catalog.rngtypid WHERE range_type.typname = 'type_matrix_canonical_span';",
+    "BEGIN;",
+    "CREATE TYPE type_matrix_rolled_back_span AS RANGE (SUBTYPE = date);",
+    "ROLLBACK;",
+    "SELECT count(*) AS remaining_types FROM pg_type WHERE typname IN ('type_matrix_rolled_back_span', 'type_matrix_rolled_back_span_multirange');",
+    "DROP TYPE type_matrix_exact_spans;",
+    "DROP TYPE type_matrix_exact_span CASCADE;",
+    "SELECT count(*) AS remaining_types FROM pg_type WHERE typname IN ('type_matrix_exact_span', 'type_matrix_exact_spans');",
+    "DROP TYPE type_matrix_canonical_span CASCADE;"
+  ],
+  "expectation": "match"
+}

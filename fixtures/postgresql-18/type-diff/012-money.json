@@ -1,0 +1,33 @@
+{
+  "id": "type_matrix_money",
+  "description": "PostgreSQL 18 money input, cent rounding, output, arithmetic, casts, comparison, indexes, wire type, and errors",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_money_sum;",
+    "DROP TABLE IF EXISTS type_matrix_money;"
+  ],
+  "sql": [
+    "SELECT '1234.56'::money AS plain, '$1,234.56'::money AS currency, '(123.45)'::money AS parentheses, '-$0.005'::money AS negative_round, '$0.005'::money AS positive_round;",
+    "SELECT 10::money + 2::money AS addition, 10::money - 2::money AS subtraction, 10::money * 2::int4 AS integer_multiply, 2::numeric * 10::money AS numeric_multiply, 10::money / 4::int4 AS scalar_divide, 10::money / 4::money AS money_ratio;",
+    "SELECT 10.129::numeric::money AS numeric_to_money, 10::money::numeric AS money_to_numeric, 10::money::text AS money_to_text;",
+    "CREATE TABLE type_matrix_money (id TEXT PRIMARY KEY, amount MONEY);",
+    "INSERT INTO type_matrix_money VALUES ('small', 2), ('large', 10), ('negative', -1);",
+    "CREATE INDEX type_matrix_money_amount_idx ON type_matrix_money (amount);",
+    "SELECT id, amount, amount = 2::money AS equals_two, amount > 2::money AS above_two FROM type_matrix_money ORDER BY amount;",
+    "SELECT id FROM type_matrix_money WHERE amount = 10::money ORDER BY id;",
+    "SELECT SUM(amount) AS amount_sum, MIN(amount) AS amount_min, MAX(amount) AS amount_max FROM type_matrix_money;",
+    "SELECT AVG(amount) FROM type_matrix_money;",
+    "SELECT 92233720368547758.07::numeric::money + 0.01::money;",
+    "SELECT (-92233720368547758.08)::numeric::money - 0.01::money;",
+    "SELECT 1::money + 1::numeric;",
+    "SELECT 10::money % 3::money;",
+    "SELECT 10::money::int4;",
+    "SELECT +1::money;",
+    "SELECT -(1::money);",
+    "SELECT 1::money / 0::int4;",
+    "SELECT 1::money / 0::money;",
+    "CREATE TABLE type_matrix_money_sum (id TEXT PRIMARY KEY, amount MONEY);",
+    "INSERT INTO type_matrix_money_sum VALUES ('max', 92233720368547758.07), ('cent', 0.01);",
+    "SELECT SUM(amount) FROM type_matrix_money_sum;"
+  ],
+  "expectation": "match"
+}

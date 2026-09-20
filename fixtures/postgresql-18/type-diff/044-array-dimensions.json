@@ -1,0 +1,19 @@
+{
+  "id": "type_matrix_array_dimensions",
+  "description": "PostgreSQL 18 multidimensional array bounds, nulls, empty arrays, rectangular validation, and rank limits",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_array_rank;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_array_rank (ordinary INT4[], matrix INT4[2][3], labels TEXT[4]);",
+    "SELECT a.attname, a.attndims, format_type(a.atttypid, a.atttypmod) FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid WHERE c.relname = 'type_matrix_array_rank' AND a.attnum > 0 ORDER BY a.attnum;",
+    "SELECT '[0:1][5:6]={{1,2},{3,4}}'::int4[] AS matrix, array_dims('[0:1][5:6]={{1,2},{3,4}}'::int4[]) AS dimensions, '{1,NULL,3}'::int4[] AS nulls, '{}'::int4[] AS empty;",
+    "SELECT array_ndims('[0:1][5:6]={{1,2},{3,4}}'::int4[]), array_lower('[0:1][5:6]={{1,2},{3,4}}'::int4[], 1), array_upper('[0:1][5:6]={{1,2},{3,4}}'::int4[], 2), cardinality('[0:1][5:6]={{1,2},{3,4}}'::int4[]);",
+    "SELECT '{{{{{{1}}}}}}'::int4[];",
+    "SELECT '{{1,2},{3}}'::int4[];",
+    "SELECT '{{{{{{{1}}}}}}}'::int4[];",
+    "SELECT '[2:1]={}'::int4[];",
+    "SELECT '[2147483647:2147483647]={1}'::int4[];"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,23 @@
+[package]
+name = "bicdb-provider-grpc"
+version = "1.0.438-beta"
+edition.workspace = true
+license = "Apache-2.0"
+rust-version.workspace = true
+
+[dependencies]
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.438-beta" }
+bicdb-extension = { path = "../bicdb-extension", version = "1.0.438-beta" }
+bytes.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tonic.workspace = true
+url.workspace = true
+
+[build-dependencies]
+protoc-bin-vendored = "3"
+tonic-build = "0.12"
+
+[dev-dependencies]
+prost = "0.13"
+tokio-stream = { workspace = true, features = ["net"] }

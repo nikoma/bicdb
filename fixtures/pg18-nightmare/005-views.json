@@ -1,0 +1,17 @@
+{
+  "id": "nightmare_views",
+  "description": "CREATE VIEW, SELECT from views, DROP VIEW, and catalog visibility",
+  "cleanup_sql": [
+    "DROP VIEW IF EXISTS nm_view_active;",
+    "DROP TABLE IF EXISTS nm_view_users;"
+  ],
+  "sql": [
+    "CREATE TABLE nm_view_users (id TEXT PRIMARY KEY, name TEXT, active BOOLEAN);",
+    "INSERT INTO nm_view_users (id, name, active) VALUES ('u1', 'Ada', true), ('u2', 'Grace', false);",
+    "CREATE VIEW nm_view_active AS SELECT id, name FROM nm_view_users WHERE active = true;",
+    "SELECT id, name FROM nm_view_active ORDER BY id;",
+    "SELECT table_name, table_type FROM information_schema.tables WHERE table_name = 'nm_view_active';",
+    "SELECT column_name FROM information_schema.columns WHERE table_name = 'nm_view_active' ORDER BY ordinal_position;",
+    "DROP VIEW nm_view_active;"
+  ]
+}

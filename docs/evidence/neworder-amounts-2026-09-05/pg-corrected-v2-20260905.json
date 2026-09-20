@@ -1,0 +1,246 @@
+{
+  "label": "pg-corrected-v2-20260905",
+  "scope": "warehouse 1 district 1 post-seed line amount versus the retained HammerDB procedure formula",
+  "lines": 374804,
+  "mismatches": 65,
+  "missing": 418,
+  "missing_item": 394,
+  "null_amount": 418,
+  "large_delta": 65,
+  "examples": [
+    {
+      "order": 4542,
+      "line": 11,
+      "item": 25249,
+      "quantity": 9,
+      "amount": "66.92",
+      "expected": "847.10"
+    },
+    {
+      "order": 4542,
+      "line": 12,
+      "item": 2560,
+      "quantity": 1,
+      "amount": "31.82",
+      "expected": "66.92"
+    },
+    {
+      "order": 4542,
+      "line": 13,
+      "item": 87235,
+      "quantity": 1,
+      "amount": "431.99",
+      "expected": "31.82"
+    },
+    {
+      "order": 11390,
+      "line": 5,
+      "item": 51005,
+      "quantity": 5,
+      "amount": "78.02",
+      "expected": "344.10"
+    },
+    {
+      "order": 11644,
+      "line": 14,
+      "item": 52002,
+      "quantity": 2,
+      "amount": "90.58",
+      "expected": "81.56"
+    },
+    {
+      "order": 19891,
+      "line": 5,
+      "item": 40154,
+      "quantity": 4,
+      "amount": "754.56",
+      "expected": "159.21"
+    },
+    {
+      "order": 19891,
+      "line": 6,
+      "item": 98750,
+      "quantity": 9,
+      "amount": "232.29",
+      "expected": "754.56"
+    },
+    {
+      "order": 19891,
+      "line": 7,
+      "item": 7590,
+      "quantity": 4,
+      "amount": "685.95",
+      "expected": "232.29"
+    },
+    {
+      "order": 20238,
+      "line": 12,
+      "item": 21934,
+      "quantity": 2,
+      "amount": "21.83",
+      "expected": "109.28"
+    },
+    {
+      "order": 20238,
+      "line": 13,
+      "item": 1018,
+      "quantity": 9,
+      "amount": "62.99",
+      "expected": "21.83"
+    }
+  ],
+  "large_examples": [
+    {
+      "order": 4542,
+      "line": 11,
+      "item": 25249,
+      "quantity": 9,
+      "amount": "66.92",
+      "expected": "847.10"
+    },
+    {
+      "order": 4542,
+      "line": 12,
+      "item": 2560,
+      "quantity": 1,
+      "amount": "31.82",
+      "expected": "66.92"
+    },
+    {
+      "order": 4542,
+      "line": 13,
+      "item": 87235,
+      "quantity": 1,
+      "amount": "431.99",
+      "expected": "31.82"
+    },
+    {
+      "order": 11390,
+      "line": 5,
+      "item": 51005,
+      "quantity": 5,
+      "amount": "78.02",
+      "expected": "344.10"
+    },
+    {
+      "order": 11644,
+      "line": 14,
+      "item": 52002,
+      "quantity": 2,
+      "amount": "90.58",
+      "expected": "81.56"
+    },
+    {
+      "order": 19891,
+      "line": 5,
+      "item": 40154,
+      "quantity": 4,
+      "amount": "754.56",
+      "expected": "159.21"
+    },
+    {
+      "order": 19891,
+      "line": 6,
+      "item": 98750,
+      "quantity": 9,
+      "amount": "232.29",
+      "expected": "754.56"
+    },
+    {
+      "order": 19891,
+      "line": 7,
+      "item": 7590,
+      "quantity": 4,
+      "amount": "685.95",
+      "expected": "232.29"
+    },
+    {
+      "order": 20238,
+      "line": 12,
+      "item": 21934,
+      "quantity": 2,
+      "amount": "21.83",
+      "expected": "109.28"
+    },
+    {
+      "order": 20238,
+      "line": 13,
+      "item": 1018,
+      "quantity": 9,
+      "amount": "62.99",
+      "expected": "21.83"
+    }
+  ],
+  "missing_examples": [
+    {
+      "order": 35588,
+      "line": 13,
+      "item": 44790,
+      "quantity": 6,
+      "amount": null
+    },
+    {
+      "order": 24335,
+      "line": 10,
+      "item": 100001,
+      "quantity": 6,
+      "amount": null
+    },
+    {
+      "order": 36055,
+      "line": 5,
+      "item": 100001,
+      "quantity": 2,
+      "amount": null
+    },
+    {
+      "order": 24621,
+      "line": 13,
+      "item": 100001,
+      "quantity": 4,
+      "amount": null
+    },
+    {
+      "order": 24651,
+      "line": 6,
+      "item": 100001,
+      "quantity": 1,
+      "amount": null
+    },
+    {
+      "order": 3473,
+      "line": 8,
+      "item": 100001,
+      "quantity": 8,
+      "amount": null
+    },
+    {
+      "order": 4082,
+      "line": 10,
+      "item": 100001,
+      "quantity": 2,
+      "amount": null
+    },
+    {
+      "order": 4106,
+      "line": 8,
+      "item": 100001,
+      "quantity": 1,
+      "amount": null
+    },
+    {
+      "order": 3006,
+      "line": 11,
+      "item": 100001,
+      "quantity": 10,
+      "amount": null
+    },
+    {
+      "order": 4321,
+      "line": 5,
+      "item": 100001,
+      "quantity": 8,
+      "amount": null
+    }
+  ]
+}

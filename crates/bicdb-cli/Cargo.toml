@@ -1,0 +1,61 @@
+[package]
+name = "bicdb-cli"
+version = "1.0.438-beta"
+edition.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "bicdb"
+path = "src/main.rs"
+
+[features]
+default = []
+# Benchmark and PostgreSQL compatibility harnesses are developer tooling.
+bench = ["dep:bicdb-bench"]
+# External comparison engines remain public developer tooling, but are not
+# linked into the production CLI unless explicitly requested.
+bench-comparison-engines = ["bench", "bicdb-bench/comparison-engines"]
+
+[dependencies]
+anyhow.workspace = true
+bicdb-analytics = { path = "../bicdb-analytics", version = "1.0.438-beta" }
+base64.workspace = true
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.438-beta" }
+bicdb-blob-s3 = { path = "../bicdb-blob-s3", version = "1.0.438-beta" }
+bicdb-bench = { path = "../bicdb-bench", version = "1.0.438-beta", optional = true }
+bicdb-cell = { path = "../bicdb-cell", version = "1.0.438-beta" }
+bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta" }
+bicdb-pgwire = { path = "../bicdb-pgwire", version = "1.0.438-beta" }
+bicdb-page = { path = "../bicdb-page", version = "1.0.438-beta" }
+runtime-redis-provider = { package = "bicdb-provider-redis", path = "../bicdb-provider-redis", version = "1.0.438-beta" }
+runtime-email-provider = { package = "bicdb-provider-email", path = "../bicdb-provider-email", version = "1.0.438-beta" }
+runtime-grpc-provider = { package = "bicdb-provider-grpc", path = "../bicdb-provider-grpc", version = "1.0.438-beta" }
+runtime-tokenizer-provider = { package = "bicdb-provider-tokenizer", path = "../bicdb-provider-tokenizer", version = "1.0.438-beta" }
+runtime-embeddings-provider = { package = "bicdb-provider-embeddings", path = "../bicdb-provider-embeddings", version = "1.0.438-beta" }
+runtime-llm-provider = { package = "bicdb-provider-llm", path = "../bicdb-provider-llm", version = "1.0.438-beta" }
+bicdb-resp = { path = "../bicdb-resp", version = "1.0.438-beta" }
+bicdb-sql = { path = "../bicdb-sql", version = "1.0.438-beta" }
+bicdb-sync = { path = "../bicdb-sync", version = "1.0.438-beta" }
+clap.workspace = true
+ctrlc.workspace = true
+crossterm.workspace = true
+hex.workspace = true
+libc.workspace = true
+mimalloc = "0.1"
+parking_lot.workspace = true
+ratatui.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+osmpbfreader.workspace = true
+protobuf.workspace = true
+tempfile.workspace = true
+
+[[test]]
+name = "paged_recovery_cli"
+path = "tests/paged_recovery_cli.rs"
+required-features = ["bench"]

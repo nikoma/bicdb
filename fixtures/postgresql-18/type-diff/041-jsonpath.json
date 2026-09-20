@@ -1,0 +1,29 @@
+{
+  "id": "type_matrix_jsonpath",
+  "description": "PostgreSQL 18 jsonpath parsing, canonical text, modes, predicates, variables, methods, operators, set-returning queries, and GIN-rechecked filtering",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_jsonpath;"
+  ],
+  "sql": [
+    "SELECT '$.a'::jsonpath, 'strict $.a[*] ? (@ > $min)'::jsonpath, '$.a.**{1 to 3}.b'::jsonpath;",
+    "SELECT encode(jsonpath_send('$.a'::jsonpath), 'hex'), encode(jsonpath_send('$.value ? (@ > 2)'::jsonpath), 'hex'), jsonb_path_exists_opr('{\"a\":1}'::jsonb, '$.a'::jsonpath), jsonb_path_match_opr('{\"a\":1}'::jsonb, '$.a == 1'::jsonpath);",
+    "SELECT jsonb_path_exists('{\"a\":[1,2,3]}'::jsonb, '$.a[*] ? (@ >= 2)'::jsonpath), jsonb_path_match('{\"a\":1}'::jsonb, '$.a == 1'::jsonpath);",
+    "SELECT jsonb_path_query_array('{\"a\":[1,2,3]}'::jsonb, '$.a[*] ? (@ >= $min)'::jsonpath, '{\"min\":2}'::jsonb), jsonb_path_query_first('{\"a\":[10,20,30]}'::jsonb, '$.a[last]'::jsonpath);",
+    "SELECT jsonb_path_query_array('{\"a\":[10,20,30]}'::jsonb, '$.a[0 to last - $offset]'::jsonpath, '{\"offset\":1}'::jsonb), jsonb_path_query_array('{\"a\":[1,2]}'::jsonb, '$.a.size()'::jsonpath);",
+    "SELECT jsonb_path_query_array('{\"s\":[\"Abc\",\"other\"]}'::jsonb, '$.s[*] ? (@ starts with \"Ab\")'::jsonpath), jsonb_path_query_array('{\"s\":[\"Abc\",\"other\"]}'::jsonb, '$.s[*] ? (@ like_regex \"^a\" flag \"i\")'::jsonpath);",
+    "SELECT jsonb_path_query_array('{\"n\":\"12.345\"}'::jsonb, '$.n.decimal(5,2)'::jsonpath), jsonb_path_query_array('{\"n\":1.2}'::jsonb, '$.n.ceiling()'::jsonpath), jsonb_path_query_array('{\"a\":[1,2]}'::jsonb, '$.a.type()'::jsonpath);",
+    "SELECT jsonb_path_query_array('{\"n\":9007199254740993.1}'::jsonb, '$.n.ceiling()'::jsonpath), jsonb_path_query_array('{\"n\":-9007199254740993.1}'::jsonb, '$.n.floor()'::jsonpath), jsonb_path_query_array('{\"n\":-9007199254740993.1}'::jsonb, '$.n.abs()'::jsonpath), jsonb_path_query_array('{\"n\":\"9007199254740993.1\"}'::jsonb, '$.n.number()'::jsonpath);",
+    "SELECT jsonb_path_exists_tz('{\"d\":\"2024-01-02 12:00:00+02\"}'::jsonb, '$.d.datetime() < \"2024-01-02 11:00:00+00\".datetime()'::jsonpath), jsonb_path_query_array_tz('{\"d\":\"2024-01-02\"}'::jsonb, '$.d.date()'::jsonpath);",
+    "SELECT jsonb_path_query_array('{}'::jsonb, 'strict $.missing'::jsonpath, '{}'::jsonb, true);",
+    "SELECT value, ordinality FROM jsonb_path_query('{\"a\":[10,20]}'::jsonb, '$.a[*]'::jsonpath) WITH ORDINALITY AS q(value, ordinality);",
+    "SELECT '{\"a\":[1,2]}'::jsonb @? '$.a[*] ? (@ == 2)'::jsonpath, '{\"a\":1}'::jsonb @@ '$.a == 1'::jsonpath;",
+    "CREATE TABLE type_matrix_jsonpath (id INTEGER PRIMARY KEY, payload JSONB NOT NULL);",
+    "INSERT INTO type_matrix_jsonpath VALUES (1, '{\"patient\":{\"status\":\"active\"}}'), (2, '{\"patient\":{\"status\":\"inactive\"}}'), (3, '{\"status\":\"active\"}');",
+    "CREATE INDEX idx_type_matrix_jsonpath_payload ON type_matrix_jsonpath USING GIN (payload);",
+    "SELECT id FROM type_matrix_jsonpath WHERE payload @? '$.patient.status ? (@ == \"active\")'::jsonpath ORDER BY id;",
+    "UPDATE type_matrix_jsonpath SET payload = '{\"patient\":{\"status\":\"active\"}}' WHERE id = 2;",
+    "DELETE FROM type_matrix_jsonpath WHERE id = 1;",
+    "SELECT id FROM type_matrix_jsonpath WHERE payload @@ '$.patient.status == \"active\"'::jsonpath ORDER BY id;"
+  ],
+  "expectation": "match"
+}

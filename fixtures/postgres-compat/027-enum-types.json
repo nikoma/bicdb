@@ -1,0 +1,25 @@
+{
+  "id": "enum_types",
+  "description": "Enum type DDL, values, ordering, and catalogs match PostgreSQL",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_enum_rows;",
+    "DROP TYPE IF EXISTS diff_mood;"
+  ],
+  "sql": [
+    "CREATE TYPE diff_mood AS ENUM ('happy', 'sad');",
+    "CREATE TABLE diff_enum_rows (id TEXT PRIMARY KEY, mood diff_mood);",
+    "INSERT INTO diff_enum_rows VALUES ('e1', 'happy');",
+    "SELECT id, mood FROM diff_enum_rows ORDER BY mood;"
+  ],
+  "expectation": "match",
+  "roadmap_items": [
+    "DT-0901",
+    "DT-0905",
+    "DT-0906"
+  ],
+  "roadmap_status": {
+    "DT-0901": "complete",
+    "DT-0905": "complete",
+    "DT-0906": "complete"
+  }
+}

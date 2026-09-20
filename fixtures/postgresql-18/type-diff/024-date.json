@@ -1,0 +1,25 @@
+{
+  "id": "type_matrix_date",
+  "description": "PostgreSQL 18 date parsing, canonical output, BC and Julian calendars, infinity, arithmetic, ordering, and range validation",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_date;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_date (id TEXT PRIMARY KEY, value DATE UNIQUE);",
+    "CREATE INDEX type_matrix_date_value_idx ON type_matrix_date (value);",
+    "INSERT INTO type_matrix_date VALUES ('negative_infinity', '-infinity'), ('bc', '0001-01-01 BC'), ('epoch', 'epoch'), ('julian', 'J2451546'), ('named', 'February 3, 2024'), ('ordinal', '2024-035'), ('positive_infinity', 'infinity');",
+    "SELECT id, value FROM type_matrix_date ORDER BY value, id;",
+    "SELECT '2024-2-3'::date AS short_iso, '02/03/2024'::date AS mdy, 'February 3, 2024'::date AS named, '2024-034'::date AS ordinal, 'J2451545'::date AS julian, '0001-01-01 BC'::date AS bc, '+infinity'::date AS positive_infinity;",
+    "SELECT '2024-02-29'::date + 1 AS date_plus, 1 + '2024-02-29'::date AS plus_date, '2024-03-01'::date - 1 AS date_minus, '2024-03-01'::date - '2024-02-28'::date AS date_difference, '0001-01-01 BC'::date + 1 AS bc_plus, '0001-01-01 BC'::date - 1 AS bc_minus, 'infinity'::date + 1 AS infinity_plus;",
+    "SELECT '-infinity'::date < '0001-01-01 BC'::date AS negative_order, '0001-01-01 BC'::date < '0001-01-01'::date AS bc_order, 'infinity'::date > '5874897-12-31'::date AS positive_order;",
+    "SELECT id FROM type_matrix_date WHERE value = 'February 3, 2024'::date;",
+    "SELECT '4714-11-24 BC'::date AS minimum_date, '5874897-12-31'::date AS maximum_date;",
+    "SELECT '2023-02-29'::date;",
+    "SELECT '0000-01-01'::date;",
+    "SELECT '5874898-01-01'::date;",
+    "SELECT '2024-02-29junk'::date;",
+    "SELECT '4714-11-24 BC'::date - 1;",
+    "SELECT 'infinity'::date - '-infinity'::date;"
+  ],
+  "expectation": "match"
+}

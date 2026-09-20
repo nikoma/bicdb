@@ -1,0 +1,26 @@
+{
+  "id": "type_matrix_multirange_constructors",
+  "description": "PostgreSQL 18 built-in multirange constructors, canonical input/output, persistence, nulls, errors, type OIDs, and session timezone rendering",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_multirange_rows;"
+  ],
+  "sql": [
+    "SELECT int4multirange(), int8multirange(), nummultirange(), datemultirange(), tsmultirange(), tstzmultirange();",
+    "SELECT int4multirange('[1,5)'::int4range), int8multirange('[9007199254740993,9007199254741000]'::int8range), nummultirange('[0.10,9.90]'::numrange), datemultirange('[2024-01-01,2024-01-31]'::daterange), tsmultirange('[2024-01-01 01:02:03,2024-01-02 04:05:06)'::tsrange), tstzmultirange('[2024-01-01 01:02:03+00,2024-01-02 04:05:06+00)'::tstzrange);",
+    "SELECT int4multirange('[8,10)'::int4range, '[1,5)'::int4range, '[4,9)'::int4range, 'empty'::int4range), int8multirange('[8,10)'::int8range, '[1,8)'::int8range), nummultirange('[1,2)'::numrange, '[2,3)'::numrange), datemultirange('[2024-01-01,2024-01-03]'::daterange, '[2024-01-04,2024-01-05)'::daterange);",
+    "SELECT nummultirange('[1,2)'::numrange, '(2,3)'::numrange), '{[8,10),[1,5),[4,9),empty}'::int4multirange, '{empty}'::int4multirange;",
+    "SELECT pg_typeof(int4multirange()), pg_typeof(int8multirange()), pg_typeof(nummultirange()), pg_typeof(datemultirange()), pg_typeof(tsmultirange()), pg_typeof(tstzmultirange());",
+    "SET TIME ZONE 'America/Los_Angeles';",
+    "SELECT '{[2024-01-01 01:02:03+00,2024-01-02 04:05:06+00)}'::tstzmultirange, tstzmultirange('[2024-01-01 01:02:03+00,2024-01-02 04:05:06+00)'::tstzrange);",
+    "CREATE TABLE type_matrix_multirange_rows (id text PRIMARY KEY, ints int4multirange NOT NULL, exacts nummultirange, instants tstzmultirange);",
+    "INSERT INTO type_matrix_multirange_rows VALUES ('canonical', '{[8,10),[1,5),[4,9),empty}', '{[1.00,2.00),(2.00,3.00)}', '{[2024-01-01 01:02:03+00,2024-01-02 04:05:06+00)}');",
+    "SELECT id, ints, exacts, instants FROM type_matrix_multirange_rows;",
+    "UPDATE type_matrix_multirange_rows SET ints = int4multirange('[20,30)'::int4range, '[10,20)'::int4range) WHERE id = 'canonical';",
+    "SELECT ints FROM type_matrix_multirange_rows;",
+    "SELECT int4multirange(NULL::int4range);",
+    "SELECT int4multirange('[1,2)'::int4range, NULL::int4range);",
+    "SELECT '{{[1,2)}}'::int4multirange;",
+    "SELECT int4multirange('[1,2)'::int8range);"
+  ],
+  "expectation": "match"
+}

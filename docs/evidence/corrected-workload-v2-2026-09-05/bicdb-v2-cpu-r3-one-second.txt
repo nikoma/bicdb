@@ -1,0 +1,80 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cpu-clock' (time slices: 43347.131778325,43348.131778325)
+# Event count (approx.): 19969696770
+#
+# Children      Self  Command          Shared Object      Symbol                                                                                                                                                                                                                                                                                     
+# ........  ........  ...............  .................  ...........................................................................................................................................................................................................................................................................................
+#
+     8.40%     8.40%  tokio-rt-worker  bicdb              [.] _mi_page_malloc_zero
+     5.67%     0.25%  tokio-rt-worker  [kernel.kallsyms]  [k] do_syscall_64
+     5.67%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] entry_SYSCALL_64_after_hwframe
+     4.91%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] x64_sys_call
+     4.86%     4.86%  tokio-rt-worker  bicdb              [.] bicdb_core::record::StoredRecord::cells_into
+     4.65%     2.23%  tokio-rt-worker  bicdb              [.] bicdb_sql::session::txn_update::<impl bicdb_sql::session::SqlSession>::try_execute_update_stored
+     4.35%     4.35%  tokio-rt-worker  bicdb              [.] mi_free
+     4.15%     0.10%  tokio-rt-worker  bicdb              [.] bicdb_sql::session::txn_update::<impl bicdb_sql::session::SqlSession>::execute_update_with_ctes
+     3.03%     0.71%  tokio-rt-worker  bicdb              [.] _mi_malloc_generic
+     2.73%     0.35%  tokio-rt-worker  bicdb              [.] bicdb_pgwire::handle_client_loop
+     2.33%     2.33%  tokio-rt-worker  libc.so.6          [.] 0x0000000000188799
+     2.33%     0.00%  tokio-rt-worker  libc.so.6          [.] 0x0000780846b88799
+     2.23%     1.47%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::row_columns_expr_pg_type
+     2.23%     0.00%  tokio-rt-worker  libc.so.6          [.] __send
+     1.97%     1.97%  tokio-rt-worker  bicdb              [.] mi_theap_malloc_aligned
+     1.92%     0.20%  tokio-rt-worker  bicdb              [.] mi_theap_malloc_zero_aligned_at_overalloc
+     1.87%     1.26%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::row_eval::<impl bicdb_sql::engine::SqlEngine>::eval_slot_row_value
+     1.87%     0.00%  tokio-rt-worker  [unknown]          [.] 0x0000000000000007
+     1.77%     1.06%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::predicates_locators::<impl bicdb_sql::engine::SqlEngine>::slot_rows_from_visible
+     1.77%     0.10%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::materialize::<impl bicdb_sql::engine::SqlEngine>::row_set_from_table_with_joins_with_selection
+     1.77%     0.05%  tokio-rt-worker  [kernel.kallsyms]  [k] inet_sendmsg
+     1.77%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] __x64_sys_sendto
+     1.72%     0.05%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::row_eval::<impl bicdb_sql::engine::SqlEngine>::eval_slot_row_case
+     1.72%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] __sys_sendto
+     1.72%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] tcp_sendmsg
+     1.72%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] tcp_sendmsg_locked
+     1.67%     0.61%  tokio-rt-worker  bicdb              [.] _mi_theap_realloc_zero
+     1.67%     0.00%  tokio-rt-worker  [unknown]          [.] 0x7fffffffffffffff
+     1.57%     1.16%  tokio-rt-worker  bicdb              [.] bicdb_sql::planner::BoundExprScope::bind_in
+     1.57%     0.05%  tokio-rt-worker  [kernel.kallsyms]  [k] __ip_queue_xmit
+     1.57%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] __tcp_push_pending_frames
+     1.57%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] __tcp_transmit_skb
+     1.57%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] ip_queue_xmit
+     1.57%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] tcp_push
+     1.57%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] tcp_write_xmit
+     1.57%     0.00%  tokio-rt-worker  [unknown]          [.] 0x0000000000000003
+     1.37%     0.00%  tokio-rt-worker  [unknown]          [.] 0x0000000000000005
+     1.32%     1.01%  tokio-rt-worker  bicdb              [.] bicdb_core::db::Transaction::prepare_final_wal_payloads
+     1.32%     0.91%  tokio-rt-worker  bicdb              [.] bicdb_core::db::spatial_paged::<impl bicdb_core::db::BicDb>::commit_transaction
+     1.26%     0.91%  tokio-rt-worker  bicdb              [.] bicdb_core::db::access_mutation::<impl bicdb_core::db::BicDb>::get_stored
+     1.26%     0.30%  tokio-rt-worker  bicdb              [.] mi_page_queue_find_free_ex
+     1.21%     0.00%  tokio-rt-worker  [unknown]          [.] 0x0000000000000006
+     1.16%     0.81%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::predicates_locators::<impl bicdb_sql::engine::SqlEngine>::apply_row_join
+     1.16%     0.61%  tokio-rt-worker  bicdb              [.] bicdb_sql::session::functions_insert::<impl bicdb_sql::session::SqlSession>::execute_insert_with_ctes
+     1.16%     0.00%  tokio-rt-worker  bicdb              [.] bicdb_pgwire::execute_server_db_sql_for_state
+     1.11%     1.11%  tokio-rt-worker  libc.so.6          [.] 0x000000000018879d
+     1.11%     0.91%  tokio-rt-worker  bicdb              [.] bicdb_sql::planner::BoundExpr::eval_value
+     1.11%     0.00%  tokio-rt-worker  libc.so.6          [.] 0x0000780846b8879d
+     1.06%     1.06%  tokio-rt-worker  libc.so.6          [.] 0x00000000001887a3
+     1.06%     0.91%  tokio-rt-worker  bicdb              [.] bicdb_core::db::Transaction::get_stored_by_pks
+     1.06%     0.15%  tokio-rt-worker  [kernel.kallsyms]  [k] handle_softirqs
+     1.06%     0.05%  tokio-rt-worker  [kernel.kallsyms]  [k] ip_finish_output
+     1.06%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] ip_output
+     1.06%     0.00%  tokio-rt-worker  libc.so.6          [.] 0x0000780846b887a3
+     1.06%     0.00%  tokio-rt-worker  [unknown]          [.] 0x0000000000000001
+     1.01%     1.01%  tokio-rt-worker  [kernel.kallsyms]  [k] _raw_spin_unlock_irqrestore
+     1.01%     0.81%  tokio-rt-worker  bicdb              [.] bicdb_sql::planner::BoundExprScope::bind_identifier
+     1.01%     0.46%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::joins_windows::<impl bicdb_sql::engine::SqlEngine>::bound_row_context
+     1.01%     0.35%  tokio-rt-worker  bicdb              [.] alloc::collections::btree::map::BTreeMap<K,V,A>::insert
+     1.01%     0.30%  tokio-rt-worker  bicdb              [.] mi_theap_malloc_zero_aligned_at_generic
+     1.01%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] __dev_queue_xmit
+     1.01%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] __ip_finish_output
+     1.01%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] ip_finish_output2
+     1.01%     0.00%  tokio-rt-worker  [kernel.kallsyms]  [k] neigh_hh_output
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

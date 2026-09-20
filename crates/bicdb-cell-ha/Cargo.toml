@@ -1,0 +1,21 @@
+[package]
+name = "bicdb-cell-ha"
+version = "1.0.438-beta"
+edition.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta" }
+ciborium.workspace = true
+ed25519-dalek.workspace = true
+hex.workspace = true
+libc.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

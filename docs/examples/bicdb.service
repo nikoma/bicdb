@@ -1,0 +1,27 @@
+[Unit]
+Description=BicDB production pgwire server
+Documentation=docs/production-observability.md SERVER_MODE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bicdb
+Group=bicdb
+EnvironmentFile=/etc/bicdb/bicdb-production.env
+# Inject BICDB_DB_KEY and BICDB_BACKUP_KEY with systemd credentials or a
+# deployment secret manager before starting the service.
+ExecStartPre=/usr/local/bin/bicdb security production-gate ${BICDB_DB_PATH} --profile ${BICDB_PROFILE} --host ${BICDB_HOST} --require-auth --auth-method scram-sha-256 --require-tls --tls-cert ${BICDB_TLS_CERT} --tls-key ${BICDB_TLS_KEY} --db-key-env ${BICDB_DB_KEY_ENV} --backup-key-env ${BICDB_BACKUP_KEY_ENV} --audit-retention-days 365 --audit-tamper-evidence --protected-data-evidence ${BICDB_PROTECTED_DATA_EVIDENCE} --dependency-evidence ${BICDB_DEPENDENCY_EVIDENCE} --json
+ExecStart=/usr/local/bin/bicdb serve ${BICDB_DB_PATH} --host ${BICDB_HOST} --port ${BICDB_PORT} --require-auth --auth-method scram-sha-256 --max-connections ${BICDB_MAX_CONNECTIONS} --max-active-queries ${BICDB_MAX_ACTIVE_QUERIES} --max-queued-queries ${BICDB_MAX_QUEUED_QUERIES} --max-active-reads ${BICDB_MAX_ACTIVE_READS} --max-queued-reads ${BICDB_MAX_QUEUED_READS} --max-active-writes ${BICDB_MAX_ACTIVE_WRITES} --max-queued-writes ${BICDB_MAX_QUEUED_WRITES} --idle-timeout-seconds ${BICDB_IDLE_TIMEOUT_SECONDS} --shutdown-grace-seconds ${BICDB_SHUTDOWN_GRACE_SECONDS} --query-timeout-ms ${BICDB_QUERY_TIMEOUT_MS} --overload-timeout-ms ${BICDB_OVERLOAD_TIMEOUT_MS} --write-timeout-ms ${BICDB_WRITE_TIMEOUT_MS} --max-result-rows ${BICDB_MAX_RESULT_ROWS} --max-request-bytes ${BICDB_MAX_REQUEST_BYTES} --per-connection-memory-limit ${BICDB_PER_CONNECTION_MEMORY_LIMIT} --tls-cert ${BICDB_TLS_CERT} --tls-key ${BICDB_TLS_KEY} --require-tls --slow-query-log ${BICDB_SLOW_QUERY_LOG} --slow-query-threshold-ms ${BICDB_SLOW_QUERY_THRESHOLD_MS} --redact-field ssn --redact-field tax_id
+ExecReload=/bin/kill -TERM $MAINPID
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/bicdb /var/log/bicdb
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

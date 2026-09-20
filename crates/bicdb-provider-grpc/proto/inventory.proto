@@ -1,0 +1,21 @@
+syntax = "proto3";
+package bicdb.example.inventory.v1;
+
+message ReservationLine {
+  string sku = 1;
+  int32 quantity = 2;
+}
+
+message ReserveRequest {
+  repeated ReservationLine lines = 1;
+  optional string request_id = 2;
+}
+
+message ReserveResponse {
+  bool accepted = 1;
+  string reservation_id = 2;
+}
+
+service Inventory {
+  rpc Reserve(ReserveRequest) returns (ReserveResponse);
+}

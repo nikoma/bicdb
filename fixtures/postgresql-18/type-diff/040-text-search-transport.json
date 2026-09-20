@@ -1,0 +1,15 @@
+{
+  "id": "type_matrix_text_search_transport",
+  "description": "PostgreSQL 18 text-search arrays, catalog identity, persistence-ready declarations, and canonical transport values",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_search_transport;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_search_transport (id TEXT PRIMARY KEY, document TSVECTOR NOT NULL, query TSQUERY NOT NULL, documents TSVECTOR[], queries TSQUERY[]);",
+    "INSERT INTO type_matrix_search_transport VALUES ('one', '''fat'':1A ''rat'':2', 'fat & !rat', ARRAY['''fat'':1A'::tsvector, '''rat'':2'::tsvector], ARRAY['fat & rat'::tsquery, NULL]);",
+    "SELECT id, document, query, documents, queries FROM type_matrix_search_transport ORDER BY id;",
+    "SELECT typname, oid, typarray FROM pg_catalog.pg_type WHERE typname IN ('tsvector', 'tsquery') ORDER BY oid;",
+    "SELECT attname, atttypid, format_type(atttypid, atttypmod) FROM pg_catalog.pg_attribute WHERE attrelid = 'type_matrix_search_transport'::regclass AND attnum > 0 ORDER BY attnum;"
+  ],
+  "expectation": "match"
+}

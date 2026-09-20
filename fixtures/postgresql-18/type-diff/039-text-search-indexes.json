@@ -1,0 +1,27 @@
+{
+  "id": "type_matrix_text_search_indexes",
+  "description": "PostgreSQL 18 GIN and GiST text-search indexes, expression backfill, query shapes, and update maintenance",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_search_gin;",
+    "DROP TABLE IF EXISTS type_matrix_search_gist;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_search_gin (id TEXT PRIMARY KEY, body TEXT NOT NULL, search TSVECTOR NOT NULL);",
+    "INSERT INTO type_matrix_search_gin VALUES ('a', 'fat cat sat', to_tsvector('english', 'fat cat sat')), ('b', 'dog chased cats', to_tsvector('english', 'dog chased cats')), ('c', 'quiet bird', to_tsvector('english', 'quiet bird'));",
+    "CREATE INDEX type_matrix_search_gin_idx ON type_matrix_search_gin USING GIN (search);",
+    "SELECT id FROM type_matrix_search_gin WHERE search @@ to_tsquery('english', 'cat:*') ORDER BY id;",
+    "SELECT id FROM type_matrix_search_gin WHERE search @@ to_tsquery('english', 'dog | bird') ORDER BY id;",
+    "SELECT id FROM type_matrix_search_gin WHERE search @@ phraseto_tsquery('english', 'fat cat') ORDER BY id;",
+    "SELECT id FROM type_matrix_search_gin WHERE search @@ to_tsquery('english', 'cat & !dog') ORDER BY id;",
+    "UPDATE type_matrix_search_gin SET body = 'new phrase', search = to_tsvector('english', 'new phrase') WHERE id = 'a';",
+    "SELECT id FROM type_matrix_search_gin WHERE search @@ to_tsquery('english', 'new') ORDER BY id;",
+    "CREATE TABLE type_matrix_search_gist (id TEXT PRIMARY KEY, body TEXT NOT NULL);",
+    "INSERT INTO type_matrix_search_gist VALUES ('g1', 'alpha beta'), ('g2', 'gamma');",
+    "CREATE INDEX type_matrix_search_gist_idx ON type_matrix_search_gist USING GIST (to_tsvector('simple', body));",
+    "SELECT id FROM type_matrix_search_gist WHERE to_tsvector('simple', body) @@ to_tsquery('simple', 'alpha') ORDER BY id;",
+    "UPDATE type_matrix_search_gist SET body = 'delta epsilon' WHERE id = 'g1';",
+    "SELECT id FROM type_matrix_search_gist WHERE to_tsvector('simple', body) @@ to_tsquery('simple', 'delta') ORDER BY id;",
+    "ANALYZE type_matrix_search_gin;"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,35 @@
+[package]
+name = "bicdb-page"
+version = "1.0.438-beta"
+edition.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+
+# Phase 1 of docs/server-paged-storage-todo.md: the first-party page file and
+# buffer pool underneath `storage_mode = server_paged`.
+#
+# Deliberately has NO dependency on bicdb-core. The page store is testable,
+# benchmarkable, and licence-auditable on its own, and keeping the edge
+# one-directional stops record semantics leaking into the storage layer.
+
+[dependencies]
+crc32fast.workspace = true
+# `flock` for exclusive store-directory ownership; see src/lock.rs for why an OS
+# lock rather than a lock file is the only crash-safe option.
+libc.workspace = true
+hex.workspace = true
+parking_lot.workspace = true
+rustc-hash.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+# Writer process for tests/kill_recovery.rs. A dedicated binary rather than a
+# re-exec of the test harness, which would spawn a process per test recursively.
+[[bin]]
+name = "kill-writer"
+path = "src/bin/kill-writer.rs"

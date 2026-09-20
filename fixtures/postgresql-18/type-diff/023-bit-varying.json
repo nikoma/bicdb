@@ -1,0 +1,27 @@
+{
+  "id": "type_matrix_bit_varying",
+  "description": "PostgreSQL 18 variable-length bit strings, typmods, casts, result types, ordering, and indexes",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_bit_varying;",
+    "DROP TABLE IF EXISTS type_matrix_invalid_bit_varying;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_bit_varying (id TEXT PRIMARY KEY, flags VARBIT(9) UNIQUE);",
+    "CREATE INDEX type_matrix_bit_varying_flags_idx ON type_matrix_bit_varying (flags);",
+    "INSERT INTO type_matrix_bit_varying VALUES ('empty', B''), ('zero', B'0'), ('two_zero', B'00'), ('zero_zero_one', B'001'), ('zero_one', B'01'), ('one', B'1'), ('one_long', B'100000000'), ('one_one', B'11');",
+    "SELECT id, flags FROM type_matrix_bit_varying ORDER BY flags;",
+    "SELECT B'1'::varbit(5) AS short_cast, B'101010'::varbit(5) AS truncated_cast, B''::varbit(5) AS empty_cast, B'101'::varbit::bit(5) AS fixed_cast, B'101'::bit(5)::varbit(2) AS varying_cast;",
+    "SELECT ~(B'1'::varbit) AS inverted, B'1'::varbit << 1 AS shifted, B'1'::varbit & B'0'::varbit AS bit_and, B'1'::varbit || B'0'::varbit AS concatenated, set_bit(B'1'::varbit, 0, 0) AS replaced, substring(B'101'::varbit FROM 1 FOR 2) AS sliced, overlay(B'101'::varbit PLACING B'1' FROM 2 FOR 1) AS overlaid;",
+    "SELECT id FROM type_matrix_bit_varying WHERE flags = B'100000000';",
+    "SELECT atttypmod, format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid = 'type_matrix_bit_varying'::regclass AND attname = 'flags';",
+    "INSERT INTO type_matrix_bit_varying VALUES ('long', B'1010101010');",
+    "UPDATE type_matrix_bit_varying SET flags = B'1010101010' WHERE id = 'empty';",
+    "SELECT B'1'::varbit & B'01'::varbit;",
+    "SELECT 5::varbit(5);",
+    "SELECT B'1'::varbit::int4;",
+    "SELECT 1::int2::bit(5);",
+    "SELECT get_bit(B''::varbit, 0);",
+    "CREATE TABLE type_matrix_invalid_bit_varying (flags VARBIT(0));"
+  ],
+  "expectation": "match"
+}

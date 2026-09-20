@@ -1,0 +1,17 @@
+{
+  "id": "type_matrix_name_internal_char",
+  "description": "PostgreSQL 18 name clipping and internal char byte semantics",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_name_internal_char;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_name_internal_char (id TEXT PRIMARY KEY, catalog_name NAME UNIQUE, kind \"char\");",
+    "CREATE INDEX type_matrix_name_internal_char_kind_idx ON type_matrix_name_internal_char (kind);",
+    "INSERT INTO type_matrix_name_internal_char VALUES ('ascii', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaasuffix', 'AB'), ('unicode', 'éééééééééééééééééééééééééééééééééééééééé', 'é'), ('empty', 'empty', '');",
+    "SELECT id, length(catalog_name::text) AS char_length, octet_length(catalog_name::text) AS byte_length, kind::text AS kind_text, kind::int4 AS kind_code FROM type_matrix_name_internal_char ORDER BY type_matrix_name_internal_char.kind;",
+    "SELECT (-128)::\"char\"::int4 AS low_code, 127::\"char\"::int4 AS high_code;",
+    "SELECT 128::\"char\";",
+    "INSERT INTO type_matrix_name_internal_char VALUES ('duplicate', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaother', 'D');"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,23 @@
+{
+  "id": "type_matrix_cast_catalog",
+  "description": "PostgreSQL 18 pg_cast catalog, coercion contexts, array recursion, assignment casts, explicit casts, and user range casts",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_cast_assignment CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_cast_range CASCADE;"
+  ],
+  "sql": [
+    "SELECT count(*) AS count FROM pg_catalog.pg_cast WHERE oid < 16384;",
+    "SELECT oid, castsource, casttarget, castfunc, castcontext::text, castmethod::text FROM pg_catalog.pg_cast WHERE oid < 16384 ORDER BY oid;",
+    "SELECT ARRAY[1::int2]::int8[]::text, pg_typeof(ARRAY[1::int2]::int8[])::text;",
+    "SELECT 1::int8::int2, pg_typeof(1::int8::int2)::text;",
+    "SELECT 1::int8 + 2::int2, pg_typeof(1::int8 + 2::int2)::text;",
+    "SELECT '00000000-0000-0000-0000-000000000000'::uuid::text;",
+    "CREATE TABLE type_matrix_cast_assignment (id uuid PRIMARY KEY, n int2, label text);",
+    "INSERT INTO type_matrix_cast_assignment (id, n, label) VALUES ('10000000-0000-0000-0000-000000000085', 1::int8, '00000000-0000-0000-0000-000000000000'::uuid);",
+    "SELECT n, label FROM type_matrix_cast_assignment;",
+    "CREATE TYPE type_matrix_cast_range AS RANGE (subtype = int4);",
+    "SELECT source.typname, target.typname, c.castcontext::text, c.castmethod::text, c.castfunc <> 0 AS has_function FROM pg_catalog.pg_cast AS c JOIN pg_catalog.pg_type AS source ON source.oid = c.castsource JOIN pg_catalog.pg_type AS target ON target.oid = c.casttarget WHERE source.typname = 'type_matrix_cast_range';",
+    "SELECT '00000000-0000-0000-0000-000000000000'::uuid::int4;"
+  ],
+  "expectation": "match"
+}

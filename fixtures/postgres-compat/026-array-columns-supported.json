@@ -1,0 +1,26 @@
+{
+  "id": "array_columns_supported_subset",
+  "description": "Persisted one-dimensional text arrays round-trip with catalog OIDs",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_array_types;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_array_types (id TEXT PRIMARY KEY, tags TEXT[]);",
+    "INSERT INTO diff_array_types (id, tags) VALUES ('a1', ARRAY['alpha', 'beta']::text[]);",
+    "SELECT id, tags FROM diff_array_types ORDER BY id;",
+    "SELECT a.attname, a.atttypid FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid WHERE c.relname = 'diff_array_types' AND a.attname = 'tags';"
+  ],
+  "expectation": "match",
+  "roadmap_items": [
+    "DT-0206",
+    "DT-0801",
+    "DT-0802",
+    "DT-0803"
+  ],
+  "roadmap_status": {
+    "DT-0206": "complete",
+    "DT-0801": "complete",
+    "DT-0802": "complete",
+    "DT-0803": "complete"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "id": "type_matrix_transaction_system_types",
+  "description": "xid, xid8, cid, tid, arrays, binary-width catalog metadata, and user-table system columns",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_system_rows;",
+    "DROP TABLE IF EXISTS type_matrix_transaction_values;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_transaction_values (id int4 PRIMARY KEY, transaction_id xid NOT NULL, full_transaction_id xid8 NOT NULL, command_id cid NOT NULL, tuple_id tid NOT NULL, transaction_ids xid8[] NOT NULL);",
+    "INSERT INTO type_matrix_transaction_values VALUES (1, '-1', '-1', '-1', '(4294967295,65535)', ARRAY['0'::xid8, '18446744073709551615'::xid8]), (2, '0', '0', '0', '(0,1)', ARRAY['1'::xid8]);",
+    "SELECT id, transaction_id::text, full_transaction_id::text, command_id::text, tuple_id::text, transaction_ids::text, pg_typeof(transaction_id), pg_typeof(full_transaction_id), pg_typeof(command_id), pg_typeof(tuple_id) FROM type_matrix_transaction_values ORDER BY full_transaction_id, tuple_id;",
+    "SELECT oid, typname, typlen, typbyval, typalign, typstorage, typarray FROM pg_type WHERE typname IN ('tid', 'xid', 'cid', 'xid8') ORDER BY oid;",
+    "CREATE TABLE type_matrix_system_rows (id int4 PRIMARY KEY, value text);",
+    "INSERT INTO type_matrix_system_rows VALUES (1, 'one'), (2, 'two');",
+    "SELECT id, value FROM type_matrix_system_rows ORDER BY id;",
+    "SELECT pg_typeof(tableoid), pg_typeof(xmin), pg_typeof(xmax), pg_typeof(cmin), pg_typeof(cmax), pg_typeof(ctid) FROM type_matrix_system_rows ORDER BY id LIMIT 1;",
+    "SELECT bool_and(tableoid::regclass::text = 'type_matrix_system_rows'), bool_and(xmax::text = '0'), count(DISTINCT ctid) = count(*) AS tids_unique FROM type_matrix_system_rows;",
+    "SELECT '4294967296'::xid;",
+    "SELECT '-2147483649'::cid;",
+    "SELECT '18446744073709551616'::xid8;",
+    "SELECT '-18446744073709551616'::xid8;",
+    "SELECT '(4294967296,1)'::tid;",
+    "SELECT '(1,65536)'::tid;",
+    "SELECT '1'::xid < '2'::xid;",
+    "SELECT '1'::cid < '2'::cid;",
+    "CREATE TABLE type_matrix_invalid_system_column (xmin int4);"
+  ],
+  "expectation": "match"
+}

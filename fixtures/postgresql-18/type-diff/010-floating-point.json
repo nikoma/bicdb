@@ -1,0 +1,26 @@
+{
+  "id": "type_matrix_floating_point",
+  "description": "PostgreSQL 18 float4/float8 precision, special values, ordering, indexes, text output, and range errors",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_floating_point;"
+  ],
+  "sql": [
+    "SELECT 0.1::float4 AS f4, 0.1::float8 AS f8, 0.1::float4 + 0.2::float4 AS f4_sum, 1::float4 + 1::int4 AS mixed_sum;",
+    "SELECT 1e6::float4 AS f4_scientific, 1e-5::float8 AS f8_scientific, 1e-4::float8 AS f8_fixed, '-0'::float8 AS negative_zero, 'Infinity'::float8 AS positive_infinity, '-Infinity'::float8 AS negative_infinity, 'NaN'::float8 AS not_a_number;",
+    "SELECT (1e6::float4)::text AS f4_text, (1e-5::float8)::text AS f8_text, (1e-4::float8)::text AS f8_fixed_text, ('-0'::float8)::text AS negative_zero_text, ('Infinity'::float8)::text AS infinity_text, ('NaN'::float8)::text AS nan_text;",
+    "SELECT 'NaN'::float8 = 'NaN'::float8, 'NaN'::float8 > 'Infinity'::float8, 'NaN'::float8 < 'Infinity'::float8, '-0'::float8 = '0'::float8;",
+    "CREATE TABLE type_matrix_floating_point (label TEXT PRIMARY KEY, value FLOAT8);",
+    "INSERT INTO type_matrix_floating_point VALUES ('negative_infinity', '-Infinity'), ('negative_one', -1), ('a_negative_zero', '-0'), ('b_positive_zero', '0'), ('positive_one', 1), ('positive_infinity', 'Infinity'), ('nan_a', 'NaN'), ('nan_b', 'NaN');",
+    "CREATE INDEX type_matrix_floating_point_value_idx ON type_matrix_floating_point (value);",
+    "SELECT label, value FROM type_matrix_floating_point ORDER BY value, label;",
+    "SELECT COUNT(DISTINCT value) AS distinct_count FROM type_matrix_floating_point;",
+    "SELECT label FROM type_matrix_floating_point WHERE value = 'NaN'::float8 ORDER BY label;",
+    "SELECT label FROM type_matrix_floating_point WHERE value > 'Infinity'::float8 ORDER BY label;",
+    "SELECT '3.4028236e38'::float4;",
+    "SELECT '7e-46'::float4;",
+    "SELECT 3e38::float4 * 2::float4;",
+    "SELECT 1e-30::float4 * 1e-20::float4;",
+    "SELECT 1::float8 / 0::float8;"
+  ],
+  "expectation": "match"
+}

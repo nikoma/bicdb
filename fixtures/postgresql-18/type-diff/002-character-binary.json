@@ -1,0 +1,15 @@
+{
+  "id": "type_matrix_character_binary",
+  "description": "DDL, input, canonical output, casts, typmods, and catalog OIDs for character, binary, bit, UUID, and JSON types",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_character_binary;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_character_binary (id TEXT PRIMARY KEY, fixed CHARACTER(4), varying CHARACTER VARYING(12), named NAME, internal_char \"char\", bytes BYTEA, fixed_bits BIT(4), varying_bits VARBIT(8), identifier UUID, document JSON, binary_document JSONB);",
+    "INSERT INTO type_matrix_character_binary (id, fixed, varying, named, internal_char, bytes, fixed_bits, varying_bits, identifier, document, binary_document) VALUES ('c1', 'ab', 'hello', 'catalog_name', 'Z', '\\x00ff'::bytea, B'1010', B'001101', '018f22e2-7b2a-7cc2-98c4-df37b628f801', '{\"b\":2,\"a\":1}', '{\"b\":2,\"a\":1}');",
+    "SELECT fixed, varying, named, internal_char, bytes, fixed_bits, varying_bits, identifier, document, binary_document FROM type_matrix_character_binary WHERE id = 'c1';",
+    "SELECT 'xy'::character(4) AS fixed, 'hello'::varchar(12) AS varying, 'catalog_name'::name AS named, 'Z'::\"char\" AS internal_char, '\\xdeadbeef'::bytea AS bytes, B'1010'::bit(4) AS fixed_bits, B'001101'::varbit(8) AS varying_bits, '018f22e2-7b2a-7cc2-98c4-df37b628f801'::uuid AS identifier, '{\"a\":1}'::json AS document, '{\"a\":1}'::jsonb AS binary_document;",
+    "SELECT a.attname, a.atttypid, a.atttypmod, pg_catalog.format_type(a.atttypid, a.atttypmod) AS formatted_type FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid WHERE c.relname = 'type_matrix_character_binary' AND a.attnum > 0 ORDER BY a.attnum;"
+  ],
+  "expectation": "match"
+}

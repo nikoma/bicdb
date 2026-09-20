@@ -1,0 +1,18 @@
+{
+  "id": "nightmare_error_sqlstate_parity",
+  "description": "Invalid SQL and constraint/type error SQLSTATE parity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS nm_errors;"
+  ],
+  "sql": [
+    "CREATE TABLE nm_errors (id TEXT PRIMARY KEY, n INT NOT NULL UNIQUE CHECK (n > 0));",
+    "INSERT INTO nm_errors (id, n) VALUES ('e1', 1);",
+    "INSERT INTO nm_errors (id, n) VALUES ('e1', 2);",
+    "INSERT INTO nm_errors (id, n) VALUES ('e2', NULL);",
+    "INSERT INTO nm_errors (id, n) VALUES ('e3', -1);",
+    "SELECT * FROM;",
+    "SELECT 'abc'::int4;"
+  ],
+  "expectation": "expected_difference",
+  "expected_difference": "Current BicDB SQLSTATE parity still differs for some invalid casts and parser/type errors. The fixture records the exact PostgreSQL/BicDB SQLSTATE mismatch instead of treating unsupported errors as a match."
+}

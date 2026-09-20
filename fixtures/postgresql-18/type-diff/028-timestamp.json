@@ -1,0 +1,25 @@
+{
+  "id": "type_matrix_timestamp",
+  "description": "PostgreSQL 18 timestamp precision, parsing, BC and infinity, arithmetic, extraction, truncation, indexing, and validation",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_timestamp;"
+  ],
+  "sql": [
+    "SET DateStyle = 'ISO, MDY';",
+    "CREATE TABLE type_matrix_timestamp (id TEXT PRIMARY KEY, value TIMESTAMP(3) UNIQUE);",
+    "CREATE INDEX type_matrix_timestamp_value_idx ON type_matrix_timestamp (value);",
+    "INSERT INTO type_matrix_timestamp VALUES ('rounded', '2024-02-29 12:34:56.5555'), ('carry', '2024-02-29 23:59:59.999999'), ('bc', '0001-01-01 00:00:00 BC'), ('infinity', 'infinity'), ('negative_infinity', '-infinity');",
+    "SELECT id, value FROM type_matrix_timestamp ORDER BY value, id;",
+    "SELECT '2024-02-29 12:34:56.5555555'::timestamp AS rounded, '2024-02-29 23:59:59.9999995'::timestamp AS carry, '0001-01-01 00:00:00 BC'::timestamp AS bc, 'epoch'::timestamp AS epoch, 'infinity'::timestamp AS pos_inf, '-infinity'::timestamp AS neg_inf;",
+    "SELECT '2024-02-29 12:00:00+05'::timestamp AS ignored_offset, '2024-02-29'::timestamp AS date_only, 'February 3, 2024 04:05:06 PM'::timestamp AS named, '2024-034 04:05:06'::timestamp AS ordinal, '20000229 040506'::timestamp AS compact;",
+    "SELECT '2024-01-01 00:00:00.0005'::timestamp(3) AS tie, '2024-02-29 23:59:59.999999'::timestamp(3) AS carry;",
+    "SELECT '2024-01-31 23:59:59.5'::timestamp + interval '1 mon 1 day 1.5 seconds' AS plus_span, '2024-03-31 00:00:00'::timestamp - interval '1 mon' AS minus_month, '2024-02-29 12:00:00.25'::timestamp - '2024-02-28 10:30:00'::timestamp AS difference;",
+    "SELECT extract(year from timestamp '2024-02-29 12:34:56.789123') AS year, extract(quarter from timestamp '2024-02-29 12:34:56.789123') AS quarter, extract(dow from timestamp '2024-02-29 12:34:56.789123') AS dow, extract(doy from timestamp '2024-02-29 12:34:56.789123') AS doy, extract(epoch from timestamp '2000-01-02 00:00:00.5') AS epoch, extract(second from timestamp '2024-02-29 12:34:56.789123') AS second;",
+    "SELECT date_trunc('year', timestamp '2024-02-29 12:34:56.789123') AS year, date_trunc('quarter', timestamp '2024-05-29 12:34:56.789123') AS quarter, date_trunc('week', timestamp '2024-02-29 12:34:56.789123') AS week, date_trunc('millisecond', timestamp '2024-02-29 12:34:56.789123') AS millis;",
+    "SELECT id FROM type_matrix_timestamp WHERE value = '2024-02-29 12:34:56.5555'::timestamp(3);",
+    "SELECT '2023-02-29 12:00:00'::timestamp;",
+    "SELECT '2024-01-01 25:00:00'::timestamp;",
+    "SELECT 'nonsense'::timestamp;"
+  ],
+  "expectation": "match"
+}

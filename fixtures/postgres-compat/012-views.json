@@ -1,0 +1,26 @@
+{
+  "id": "views",
+  "description": "CREATE VIEW, SELECT from simple and join views, DROP VIEW, and catalog introspection",
+  "cleanup_sql": [
+    "DROP VIEW IF EXISTS diff_patient_appointments;",
+    "DROP VIEW IF EXISTS diff_patient_names;",
+    "DROP TABLE IF EXISTS diff_view_appointments;",
+    "DROP TABLE IF EXISTS diff_view_patients;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_view_patients (id TEXT PRIMARY KEY, name TEXT, age INT);",
+    "CREATE TABLE diff_view_appointments (id TEXT PRIMARY KEY, patient_id TEXT, doctor TEXT);",
+    "INSERT INTO diff_view_patients (id, name, age) VALUES ('p1', 'Ada', 36), ('p2', 'John', 45);",
+    "INSERT INTO diff_view_appointments (id, patient_id, doctor) VALUES ('a1', 'p1', 'Dr. Rao'), ('a2', 'p2', 'Dr. Kim');",
+    "CREATE VIEW diff_patient_names AS SELECT id, name FROM diff_view_patients;",
+    "SELECT id, name FROM diff_patient_names ORDER BY id;",
+    "CREATE VIEW diff_patient_appointments AS SELECT diff_view_patients.name AS patient_name, diff_view_appointments.doctor AS doctor FROM diff_view_patients JOIN diff_view_appointments ON diff_view_patients.id = diff_view_appointments.patient_id;",
+    "SELECT patient_name, doctor FROM diff_patient_appointments WHERE doctor = 'Dr. Rao';",
+    "SELECT table_name, table_type FROM information_schema.tables WHERE table_name = 'diff_patient_names';",
+    "SELECT column_name FROM information_schema.columns WHERE table_name = 'diff_patient_names' ORDER BY ordinal_position;",
+    "SELECT relname, relkind FROM pg_catalog.pg_class WHERE relname = 'diff_patient_names';",
+    "DROP VIEW diff_patient_appointments;",
+    "DROP VIEW diff_patient_names;"
+  ],
+  "expectation": "match"
+}

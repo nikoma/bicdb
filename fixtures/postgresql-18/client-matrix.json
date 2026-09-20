@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "target_version": "18.4",
+  "automated": [
+    {
+      "id": "psql",
+      "name": "psql",
+      "version": "host PostgreSQL client",
+      "scope": "cross_target",
+      "formats": "text",
+      "coverage": "Scalar values and result OIDs against BicDB and PostgreSQL 18.4"
+    },
+    {
+      "id": "node-postgres",
+      "name": "node-postgres",
+      "version": "8.16.3",
+      "scope": "cross_target",
+      "formats": "text and driver-safe binary",
+      "coverage": "DDL, CRUD, rollback, named prepared statements, scalar values, and result OIDs"
+    },
+    {
+      "id": "psycopg",
+      "name": "psycopg",
+      "version": "3.2.9",
+      "scope": "cross_target",
+      "formats": "text and binary",
+      "coverage": "DDL, CRUD, rollback, prepared execution, exact numeric, and temporal migrations"
+    },
+    {
+      "id": "sqlalchemy",
+      "name": "SQLAlchemy with psycopg",
+      "version": "2.0.41 / 3.2.9",
+      "scope": "cross_target",
+      "formats": "driver managed",
+      "coverage": "Engine and session flows, DDL, CRUD, rollback, and bound parameters"
+    },
+    {
+      "id": "sqlx",
+      "name": "SQLx",
+      "version": "0.8.6",
+      "scope": "cross_target",
+      "formats": "text and binary",
+      "coverage": "Canonical text values and typed extended-protocol decoding"
+    },
+    {
+      "id": "jdbc",
+      "name": "PostgreSQL JDBC",
+      "version": "42.7.7",
+      "scope": "cross_target",
+      "formats": "text and forced binary",
+      "coverage": "Typed getters with binary transfer disabled and forced"
+    },
+    {
+      "id": "libpq",
+      "name": "libpq",
+      "version": "host PostgreSQL library",
+      "scope": "cross_target",
+      "formats": "text and binary",
+      "coverage": "PQexecParams plus raw network-byte assertions"
+    },
+    {
+      "id": "tokio-postgres",
+      "name": "tokio-postgres",
+      "version": "0.7.18",
+      "scope": "bicdb_regression",
+      "formats": "text and binary",
+      "coverage": "In-process BicDB DDL, CRUD, rollback, prepared statements, and typed decoding"
+    }
+  ],
+  "manual": [
+    {
+      "name": "Prisma",
+      "version": "6.10.1",
+      "status": "known_gap",
+      "coverage": "Reproducible db pull smoke; not part of the passing automated matrix"
+    },
+    {
+      "name": "DBeaver, DataGrip, and TablePlus",
+      "version": "operator supplied",
+      "status": "manual",
+      "coverage": "Connection browser and shared SQL smoke script"
+    }
+  ]
+}

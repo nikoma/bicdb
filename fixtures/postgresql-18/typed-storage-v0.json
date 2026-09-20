@@ -1,0 +1,31 @@
+{
+  "format_version": 0,
+  "schema": "CREATE TABLE legacy_typed_values (id TEXT PRIMARY KEY, amount NUMERIC, single FLOAT4, double_value FLOAT8, happened_on DATE, happened_at TIMESTAMPTZ, elapsed INTERVAL, payload BYTEA, flags VARBIT, tags TEXT[], address INET, window INT8RANGE)",
+  "records": [
+    {
+      "id": "legacy-1",
+      "metadata": {
+        "amount": "9007199254740993.0100",
+        "single": -0.0,
+        "double_value": 42.5,
+        "happened_on": "2026-07-17",
+        "happened_at": "2026-07-17 12:34:56.123456+00",
+        "elapsed": "1 mon 2 days 03:04:05.600",
+        "payload": [0, 1, 127, 255],
+        "flags": "00101",
+        "tags": ["alpha", null, "omega"],
+        "address": "2001:0db8:0:0:0:0:0:1/64",
+        "window": "[10,20)",
+        "plain_note": "must remain untouched"
+      }
+    },
+    {
+      "id": "legacy-null",
+      "metadata": {
+        "amount": null,
+        "single": null,
+        "plain_note": "null typed values stay null"
+      }
+    }
+  ]
+}

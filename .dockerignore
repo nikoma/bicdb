@@ -1,0 +1,17 @@
+.git
+.git/**
+target
+target/**
+**/target
+**/target/**
+**/carrier-broker-data
+**/carrier-broker-data/**
+testdb
+testdb/**
+walknorth-chat-db
+walknorth-chat-db/**
+reports/performance/**/raw
+reports/performance/**/raw/**
+*.seg
+*.wal
+*.log

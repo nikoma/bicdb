@@ -1,0 +1,23 @@
+{
+  "id": "nightmare_intentional_gaps_jsonb_copy_triggers_protocol",
+  "description": "Explicitly listed intentional gaps: JSONB operators, COPY, PL/pgSQL triggers/functions, binary protocol, malformed protocol frames, and cancel requests",
+  "cleanup_sql": [
+    "DROP TRIGGER IF EXISTS nm_gap_touch ON nm_gap_trigger;",
+    "DROP FUNCTION IF EXISTS nm_gap_fn();",
+    "DROP TABLE IF EXISTS nm_gap_trigger;",
+    "DROP TABLE IF EXISTS nm_gap_jsonb;",
+    "DROP TABLE IF EXISTS nm_gap_copy;"
+  ],
+  "sql": [
+    "CREATE TABLE nm_gap_jsonb (id TEXT PRIMARY KEY, doc JSONB);",
+    "INSERT INTO nm_gap_jsonb (id, doc) VALUES ('j1', '{\"a\": {\"b\": 1}, \"tags\": [\"x\"]}'::jsonb);",
+    "SELECT doc->'a'->>'b' AS b FROM nm_gap_jsonb WHERE doc ? 'tags';",
+    "CREATE TABLE nm_gap_copy (id TEXT PRIMARY KEY, label TEXT);",
+    "COPY nm_gap_copy (id, label) FROM '/definitely/missing/nightmare.csv';",
+    "CREATE TABLE nm_gap_trigger (id TEXT PRIMARY KEY, touched INT);",
+    "CREATE FUNCTION nm_gap_fn() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN NEW.touched := 1; RETURN NEW; END';",
+    "CREATE TRIGGER nm_gap_touch BEFORE INSERT ON nm_gap_trigger FOR EACH ROW EXECUTE FUNCTION nm_gap_fn();"
+  ],
+  "expectation": "expected_difference",
+  "expected_difference": "BicDB does not yet claim JSONB operator, COPY FROM STDIN, PL/pgSQL trigger execution, binary-format bind parity, malformed protocol frame parity, or cancel-request parity. Protocol-level gaps are also exercised by crates/bicdb-pgwire/tests/protocol.rs and scripts/pg18-nightmare.sh."
+}

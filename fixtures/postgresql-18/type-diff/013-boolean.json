@@ -1,0 +1,25 @@
+{
+  "id": "type_matrix_boolean",
+  "description": "PostgreSQL 18 boolean input prefixes, casts, three-valued logic, ordering, aggregates, indexes, windows, and errors",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_boolean;"
+  ],
+  "sql": [
+    "SELECT 'true'::bool AS b1, 'tr'::bool AS b2, 't'::bool AS b3, 'yes'::bool AS b4, 'ye'::bool AS b5, 'y'::bool AS b6, 'on'::bool AS b7, '1'::bool AS b8, 'false'::bool AS b9, 'fa'::bool AS b10, 'f'::bool AS b11, 'no'::bool AS b12, 'n'::bool AS b13, 'off'::bool AS b14, 'of'::bool AS b15, '0'::bool AS b16;",
+    "SELECT 'o'::bool;",
+    "SELECT true::int4 AS c1, false::int4 AS c2, 0::int4::bool AS c3, 2::int4::bool AS c4, (-1)::int4::bool AS c5, true::text AS c6, false::varchar AS c7;",
+    "SELECT true::int2;",
+    "SELECT 1::int8::bool;",
+    "SELECT true::numeric;",
+    "SELECT false AND NULL, true AND NULL, false OR NULL, true OR NULL, NOT NULL::bool, NULL::bool IS TRUE, NULL::bool IS FALSE, NULL::bool IS UNKNOWN, NULL::bool IS NOT UNKNOWN;",
+    "CREATE TABLE type_matrix_boolean (id TEXT PRIMARY KEY, flag BOOLEAN);",
+    "INSERT INTO type_matrix_boolean VALUES ('false', 'of'), ('true', 'tr'), ('null', NULL);",
+    "CREATE INDEX type_matrix_boolean_flag_idx ON type_matrix_boolean (flag);",
+    "SELECT id, flag FROM type_matrix_boolean ORDER BY flag NULLS LAST, id;",
+    "SELECT id FROM type_matrix_boolean WHERE flag = true ORDER BY id;",
+    "SELECT bool_and(flag) AS a1, bool_or(flag) AS a2, every(flag) AS a3, bool_and(DISTINCT flag) AS a4, bool_or(DISTINCT flag) AS a5 FROM type_matrix_boolean;",
+    "SELECT bool_and(flag) AS a1, bool_or(flag) AS a2, every(flag) AS a3 FROM type_matrix_boolean WHERE false;",
+    "SELECT id, bool_and(flag) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), bool_or(flag) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM type_matrix_boolean ORDER BY id;"
+  ],
+  "expectation": "match"
+}

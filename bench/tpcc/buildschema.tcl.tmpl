@@ -1,0 +1,23 @@
+#!/bin/tclsh
+# Build an immutable HammerDB TPC-C seed for the BicDB performance campaign.
+dbset db pg
+dbset bm TPC-C
+diset connection pg_host host.docker.internal
+diset connection pg_port @PORT@
+diset connection pg_sslmode disable
+diset tpcc pg_superuser bicdb
+diset tpcc pg_superuserpass bicdb
+diset tpcc pg_defaultdbase bicdb
+diset tpcc pg_user tpcc
+diset tpcc pg_pass tpcc
+diset tpcc pg_dbase tpcc
+diset tpcc pg_count_ware @WAREHOUSES@
+diset tpcc pg_num_vu @BUILD_VU@
+diset tpcc pg_storedprocs true
+diset tpcc pg_partition false
+buildschema
+waittocomplete
+vudestroy
+# Batch mode does not need interactive TclReadLine restoration. HammerDB 6.0
+# can fail in `quit` after all loaders have completed successfully.
+exit 0

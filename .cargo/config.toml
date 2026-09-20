@@ -1,0 +1,3 @@
+[build]
+# Keep every repository-local Cargo invocation within the host safety limit.
+jobs = 10

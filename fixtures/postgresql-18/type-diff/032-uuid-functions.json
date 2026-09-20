@@ -1,0 +1,13 @@
+{
+  "id": "type_matrix_uuid_functions",
+  "description": "PostgreSQL 18 UUIDv4/v7 generation, timestamp and version extraction, NULL behavior, and bytewise ordering",
+  "cleanup_sql": [],
+  "sql": [
+    "SELECT uuid_extract_version(uuidv4()) AS uuidv4_version, uuid_extract_version(gen_random_uuid()) AS random_version, uuid_extract_version(uuidv7()) AS uuidv7_version, uuid_extract_version(uuidv7(interval '2 hours')) AS shifted_version;",
+    "SELECT uuid_extract_version('00000000-0000-0000-8000-000000000000'::uuid) AS version_zero, uuid_extract_version('00000000-0000-f000-8000-000000000000'::uuid) AS version_fifteen, uuid_extract_version('00000000-0000-0000-0000-000000000000'::uuid) AS non_rfc_version;",
+    "SELECT uuid_extract_timestamp('d62f9b40-1f3d-11ef-8f7d-0242ac120002'::uuid) AS v1_timestamp, uuid_extract_timestamp('01890f3b-9e80-7000-8000-000000000000'::uuid) AS v7_timestamp, uuid_extract_timestamp('d62f9b40-1f3d-41ef-8f7d-0242ac120002'::uuid) AS v4_timestamp;",
+    "SELECT uuid_extract_version(NULL::uuid) AS null_version, uuid_extract_timestamp(NULL::uuid) AS null_timestamp;",
+    "SELECT '01890f3b-9e80-7000-8000-000000000000'::uuid < '01890f3b-9e81-7000-8000-000000000000'::uuid AS time_order, '00000000-0000-0000-8000-000000000001'::uuid < '00000000-0000-0000-8000-000000000002'::uuid AS byte_order;"
+  ],
+  "expectation": "match"
+}

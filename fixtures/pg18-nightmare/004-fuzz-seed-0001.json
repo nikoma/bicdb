@@ -1,0 +1,20 @@
+{
+  "id": "nightmare_fuzz_seed_0001",
+  "description": "Deterministic property/fuzz seed: random-looking schema, rows, SELECT/INSERT/UPDATE/DELETE, and shrinkable failing prefix",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS nm_fuzz_0001_b;",
+    "DROP TABLE IF EXISTS nm_fuzz_0001_a;"
+  ],
+  "sql": [
+    "CREATE TABLE nm_fuzz_0001_a (id TEXT PRIMARY KEY, k INT, v TEXT, flag BOOLEAN);",
+    "CREATE TABLE nm_fuzz_0001_b (id TEXT PRIMARY KEY, a_id TEXT, amount INT);",
+    "INSERT INTO nm_fuzz_0001_a (id, k, v, flag) VALUES ('a0', 0, NULL, true), ('a1', -7, 'seven', false), ('a2', 42, 'forty two', NULL);",
+    "INSERT INTO nm_fuzz_0001_b (id, a_id, amount) VALUES ('b0', 'a0', 0), ('b1', 'a1', -7), ('b2', 'missing', 99);",
+    "SELECT a.id, b.id, COALESCE(a.v, 'nil') FROM nm_fuzz_0001_a a LEFT JOIN nm_fuzz_0001_b b ON a.id = b.a_id WHERE a.k >= -7 ORDER BY a.k, b.id;",
+    "UPDATE nm_fuzz_0001_a SET v = v || '-u' WHERE flag = false;",
+    "DELETE FROM nm_fuzz_0001_b WHERE amount < 0;",
+    "SELECT a.id, a.v, COUNT(b.id) FROM nm_fuzz_0001_a a LEFT JOIN nm_fuzz_0001_b b ON a.id = b.a_id GROUP BY a.id, a.v ORDER BY a.id;"
+  ],
+  "expectation": "expected_difference",
+  "expected_difference": "This seed currently exposes known UPDATE expression and aggregate-over-join gaps. It stays as an explicit fuzz repro until those operations match PostgreSQL."
+}

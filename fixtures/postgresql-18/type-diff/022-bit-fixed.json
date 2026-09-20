@@ -1,0 +1,26 @@
+{
+  "id": "type_matrix_fixed_bit",
+  "description": "PostgreSQL 18 fixed-length bit strings, literals, casts, operators, functions, ordering, and indexes",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_fixed_bit;",
+    "DROP TABLE IF EXISTS type_matrix_invalid_fixed_bit;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_fixed_bit (id TEXT PRIMARY KEY, flags BIT(5) UNIQUE);",
+    "CREATE INDEX type_matrix_fixed_bit_flags_idx ON type_matrix_fixed_bit (flags);",
+    "INSERT INTO type_matrix_fixed_bit VALUES ('a', B'10101'), ('b', X'3'::bit(5));",
+    "SELECT id, flags FROM type_matrix_fixed_bit ORDER BY flags;",
+    "SELECT X'A'::bit(5) AS hex_bits, '101'::bit(5) AS padded, '101010'::bit(5) AS truncated, 5::bit(5) AS integer_bits, (-1)::bit(5) AS negative_bits, B'10101'::int4 AS bits_integer;",
+    "SELECT B'10101' & B'11000' AS bit_and, B'10101' | B'11000' AS bit_or, B'10101' # B'11000' AS bit_xor, ~B'10101' AS bit_not, B'10101' << 2 AS shift_left, B'10101' >> 2 AS shift_right, B'101' || B'01' AS concatenated;",
+    "SELECT bit_count(B'10101'), length(B'10101'), bit_length(B'10101'), octet_length(B'10101'), get_bit(B'10101', 0), set_bit(B'10101', 1, 1);",
+    "SELECT id FROM type_matrix_fixed_bit WHERE flags = B'10101';",
+    "INSERT INTO type_matrix_fixed_bit VALUES ('short', B'101');",
+    "INSERT INTO type_matrix_fixed_bit VALUES ('long', B'101010');",
+    "SELECT B'101' & B'10';",
+    "SELECT get_bit(B'1', 1);",
+    "SELECT set_bit(B'1', 0, 2);",
+    "SELECT B'10101'::int2;",
+    "CREATE TABLE type_matrix_invalid_fixed_bit (flags BIT(0));"
+  ],
+  "expectation": "match"
+}

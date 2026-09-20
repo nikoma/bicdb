@@ -1,0 +1,18 @@
+{
+  "id": "type_breadth_supported",
+  "description": "Supported numeric, interval, date/time variants, casts, and pg_type catalog visibility",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_type_breadth;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_type_breadth (id TEXT PRIMARY KEY, amount NUMERIC, day DATE, at_time TIME, span INTERVAL, starts_at TIMESTAMP WITH TIME ZONE);",
+    "INSERT INTO diff_type_breadth (id, amount, day, at_time, span, starts_at) VALUES ('t1', '12.30'::numeric, '2024-01-02'::date, '02:03:04'::time, '1 day'::interval, '2024-01-02 03:04:05+00'::timestamptz);",
+    "SELECT amount, day, at_time, span, starts_at FROM diff_type_breadth WHERE id = 't1';",
+    "SELECT amount + 0.20::numeric AS exact_total, amount * 3 AS exact_scaled FROM diff_type_breadth WHERE id = 't1';",
+    "SELECT day + '2 days'::interval AS due_on, starts_at + '1 hour'::interval AS starts_later, date_part('day', span) AS span_days FROM diff_type_breadth WHERE id = 't1';",
+    "SELECT '7'::numeric AS cast_numeric, '1 day'::interval AS cast_interval, '2024-01-02 03:04:05'::timestamp AS cast_timestamp;",
+    "SELECT typname, oid FROM pg_catalog.pg_type WHERE typname IN ('numeric', 'interval') ORDER BY typname;",
+    "SELECT a.attname, a.atttypid FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON a.attrelid = c.oid WHERE c.relname = 'diff_type_breadth' AND a.attname IN ('amount', 'span') ORDER BY a.attname;"
+  ],
+  "expectation": "match"
+}

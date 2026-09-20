@@ -1,0 +1,33 @@
+name: dependency-policy
+
+# Dependency licence and supply-chain gate (Phase 0 of
+# docs/server-paged-storage-todo.md).
+#
+# Runs on every pull request rather than on a schedule: the policy's purpose is
+# to reject an ineligible crate while it is still an experiment, which only works
+# if the answer arrives before the change merges.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  dependency-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # The action pins and caches cargo-deny; running `cargo install` here would
+      # rebuild it on every job.
+      - name: Check licences, banned engines, and sources
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses bans sources
+          # No feature or target flags here on purpose: deny.toml owns that
+          # selection (`[graph] targets`, `all-features = false`). Overriding it
+          # on the command line makes CI evaluate a different dependency graph
+          # than a developer running scripts/check-licenses.sh locally, and the
+          # two then disagree about which crates are even in scope.

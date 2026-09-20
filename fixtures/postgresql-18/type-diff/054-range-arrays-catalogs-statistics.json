@@ -1,0 +1,18 @@
+{
+  "id": "type_matrix_range_arrays_catalogs_statistics",
+  "description": "PostgreSQL 18 range and multirange arrays, catalog identities, pg_range links, and ANALYZE histogram metadata",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_range_statistics;"
+  ],
+  "sql": [
+    "SELECT pg_typeof(ARRAY['[1,3)'::int4range, 'empty'::int4range])::text AS i4_type, cardinality(ARRAY['[1,3)'::int4range, 'empty'::int4range]) AS i4_count, (ARRAY['[1,3)'::int4range, 'empty'::int4range])[1]::text AS i4_first, (ARRAY['[1,3)'::int4range, 'empty'::int4range])[2]::text AS i4_second, pg_typeof(ARRAY['[9007199254740993,9007199254741000)'::int8range])::text AS i8_type, (ARRAY['[9007199254740993,9007199254741000)'::int8range])[1]::text AS i8_first, pg_typeof(ARRAY['[0.10,9.99)'::numrange])::text AS nr_type, (ARRAY['[0.10,9.99)'::numrange])[1]::text AS nr_first, pg_typeof(ARRAY['[2024-01-01 00:00:00,2024-01-02)'::tsrange])::text AS ts_type, pg_typeof(ARRAY['[2024-01-01 00:00:00+00,2024-01-02 00:00:00+00)'::tstzrange])::text AS tstz_type, pg_typeof(ARRAY['[2024-01-01,2024-01-03)'::daterange])::text AS date_type;",
+    "SELECT pg_typeof(ARRAY['{[1,3)}'::int4multirange, '{}'::int4multirange])::text AS i4m_type, cardinality(ARRAY['{[1,3)}'::int4multirange, '{}'::int4multirange]) AS i4m_count, (ARRAY['{[1,3)}'::int4multirange, '{}'::int4multirange])[1]::text AS i4m_first, (ARRAY['{[1,3)}'::int4multirange, '{}'::int4multirange])[2]::text AS i4m_second, pg_typeof(ARRAY['{[9007199254740993,9007199254741000)}'::int8multirange])::text AS i8m_type, pg_typeof(ARRAY['{[0.10,9.99)}'::nummultirange])::text AS nrm_type, pg_typeof(ARRAY['{[2024-01-01 00:00:00,2024-01-02)}'::tsmultirange])::text AS tsm_type, pg_typeof(ARRAY['{[2024-01-01 00:00:00+00,2024-01-02 00:00:00+00)}'::tstzmultirange])::text AS tstzm_type, pg_typeof(ARRAY['{[2024-01-01,2024-01-03)}'::datemultirange])::text AS datem_type;",
+    "SELECT typname::text, typinput::text, typoutput::text, typreceive::text, typsend::text, typanalyze::text, typelem::bigint, typarray::bigint FROM pg_catalog.pg_type WHERE typname IN ('int4range', '_int4range', 'int4multirange', '_int4multirange') ORDER BY oid;",
+    "SELECT rt.typname::text, st.typname::text, mt.typname::text FROM pg_catalog.pg_range r JOIN pg_catalog.pg_type rt ON rt.oid = r.rngtypid JOIN pg_catalog.pg_type st ON st.oid = r.rngsubtype JOIN pg_catalog.pg_type mt ON mt.oid = r.rngmultitypid ORDER BY r.rngtypid;",
+    "CREATE TABLE type_matrix_range_statistics (id integer PRIMARY KEY, span int4range, spans int4multirange);",
+    "INSERT INTO type_matrix_range_statistics SELECT g, int4range(g, g + 10), int4multirange(int4range(g, g + 10)) FROM generate_series(0, 99) AS s(g);",
+    "ANALYZE type_matrix_range_statistics;",
+    "SELECT attname::text, cardinality(range_bounds_histogram), cardinality(range_length_histogram), pg_typeof(range_bounds_histogram)::text AS bounds_type, pg_typeof(range_length_histogram)::text AS lengths_type, range_empty_frac FROM pg_catalog.pg_stats WHERE tablename = 'type_matrix_range_statistics' AND attname IN ('span', 'spans') ORDER BY attname;"
+  ],
+  "expectation": "match"
+}

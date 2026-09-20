@@ -1,0 +1,237 @@
+# PostgreSQL 18.4 pg_cast rows: oid, source, target, function oid, function name, context, method.
+# Generated from a stock PostgreSQL 18.4 catalog and reviewed as DT-1505 compatibility data.
+10000	int8	int2	714	int2	a	f
+10001	int8	int4	480	int4	a	f
+10002	int8	float4	652	float4	i	f
+10003	int8	float8	482	float8	i	f
+10004	int8	numeric	1781	numeric	i	f
+10005	int2	int8	754	int8	i	f
+10006	int2	int4	313	int4	i	f
+10007	int2	float4	236	float4	i	f
+10008	int2	float8	235	float8	i	f
+10009	int2	numeric	1782	numeric	i	f
+10010	int4	int8	481	int8	i	f
+10011	int4	int2	314	int2	a	f
+10012	int4	float4	318	float4	i	f
+10013	int4	float8	316	float8	i	f
+10014	int4	numeric	1740	numeric	i	f
+10015	float4	int8	653	int8	a	f
+10016	float4	int2	238	int2	a	f
+10017	float4	int4	319	int4	a	f
+10018	float4	float8	311	float8	i	f
+10019	float4	numeric	1742	numeric	a	f
+10020	float8	int8	483	int8	a	f
+10021	float8	int2	237	int2	a	f
+10022	float8	int4	317	int4	a	f
+10023	float8	float4	312	float4	a	f
+10024	float8	numeric	1743	numeric	a	f
+10025	numeric	int8	1779	int8	a	f
+10026	numeric	int2	1783	int2	a	f
+10027	numeric	int4	1744	int4	a	f
+10028	numeric	float4	1745	float4	i	f
+10029	numeric	float8	1746	float8	i	f
+10030	money	numeric	3823	numeric	a	f
+10031	numeric	money	3824	money	a	f
+10032	int4	money	3811	money	a	f
+10033	int8	money	3812	money	a	f
+10034	int4	bool	2557	bool	e	f
+10035	bool	int4	2558	int4	e	f
+10036	xid8	xid	5071	xid	e	f
+10037	int8	oid	1287	oid	i	f
+10038	int2	oid	313	int4	i	f
+10039	int4	oid	0		i	b
+10040	oid	int8	1288	int8	a	f
+10041	oid	int4	0		a	b
+10042	oid	regproc	0		i	b
+10043	regproc	oid	0		i	b
+10044	int8	regproc	1287	oid	i	f
+10045	int2	regproc	313	int4	i	f
+10046	int4	regproc	0		i	b
+10047	regproc	int8	1288	int8	a	f
+10048	regproc	int4	0		a	b
+10049	regproc	regprocedure	0		i	b
+10050	regprocedure	regproc	0		i	b
+10051	oid	regprocedure	0		i	b
+10052	regprocedure	oid	0		i	b
+10053	int8	regprocedure	1287	oid	i	f
+10054	int2	regprocedure	313	int4	i	f
+10055	int4	regprocedure	0		i	b
+10056	regprocedure	int8	1288	int8	a	f
+10057	regprocedure	int4	0		a	b
+10058	oid	regoper	0		i	b
+10059	regoper	oid	0		i	b
+10060	int8	regoper	1287	oid	i	f
+10061	int2	regoper	313	int4	i	f
+10062	int4	regoper	0		i	b
+10063	regoper	int8	1288	int8	a	f
+10064	regoper	int4	0		a	b
+10065	regoper	regoperator	0		i	b
+10066	regoperator	regoper	0		i	b
+10067	oid	regoperator	0		i	b
+10068	regoperator	oid	0		i	b
+10069	int8	regoperator	1287	oid	i	f
+10070	int2	regoperator	313	int4	i	f
+10071	int4	regoperator	0		i	b
+10072	regoperator	int8	1288	int8	a	f
+10073	regoperator	int4	0		a	b
+10074	oid	regclass	0		i	b
+10075	regclass	oid	0		i	b
+10076	int8	regclass	1287	oid	i	f
+10077	int2	regclass	313	int4	i	f
+10078	int4	regclass	0		i	b
+10079	regclass	int8	1288	int8	a	f
+10080	regclass	int4	0		a	b
+10081	oid	regcollation	0		i	b
+10082	regcollation	oid	0		i	b
+10083	int8	regcollation	1287	oid	i	f
+10084	int2	regcollation	313	int4	i	f
+10085	int4	regcollation	0		i	b
+10086	regcollation	int8	1288	int8	a	f
+10087	regcollation	int4	0		a	b
+10088	oid	regtype	0		i	b
+10089	regtype	oid	0		i	b
+10090	int8	regtype	1287	oid	i	f
+10091	int2	regtype	313	int4	i	f
+10092	int4	regtype	0		i	b
+10093	regtype	int8	1288	int8	a	f
+10094	regtype	int4	0		a	b
+10095	oid	regconfig	0		i	b
+10096	regconfig	oid	0		i	b
+10097	int8	regconfig	1287	oid	i	f
+10098	int2	regconfig	313	int4	i	f
+10099	int4	regconfig	0		i	b
+10100	regconfig	int8	1288	int8	a	f
+10101	regconfig	int4	0		a	b
+10102	oid	regdictionary	0		i	b
+10103	regdictionary	oid	0		i	b
+10104	int8	regdictionary	1287	oid	i	f
+10105	int2	regdictionary	313	int4	i	f
+10106	int4	regdictionary	0		i	b
+10107	regdictionary	int8	1288	int8	a	f
+10108	regdictionary	int4	0		a	b
+10109	text	regclass	1079	regclass	i	f
+10110	varchar	regclass	1079	regclass	i	f
+10111	oid	regrole	0		i	b
+10112	regrole	oid	0		i	b
+10113	int8	regrole	1287	oid	i	f
+10114	int2	regrole	313	int4	i	f
+10115	int4	regrole	0		i	b
+10116	regrole	int8	1288	int8	a	f
+10117	regrole	int4	0		a	b
+10118	oid	regnamespace	0		i	b
+10119	regnamespace	oid	0		i	b
+10120	int8	regnamespace	1287	oid	i	f
+10121	int2	regnamespace	313	int4	i	f
+10122	int4	regnamespace	0		i	b
+10123	regnamespace	int8	1288	int8	a	f
+10124	regnamespace	int4	0		a	b
+10125	text	bpchar	0		i	b
+10126	text	varchar	0		i	b
+10127	bpchar	text	401	text	i	f
+10128	bpchar	varchar	401	text	i	f
+10129	varchar	text	0		i	b
+10130	varchar	bpchar	0		i	b
+10131	char	text	946	text	i	f
+10132	char	bpchar	860	bpchar	a	f
+10133	char	varchar	946	text	a	f
+10134	name	text	406	text	i	f
+10135	name	bpchar	408	bpchar	a	f
+10136	name	varchar	1401	varchar	a	f
+10137	text	char	944	char	a	f
+10138	bpchar	char	944	char	a	f
+10139	varchar	char	944	char	a	f
+10140	text	name	407	name	i	f
+10141	bpchar	name	409	name	i	f
+10142	varchar	name	1400	name	i	f
+10143	int2	bytea	6367	bytea	e	f
+10144	int4	bytea	6368	bytea	e	f
+10145	int8	bytea	6369	bytea	e	f
+10146	bytea	int2	6370	int2	e	f
+10147	bytea	int4	6371	int4	e	f
+10148	bytea	int8	6372	int8	e	f
+10149	char	int4	77	int4	e	f
+10150	int4	char	78	char	e	f
+10151	pg_node_tree	text	0		i	b
+10152	pg_ndistinct	bytea	0		i	b
+10153	pg_ndistinct	text	0		i	i
+10154	pg_dependencies	bytea	0		i	b
+10155	pg_dependencies	text	0		i	i
+10156	pg_mcv_list	bytea	0		i	b
+10157	pg_mcv_list	text	0		i	i
+10158	date	timestamp	2024	timestamp	i	f
+10159	date	timestamptz	1174	timestamptz	i	f
+10160	time	interval	1370	interval	i	f
+10161	time	timetz	2047	timetz	i	f
+10162	timestamp	date	2029	date	a	f
+10163	timestamp	time	1316	time	a	f
+10164	timestamp	timestamptz	2028	timestamptz	i	f
+10165	timestamptz	date	1178	date	a	f
+10166	timestamptz	time	2019	time	a	f
+10167	timestamptz	timestamp	2027	timestamp	a	f
+10168	timestamptz	timetz	1388	timetz	a	f
+10169	interval	time	1419	time	a	f
+10170	timetz	time	2046	time	a	f
+10171	point	box	4091	box	a	f
+10172	lseg	point	1532	point	e	f
+10173	path	polygon	1449	polygon	a	f
+10174	box	point	1534	point	e	f
+10175	box	lseg	1541	lseg	e	f
+10176	box	polygon	1448	polygon	a	f
+10177	box	circle	1479	circle	e	f
+10178	polygon	point	1540	point	e	f
+10179	polygon	path	1447	path	a	f
+10180	polygon	box	1446	box	e	f
+10181	polygon	circle	1474	circle	e	f
+10182	circle	point	1416	point	e	f
+10183	circle	box	1480	box	e	f
+10184	circle	polygon	1544	polygon	e	f
+10185	macaddr	macaddr8	4123	macaddr8	i	f
+10186	macaddr8	macaddr	4124	macaddr	i	f
+10187	cidr	inet	0		i	b
+10188	inet	cidr	1715	cidr	a	f
+10189	bit	varbit	0		i	b
+10190	varbit	bit	0		i	b
+10191	int8	bit	2075	bit	e	f
+10192	int4	bit	1683	bit	e	f
+10193	bit	int8	2076	int8	e	f
+10194	bit	int4	1684	int4	e	f
+10195	cidr	text	730	text	a	f
+10196	inet	text	730	text	a	f
+10197	bool	text	2971	text	a	f
+10198	xml	text	0		a	b
+10199	text	xml	2896	xml	e	f
+10200	cidr	varchar	730	text	a	f
+10201	inet	varchar	730	text	a	f
+10202	bool	varchar	2971	text	a	f
+10203	xml	varchar	0		a	b
+10204	varchar	xml	2896	xml	e	f
+10205	cidr	bpchar	730	text	a	f
+10206	inet	bpchar	730	text	a	f
+10207	bool	bpchar	2971	text	a	f
+10208	xml	bpchar	0		a	b
+10209	bpchar	xml	2896	xml	e	f
+10210	bpchar	bpchar	668	bpchar	i	f
+10211	varchar	varchar	669	varchar	i	f
+10212	time	time	1968	time	i	f
+10213	timestamp	timestamp	1961	timestamp	i	f
+10214	timestamptz	timestamptz	1967	timestamptz	i	f
+10215	interval	interval	1200	interval	i	f
+10216	timetz	timetz	1969	timetz	i	f
+10217	bit	bit	1685	bit	i	f
+10218	varbit	varbit	1687	varbit	i	f
+10219	numeric	numeric	1703	numeric	i	f
+10220	json	jsonb	0		a	i
+10221	jsonb	json	0		a	i
+10222	jsonb	bool	3556	bool	e	f
+10223	jsonb	numeric	3449	numeric	e	f
+10224	jsonb	int2	3450	int2	e	f
+10225	jsonb	int4	3451	int4	e	f
+10226	jsonb	int8	3452	int8	e	f
+10227	jsonb	float4	3453	float4	e	f
+10228	jsonb	float8	2580	float8	e	f
+10229	int4range	int4multirange	4281	int4multirange	e	f
+10230	int8range	int8multirange	4296	int8multirange	e	f
+10231	numrange	nummultirange	4284	nummultirange	e	f
+10232	daterange	datemultirange	4293	datemultirange	e	f
+10233	tsrange	tsmultirange	4287	tsmultirange	e	f
+10234	tstzrange	tstzmultirange	4290	tstzmultirange	e	f

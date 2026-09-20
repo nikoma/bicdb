@@ -1,0 +1,11 @@
+{
+  "id": "type_matrix_text_search_languages",
+  "description": "PostgreSQL 18 built-in Snowball language configurations and stop-word dictionaries",
+  "cleanup_sql": [],
+  "sql": [
+    "SELECT to_tsvector('arabic','الكتابات') AS arabic, to_tsvector('armenian','գրքեր') AS armenian, to_tsvector('basque','etxeak') AS basque, to_tsvector('catalan','cases') AS catalan, to_tsvector('danish','hestene og') AS danish, to_tsvector('dutch','huizen de') AS dutch, to_tsvector('english','running houses the') AS english, to_tsvector('estonian','majades') AS estonian, to_tsvector('finnish','taloissa ja') AS finnish, to_tsvector('french','maisons les') AS french;",
+    "SELECT to_tsvector('german','häuser und') AS german, to_tsvector('greek','σπίτια και') AS greek, to_tsvector('hindi','किताबें') AS hindi, to_tsvector('hungarian','házak és') AS hungarian, to_tsvector('indonesian','rumahnya') AS indonesian, to_tsvector('irish','tithe') AS irish, to_tsvector('italian','case e') AS italian, to_tsvector('lithuanian','namuose') AS lithuanian, to_tsvector('nepali','किताबहरू') AS nepali, to_tsvector('norwegian','husene og') AS norwegian;",
+    "SELECT to_tsvector('portuguese','casas e') AS portuguese, to_tsvector('romanian','casele') AS romanian, to_tsvector('russian','домами и') AS russian, to_tsvector('serbian','кућама') AS serbian, to_tsvector('spanish','casas y') AS spanish, to_tsvector('swedish','husen och') AS swedish, to_tsvector('tamil','வீடுகள்') AS tamil, to_tsvector('turkish','evlerde ve') AS turkish, to_tsvector('yiddish','הייזער') AS yiddish;"
+  ],
+  "expectation": "match"
+}

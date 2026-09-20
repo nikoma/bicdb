@@ -1,0 +1,23 @@
+{
+  "id": "type_matrix_xml",
+  "description": "PostgreSQL 18 XML validation, declaration normalization, SQL/XML constructors and predicates, XPath namespaces, XMLTABLE projection, aggregation, storage, arrays, and catalog identity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_xml;"
+  ],
+  "sql": [
+    "SELECT xml '<?xml version=\"1.0\" encoding=\"LATIN1\"?><root>é</root>', xml '<?xml version=\"1.1\" encoding=\"UTF-8\"?><root/>', xml_is_well_formed('<a/>'), xml_is_well_formed_document('<a/><b/>'), xml_is_well_formed_content('<a/><b/>');",
+    "SELECT xmlparse(document '<root><a/></root>'), xmlparse(content '<a/><b/>'), xmlserialize(document xml '<a/>' AS text), xmlexists('/root/a' PASSING BY VALUE xml '<root><a/></root>');",
+    "SELECT xmlelement(name patient, xmlattributes(42 AS id, NULL AS omitted), xmlforest('Ada & Bob' AS name, xml '<b/>' AS payload)), xmlpi(name php, 'echo 1;'), xmlcomment('reviewed');",
+    "SELECT xmlroot(xml '<a/>', version '1.1', standalone yes), xmlroot(xml '<a/>', version no value, standalone no value), xmlconcat(xml '<a/>', NULL, xml '<b/>');",
+    "SELECT xpath('/root/a/text()', xml '<root><a>one</a><a>two</a></root>'), xpath_exists('/root/a[@id=\"x\"]', xml '<root><a id=\"x\"/></root>');",
+    "SELECT xpath('/r:root/r:item', xml '<r:root xmlns:r=\"urn:test\"><r:item id=\"1\">A</r:item></r:root>', ARRAY[ARRAY['r', 'urn:test']]);",
+    "SELECT xml '<!DOCTYPE foo [<!ENTITY x \"bar\">]><foo>&x;</foo>', xpath('string(/foo)', xml '<!DOCTYPE foo [<!ENTITY x \"bar\">]><foo>&x;</foo>'), xml '<!DOCTYPE foo SYSTEM \"file:///does-not-exist\"><foo>&external;</foo>';",
+    "SELECT id, name, ordinality FROM XMLTABLE(XMLNAMESPACES('urn:test' AS r), '/r:rows/r:row' PASSING xml '<r:rows xmlns:r=\"urn:test\"><r:row id=\"7\"><r:name>A</r:name></r:row><r:row id=\"8\"/></r:rows>' COLUMNS id int PATH '@id', name text PATH 'r:name' DEFAULT 'missing', ordinality FOR ORDINALITY) ORDER BY id;",
+    "CREATE TABLE type_matrix_xml (id INTEGER PRIMARY KEY, payload XML, fragments XML[]);",
+    "INSERT INTO type_matrix_xml VALUES (2, xml '<b/>', ARRAY[xml '<b/>', NULL]), (1, xml '<a/>', ARRAY[xml '<a/>']);",
+    "SELECT xmlagg(payload ORDER BY id), pg_typeof(xmlagg(payload)), xmlagg(payload) FILTER (WHERE id = 1) FROM type_matrix_xml;",
+    "SELECT id, payload, fragments FROM type_matrix_xml ORDER BY id;",
+    "SELECT oid, typarray FROM pg_type WHERE typname = 'xml';"
+  ],
+  "expectation": "match"
+}

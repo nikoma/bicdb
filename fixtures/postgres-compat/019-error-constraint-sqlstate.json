@@ -1,0 +1,12 @@
+{
+  "id": "error_constraint_sqlstate",
+  "description": "Basic unique constraint violations expose PostgreSQL SQLSTATE 23505",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_error_constraints;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_error_constraints (id TEXT PRIMARY KEY, email TEXT UNIQUE);",
+    "INSERT INTO diff_error_constraints (id, email) VALUES ('p1', 'a@example.com');",
+    "INSERT INTO diff_error_constraints (id, email) VALUES ('p2', 'a@example.com');"
+  ]
+}

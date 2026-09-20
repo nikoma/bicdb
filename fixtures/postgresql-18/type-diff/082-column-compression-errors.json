@@ -1,0 +1,12 @@
+{
+  "id": "type_matrix_column_compression_errors",
+  "description": "PostgreSQL 18 rejects compression on fixed-width types and unknown compression methods with matching SQLSTATEs",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_compression_errors CASCADE;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_compression_errors (fixed_value int4 COMPRESSION pglz);",
+    "CREATE TABLE type_matrix_compression_errors (text_value text COMPRESSION unknown_method);"
+  ],
+  "expectation": "match"
+}

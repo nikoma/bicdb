@@ -1,0 +1,20 @@
+services:
+  pg18:
+    image: ${PG18_IMAGE:-postgres:18.4}
+    container_name: ${PG18_CONTAINER_NAME:-bicdb-pg18-compat}
+    environment:
+      POSTGRES_DB: ${PG18_DB:-compat}
+      POSTGRES_USER: ${PG18_USER:-postgres}
+      POSTGRES_PASSWORD: ${PG18_PASSWORD:-postgres}
+    ports:
+      - "${PG18_BIND_HOST:-127.0.0.1}:${PG18_HOST_PORT:-55432}:5432"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -p 5432 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"",
+        ]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+      start_period: 2s

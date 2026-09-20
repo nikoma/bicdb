@@ -1,0 +1,28 @@
+{
+  "id": "type_matrix_user_type_dependencies",
+  "description": "PostgreSQL 18 dependency directions for base, domain, enum, composite, relation, range, multirange, array, and routine objects",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_dependency_table CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_dependency_range CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_dependency_composite CASCADE;",
+    "DROP DOMAIN IF EXISTS type_matrix_dependency_domain CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_dependency_enum CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_dependency_base CASCADE;"
+  ],
+  "sql": [
+    "CREATE TYPE type_matrix_dependency_base;",
+    "CREATE FUNCTION type_matrix_dependency_base_in(cstring) RETURNS type_matrix_dependency_base AS 'textin' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE FUNCTION type_matrix_dependency_base_out(type_matrix_dependency_base) RETURNS cstring AS 'textout' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE FUNCTION type_matrix_dependency_base_recv(internal) RETURNS type_matrix_dependency_base AS 'textrecv' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE FUNCTION type_matrix_dependency_base_send(type_matrix_dependency_base) RETURNS bytea AS 'textsend' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE TYPE type_matrix_dependency_base (INPUT=type_matrix_dependency_base_in, OUTPUT=type_matrix_dependency_base_out, RECEIVE=type_matrix_dependency_base_recv, SEND=type_matrix_dependency_base_send, INTERNALLENGTH=variable, ALIGNMENT=int4, STORAGE=extended, CATEGORY='S');",
+    "CREATE DOMAIN type_matrix_dependency_domain AS type_matrix_dependency_base;",
+    "CREATE TYPE type_matrix_dependency_enum AS ENUM ('open', 'closed');",
+    "CREATE TYPE type_matrix_dependency_composite AS (state type_matrix_dependency_enum, value type_matrix_dependency_domain);",
+    "CREATE TYPE type_matrix_dependency_range AS RANGE (SUBTYPE = int4, MULTIRANGE_TYPE_NAME = type_matrix_dependency_multirange);",
+    "CREATE TABLE type_matrix_dependency_table (id int4, state type_matrix_dependency_enum, value type_matrix_dependency_domain);",
+    "SELECT object_type.typname::text AS object_name, d.objsubid, d.refclassid::regclass::text AS referenced_class, COALESCE(referenced_type.typname::text, referenced_namespace.nspname::text, referenced_routine.proname::text, referenced_relation.relname::text, d.refobjid::text) AS referenced_name, d.refobjsubid, d.deptype::text FROM pg_depend AS d JOIN pg_type AS object_type ON d.classid = 'pg_type'::regclass AND d.objid = object_type.oid LEFT JOIN pg_type AS referenced_type ON d.refclassid = 'pg_type'::regclass AND d.refobjid = referenced_type.oid LEFT JOIN pg_namespace AS referenced_namespace ON d.refclassid = 'pg_namespace'::regclass AND d.refobjid = referenced_namespace.oid LEFT JOIN pg_proc AS referenced_routine ON d.refclassid = 'pg_proc'::regclass AND d.refobjid = referenced_routine.oid LEFT JOIN pg_class AS referenced_relation ON d.refclassid = 'pg_class'::regclass AND d.refobjid = referenced_relation.oid WHERE object_type.typname IN ('type_matrix_dependency_base', '_type_matrix_dependency_base', 'type_matrix_dependency_domain', '_type_matrix_dependency_domain', 'type_matrix_dependency_enum', '_type_matrix_dependency_enum', 'type_matrix_dependency_composite', '_type_matrix_dependency_composite', 'type_matrix_dependency_range', '_type_matrix_dependency_range', 'type_matrix_dependency_multirange', '_type_matrix_dependency_multirange', 'type_matrix_dependency_table', '_type_matrix_dependency_table') ORDER BY object_name, referenced_class, referenced_name, d.deptype;",
+    "SELECT d.classid::regclass::text AS object_class, COALESCE(object_type.typname::text, object_routine.proname::text, object_relation.relname::text, d.objid::text) AS object_name, d.objsubid, referenced_type.typname::text AS referenced_name, d.refobjsubid, d.deptype::text FROM pg_depend AS d JOIN pg_type AS referenced_type ON d.refclassid = 'pg_type'::regclass AND d.refobjid = referenced_type.oid LEFT JOIN pg_type AS object_type ON d.classid = 'pg_type'::regclass AND d.objid = object_type.oid LEFT JOIN pg_proc AS object_routine ON d.classid = 'pg_proc'::regclass AND d.objid = object_routine.oid LEFT JOIN pg_class AS object_relation ON d.classid = 'pg_class'::regclass AND d.objid = object_relation.oid WHERE d.classid <> 'pg_cast'::regclass AND referenced_type.typname IN ('type_matrix_dependency_base', 'type_matrix_dependency_domain', 'type_matrix_dependency_enum', 'type_matrix_dependency_composite', 'type_matrix_dependency_range', 'type_matrix_dependency_multirange', 'type_matrix_dependency_table') ORDER BY object_class, object_name, d.objsubid, referenced_name, d.deptype;"
+  ],
+  "expectation": "match"
+}

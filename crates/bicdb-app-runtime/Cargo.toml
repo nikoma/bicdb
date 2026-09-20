@@ -1,0 +1,57 @@
+[package]
+name = "bicdb-app-runtime"
+version = "1.0.438-beta"
+edition.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+description = "Capability-mediated batteries-included application runtime for BicDB"
+
+[dependencies]
+aes-gcm.workspace = true
+argon2.workspace = true
+base64.workspace = true
+axum.workspace = true
+axum-server.workspace = true
+bytes.workspace = true
+bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta" }
+bicdb-extension = { path = "../bicdb-extension", version = "1.0.438-beta", features = ["http"] }
+bicdb-sql = { path = "../bicdb-sql", version = "1.0.438-beta", default-features = false }
+chacha20poly1305.workspace = true
+chrono.workspace = true
+chrono-tz = "0.10"
+cron.workspace = true
+ed25519-dalek.workspace = true
+geo.workspace = true
+handlebars.workspace = true
+hex.workspace = true
+hmac.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
+libc.workspace = true
+mime_guess.workspace = true
+opentelemetry.workspace = true
+opentelemetry-otlp.workspace = true
+opentelemetry_sdk.workspace = true
+parking_lot.workspace = true
+phonenumber.workspace = true
+reqwest.workspace = true
+regex.workspace = true
+rsa.workspace = true
+rust_decimal = { version = "1.42", features = ["serde"] }
+serde.workspace = true
+serde_json.workspace = true
+semver.workspace = true
+sha2.workspace = true
+sha1.workspace = true
+sqlparser.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+rand_core = { version = "0.6", features = ["getrandom"] }
+tempfile.workspace = true
+wat = "1"

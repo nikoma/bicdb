@@ -1,0 +1,55 @@
+[package]
+name = "bicdb-sql"
+version = "1.0.438-beta"
+edition.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+
+[features]
+# The adaptive engine's compiled-proc backend JITs procedures with wasmtime,
+# which cannot itself be compiled TO wasm; wasm cache builds turn it off and
+# always run the interpreter (the authoritative path either way).
+default = ["adaptive-procs", "extension-host", "bicdb-core/default"]
+adaptive-procs = ["dep:wasmtime", "dep:wasm-encoder"]
+extension-host = ["bicdb-extension/host"]
+
+[dependencies]
+smallvec = "1"
+base64.workspace = true
+bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta", default-features = false }
+bicdb-extension = { path = "../bicdb-extension", version = "1.0.438-beta", default-features = false }
+chrono = "0.4"
+chrono-tz = "0.10"
+crc32fast.workspace = true
+geo.workspace = true
+hmac.workspace = true
+icu_collator.workspace = true
+itoa.workspace = true
+md-5 = "0.10"
+num-bigint = "0.4"
+num-traits = "0.2"
+regex.workspace = true
+rustc-hash.workspace = true
+rust-stemmers.workspace = true
+waken_snowball.workspace = true
+serde.workspace = true
+h3o.workspace = true
+hex.workspace = true
+rstar.workspace = true
+# SQL `json` preserves object insertion/column order while `jsonb` applies its
+# own canonical renderer. Request this feature explicitly so either contract is
+# stable when bicdb-sql is built alone or inside a larger Cargo feature graph.
+serde_json = { workspace = true, features = ["preserve_order"] }
+sha2.workspace = true
+unicode_categories.workspace = true
+uuid.workspace = true
+sqlparser.workspace = true
+sxd-document = { package = "sxd-document-no-unsafe", version = "0.4.2", default-features = false, features = ["no-unsafe"] }
+sxd-xpath = { package = "sxd-xpath-no-unsafe", version = "0.5.1", features = ["no-unsafe"] }
+thiserror.workspace = true
+wasm-encoder = { version = "0.252.0", optional = true }
+wasmtime = { version = "46.0.1", optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+wat = "1"

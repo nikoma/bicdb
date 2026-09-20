@@ -1,0 +1,10 @@
+{
+  "request_id": 1,
+  "value": {"kind": "unit"},
+  "error": {
+    "code": "AMBIGUOUS",
+    "class": "invalid_request",
+    "message": "a result cannot contain both value and error",
+    "trace_id": "compatibility-trace"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "type_matrix_pg_lsn",
+  "description": "pg_lsn parsing, arithmetic, ordering, arrays, catalog metadata, protocol type inference, and WAL-position functions",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_lsn_values;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_lsn_values (id int4 PRIMARY KEY, position pg_lsn NOT NULL, positions pg_lsn[] NOT NULL);",
+    "INSERT INTO type_matrix_lsn_values VALUES (1, '10/0', ARRAY['0/1'::pg_lsn, 'FFFFFFFF/FFFFFFFF'::pg_lsn]), (2, 'F/FFFFFFFF', ARRAY['0/2'::pg_lsn]);",
+    "SELECT id, position::text, positions::text, pg_typeof(position) FROM type_matrix_lsn_values ORDER BY id;",
+    "SELECT '0/1'::pg_lsn + 1.4, '0/1'::pg_lsn + 1.5, '0/1'::pg_lsn + 1.6, '0/10'::pg_lsn + 2.5, '0/10'::pg_lsn + 3.5, '0/10'::pg_lsn + (-1.5), '0/10'::pg_lsn + (-2.5);",
+    "SELECT 'F/FFFFFFFF'::pg_lsn < '10/0'::pg_lsn, 'FFFFFFFF/FFFFFFFF'::pg_lsn - '0/0'::pg_lsn, pg_typeof('0/1'::pg_lsn - '0/0'::pg_lsn);",
+    "SELECT pg_typeof(pg_current_wal_lsn()), pg_typeof(pg_current_wal_insert_lsn()), pg_typeof(pg_current_wal_flush_lsn()), pg_typeof(pg_wal_lsn_diff('0/10', '0/1')), pg_typeof(pg_last_wal_receive_lsn()), pg_typeof(pg_last_wal_replay_lsn()), pg_is_in_recovery();",
+    "SELECT oid, typname, typlen, typbyval, typalign, typstorage, typarray FROM pg_type WHERE typname = 'pg_lsn';",
+    "SELECT 'G/0'::pg_lsn;",
+    "SELECT 'FFFFFFFF/FFFFFFFF'::pg_lsn + 1;",
+    "SELECT '0/0'::pg_lsn - 1;"
+  ],
+  "expectation": "match"
+}

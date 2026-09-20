@@ -1,0 +1,17 @@
+{
+  "id": "type_matrix_geometric_spatial_boundary",
+  "description": "Declared PostgreSQL planar geometric columns retain their type semantics regardless of column name",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_geometric_spatial_boundary;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_geometric_spatial_boundary (id int4 PRIMARY KEY, geometry point NOT NULL, bounds box NOT NULL);",
+    "INSERT INTO type_matrix_geometric_spatial_boundary VALUES (1, point(1,2), '(0,0),(4,5)'), (2, point(6,7), '(5,6),(8,9)');",
+    "SELECT id, geometry, pg_typeof(geometry), bounds, pg_typeof(bounds) FROM type_matrix_geometric_spatial_boundary ORDER BY id;",
+    "CREATE INDEX type_matrix_geometric_spatial_boundary_gist ON type_matrix_geometric_spatial_boundary USING gist (geometry);",
+    "SELECT id FROM type_matrix_geometric_spatial_boundary WHERE geometry << point(5, 0) ORDER BY id;",
+    "UPDATE type_matrix_geometric_spatial_boundary SET geometry = point(3,4) WHERE id = 1;",
+    "SELECT id, geometry FROM type_matrix_geometric_spatial_boundary ORDER BY id;"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "type_matrix_geometric_transport",
+  "description": "PostgreSQL 18 geometric arrays, lower bounds, catalogs, and canonical transport parity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_geometric_transport;"
+  ],
+  "sql": [
+    "SELECT ARRAY['(1,2)','(3,4)']::point[] AS points, ARRAY['{1,2,3}','{4,5,6}']::line[] AS lines, ARRAY['[(1,2),(3,4)]','[(5,6),(7,8)]']::lseg[] AS segments;",
+    "SELECT '{(1,2),(3,4);(5,6),(7,8)}'::box[] AS boxes, ARRAY['[(1,2),(3,4)]','((5,6),(7,8))']::path[] AS paths, ARRAY['((1,2),(3,4),(5,6))','((7,8),(9,10),(11,12))']::polygon[] AS polygons, ARRAY['<(1,2),3>','<(4,5),6>']::circle[] AS circles;",
+    "SELECT '[0:1]={\"(1,2)\",\"(3,4)\"}'::point[] AS bounded_points, array_dims('[0:1]={\"(1,2)\",\"(3,4)\"}'::point[]) AS point_dims, ('[0:1]={\"(1,2)\",\"(3,4)\"}'::point[])[0] AS first_point;",
+    "SELECT '{{\"(1,2)\",\"(3,4)\"},{\"(5,6)\",\"(7,8)\"}}'::point[] AS point_matrix, array_dims('{{\"(1,2)\",\"(3,4)\"},{\"(5,6)\",\"(7,8)\"}}'::point[]) AS matrix_dims;",
+    "CREATE TABLE type_matrix_geometric_transport (id int4 PRIMARY KEY, points point[], lines line[], segments lseg[], boxes box[], paths path[], polygons polygon[], circles circle[]);",
+    "INSERT INTO type_matrix_geometric_transport VALUES (1, '{\"(1,2)\",\"(3,4)\"}', '{\"{1,2,3}\",\"{4,5,6}\"}', '{\"[(1,2),(3,4)]\",\"[(5,6),(7,8)]\"}', '{(1,2),(3,4);(5,6),(7,8)}', '{\"[(1,2),(3,4)]\",\"((5,6),(7,8))\"}', '{\"((1,2),(3,4),(5,6))\",\"((7,8),(9,10),(11,12))\"}', '{\"<(1,2),3>\",\"<(4,5),6>\"}');",
+    "SELECT points, lines, segments, boxes, paths, polygons, circles FROM type_matrix_geometric_transport WHERE id = 1;",
+    "SELECT oid, typname::text, typelem, typarray, typdelim::text FROM pg_type WHERE oid IN (600, 601, 602, 603, 604, 628, 629, 718, 719, 1017, 1018, 1019, 1020, 1027) ORDER BY oid;",
+    "SELECT format_type(1017, -1), format_type(1018, -1), format_type(1019, -1), format_type(1020, -1), format_type(1027, -1), format_type(629, -1), format_type(719, -1);",
+    "SELECT '{(1,2),(3,4),(5,6),(7,8)}'::box[];"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,43 @@
+{
+  "id": "type_matrix_jsonb_operations",
+  "description": "PostgreSQL 18 JSONB canonicalization, operators, functions, records, subscripting, aggregates, ordering, and GIN query behavior",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_jsonb_operations;",
+    "DROP TABLE IF EXISTS type_matrix_jsonb_ordering;",
+    "DROP TABLE IF EXISTS type_matrix_jsonb_aggregates;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_jsonb_operations (id INTEGER PRIMARY KEY, payload JSONB NOT NULL);",
+    "INSERT INTO type_matrix_jsonb_operations VALUES (1, '{\"kind\":\"patient\",\"active\":true,\"tags\":[\"urgent\",\"west\"],\"nested\":{\"score\":1.00}}'), (2, '{\"kind\":\"patient\",\"active\":false,\"tags\":[\"east\"]}'), (3, '{\"kind\":\"invoice\",\"nested\":{\"kind\":\"patient\"}}'), (4, '{\"other\":1}');",
+    "SELECT '{\"aa\":1,\"b\":2,\"aa\":3,\"n\":1.2300e+02}'::jsonb AS canonical;",
+    "SELECT '1.00'::jsonb = '1'::jsonb, '9007199254740993'::jsonb > '9007199254740992'::jsonb, jsonb_cmp('{\"a\":1}'::jsonb, '{\"a\":2}'::jsonb);",
+    "CREATE TABLE type_matrix_jsonb_ordering (value JSONB PRIMARY KEY);",
+    "INSERT INTO type_matrix_jsonb_ordering VALUES ('null'), ('\"a\"'), ('0'), ('false'), ('[]'), ('[1]'), ('{}');",
+    "SELECT value FROM type_matrix_jsonb_ordering ORDER BY value;",
+    "SELECT payload->'nested'->>'score' AS score, payload#>>'{tags,0}' AS first_tag, payload @> '{\"kind\":\"patient\"}' AS contains_patient, payload ? 'active' AS has_active, payload ?| ARRAY['missing','tags'] AS has_any, payload ?& ARRAY['kind','active'] AS has_all FROM type_matrix_jsonb_operations WHERE id = 1;",
+    "SELECT '{\"a\":1,\"b\":2}'::jsonb - 'a', '[\"a\",\"b\",\"a\"]'::jsonb - 'a', '[10,20,30]'::jsonb - -1, '{\"a\":{\"b\":[10,20]}}'::jsonb #- '{a,b,-1}', '{\"a\":1}'::jsonb || '{\"b\":2}'::jsonb;",
+    "SELECT jsonb_build_object('a', 1, 'missing', NULL), jsonb_build_array(1, NULL, 'x'), jsonb_object(ARRAY['a','b'], ARRAY['1',NULL]), to_jsonb('plain text'::text);",
+    "SELECT jsonb_array_element('[10,20]'::jsonb, -1), jsonb_array_element_text('[10,null]'::jsonb, 1), jsonb_object_field('{\"a\":{\"b\":1}}'::jsonb, 'a'), jsonb_object_field_text('{\"a\":null}'::jsonb, 'a'), jsonb_send('{\"a\":1}'::jsonb);",
+    "SELECT jsonb_set('{\"a\":[1,2]}'::jsonb, '{a,-1}', '9'), jsonb_insert('[0,1,2]'::jsonb, '{1}', '9', false), jsonb_insert('[0,1,2]'::jsonb, '{1}', '9', true), jsonb_strip_nulls('{\"a\":null,\"b\":[null,1]}'::jsonb);",
+    "SELECT jsonb_set_lax('{\"a\":1}'::jsonb, '{a}', NULL, true, 'use_json_null'), jsonb_set_lax('{\"a\":1}'::jsonb, '{a}', NULL, true, 'delete_key'), jsonb_set_lax('{\"a\":1}'::jsonb, '{a}', NULL, true, 'return_target');",
+    "SELECT ('{\"items\":[10,20],\"0\":\"zero\"}'::jsonb)['items'][0] AS first_item, ('[10,20]'::jsonb)[-1] AS last_item, ('{\"0\":\"zero\"}'::jsonb)[0] AS numeric_key, ('{\"a\":1}'::jsonb)['missing'] AS missing;",
+    "SELECT * FROM jsonb_array_elements('[1,{\"a\":2},null]'::jsonb);",
+    "SELECT * FROM jsonb_array_elements_text('[null,\"x\",{\"a\":2}]'::jsonb);",
+    "SELECT * FROM jsonb_object_keys('{\"aa\":1,\"b\":2,\"a\":3}'::jsonb);",
+    "SELECT key, value FROM jsonb_each('{\"aa\":1,\"b\":null}'::jsonb);",
+    "SELECT key, value FROM jsonb_each_text('{\"a\":null,\"b\":2}'::jsonb);",
+    "SELECT * FROM jsonb_to_record('{\"a\":1,\"b\":\"x\",\"c\":true}'::jsonb) AS x(a integer, b text, c boolean, missing text);",
+    "SELECT * FROM jsonb_to_recordset('[{\"a\":1,\"b\":\"x\"},{\"a\":2,\"c\":true}]'::jsonb) AS x(a integer, b text, c boolean);",
+    "SELECT * FROM jsonb_populate_record(NULL::record, '{\"a\":1,\"b\":\"x\"}'::jsonb) AS x(a integer, b text);",
+    "CREATE TABLE type_matrix_jsonb_aggregates (id INTEGER PRIMARY KEY, key_name TEXT, value_number INTEGER);",
+    "INSERT INTO type_matrix_jsonb_aggregates VALUES (1, 'a', 1), (2, 'b', NULL), (3, 'a', 3), (4, 'c', 2);",
+    "SELECT jsonb_agg(value_number ORDER BY id), jsonb_agg_strict(value_number ORDER BY id), jsonb_object_agg(key_name, value_number ORDER BY id), jsonb_object_agg_strict(key_name, value_number ORDER BY id) FROM type_matrix_jsonb_aggregates;",
+    "CREATE INDEX idx_type_matrix_jsonb_payload ON type_matrix_jsonb_operations USING GIN (payload);",
+    "SELECT id FROM type_matrix_jsonb_operations WHERE payload @> '{\"kind\":\"patient\"}'::jsonb ORDER BY id;",
+    "SELECT id FROM type_matrix_jsonb_operations WHERE payload ?| ARRAY['missing','other'] ORDER BY id;",
+    "UPDATE type_matrix_jsonb_operations SET payload = '{\"kind\":\"patient\"}' WHERE id = 4;",
+    "DELETE FROM type_matrix_jsonb_operations WHERE id = 2;",
+    "SELECT id FROM type_matrix_jsonb_operations WHERE payload @> '{\"kind\":\"patient\"}'::jsonb ORDER BY id;"
+  ],
+  "expectation": "match"
+}

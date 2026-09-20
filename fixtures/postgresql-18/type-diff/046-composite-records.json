@@ -1,0 +1,19 @@
+{
+  "id": "type_matrix_composite_records",
+  "description": "PostgreSQL 18 anonymous record values, table row types, field access, JSON conversion, comparisons, and catalogs",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_composite_people;"
+  ],
+  "sql": [
+    "SELECT ROW(1, 'alpha') AS value, pg_typeof(ROW(1, 'alpha')) AS value_type, row_to_json(ROW(1, 'alpha')) AS value_json;",
+    "SELECT ROW(NULL, '', 'a,b', 'a b', ROW(2, 'nested')) AS value, ROW(1, NULL) = ROW(1, NULL) AS nullable_equality, ROW(1, NULL) IS NOT DISTINCT FROM ROW(1, NULL) AS not_distinct;",
+    "SELECT ROW(1, 'alpha') = ROW(1, 'alpha') AS equal_rows, ROW(1, 'alpha') < ROW(2, 'aardvark') AS ordered_rows;",
+    "CREATE TABLE type_matrix_composite_people (id INT PRIMARY KEY, name TEXT NOT NULL, score INT CHECK (score > 0));",
+    "INSERT INTO type_matrix_composite_people VALUES (1, 'Ada', 10);",
+    "SELECT p AS person, pg_typeof(p) AS person_type, (p).name AS person_name, row_to_json(p) AS person_json FROM type_matrix_composite_people p;",
+    "SELECT c.reltype = t.oid AS reltype_matches, t.typrelid = c.oid AS typrelid_matches, t.typtype AS type_kind, t.typcategory AS type_category, t.typarray <> 0 AS has_array_type FROM pg_class c JOIN pg_type t ON t.oid = c.reltype WHERE c.relname = 'type_matrix_composite_people';",
+    "DROP TABLE type_matrix_composite_people;",
+    "SELECT count(*) AS type_count FROM pg_type WHERE typname IN ('type_matrix_composite_people', '_type_matrix_composite_people');"
+  ],
+  "expectation": "match"
+}

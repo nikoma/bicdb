@@ -1,0 +1,7 @@
+{
+  "id": "error_syntax_sqlstate",
+  "description": "Basic syntax errors expose PostgreSQL SQLSTATE 42601",
+  "sql": [
+    "SELECT FROM;"
+  ]
+}

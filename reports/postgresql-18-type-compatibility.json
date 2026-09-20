@@ -1,0 +1,563 @@
+{
+  "schema_version": 1,
+  "bicdb_version": "1.0.140-beta",
+  "target": {
+    "postgres_version": "18.4",
+    "oracle_image": "postgres:18.4",
+    "server_version_num": 180004
+  },
+  "roadmap": {
+    "total": 151,
+    "complete": 151,
+    "pending": 0,
+    "pending_items": []
+  },
+  "oracle_inventory": {
+    "catalog_rows": 473,
+    "kinds": {
+      "b": 291,
+      "c": 144,
+      "m": 6,
+      "p": 26,
+      "r": 6
+    },
+    "note": "Catalog rows include arrays, pseudo-types, and system relation composites; they are not a count of general-purpose column types."
+  },
+  "type_classification": {
+    "catalog_rows": 473,
+    "classified_rows": 473,
+    "unclassified_rows": 0,
+    "general_purpose_roots": 51,
+    "supported_general_purpose_roots": 51,
+    "approved_internal_exclusions": 4,
+    "classifications": {
+      "derived_array": 219,
+      "general_purpose_supported": 51,
+      "internal_array_out_of_scope": 2,
+      "internal_out_of_scope": 4,
+      "pseudo_type_boundary": 26,
+      "system_relation_composite": 144,
+      "system_type_supported": 27
+    }
+  },
+  "type_differential": {
+    "status": "passed",
+    "fixture_count": 89,
+    "passed": 89,
+    "failed": 0,
+    "expected_differences": 0,
+    "clean_state_shards": [
+      40,
+      38,
+      11
+    ],
+    "cases": [
+      {
+        "id": "type_matrix_numeric",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_character_binary",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_temporal",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_network",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_range",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_catalog_reference_search",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_non_column_types",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_integer_boundaries",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_int8_arithmetic",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_floating_point",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_exact_numeric",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_money",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_boolean",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_serial_identity",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_character_declarations",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_character_length",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_fixed_character",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_collations",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_unicode_patterns",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_name_internal_char",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_bytea",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_fixed_bit",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_bit_varying",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_date",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_current_date",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_time",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_timetz",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_timestamp",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_timestamptz",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_interval",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_uuid",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_uuid_functions",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_json_text",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_json_operations",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_jsonb_operations",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_tsvector",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_tsquery",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_text_search_functions",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_text_search_languages",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_text_search_indexes",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_text_search_transport",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_jsonpath",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_xml",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_catalog_vectors",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_array_dimensions",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_domains",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_composite_records",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_named_composite_types",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_enum_types",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_range_catalog",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_range_operations",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_multirange_constructors",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_range_multirange_operators_aggregates",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_range_exclusion_gist_spgist",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_range_arrays_catalogs_statistics",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_array_operations",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_array_integration",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_user_defined_ranges",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_user_type_management",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_inet",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_cidr",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_mac_address",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_network_operations",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_network_indexes",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_network_codecs",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_point",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_geometric_types",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_geometric_operations",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_geometric_indexes",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_geometric_transport",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_geometric_spatial_boundary",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_oid",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_regclass_dependencies",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_transaction_system_types",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_pg_lsn",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_pg_snapshot",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_pseudo_types",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_pseudo_type_boundaries",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_pg_type_catalog",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_user_pg_type_catalog",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_user_type_dependencies",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_pg_attribute_catalog",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_column_compression_errors",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_information_schema_types",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_common_type_selection",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_cast_catalog",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_statistics_operator_classes",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_alter_column_type_lifecycle",
+        "status": "passed"
+      },
+      {
+        "id": "type_matrix_refcursor",
+        "status": "passed"
+      }
+    ]
+  },
+  "support_guarantee": {
+    "status": "accepted",
+    "scope": "Behavior exercised by the checked-in PostgreSQL 18.4 differential, dump/restore, catalog, storage, and protocol gates.",
+    "excludes": "Unexercised PostgreSQL SQL, extension, operational, and catalog behavior."
+  },
+  "clients": {
+    "schema_version": 1,
+    "target_version": "18.4",
+    "automated": [
+      {
+        "id": "psql",
+        "name": "psql",
+        "version": "host PostgreSQL client",
+        "scope": "cross_target",
+        "formats": "text",
+        "coverage": "Scalar values and result OIDs against BicDB and PostgreSQL 18.4"
+      },
+      {
+        "id": "node-postgres",
+        "name": "node-postgres",
+        "version": "8.16.3",
+        "scope": "cross_target",
+        "formats": "text and driver-safe binary",
+        "coverage": "DDL, CRUD, rollback, named prepared statements, scalar values, and result OIDs"
+      },
+      {
+        "id": "psycopg",
+        "name": "psycopg",
+        "version": "3.2.9",
+        "scope": "cross_target",
+        "formats": "text and binary",
+        "coverage": "DDL, CRUD, rollback, prepared execution, exact numeric, and temporal migrations"
+      },
+      {
+        "id": "sqlalchemy",
+        "name": "SQLAlchemy with psycopg",
+        "version": "2.0.41 / 3.2.9",
+        "scope": "cross_target",
+        "formats": "driver managed",
+        "coverage": "Engine and session flows, DDL, CRUD, rollback, and bound parameters"
+      },
+      {
+        "id": "sqlx",
+        "name": "SQLx",
+        "version": "0.8.6",
+        "scope": "cross_target",
+        "formats": "text and binary",
+        "coverage": "Canonical text values and typed extended-protocol decoding"
+      },
+      {
+        "id": "jdbc",
+        "name": "PostgreSQL JDBC",
+        "version": "42.7.7",
+        "scope": "cross_target",
+        "formats": "text and forced binary",
+        "coverage": "Typed getters with binary transfer disabled and forced"
+      },
+      {
+        "id": "libpq",
+        "name": "libpq",
+        "version": "host PostgreSQL library",
+        "scope": "cross_target",
+        "formats": "text and binary",
+        "coverage": "PQexecParams plus raw network-byte assertions"
+      },
+      {
+        "id": "tokio-postgres",
+        "name": "tokio-postgres",
+        "version": "0.7.18",
+        "scope": "bicdb_regression",
+        "formats": "text and binary",
+        "coverage": "In-process BicDB DDL, CRUD, rollback, prepared statements, and typed decoding"
+      }
+    ],
+    "manual": [
+      {
+        "name": "Prisma",
+        "version": "6.10.1",
+        "status": "known_gap",
+        "coverage": "Reproducible db pull smoke; not part of the passing automated matrix"
+      },
+      {
+        "name": "DBeaver, DataGrip, and TablePlus",
+        "version": "operator supplied",
+        "status": "manual",
+        "coverage": "Connection browser and shared SQL smoke script"
+      }
+    ],
+    "evidence": {
+      "schema_version": 1,
+      "target_version": "18.4",
+      "status": "passed",
+      "targets": [
+        "bicdb",
+        "postgresql_18_4"
+      ],
+      "protocol_coverage": {
+        "prepared_binary_registered_scalars": "passed",
+        "prepared_binary_registered_arrays": "passed",
+        "evidence_tests": [
+          "extended_query_binary_parameters_and_results_cover_structured_types",
+          "extended_query_binary_array_matrix_covers_every_registered_scalar_codec"
+        ]
+      },
+      "clients": [
+        {
+          "id": "psql",
+          "name": "psql",
+          "version": "host PostgreSQL client",
+          "status": "passed"
+        },
+        {
+          "id": "node-postgres",
+          "name": "node-postgres",
+          "version": "8.16.3",
+          "status": "passed"
+        },
+        {
+          "id": "psycopg",
+          "name": "psycopg",
+          "version": "3.2.9",
+          "status": "passed"
+        },
+        {
+          "id": "sqlalchemy",
+          "name": "SQLAlchemy with psycopg",
+          "version": "2.0.41 / 3.2.9",
+          "status": "passed"
+        },
+        {
+          "id": "sqlx",
+          "name": "SQLx",
+          "version": "0.8.6",
+          "status": "passed"
+        },
+        {
+          "id": "jdbc",
+          "name": "PostgreSQL JDBC",
+          "version": "42.7.7",
+          "status": "passed"
+        },
+        {
+          "id": "libpq",
+          "name": "libpq",
+          "version": "host PostgreSQL library",
+          "status": "passed"
+        }
+      ]
+    }
+  }
+}

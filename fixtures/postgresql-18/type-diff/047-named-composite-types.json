@@ -1,0 +1,30 @@
+{
+  "id": "type_matrix_named_composite_types",
+  "description": "PostgreSQL 18 named composite creation, casts, storage, catalogs, attribute evolution, rename, and drop",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_named_composite_values CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_named_contact CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_renamed_contact CASCADE;"
+  ],
+  "sql": [
+    "CREATE TYPE type_matrix_named_contact AS (name VARCHAR(12), age INTEGER);",
+    "CREATE TABLE type_matrix_named_composite_values (id INTEGER PRIMARY KEY, contact type_matrix_named_contact);",
+    "INSERT INTO type_matrix_named_composite_values VALUES (1, ROW('Ada', 42)::type_matrix_named_contact);",
+    "SELECT contact, pg_typeof(contact), (contact).name AS name, (contact).age AS age, row_to_json(contact) FROM type_matrix_named_composite_values;",
+    "SELECT t.typtype, t.typcategory, t.typrelid = c.oid AS relation_matches, t.oid = c.reltype AS type_matches, t.typarray <> 0 AS has_array FROM pg_type t JOIN pg_class c ON c.oid = t.typrelid WHERE t.typname = 'type_matrix_named_contact';",
+    "SELECT a.attname, format_type(a.atttypid, a.atttypmod), a.attndims FROM pg_attribute a WHERE a.attrelid = (SELECT typrelid FROM pg_type WHERE typname = 'type_matrix_named_contact') ORDER BY a.attnum;",
+    "ALTER TYPE type_matrix_named_contact ADD ATTRIBUTE enabled BOOLEAN CASCADE;",
+    "SELECT contact, row_to_json(contact) FROM type_matrix_named_composite_values;",
+    "ALTER TYPE type_matrix_named_contact RENAME ATTRIBUTE name TO display_name CASCADE;",
+    "SELECT contact, row_to_json(contact) FROM type_matrix_named_composite_values;",
+    "ALTER TYPE type_matrix_named_contact DROP ATTRIBUTE enabled CASCADE;",
+    "ALTER TYPE type_matrix_named_contact RENAME TO type_matrix_renamed_contact;",
+    "SELECT contact, pg_typeof(contact), row_to_json(contact) FROM type_matrix_named_composite_values;",
+    "DROP TABLE type_matrix_named_composite_values;",
+    "ALTER TYPE type_matrix_renamed_contact ALTER ATTRIBUTE age TYPE BIGINT CASCADE;",
+    "SELECT a.attname, format_type(a.atttypid, a.atttypmod) FROM pg_attribute a WHERE a.attrelid = (SELECT typrelid FROM pg_type WHERE typname = 'type_matrix_renamed_contact') ORDER BY a.attnum;",
+    "DROP TYPE type_matrix_renamed_contact;",
+    "SELECT count(*) AS count FROM pg_type WHERE typname IN ('type_matrix_named_contact', 'type_matrix_renamed_contact');"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,41 @@
+{
+  "id": "type_matrix_range_exclusion_gist_spgist",
+  "description": "PostgreSQL 18 range and multirange exclusion enforcement plus GiST/SP-GiST index and catalog behavior",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_range_exclusion;",
+    "DROP TABLE IF EXISTS type_matrix_range_adjacency;",
+    "DROP TABLE IF EXISTS type_matrix_range_exclusion_keys;"
+  ],
+  "sql": [
+    "CREATE EXTENSION IF NOT EXISTS btree_gist;",
+    "CREATE TABLE type_matrix_range_exclusion_keys (id bigint PRIMARY KEY, code text, span int4range);",
+    "ALTER TABLE type_matrix_range_exclusion_keys ADD CONSTRAINT type_matrix_range_exclusion_keys_equal EXCLUDE USING gist (code WITH =, span WITH =);",
+    "INSERT INTO type_matrix_range_exclusion_keys VALUES (1, 'a', '[1,3)'), (2, 'a', '[2,4)');",
+    "INSERT INTO type_matrix_range_exclusion_keys VALUES (3, 'a', '[1,3)');",
+    "CREATE TABLE type_matrix_range_exclusion (id bigint PRIMARY KEY, account bigint NOT NULL, i4 int4range, i8 int8range, nr numrange, dr daterange, tr tsrange, tzr tstzrange, i4m int4multirange);",
+    "CREATE INDEX type_matrix_range_exclusion_i4_gist ON type_matrix_range_exclusion USING gist (i4);",
+    "CREATE INDEX type_matrix_range_exclusion_i8_spgist ON type_matrix_range_exclusion USING spgist (i8);",
+    "CREATE INDEX type_matrix_range_exclusion_nr_gist ON type_matrix_range_exclusion USING gist (nr);",
+    "CREATE INDEX type_matrix_range_exclusion_dr_spgist ON type_matrix_range_exclusion USING spgist (dr);",
+    "CREATE INDEX type_matrix_range_exclusion_tr_gist ON type_matrix_range_exclusion USING gist (tr);",
+    "CREATE INDEX type_matrix_range_exclusion_tzr_spgist ON type_matrix_range_exclusion USING spgist (tzr);",
+    "CREATE INDEX type_matrix_range_exclusion_i4m_gist ON type_matrix_range_exclusion USING gist (i4m);",
+    "ALTER TABLE type_matrix_range_exclusion ADD CONSTRAINT type_matrix_range_exclusion_no_overlap EXCLUDE USING gist (account WITH =, i4m WITH &&) WHERE (i4m IS NOT NULL);",
+    "INSERT INTO type_matrix_range_exclusion VALUES (1, 7, '[1,3)', '[9007199254740993,9007199254741000)', '[0.0000001,0.0000002)', '[2024-01-01,2024-01-03)', '[2024-01-01 00:00:00,2024-01-03 00:00:00)', '[2024-01-01 00:00:00+00,2024-01-03 00:00:00+00)', '{[1,3),[8,10)}'), (2, 7, '[3,8)', '[9007199254741000,9007199254741010)', '[0.0000002,0.0000003)', '[2024-01-03,2024-01-05)', '[2024-01-03 00:00:00,2024-01-05 00:00:00)', '[2024-01-03 00:00:00+00,2024-01-05 00:00:00+00)', '{[3,8)}');",
+    "SELECT c.conindid = i.indexrelid AS same_index, i.indisexclusion, am.amname FROM pg_catalog.pg_constraint c JOIN pg_catalog.pg_index i ON i.indexrelid = c.conindid JOIN pg_catalog.pg_class ic ON ic.oid = i.indexrelid JOIN pg_catalog.pg_am am ON am.oid = ic.relam WHERE c.conname = 'type_matrix_range_exclusion_no_overlap';",
+    "SELECT ic.relname::text, am.amname::text FROM pg_catalog.pg_class ic JOIN pg_catalog.pg_am am ON am.oid = ic.relam WHERE ic.relname IN ('type_matrix_range_exclusion_i4_gist', 'type_matrix_range_exclusion_i8_spgist', 'type_matrix_range_exclusion_i4m_gist') ORDER BY ic.relname;",
+    "DROP INDEX type_matrix_range_exclusion_no_overlap;",
+    "INSERT INTO type_matrix_range_exclusion (id, account, i4m) VALUES (3, 7, '{[2,4)}');",
+    "INSERT INTO type_matrix_range_exclusion (id, account, i4m) VALUES (4, 8, '{[2,4)}');",
+    "UPDATE type_matrix_range_exclusion SET account = 7 WHERE id = 4;",
+    "CREATE TABLE type_matrix_range_adjacency (id bigint PRIMARY KEY, exact_start numeric NOT NULL, exact_end numeric NOT NULL);",
+    "ALTER TABLE type_matrix_range_adjacency ADD CONSTRAINT type_matrix_range_adjacency_not_adjacent EXCLUDE USING gist (numrange(exact_start, exact_end) WITH -|-);",
+    "INSERT INTO type_matrix_range_adjacency VALUES (1, 0.0000001, 0.0000002);",
+    "INSERT INTO type_matrix_range_adjacency VALUES (2, 0.0000002, 0.0000003);",
+    "INSERT INTO type_matrix_range_adjacency VALUES (3, 0.00000015, 0.00000025);",
+    "CREATE INDEX type_matrix_range_exclusion_i4m_spgist ON type_matrix_range_exclusion USING spgist (i4m);",
+    "ALTER TABLE type_matrix_range_exclusion ADD CONSTRAINT type_matrix_range_exclusion_spgist_multi EXCLUDE USING spgist (account WITH =, i4 WITH &&);",
+    "ALTER TABLE type_matrix_range_exclusion ADD CONSTRAINT type_matrix_range_exclusion_noncommutative EXCLUDE USING gist (i4 WITH @>);"
+  ],
+  "expectation": "match"
+}

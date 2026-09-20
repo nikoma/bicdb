@@ -1,0 +1,14 @@
+{
+  "id": "expected_difference_unsupported_expressions",
+  "description": "Unsupported expression forms return stable unsupported errors",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_expr_unsupported;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_expr_unsupported (id TEXT PRIMARY KEY, age INT);",
+    "INSERT INTO diff_expr_unsupported (id, age) VALUES ('e1', 36);",
+    "SELECT id FROM diff_expr_unsupported WHERE id SIMILAR TO 'e[0-9]';"
+  ],
+  "expectation": "expected_difference",
+  "expected_difference": "BicDB explicitly rejects unsupported SIMILAR TO expressions with SQLSTATE 0A000"
+}

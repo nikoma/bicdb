@@ -1,0 +1,21 @@
+[package]
+name = "bicdb-resp"
+version = "1.0.438-beta"
+edition.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+base64.workspace = true
+bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta" }
+bicdb-sql = { path = "../bicdb-sql", version = "1.0.438-beta" }
+parking_lot.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+serde_json.workspace = true
+sqlparser = { workspace = true, features = ["visitor"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true

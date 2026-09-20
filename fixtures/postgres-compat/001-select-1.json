@@ -1,0 +1,8 @@
+{
+  "id": "select_1",
+  "description": "SELECT 1 parity",
+  "sql": [
+    "SELECT 1;"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,38 @@
+{
+  "id": "type_matrix_user_type_management",
+  "description": "PostgreSQL 18 user-type ACL defaults, comments, schema movement, dependency catalogs, and DROP behavior",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_managed_rows CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_target.managed_state CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_target.score_range CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_source.managed_state CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_source.score_range CASCADE;",
+    "DROP ROLE IF EXISTS type_matrix_type_reader;"
+  ],
+  "sql": [
+    "CREATE ROLE type_matrix_type_reader;",
+    "CREATE SCHEMA IF NOT EXISTS type_matrix_source;",
+    "CREATE SCHEMA IF NOT EXISTS type_matrix_target;",
+    "CREATE TYPE type_matrix_source.managed_state AS ENUM ('open', 'closed');",
+    "SELECT typacl IS NULL AS default_acl_is_null, has_type_privilege('type_matrix_type_reader', 'type_matrix_source.managed_state', 'USAGE') AS public_usage FROM pg_type WHERE typname = 'managed_state';",
+    "REVOKE USAGE ON TYPE type_matrix_source.managed_state FROM PUBLIC;",
+    "SELECT typacl IS NOT NULL AS acl_materialized, has_type_privilege('type_matrix_type_reader', 'type_matrix_source.managed_state', 'USAGE') AS usage_revoked FROM pg_type WHERE typname = 'managed_state';",
+    "GRANT USAGE ON TYPE type_matrix_source.managed_state TO type_matrix_type_reader;",
+    "SELECT has_type_privilege('type_matrix_type_reader', oid, 'USAGE') AS oid_usage_granted FROM pg_type WHERE typname = 'managed_state';",
+    "COMMENT ON TYPE type_matrix_source.managed_state IS 'managed workflow state';",
+    "CREATE TABLE type_matrix_managed_rows (id int4 PRIMARY KEY, state type_matrix_source.managed_state);",
+    "INSERT INTO type_matrix_managed_rows VALUES (1, 'open');",
+    "ALTER TYPE type_matrix_source.managed_state SET SCHEMA type_matrix_target;",
+    "SELECT value.state, pg_typeof(value.state)::text AS moved_type, obj_description(type_catalog.oid, 'pg_type') AS comment FROM type_matrix_managed_rows AS value JOIN pg_type AS type_catalog ON type_catalog.typname = 'managed_state';",
+    "SELECT description FROM pg_description WHERE objoid = (SELECT oid FROM pg_type WHERE typname = 'managed_state');",
+    "SELECT count(*) >= 2 AS dependencies_visible FROM pg_depend WHERE refclassid = 1247 AND refobjid = (SELECT oid FROM pg_type WHERE typname = 'managed_state');",
+    "CREATE TYPE type_matrix_source.score_range AS RANGE (SUBTYPE = int4);",
+    "ALTER TYPE type_matrix_source.score_range SET SCHEMA type_matrix_target;",
+    "SELECT range_namespace.nspname AS range_schema, multirange_namespace.nspname AS multirange_schema FROM pg_range AS range_catalog JOIN pg_type AS range_type ON range_type.oid = range_catalog.rngtypid JOIN pg_namespace AS range_namespace ON range_namespace.oid = range_type.typnamespace JOIN pg_type AS multirange_type ON multirange_type.oid = range_catalog.rngmultitypid JOIN pg_namespace AS multirange_namespace ON multirange_namespace.oid = multirange_type.typnamespace WHERE range_type.typname = 'score_range';",
+    "DROP TYPE type_matrix_target.managed_state CASCADE;",
+    "SELECT count(*) AS remaining_managed_types FROM pg_type WHERE typname = 'managed_state';",
+    "DROP TYPE type_matrix_target.score_range CASCADE;",
+    "DROP ROLE type_matrix_type_reader;"
+  ],
+  "expectation": "match"
+}

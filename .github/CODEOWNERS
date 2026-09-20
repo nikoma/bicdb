@@ -1,0 +1,21 @@
+# BicDB review boundaries. The repository currently has one accountable
+# collaborator; independent team approvals require a future organization/team
+# setup and are not represented by fictitious reviewers here.
+
+* @nikoma
+
+# Storage, SQL, protocol, analytics, and sync domain.
+/crates/bicdb-core/** @nikoma
+/crates/bicdb-sql/** @nikoma
+/crates/bicdb-pgwire/** @nikoma
+/crates/bicdb-analytics/** @nikoma
+/crates/bicdb-sync/** @nikoma
+
+# Security, compatibility, migration, and release boundaries.
+/crates/bicdb-pgwire/** @nikoma
+/fixtures/postgres-compat/** @nikoma
+/scripts/** @nikoma
+/.github/** @nikoma
+
+# Accessibility-sensitive database client surfaces.
+/web/bicdb-client/** @nikoma

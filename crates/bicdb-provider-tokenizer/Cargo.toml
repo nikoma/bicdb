@@ -1,0 +1,13 @@
+[package]
+name = "bicdb-provider-tokenizer"
+version = "1.0.438-beta"
+edition.workspace = true
+license = "Apache-2.0"
+rust-version.workspace = true
+
+[dependencies]
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.438-beta" }
+tokenizers.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

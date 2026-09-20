@@ -1,0 +1,17 @@
+{
+  "id": "procedural_ddl",
+  "description": "SQL-language CREATE/DROP FUNCTION and PROCEDURE plus pg_proc catalog visibility",
+  "cleanup_sql": [
+    "DROP PROCEDURE IF EXISTS diff_proc();",
+    "DROP FUNCTION IF EXISTS diff_fn();"
+  ],
+  "sql": [
+    "CREATE FUNCTION diff_fn() RETURNS INT LANGUAGE SQL AS 'SELECT 42';",
+    "SELECT proname, prokind FROM pg_catalog.pg_proc WHERE proname = 'diff_fn';",
+    "CREATE PROCEDURE diff_proc() LANGUAGE SQL AS 'SELECT 1';",
+    "SELECT proname, prokind FROM pg_catalog.pg_proc WHERE proname = 'diff_proc';",
+    "DROP PROCEDURE diff_proc();",
+    "DROP FUNCTION diff_fn();"
+  ],
+  "expectation": "match"
+}

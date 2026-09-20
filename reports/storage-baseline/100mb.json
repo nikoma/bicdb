@@ -1,0 +1,49 @@
+{
+  "build_ms": 1001.43286,
+  "database_size_bytes": 151224984,
+  "indexes": 0,
+  "logical_bytes": 98367580,
+  "metadata_bytes_per_record": 1024,
+  "mode": "storage_baseline",
+  "on_disk_amplification": 1.5373457799815753,
+  "open_ms": 398.968799,
+  "peak_resident_bytes": 541560832,
+  "records": 100000,
+  "residency": {
+    "accounted_bytes": 152121084,
+    "collections": [
+      {
+        "exact_vectors_bytes": 0,
+        "name": "baseline",
+        "primary_key_maps_bytes": 12401600,
+        "record_count": 100000,
+        "rows_bytes": 119934780,
+        "version_chains_bytes": 19784704,
+        "version_count": 100000
+      }
+    ],
+    "exact_vectors_bytes": 0,
+    "generated_at": 1784918555,
+    "graphs_bytes": 0,
+    "hnsw": [],
+    "hnsw_bytes": 0,
+    "indexes": [],
+    "not_instrumented": [
+      "broker_projections",
+      "query_intermediates"
+    ],
+    "primary_key_maps_bytes": 12401600,
+    "process_resident_bytes": 540860416,
+    "record_count": 100000,
+    "rows_bytes": 119934780,
+    "secondary_indexes_bytes": 0,
+    "unaccounted_bytes": 388739332,
+    "version_chains_bytes": 19784704,
+    "version_count": 100000
+  },
+  "resident_per_logical_byte": 5.505480891163532,
+  "segment_bytes": 0,
+  "steady_resident_bytes": 541560832,
+  "storage_mode": "embedded_memory",
+  "vector_dim": 0
+}

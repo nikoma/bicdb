@@ -1,0 +1,2 @@
+mode,nodes,edges,insert_elapsed_ms,route_p50_ms,route_p95_ms,route_p99_ms,route_result_count,database_size_bytes,path
+route,1000,3000,218.900,16.676,18.340,20.392,1394,2057471,target/bicdb-bench-route-1k

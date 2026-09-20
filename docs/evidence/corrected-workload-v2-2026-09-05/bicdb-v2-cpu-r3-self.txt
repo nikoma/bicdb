@@ -1,0 +1,50 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 69K of event 'cpu-clock'
+# Event count (approx.): 700373730370
+#
+# Overhead  Command          Shared Object      Symbol                                                                                                                                                                                                                                                                                     
+# ........  ...............  .................  ...........................................................................................................................................................................................................................................................................................
+#
+     8.41%  tokio-rt-worker  bicdb              [.] _mi_page_malloc_zero
+     4.72%  tokio-rt-worker  bicdb              [.] bicdb_core::record::StoredRecord::cells_into
+     4.31%  tokio-rt-worker  bicdb              [.] mi_free
+     2.32%  tokio-rt-worker  libc.so.6          [.] 0x0000000000188799
+     2.19%  tokio-rt-worker  bicdb              [.] bicdb_sql::session::txn_update::<impl bicdb_sql::session::SqlSession>::try_execute_update_stored
+     1.90%  tokio-rt-worker  bicdb              [.] mi_theap_malloc_aligned
+     1.43%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::row_columns_expr_pg_type
+     1.11%  tokio-rt-worker  bicdb              [.] bicdb_core::db::Transaction::prepare_final_wal_payloads
+     1.07%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::row_eval::<impl bicdb_sql::engine::SqlEngine>::eval_slot_row_value
+     1.07%  tokio-rt-worker  bicdb              [.] bicdb_core::db::Transaction::get_stored_by_pks
+     1.03%  tokio-rt-worker  bicdb              [.] mi_malloc_aligned
+     1.00%  tokio-rt-worker  libc.so.6          [.] 0x00000000001887a3
+     0.99%  tokio-rt-worker  bicdb              [.] bicdb_sql::planner::BoundExpr::eval_value
+     0.95%  tokio-rt-worker  [kernel.kallsyms]  [k] _raw_spin_unlock_irqrestore
+     0.91%  tokio-rt-worker  libc.so.6          [.] 0x000000000018879d
+     0.82%  tokio-rt-worker  bicdb              [.] bicdb_core::db::apply_record_writes_to_state
+     0.79%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::predicates_locators::<impl bicdb_sql::engine::SqlEngine>::apply_row_join
+     0.78%  tokio-rt-worker  bicdb              [.] bicdb_sql::planner::BoundExprScope::bind_in
+     0.78%  tokio-rt-worker  bicdb              [.] bicdb_core::db::access_mutation::<impl bicdb_core::db::BicDb>::get_stored
+     0.73%  tokio-rt-worker  bicdb              [.] mi_theap_umalloc
+     0.70%  tokio-rt-worker  bicdb              [.] _mi_theap_realloc_zero
+     0.67%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::joins_windows::<impl bicdb_sql::engine::SqlEngine>::bound_row_context
+     0.66%  tokio-rt-worker  bicdb              [.] _mi_malloc_generic
+     0.63%  tokio-rt-worker  bicdb              [.] bicdb_sql::planner::BoundExprScope::bind_identifier
+     0.62%  tokio-rt-worker  bicdb              [.] bicdb_core::db::spatial_paged::<impl bicdb_core::db::BicDb>::commit_transaction
+     0.60%  bicdb            bicdb              [.] <bicdb_core::record::StoredRecord as serde_core::ser::Serialize>::serialize
+     0.58%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::materialize::<impl bicdb_sql::engine::SqlEngine>::typed_row_result
+     0.57%  tokio-rt-worker  bicdb              [.] bicdb_sql::engine::predicates_locators::<impl bicdb_sql::engine::SqlEngine>::slot_rows_from_visible
+     0.57%  tokio-rt-worker  bicdb              [.] bicdb_core::db::commit_snapshot::<impl bicdb_core::db::BicDb>::tx_index_mutations_by_collection
+     0.57%  tokio-rt-worker  bicdb              [.] bicdb_sql::session::txn_update::<impl bicdb_sql::session::SqlSession>::stored_update_candidates
+     0.56%  tokio-rt-worker  bicdb              [.] _mi_theap_malloc_zero
+     0.51%  tokio-rt-worker  bicdb              [.] bicdb_core::db::commit_snapshot::<impl bicdb_core::db::BicDb>::lock_tx_record_with_attempts
+     0.51%  tokio-rt-worker  bicdb              [.] bicdb_sql::session::txn_update::<impl bicdb_sql::session::SqlSession>::sql_engine_with_ctes
+     0.51%  tokio-rt-worker  bicdb              [.] bicdb_sql::session::txn_update::<impl bicdb_sql::session::SqlSession>::eval_session_expr
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

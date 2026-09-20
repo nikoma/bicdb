@@ -1,0 +1,64 @@
+{
+  "build_ms": 4124.919855,
+  "database_size_bytes": 605367374,
+  "indexes": 2,
+  "logical_bytes": 393803650,
+  "metadata_bytes_per_record": 1024,
+  "mode": "storage_baseline",
+  "on_disk_amplification": 1.5372314959498217,
+  "open_ms": 1809.265372,
+  "peak_resident_bytes": 1946628096,
+  "records": 400000,
+  "residency": {
+    "accounted_bytes": 617449751,
+    "collections": [
+      {
+        "exact_vectors_bytes": 0,
+        "name": "baseline",
+        "primary_key_maps_bytes": 49606400,
+        "record_count": 400000,
+        "rows_bytes": 480072450,
+        "version_chains_bytes": 79138816,
+        "version_count": 400000
+      }
+    ],
+    "exact_vectors_bytes": 0,
+    "generated_at": 1784918599,
+    "graphs_bytes": 0,
+    "hnsw": [],
+    "hnsw_bytes": 0,
+    "indexes": [
+      {
+        "collection": "baseline",
+        "entry_count": 400000,
+        "name": "baseline_field0",
+        "spatial_bytes": 0,
+        "store_bytes": 4356666
+      },
+      {
+        "collection": "baseline",
+        "entry_count": 400000,
+        "name": "baseline_field1",
+        "spatial_bytes": 0,
+        "store_bytes": 4275419
+      }
+    ],
+    "not_instrumented": [
+      "broker_projections",
+      "query_intermediates"
+    ],
+    "primary_key_maps_bytes": 49606400,
+    "process_resident_bytes": 1946628096,
+    "record_count": 400000,
+    "rows_bytes": 480072450,
+    "secondary_indexes_bytes": 8632085,
+    "unaccounted_bytes": 1329178345,
+    "version_chains_bytes": 79138816,
+    "version_count": 400000
+  },
+  "resident_per_logical_byte": 2.4697153314856273,
+  "segment_bytes": 0,
+  "steady_resident_bytes": 972582912,
+  "storage_mode": "embedded_memory",
+  "vector_dim": 0
+}

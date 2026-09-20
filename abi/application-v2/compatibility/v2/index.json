@@ -1,0 +1,55 @@
+{
+  "corpus_version": 2,
+  "abi_version": 2,
+  "cases": [
+    {
+      "name": "canonical-clock-request",
+      "kind": "host_call",
+      "file": "canonical-clock-request.json",
+      "expect": "accept",
+      "canonical": true
+    },
+    {
+      "name": "canonical-clock-response",
+      "kind": "host_result",
+      "file": "canonical-clock-response.json",
+      "expect": "accept",
+      "canonical": true
+    },
+    {
+      "name": "legacy-minimal-manifest-defaults",
+      "kind": "manifest",
+      "file": "legacy-minimal-manifest.json",
+      "expect": "accept",
+      "canonical": false
+    },
+    {
+      "name": "future-extension-abi",
+      "kind": "manifest",
+      "file": "future-extension-abi.json",
+      "expect": "reject_validate",
+      "canonical": false
+    },
+    {
+      "name": "unknown-application-field",
+      "kind": "manifest",
+      "file": "unknown-application-field.json",
+      "expect": "reject_decode",
+      "canonical": false
+    },
+    {
+      "name": "unknown-host-operation",
+      "kind": "host_call",
+      "file": "unknown-host-operation.json",
+      "expect": "reject_decode",
+      "canonical": false
+    },
+    {
+      "name": "ambiguous-host-result",
+      "kind": "host_result",
+      "file": "ambiguous-host-result.json",
+      "expect": "reject_validate",
+      "canonical": false
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+#!/bin/tclsh
+# HammerDB TPC-C timed driver for the BicDB performance campaign.
+dbset db pg
+dbset bm TPC-C
+diset connection pg_host 127.0.0.1
+diset connection pg_port @PORT@
+diset connection pg_sslmode disable
+diset tpcc pg_superuser bicdb
+diset tpcc pg_superuserpass bicdb
+diset tpcc pg_defaultdbase bicdb
+diset tpcc pg_user tpcc
+diset tpcc pg_pass tpcc
+diset tpcc pg_dbase tpcc
+diset tpcc pg_storedprocs true
+diset tpcc pg_allwarehouse false
+diset tpcc pg_timeprofile @TIMEPROFILE@
+diset tpcc pg_driver timed
+diset tpcc pg_rampup @RAMPUP@
+diset tpcc pg_duration @DURATION@
+diset tpcc pg_keyandthink false
+diset tpcc pg_raiseerror true
+loadscript
+if {[file exists /trial/corrected_outcomes.tcl]} {
+    source /trial/corrected_outcomes.tcl
+}
+# Capture the once-per-terminal contention layout. Optional replay uses a prior
+# unselected random run, not a hand-balanced layout. Leave both original random
+# draws in place so replay does not remove draws from the transaction RNG.
+set terminal_assignments [dict create]
+if {[file exists /trial/terminal-assignments.tsv]} {
+    set assignment_file [open /trial/terminal-assignments.tsv r]
+    set assignment_text [read $assignment_file]
+    close $assignment_file
+    foreach line [split $assignment_text \n] {
+        if {[string trim $line] eq ""} {continue}
+        if {![regexp {^([0-9]+)[ \t]+([0-9]+)[ \t]+([0-9]+)$} $line -> position warehouse district]} {
+            error "Invalid terminal assignment row: $line"
+        }
+        if {$position < 2 || $position > @VU@ + 1 || $warehouse < 1 || $district < 1
+            || [dict exists $terminal_assignments $position]} {
+            error "Invalid or duplicate terminal assignment: $line"
+        }
+        dict set terminal_assignments $position [list $warehouse $district]
+    }
+    if {[dict size $terminal_assignments] != @VU@} {
+        error "Terminal replay must specify every active VU exactly once"
+    }
+}
+set assignment_hook {
+        if {[dict size $bicdb_terminal_assignments] > 0} {
+            lassign [dict get $bicdb_terminal_assignments $myposition] w_id stock_level_d_id
+            if {$w_id > $w_id_input || $stock_level_d_id > $d_id_input} {
+                error "Terminal assignment exceeds database warehouse/district bounds"
+            }
+        }
+        puts "BICDB_TERMINAL_ASSIGNMENT $myposition $w_id $stock_level_d_id"
+}
+# Fail closed if a future HammerDB driver changes this initialization site.
+set assignment_pattern {set stock_level_d_id[ \t]+\[[ \t]*RandomNumber 1 \$d_id_input[ \t]*\]}
+if {[regexp -all $assignment_pattern $_ED(package)] != 1} {
+    error "Expected exactly one stock-level district initialization in driver"
+}
+regexp -indices $assignment_pattern $_ED(package) assignment_span
+set assignment_end [lindex $assignment_span 1]
+set _ED(package) "[string range $_ED(package) 0 $assignment_end]\n[list set bicdb_terminal_assignments $terminal_assignments]\n$assignment_hook[string range $_ED(package) [expr {$assignment_end + 1}] end]"
+vuset logtotemp 1
+vuset vu @VU@
+vucreate
+vurun
+vudestroy
+# Batch mode has no interactive readline state to restore. HammerDB's `quit`
+# calls TclReadLine::doExit, which can fail after successful completion when
+# ::_unknown was never installed. Exit directly; the harness still checks every
+# VU's completion and failure status independently of this process exit code.
+exit 0

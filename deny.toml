@@ -1,0 +1,305 @@
+# BicDB dependency licence policy.
+#
+# Required by Phase 0 of `docs/server-paged-storage-todo.md`: the policy gate has
+# to exist *before* any storage or vector dependency is evaluated, so that a
+# technically attractive crate is rejected on licence grounds while it is still
+# an experiment rather than after it is load-bearing.
+#
+# BicDB uses its License 1.0 (Apache 2.0 + three exceptions) (see /LICENSE and /LICENSE-SCOPE.md).
+# The independent third-party dependency policy is that no
+# reciprocal, copyleft, or source-available term may enter the production path
+# without an explicit, reviewed policy exception.
+#
+# Run with: cargo deny check licenses
+# Or via:   scripts/check-licenses.sh   (requires cargo-deny)
+
+[graph]
+# Only the targets BicDB actually ships. Without this, cargo-deny evaluates
+# crates for platforms we never build, producing findings nobody can action.
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "aarch64-unknown-linux-gnu" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "aarch64-apple-darwin" },
+    { triple = "wasm32-unknown-unknown" },
+]
+all-features = false
+
+[licenses]
+# Permissive terms compatible with BicDB distribution. Adding to this
+# machine-readable policy is a policy decision, not a build fix.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "BSL-1.0",
+    "CC0-1.0",
+    "0BSD",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CDLA-Permissive-2.0",
+    "OpenSSL",
+    "Unlicense",
+]
+
+# Everything not in `allow` is denied. Copyleft and source-available terms are
+# therefore rejected by default rather than by enumeration, so a licence nobody
+# anticipated fails closed.
+unused-allowed-license = "allow"
+confidence-threshold = 0.9
+
+# Crates dual-licensed with a GPL option: elect the permissive side explicitly so
+# the resolution is recorded rather than left to the tool's preference order.
+[[licenses.exceptions]]
+name = "self_cell"          # Apache-2.0 OR GPL-2.0-only
+allow = ["Apache-2.0"]
+
+[[licenses.exceptions]]
+name = "ittapi"             # GPL-2.0-only OR BSD-3-Clause (via wasmtime)
+allow = ["BSD-3-Clause"]
+
+[[licenses.exceptions]]
+name = "ittapi-sys"
+allow = ["BSD-3-Clause"]
+
+# --- Reciprocal terms reaching the tree only through the optional `osm-import`
+# --- feature. Recorded here as known and bounded, NOT as blanket approval.
+#
+# `smartstring` is MPL-2.0 (weak, file-level copyleft) and arrives via
+# osmpbfreader. The audit's judgement is that it is acceptable for proprietary
+# distribution while unmodified and noticed. It is listed so the gate stays green
+# on the default build. `bicdb-core` currently enables `osm-import` by default,
+# so this is an active default-distribution policy exception and must be
+# reviewed for the actual components and distribution shipped.
+[[licenses.exceptions]]
+name = "smartstring"
+allow = ["MPL-2.0"]
+
+# WTFPL is a public-domain dedication, permissive in effect but not OSI-listed
+# and therefore not in the global allow list. Same osm-import lever as above.
+[[licenses.exceptions]]
+name = "osmpbfreader"
+allow = ["WTFPL"]
+
+[[licenses.exceptions]]
+name = "par-map"
+allow = ["WTFPL"]
+
+[[licenses.exceptions]]
+name = "pub-iterator-type"
+allow = ["WTFPL"]
+
+[bans]
+# A second copy of a storage-shaped dependency is usually an accident and always
+# worth seeing.
+multiple-versions = "warn"
+wildcards = "deny"
+
+# The roadmap's non-negotiable constraint: BicDB implements its own page store
+# and B+ tree, and never requires RocksDB, an LSM product, or another database
+# engine. These are named so that "let us just try it" fails at CI rather than at
+# review, which is the point of writing the policy down in advance.
+#
+# Engines that must not appear anywhere in the graph:
+[[bans.deny]]
+name = "rocksdb"
+[[bans.deny]]
+name = "librocksdb-sys"
+[[bans.deny]]
+name = "leveldb"
+[[bans.deny]]
+name = "lmdb-rkv"
+[[bans.deny]]
+name = "heed"
+[[bans.deny]]
+name = "sled"
+[[bans.deny]]
+name = "duckdb"
+[[bans.deny]]
+name = "libsqlite3-sys"
+
+# Engines permitted ONLY as benchmark baselines. `wrappers` means the crate is
+# allowed when `bicdb-bench` depends on it and banned everywhere else, so
+# comparing BicDB against them stays possible while depending on them for real
+# storage fails the gate.
+#
+# `bicdb-cli` exposes these tools only through its opt-in
+# `bench-comparison-engines` feature; ordinary production builds do not link
+# either comparison engine.
+[[bans.deny]]
+name = "redb"        # embedded copy-on-write B-tree, insert baseline
+wrappers = ["bicdb-bench"]
+
+[[bans.deny]]
+name = "fjall"       # LSM engine, write-amplification baseline
+wrappers = ["bicdb-bench"]
+
+[advisories]
+version = 2
+yanked = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+# First-party community terms only; never a blanket third-party allowance.
+# Hash pinned to the operative LICENSE; update deliberately when its text changes.
+
+[[licenses.clarify]]
+name = "bicdb-core"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-core"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-page"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-page"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-sync"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-sync"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-sql"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-sql"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-pgwire"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-pgwire"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-resp"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-resp"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-wasm"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-wasm"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-analytics"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-analytics"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-bench"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-bench"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-app-runtime"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-app-runtime"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-cell"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-cell"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-cell-admission"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-cell-admission"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-cell-device"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-cell-device"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-cell-grant"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-cell-grant"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-cell-ha"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-cell-ha"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-fleet"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-fleet"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-cli"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-cli"
+allow = ["LicenseRef-BicDB-1.0"]

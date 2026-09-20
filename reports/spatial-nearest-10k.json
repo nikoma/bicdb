@@ -1,0 +1,16 @@
+{
+  "mode": "spatial_nearest",
+  "points": 10000,
+  "queries": 100,
+  "nearest_p50_ms": 11.913976,
+  "nearest_p95_ms": 12.122091999999999,
+  "nearest_p99_ms": 12.155595,
+  "radius_p50_ms": 0.595939,
+  "radius_p95_ms": 0.635282,
+  "radius_p99_ms": 0.6495879999999999,
+  "nearest_result_count": 1000,
+  "radius_result_count": 29970,
+  "radius_meters": 2000.0,
+  "database_size_bytes": 4847439,
+  "path": "target/bicdb-bench-spatial-nearest-10k"
+}

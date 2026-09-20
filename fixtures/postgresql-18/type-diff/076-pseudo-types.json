@@ -1,0 +1,20 @@
+{
+  "id": "type_matrix_pseudo_types",
+  "description": "PostgreSQL 18 pseudo-type catalogs, stable OIDs, record array metadata, regtype lookup, and supported routine signatures",
+  "cleanup_sql": [
+    "DROP FUNCTION IF EXISTS type_matrix_pseudo_identity(anyelement);",
+    "DROP FUNCTION IF EXISTS type_matrix_pseudo_compatible(anycompatiblearray);",
+    "DROP FUNCTION IF EXISTS type_matrix_pseudo_record();",
+    "DROP FUNCTION IF EXISTS type_matrix_pseudo_event();"
+  ],
+  "sql": [
+    "CREATE FUNCTION type_matrix_pseudo_identity(value anyelement) RETURNS anyelement LANGUAGE plpgsql AS 'BEGIN RETURN value; END';",
+    "CREATE FUNCTION type_matrix_pseudo_compatible(value anycompatiblearray) RETURNS anycompatiblearray LANGUAGE plpgsql AS 'BEGIN RETURN value; END';",
+    "CREATE FUNCTION type_matrix_pseudo_record() RETURNS record LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';",
+    "CREATE FUNCTION type_matrix_pseudo_event() RETURNS event_trigger LANGUAGE plpgsql AS 'BEGIN RETURN; END';",
+    "SELECT oid, typname, typtype, typcategory, typlen, typbyval, typalign, typstorage, typarray FROM pg_type WHERE typtype = 'p' ORDER BY oid;",
+    "SELECT 'record'::regtype::oid, 'event_trigger'::regtype::oid, 'anycompatiblemultirange'::regtype::oid, 'record[]'::regtype::oid;",
+    "SELECT proname, pg_get_function_arguments(oid), pg_get_function_result(oid) FROM pg_proc WHERE proname LIKE 'type_matrix_pseudo_%' ORDER BY proname;"
+  ],
+  "expectation": "match"
+}

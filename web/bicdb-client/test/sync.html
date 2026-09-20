@@ -1,0 +1,135 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>bicdb-client sync e2e</title>
+<body>
+<pre id="log"></pre>
+<script type="module">
+  import {
+    BicDbClient,
+    HttpSyncEndpoint,
+    SyncManager,
+    TelemetryReporter,
+  } from "../src/index.js";
+
+  // One step of the two-device convergence scenario. Each call opens the
+  // local database, runs one syncOnce round trip (plus local writes), and
+  // closes — like an app foregrounding, syncing, and being killed.
+  window.__sync = async ({ phase, serverUrl, scope, token, noteId, label, statements, sql }) => {
+    if (phase === "dual") {
+      // A6.5: one worker, two databases, two independent sync cursors to
+      // two different scopes.
+      const client = await BicDbClient.open({
+        databases: [{ name: "dual-a" }, { name: "dual-b" }],
+        wasmUrl: new URL("/wasm/bicdb_wasm.wasm", location.href),
+      });
+      try {
+        const a = client.db("dual-a");
+        const b = client.db("dual-b");
+        const managerA = new SyncManager(a, new HttpSyncEndpoint({ url: serverUrl, scope, token }));
+        const managerB = new SyncManager(b, new HttpSyncEndpoint({ url: serverUrl, scope: "dualworld", token }));
+        await managerA.syncOnce(); // bootstrap the shared scope into db A
+        await b.query("CREATE TABLE things (id INT PRIMARY KEY, v TEXT)");
+        await b.query("INSERT INTO things VALUES (1, 'from dual-b')");
+        await managerB.syncOnce(); // push db B to its own scope
+        const notes = await a.query("SELECT COUNT(*) AS c FROM notes");
+        return { notesFromHub: notes.rows[0][0] };
+      } finally {
+        await client.close();
+      }
+    }
+    const db = await BicDbClient.open({
+      database: `sync-${scope}`,
+      wasmUrl: new URL("/wasm/bicdb_wasm.wasm", location.href),
+    });
+    const manager = new SyncManager(
+      db,
+      new HttpSyncEndpoint({ url: serverUrl, scope, token }),
+    );
+    const list = async () => {
+      const { rows } = await db.query("SELECT body FROM notes ORDER BY id");
+      return rows.map((row) => row[0]);
+    };
+    try {
+      if (phase === "bootstrap-and-write") {
+        // Fresh device: first sync must deliver the server-composed
+        // working set (schema + announcement row) from offset zero.
+        const first = await manager.syncOnce();
+        const bootstrapped = await list();
+        await db.query(
+          `INSERT INTO notes (id, body) VALUES (${noteId}, '${label}')`,
+        );
+        const second = await manager.syncOnce();
+        return { bootstrapped, first, second, after: await list() };
+      }
+      if (phase === "converge") {
+        const report = await manager.syncOnce();
+        let messages = null;
+        try {
+          const result = await db.query("SELECT id FROM messages ORDER BY id");
+          messages = result.rows.map((row) => row[0]);
+        } catch {
+          /* scenario without a messages table */
+        }
+        return { report, rows: await list(), messages };
+      }
+      if (phase === "compact-write-sync") {
+        // Compaction rewrites event offsets and resets the engine's export
+        // watermark; a write immediately after MUST still reach the server.
+        await manager.syncOnce();
+        await db.compact();
+        await db.query(
+          `INSERT INTO notes (id, body) VALUES (${noteId}, '${label}')`,
+        );
+        const report = await manager.syncOnce();
+        return { report, rows: await list() };
+      }
+      if (phase === "rls") {
+        // Generic step for the multi-tenant tests: sync in whatever the
+        // composer has produced, run local writes, push them, and report
+        // the local view of `sql`.
+        await manager.syncOnce();
+        for (const s of statements ?? []) await db.query(s);
+        if (statements?.length) await manager.syncOnce();
+        let rows = [];
+        try {
+          rows = (await db.query(sql)).rows;
+        } catch (error) {
+          return { rows: null, error: String(error.message) };
+        }
+        return { rows };
+      }
+      if (phase === "push-forbidden") {
+        // A6.4: a push touching a server-write-only collection is rejected
+        // whole; the device sees the violation instead of silently losing it.
+        const bootstrap = await manager.syncOnce();
+        try {
+          for (const s of statements ?? []) await db.query(s);
+        } catch (error) {
+          return { error: `local write failed: ${error.message}`, bootstrap };
+        }
+        try {
+          await manager.syncOnce();
+          return { error: null, bootstrap };
+        } catch (error) {
+          return { error: String(error.message), bootstrap };
+        }
+      }
+      if (phase === "telemetry") {
+        const reporter = new TelemetryReporter({
+          url: serverUrl,
+          scope,
+          token,
+        });
+        reporter.record("cold-open", { ms: 123, database: `sync-${scope}` });
+        reporter.record("sync-report", await manager.syncOnce());
+        const flushed = await reporter.flush();
+        return { recorded: flushed.recorded };
+      }
+      throw new Error(`unknown phase ${phase}`);
+    } finally {
+      await db.close();
+    }
+  };
+  document.getElementById("log").textContent = "ready";
+</script>
+</body>

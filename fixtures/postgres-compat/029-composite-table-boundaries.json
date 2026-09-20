@@ -1,0 +1,24 @@
+{
+  "id": "composite_table_boundaries",
+  "description": "Table row types remain standalone composites while table boundaries enforce source constraints",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_composite_holder CASCADE;",
+    "DROP DOMAIN IF EXISTS diff_valid_composite_item CASCADE;",
+    "DROP TABLE IF EXISTS diff_composite_item CASCADE;",
+    "DROP TABLE IF EXISTS diff_composite_item_renamed CASCADE;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_composite_item (name VARCHAR(5) NOT NULL, quantity INTEGER CHECK (quantity > 0), state TEXT DEFAULT 'new');",
+    "SELECT ROW(NULL, -1, 'held')::diff_composite_item AS standalone_item;",
+    "CREATE TABLE diff_composite_holder (id INTEGER PRIMARY KEY, item diff_composite_item, items diff_composite_item[]);",
+    "INSERT INTO diff_composite_holder VALUES (1, ROW(NULL, -1, 'held')::diff_composite_item, ARRAY[ROW('array', 2, 'new')::diff_composite_item]);",
+    "SELECT (item).name, (item).quantity, (items[1]).name, (items[1]).quantity, pg_typeof(item), pg_typeof(items) FROM diff_composite_holder WHERE id = 1;",
+    "SELECT ROW(NULL, NULL, NULL)::diff_composite_item IS NULL AS all_null_is_null, ROW(NULL, 1, NULL)::diff_composite_item IS NULL AS partial_is_null, ROW(NULL, 1, NULL)::diff_composite_item IS NOT NULL AS partial_is_not_null, ROW('ok', 1, 'new')::diff_composite_item IS NOT NULL AS complete_is_not_null;",
+    "CREATE DOMAIN diff_valid_composite_item AS diff_composite_item CHECK ((VALUE).quantity > 0 AND (VALUE).name IS NOT NULL);",
+    "SELECT ROW('valid', 1, 'new')::diff_valid_composite_item AS valid_item;",
+    "ALTER TABLE diff_composite_item RENAME COLUMN quantity TO amount;",
+    "ALTER TABLE diff_composite_item RENAME TO diff_composite_item_renamed;",
+    "SELECT (item).amount, (items[1]).amount, pg_typeof(item), pg_typeof(items) FROM diff_composite_holder WHERE id = 1;"
+  ],
+  "expectation": "match"
+}

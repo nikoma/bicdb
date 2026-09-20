@@ -1,0 +1,21 @@
+{
+  "id": "expressions_operators_casts",
+  "description": "Arithmetic, boolean NULL behavior, CASE, COALESCE, LIKE/ILIKE, IN, concatenation, and common casts",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_exprs;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_exprs (id TEXT PRIMARY KEY, name TEXT, age INT, score FLOAT8, active BOOLEAN, joined DATE);",
+    "INSERT INTO diff_exprs (id, name, age, score, active, joined) VALUES ('e1', 'Ada', 36, 9.5, true, '2024-01-02'::date), ('e2', 'Bob', NULL, NULL, false, NULL), ('e3', 'ALICE', 41, 7.0, NULL, '2023-12-31'::date);",
+    "SELECT id, age + 4 AS age_plus, score * 2 AS doubled, name || '-x' AS label FROM diff_exprs WHERE id = 'e1';",
+    "SELECT id, CASE WHEN age IS NULL THEN 'missing' WHEN age >= 40 THEN 'senior' ELSE 'adult' END AS band, COALESCE(age::text, 'n/a') AS age_text FROM diff_exprs ORDER BY id;",
+    "SELECT id FROM diff_exprs WHERE (active OR age > 40) AND name ILIKE 'a%' ORDER BY id;",
+    "SELECT id FROM diff_exprs WHERE name LIKE 'A%' AND id IN ('e1', 'e3') ORDER BY id;",
+    "SELECT id FROM diff_exprs WHERE age BETWEEN 30 AND 40 ORDER BY id;",
+    "SELECT id FROM diff_exprs WHERE age = ANY(ARRAY[36, 41]) ORDER BY id;",
+    "SELECT NULLIF('posted', 'draft') AS status_text, NULLIF(7, 7) AS gone;",
+    "SELECT id FROM diff_exprs WHERE age = NULL OR active = NULL ORDER BY id;",
+    "SELECT '123'::int4 AS cast_int, 7::text AS cast_text, '2024-01-02'::date AS cast_date;"
+  ],
+  "expectation": "match"
+}

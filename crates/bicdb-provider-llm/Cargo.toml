@@ -1,0 +1,13 @@
+[package]
+name = "bicdb-provider-llm"
+version = "1.0.438-beta"
+edition.workspace = true
+license = "Apache-2.0"
+rust-version.workspace = true
+
+[dependencies]
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.438-beta" }
+bicdb-extension = { path = "../bicdb-extension", version = "1.0.438-beta" }
+reqwest.workspace = true
+serde_json.workspace = true
+url.workspace = true

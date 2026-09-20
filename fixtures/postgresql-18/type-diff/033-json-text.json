@@ -1,0 +1,19 @@
+{
+  "id": "type_matrix_json_text",
+  "description": "PostgreSQL 18 json validation and exact input-text preservation across casts, defaults, inserts, and updates",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_json_text;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_json_text (id TEXT PRIMARY KEY, payload JSON NOT NULL DEFAULT '{  \"z\" : 1, \"a\" : [ true, null ], \"z\" : 2 }', canonical JSONB NOT NULL DEFAULT '{  \"z\" : 1, \"a\" : [ true, null ], \"z\" : 2 }');",
+    "INSERT INTO type_matrix_json_text (id, payload, canonical) VALUES ('inserted', '{  \"z\" : 1, \"a\" : [ true, null ], \"z\" : 2 }', '{  \"z\" : 1, \"a\" : [ true, null ], \"z\" : 2 }');",
+    "INSERT INTO type_matrix_json_text (id) VALUES ('defaulted');",
+    "SELECT id, payload, canonical FROM type_matrix_json_text ORDER BY id;",
+    "SELECT '{  \"z\" : 1, \"a\" : [ true, null ], \"z\" : 2 }'::json AS preserved, '{  \"z\" : 1, \"a\" : [ true, null ], \"z\" : 2 }'::jsonb AS canonicalized;",
+    "UPDATE type_matrix_json_text SET payload = '[ 1,  2, { \"same\" : 1, \"same\" : 2 } ]' WHERE id = 'inserted';",
+    "SELECT payload FROM type_matrix_json_text WHERE id = 'inserted';",
+    "SELECT '{broken'::json;",
+    "UPDATE type_matrix_json_text SET payload = '{broken' WHERE id = 'inserted';"
+  ],
+  "expectation": "match"
+}

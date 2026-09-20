@@ -1,0 +1,20 @@
+{
+  "id": "type_matrix_non_column_types",
+  "description": "Pseudo-types are cataloged but rejected as table columns by PostgreSQL and BicDB",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_pseudo_record;",
+    "DROP TABLE IF EXISTS type_matrix_pseudo_void;",
+    "DROP TABLE IF EXISTS type_matrix_pseudo_trigger;",
+    "DROP TABLE IF EXISTS type_matrix_pseudo_handler;",
+    "DROP TABLE IF EXISTS type_matrix_pseudo_internal;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_pseudo_record (value RECORD);",
+    "CREATE TABLE type_matrix_pseudo_void (value VOID);",
+    "CREATE TABLE type_matrix_pseudo_trigger (value TRIGGER);",
+    "CREATE TABLE type_matrix_pseudo_handler (value LANGUAGE_HANDLER);",
+    "CREATE TABLE type_matrix_pseudo_internal (value INTERNAL);",
+    "SELECT typname, oid, typtype FROM pg_catalog.pg_type WHERE typname IN ('record', 'void', 'trigger', 'language_handler', 'internal') ORDER BY oid;"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "campaign_id": "20260709-harness-smoke",
+  "created_at": "2026-07-09T13:30:19,708394236-07:00",
+  "binary": "/home/benchmark/bicdb/target/release/bicdb",
+  "seed": "/dev/shm/bicdb-tpcc-seed",
+  "matrix": {
+    "permutations": 1,
+    "discarded_warmups": false,
+    "allocation_profiles": false
+  },
+  "workload": {
+    "vu": 2,
+    "rampup_minutes": 0,
+    "duration_minutes": 1
+  },
+  "lanes": {
+    "default-durable": {
+      "purpose": "out-of-box durable product configuration"
+    },
+    "tuned-durable": {
+      "purpose": "best proven durable configuration"
+    },
+    "cpu-ceiling": {
+      "purpose": "non-durable diagnostic upper bound; never a production keeper"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "type_matrix_common_type_selection",
+  "description": "PostgreSQL 18 common-type selection for conditional, array, VALUES, set-operation, domain, and polymorphic expressions",
+  "cleanup_sql": [
+    "DROP DOMAIN IF EXISTS type_matrix_common_positive CASCADE;"
+  ],
+  "sql": [
+    "CREATE DOMAIN type_matrix_common_positive AS int4 CHECK (VALUE > 0);",
+    "SELECT pg_typeof(CASE WHEN false THEN 1 ELSE 2.5 END)::text, (CASE WHEN false THEN 1 ELSE 2.5 END)::text;",
+    "SELECT pg_typeof(CASE WHEN true THEN 1::int2 ELSE 2::int8 END)::text, (CASE WHEN true THEN 1::int2 ELSE 2::int8 END)::text;",
+    "SELECT pg_typeof(COALESCE(NULL, 1::int4, 2::int8))::text, COALESCE(NULL, 1::int4, 2::int8)::text;",
+    "SELECT pg_typeof(COALESCE(NULL, NULL))::text, COALESCE(NULL, NULL)::text;",
+    "SELECT pg_typeof(GREATEST(1::int4, 2.5::numeric))::text, GREATEST(1::int4, 2.5::numeric)::text;",
+    "SELECT pg_typeof(ARRAY[1::int2, 2::int8])::text, ARRAY[1::int2, 2::int8]::text;",
+    "SELECT pg_typeof(value)::text, value::text FROM (VALUES (1::int2), (2::int8)) AS values_input(value) ORDER BY value;",
+    "SELECT pg_typeof(value)::text, value::text FROM (SELECT 1::int2 AS value UNION ALL SELECT 2::int8) AS union_input ORDER BY value;",
+    "SELECT pg_typeof(CASE WHEN true THEN 1::type_matrix_common_positive ELSE 2::type_matrix_common_positive END)::text;",
+    "SELECT pg_typeof(CASE WHEN true THEN 1::type_matrix_common_positive ELSE 2::int4 END)::text;",
+    "SELECT pg_typeof(COALESCE('a'::varchar, 'b'::text))::text, COALESCE('a'::varchar, 'b'::text);",
+    "SELECT pg_typeof(array_append(ARRAY[1::int2], 2::int8))::text, array_append(ARRAY[1::int2], 2::int8)::text;",
+    "SELECT CASE WHEN true THEN 1 ELSE 'x'::text END;"
+  ],
+  "expectation": "match"
+}

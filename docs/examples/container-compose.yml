@@ -1,0 +1,71 @@
+# General pgwire server: databases share one process and failure domain.
+# Database separation is not a Cell boundary. Hard Cell isolation requires one
+# bicdb-cell runtime per process with dedicated mounts, uid, network policy and
+# cgroup limits; confidential deployments also require verified VM attestation.
+services:
+  bicdb:
+    image: ghcr.io/nikoma/bicdb:production
+    command:
+      - serve
+      - /data/database
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5433"
+      - --require-auth
+      - --auth-method
+      - scram-sha-256
+      - --max-connections
+      - "1000"
+      - --max-active-queries
+      - "32"
+      - --max-queued-queries
+      - "128"
+      - --max-active-reads
+      - "32"
+      - --max-queued-reads
+      - "128"
+      - --max-active-writes
+      - "16"
+      - --max-queued-writes
+      - "64"
+      - --overload-timeout-ms
+      - "5000"
+      - --tls-cert
+      - /run/secrets/bicdb_tls_cert
+      - --tls-key
+      - /run/secrets/bicdb_tls_key
+      - --require-tls
+      - --slow-query-log
+      - /logs/slow-query.jsonl
+      - --slow-query-threshold-ms
+      - "1000"
+      - --redact-field
+      - ssn
+      - --redact-field
+      - tax_id
+    environment:
+      BICDB_DB_KEY: "${BICDB_DB_KEY:?set BICDB_DB_KEY from the secret store}"
+      BICDB_BACKUP_KEY: "${BICDB_BACKUP_KEY:?set BICDB_BACKUP_KEY from the secret store}"
+    ports:
+      - "5433:5433"
+    volumes:
+      - bicdb-data:/data
+      - bicdb-logs:/logs
+    secrets:
+      - bicdb_tls_cert
+      - bicdb_tls_key
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+
+volumes:
+  bicdb-data:
+  bicdb-logs:
+
+secrets:
+  bicdb_tls_cert:
+    file: ./secrets/server.pem
+  bicdb_tls_key:
+    file: ./secrets/server-key.pem

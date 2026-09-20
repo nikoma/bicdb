@@ -1,0 +1,12 @@
+{
+  "mode": "route",
+  "nodes": 1000,
+  "edges": 3000,
+  "insert_elapsed_ms": 218.900449,
+  "route_p50_ms": 16.676151,
+  "route_p95_ms": 18.339644,
+  "route_p99_ms": 20.392152,
+  "route_result_count": 1394,
+  "database_size_bytes": 2057471,
+  "path": "target/bicdb-bench-route-1k"
+}

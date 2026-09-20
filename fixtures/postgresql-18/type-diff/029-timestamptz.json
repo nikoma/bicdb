@@ -1,0 +1,31 @@
+{
+  "id": "type_matrix_timestamptz",
+  "description": "PostgreSQL 18 timestamptz precision, UTC storage, session rendering, named zones, DST, arithmetic, conversion, indexing, and validation",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_timestamptz;"
+  ],
+  "sql": [
+    "SET DateStyle = 'ISO, MDY';",
+    "SET TIME ZONE 'America/New_York';",
+    "CREATE TABLE type_matrix_timestamptz (id TEXT PRIMARY KEY, value TIMESTAMPTZ(3) UNIQUE);",
+    "CREATE INDEX type_matrix_timestamptz_value_idx ON type_matrix_timestamptz (value);",
+    "INSERT INTO type_matrix_timestamptz VALUES ('rounded', '2024-02-29 17:34:56.5555+00'), ('fold', '2024-11-03 01:30:00'), ('gap', '2024-03-10 02:30:00'), ('bc', '0001-01-01 00:00:00+00 BC'), ('infinity', 'infinity'), ('negative_infinity', '-infinity');",
+    "SELECT id, value FROM type_matrix_timestamptz ORDER BY value, id;",
+    "SELECT '2024-02-29 12:34:56.5555555-05'::timestamptz AS rounded, '2024-02-29 23:59:59.9999995+00'::timestamptz AS carry, 'epoch'::timestamptz AS epoch, 'infinity'::timestamptz AS pos_inf, '-infinity'::timestamptz AS neg_inf;",
+    "SELECT '2024-02-29 12:00:00 America/Los_Angeles'::timestamptz AS named, '2024-02-29 12:00:00 UTC'::timestamptz AS utc_named, '2024-02-29 12:00:00+05:30'::timestamptz AS explicit_offset;",
+    "SELECT '2024-11-03 01:30:00'::timestamptz AS fold, '2024-03-10 02:30:00'::timestamptz AS gap;",
+    "SELECT '2024-01-01 00:00:00.0005+00'::timestamptz(3) AS tie, '2024-02-29 23:59:59.999999+00'::timestamptz(3) AS carry;",
+    "SELECT '2024-03-09 12:00:00'::timestamptz + interval '1 day' AS calendar_day, '2024-03-09 12:00:00'::timestamptz + interval '24 hours' AS absolute_day, '2024-11-03 01:30:00'::timestamptz - '2024-11-03 00:30:00'::timestamptz AS difference;",
+    "SELECT '2024-11-03 01:30:00'::timestamp AT TIME ZONE 'America/New_York' AS to_instant, '2024-11-03 01:30:00-05'::timestamptz AT TIME ZONE 'UTC' AS to_local;",
+    "SELECT extract(epoch from '2000-01-02 00:00:00+00'::timestamptz) AS epoch, date_part('epoch', '2000-01-02 00:00:00+00'::timestamptz) AS date_part_epoch, date_trunc('day', '2024-03-10 12:34:56+00'::timestamptz) AS local_day;",
+    "SELECT id FROM type_matrix_timestamptz WHERE value = '2024-11-03 06:30:00+00'::timestamptz;",
+    "SET TIME ZONE 'Asia/Tokyo';",
+    "SELECT id, value FROM type_matrix_timestamptz WHERE id IN ('rounded', 'fold') ORDER BY id;",
+    "SET TIME ZONE '+02:00';",
+    "SELECT '2024-01-01 00:00:00+00'::timestamptz AS posix_session_offset;",
+    "SELECT '2023-02-29 12:00:00+00'::timestamptz;",
+    "SELECT '2024-01-01 25:00:00+00'::timestamptz;",
+    "SELECT '2024-01-01 12:00:00 Mars/Olympus_Mons'::timestamptz;"
+  ],
+  "expectation": "match"
+}

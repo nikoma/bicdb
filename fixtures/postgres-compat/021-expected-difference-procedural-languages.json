@@ -1,0 +1,12 @@
+{
+  "id": "expected_difference_procedural_languages",
+  "description": "Non-trigger PL/pgSQL functions are explicitly rejected as unsupported",
+  "cleanup_sql": [
+    "DROP FUNCTION IF EXISTS diff_plpgsql_fn();"
+  ],
+  "sql": [
+    "CREATE FUNCTION diff_plpgsql_fn() RETURNS INT LANGUAGE plpgsql AS 'BEGIN RETURN 1; END';"
+  ],
+  "expectation": "expected_difference",
+  "expected_difference": "BicDB explicitly rejects non-trigger PL/pgSQL functions"
+}

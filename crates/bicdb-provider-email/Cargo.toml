@@ -1,0 +1,12 @@
+[package]
+name = "bicdb-provider-email"
+version = "1.0.438-beta"
+edition.workspace = true
+license = "Apache-2.0"
+rust-version.workspace = true
+
+[dependencies]
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.438-beta" }
+lettre.workspace = true
+url.workspace = true
+uuid.workspace = true

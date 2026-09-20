@@ -1,0 +1,28 @@
+{
+  "id": "nightmare_constraints_transactions_sequences",
+  "description": "Constraints, transaction rollback, savepoints, sequences, and prepared statement SQL surface",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS nm_tx_child;",
+    "DROP TABLE IF EXISTS nm_tx_parent;",
+    "DROP SEQUENCE IF EXISTS nm_tx_seq;"
+  ],
+  "sql": [
+    "CREATE SEQUENCE nm_tx_seq START 10 INCREMENT 5;",
+    "CREATE TABLE nm_tx_parent (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, n INT CHECK (n > 0));",
+    "CREATE TABLE nm_tx_child (id TEXT PRIMARY KEY, parent_code TEXT REFERENCES nm_tx_parent(code) ON UPDATE CASCADE ON DELETE SET NULL);",
+    "INSERT INTO nm_tx_parent (id, code, n) VALUES ('p1', 'alpha', nextval('nm_tx_seq')::int);",
+    "INSERT INTO nm_tx_child (id, parent_code) VALUES ('c1', 'alpha');",
+    "UPDATE nm_tx_parent SET code = 'beta' WHERE id = 'p1';",
+    "SELECT parent_code FROM nm_tx_child WHERE id = 'c1';",
+    "BEGIN; INSERT INTO nm_tx_parent (id, code, n) VALUES ('rolled', 'rolled', 1); ROLLBACK;",
+    "SELECT COUNT(*) FROM nm_tx_parent WHERE id = 'rolled';",
+    "BEGIN; SAVEPOINT nm_sp; INSERT INTO nm_tx_parent (id, code, n) VALUES ('sp', 'savepoint', 1); ROLLBACK TO SAVEPOINT nm_sp; COMMIT;",
+    "SELECT COUNT(*) FROM nm_tx_parent WHERE id = 'sp';",
+    "PREPARE nm_plan(text) AS SELECT id FROM nm_tx_parent WHERE code = $1;",
+    "EXECUTE nm_plan('beta');",
+    "DEALLOCATE nm_plan;",
+    "SELECT nextval('nm_tx_seq') AS next_value;"
+  ],
+  "expectation": "expected_difference",
+  "expected_difference": "Current BicDB parity gaps include CREATE SEQUENCE/nextval, SQL-level PREPARE/EXECUTE, savepoint execution, and some transaction statement batching semantics. These remain explicit intentional gaps until implemented."
+}

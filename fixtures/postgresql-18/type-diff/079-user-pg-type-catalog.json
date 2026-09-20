@@ -1,0 +1,27 @@
+{
+  "id": "type_matrix_user_pg_type_catalog",
+  "description": "User-defined base, enum, domain, composite, range, multirange, relation, and array pg_type metadata",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_catalog_table CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_catalog_range CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_catalog_composite CASCADE;",
+    "DROP DOMAIN IF EXISTS type_matrix_catalog_domain CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_catalog_enum CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_catalog_base CASCADE;"
+  ],
+  "sql": [
+    "CREATE TYPE type_matrix_catalog_base;",
+    "CREATE FUNCTION type_matrix_catalog_base_in(cstring) RETURNS type_matrix_catalog_base AS 'textin' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE FUNCTION type_matrix_catalog_base_out(type_matrix_catalog_base) RETURNS cstring AS 'textout' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE FUNCTION type_matrix_catalog_base_recv(internal) RETURNS type_matrix_catalog_base AS 'textrecv' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE FUNCTION type_matrix_catalog_base_send(type_matrix_catalog_base) RETURNS bytea AS 'textsend' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE TYPE type_matrix_catalog_base (INPUT=type_matrix_catalog_base_in, OUTPUT=type_matrix_catalog_base_out, RECEIVE=type_matrix_catalog_base_recv, SEND=type_matrix_catalog_base_send, INTERNALLENGTH=variable, ALIGNMENT=int4, STORAGE=extended, CATEGORY='S', PREFERRED=true, DEFAULT='seed', DELIMITER=';', COLLATABLE=true);",
+    "CREATE TYPE type_matrix_catalog_enum AS ENUM ('open', 'closed');",
+    "CREATE DOMAIN type_matrix_catalog_domain AS NUMERIC(8,2) DEFAULT 1.20 NOT NULL;",
+    "CREATE TYPE type_matrix_catalog_composite AS (label VARCHAR(12), amount type_matrix_catalog_domain);",
+    "CREATE TYPE type_matrix_catalog_range AS RANGE (SUBTYPE = int4, MULTIRANGE_TYPE_NAME = type_matrix_catalog_multirange);",
+    "CREATE TABLE type_matrix_catalog_table (id int4, state type_matrix_catalog_enum);",
+    "SELECT t.typname::text, n.nspname::text, t.typowner = (SELECT oid FROM pg_roles WHERE rolname = current_user) AS owned_by_current_user, t.typlen::integer, t.typbyval, t.typtype::text, t.typcategory::text, t.typispreferred, t.typisdefined, t.typdelim::text, COALESCE(c.relname::text, '-') AS relation_name, t.typsubscript::text, COALESCE(element_type.typname::text, '-') AS element_name, COALESCE(array_type.typname::text, '-') AS array_name, t.typinput::text, t.typoutput::text, t.typreceive::text, t.typsend::text, t.typmodin::text, t.typmodout::text, t.typanalyze::text, t.typalign::text, t.typstorage::text, t.typnotnull, COALESCE(base_type.typname::text, '-') AS base_name, t.typtypmod, t.typndims, COALESCE(coll.collname::text, '-') AS collation_name, pg_get_expr(t.typdefaultbin, 0) AS default_expression, t.typdefault, t.typacl::text FROM pg_type AS t JOIN pg_namespace AS n ON n.oid = t.typnamespace LEFT JOIN pg_class AS c ON c.oid = t.typrelid LEFT JOIN pg_type AS element_type ON element_type.oid = t.typelem LEFT JOIN pg_type AS array_type ON array_type.oid = t.typarray LEFT JOIN pg_type AS base_type ON base_type.oid = t.typbasetype LEFT JOIN pg_collation AS coll ON coll.oid = t.typcollation WHERE t.typname IN ('type_matrix_catalog_base', '_type_matrix_catalog_base', 'type_matrix_catalog_enum', '_type_matrix_catalog_enum', 'type_matrix_catalog_domain', '_type_matrix_catalog_domain', 'type_matrix_catalog_composite', '_type_matrix_catalog_composite', 'type_matrix_catalog_range', '_type_matrix_catalog_range', 'type_matrix_catalog_multirange', '_type_matrix_catalog_multirange', 'type_matrix_catalog_table', '_type_matrix_catalog_table') ORDER BY t.typname;"
+  ],
+  "expectation": "match"
+}

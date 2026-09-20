@@ -1,0 +1,321 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>bicdb-client smoke</title>
+<body>
+<pre id="log"></pre>
+<script type="module">
+  import {
+    BicDbClient,
+    CacheManager,
+    AttachmentStore,
+  } from "../src/index.js";
+
+  const log = (line) => {
+    document.getElementById("log").textContent += line + "\n";
+  };
+
+  // Driven by the Playwright test: window.__run(phase) executes one phase
+  // and resolves with observable results. Phase "write" seeds the database;
+  // phase "verify" runs after a full page reload, so anything it sees came
+  // back from OPFS, not from memory.
+  window.__run = async (phase) => {
+    const db = await BicDbClient.open({
+      database: "smoke",
+      wasmUrl: new URL("/wasm/bicdb_wasm.wasm", location.href),
+    });
+    try {
+      if (phase === "write") {
+        await db.query(
+          "CREATE TABLE notes (id INT PRIMARY KEY, body TEXT, stars INT)",
+        );
+        for (let n = 0; n < 50; n++) {
+          await db.query(
+            `INSERT INTO notes (id, body, stars) VALUES (${n}, 'note ${n}', ${n % 5})`,
+          );
+        }
+        const count = await db.query(
+          "SELECT COUNT(*) AS c FROM notes WHERE stars >= 3",
+        );
+        const stats = await db.stats();
+        log("write done");
+        return {
+          phase,
+          count: count.rows[0][0],
+          records: stats.db.record_count,
+          poolUsed: stats.pool.usedSlots,
+        };
+      }
+      if (phase === "verify") {
+        const row = await db.query("SELECT body FROM notes WHERE id = 42");
+        const count = await db.query("SELECT COUNT(*) AS c FROM notes");
+        const report = await db.compact();
+        const after = await db.query("SELECT COUNT(*) AS c FROM notes");
+        log("verify done");
+        return {
+          phase,
+          body: row.rows[0]?.[0] ?? null,
+          count: count.rows[0][0],
+          countAfterCompact: after.rows[0][0],
+          compacted: report != null,
+        };
+      }
+      throw new Error(`unknown phase ${phase}`);
+    } finally {
+      await db.close();
+    }
+  };
+
+  const KEY_HEX = "8f".repeat(32); // test-only 32-byte key
+  window.__runEncrypted = async (phase) => {
+    if (phase === "wrong-key") {
+      try {
+        const db = await BicDbClient.open({
+          database: "smoke-enc",
+          wasmUrl: new URL("/wasm/bicdb_wasm.wasm", location.href),
+          config: { raw_key_hex: "00".repeat(32) },
+        });
+        await db.close();
+        return { phase, opened: true };
+      } catch (error) {
+        return { phase, opened: false, error: String(error.message) };
+      }
+    }
+    const db = await BicDbClient.open({
+      database: "smoke-enc",
+      wasmUrl: new URL("/wasm/bicdb_wasm.wasm", location.href),
+      config: { raw_key_hex: KEY_HEX },
+    });
+    try {
+      if (phase === "write") {
+        await db.query("CREATE TABLE phi (id INT PRIMARY KEY, note TEXT)");
+        await db.query("INSERT INTO phi VALUES (7, 'sealed at rest')");
+        return { phase, ok: true };
+      }
+      const row = await db.query("SELECT note FROM phi WHERE id = 7");
+      return { phase, note: row.rows[0]?.[0] ?? null };
+    } finally {
+      await db.close();
+    }
+  };
+
+  // Cache hygiene: churn creates log garbage; CacheManager must compact it
+  // away under pressure and report cache-full when the budget stays blown;
+  // destroy() must wipe the OPFS cache for a fresh re-bootstrap.
+  window.__runHygiene = async () => {
+    const wasmUrl = new URL("/wasm/bicdb_wasm.wasm", location.href);
+    const open = () => BicDbClient.open({ database: "hygiene", wasmUrl });
+
+    let db = await open();
+    await db.query("CREATE TABLE junk (id INT PRIMARY KEY, blob TEXT)");
+    const filler = "x".repeat(2000);
+    for (let n = 0; n < 200; n++) {
+      await db.query(`INSERT INTO junk VALUES (${n}, '${filler}')`);
+    }
+    for (let n = 0; n < 180; n++) {
+      await db.query(`DELETE FROM junk WHERE id = ${n}`);
+    }
+    const before = (await db.stats()).pool.poolBytes;
+
+    const states = [];
+    const manager = new CacheManager(db, {
+      maxBytes: 64 * 1024, // deliberately blown budget
+      softRatio: 0.5,
+      onState: (snapshot) => states.push(snapshot.state),
+    });
+    const snapshot = await manager.check();
+    const after = (await db.stats()).pool.poolBytes;
+    await db.close();
+
+    await BicDbClient.destroy("hygiene");
+    db = await open();
+    let freshAfterDestroy = false;
+    try {
+      await db.query("SELECT COUNT(*) AS c FROM junk");
+    } catch {
+      freshAfterDestroy = true; // table gone: the cache really was wiped
+    }
+    await db.close();
+    return {
+      before,
+      after,
+      compacted: snapshot.compacted,
+      state: snapshot.state,
+      states,
+      freshAfterDestroy,
+    };
+  };
+
+  // Encrypted chunked attachments: multi-chunk roundtrip, ciphertext on
+  // disk, wrong-key rejection, manifest row lifecycle.
+  window.__runAttachments = async () => {
+    const wasmUrl = new URL("/wasm/bicdb_wasm.wasm", location.href);
+    const db = await BicDbClient.open({ database: "attach", wasmUrl });
+    try {
+      const KEY = "4b".repeat(32);
+      const store = await AttachmentStore.open(db, {
+        database: "attach",
+        rawKeyHex: KEY,
+      });
+      // 2.5 MiB deterministic pattern -> 3 chunks
+      const size = Math.floor(2.5 * 1024 * 1024);
+      const data = new Uint8Array(size);
+      for (let i = 0; i < size; i++) data[i] = (i * 31 + 7) & 0xff;
+
+      const put = await store.put("lecture-01.bin", data, { mime: "video/mp4" });
+      const back = await store.get("lecture-01.bin");
+      const roundtrip =
+        back.length === data.length && back.every((b, i) => b === data[i]);
+
+      // Raw OPFS bytes must not contain the plaintext prefix.
+      const root = await navigator.storage.getDirectory();
+      const dir = await root.getDirectoryHandle("bicdb-attach-attachments");
+      const raw = new Uint8Array(
+        await (
+          await (await dir.getFileHandle("lecture-01.bin")).getFile()
+        ).arrayBuffer(),
+      );
+      let plaintextOnDisk = false;
+      for (let i = 0; i < raw.length - 64; i++) {
+        let match = true;
+        for (let j = 0; j < 64; j++) {
+          if (raw[i + j] !== data[j]) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          plaintextOnDisk = true;
+          break;
+        }
+      }
+
+      const wrongKey = await AttachmentStore.open(db, {
+        database: "attach",
+        rawKeyHex: "00".repeat(32),
+      });
+      let wrongKeyFailed = false;
+      try {
+        await wrongKey.get("lecture-01.bin");
+      } catch {
+        wrongKeyFailed = true;
+      }
+
+      const manifest = await db.query("SELECT id, size FROM _attachments");
+      const usage = await store.usageBytes();
+      await store.delete("lecture-01.bin");
+      const hasAfterDelete = await store.has("lecture-01.bin");
+      const manifestAfterDelete = await db.query(
+        "SELECT COUNT(*) AS c FROM _attachments",
+      );
+      return {
+        chunks: put.chunks,
+        roundtrip,
+        plaintextOnDisk,
+        wrongKeyFailed,
+        manifest: manifest.rows,
+        usage,
+        hasAfterDelete,
+        manifestCountAfterDelete: manifestAfterDelete.rows[0][0],
+      };
+    } finally {
+      await db.close();
+    }
+  };
+
+  // A6: one worker owning several databases (own OPFS pools), persistent
+  // sessions with cross-call transactions/GUCs, and change generations.
+  window.__runSubstrate = async () => {
+    const wasmUrl = new URL("/wasm/bicdb_wasm.wasm", location.href);
+    const client = await BicDbClient.open({
+      databases: [{ name: "multi-control" }, { name: "multi-data" }],
+      wasmUrl,
+    });
+    try {
+      const control = client.db("multi-control");
+      const data = client.db("multi-data");
+      await control.query("CREATE TABLE releases (id INT PRIMARY KEY, name TEXT)");
+      await control.query("INSERT INTO releases VALUES (1, 'rel-42')");
+      await data.query("CREATE TABLE rows (id INT PRIMARY KEY, v TEXT)");
+      await data.query("INSERT INTO rows VALUES (1, 'business')");
+
+      // isolation: each db sees only its own tables
+      let crossLeak = false;
+      try {
+        await data.query("SELECT * FROM releases");
+        crossLeak = true;
+      } catch { /* expected */ }
+
+      // persistent session: ordinary application GUCs survive across calls;
+      // protected carrier.* identity is host-bound and tested in Rust.
+      const session = await data.session();
+      await session.exec("SET app.session_user = 'alice'");
+      const who = await session.exec(
+        "SELECT current_setting('app.session_user', true) AS u",
+      );
+      await session.exec("BEGIN");
+      await session.exec("INSERT INTO rows VALUES (2, 'doomed')");
+      await session.exec("ROLLBACK");
+      await session.close();
+      const rowsAfter = await data.query("SELECT COUNT(*) AS c FROM rows");
+
+      // generations: bump on the touched collection only
+      const g1 = await data.generations();
+      await data.query("INSERT INTO rows VALUES (3, 'bump')");
+      const g2 = await data.generations();
+      const controlG1 = await control.generations();
+      await client.close();
+
+      // destroy one database; the other must survive
+      await BicDbClient.destroy("multi-control");
+      const reopened = await BicDbClient.open({
+        databases: [{ name: "multi-control" }, { name: "multi-data" }],
+        wasmUrl,
+      });
+      let controlFresh = false;
+      try {
+        await reopened.db("multi-control").query("SELECT COUNT(*) AS c FROM releases");
+      } catch {
+        controlFresh = true;
+      }
+      const dataSurvived = await reopened
+        .db("multi-data")
+        .query("SELECT COUNT(*) AS c FROM rows");
+      await reopened.close();
+
+      return {
+        crossLeak,
+        guc: who.rows[0][0],
+        rowsAfterRollback: rowsAfter.rows[0][0],
+        rowsGenBumped: g2.rows > g1.rows,
+        controlFresh,
+        dataSurvived: dataSurvived.rows[0][0],
+        controlHadOwnGenerations: "releases" in controlG1,
+      };
+    } finally {
+      /* closed above */
+    }
+  };
+
+  // Two clients contending for the same database: the second open() must
+  // wait on the Web Lock until the first closes, not corrupt the pool.
+  window.__runContention = async () => {
+    const wasmUrl = new URL("/wasm/bicdb_wasm.wasm", location.href);
+    const first = await BicDbClient.open({ database: "smoke", wasmUrl });
+    let secondOpened = false;
+    const second = BicDbClient.open({ database: "smoke", wasmUrl }).then(
+      async (db) => {
+        secondOpened = true;
+        const count = await db.query("SELECT COUNT(*) AS c FROM notes");
+        await db.close();
+        return count.rows[0][0];
+      },
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    const waitedWhileFirstOpen = !secondOpened;
+    await first.close();
+    const countFromSecond = await second;
+    return { waitedWhileFirstOpen, countFromSecond };
+  };
+  log("ready");
+</script>
+</body>

@@ -1,0 +1,122 @@
+name: tests
+
+# The reason this exists: three separate defects shipped in a single week
+# because nothing ran the test suite on a pull request. One of them was a
+# crate that did not compile. Reviewing diffs is not a substitute for
+# building them.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # GitHub's hosted runner has limited disk and memory. Eight simultaneous
+  # static links have produced SIGBUS failures, and building every workspace
+  # example before every matrix suite has exhausted the runner's disk.
+  # One linker at a time, no incremental object cache, and no debug symbols in
+  # CI keeps the complete suite below the runner's hard memory/disk ceilings.
+  CARGO_BUILD_JOBS: "1"
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  RUST_TEST_THREADS: "4"
+
+jobs:
+  architecture:
+    name: Public repository has no private dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install boundary scanner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+      - name: Enforce open-core dependency direction
+        run: ./scripts/check-open-core-boundary.sh
+
+  build:
+    name: Community-only workspace compiles, tests included
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # --all-targets is the point: `cargo build` alone would not have caught
+      # bicdb-sql's unit tests failing to compile against a changed signature.
+      - name: cargo check --workspace --all-targets
+        run: cargo check --workspace --all-targets --locked
+
+  fmt:
+    name: Formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  licensing:
+    name: Licensing invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: scripts/validate-licensing.sh
+        run: ./scripts/validate-licensing.sh
+
+  test:
+    name: ${{ matrix.suite.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - name: bicdb-core
+            args: -p bicdb-core
+          - name: bicdb-sql
+            args: -p bicdb-sql
+          - name: bicdb-pgwire
+            args: -p bicdb-pgwire
+          - name: rest of workspace
+            args: >-
+              --workspace
+              --exclude bicdb-core
+              --exclude bicdb-sql
+              --exclude bicdb-pgwire
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install test-target scanner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+      - uses: Swatinem/rust-cache@v2
+      # bicdb-core's projection chaos test deliberately refuses to run unless
+      # its out-of-process crash helper exists. No other suite needs the full
+      # workspace's examples, so build exactly that helper in the core job.
+      - name: Build projection chaos helper
+        if: matrix.suite.name == 'bicdb-core'
+        run: cargo build -p bicdb-core --example chaos_child --locked
+      - name: cargo test ${{ matrix.suite.args }}
+        if: matrix.suite.name != 'bicdb-sql'
+        run: cargo test ${{ matrix.suite.args }} --locked -- --test-threads=4
+      - name: cargo test bicdb-sql with bounded linked artifacts
+        if: matrix.suite.name == 'bicdb-sql'
+        run: ./scripts/run-cargo-test-targets-bounded.sh bicdb-sql

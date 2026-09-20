@@ -1,0 +1,11 @@
+{
+  "id": "error_type_sqlstate",
+  "description": "Invalid integer input exposes PostgreSQL SQLSTATE 22P02",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_error_types;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_error_types (id TEXT PRIMARY KEY, age INT NOT NULL);",
+    "INSERT INTO diff_error_types (id, age) VALUES ('p1', 'old');"
+  ]
+}

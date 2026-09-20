@@ -1,0 +1,18 @@
+{
+  "id": "type_matrix_character_length",
+  "description": "PostgreSQL 18 character typmod assignment errors, trailing-space compatibility, explicit truncation, and Unicode character counting",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_character_length;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_character_length (id VARCHAR(3) PRIMARY KEY, varying VARCHAR(3), fixed CHAR(3));",
+    "INSERT INTO type_matrix_character_length (id, varying, fixed) VALUES ('one', 'abc   ', 'abc   ');",
+    "SELECT id, varying, fixed FROM type_matrix_character_length;",
+    "INSERT INTO type_matrix_character_length (id) VALUES ('toolong');",
+    "INSERT INTO type_matrix_character_length (id, varying) VALUES ('two', 'abcd');",
+    "INSERT INTO type_matrix_character_length (id, fixed) VALUES ('two', 'abcd');",
+    "UPDATE type_matrix_character_length SET varying = 'abcd' WHERE id = 'one';",
+    "SELECT 'abcdef'::VARCHAR(3) AS short_varchar, 'abcdef'::CHAR(3) AS short_char, '😀éxy'::VARCHAR(3) AS unicode_varchar, '😀éxy'::CHAR(3) AS unicode_char;"
+  ],
+  "expectation": "match"
+}

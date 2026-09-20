@@ -1,0 +1,24 @@
+{
+  "id": "type_matrix_exact_numeric",
+  "description": "PostgreSQL 18 exact numeric typmods, rounding, arithmetic, special values, ordering, aggregates, and errors",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_exact_numeric;"
+  ],
+  "sql": [
+    "SELECT 1.235::numeric(4,2) AS positive_round, (-1.235)::numeric(4,2) AS negative_round, 149::numeric(2,-1) AS negative_scale, 0.001234::numeric(2,4) AS scale_above_precision, 1.2300e2::numeric AS exponent_input;",
+    "SELECT 1.20::numeric + 2.3::numeric AS addition, 1.20::numeric - 2.3::numeric AS subtraction, 1.20::numeric * 2.30::numeric AS multiplication, 1.00::numeric / 3::numeric AS division, 5.50::numeric % 2::numeric AS modulo;",
+    "SELECT 123456789012345678901234567890.01::numeric + 0.09::numeric AS arbitrary_precision;",
+    "SELECT 'NaN'::numeric = 'NaN'::numeric AS nan_equal, 'NaN'::numeric > 'Infinity'::numeric AS nan_above_infinity, 'Infinity'::numeric + '-Infinity'::numeric AS opposite_infinities, 'Infinity'::numeric * 0::numeric AS infinity_times_zero, 2::numeric % 'Infinity'::numeric AS finite_mod_infinity;",
+    "CREATE TABLE type_matrix_exact_numeric (id TEXT PRIMARY KEY, amount NUMERIC(8,2), rounded NUMERIC(2,-1), flexible NUMERIC);",
+    "INSERT INTO type_matrix_exact_numeric VALUES ('a', 1.235, 149, 0.10), ('b', -1.235, 151, 0.20), ('c', 2.00, 160, 'NaN');",
+    "CREATE INDEX type_matrix_exact_numeric_flexible_idx ON type_matrix_exact_numeric (flexible);",
+    "SELECT id, amount, rounded, flexible FROM type_matrix_exact_numeric ORDER BY flexible, id;",
+    "SELECT SUM(amount) AS amount_sum, AVG(amount) AS amount_avg, MIN(flexible) AS flexible_min, MAX(flexible) AS flexible_max FROM type_matrix_exact_numeric;",
+    "SELECT id FROM type_matrix_exact_numeric WHERE flexible = 0.1::numeric ORDER BY id;",
+    "SELECT 999::numeric(2,-1);",
+    "SELECT 'Infinity'::numeric(8,2);",
+    "SELECT 1::numeric / 0::numeric;",
+    "SELECT '1ehello'::numeric;"
+  ],
+  "expectation": "match"
+}

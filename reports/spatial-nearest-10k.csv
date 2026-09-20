@@ -1,0 +1,2 @@
+mode,points,queries,nearest_p50_ms,nearest_p95_ms,nearest_p99_ms,radius_p50_ms,radius_p95_ms,radius_p99_ms,nearest_result_count,radius_result_count,radius_meters,database_size_bytes,path
+spatial_nearest,10000,100,11.914,12.122,12.156,0.596,0.635,0.650,1000,29970,2000.000,4847439,target/bicdb-bench-spatial-nearest-10k

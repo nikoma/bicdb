@@ -1,0 +1,37 @@
+[package]
+name = "bicdb-bench"
+version = "1.0.438-beta"
+edition.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# Optional: this crate registers a process-wide #[global_allocator] that counts
+# every allocation. Keep it opt-in so it is not linked into the production CLI
+# (which depends on this crate) and taxed on every allocation in the server.
+allocation-counter = { workspace = true, optional = true }
+anyhow.workspace = true
+arrow.workspace = true
+bicdb-analytics = { path = "../bicdb-analytics", version = "1.0.438-beta" }
+bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta" }
+bicdb-page = { path = "../bicdb-page", version = "1.0.438-beta" }
+bicdb-pgwire = { path = "../bicdb-pgwire", version = "1.0.438-beta" }
+bicdb-sql = { path = "../bicdb-sql", version = "1.0.438-beta" }
+fjall = { workspace = true, optional = true }
+hex.workspace = true
+postgres = "0.19.14"
+redb = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[features]
+# Enable the allocation-counter global allocator to populate the vector-search
+# allocation metrics. Off by default so dependents (e.g. the CLI/server) do not
+# pay per-allocation counting overhead.
+alloc-counting = ["dep:allocation-counter"]
+# External engines are useful comparison targets, never production storage
+# dependencies. Keep them behind an explicit benchmark-only feature.
+comparison-engines = ["dep:fjall", "dep:redb"]

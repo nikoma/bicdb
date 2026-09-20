@@ -1,0 +1,26 @@
+{
+  "id": "type_matrix_bytea",
+  "description": "PostgreSQL 18 bytea storage, input/output, functions, ordering, and indexes",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_bytea;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_bytea (id TEXT PRIMARY KEY, payload BYTEA UNIQUE);",
+    "CREATE INDEX type_matrix_bytea_payload_idx ON type_matrix_bytea (payload);",
+    "INSERT INTO type_matrix_bytea VALUES ('hex', '\\x00ff415c'::bytea), ('escape', '\\001\\\\A'::bytea), ('prefix', '\\x00ff'::bytea);",
+    "SELECT id, payload, encode(payload, 'hex'), length(payload), octet_length(payload), bit_length(payload), bit_count(payload) FROM type_matrix_bytea ORDER BY payload;",
+    "SELECT '\\x00ff'::bytea || '\\x415c'::bytea AS concatenated, get_byte('\\x00ff415c'::bytea, 1) AS byte_1, get_bit('\\x01'::bytea, 0) AS bit_0, set_byte('\\x00ff'::bytea, 0, 171) AS changed_byte, set_bit('\\x00'::bytea, 7, 1) AS changed_bit;",
+    "SELECT substring('\\x0011223344'::bytea FROM 2 FOR 3) AS sliced, reverse('\\x00ff415c'::bytea) AS reversed, md5('\\x00ff'::bytea) AS md5, sha256('abc'::bytea) AS sha256, crc32('abc'::bytea) AS crc32, crc32c('abc'::bytea) AS crc32c;",
+    "SELECT '\\x00ff'::bytea < '\\x0100'::bytea AS byte_order, '\\x00ff'::bytea < '\\x00ff00'::bytea AS prefix_order, encode(decode('AP9BXA==', 'base64'), 'hex') AS base64_roundtrip;",
+    "SELECT substring('\\x00010203'::bytea FROM 0 FOR 2) AS zero_start, position('\\x0203'::bytea IN '\\x0001020304'::bytea) AS byte_position, overlay('\\x0001020304'::bytea PLACING '\\xaabb'::bytea FROM 2 FOR 2) AS overlaid, btrim('\\x0001000002'::bytea, '\\x0002'::bytea) AS trimmed;",
+    "SELECT convert_from('\\x636166c3a9'::bytea, 'UTF8') AS decoded_text, encode(convert_to('café', 'UTF8'), 'hex') AS encoded_text, encode(convert('\\x636166e9'::bytea, 'LATIN1', 'UTF8'), 'hex') AS transcoded, encode(decode(E'AAEC\\nAwQ=', 'base64'), 'hex') AS folded_base64;",
+    "SET bytea_output = escape;",
+    "SELECT '\\x005c27417fff80'::bytea AS escaped_output;",
+    "RESET bytea_output;",
+    "SELECT payload FROM type_matrix_bytea WHERE payload = '\\x00ff415c'::bytea;",
+    "SELECT get_byte('\\x00'::bytea, 1);",
+    "SELECT decode('0', 'hex');",
+    "INSERT INTO type_matrix_bytea VALUES ('duplicate', '\\x00ff415c'::bytea);"
+  ],
+  "expectation": "match"
+}

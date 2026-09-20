@@ -1,0 +1,13 @@
+{
+  "id": "create_insert_select",
+  "description": "CREATE TABLE, INSERT, and SELECT parity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_patients;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_patients (id TEXT PRIMARY KEY, name TEXT, age INT);",
+    "INSERT INTO diff_patients (id, name, age) VALUES ('p1', 'Ada', 36);",
+    "SELECT id, name, age FROM diff_patients WHERE id = 'p1';"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "window_functions",
+  "description": "Window functions execute with PostgreSQL-compatible ranking, frames, inheritance, and grouped aggregates",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_window_patients;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_window_patients (id TEXT PRIMARY KEY, name TEXT, age INT);",
+    "INSERT INTO diff_window_patients (id, name, age) VALUES ('p1', 'Ada', 36), ('p2', 'John', 45);",
+    "SELECT id, ROW_NUMBER() OVER (ORDER BY age) FROM diff_window_patients ORDER BY id;",
+    "SELECT id, PERCENT_RANK() OVER ordered, CUME_DIST() OVER ordered, SUM(age) OVER framed FROM diff_window_patients WINDOW base AS (), ordered AS (base ORDER BY age), framed AS (ordered GROUPS BETWEEN 1 PRECEDING AND CURRENT ROW) ORDER BY id;",
+    "SELECT age, COUNT(*), RANK() OVER (ORDER BY COUNT(*)) FROM diff_window_patients GROUP BY age ORDER BY age;"
+  ],
+  "expectation": "match"
+}

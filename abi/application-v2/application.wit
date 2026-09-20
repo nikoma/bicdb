@@ -1,0 +1,27 @@
+package bicdb:application@2.0.0;
+
+/// Component-model projection of BicDB's application ABI v2 transport.
+///
+/// ABI v2 currently lowers this interface to the core-Wasm import
+/// `bicdb:app/host.call`. Request and response payloads are canonical JSON
+/// representations of `HostCall` and `HostCallResult` from
+/// `bicdb_extension::abi_v2`.
+interface host {
+  variant transport-error {
+    buffer-too-small(u32),
+    protocol-error,
+  }
+
+  call: func(request: list<u8>, response-capacity: u32) -> result<list<u8>, transport-error>;
+}
+
+/// A generic application module receives and returns canonical JSON bytes.
+/// The typed invocation envelope is versioned by the package manifest.
+interface guest {
+  invoke: func(request: list<u8>) -> result<list<u8>, string>;
+}
+
+world application-v2 {
+  import host;
+  export guest;
+}

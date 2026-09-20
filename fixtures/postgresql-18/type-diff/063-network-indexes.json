@@ -1,0 +1,18 @@
+{
+  "id": "type_matrix_network_indexes",
+  "description": "PostgreSQL 18 canonical inet B-tree ordering and MAC hash-index equality behavior",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_network_indexes;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_network_indexes (id int4 PRIMARY KEY, address inet NOT NULL, mac macaddr NOT NULL);",
+    "INSERT INTO type_matrix_network_indexes VALUES (1, '192.168.1.1/24', '08:00:2b:01:02:03'), (2, '192.168.1.0/25', '08:00:2b:01:02:04'), (3, '192.168.0.255/32', '08:00:2b:01:02:05'), (4, '192.168.1.200/24', '08:00:2b:01:02:06');",
+    "CREATE INDEX type_matrix_network_address_btree ON type_matrix_network_indexes USING btree (address);",
+    "CREATE INDEX type_matrix_network_mac_hash ON type_matrix_network_indexes USING hash (mac);",
+    "SELECT id FROM type_matrix_network_indexes WHERE address = '192.168.1.1/24'::inet;",
+    "SELECT id FROM type_matrix_network_indexes WHERE mac = '08002b:010204'::macaddr;",
+    "SELECT address FROM type_matrix_network_indexes WHERE address >= '192.168.1.1/24'::inet ORDER BY address;",
+    "SELECT address FROM type_matrix_network_indexes ORDER BY address;"
+  ],
+  "expectation": "match"
+}

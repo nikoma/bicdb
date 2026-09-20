@@ -1,0 +1,23 @@
+{
+  "id": "shell_base_types",
+  "description": "Shell types finalize into safe registered base codecs with arrays, catalogs, defaults, and PostgreSQL operator boundaries",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_base_rows CASCADE;",
+    "DROP TYPE IF EXISTS diff_exact_text CASCADE;"
+  ],
+  "sql": [
+    "CREATE TYPE diff_exact_text;",
+    "SELECT typtype, typisdefined, typarray = 0 AS no_array_before_definition FROM pg_type WHERE typname = 'diff_exact_text';",
+    "CREATE FUNCTION diff_exact_text_in(cstring) RETURNS diff_exact_text AS 'textin' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE FUNCTION diff_exact_text_out(diff_exact_text) RETURNS cstring AS 'textout' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE FUNCTION diff_exact_text_recv(internal) RETURNS diff_exact_text AS 'textrecv' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE FUNCTION diff_exact_text_send(diff_exact_text) RETURNS bytea AS 'textsend' LANGUAGE internal IMMUTABLE STRICT;",
+    "CREATE TYPE diff_exact_text (INPUT=diff_exact_text_in, OUTPUT=diff_exact_text_out, RECEIVE=diff_exact_text_recv, SEND=diff_exact_text_send, INTERNALLENGTH=variable, ALIGNMENT=int4, STORAGE=extended, CATEGORY='S', DEFAULT='seed', DELIMITER=';', COLLATABLE=true);",
+    "SELECT typtype, typisdefined, typcategory, typarray <> 0 AS has_array, typinput::regproc::text, typoutput::regproc::text, typreceive::regproc::text, typsend::regproc::text, typdelim, typcollation <> 0 AS collatable FROM pg_type WHERE typname = 'diff_exact_text';",
+    "CREATE TABLE diff_base_rows (id INTEGER PRIMARY KEY, value diff_exact_text, values_array diff_exact_text[]);",
+    "INSERT INTO diff_base_rows (id, values_array) VALUES (1, '{alpha;beta}');",
+    "INSERT INTO diff_base_rows VALUES (2, 'zeta', '{gamma;delta}');",
+    "SELECT value, values_array, pg_typeof(value), pg_typeof(values_array) FROM diff_base_rows ORDER BY id;"
+  ],
+  "expectation": "match"
+}

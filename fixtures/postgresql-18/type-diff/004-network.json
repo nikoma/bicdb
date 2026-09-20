@@ -1,0 +1,15 @@
+{
+  "id": "type_matrix_network",
+  "description": "DDL, input, canonical output, casts, and catalog OIDs for PostgreSQL network address types",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_network;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_network (id TEXT PRIMARY KEY, host INET, network CIDR, mac MACADDR, mac8 MACADDR8);",
+    "INSERT INTO type_matrix_network (id, host, network, mac, mac8) VALUES ('w1', '192.0.2.1/24', '192.0.2.0/24', '08:00:2b:01:02:03', '08:00:2b:ff:fe:01:02:03');",
+    "SELECT host, network, mac, mac8 FROM type_matrix_network WHERE id = 'w1';",
+    "SELECT '2001:db8::1/64'::inet AS host, '2001:db8::/32'::cidr AS network, '08-00-2b-01-02-03'::macaddr AS mac, '08:00:2b:ff:fe:01:02:03'::macaddr8 AS mac8;",
+    "SELECT a.attname, a.atttypid, pg_catalog.format_type(a.atttypid, a.atttypmod) AS formatted_type FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid WHERE c.relname = 'type_matrix_network' AND a.attnum > 0 ORDER BY a.attnum;"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "type_matrix_numeric",
+  "description": "DDL, input, canonical output, casts, typmods, and catalog OIDs for Boolean and numeric scalar types",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_numeric;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_numeric (id TEXT PRIMARY KEY, enabled BOOLEAN, small SMALLINT, regular INTEGER, big BIGINT, single REAL, double_value DOUBLE PRECISION, exact NUMERIC(19,4), object_id OID);",
+    "INSERT INTO type_matrix_numeric (id, enabled, small, regular, big, single, double_value, exact, object_id) VALUES ('n1', true, -32768, 2147483647, 9007199254740993, 1.25, -2.5, 123456789012345.5000, 42);",
+    "SELECT enabled, small, regular, big, single, double_value, exact, object_id FROM type_matrix_numeric WHERE id = 'n1';",
+    "SELECT 'false'::boolean AS enabled, '-12'::smallint AS small, '34'::integer AS regular, '9007199254740993'::bigint AS big, '1.5'::real AS single, '-2.25'::double precision AS double_value, '0.1000'::numeric(9,4) AS exact, '42'::oid AS object_id;",
+    "SELECT a.attname, a.atttypid, a.atttypmod, pg_catalog.format_type(a.atttypid, a.atttypmod) AS formatted_type FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid WHERE c.relname = 'type_matrix_numeric' AND a.attnum > 0 ORDER BY a.attnum;"
+  ],
+  "expectation": "match"
+}

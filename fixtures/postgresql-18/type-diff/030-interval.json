@@ -1,0 +1,33 @@
+{
+  "id": "type_matrix_interval",
+  "description": "PostgreSQL 18 interval input syntaxes, field and precision typmods, component storage, output styles, arithmetic, comparison, extraction, normalization, indexing, and validation",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_interval;"
+  ],
+  "sql": [
+    "SET IntervalStyle = postgres;",
+    "CREATE TABLE type_matrix_interval (id TEXT PRIMARY KEY, value INTERVAL(3) UNIQUE, whole_years INTERVAL YEAR);",
+    "CREATE INDEX type_matrix_interval_value_idx ON type_matrix_interval (value);",
+    "INSERT INTO type_matrix_interval VALUES ('rounded', '1 year 2 mons 3 days 04:05:06.555555', '1 year 2 mons 3 days'), ('fractional', '1.1 mons', '2 years 11 mons'), ('negative', '-1 mon -2 days -3 seconds', '-3 years 4 mons');",
+    "SELECT id, value, whole_years FROM type_matrix_interval ORDER BY value, id;",
+    "SELECT '1 year 2 mons 3 days 04:05:06.7'::interval AS postgres_input, '@ 1 year 2 mons 3 days 4 hours 5 mins 6.7 secs'::interval AS verbose_input, '1-2 3 04:05:06.7'::interval AS sql_input, 'P1Y2M3DT4H5M6.7S'::interval AS iso_input;",
+    "SELECT '1.5 years'::interval AS fractional_year, '1.1 mons'::interval AS fractional_month, '1.01 mons'::interval AS fractional_month_time, '1.1 weeks'::interval AS fractional_week;",
+    "SELECT interval '1 year 2 mons 3 days 04:05:06.555555' YEAR AS year_only, interval '1 year 2 mons 3 days 04:05:06.555555' YEAR TO MONTH AS through_month, interval '1 year 2 mons 3 days 04:05:06.555555' DAY AS through_day, interval '1 year 2 mons 3 days 04:05:06.555555' HOUR AS through_hour, interval '1 year 2 mons 3 days 04:05:06.555555' MINUTE AS through_minute, interval(3) '1 year 2 mons 3 days 04:05:06.555555' AS rounded;",
+    "SELECT interval(3) '23:59:59.999999' AS precision_carry, interval(0) '00:00:00.5' AS half_up, interval(0) '00:00:01.5' AS one_half_up;",
+    "SELECT interval '1 mon' + interval '15 days' AS added, interval '1 mon' - interval '15 days' AS subtracted, interval '1 mon' / 2 AS divided, interval '1 mon' * 1.5 AS multiplied, -interval '1 day 2 seconds' AS negated;",
+    "SELECT interval '1 mon' = interval '30 days' AS equivalent, interval '1 mon' < interval '31 days' AS less_than, interval '1 day' > interval '23 hours' AS greater_than;",
+    "SELECT extract(year FROM interval '14 mons') AS year, extract(month FROM interval '14 mons') AS month, extract(day FROM interval '2 days 03:04:05.6') AS day, extract(hour FROM interval '2 days 03:04:05.6') AS hour, extract(minute FROM interval '2 days 03:04:05.6') AS minute, extract(second FROM interval '2 days 03:04:05.6') AS second, extract(epoch FROM interval '1 mon 2 days 3 seconds') AS epoch;",
+    "SELECT justify_hours(interval '27 hours') AS hours, justify_days(interval '35 days') AS days, justify_interval(interval '1 mon -1 day -1 hour') AS normalized;",
+    "SELECT id FROM type_matrix_interval WHERE value = '1 year 2 mons 3 days 04:05:06.555555'::interval(3);",
+    "SET IntervalStyle = postgres_verbose;",
+    "SELECT interval '1 year 2 mons 3 days 04:05:06.7' AS positive, interval '-1 year -2 mons -3 days -04:05:06.7' AS negative, interval '10 mons 3 days -04:05:06.7' AS mixed;",
+    "SET IntervalStyle = sql_standard;",
+    "SELECT interval '1 year 2 mons 3 days 04:05:06.7' AS positive, interval '-1 year -2 mons -3 days -04:05:06.7' AS negative, interval '10 mons 3 days -04:05:06.7' AS mixed;",
+    "SET IntervalStyle = iso_8601;",
+    "SELECT interval '1 year 2 mons 3 days 04:05:06.7' AS positive, interval '-1 year -2 mons -3 days -04:05:06.7' AS negative, interval '10 mons 3 days -04:05:06.7' AS mixed;",
+    "SET IntervalStyle = postgres;",
+    "SELECT 'nonsense'::interval;",
+    "SELECT '1 day 25:99:00'::interval;"
+  ],
+  "expectation": "match"
+}

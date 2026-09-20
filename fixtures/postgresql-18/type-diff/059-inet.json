@@ -1,0 +1,23 @@
+{
+  "id": "type_matrix_inet",
+  "description": "PostgreSQL 18 inet IPv4/IPv6 validation, canonical output, assignment, and durable storage",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_inet;"
+  ],
+  "sql": [
+    "SELECT '192.0.2.1'::inet, '192.000.002.001/024'::inet, '001.002.003.004/00'::inet;",
+    "SELECT '2001:0DB8:0:0:0:0:0:1/64'::inet, '::ffff:c000:201/120'::inet, '::192.0.2.1'::inet;",
+    "CREATE TABLE type_matrix_inet (id int4 PRIMARY KEY, ipv4 inet NOT NULL, ipv6 inet NOT NULL, mapped inet NOT NULL);",
+    "INSERT INTO type_matrix_inet VALUES (1, '192.000.002.001/024', '2001:0DB8:0:0:0:0:0:1/64', '::ffff:c000:201/120');",
+    "SELECT ipv4, ipv6, mapped FROM type_matrix_inet ORDER BY id;",
+    "SELECT ' 192.0.2.1'::inet;",
+    "SELECT '192.0.2.1 '::inet;",
+    "SELECT '192.0.2.1/33'::inet;",
+    "SELECT '192.168.1'::inet;",
+    "SELECT '256.0.0.1'::inet;",
+    "SELECT '2001:db8::1/064'::inet;",
+    "SELECT '2001:db8::1/129'::inet;",
+    "SELECT 'fe80::1%eth0'::inet;"
+  ],
+  "expectation": "match"
+}

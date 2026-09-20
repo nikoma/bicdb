@@ -1,0 +1,21 @@
+{
+  "id": "alter_table_migrations",
+  "description": "Common ALTER TABLE migration operations",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_people;",
+    "DROP TABLE IF EXISTS diff_patients;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_patients (id TEXT PRIMARY KEY, name TEXT, age INT);",
+    "INSERT INTO diff_patients (id, name, age) VALUES ('p1', 'Ada', 36);",
+    "ALTER TABLE diff_patients ADD COLUMN active BOOLEAN DEFAULT true;",
+    "ALTER TABLE diff_patients ADD COLUMN profile JSONB DEFAULT '{\"tier\":\"gold\"}'::jsonb;",
+    "ALTER TABLE diff_patients RENAME COLUMN name TO full_name;",
+    "ALTER TABLE diff_patients ALTER COLUMN age TYPE TEXT;",
+    "ALTER TABLE diff_patients DROP COLUMN active;",
+    "ALTER TABLE diff_patients RENAME TO diff_people;",
+    "SELECT id, full_name, age, profile->>'tier' AS tier FROM diff_people WHERE id = 'p1';",
+    "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'diff_people' ORDER BY ordinal_position;"
+  ],
+  "expectation": "match"
+}

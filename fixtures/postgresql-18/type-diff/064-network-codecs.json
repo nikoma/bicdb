@@ -1,0 +1,16 @@
+{
+  "id": "type_matrix_network_codecs",
+  "description": "PostgreSQL 18 scalar and array text output for inet, cidr, macaddr, and macaddr8",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_network_codecs;"
+  ],
+  "sql": [
+    "SELECT '192.0.2.1/32'::inet, '2001:db8::1/128'::inet, '192.0.2.0/24'::cidr, '08-00-2b-01-02-03'::macaddr, '08-00-2b-01-02-03-04-05'::macaddr8;",
+    "SELECT ARRAY['192.0.2.1/32','2001:db8::1/128','192.0.2.1/24']::inet[] AS addresses, ARRAY['192.0.2.0/24','2001:db8::/32']::cidr[] AS networks;",
+    "SELECT ARRAY['08:00:2b:01:02:03','08-00-2b-01-02-04']::macaddr[] AS macs, ARRAY['08:00:2b:01:02:03:04:05','08-00-2b-01-02-03-04-06']::macaddr8[] AS macs8;",
+    "CREATE TABLE type_matrix_network_codecs (id int4 PRIMARY KEY, addresses inet[] NOT NULL, networks cidr[] NOT NULL, macs macaddr[] NOT NULL, macs8 macaddr8[] NOT NULL);",
+    "INSERT INTO type_matrix_network_codecs VALUES (1, ARRAY['192.0.2.1/32','2001:db8::1/128']::inet[], ARRAY['192.0.2.0/24']::cidr[], ARRAY['08-00-2b-01-02-03']::macaddr[], ARRAY['08-00-2b-01-02-03-04-05']::macaddr8[]);",
+    "SELECT addresses, networks, macs, macs8 FROM type_matrix_network_codecs WHERE id = 1;"
+  ],
+  "expectation": "match"
+}

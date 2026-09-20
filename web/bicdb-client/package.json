@@ -1,0 +1,29 @@
+{
+  "name": "@bicdb/client",
+  "version": "0.1.1",
+  "description": "BicDB in the browser: SQL over an encrypted OPFS cache, running in a Web Worker",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./worker": "./src/worker.js"
+  },
+  "files": [
+    "src/",
+    "vendor/",
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "docs/licensing-faq.md"
+  ],
+  "scripts": {
+    "test": "node test/browser-smoke.mjs && node test/sync-e2e.mjs && node test/rls-e2e.mjs",
+    "test:smoke": "node test/browser-smoke.mjs",
+    "test:sync": "node test/sync-e2e.mjs",
+    "test:rls": "node test/rls-e2e.mjs"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

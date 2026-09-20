@@ -1,0 +1,9 @@
+{
+  "id": "type_matrix_range_catalog",
+  "description": "PostgreSQL 18 built-in range subtype, multirange, collation, operator class, canonicalizer, and subtype-difference metadata",
+  "cleanup_sql": [],
+  "sql": [
+    "SELECT rt.typname AS range_type, st.typname AS subtype, mt.typname AS multirange_type, r.rngcollation, r.rngsubopc, r.rngcanonical::oid AS canonical_oid, r.rngsubdiff::oid AS subdiff_oid FROM pg_range r JOIN pg_type rt ON rt.oid = r.rngtypid JOIN pg_type st ON st.oid = r.rngsubtype JOIN pg_type mt ON mt.oid = r.rngmultitypid ORDER BY r.rngtypid;"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,29 @@
+{
+  "id": "type_matrix_information_schema_types",
+  "description": "PostgreSQL 18 format_type, to_regtype, and information_schema type and routine metadata",
+  "cleanup_sql": [
+    "DROP PROCEDURE IF EXISTS type_matrix_info_proc(type_matrix_info_amount, text) CASCADE;",
+    "DROP FUNCTION IF EXISTS type_matrix_info_echo(type_matrix_info_amount, varchar) CASCADE;",
+    "DROP TABLE IF EXISTS type_matrix_info_rows CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_info_pair CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_info_status CASCADE;",
+    "DROP DOMAIN IF EXISTS type_matrix_info_amount CASCADE;"
+  ],
+  "sql": [
+    "CREATE DOMAIN type_matrix_info_amount AS numeric(8,2) DEFAULT 1.25 NOT NULL;",
+    "CREATE TYPE type_matrix_info_status AS ENUM ('open', 'closed');",
+    "CREATE TYPE type_matrix_info_pair AS (label varchar(12), amount type_matrix_info_amount);",
+    "CREATE TABLE type_matrix_info_rows (id int4, amount type_matrix_info_amount, amounts type_matrix_info_amount[], status type_matrix_info_status, statuses type_matrix_info_status[], pair type_matrix_info_pair, pairs type_matrix_info_pair[], labels text[], fixed_label varchar(12));",
+    "CREATE FUNCTION type_matrix_info_echo(IN input_value type_matrix_info_amount, INOUT note varchar(12), OUT doubled numeric(8,2)) RETURNS record LANGUAGE plpgsql AS $$ BEGIN doubled := input_value * 2; END $$;",
+    "CREATE PROCEDURE type_matrix_info_proc(IN input_value type_matrix_info_amount, INOUT note text) LANGUAGE plpgsql AS $$ BEGIN note := note; END $$;",
+    "SELECT format_type((SELECT oid FROM pg_type WHERE typname = 'type_matrix_info_amount'), -1), format_type((SELECT oid FROM pg_type WHERE typname = '_type_matrix_info_amount'), -1), format_type((SELECT oid FROM pg_type WHERE typname = 'type_matrix_info_pair'), -1), format_type(99999999, -1), format_type(NULL, -1);",
+    "SELECT to_regtype('type_matrix_info_amount')::text, to_regtype('type_matrix_info_amount[]')::text, to_regtype('decimal')::text, to_regtype('public.missing')::text;",
+    "SELECT domain_name, data_type, domain_default, udt_schema, udt_name, numeric_precision, numeric_scale, dtd_identifier FROM information_schema.domains WHERE domain_name = 'type_matrix_info_amount';",
+    "SELECT object_type, object_name, collection_type_identifier, data_type, udt_schema, udt_name, dtd_identifier FROM information_schema.element_types WHERE object_name = 'type_matrix_info_rows' ORDER BY collection_type_identifier::integer;",
+    "SELECT user_defined_type_name, user_defined_type_category, is_instantiable, is_final, ordering_form FROM information_schema.user_defined_types WHERE user_defined_type_name LIKE 'type_matrix_info_%' ORDER BY user_defined_type_name;",
+    "SELECT routine_name, routine_type, data_type, type_udt_schema, type_udt_name, routine_body, external_language, parameter_style, is_deterministic, sql_data_access, security_type, dtd_identifier FROM information_schema.routines WHERE routine_name LIKE 'type_matrix_info_%' ORDER BY routine_name;",
+    "SELECT r.routine_name, p.ordinal_position, p.parameter_mode, p.is_result, p.as_locator, p.parameter_name, p.data_type, p.udt_schema, p.udt_name, p.dtd_identifier FROM information_schema.parameters AS p JOIN information_schema.routines AS r USING (specific_catalog, specific_schema, specific_name) WHERE r.routine_name LIKE 'type_matrix_info_%' ORDER BY r.routine_name, p.ordinal_position;",
+    "SELECT column_name, data_type, domain_schema, domain_name, udt_schema, udt_name, dtd_identifier FROM information_schema.columns WHERE table_name = 'type_matrix_info_rows' ORDER BY ordinal_position;"
+  ],
+  "expectation": "match"
+}

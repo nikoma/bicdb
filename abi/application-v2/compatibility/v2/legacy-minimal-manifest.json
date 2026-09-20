@@ -1,0 +1,21 @@
+{
+  "identity": {
+    "name": "carrier_compatibility_fixture",
+    "version": "1.0.0",
+    "abi_version": 2
+  },
+  "application": {
+    "carrier_profile": "bicdb-application-v2",
+    "package": {
+      "application": "carrier_compatibility_fixture",
+      "version": "1.0.0",
+      "package_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dependency_lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sbom_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "provenance_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "signature_key_id": "compatibility-release",
+      "signature_algorithm": "ed25519",
+      "signature": "compatibility-signature"
+    }
+  }
+}

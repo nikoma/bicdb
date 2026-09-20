@@ -1,0 +1,40 @@
+{
+  "mode": "indexes",
+  "records": 100000,
+  "insert_without_indexes_ms": 3745.482208,
+  "insert_with_indexes_ms": 11244.31925,
+  "write_overhead_ms": 7498.837042,
+  "index_build_ms": 685.232791,
+  "index_size_bytes": 930,
+  "point_lookup_scan_ms": 349.868083,
+  "point_lookup_index_ms": 1.781166,
+  "point_lookup_rows": 391,
+  "timestamp_range_scan_ms": 287.08591700000005,
+  "timestamp_range_index_ms": 45.548167,
+  "timestamp_range_rows": 10001,
+  "metadata_equality_scan_ms": 322.93645799999996,
+  "metadata_equality_index_ms": 6.361458000000001,
+  "metadata_equality_rows": 1562,
+  "composite_lookup_scan_ms": 325.892292,
+  "composite_lookup_index_ms": 1.9718330000000002,
+  "composite_lookup_rows": 391,
+  "order_by_scan_ms": 312.692417,
+  "order_by_index_ms": 0.08462499999999999,
+  "order_by_rows": 10,
+  "database_size_bytes": 94530713,
+  "collection_sizes": [
+    {
+      "name": "wearable",
+      "segment_bytes": 20575250,
+      "logical_record_bytes": 16475250,
+      "storage_overhead_bytes": 4100000
+    },
+    {
+      "name": "wearable_indexed_write",
+      "segment_bytes": 20875250,
+      "logical_record_bytes": 16775250,
+      "storage_overhead_bytes": 4100000
+    }
+  ],
+  "path": "/tmp/bicdb-index-report"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "type_matrix_unicode_patterns",
+  "description": "PostgreSQL 18 Unicode preservation, NUL rejection, pattern matching, and deterministic ICU locale ordering",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_unicode_patterns;"
+  ],
+  "sql": [
+    "SELECT collprovider, collisdeterministic, colllocale FROM pg_collation WHERE collname = 'en-x-icu';",
+    "CREATE TABLE type_matrix_unicode_patterns (id TEXT PRIMARY KEY, value TEXT COLLATE \"en-x-icu\");",
+    "INSERT INTO type_matrix_unicode_patterns VALUES ('1', 'z'), ('2', 'ä'), ('3', 'a'), ('4', 'A'), ('5', 'é'), ('6', 'e');",
+    "CREATE UNIQUE INDEX type_matrix_unicode_patterns_locale_idx ON type_matrix_unicode_patterns (value);",
+    "SELECT value FROM type_matrix_unicode_patterns ORDER BY value;",
+    "SELECT 'ÄPFEL' ILIKE 'ä%', 'é' LIKE '_', 'a_b' LIKE 'a\\_b', 'a%b' LIKE 'a\\%b';",
+    "SELECT ('é' COLLATE \"C\") = ('é' COLLATE \"C\"), ('é' COLLATE \"en-x-icu\") = ('é' COLLATE \"en-x-icu\"), ('ä' COLLATE \"en-x-icu\") < ('z' COLLATE \"en-x-icu\"), ('ä' COLLATE \"C\") < ('z' COLLATE \"C\");",
+    "SELECT char_length('é'), octet_length('é'), char_length('é'), octet_length('é');",
+    "SELECT chr(0);",
+    "SELECT 'a' LIKE 'a' ESCAPE 'xx';"
+  ],
+  "expectation": "match"
+}

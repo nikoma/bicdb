@@ -1,0 +1,24 @@
+{
+  "id": "type_matrix_timetz",
+  "description": "PostgreSQL 18 timetz offset storage, precision, comparison, casts, arithmetic, indexing, and validation",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_timetz;"
+  ],
+  "sql": [
+    "SET TIME ZONE 'America/Los_Angeles';",
+    "CREATE TABLE type_matrix_timetz (id TEXT PRIMARY KEY, value TIMETZ(3) UNIQUE);",
+    "CREATE INDEX type_matrix_timetz_value_idx ON type_matrix_timetz (value);",
+    "INSERT INTO type_matrix_timetz VALUES ('plus2', '12:34:56.5555+02'), ('negative', '12:34:56-03:30:15'), ('zulu', '12:34:56Z'), ('implicit', '12:34:56'), ('carry', '23:59:59.999999+05:30');",
+    "SELECT id, value FROM type_matrix_timetz ORDER BY value, id;",
+    "SELECT '12:34:56+02'::timetz AS plus2, '12:34:56+02:30'::timetz AS plus230, '12:34:56-03:30:15'::timetz AS negative, '12:34:56Z'::timetz AS zulu, '12:34:56'::timetz AS implicit_zone;",
+    "SELECT '12:34:56.5555+02'::timetz(3) AS rounded, '23:59:59.999999+02'::timetz(3) AS carry, '00:00:00.0000005+00'::timetz AS tie_even, '00:00:00.0000015+00'::timetz AS tie_odd;",
+    "SELECT '23:00:00+02'::timetz + interval '2 hours' AS plus_interval, '01:00:00-03'::timetz - interval '2 hours' AS minus_interval, interval '1.25 seconds' + '12:00:00+05:30'::timetz AS reverse_plus;",
+    "SELECT '04:00:00+02'::timetz = '01:00:00-01'::timetz AS same_utc_different_offset, '04:00:00+02'::timetz < '04:00:00+01'::timetz AS utc_order, '04:00:00+02'::timetz < '03:00:00+01'::timetz AS offset_tie_break;",
+    "SELECT '04:05:06+02'::timetz::time AS drop_zone, '04:05:06'::time::timetz AS add_session_zone;",
+    "SELECT id FROM type_matrix_timetz WHERE value = '12:34:56+02'::timetz(3);",
+    "SELECT '12:34:56+16'::timetz;",
+    "SELECT '25:00:00+00'::timetz;",
+    "SELECT 'nonsense'::timetz;"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,16 @@
+{
+  "kind": "s3_compatible",
+  "endpoint": "https://objects.example.com",
+  "bucket": "application-blobs",
+  "key_prefix": "production/applications",
+  "region": "us-west-2",
+  "access_key_id_file": "secrets/s3-access-key-id",
+  "secret_access_key_file": "secrets/s3-secret-access-key",
+  "force_path_style": false,
+  "allow_insecure_http": false,
+  "max_object_bytes": 268435456,
+  "connect_timeout_ms": 5000,
+  "request_timeout_ms": 60000,
+  "server_side_encryption": "aws:kms",
+  "sse_kms_key_id": "alias/application-blobs"
+}

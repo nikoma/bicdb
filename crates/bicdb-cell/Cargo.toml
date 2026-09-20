@@ -1,0 +1,43 @@
+[package]
+name = "bicdb-cell"
+version = "1.0.438-beta"
+edition.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "bicdb-cell"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.438-beta" }
+bicdb-cell-admission = { path = "../bicdb-cell-admission", version = "1.0.438-beta" }
+bicdb-cell-ha = { path = "../bicdb-cell-ha", version = "1.0.438-beta" }
+bicdb-cell-device = { path = "../bicdb-cell-device", version = "1.0.438-beta" }
+bicdb-cell-grant = { path = "../bicdb-cell-grant", version = "1.0.438-beta" }
+bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta", default-features = false, features = ["compression"] }
+bicdb-extension = { path = "../bicdb-extension", version = "1.0.438-beta" }
+bicdb-fleet = { path = "../bicdb-fleet", version = "1.0.438-beta" }
+ciborium.workspace = true
+clap.workspace = true
+ctrlc.workspace = true
+ed25519-dalek.workspace = true
+getrandom.workspace = true
+hex.workspace = true
+hkdf.workspace = true
+hmac.workspace = true
+libc.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+wat = "1"

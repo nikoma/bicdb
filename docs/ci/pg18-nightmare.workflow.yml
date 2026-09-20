@@ -1,0 +1,34 @@
+name: pg18-nightmare
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: quick or full
+        required: false
+        default: full
+  schedule:
+    - cron: "17 8 * * *"
+
+jobs:
+  pg18-nightmare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BICDB_NIGHTMARE_MODE: ${{ github.event_name == 'pull_request' && 'quick' || inputs.mode || 'full' }}
+      BICDB_NIGHTMARE_REPORT_DIR: reports/pg18-nightmare
+      BICDB_NIGHTMARE_FUZZ_SEEDS: ${{ github.event_name == 'pull_request' && '0' || '8' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Run pg18-nightmare
+        run: ./scripts/pg18-nightmare.sh
+      - name: Upload nightmare reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pg18-nightmare-report
+          path: reports/pg18-nightmare

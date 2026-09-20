@@ -1,0 +1,34 @@
+{
+  "id": "type_matrix_domains",
+  "description": "PostgreSQL 18 domain typmods, defaults, nullability, checks, arrays, catalogs, and ALTER lifecycle",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_domain_rows;",
+    "DROP DOMAIN IF EXISTS type_matrix_array_amount;",
+    "DROP DOMAIN IF EXISTS type_matrix_positive_amount;"
+  ],
+  "sql": [
+    "CREATE DOMAIN type_matrix_positive_amount AS NUMERIC(8,2) DEFAULT 1.20 CONSTRAINT type_matrix_amount_required NOT NULL CONSTRAINT type_matrix_amount_positive CHECK (VALUE > 0);",
+    "CREATE DOMAIN type_matrix_array_amount AS NUMERIC(8,2);",
+    "CREATE TABLE type_matrix_domain_rows (id TEXT PRIMARY KEY, amount type_matrix_positive_amount, history type_matrix_array_amount[]);",
+    "INSERT INTO type_matrix_domain_rows (id) VALUES ('defaulted');",
+    "INSERT INTO type_matrix_domain_rows VALUES ('explicit', 12.345, '[0:2]={1.234,2,9.999}');",
+    "SELECT id, amount, array_dims(history), history FROM type_matrix_domain_rows ORDER BY id;",
+    "SELECT typtype, typcategory, typbasetype, typtypmod, typnotnull, typinput, typoutput, typreceive, typsend, typdefault FROM pg_type WHERE typname = 'type_matrix_positive_amount';",
+    "SELECT conname, contype, conrelid, convalidated FROM pg_constraint WHERE conname = 'type_matrix_amount_positive';",
+    "ALTER DOMAIN type_matrix_positive_amount ADD CONSTRAINT type_matrix_amount_ceiling CHECK (VALUE < 1000) NOT VALID;",
+    "SELECT conname, convalidated FROM pg_constraint WHERE conname = 'type_matrix_amount_ceiling';",
+    "ALTER DOMAIN type_matrix_positive_amount VALIDATE CONSTRAINT type_matrix_amount_ceiling;",
+    "ALTER DOMAIN type_matrix_positive_amount RENAME CONSTRAINT type_matrix_amount_ceiling TO type_matrix_amount_bounded;",
+    "SELECT conname, convalidated FROM pg_constraint WHERE contypid = (SELECT oid FROM pg_type WHERE typname = 'type_matrix_positive_amount') ORDER BY conname;",
+    "ALTER DOMAIN type_matrix_positive_amount DROP CONSTRAINT type_matrix_amount_bounded;",
+    "ALTER DOMAIN type_matrix_positive_amount RENAME CONSTRAINT type_matrix_amount_required TO type_matrix_amount_present;",
+    "ALTER DOMAIN type_matrix_positive_amount VALIDATE CONSTRAINT type_matrix_amount_present;",
+    "ALTER DOMAIN type_matrix_positive_amount DROP CONSTRAINT type_matrix_amount_present;",
+    "SELECT typnotnull FROM pg_type WHERE typname = 'type_matrix_positive_amount';",
+    "ALTER DOMAIN type_matrix_positive_amount ADD CONSTRAINT type_matrix_amount_required NOT NULL;",
+    "ALTER DOMAIN type_matrix_positive_amount SET DEFAULT 2.50;",
+    "INSERT INTO type_matrix_domain_rows (id) VALUES ('changed-default');",
+    "SELECT amount FROM type_matrix_domain_rows WHERE id = 'changed-default';"
+  ],
+  "expectation": "match"
+}

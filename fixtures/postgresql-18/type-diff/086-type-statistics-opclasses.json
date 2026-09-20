@@ -1,0 +1,38 @@
+{
+  "id": "type_matrix_statistics_operator_classes",
+  "description": "PostgreSQL 18 type-aware statistics, sorting, hashing, operator-class catalogs, default selection, explicit selection, and validation",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_type_planner CASCADE;",
+    "DROP DOMAIN IF EXISTS type_matrix_money_amount CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_work_state CASCADE;"
+  ],
+  "sql": [
+    "SELECT count(*) AS count FROM pg_catalog.pg_opclass WHERE oid < 16384;",
+    "SELECT oid, opcmethod, opcname::text, opcnamespace, opcowner, opcfamily, opcintype, opcdefault, opckeytype FROM pg_catalog.pg_opclass WHERE oid < 16384 ORDER BY oid;",
+    "SELECT count(*) AS count FROM pg_catalog.pg_opfamily WHERE oid < 16384;",
+    "SELECT oid, opfmethod, opfname::text, opfnamespace, opfowner FROM pg_catalog.pg_opfamily WHERE oid < 16384 ORDER BY oid;",
+    "SELECT count(*) AS count FROM pg_catalog.pg_amop WHERE oid < 16384;",
+    "SELECT oid, amopfamily, amoplefttype, amoprighttype, amopstrategy, amoppurpose::text, amopopr, amopmethod, amopsortfamily FROM pg_catalog.pg_amop WHERE oid < 16384 ORDER BY oid;",
+    "SELECT count(*) AS count FROM pg_catalog.pg_amproc WHERE oid < 16384;",
+    "SELECT oid, amprocfamily, amproclefttype, amprocrighttype, amprocnum, amproc::oid FROM pg_catalog.pg_amproc WHERE oid < 16384 ORDER BY oid;",
+    "CREATE TYPE type_matrix_work_state AS ENUM ('open', 'closed');",
+    "CREATE DOMAIN type_matrix_money_amount AS numeric CHECK (VALUE >= 0);",
+    "CREATE TABLE type_matrix_type_planner (id uuid PRIMARY KEY, amount numeric, domain_amount type_matrix_money_amount, owner_id uuid, tags text[], payload jsonb, span int4range, state type_matrix_work_state, xml_doc xml);",
+    "INSERT INTO type_matrix_type_planner VALUES ('00000000-0000-0000-0000-000000000001', 0.10, 0.10, '10000000-0000-0000-0000-000000000001', ARRAY['a'], '{\"a\":1}', '[1,3)', 'open', '<a/>'), ('00000000-0000-0000-0000-000000000002', 9007199254740993.01, 1.25, '10000000-0000-0000-0000-000000000002', ARRAY['a','b'], '{\"a\":2}', '[3,5)', 'open', '<b/>'), ('00000000-0000-0000-0000-000000000003', 9007199254740993.01, 2.50, '10000000-0000-0000-0000-000000000003', ARRAY['c'], '{\"a\":3}', '[5,7)', 'closed', '<c/>'), ('00000000-0000-0000-0000-000000000004', 10.00, 3.75, '10000000-0000-0000-0000-000000000004', ARRAY['d'], '{\"a\":4}', '[7,9)', 'open', '<d/>');",
+    "CREATE INDEX type_matrix_type_planner_amount_idx ON type_matrix_type_planner (amount);",
+    "CREATE INDEX type_matrix_type_planner_domain_idx ON type_matrix_type_planner (domain_amount);",
+    "CREATE INDEX type_matrix_type_planner_owner_idx ON type_matrix_type_planner USING hash (owner_id);",
+    "CREATE INDEX type_matrix_type_planner_tags_idx ON type_matrix_type_planner USING gin (tags);",
+    "CREATE INDEX type_matrix_type_planner_payload_idx ON type_matrix_type_planner USING gin (payload jsonb_path_ops);",
+    "CREATE INDEX type_matrix_type_planner_span_idx ON type_matrix_type_planner USING gist (span);",
+    "CREATE INDEX type_matrix_type_planner_state_idx ON type_matrix_type_planner (state);",
+    "SELECT c.relname::text, i.indclass::text FROM pg_catalog.pg_index AS i JOIN pg_catalog.pg_class AS c ON c.oid = i.indexrelid WHERE c.relname LIKE 'type_matrix_type_planner_%_idx' ORDER BY c.relname;",
+    "ANALYZE type_matrix_type_planner;",
+    "SELECT attname::text, null_frac, n_distinct, avg_width > 0 AS has_width, (most_common_vals IS NOT NULL OR histogram_bounds IS NOT NULL) AS has_distribution, pg_typeof(most_common_vals)::text, pg_typeof(histogram_bounds)::text FROM pg_catalog.pg_stats WHERE tablename = 'type_matrix_type_planner' AND attname IN ('amount', 'domain_amount', 'owner_id', 'tags', 'state') ORDER BY attname;",
+    "SELECT amount::text, count(*) AS count FROM type_matrix_type_planner GROUP BY amount ORDER BY amount;",
+    "SELECT owner_id::text FROM type_matrix_type_planner ORDER BY owner_id DESC;",
+    "CREATE INDEX type_matrix_type_planner_xml_idx ON type_matrix_type_planner (xml_doc);",
+    "CREATE INDEX type_matrix_type_planner_wrong_idx ON type_matrix_type_planner (owner_id numeric_ops);"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "type_matrix_catalog_reference_search",
+  "description": "DDL, input, canonical output, casts, and catalog OIDs for reg* and full-text-search types",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_catalog_reference_search;",
+    "DROP ROLE IF EXISTS type_matrix_alias_role;"
+  ],
+  "sql": [
+    "CREATE ROLE type_matrix_alias_role;",
+    "CREATE TABLE type_matrix_catalog_reference_search (id TEXT PRIMARY KEY, procedure REGPROC, procedure_signature REGPROCEDURE, operator_name REGOPER, operator_signature REGOPERATOR, relation REGCLASS, relations REGCLASS[], type_name REGTYPE, namespace REGNAMESPACE, collation_name REGCOLLATION, role_name REGROLE, document TSVECTOR, query TSQUERY, configuration REGCONFIG, dictionary REGDICTIONARY);",
+    "INSERT INTO type_matrix_catalog_reference_search (id, procedure, procedure_signature, operator_name, operator_signature, relation, relations, type_name, namespace, collation_name, role_name, document, query, configuration, dictionary) VALUES ('f1', 'now', 'now()', '?', '?(jsonb,text)', 'pg_catalog.pg_type', '{pg_catalog.pg_type,pg_catalog.pg_class}', 'integer', 'pg_catalog', '\"C\"', 'type_matrix_alias_role', '''cat'':1 ''dog'':2', '''cat'' & ''dog''', 'english', 'english_stem');",
+    "SELECT procedure, procedure_signature, operator_name, operator_signature, relation, relations, type_name, namespace, collation_name, role_name, document, query, configuration, dictionary FROM type_matrix_catalog_reference_search WHERE id = 'f1';",
+    "SELECT 'now'::regproc AS procedure, 'now()'::regprocedure AS procedure_signature, '?'::regoper AS operator_name, '?(jsonb,text)'::regoperator AS operator_signature, 'pg_catalog.pg_type'::regclass AS relation, '{pg_catalog.pg_type,pg_catalog.pg_class}'::regclass[] AS relations, 'integer'::regtype AS type_name, 'pg_catalog'::regnamespace AS namespace, '\"C\"'::regcollation AS collation_name, 'type_matrix_alias_role'::regrole AS role_name, '''cat'':1 ''dog'':2'::tsvector AS document, '''cat'' & ''dog'''::tsquery AS query, 'english'::regconfig AS configuration, 'english_stem'::regdictionary AS dictionary;",
+    "SELECT a.attname, a.atttypid, pg_catalog.format_type(a.atttypid, a.atttypmod) AS formatted_type FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid WHERE c.relname = 'type_matrix_catalog_reference_search' AND a.attnum > 0 ORDER BY a.attnum;"
+  ],
+  "expectation": "match"
+}

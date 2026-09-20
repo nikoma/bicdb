@@ -1,0 +1,19 @@
+{
+  "id": "type_matrix_tsvector",
+  "description": "PostgreSQL 18 tsvector parsing, canonical output, positions, weights, functions, concatenation, comparison, storage, and restart-safe equality",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_tsvector;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_tsvector (id TEXT PRIMARY KEY, document TSVECTOR NOT NULL UNIQUE);",
+    "INSERT INTO type_matrix_tsvector VALUES ('canonical', '''z'':2,1,1A,2B,4D,3C ''a b'':1A,2B,2C,3D ''O''''Reilly'':4'), ('position-two', '''a'':2'), ('weight-a', '''a'':1A'), ('weight-b', '''a'':1B'), ('unweighted', '''a'':1');",
+    "SELECT document, length(document), strip(document) FROM type_matrix_tsvector WHERE id = 'canonical';",
+    "SELECT '''a'':1A'::tsvector || '''b'':2B'::tsvector AS shifted_right, '''b'':1'::tsvector || '''a'':2'::tsvector AS shifted_left;",
+    "SELECT id, document FROM type_matrix_tsvector WHERE id <> 'canonical' ORDER BY document;",
+    "SELECT '''a'':1'::tsvector < '''a'':2'::tsvector AS position_order, '''a'':1'::tsvector = '''a'':2'::tsvector AS position_equal, '''a'':1'::tsvector < '''b'':1'::tsvector AS lexeme_order;",
+    "SELECT ''::tsvector AS empty_vector, length(''::tsvector), '''a'':16384'::tsvector AS clamped_position;",
+    "SELECT '''back\\\\slash'':1 ''quote''''word'':2'::tsvector AS escaped_vector;",
+    "INSERT INTO type_matrix_tsvector VALUES ('duplicate', '''a'':1A,1B');"
+  ],
+  "expectation": "match"
+}

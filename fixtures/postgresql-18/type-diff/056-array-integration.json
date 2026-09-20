@@ -1,0 +1,29 @@
+{
+  "id": "type_matrix_array_integration",
+  "description": "PostgreSQL 18 quantified array comparisons, UNNEST ordinality, variadic expansion, FOREACH, aggregates, and indexed array predicates",
+  "cleanup_sql": [
+    "DROP FUNCTION IF EXISTS type_matrix_foreach_sum(INT4[]);",
+    "DROP FUNCTION IF EXISTS type_matrix_foreach_slice(INT4[]);",
+    "DROP TABLE IF EXISTS type_matrix_array_integration;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_array_integration (id INT4 PRIMARY KEY, values_int INT4[], labels TEXT[]);",
+    "INSERT INTO type_matrix_array_integration VALUES (1, ARRAY[1,2], ARRAY['alpha','beta']), (2, ARRAY[2,3], ARRAY['beta']), (3, '[0:1]={4,5}'::INT4[], ARRAY[]::TEXT[]);",
+    "CREATE INDEX type_matrix_array_integration_values_btree ON type_matrix_array_integration (values_int);",
+    "CREATE INDEX type_matrix_array_integration_labels_gin ON type_matrix_array_integration USING GIN (labels);",
+    "SELECT 3 = ANY('{{1,2},{3,4}}'::INT4[]) AS multidimensional_any, 5 <> ALL('{{1,2},{3,4}}'::INT4[]) AS multidimensional_all, 2 < ANY(ARRAY[1,NULL,3]) AS any_with_null, 4 < ALL(ARRAY[5,NULL,6]) AS all_with_null, 1 = ANY(NULL::INT4[]) AS null_array, 1 = ANY(ARRAY[]::INT4[]) AS empty_array;",
+    "SELECT id FROM type_matrix_array_integration WHERE labels @> ARRAY['beta'] ORDER BY id;",
+    "SELECT id FROM type_matrix_array_integration WHERE values_int >= ARRAY[2,3] ORDER BY values_int, id;",
+    "SELECT * FROM UNNEST('[0:1][5:6]={{1,2},{3,4}}'::INT4[]) WITH ORDINALITY AS u(value, ordinality);",
+    "SELECT * FROM UNNEST(ARRAY[10,20], ARRAY['a']) WITH ORDINALITY AS u(number_value, label, ordinality);",
+    "SELECT concat_ws('-', VARIADIC ARRAY['a','b','c']) AS joined, concat(VARIADIC ARRAY['x',NULL,'z']) AS concatenated;",
+    "SELECT array_agg(value ORDER BY value DESC), array_agg(value ORDER BY value) FILTER (WHERE value > 1) FROM (VALUES (1),(2),(3)) AS input(value);",
+    "SELECT array_agg(values_int ORDER BY id) FROM type_matrix_array_integration WHERE id < 3;",
+    "SELECT array_agg(values_int) FROM (VALUES (ARRAY[1,2]), (ARRAY[3])) AS input(values_int);",
+    "CREATE FUNCTION type_matrix_foreach_sum(input INT4[]) RETURNS INT4 LANGUAGE plpgsql AS $$ DECLARE item INT4; total INT4 := 0; BEGIN FOREACH item IN ARRAY input LOOP total := total + item; END LOOP; RETURN total; END $$;",
+    "SELECT type_matrix_foreach_sum('[0:2]={2,3,4}'::INT4[]);",
+    "CREATE FUNCTION type_matrix_foreach_slice(input INT4[]) RETURNS INT4[] LANGUAGE plpgsql AS $$ DECLARE item INT4[]; totals INT4[] := '{}'; BEGIN FOREACH item SLICE 1 IN ARRAY input LOOP totals := array_append(totals, item[1] + item[2]); END LOOP; RETURN totals; END $$;",
+    "SELECT type_matrix_foreach_slice('{{1,2},{3,4}}'::INT4[]);"
+  ],
+  "expectation": "match"
+}

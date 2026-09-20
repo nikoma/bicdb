@@ -1,0 +1,181 @@
+{
+  "completed_runs": 6,
+  "planned_runs": 6,
+  "results": [
+    {
+      "engine": "PostgreSQL 18.6",
+      "rep": 1,
+      "nopm": 563407,
+      "neworders": 1690221,
+      "payments": 1687636,
+      "payment_calls": 1687636,
+      "procedures": {
+        "dbms_random": 52561437,
+        "neword": 1690221,
+        "delivery": 168400,
+        "payment": 1687636,
+        "ostat": 168472,
+        "slev": 168079
+      },
+      "successful_vus": 33,
+      "wal_bytes": 26022367522,
+      "driver_elapsed_seconds": 187.179563524,
+      "wall_clock_verified_orders_per_minute": 541796.6475116654
+    },
+    {
+      "engine": "BicDB PGO+BOLT no-split",
+      "rep": 1,
+      "nopm": 559068.3333333334,
+      "neworders": 1677205,
+      "payments": 1675479,
+      "payment_calls": 1675702,
+      "procedures": {
+        "delivery": 167492,
+        "neword": 1677205,
+        "ostat": 167419,
+        "payment": 1675702,
+        "slev": 167298
+      },
+      "successful_vus": 33,
+      "wal_bytes": 27975781440,
+      "handled_failures": {
+        "deadlock_detected": 0,
+        "no_data_found": 20867,
+        "other": 0,
+        "serialization_failure": 60673
+      },
+      "driver_elapsed_seconds": 187.640045248,
+      "wall_clock_verified_orders_per_minute": 536305.0294887552
+    },
+    {
+      "engine": "PostgreSQL 18.6",
+      "rep": 2,
+      "nopm": 606449.6666666666,
+      "neworders": 1819349,
+      "payments": 1820046,
+      "payment_calls": 1820046,
+      "procedures": {
+        "dbms_random": 56585322,
+        "neword": 1819349,
+        "delivery": 182539,
+        "payment": 1820046,
+        "ostat": 182541,
+        "slev": 182255
+      },
+      "successful_vus": 33,
+      "wal_bytes": 28743557261,
+      "driver_elapsed_seconds": 197.332161753,
+      "wall_clock_verified_orders_per_minute": 553183.7234755295,
+      "delivery_business": {
+        "pending_orders_after": 557099,
+        "delivered_orders": 1406250,
+        "delivery_calls": 182539,
+        "delivered_orders_per_call": 7.703833153463096
+      }
+    },
+    {
+      "engine": "BicDB PGO+BOLT no-split",
+      "rep": 2,
+      "nopm": 560250,
+      "neworders": 1680750,
+      "payments": 1682700,
+      "payment_calls": 1682925,
+      "procedures": {
+        "delivery": 168638,
+        "neword": 1680750,
+        "ostat": 168414,
+        "payment": 1682925,
+        "slev": 167921
+      },
+      "successful_vus": 33,
+      "wal_bytes": 28099934651,
+      "handled_failures": {
+        "deadlock_detected": 0,
+        "no_data_found": 20764,
+        "other": 0,
+        "serialization_failure": 60723
+      },
+      "driver_elapsed_seconds": 187.574416688,
+      "wall_clock_verified_orders_per_minute": 537626.6219062246,
+      "delivery_business": {
+        "pending_orders_after": 764889,
+        "delivered_orders": 1059861,
+        "delivery_calls": 168638,
+        "delivered_orders_per_call": 6.284829042090157
+      }
+    },
+    {
+      "engine": "PostgreSQL 18.6",
+      "rep": 3,
+      "nopm": 444442.3333333333,
+      "neworders": 1333327,
+      "payments": 1333671,
+      "payment_calls": 1333671,
+      "procedures": {
+        "dbms_random": 41446314,
+        "neword": 1333327,
+        "delivery": 133092,
+        "payment": 1333671,
+        "ostat": 133569,
+        "slev": 133043
+      },
+      "successful_vus": 33,
+      "wal_bytes": 17917037587,
+      "driver_elapsed_seconds": 187.053242322,
+      "wall_clock_verified_orders_per_minute": 427683.6851739028,
+      "delivery_business": {
+        "pending_orders_after": 419147,
+        "delivered_orders": 1058180,
+        "delivery_calls": 133092,
+        "delivered_orders_per_call": 7.950740840922069
+      }
+    },
+    {
+      "engine": "BicDB PGO+BOLT no-split",
+      "rep": 3,
+      "nopm": 551457.6666666666,
+      "neworders": 1654373,
+      "payments": 1650308,
+      "payment_calls": 1650537,
+      "procedures": {
+        "delivery": 165438,
+        "neword": 1654373,
+        "ostat": 166040,
+        "payment": 1650537,
+        "slev": 165310
+      },
+      "successful_vus": 33,
+      "wal_bytes": 27600822530,
+      "handled_failures": {
+        "deadlock_detected": 0,
+        "no_data_found": 20964,
+        "other": 0,
+        "serialization_failure": 59812
+      },
+      "driver_elapsed_seconds": 187.621658728,
+      "wall_clock_verified_orders_per_minute": 529056.0837856319,
+      "delivery_business": {
+        "pending_orders_after": 760867,
+        "delivered_orders": 1037506,
+        "delivery_calls": 165438,
+        "delivered_orders_per_call": 6.271267786119271
+      }
+    }
+  ],
+  "mean_nopm": {
+    "PostgreSQL 18.6": 538099.6666666666,
+    "BicDB PGO+BOLT no-split": 556925.3333333334
+  },
+  "mean_wall_clock_verified_orders_per_minute": {
+    "PostgreSQL 18.6": 507554.6853870325,
+    "BicDB PGO+BOLT no-split": 534329.245060204
+  },
+  "paired_pg_over_bicdb_ratio": {
+    "mean": 0.9653880343811279,
+    "student_t_95_ci": [
+      0.6100380486413979,
+      1.3207380201208578
+    ],
+    "n": 3
+  }
+}

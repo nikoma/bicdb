@@ -1,0 +1,28 @@
+{
+  "id": "type_matrix_network_operations",
+  "description": "PostgreSQL 18 inet/cidr and MAC comparison, containment, bitwise, arithmetic, extraction, conversion, aggregate, formatting, and error parity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_network_operations;"
+  ],
+  "sql": [
+    "SELECT '192.168.1.5/24'::inet << '192.168.0.0/16'::inet, '192.168.1.5/24'::inet <<= '192.168.1.0/24'::inet, '192.168.0.0/16'::inet >> '192.168.1.5/24'::inet, '192.168.1.0/24'::inet >>= '192.168.1.5/24'::inet, '192.168.1.5/24'::inet && '192.168.1.128/25'::inet, '10/8'::cidr = '10.0.0.0/8'::inet, '192.168.1.1/24'::inet < '192.168.1.0/25'::inet;",
+    "SELECT ~ '192.0.2.1/24'::inet, '192.0.2.1/24'::inet & '255.255.255.0'::inet, '192.0.2.1/24'::inet | '0.0.0.15'::inet, '192.0.2.1'::inet + 5, 5 + '192.0.2.1'::inet, '192.0.2.10'::inet - 5, '192.0.2.10'::inet - '192.0.2.1'::inet;",
+    "SELECT ~ '08:00:2b:01:02:03'::macaddr, '08:00:2b:ff:00:ff'::macaddr & 'ff:ff:ff:00:ff:00'::macaddr, '08:00:2b:00:00:00'::macaddr | '00:00:00:01:02:03'::macaddr, ~ '08:00:2b:01:02:03:04:05'::macaddr8, '08:00:2b:01:02:03'::macaddr < '08:00:2b:01:02:04'::macaddr, '08:00:2b:01:02:03:04:05'::macaddr8 = '08:00:2b:01:02:03:04:05'::macaddr8;",
+    "SELECT abbrev('10.1.0.0/16'::cidr), abbrev('2001:db8:1::/48'::cidr), host('192.168.1.5/24'::inet), text('::1'::inet), family('::1'::inet), masklen('10/8'::cidr);",
+    "SELECT network('192.168.1.5/24'::inet), broadcast('192.168.1.5/24'::inet), netmask('192.168.1.5/24'::inet), hostmask('192.168.1.5/24'::inet), set_masklen('192.168.1.5/24'::inet, 16), set_masklen('192.168.1.5/24'::inet, '12'), set_masklen('192.168.1.0/24'::cidr, 16);",
+    "SELECT inet_same_family('10.0.0.1'::inet, '::1'::inet), inet_merge('192.168.1.5/24'::inet, '192.168.2.7/24'::inet), trunc('08:00:2b:01:02:03'::macaddr), trunc('08:00:2b:01:02:03:04:05'::macaddr8), macaddr8_set7bit('00:00:00:00:00:00:00:00'::macaddr8);",
+    "CREATE TABLE type_matrix_network_operations (id int4 PRIMARY KEY, address inet NOT NULL);",
+    "INSERT INTO type_matrix_network_operations VALUES (1, '192.168.1.1/24'), (2, '192.168.1.0/25'), (3, '192.168.0.255/32'), (4, '192.168.1.200/24');",
+    "SELECT address FROM type_matrix_network_operations ORDER BY address;",
+    "SELECT min(address), max(address) FROM type_matrix_network_operations;",
+    "SELECT address FROM type_matrix_network_operations WHERE address <<= '192.168.1.0/24'::cidr ORDER BY address;",
+    "SELECT '255.255.255.255'::inet + 1;",
+    "SELECT '::'::inet - '8000::'::inet;",
+    "SELECT '10.0.0.1'::inet & '::1'::inet;",
+    "SELECT inet_merge('10.0.0.1'::inet, '::1'::inet);",
+    "SELECT set_masklen('10.0.0.1'::inet, 33);",
+    "SELECT family('10.0.0.1'::inet, '10.0.0.2'::inet);",
+    "SELECT set_masklen('10.0.0.1'::inet, 8::int8);"
+  ],
+  "expectation": "match"
+}

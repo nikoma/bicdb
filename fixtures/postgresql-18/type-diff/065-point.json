@@ -1,0 +1,19 @@
+{
+  "id": "type_matrix_point",
+  "description": "PostgreSQL 18 planar point input, constructor, output, storage, and error parity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_point;"
+  ],
+  "sql": [
+    "SELECT '(1.5,-2)'::point AS parenthesized, '1,2'::point AS bare, '(1000,-1000)'::point AS unbounded;",
+    "SELECT '(NaN,Infinity)'::point AS special, '(-Infinity,-0)'::point AS negative_special, '(0x1p2,2)'::point AS hexadecimal;",
+    "SELECT point(1, 2) AS constructed, pg_typeof(point(1, 2)) AS constructed_type;",
+    "CREATE TABLE type_matrix_point (id int4 PRIMARY KEY, location point NOT NULL);",
+    "INSERT INTO type_matrix_point VALUES (1, '1,2'), (2, point(1000, -1000)), (3, '(NaN,Infinity)');",
+    "SELECT id, location FROM type_matrix_point ORDER BY id;",
+    "SELECT '(1)'::point;",
+    "SELECT '(1,2,3)'::point;",
+    "SELECT '(1e999,2)'::point;"
+  ],
+  "expectation": "match"
+}

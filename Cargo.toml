@@ -1,0 +1,150 @@
+[workspace]
+members = [
+  "crates/bicdb-core",
+  "crates/bicdb-extension",
+  "crates/bicdb-page",
+  "crates/bicdb-sync",
+  "crates/bicdb-sql",
+  "crates/bicdb-pgwire",
+  "crates/bicdb-resp",
+  "crates/bicdb-wasm",
+  "crates/bicdb-analytics",
+  "crates/bicdb-bench",
+  "crates/bicdb-app-runtime",
+  "crates/bicdb-cell",
+  "crates/bicdb-cell-admission",
+  "crates/bicdb-cell-device",
+  "crates/bicdb-cell-grant",
+  "crates/bicdb-cell-ha",
+  "crates/bicdb-fleet",
+  "crates/bicdb-blob-s3",
+  "crates/bicdb-provider-redis",
+  "crates/bicdb-provider-email",
+  "crates/bicdb-provider-grpc",
+  "crates/bicdb-provider-tokenizer",
+  "crates/bicdb-provider-embeddings",
+  "crates/bicdb-provider-llm",
+  "crates/bicdb-cli",
+  "examples/extensions/hello-extension",
+  "examples/extensions/website-host",
+  "examples/extensions/website-renderer",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license-file = "LICENSE"
+repository = "https://github.com/nikoma/bicdb"
+rust-version = "1.96"
+
+[workspace.dependencies]
+allocation-counter = "0.8"
+aes-gcm = "0.10"
+anyhow = "1.0"
+argon2 = "0.5"
+arrow = { version = "58.3.0", features = ["ipc", "prettyprint"] }
+axum = { version = "0.7.9", features = ["ws"] }
+axum-server = { version = "0.7.2", features = ["tls-rustls"] }
+base64 = "0.22"
+bytes = "1"
+ciborium = "0.2.2"
+chacha20poly1305 = { version = "0.10", features = ["std"] }
+curve25519-dalek = "4.1"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.5", features = ["derive"] }
+crc32fast = "1.4"
+cron = "0.15"
+crossbeam-skiplist = "0.1"
+ctrlc = { version = "3.4", features = ["termination"] }
+crossterm = "0.28.1"
+datafusion = { version = "54.0.0", default-features = false, features = ["sql"] }
+fjall = "2.11.2"
+h3o = "0.8"
+hex = "0.4"
+geo-types = { version = "0.7", features = ["serde"] }
+geo = "0.29.3"
+geojson = { version = "1.0", default-features = false }
+getrandom = "0.3"
+handlebars = "=6.4.2"
+hmac = "0.12"
+hpke = { version = "=0.14.0", default-features = false, features = ["alloc", "getrandom", "x25519", "chacha"] }
+hkdf = "0.12"
+http-body = "1"
+http-body-util = "0.1"
+ed25519-dalek = "2.1"
+icu_collator = "2.2.1"
+itoa = "1"
+libc = "0.2"
+lettre = { version = "0.11.22", default-features = false, features = ["builder", "hostname", "native-tls", "pool", "smtp-transport"] }
+mime_guess = "2.0"
+memmap2 = "0.9"
+osmpbfreader = "0.19.1"
+opentelemetry = "0.28"
+opentelemetry-otlp = { version = "0.28", default-features = false, features = ["grpc-tonic", "http-proto", "logs", "metrics", "reqwest-client", "trace"] }
+opentelemetry_sdk = { version = "0.28", features = ["experimental_logs_batch_log_processor_with_async_runtime", "experimental_metrics_periodicreader_with_async_runtime", "experimental_trace_batch_span_processor_with_async_runtime", "rt-tokio"] }
+# Android/mobile: load-dynamic avoids linking onnxruntime at build time;
+# embeddings simply stay unavailable unless a runtime .so is provided.
+ort = { version = "2.0.0-rc.12", default-features = false, features = ["load-dynamic", "ndarray", "api-18"] }
+parking_lot = { version = "0.12", features = ["arc_lock"] }
+petgraph = "0.6"
+phonenumber = "0.3.10"
+protobuf = "3.7.2"
+pbkdf2 = "0.12"
+redb = "2.2"
+regex = "1.12"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+redis = { version = "0.32.7", default-features = false, features = ["r2d2", "tls-rustls", "tls-rustls-webpki-roots"] }
+r2d2 = "0.8.10"
+rsa = { version = "0.9.8", features = ["sha2"] }
+rustc-hash = "2.1"
+rust-stemmers = "1.2"
+waken_snowball = "0.1"
+rstar = "0.12"
+ratatui = "0.30.2"
+rustls = "0.23"
+rustls-pemfile = "2.2"
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = { version = "1.0", features = ["arbitrary_precision", "raw_value"] }
+semver = "1.0"
+sha2 = "0.10"
+sha1 = "0.10"
+sqlparser = { version = "0.62.0", features = ["visitor"] }
+subtle = "2.6"
+unicode_categories = "0.1"
+tempfile = "3.12"
+thiserror = "2.0"
+tokenizers = { version = "0.23.1", default-features = false, features = ["fancy-regex"] }
+tokio = { version = "1.42", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tonic = { version = "0.12.3", features = ["transport", "tls-webpki-roots"] }
+uuid = { version = "1.10", features = ["v4", "v7", "serde"] }
+url = "2.5"
+wide = "0.7.33"
+wkt = "0.14"
+zstd = "0.13"
+zeroize = { version = "1.9", features = ["derive"] }
+
+x509-parser = { version = "0.18.1", default-features = false }
+
+[profile.release]
+debug = "line-tables-only"
+# Thin LTO restores cross-codegen-unit inlining (the module split scattered
+# hot paths that previously shared a unit inside the single-file crate) and
+# enables cross-crate inlining core<->sql that release builds never had.
+lto = "thin"
+
+# Size-tuned profile for the browser wasm module (see docs/wasm-embedded-size.md).
+# Halves the shipped module vs `release`: fat LTO dedupes the large derived
+# impls that thin LTO leaves duplicated across codegen units, and panic=abort
+# costs nothing on wasm32-wasip1 — panics there never unwind anyway, so the
+# native-only catch_unwind in bicdb-wasm is unaffected. Native builds keep
+# using `release`; this profile exists so their settings never mix.
+#   cargo build --profile wasm-release -p bicdb-wasm --target wasm32-wasip1
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = "debuginfo"

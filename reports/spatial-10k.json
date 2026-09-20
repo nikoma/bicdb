@@ -1,0 +1,18 @@
+{
+  "mode": "spatial",
+  "points": 10000,
+  "insert_elapsed_ms": 457.35906,
+  "points_per_sec": 21864.659246063697,
+  "index_build_ms": 16.722106,
+  "index_size_bytes": 216,
+  "database_size_bytes": 4847439,
+  "collection_sizes": [
+    {
+      "name": "bench_spatial",
+      "segment_bytes": 2337980,
+      "logical_record_bytes": 1927980,
+      "storage_overhead_bytes": 410000
+    }
+  ],
+  "path": "target/bicdb-bench-spatial-10k"
+}

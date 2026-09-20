@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "campaign_id": "20260709-local-vu16-head-baseline-screen",
+  "created_at": "2026-07-09T13:41:00,567351122-07:00",
+  "binary": "/home/benchmark/bicdb/target/release/bicdb",
+  "seed": "/dev/shm/bicdb-tpcc-seed",
+  "matrix": {
+    "permutations": 3,
+    "discarded_warmups": true,
+    "allocation_profiles": true
+  },
+  "workload": {
+    "vu": 16,
+    "rampup_minutes": 1,
+    "duration_minutes": 2
+  },
+  "lanes": {
+    "default-durable": {
+      "purpose": "out-of-box durable product configuration"
+    },
+    "tuned-durable": {
+      "purpose": "best proven durable configuration"
+    },
+    "cpu-ceiling": {
+      "purpose": "non-durable diagnostic upper bound; never a production keeper"
+    }
+  }
+}

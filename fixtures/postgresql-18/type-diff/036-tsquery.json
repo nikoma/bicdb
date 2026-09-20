@@ -1,0 +1,19 @@
+{
+  "id": "type_matrix_tsquery",
+  "description": "PostgreSQL 18 tsquery AST parsing, canonical output, boolean and phrase operators, prefix and weight matching, comparison, storage, and restart-safe equality",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_tsquery;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_tsquery (id TEXT PRIMARY KEY, query TSQUERY NOT NULL UNIQUE);",
+    "INSERT INTO type_matrix_tsquery VALUES ('canonical', '!(fat | rat) & cat:*BA'), ('left-nested', '(a & b) & c'), ('right-nested', 'a & (b & c)'), ('weight-a', 'a:A'), ('empty', ''), ('operand-b', 'b'), ('not-a', '!a'), ('phrase-two', 'a <2> b'), ('phrase-one', 'a <-> b'), ('query-or', 'a | b'), ('query-and', 'a & b'), ('prefix-z', 'z:*A'), ('weight-y', 'y:B');",
+    "SELECT query AS canonical_query FROM type_matrix_tsquery WHERE id = 'canonical';",
+    "SELECT 'a'::tsquery && 'b'::tsquery AS query_and, 'a'::tsquery || 'b'::tsquery AS query_or, !!'a'::tsquery AS query_not;",
+    "SELECT '''a'':1A ''alpha'':2 ''b'':3B ''cat'':4C'::tsvector @@ 'a & b'::tsquery AS boolean_match, '''a'':1A ''alpha'':2 ''b'':3B ''cat'':4C'::tsvector @@ 'a <2> b'::tsquery AS phrase_match, 'al:*'::tsquery @@ '''alpha'':2'::tsvector AS reverse_prefix_match, '''a'':1A'::tsvector @@ 'a:B'::tsquery AS weight_mismatch, '''a'''::tsvector @@ 'a:B'::tsquery AS stripped_weight_match, '''a'''::tsvector @@ 'a <-> b'::tsquery AS stripped_phrase_match;",
+    "SELECT 'a:A'::tsquery = 'a:B'::tsquery AS weights_ignored, 'a:*'::tsquery = 'a'::tsquery AS prefix_ignored, 'a & (b & c)'::tsquery < '(a & b) & c'::tsquery AS tree_order;",
+    "SELECT id, query FROM type_matrix_tsquery WHERE id IN ('left-nested', 'right-nested') ORDER BY query;",
+    "SELECT id, query FROM type_matrix_tsquery WHERE id IN ('empty', 'weight-a', 'operand-b', 'not-a', 'phrase-two', 'phrase-one', 'query-or', 'query-and', 'prefix-z', 'weight-y') ORDER BY query;",
+    "INSERT INTO type_matrix_tsquery VALUES ('weight-b', 'a:B');"
+  ],
+  "expectation": "match"
+}

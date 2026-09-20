@@ -1,0 +1,31 @@
+{
+  "format_version": 1,
+  "records": [
+    {
+      "id": "legacy-1",
+      "typed_columns": {
+        "amount": "numeric",
+        "single": "float4",
+        "double_value": "float8",
+        "happened_on": "date",
+        "happened_at": "timestamptz",
+        "elapsed": "interval",
+        "payload": "bytea",
+        "flags": "varbit",
+        "tags": "text[]",
+        "address": "inet",
+        "window": "int8range"
+      },
+      "plain_values": {
+        "plain_note": "must remain untouched"
+      }
+    },
+    {
+      "id": "legacy-null",
+      "null_columns": ["amount", "single"],
+      "plain_values": {
+        "plain_note": "null typed values stay null"
+      }
+    }
+  ]
+}

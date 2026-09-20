@@ -1,0 +1,238 @@
+{
+  "campaign": "20260709-harness-smoke",
+  "lanes": {
+    "cpu-ceiling": {
+      "district_sum_nopm": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "graceful_reopen_ns": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "invalid": [
+        {
+          "reasons": [
+            "invalid district-sum delta",
+            "HammerDB exit code is missing",
+            "HammerDB did not report completion",
+            "HammerDB created None VUs; expected 3 including monitor",
+            "HammerDB completed 0 VUs successfully; expected 3 including monitor",
+            "failed query count is missing"
+          ],
+          "trial_id": "rep1-pos3-cpu-ceiling"
+        }
+      ],
+      "recovery_ns": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "rss_peak_bytes": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "trials": 1,
+      "valid_trials": 0,
+      "wal_bytes_written": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      }
+    },
+    "default-durable": {
+      "district_sum_nopm": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "graceful_reopen_ns": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "invalid": [
+        {
+          "reasons": [
+            "invalid district-sum delta",
+            "HammerDB exit code is missing",
+            "HammerDB did not report completion",
+            "HammerDB created None VUs; expected 3 including monitor",
+            "HammerDB completed 0 VUs successfully; expected 3 including monitor",
+            "failed query count is missing"
+          ],
+          "trial_id": "rep1-pos1-default-durable"
+        }
+      ],
+      "recovery_ns": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "rss_peak_bytes": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "trials": 1,
+      "valid_trials": 0,
+      "wal_bytes_written": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      }
+    },
+    "tuned-durable": {
+      "district_sum_nopm": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "graceful_reopen_ns": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "invalid": [
+        {
+          "reasons": [
+            "invalid district-sum delta",
+            "HammerDB exit code is missing",
+            "HammerDB did not report completion",
+            "HammerDB created None VUs; expected 3 including monitor",
+            "HammerDB completed 0 VUs successfully; expected 3 including monitor",
+            "failed query count is missing"
+          ],
+          "trial_id": "rep1-pos2-tuned-durable"
+        }
+      ],
+      "recovery_ns": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "rss_peak_bytes": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      },
+      "trials": 1,
+      "valid_trials": 0,
+      "wal_bytes_written": {
+        "ci95_normal": null,
+        "ci95_student_t": null,
+        "cv": null,
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "stdev": null,
+        "values": []
+      }
+    }
+  },
+  "schema_version": 2,
+  "trial_count": 3
+}

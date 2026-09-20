@@ -1,0 +1,18 @@
+{
+  "id": "type_matrix_range",
+  "description": "DDL, input, canonical output, casts, and catalog OIDs for built-in range types",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_range;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_range (id TEXT PRIMARY KEY, ints INT4RANGE, bigints INT8RANGE, exacts NUMRANGE, days DATERANGE, local_times TSRANGE, instants TSTZRANGE);",
+    "INSERT INTO type_matrix_range (id, ints, bigints, exacts, days, local_times, instants) VALUES ('r1', '[1,5)', '[9007199254740993,9007199254741000)', '[0.10,9.90]', '[2024-01-01,2024-02-01)', '[2024-01-01 00:00:00,2024-01-02 00:00:00)', '[2024-01-01 00:00:00+00,2024-01-02 00:00:00+00)');",
+    "SELECT ints, bigints, exacts, days, local_times, instants FROM type_matrix_range WHERE id = 'r1';",
+    "SELECT '[1,5)'::int4range AS ints, '[9007199254740993,9007199254741000)'::int8range AS bigints, '[0.10,9.90]'::numrange AS exacts, '[2024-01-01,2024-02-01)'::daterange AS days, '[2024-01-01,2024-01-02)'::tsrange AS local_times, '[2024-01-01,2024-01-02)'::tstzrange AS instants;",
+    "SELECT '[1,5]'::int4range AS inclusive_ints, '(1,5)'::int4range AS exclusive_ints, '(1,1]'::int4range AS empty_ints, '[9007199254740993,9007199254741000]'::int8range AS inclusive_bigints, '[2024-01-01,2024-01-31]'::daterange AS inclusive_days;",
+    "SELECT '[2,1)'::int4range;",
+    "SELECT '(2147483647,)'::int4range;",
+    "SELECT a.attname, a.atttypid, pg_catalog.format_type(a.atttypid, a.atttypmod) AS formatted_type FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid WHERE c.relname = 'type_matrix_range' AND a.attnum > 0 ORDER BY a.attnum;"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,23 @@
+{
+  "id": "type_matrix_current_date",
+  "description": "PostgreSQL 18 transaction-stable CURRENT_DATE with session timezones and indexed date predicates",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_current_date;"
+  ],
+  "sql": [
+    "SET TIME ZONE 'UTC';",
+    "CREATE TABLE type_matrix_current_date (id TEXT PRIMARY KEY, value DATE UNIQUE);",
+    "CREATE INDEX type_matrix_current_date_value_idx ON type_matrix_current_date (value);",
+    "INSERT INTO type_matrix_current_date VALUES ('today', CURRENT_DATE), ('tomorrow', CURRENT_DATE + 1);",
+    "SELECT id FROM type_matrix_current_date WHERE value = CURRENT_DATE;",
+    "SELECT CURRENT_DATE = CURRENT_DATE AS date_stable, now() = transaction_timestamp() AS transaction_stable, clock_timestamp() >= transaction_timestamp() AS clock_advances;",
+    "BEGIN;",
+    "SET TIME ZONE 'Pacific/Kiritimati';",
+    "SELECT CURRENT_DATE = CURRENT_DATE AS kiritimati_stable, now() = transaction_timestamp() AS transaction_stable;",
+    "SET TIME ZONE 'America/Adak';",
+    "SELECT CURRENT_DATE = CURRENT_DATE AS adak_stable, now() = transaction_timestamp() AS transaction_stable;",
+    "ROLLBACK;",
+    "SET TIME ZONE 'Mars/Olympus_Mons';"
+  ],
+  "expectation": "match"
+}

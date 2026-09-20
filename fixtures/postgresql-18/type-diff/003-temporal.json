@@ -1,0 +1,15 @@
+{
+  "id": "type_matrix_temporal",
+  "description": "DDL, input, canonical output, casts, typmods, and catalog OIDs for temporal scalar types",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_temporal;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_temporal (id TEXT PRIMARY KEY, day DATE, local_time TIME(3), zoned_time TIME(3) WITH TIME ZONE, local_timestamp TIMESTAMP(3), instant TIMESTAMP(3) WITH TIME ZONE, span INTERVAL DAY TO SECOND(3));",
+    "INSERT INTO type_matrix_temporal (id, day, local_time, zoned_time, local_timestamp, instant, span) VALUES ('t1', '2024-02-29', '12:34:56.789', '12:34:56.789+02', '2024-02-29 12:34:56.789', '2024-02-29 10:34:56.789+00', '1 day 02:03:04.567');",
+    "SELECT day, local_time, zoned_time, local_timestamp, instant, span FROM type_matrix_temporal WHERE id = 't1';",
+    "SELECT '2024-02-29'::date AS day, '12:34:56.789'::time(3) AS local_time, '12:34:56.789+02'::timetz(3) AS zoned_time, '2024-02-29 12:34:56.789'::timestamp(3) AS local_timestamp, '2024-02-29 10:34:56.789+00'::timestamptz(3) AS instant, '1 day 02:03:04.567'::interval day to second(3) AS span;",
+    "SELECT a.attname, a.atttypid, a.atttypmod, pg_catalog.format_type(a.atttypid, a.atttypmod) AS formatted_type FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid WHERE c.relname = 'type_matrix_temporal' AND a.attnum > 0 ORDER BY a.attnum;"
+  ],
+  "expectation": "match"
+}

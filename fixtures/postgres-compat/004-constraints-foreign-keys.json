@@ -1,0 +1,21 @@
+{
+  "id": "constraints_foreign_keys",
+  "description": "Common constraint enforcement and foreign-key update/delete actions",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_fk_children;",
+    "DROP TABLE IF EXISTS diff_fk_parents;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_fk_parents (id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, label TEXT CHECK (label <> ''));",
+    "CREATE TABLE diff_fk_children (id TEXT PRIMARY KEY, parent_code TEXT, CONSTRAINT diff_fk_children_parent_fkey FOREIGN KEY (parent_code) REFERENCES diff_fk_parents(code) ON UPDATE CASCADE ON DELETE SET NULL);",
+    "INSERT INTO diff_fk_parents (id, code, label) VALUES ('p1', 'alpha', 'Alpha');",
+    "INSERT INTO diff_fk_children (id, parent_code) VALUES ('c1', 'alpha');",
+    "UPDATE diff_fk_parents SET code = 'beta' WHERE code = 'alpha';",
+    "SELECT parent_code FROM diff_fk_children WHERE id = 'c1';",
+    "DELETE FROM diff_fk_parents WHERE code = 'beta';",
+    "SELECT parent_code FROM diff_fk_children WHERE id = 'c1';",
+    "SELECT constraint_name, constraint_type FROM information_schema.table_constraints WHERE table_name = 'diff_fk_children' ORDER BY constraint_name;",
+    "SELECT conname, contype FROM pg_catalog.pg_constraint WHERE conname = 'diff_fk_children_parent_fkey';"
+  ],
+  "expectation": "match"
+}

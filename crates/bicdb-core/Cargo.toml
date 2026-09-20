@@ -1,0 +1,61 @@
+[package]
+name = "bicdb-core"
+version = "1.0.438-beta"
+edition.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+
+[features]
+# Native deps are opt-out so the crate can build for wasm32-wasip1
+# (browser/OPFS cache builds use --no-default-features). Turning a feature
+# off degrades that capability at runtime with a clear error; it never
+# changes behavior for builds that keep the defaults.
+default = ["embeddings", "tls-replication", "mmap", "osm-import", "compression"]
+embeddings = ["dep:ort", "dep:tokenizers"]
+tls-replication = ["dep:rustls", "dep:rustls-pemfile"]
+mmap = ["dep:memmap2"]
+osm-import = ["dep:osmpbfreader"]
+compression = ["dep:zstd"]
+
+[dependencies]
+bicdb-page = { path = "../bicdb-page", version = "1.0.438-beta" }
+argon2.workspace = true
+chacha20poly1305.workspace = true
+crc32fast.workspace = true
+ed25519-dalek.workspace = true
+unicode_categories.workspace = true
+geo-types.workspace = true
+geojson.workspace = true
+hex.workspace = true
+hmac.workspace = true
+hkdf.workspace = true
+memmap2 = { workspace = true, optional = true }
+osmpbfreader = { workspace = true, optional = true }
+ort = { workspace = true, optional = true }
+parking_lot.workspace = true
+petgraph.workspace = true
+rstar.workspace = true
+rustc-hash.workspace = true
+smallvec = "1"
+rust_decimal = { version = "1.42", features = ["serde"] }
+rustls = { workspace = true, optional = true }
+rustls-pemfile = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokenizers = { workspace = true, optional = true }
+uuid.workspace = true
+zeroize.workspace = true
+wide.workspace = true
+wkt.workspace = true
+zstd = { workspace = true, optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+crossbeam-skiplist.workspace = true
+protobuf.workspace = true
+rcgen = "0.13"
+tempfile.workspace = true

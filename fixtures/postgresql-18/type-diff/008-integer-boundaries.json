@@ -1,0 +1,29 @@
+{
+  "id": "type_matrix_integer_boundaries",
+  "description": "PostgreSQL 18 int2/int4 boundaries, arithmetic overflow, assignment, defaults, arrays, and result type promotion",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_integer_boundaries;",
+    "DROP TABLE IF EXISTS type_matrix_invalid_integer_default;"
+  ],
+  "sql": [
+    "SELECT (-32768)::int2 AS int2_min, 32767::int2 AS int2_max, (-2147483648)::int4 AS int4_min, 2147483647::int4 AS int4_max;",
+    "SELECT 32768::int2;",
+    "SELECT (-32769)::int2;",
+    "SELECT 2147483648::int4;",
+    "SELECT (-2147483649)::int4;",
+    "SELECT 32767::int2 + 1::int2;",
+    "SELECT 2147483647::int4 + 1::int4;",
+    "SELECT 1 WHERE 32767::int2 + 1::int2 > 0;",
+    "SELECT '{1,32768}'::int2[];",
+    "CREATE TABLE type_matrix_invalid_integer_default (value INT2 DEFAULT 32768);",
+    "INSERT INTO type_matrix_invalid_integer_default DEFAULT VALUES;",
+    "CREATE TABLE type_matrix_integer_boundaries (id TEXT PRIMARY KEY, small_value INT2 DEFAULT 0, regular_value INT4);",
+    "INSERT INTO type_matrix_integer_boundaries VALUES ('edge', 32767, 2147483647);",
+    "UPDATE type_matrix_integer_boundaries SET small_value = small_value + 1 WHERE id = 'edge';",
+    "SELECT id FROM type_matrix_integer_boundaries WHERE small_value + 1::int2 > 0;",
+    "SELECT id FROM type_matrix_integer_boundaries ORDER BY small_value + 1::int2;",
+    "INSERT INTO type_matrix_integer_boundaries VALUES ('overflow', 0, 2147483648);",
+    "SELECT id, small_value, regular_value FROM type_matrix_integer_boundaries ORDER BY id;"
+  ],
+  "expectation": "match"
+}

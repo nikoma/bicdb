@@ -1,0 +1,459 @@
+{
+  "artifacts": {
+    "metadata": "metadata.json",
+    "raw": "raw"
+  },
+  "checkpoints": {
+    "attempted": 0,
+    "completed": 0,
+    "cycles": [],
+    "failed": 0
+  },
+  "cpu": {
+    "elapsed_ns": 132968310268,
+    "fs_available_min_bytes": 29068513280,
+    "major_faults": 1,
+    "mean_cores": 22.629828069073046,
+    "mem_available_min_bytes": 56855289856,
+    "minor_faults": 286172,
+    "perf": {
+      "branch-misses": null,
+      "branches": null,
+      "cache-misses": null,
+      "context-switches": 3989695.0,
+      "cpu-migrations": 163575.0,
+      "cycles": null,
+      "instructions": null,
+      "page-faults": 286173.0,
+      "task-clock": 3011021197857.0
+    },
+    "read_bytes": 1310720,
+    "rss_end_bytes": 36481921024,
+    "rss_hwm_peak_bytes": 36481921024,
+    "rss_peak_bytes": 36481921024,
+    "sample_count": 125,
+    "system_ns": 214640000000,
+    "threads_peak": 71,
+    "user_ns": 2794410000000,
+    "write_bytes": 53248
+  },
+  "duration_ns": 133248300257,
+  "graceful_reopen": {
+    "district_sum": null,
+    "district_sum_matches_post_run": null,
+    "duration_ns": null,
+    "requested": false
+  },
+  "harness": {
+    "errors": [],
+    "hammerdb_exit_code": 0,
+    "perf_collected": true,
+    "perf_exit_code": 130,
+    "perf_requested": true
+  },
+  "latency_ns": {
+    "queue": {
+      "p50": 0,
+      "p95": 0,
+      "p99": 0
+    },
+    "transactions": {}
+  },
+  "memory": {
+    "allocated_bytes": null,
+    "allocation_count": null,
+    "profiled_separately": false,
+    "rss_end_bytes": 36481921024,
+    "rss_hwm_peak_bytes": 36481921024,
+    "rss_peak_bytes": 36481921024
+  },
+  "recovery": {
+    "initial_open_ns": 23123084459,
+    "post_run_open_ns": null
+  },
+  "run": {
+    "container": {
+      "image": "tpcorg/hammerdb:postgres",
+      "image_id": "sha256:2f572150794859a5d2559d44646febfed33f0592dcccfda4c22bb5ed6542b827"
+    },
+    "host": {
+      "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+      "data_root": "/dev/shm",
+      "filesystem": "tmpfs  tmpfs  rw,nosuid,nodev,inode64",
+      "hostname": "benchmark-secondary.example.com",
+      "kernel": "Linux 6.17.0-1022-azure x86_64 GNU/Linux",
+      "logical_cpus": 32
+    },
+    "lane": "cpu-ceiling",
+    "position": 1,
+    "profiling": {
+      "allocation_trace": false,
+      "excluded_from_throughput": false,
+      "kind": "throughput",
+      "perf_stat": true
+    },
+    "reopen": {
+      "graceful_check": false
+    },
+    "rep": 1,
+    "schema_version": 1,
+    "seed": {
+      "manifest_sha256": "bfc3fdda12724133aecf13b62bc097b2e740e755bf909ce7c7672bf5a8d83d19",
+      "path": "/dev/shm/bicdb-tpcc-seed"
+    },
+    "server": {
+      "args": [
+        "serve-pg",
+        "/dev/shm/bicdb-codex-bicdb-corrected-v2-20260905-shared-cte-owned-balanced-r1",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "55436",
+        "--storage-sync",
+        "buffered",
+        "--max-result-rows",
+        "1000000",
+        "--max-connections",
+        "64",
+        "--max-connections-per-ip",
+        "64",
+        "--max-active-queries",
+        "32",
+        "--max-active-reads",
+        "32",
+        "--max-active-writes",
+        "24"
+      ],
+      "common_env": [
+        "BICDB_MEM_GUARD_MB=4096",
+        "BICDB_MEM_TRACE=1",
+        "BICDB_MEM_TRACE_SECS=1",
+        "BICDB_PROC_MIX_TRACE=1",
+        "MIMALLOC_SHOW_STATS=1",
+        "BICDB_COMPACT_UPDATE_WAL=1",
+        "BICDB_ROW_LOCK_KEY_NOTIFY=1",
+        "BICDB_ROW_LOCK_KEY_WAIT_US=5000",
+        "BICDB_UPDATE_REPAIR=1",
+        "BICDB_ROW_LOCK_POLICY=wait-graph",
+        "BICDB_WAL_SINGLE_BUFFER=1",
+        "BICDB_ROW_LOCK_KEY_NOTIFY_ONE=0"
+      ],
+      "lane_env": [
+        "BICDB_INDEX_STORE=sharded",
+        "BICDB_INDEX_SHARDS=64",
+        "BICDB_ORCH_SHARDS=16",
+        "BICDB_RC_UPDATE_LOCK_ATTEMPTS=20000",
+        "BICDB_SYNC_OUTBOX=off",
+        "BICDB_PLPGSQL_INTO_NO_DATA=1",
+        "BICDB_AUTO_COMPACT_WAL_MB=0"
+      ],
+      "port": 55436
+    },
+    "source": {
+      "binary": "/home/benchmark/bicdb-build-artifacts/20260906/bicdb-shared-cte-owned-pgo-e6d8fdce",
+      "binary_git_commit": "e6d8fdce572352a35ea48e2695844af23b5e9d3f",
+      "binary_sha256": "0eae63b4f1706947c85fb3aa4f9ef701e9efccf49ab62d8e95d0a3b918a60d9b",
+      "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_commit": "58d3b62807c1efa8abdc007aa7098568b04413d5",
+      "git_dirty": false,
+      "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18);binary: rustc;commit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea;commit-date: 2026-08-18;host: x86_64-unknown-linux-gnu;release: 1.98.0;LLVM version: 22.1.8;",
+      "state_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": [],
+      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "started_at": "2026-09-06T02:09:16,635582785+00:00",
+    "trial_id": "shared-cte-owned-balanced-r1",
+    "warmup": false,
+    "workload": {
+      "client_outcomes": true,
+      "duration_minutes": 1,
+      "initial_sql_sha256": "72cd42b6575f544ef4ffba31e521f0f9ff4ceefa8d382154e1fbdae2a3cf7b6e",
+      "name": "hammerdb-tpcc",
+      "rampup_minutes": 1,
+      "require_business_completion": true,
+      "terminal_assignment_capture": true,
+      "terminal_assignment_mode": "replay",
+      "terminal_assignment_sha256": "e43383a55a2e03156f35376e52fc606dbb48d8b551bdff1d689695e5746b87d9",
+      "time_profile": false,
+      "variant": "corrected-v2",
+      "vu": 32
+    }
+  },
+  "schema_version": 2,
+  "startup": {
+    "initial_open_ns": 23123084459
+  },
+  "terminal_assignments": [
+    [
+      2,
+      1,
+      1
+    ],
+    [
+      3,
+      1,
+      6
+    ],
+    [
+      4,
+      2,
+      1
+    ],
+    [
+      5,
+      2,
+      6
+    ],
+    [
+      6,
+      3,
+      1
+    ],
+    [
+      7,
+      3,
+      6
+    ],
+    [
+      8,
+      4,
+      1
+    ],
+    [
+      9,
+      4,
+      6
+    ],
+    [
+      10,
+      5,
+      1
+    ],
+    [
+      11,
+      5,
+      6
+    ],
+    [
+      12,
+      6,
+      1
+    ],
+    [
+      13,
+      6,
+      6
+    ],
+    [
+      14,
+      7,
+      1
+    ],
+    [
+      15,
+      7,
+      6
+    ],
+    [
+      16,
+      8,
+      1
+    ],
+    [
+      17,
+      8,
+      6
+    ],
+    [
+      18,
+      9,
+      1
+    ],
+    [
+      19,
+      9,
+      6
+    ],
+    [
+      20,
+      10,
+      1
+    ],
+    [
+      21,
+      10,
+      6
+    ],
+    [
+      22,
+      11,
+      1
+    ],
+    [
+      23,
+      11,
+      6
+    ],
+    [
+      24,
+      12,
+      1
+    ],
+    [
+      25,
+      12,
+      6
+    ],
+    [
+      26,
+      13,
+      1
+    ],
+    [
+      27,
+      13,
+      6
+    ],
+    [
+      28,
+      14,
+      1
+    ],
+    [
+      29,
+      14,
+      6
+    ],
+    [
+      30,
+      15,
+      1
+    ],
+    [
+      31,
+      15,
+      6
+    ],
+    [
+      32,
+      16,
+      1
+    ],
+    [
+      33,
+      16,
+      6
+    ]
+  ],
+  "throughput": {
+    "district_sum_after": 1444424,
+    "district_sum_before": 480160,
+    "district_sum_delta": 964264,
+    "district_sum_nopm": 482132.0,
+    "hammerdb": {
+      "all_complete": true,
+      "created_vus": 33,
+      "exit_code": 0,
+      "expected_active_vus": 32,
+      "expected_total_vus": 33,
+      "failed_vus": 0,
+      "reported_nopm": 493755,
+      "reported_tpm": 1148628,
+      "successful_vus": 33
+    }
+  },
+  "validity": {
+    "reasons": [],
+    "valid": true,
+    "watermark_gap": 0
+  },
+  "wal": {
+    "commits_written": 2027609,
+    "end_bytes": 19052203745,
+    "generated_bytes": 19052183671,
+    "max_batch_commits": 31,
+    "mean_bytes_per_write": 18603.413526500233,
+    "mean_commits_per_write": 1.9798491001569147,
+    "start_bytes": 20074,
+    "sync_calls": 0,
+    "write_calls": 1024123
+  },
+  "work": {
+    "business_completion": {
+      "neword": {
+        "call_commit_gap": 9629,
+        "calls": 973893,
+        "committed": 964264,
+        "complete": true,
+        "expected_invalid_item_rollbacks": 9629
+      },
+      "payment": {
+        "call_commit_gap": 0,
+        "calls": 975391,
+        "committed": 975391,
+        "complete": true,
+        "expected_invalid_item_rollbacks": 0
+      }
+    },
+    "client_outcomes": {
+      "complete": true,
+      "invalid": 9629,
+      "neword": 973893,
+      "other": 0,
+      "payment": 975391,
+      "positions": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33
+      ],
+      "positive": 964264
+    },
+    "commit_seq_delta": 2027609,
+    "committed_payments": 975391,
+    "failed_queries": 0,
+    "handled_failures": {
+      "deadlock_detected": 0,
+      "no_data_found": 33467,
+      "other": 0,
+      "serialization_failure": 0
+    },
+    "procedures": {
+      "delivery": 97790,
+      "neword": 973893,
+      "ostat": 97360,
+      "payment": 975391,
+      "slev": 97610
+    },
+    "server_queries": 2242211,
+    "writes_executed": 0
+  }
+}

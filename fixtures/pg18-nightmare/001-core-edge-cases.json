@@ -1,0 +1,30 @@
+{
+  "id": "nightmare_core_edge_cases",
+  "description": "NULLs, NULL joins, nested joins, subqueries, CTEs, empty aggregates, GROUP BY, ORDER BY, LIMIT/OFFSET, casts, timestamps, identifiers, Unicode, huge strings, and bytea parity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS nm_child;",
+    "DROP TABLE IF EXISTS nm_parent;",
+    "DROP TABLE IF EXISTS \"Quoted Weird Name\";"
+  ],
+  "sql": [
+    "CREATE TABLE nm_parent (id TEXT PRIMARY KEY, bucket TEXT, n INT, label TEXT, created_at TIMESTAMP);",
+    "CREATE TABLE nm_child (id TEXT PRIMARY KEY, parent_id TEXT, score INT, note TEXT);",
+    "INSERT INTO nm_parent (id, bucket, n, label, created_at) VALUES ('p1', 'a', 1, 'alpha', '2024-02-29 01:02:03'::timestamp), ('p2', 'a', NULL, NULL, NULL), ('p3', NULL, 3, 'Ω-unicode', '1970-01-01 00:00:00'::timestamp), ('p4', 'b', 4, repeat('x', 4096), '2038-01-19 03:14:07'::timestamp);",
+    "INSERT INTO nm_child (id, parent_id, score, note) VALUES ('c1', 'p1', 10, 'hit'), ('c2', 'p2', NULL, NULL), ('c3', NULL, 30, 'orphan');",
+    "SELECT id, n IS NULL AS n_is_null, label IS NULL AS label_is_null, n = NULL AS impossible FROM nm_parent ORDER BY id;",
+    "SELECT p.id, c.id, c.score FROM nm_parent p LEFT JOIN nm_child c ON p.id = c.parent_id ORDER BY p.id, c.id;",
+    "SELECT p.id, c.id FROM (nm_parent p LEFT JOIN nm_child c ON p.id = c.parent_id) LEFT JOIN nm_parent p2 ON p2.id = c.parent_id WHERE p2.id IS NULL OR p2.id = p.id ORDER BY p.id, c.id;",
+    "SELECT id FROM nm_parent WHERE id IN (SELECT parent_id FROM nm_child WHERE parent_id IS NOT NULL) ORDER BY id;",
+    "WITH ranked AS (SELECT bucket, COUNT(*) AS count_all, COUNT(n) AS count_n FROM nm_parent GROUP BY bucket) SELECT bucket, count_all, count_n FROM ranked ORDER BY bucket NULLS FIRST;",
+    "SELECT COUNT(*), COUNT(n), SUM(n), AVG(n), MIN(n), MAX(n) FROM nm_parent WHERE id = 'missing';",
+    "SELECT bucket, COUNT(*), COUNT(label) FROM nm_parent GROUP BY bucket ORDER BY bucket NULLS LAST;",
+    "SELECT id, label FROM nm_parent ORDER BY label NULLS FIRST, id LIMIT 3 OFFSET 1;",
+    "SELECT '42'::int4 AS i, 7::text AS t, '2024-02-29 01:02:03'::timestamp AS ts;",
+    "CREATE TABLE \"Quoted Weird Name\" (\"select\" TEXT PRIMARY KEY, \"sp ace\" TEXT, \"Ω\" TEXT);",
+    "INSERT INTO \"Quoted Weird Name\" (\"select\", \"sp ace\", \"Ω\") VALUES ('key', 'quoted', 'unicode');",
+    "SELECT \"select\", \"sp ace\", \"Ω\" FROM \"Quoted Weird Name\";",
+    "SELECT encode(decode('00ff4142', 'hex'), 'hex') AS bytea_hex;"
+  ],
+  "expectation": "expected_difference",
+  "expected_difference": "Current BicDB parity gaps include nested joins, NULL sort/group edge cases, quoted non-identifier-like column names, and bytea encode/decode. The fixture intentionally keeps the full SQL reproduction visible until each gap is promoted into a match fixture."
+}

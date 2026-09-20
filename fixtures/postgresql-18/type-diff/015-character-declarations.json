@@ -1,0 +1,13 @@
+{
+  "id": "type_matrix_character_declarations",
+  "description": "PostgreSQL 18 text, varchar, character varying, char, and character declaration identities and lengths",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_character_declarations;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_character_declarations (plain_text TEXT, plain_varchar VARCHAR, sized_varchar VARCHAR(7), sized_varying CHARACTER VARYING(8), default_char CHAR, sized_char CHAR(4), default_character CHARACTER, sized_character CHARACTER(5));",
+    "SELECT column_name, data_type, udt_name, character_maximum_length, character_octet_length FROM information_schema.columns WHERE table_name = 'type_matrix_character_declarations' ORDER BY ordinal_position;",
+    "SELECT a.attname, a.atttypid, a.atttypmod, pg_catalog.format_type(a.atttypid, a.atttypmod) AS formatted_type FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid WHERE c.relname = 'type_matrix_character_declarations' AND a.attnum > 0 ORDER BY a.attnum;"
+  ],
+  "expectation": "match"
+}

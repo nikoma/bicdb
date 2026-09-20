@@ -1,0 +1,22 @@
+{
+  "id": "type_matrix_text_search_functions",
+  "description": "PostgreSQL 18 text search configurations, constructors, vector transforms, ranking, headlines, JSON documents, and query rewrite",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_search_rewrites;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_search_rewrites (id INTEGER PRIMARY KEY, target TSQUERY NOT NULL, substitute TSQUERY NOT NULL);",
+    "INSERT INTO type_matrix_search_rewrites VALUES (1, 'a', 'x | y'), (2, 'b', 'z');",
+    "SELECT to_tsvector('The Fat Rats ate seven cheeses.') AS english_vector, to_tsvector('simple', 'The Fat Rats ate seven cheeses.') AS simple_vector;",
+    "SELECT to_tsquery('english', 'The & Fat & Rats') AS parsed_query, plainto_tsquery('english', 'The Fat Rats') AS plain_query, phraseto_tsquery('english', 'fat the rat') AS phrase_query, websearch_to_tsquery('english', '\"fat rat\" -cat OR dog') AS web_query;",
+    "SELECT get_current_ts_config() AS current_config, numnode('a & !b'::tsquery) AS nodes, querytree('a & !b'::tsquery) AS indexable_query, tsquery_phrase('a'::tsquery, 'b'::tsquery, 3) AS distance_phrase;",
+    "SELECT setweight('''a'':1 ''b'':2B'::tsvector, 'A') AS weighted_all, setweight('''a'':1 ''b'':2B'::tsvector, 'C', ARRAY['a']) AS weighted_selected, ts_delete('''a'':1 ''b'':2'::tsvector, 'a') AS deleted, ts_filter('''a'':1A,2B,3C,4 ''b'':5'::tsvector, ARRAY['A','C']::\"char\"[]) AS filtered;",
+    "SELECT tsvector_to_array('''a'':1 ''b'':2'::tsvector) AS lexemes, array_to_tsvector(ARRAY['foo','bar','foo']) AS vector_from_array;",
+    "SELECT ts_rank('''a'':1 ''b'':2 ''c'':8'::tsvector, 'a & b'::tsquery) AS rank_and, ts_rank_cd('''a'':1 ''b'':2 ''c'':8'::tsvector, 'a & b'::tsquery) AS rank_cd_and, ts_rank('''a'':1A ''b'':2B'::tsvector, 'a | b'::tsquery) AS rank_or, ts_rank_cd('''a'':1A ''b'':2B'::tsvector, 'a | b'::tsquery) AS rank_cd_or;",
+    "SELECT ts_headline('english', 'The fat rats ate seven cheeses. A cat watched the rats.', 'rat & chees'::tsquery) AS default_headline, ts_headline('english', 'The fat rats ate seven cheeses. A cat watched the rats.', 'rat & chees'::tsquery, 'StartSel=<b>, StopSel=</b>, MaxWords=8, MinWords=4') AS compact_headline;",
+    "SELECT ts_rewrite('a & b'::tsquery, 'a'::tsquery, 'x | y'::tsquery) AS rewritten_child, ts_rewrite('a & b'::tsquery, 'a & b'::tsquery, 'x'::tsquery) AS rewritten_root;",
+    "SELECT ts_rewrite('a & b'::tsquery, 'SELECT target, substitute FROM type_matrix_search_rewrites ORDER BY id') AS table_rewrite;",
+    "SELECT to_tsvector('english', '{\"a\":\"The Fat Rats\",\"b\":[\"cheese\",null,12]}'::jsonb) AS json_vector, ts_headline('english', '{\"a\":\"The Fat Rats\",\"b\":[\"cheese\",null,12]}'::jsonb, 'rat | chees'::tsquery) AS json_headline;"
+  ],
+  "expectation": "match"
+}

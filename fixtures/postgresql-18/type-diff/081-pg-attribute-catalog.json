@@ -1,0 +1,25 @@
+{
+  "id": "type_matrix_pg_attribute_catalog",
+  "description": "PostgreSQL 18 pg_attribute type identity, typmod, dimensions, collation, physical layout, and compression metadata",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_attribute_rows CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_attribute_range CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_attribute_composite CASCADE;",
+    "DROP DOMAIN IF EXISTS type_matrix_attribute_domain CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_attribute_enum CASCADE;"
+  ],
+  "sql": [
+    "CREATE TYPE type_matrix_attribute_enum AS ENUM ('open', 'closed');",
+    "CREATE DOMAIN type_matrix_attribute_domain AS NUMERIC(8,2);",
+    "CREATE TYPE type_matrix_attribute_composite AS (label VARCHAR(12), amount type_matrix_attribute_domain);",
+    "CREATE TYPE type_matrix_attribute_range AS RANGE (SUBTYPE = int4);",
+    "CREATE TABLE type_matrix_attribute_rows (bool_value bool, int_value int4 NOT NULL, float_value float8, text_value text, compressed_text text COMPRESSION pglz, compressed_external text COMPRESSION lz4, varchar_value varchar(12), numeric_value numeric(8,2), timestamp_value timestamp(3), interval_value interval day to second(2), bit_value bit(7), int_array int4[], float_matrix float8[][], text_array text[], text_matrix text[][] COLLATE \"C\", enum_value type_matrix_attribute_enum, enum_array type_matrix_attribute_enum[], domain_value type_matrix_attribute_domain, domain_array type_matrix_attribute_domain[], composite_value type_matrix_attribute_composite, composite_array type_matrix_attribute_composite[], range_value type_matrix_attribute_range, range_array type_matrix_attribute_range[]);",
+    "SELECT a.attname::text, attribute_type.typname::text AS type_name, a.atttypmod::integer, a.attndims::smallint, COALESCE(coll.collname::text, '-') AS collation_name, a.attlen::integer, a.attbyval, a.attalign::text, a.attstorage::text, a.attcompression::text, a.attnotnull FROM pg_attribute AS a JOIN pg_class AS relation ON relation.oid = a.attrelid JOIN pg_type AS attribute_type ON attribute_type.oid = a.atttypid LEFT JOIN pg_collation AS coll ON coll.oid = a.attcollation WHERE relation.relname = 'type_matrix_attribute_rows' AND a.attnum > 0 ORDER BY a.attnum;",
+    "SELECT a.attname::text, attribute_type.typname::text AS type_name, a.atttypmod::integer, a.attndims::smallint, COALESCE(coll.collname::text, '-') AS collation_name, a.attlen::integer, a.attbyval, a.attalign::text, a.attstorage::text, a.attcompression::text, a.attnotnull FROM pg_attribute AS a JOIN pg_type AS owner_type ON owner_type.typrelid = a.attrelid JOIN pg_type AS attribute_type ON attribute_type.oid = a.atttypid LEFT JOIN pg_collation AS coll ON coll.oid = a.attcollation WHERE owner_type.typname = 'type_matrix_attribute_composite' AND a.attnum > 0 ORDER BY a.attnum;",
+    "ALTER TABLE type_matrix_attribute_rows ALTER COLUMN compressed_text SET COMPRESSION lz4;",
+    "SELECT attcompression::text FROM pg_attribute AS a JOIN pg_class AS relation ON relation.oid = a.attrelid WHERE relation.relname = 'type_matrix_attribute_rows' AND a.attname = 'compressed_text';",
+    "ALTER TABLE type_matrix_attribute_rows ALTER COLUMN compressed_text SET COMPRESSION default;",
+    "SELECT attcompression::text FROM pg_attribute AS a JOIN pg_class AS relation ON relation.oid = a.attrelid WHERE relation.relname = 'type_matrix_attribute_rows' AND a.attname = 'compressed_text';"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "expected_difference_recursive_cte",
+  "description": "Recursive CTE is explicitly rejected as unsupported",
+  "sql": [
+    "WITH RECURSIVE nums(n) AS (SELECT 1) SELECT n FROM nums;"
+  ],
+  "expectation": "expected_difference",
+  "expected_difference": "BicDB explicitly rejects recursive CTEs"
+}

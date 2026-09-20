@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "target_version": "18.4",
+  "oracle_image": "postgres:18.4",
+  "gates": [
+    "ddl",
+    "dml",
+    "catalog",
+    "dependency",
+    "dump",
+    "restart",
+    "protocol"
+  ],
+  "families": [
+    {
+      "id": "array",
+      "label": "Arrays",
+      "gates": {
+        "ddl": { "status": "pass", "fixtures": ["type_matrix_array_dimensions"] },
+        "dml": { "status": "pass", "fixtures": ["type_matrix_array_operations", "type_matrix_array_integration"] },
+        "catalog": { "status": "pass", "test": { "source": "crates/bicdb-sql/tests/array_storage.rs", "name": "every_registered_array_type_is_persistent_and_storable" } },
+        "dependency": { "status": "pass", "fixtures": ["type_matrix_user_type_dependencies"] },
+        "dump": { "status": "pass", "sources": ["scripts/pg18-dump-restore.sh", "fixtures/postgresql-18/pg-dump/type-families.sql"] },
+        "restart": { "status": "pass", "test": { "source": "crates/bicdb-sql/tests/array_storage.rs", "name": "array_btree_and_gin_indexes_plan_mutate_and_survive_reopen" } },
+        "protocol": { "status": "pass", "test": { "source": "crates/bicdb-pgwire/tests/protocol.rs", "name": "extended_query_multidimensional_binary_array_preserves_bounds_and_nulls" } }
+      }
+    },
+    {
+      "id": "composite_record",
+      "label": "Anonymous records, table rows, and named composites",
+      "gates": {
+        "ddl": { "status": "pass", "fixtures": ["type_matrix_named_composite_types"] },
+        "dml": { "status": "pass", "fixtures": ["type_matrix_composite_records", "type_matrix_named_composite_types"] },
+        "catalog": { "status": "pass", "fixtures": ["type_matrix_user_pg_type_catalog"] },
+        "dependency": { "status": "pass", "test": { "source": "crates/bicdb-sql/tests/composite_types.rs", "name": "named_composite_drop_respects_nested_dependencies_and_cascade" } },
+        "dump": { "status": "pass", "sources": ["scripts/pg18-dump-restore.sh", "fixtures/postgresql-18/pg-dump/type-families.sql"] },
+        "restart": { "status": "pass", "test": { "source": "crates/bicdb-sql/tests/composite_types.rs", "name": "table_row_type_oids_dependencies_and_renames_survive_reopen" } },
+        "protocol": { "status": "pass", "test": { "source": "crates/bicdb-pgwire/tests/protocol.rs", "name": "named_composites_and_arrays_round_trip_text_and_binary_codecs" } }
+      }
+    },
+    {
+      "id": "enum",
+      "label": "Enums",
+      "gates": {
+        "ddl": { "status": "pass", "fixtures": ["type_matrix_enum_types"] },
+        "dml": { "status": "pass", "fixtures": ["type_matrix_enum_types"] },
+        "catalog": { "status": "pass", "fixtures": ["type_matrix_enum_types", "type_matrix_user_pg_type_catalog"] },
+        "dependency": { "status": "pass", "fixtures": ["type_matrix_user_type_dependencies"] },
+        "dump": { "status": "pass", "sources": ["scripts/pg18-dump-restore.sh", "fixtures/postgresql-18/pg-dump/type-families.sql"] },
+        "restart": { "status": "pass", "test": { "source": "crates/bicdb-sql/tests/type_durability.rs", "name": "enum_catalog_values_and_indexes_survive_reopen_and_backup_restore" } },
+        "protocol": { "status": "pass", "test": { "source": "crates/bicdb-pgwire/tests/protocol.rs", "name": "extended_query_enum_parameters_and_results_use_persisted_oids" } }
+      }
+    },
+    {
+      "id": "domain",
+      "label": "Domains",
+      "gates": {
+        "ddl": { "status": "pass", "fixtures": ["type_matrix_domains"] },
+        "dml": { "status": "pass", "fixtures": ["type_matrix_domains"] },
+        "catalog": { "status": "pass", "fixtures": ["type_matrix_domains", "type_matrix_user_pg_type_catalog"] },
+        "dependency": { "status": "pass", "fixtures": ["type_matrix_user_type_dependencies"] },
+        "dump": { "status": "pass", "sources": ["scripts/pg18-dump-restore.sh", "fixtures/postgresql-18/pg-dump/type-families.sql"] },
+        "restart": { "status": "pass", "test": { "source": "crates/bicdb-sql/tests/type_durability.rs", "name": "domain_catalog_constraints_arrays_and_indexes_survive_reopen_and_backup_restore" } },
+        "protocol": { "status": "pass", "test": { "source": "crates/bicdb-pgwire/tests/protocol.rs", "name": "extended_query_domain_parameters_and_results_use_base_binary_codec" } }
+      }
+    },
+    {
+      "id": "shell_registered_base",
+      "label": "Shell and registered base types",
+      "gates": {
+        "ddl": { "status": "pass", "fixtures": ["shell_base_types"] },
+        "dml": { "status": "pass", "fixtures": ["shell_base_types"] },
+        "catalog": { "status": "pass", "fixtures": ["type_matrix_user_pg_type_catalog"] },
+        "dependency": { "status": "pass", "fixtures": ["type_matrix_user_type_dependencies"] },
+        "dump": { "status": "pass", "sources": ["scripts/pg18-dump-restore.sh", "fixtures/postgresql-18/pg-dump/type-families.sql"] },
+        "restart": { "status": "pass", "test": { "source": "crates/bicdb-sql/tests/base_types.rs", "name": "shell_finalizes_to_durable_registered_base_type" } },
+        "protocol": { "status": "pass", "test": { "source": "crates/bicdb-pgwire/tests/protocol.rs", "name": "extended_query_registered_base_types_keep_custom_oids_and_binary_codecs" } }
+      }
+    },
+    {
+      "id": "range_multirange",
+      "label": "Ranges and multiranges",
+      "gates": {
+        "ddl": { "status": "pass", "fixtures": ["type_matrix_user_defined_ranges"] },
+        "dml": { "status": "pass", "fixtures": ["type_matrix_range_operations", "type_matrix_range_multirange_operators_aggregates"] },
+        "catalog": { "status": "pass", "fixtures": ["type_matrix_range_catalog", "type_matrix_user_pg_type_catalog"] },
+        "dependency": { "status": "pass", "fixtures": ["type_matrix_user_type_dependencies", "type_matrix_user_defined_ranges"] },
+        "dump": { "status": "pass", "sources": ["scripts/pg18-dump-restore.sh", "fixtures/postgresql-18/pg-dump/type-families.sql"] },
+        "restart": { "status": "pass", "test": { "source": "crates/bicdb-sql/tests/user_defined_ranges.rs", "name": "range_oids_catalogs_and_values_survive_reopen" } },
+        "protocol": { "status": "pass", "test": { "source": "crates/bicdb-pgwire/tests/protocol.rs", "name": "user_defined_ranges_use_persisted_oids_and_native_binary_frames" } }
+      }
+    }
+  ]
+}

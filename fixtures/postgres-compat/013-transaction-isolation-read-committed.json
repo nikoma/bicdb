@@ -1,0 +1,18 @@
+{
+  "id": "transaction_isolation_read_committed",
+  "description": "READ COMMITTED transaction isolation command forms",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_tx_isolation;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_tx_isolation (id TEXT PRIMARY KEY, name TEXT);",
+    "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;",
+    "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED READ WRITE;",
+    "INSERT INTO diff_tx_isolation (id, name) VALUES ('p1', 'Committed');",
+    "COMMIT;",
+    "BEGIN ISOLATION LEVEL READ COMMITTED;",
+    "SELECT name FROM diff_tx_isolation WHERE id = 'p1';",
+    "ROLLBACK;"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "type_matrix_catalog_vectors",
+  "description": "PostgreSQL 18 int2vector and oidvector validation, canonical text, nested arrays, storage, and catalog identity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_catalog_vectors;"
+  ],
+  "sql": [
+    "SELECT ''::int2vector, '1 2 -3'::int2vector, '1 2 -1'::oidvector, '-2'::oidvector;",
+    "CREATE TABLE type_matrix_catalog_vectors (id INTEGER PRIMARY KEY, small_ids INT2VECTOR, object_ids OIDVECTOR, small_history INT2VECTOR[], object_history OIDVECTOR[]);",
+    "INSERT INTO type_matrix_catalog_vectors VALUES (1, '1 2 -3', '1 2 -1', ARRAY['1 2'::int2vector, '-3 4'::int2vector], ARRAY['1 2'::oidvector, '-1'::oidvector]);",
+    "SELECT small_ids, object_ids, small_history, object_history FROM type_matrix_catalog_vectors WHERE id = 1;",
+    "SELECT oid, typarray, typelem FROM pg_type WHERE typname IN ('int2vector', 'oidvector') ORDER BY oid;"
+  ],
+  "expectation": "match"
+}

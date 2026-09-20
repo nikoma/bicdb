@@ -1,0 +1,28 @@
+{
+  "id": "type_matrix_pg_snapshot",
+  "description": "pg_snapshot and txid_snapshot canonical storage, visibility functions, set-returning xip access, catalogs, arrays, and protocol type inference",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_snapshot_values;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_snapshot_values (id int4 PRIMARY KEY, captured pg_snapshot NOT NULL, legacy txid_snapshot NOT NULL, history pg_snapshot[] NOT NULL);",
+    "INSERT INTO type_matrix_snapshot_values VALUES (1, '10:20:10,14,15', '10:20:10,14,15', ARRAY['10:20:10,14,15'::pg_snapshot, '20:20:'::pg_snapshot]);",
+    "SELECT id, captured::text, legacy::text, history::text, pg_typeof(captured), pg_typeof(legacy) FROM type_matrix_snapshot_values ORDER BY id;",
+    "SELECT '010:020:010,010,014,'::pg_snapshot::text, '010:020:010,010,014,'::txid_snapshot::text;",
+    "SELECT pg_snapshot_xmin('10:20:10,14,15'), pg_snapshot_xmax('10:20:10,14,15'), txid_snapshot_xmin('10:20:10,14,15'), txid_snapshot_xmax('10:20:10,14,15');",
+    "SELECT pg_visible_in_snapshot('9'::xid8, '10:20:10,14,15'), pg_visible_in_snapshot('10'::xid8, '10:20:10,14,15'), pg_visible_in_snapshot('11'::xid8, '10:20:10,14,15'), pg_visible_in_snapshot('20'::xid8, '10:20:10,14,15');",
+    "SELECT pg_snapshot_xip('10:20:10,14,15'::pg_snapshot), txid_snapshot_xip('10:20:10,14,15'::txid_snapshot);",
+    "SELECT pg_typeof(pg_current_snapshot()), pg_typeof(txid_current_snapshot());",
+    "SELECT pg_snapshot_xmin(NULL::pg_snapshot), pg_snapshot_xmax(NULL::pg_snapshot), pg_visible_in_snapshot(NULL::xid8, '10:20:'::pg_snapshot), pg_visible_in_snapshot('11'::xid8, NULL::pg_snapshot);",
+    "SELECT oid, typname, typlen, typbyval, typalign, typstorage, typarray FROM pg_type WHERE typname IN ('pg_snapshot', 'txid_snapshot') ORDER BY oid;",
+    "SELECT '10:20:'::pg_snapshot = '10:20:'::pg_snapshot;",
+    "SELECT captured FROM type_matrix_snapshot_values ORDER BY captured;",
+    "SELECT DISTINCT captured FROM type_matrix_snapshot_values;",
+    "SELECT captured, count(*) FROM type_matrix_snapshot_values GROUP BY captured;",
+    "CREATE INDEX type_matrix_snapshot_values_captured_idx ON type_matrix_snapshot_values(captured);",
+    "SELECT '0:1:'::pg_snapshot;",
+    "SELECT '20:10:'::pg_snapshot;",
+    "SELECT '10:20:14,11'::pg_snapshot;"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,24 @@
+{
+  "id": "type_matrix_cidr",
+  "description": "PostgreSQL 18 cidr abbreviated IPv4 input, IPv6 canonicalization, host-bit validation, arrays, and durable storage",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_cidr;"
+  ],
+  "sql": [
+    "SELECT '10'::cidr, '10/16'::cidr, '10.1'::cidr, '10.1/24'::cidr, '192.000.002/024'::cidr, '192.0.2.1'::cidr;",
+    "SELECT '2001:0DB8:0:0:0:0:0:0/32'::cidr, '::ffff:c000:200/120'::cidr, '::c000:200/120'::cidr;",
+    "CREATE TABLE type_matrix_cidr (id int4 PRIMARY KEY, ipv4 cidr NOT NULL, ipv6 cidr NOT NULL, networks cidr[] NOT NULL);",
+    "INSERT INTO type_matrix_cidr VALUES (1, '192.000.002/024', '2001:0DB8:0:0:0:0:0:0/32', '{10,192.000.002/024,::ffff:c000:200/120}'::cidr[]);",
+    "SELECT ipv4, ipv6, networks FROM type_matrix_cidr ORDER BY id;",
+    "SELECT ' 192.0.2.0/24'::cidr;",
+    "SELECT '192.0.2.0/24 '::cidr;",
+    "SELECT '192.0.2.1/24'::cidr;",
+    "SELECT '10.1/8'::cidr;",
+    "SELECT '192.0.2.0/33'::cidr;",
+    "SELECT '256.0.0.0/24'::cidr;",
+    "SELECT '2001:db8::1/64'::cidr;",
+    "SELECT '2001:db8::/064'::cidr;",
+    "SELECT 'fe80::%eth0/64'::cidr;"
+  ],
+  "expectation": "match"
+}

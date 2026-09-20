@@ -1,0 +1,25 @@
+{
+  "id": "type_matrix_uuid",
+  "description": "PostgreSQL 18 UUID accepted input forms, canonical output, assignment validation, defaults, updates, uniqueness, indexing, and invalid input",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_uuid;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_uuid (id UUID PRIMARY KEY, external_id UUID NOT NULL UNIQUE, optional_id UUID, defaulted_id UUID NOT NULL DEFAULT '{D0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A44}');",
+    "CREATE INDEX type_matrix_uuid_optional_idx ON type_matrix_uuid (optional_id);",
+    "INSERT INTO type_matrix_uuid (id, external_id) VALUES ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11', 'b0eebc999c0b4ef8bb6d6bb9bd380a22');",
+    "SELECT id, external_id, optional_id, defaulted_id FROM type_matrix_uuid;",
+    "SELECT '{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}'::uuid AS braced, 'a0eebc999c0b4ef8bb6d6bb9bd380a11'::uuid AS simple, 'c0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a33'::uuid AS grouped, 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'::uuid AS uppercase;",
+    "UPDATE type_matrix_uuid SET optional_id = 'c0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a33' WHERE id = '{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}'::uuid;",
+    "SELECT id, optional_id FROM type_matrix_uuid WHERE optional_id = '{c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33}'::uuid;",
+    "INSERT INTO type_matrix_uuid (id, external_id) VALUES ('e0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55', 'B0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A22');",
+    "SELECT 'not-a-uuid'::uuid;",
+    "SELECT ' a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11 '::uuid;",
+    "SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a1'::uuid;",
+    "SELECT 'g0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid;",
+    "SELECT 'a0ee--bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11'::uuid;",
+    "INSERT INTO type_matrix_uuid (id, external_id) VALUES ('bad', 'f0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66');",
+    "UPDATE type_matrix_uuid SET optional_id = 'bad';"
+  ],
+  "expectation": "match"
+}

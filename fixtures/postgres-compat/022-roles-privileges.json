@@ -1,0 +1,24 @@
+{
+  "id": "roles_privileges",
+  "description": "Basic role/user metadata, GRANT/REVOKE table/schema privileges, and privilege function introspection",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_roles_privileges;",
+    "REVOKE USAGE ON SCHEMA public FROM diff_analyst;",
+    "DROP ROLE IF EXISTS diff_app_user;",
+    "DROP ROLE IF EXISTS diff_analyst;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_roles_privileges (id TEXT PRIMARY KEY, label TEXT);",
+    "CREATE ROLE diff_analyst LOGIN CREATEDB;",
+    "CREATE USER diff_app_user PASSWORD 'secret';",
+    "GRANT USAGE ON SCHEMA public TO diff_analyst;",
+    "GRANT SELECT ON TABLE diff_roles_privileges TO diff_analyst;",
+    "SELECT rolname, rolcanlogin::text AS rolcanlogin, rolcreatedb::text AS rolcreatedb FROM pg_catalog.pg_roles WHERE rolname = 'diff_analyst';",
+    "SELECT usename FROM pg_catalog.pg_user WHERE usename = 'diff_app_user';",
+    "SELECT has_schema_privilege('diff_analyst', 'public', 'USAGE')::text AS schema_usage, has_table_privilege('diff_analyst', 'diff_roles_privileges', 'SELECT')::text AS table_select, has_table_privilege('diff_analyst', 'diff_roles_privileges', 'INSERT')::text AS table_insert;",
+    "SELECT grantee, table_name, privilege_type FROM information_schema.role_table_grants WHERE grantee = 'diff_analyst' AND table_name = 'diff_roles_privileges';",
+    "REVOKE SELECT ON TABLE diff_roles_privileges FROM diff_analyst;",
+    "SELECT has_table_privilege('diff_analyst', 'diff_roles_privileges', 'SELECT')::text AS table_select;"
+  ],
+  "expectation": "match"
+}

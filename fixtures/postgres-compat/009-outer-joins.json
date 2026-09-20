@@ -1,0 +1,19 @@
+{
+  "id": "outer_joins",
+  "description": "LEFT, RIGHT, and FULL OUTER JOIN NULL-extension parity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_join_appointments;",
+    "DROP TABLE IF EXISTS diff_join_patients;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_join_patients (id TEXT PRIMARY KEY, name TEXT);",
+    "CREATE TABLE diff_join_appointments (id TEXT PRIMARY KEY, patient_id TEXT, doctor TEXT);",
+    "INSERT INTO diff_join_patients (id, name) VALUES ('p1', 'John'), ('p2', 'Ada');",
+    "INSERT INTO diff_join_appointments (id, patient_id, doctor) VALUES ('a1', 'p1', 'Dr. Rao'), ('a2', 'p3', 'Dr. Kim');",
+    "SELECT diff_join_patients.id, diff_join_patients.name, diff_join_appointments.doctor FROM diff_join_patients LEFT JOIN diff_join_appointments ON diff_join_patients.id = diff_join_appointments.patient_id ORDER BY diff_join_patients.id;",
+    "SELECT diff_join_patients.name, diff_join_appointments.id, diff_join_appointments.doctor FROM diff_join_patients RIGHT JOIN diff_join_appointments ON diff_join_patients.id = diff_join_appointments.patient_id ORDER BY diff_join_appointments.id;",
+    "SELECT diff_join_patients.id, diff_join_appointments.id, diff_join_appointments.doctor FROM diff_join_patients FULL OUTER JOIN diff_join_appointments ON diff_join_patients.id = diff_join_appointments.patient_id WHERE diff_join_patients.id IS NULL OR diff_join_appointments.id IS NULL ORDER BY diff_join_patients.id, diff_join_appointments.id;",
+    "SELECT diff_join_patients.id FROM diff_join_patients LEFT JOIN diff_join_appointments ON diff_join_patients.id = diff_join_appointments.patient_id WHERE diff_join_appointments.id IS NULL;"
+  ],
+  "expectation": "match"
+}

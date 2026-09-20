@@ -1,0 +1,28 @@
+{
+  "id": "type_matrix_time",
+  "description": "PostgreSQL 18 time parsing, precision rounding, 24:00:00, arithmetic, COPY, indexing, and range validation",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_time;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_time (id TEXT PRIMARY KEY, raw_value TIME, rounded_value TIME(3) UNIQUE);",
+    "CREATE INDEX type_matrix_time_raw_idx ON type_matrix_time (raw_value);",
+    "INSERT INTO type_matrix_time VALUES ('flexible', '4:5:6.123456789', '12:34:56.5555'), ('compact', 'T235959.9999995', '040506.789'), ('meridiem', '4:05 PM', '00:00:00.0005'), ('zoned', '04:05:06 UTC', '23:59:59.999999');",
+    "SELECT id, raw_value, rounded_value FROM type_matrix_time ORDER BY raw_value, id;",
+    "SELECT '4:05 AM'::time AS am, '4:05 PM'::time AS pm, '12:00 AM'::time AS midnight, '12:00 PM'::time AS noon, '040506.789'::time AS compact, 'allballs'::time AS allballs, '04:05:06+02'::time AS ignored_zone;",
+    "SELECT '12:34:56.5'::time(0) AS p0, '12:34:56.55'::time(1) AS p1, '12:34:56.555'::time(2) AS p2, '12:34:56.5555'::time(3) AS p3, '23:59:59.999999'::time(3) AS carry;",
+    "SELECT '00:00:00.0000005'::time AS tie_even, '00:00:00.0000015'::time AS tie_odd, '12:34:56.123456789'::time AS rounded_microseconds;",
+    "SELECT '01:00:00'::time + interval '2 hours 3 minutes 4.5 seconds' AS plus_interval, '01:00:00'::time - interval '2 hours' AS minus_interval, interval '1.000001 seconds' + '12:00:00'::time AS reverse_plus, '04:05:06.5'::time - '01:02:03.25'::time AS time_difference;",
+    "SELECT '24:00:00'::time + interval '0 seconds' AS normalized_end, '24:00:00'::time - '00:00:00'::time AS day_difference;",
+    "SELECT id FROM type_matrix_time WHERE raw_value = '4:05 PM'::time;",
+    "INSERT INTO type_matrix_time (id, raw_value) VALUES ('copied', 'allballs');",
+    "SELECT raw_value FROM type_matrix_time WHERE id = 'copied';",
+    "SELECT '25:00:00'::time;",
+    "SELECT '24:00:00.1'::time;",
+    "SELECT '12:60:00'::time;",
+    "SELECT '04:05:06+99'::time;",
+    "SELECT '04:05:06 Bogus'::time;",
+    "SELECT 'nonsense'::time;"
+  ],
+  "expectation": "match"
+}

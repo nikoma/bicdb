@@ -1,0 +1,16 @@
+{
+  "id": "type_matrix_fixed_character",
+  "description": "PostgreSQL 18 fixed-character blank padding, comparison, ordering, and unique-key semantics",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_fixed_character;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_fixed_character (id TEXT PRIMARY KEY, code CHAR(4) UNIQUE);",
+    "INSERT INTO type_matrix_fixed_character (id, code) VALUES ('first', 'ab'), ('second', 'b');",
+    "SELECT id, code FROM type_matrix_fixed_character ORDER BY code;",
+    "SELECT id FROM type_matrix_fixed_character WHERE code = 'ab  '::CHAR(6) ORDER BY id;",
+    "SELECT 'a'::CHAR(3) = 'a  '::CHAR(5) AS equal_ignoring_blanks, 'a'::CHAR(3) < 'b  '::CHAR(5) AS ordered_ignoring_blanks;",
+    "INSERT INTO type_matrix_fixed_character (id, code) VALUES ('duplicate', 'ab  ');"
+  ],
+  "expectation": "match"
+}

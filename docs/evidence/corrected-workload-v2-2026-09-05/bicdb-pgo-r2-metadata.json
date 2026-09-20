@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "trial_id": "pgo-r2",
+  "lane": "tuned-durable",
+  "rep": 1,
+  "position": 1,
+  "warmup": false,
+  "started_at": "2026-09-05T13:44:06,742056346+00:00",
+  "source": {
+    "git_commit": "a3635cee9e3a5d62e8b59a9819169399fb95276e",
+    "git_dirty": false,
+    "state_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "status": [],
+    "binary": "/mnt/bicdb-v2-pgo-8e29e143-20260905",
+    "binary_sha256": "5814377a990c50330a51d4af4d53db822aa81b7e7deee0d97c752c743e477684",
+    "binary_git_commit": "8e29e143",
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18);binary: rustc;commit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea;commit-date: 2026-08-18;host: x86_64-unknown-linux-gnu;release: 1.98.0;LLVM version: 22.1.8;"
+  },
+  "seed": {
+    "path": "/dev/shm/bicdb-tpcc-seed",
+    "manifest_sha256": "bfc3fdda12724133aecf13b62bc097b2e740e755bf909ce7c7672bf5a8d83d19"
+  },
+  "host": {
+    "hostname": "benchmark-secondary.example.com",
+    "kernel": "Linux 6.17.0-1022-azure x86_64 GNU/Linux",
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "logical_cpus": 32,
+    "data_root": "/dev/shm",
+    "filesystem": "tmpfs  tmpfs  rw,nosuid,nodev,inode64"
+  },
+  "workload": {
+    "name": "hammerdb-tpcc",
+    "vu": 32,
+    "rampup_minutes": 1,
+    "require_business_completion": true,
+    "duration_minutes": 1,
+    "time_profile": false,
+    "terminal_assignment_capture": true,
+    "terminal_assignment_mode": "replay",
+    "terminal_assignment_sha256": "3eafccfdf53bea54b3c37061299e0764c500e03a63d3a96337b27622806fa6d5",
+    "variant": "corrected-v2",
+    "initial_sql_sha256": "72cd42b6575f544ef4ffba31e521f0f9ff4ceefa8d382154e1fbdae2a3cf7b6e",
+    "client_outcomes": true
+  },
+  "server": {
+    "port": 55436,
+    "args": [
+      "serve-pg",
+      "/dev/shm/bicdb-codex-bicdb-corrected-v2-20260905-pgo-r2",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "55436",
+      "--storage-sync",
+      "durable",
+      "--max-result-rows",
+      "1000000",
+      "--max-connections",
+      "64",
+      "--max-connections-per-ip",
+      "64",
+      "--max-active-queries",
+      "32",
+      "--max-active-reads",
+      "32",
+      "--max-active-writes",
+      "24"
+    ],
+    "common_env": [
+      "BICDB_MEM_GUARD_MB=4096",
+      "BICDB_MEM_TRACE=1",
+      "BICDB_MEM_TRACE_SECS=1",
+      "BICDB_PROC_MIX_TRACE=1",
+      "MIMALLOC_SHOW_STATS=1",
+      "BICDB_COMPACT_UPDATE_WAL=1",
+      "BICDB_ROW_LOCK_KEY_NOTIFY=1",
+      "BICDB_ROW_LOCK_KEY_WAIT_US=5000",
+      "BICDB_UPDATE_REPAIR=1",
+      "BICDB_ROW_LOCK_POLICY=wait-graph",
+      "BICDB_WAL_SINGLE_BUFFER=1",
+      "BICDB_ROW_LOCK_KEY_NOTIFY_ONE=0"
+    ],
+    "lane_env": [
+      "BICDB_INDEX_STORE=sharded",
+      "BICDB_INDEX_SHARDS=64",
+      "BICDB_ORCH_SHARDS=16",
+      "BICDB_RC_UPDATE_LOCK_ATTEMPTS=20000",
+      "BICDB_SYNC_OUTBOX=off",
+      "BICDB_PLPGSQL_INTO_NO_DATA=1",
+      "BICDB_AUTO_COMPACT_WAL_MB=4096"
+    ]
+  },
+  "container": {
+    "image": "tpcorg/hammerdb:postgres",
+    "image_id": "sha256:2f572150794859a5d2559d44646febfed33f0592dcccfda4c22bb5ed6542b827"
+  },
+  "profiling": {
+    "kind": "throughput",
+    "perf_stat": true,
+    "allocation_trace": false,
+    "excluded_from_throughput": false
+  },
+  "reopen": {
+    "graceful_check": false
+  }
+}

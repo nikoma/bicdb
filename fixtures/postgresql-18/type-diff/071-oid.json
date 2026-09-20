@@ -1,0 +1,25 @@
+{
+  "id": "type_matrix_oid",
+  "description": "Unsigned OID input, casts, ordering, catalogs, symbolic aliases, and failure contracts",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_oid;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_oid (id int4 PRIMARY KEY, value oid NOT NULL);",
+    "INSERT INTO type_matrix_oid VALUES (1, '0'), (2, '-1'), (3, '0x1a'), (4, '037777777777');",
+    "SELECT id, value, pg_typeof(value), value::text FROM type_matrix_oid ORDER BY type_matrix_oid.value, id;",
+    "SELECT (-1)::int2::oid, (-1)::int4::oid, 4294967295::int8::oid, 4294967295::oid::int4, 4294967295::oid::int8;",
+    "SELECT 4294967295::oid = (-1)::int4, 2147483648::oid = (-2147483648)::int4;",
+    "SELECT min(value), max(value) FROM type_matrix_oid;",
+    "SELECT 26::oid::regtype::text, 'pg_type'::regclass::oid, oid, pg_typeof(oid), oid::text FROM pg_type WHERE typname = 'oid';",
+    "SELECT '4294967296'::oid;",
+    "SELECT '-2147483649'::oid;",
+    "SELECT '08'::oid;",
+    "SELECT 'pg_type'::oid;",
+    "SELECT (-1)::int8::oid;",
+    "SELECT 1.0::numeric::oid;",
+    "SELECT 1::oid + 2::oid;",
+    "SELECT sum(value) FROM type_matrix_oid;"
+  ],
+  "expectation": "match"
+}

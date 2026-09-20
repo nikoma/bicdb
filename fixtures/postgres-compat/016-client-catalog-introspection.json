@@ -1,0 +1,22 @@
+{
+  "id": "client_catalog_introspection",
+  "description": "ORM and GUI-style pg_catalog introspection failures converted to regression queries",
+  "cleanup_sql": [
+    "DROP TYPE IF EXISTS diff_mood;",
+    "DROP DOMAIN IF EXISTS diff_positive_int;",
+    "DROP TABLE IF EXISTS diff_client_catalog;"
+  ],
+  "sql": [
+    "CREATE TABLE diff_client_catalog (id SERIAL PRIMARY KEY, label TEXT NOT NULL);",
+    "CREATE INDEX idx_diff_client_catalog_label ON diff_client_catalog(label);",
+    "SELECT a.attname, format_type(a.atttypid, a.atttypmod) FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON a.attrelid = c.oid WHERE c.relname = 'diff_client_catalog' AND a.attname = 'label';",
+    "SELECT pg_get_expr(d.adbin, d.adrelid) FROM pg_catalog.pg_attrdef d JOIN pg_catalog.pg_class c ON d.adrelid = c.oid WHERE c.relname = 'diff_client_catalog' AND d.adnum = 1;",
+    "SELECT c.relname, am.amname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_am am ON c.relam = am.oid WHERE c.relname = 'idx_diff_client_catalog_label';",
+    "SELECT c.relname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid WHERE c.relname = 'diff_client_catalog' AND pg_table_is_visible(c.oid) AND NOT pg_is_other_temp_schema(n.oid);",
+    "SELECT objoid, description FROM pg_catalog.pg_description WHERE objoid = 0;",
+    "SELECT inhrelid, inhparent FROM pg_catalog.pg_inherits;",
+    "SELECT enumtypid, enumlabel FROM pg_catalog.pg_enum;",
+    "SELECT spcname FROM pg_catalog.pg_tablespace WHERE spcname = 'pg_default';"
+  ],
+  "expectation": "match"
+}

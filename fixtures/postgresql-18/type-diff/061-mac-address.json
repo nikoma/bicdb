@@ -1,0 +1,24 @@
+{
+  "id": "type_matrix_mac_address",
+  "description": "PostgreSQL 18 macaddr/macaddr8 accepted notations, EUI-48 expansion, conversion validation, arrays, and durable storage",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_mac_address;"
+  ],
+  "sql": [
+    "SELECT '8:0:2b:1:2:3'::macaddr, '08002b:010203'::macaddr, '0800.2b01.0203'::macaddr, '08002b01023'::macaddr;",
+    "SELECT '08:00:2b:01:02:03'::macaddr8, '0800:2b01:0203'::macaddr8, '08.00.2b.01.02.03'::macaddr8, '08002b0102030405'::macaddr8;",
+    "SELECT '08:00:2b:01:02:03'::macaddr::macaddr8, '08:00:2b:ff:fe:01:02:03'::macaddr8::macaddr;",
+    "CREATE TABLE type_matrix_mac_address (id int4 PRIMARY KEY, address macaddr NOT NULL, extended macaddr8 NOT NULL, addresses macaddr[] NOT NULL, extended_addresses macaddr8[] NOT NULL);",
+    "INSERT INTO type_matrix_mac_address VALUES (1, '0800.2b01.0203', '08.00.2b.01.02.03', '{8:0:2b:1:2:3,08002b-010204}'::macaddr[], '{08002b010203,08-00-2b-01-02-03-04-05}'::macaddr8[]);",
+    "SELECT address, extended, addresses, extended_addresses FROM type_matrix_mac_address ORDER BY id;",
+    "SELECT '08:00-2b:01:02:03'::macaddr;",
+    "SELECT '08.00.2b.01.02.03'::macaddr;",
+    "SELECT '08:00:2b:01:02:03:04:05'::macaddr;",
+    "SELECT '8:0:2b:1:2:3'::macaddr8;",
+    "SELECT '08:00-2b:01:02:03'::macaddr8;",
+    "SELECT '08:00:2b:01:02:03:04'::macaddr8;",
+    "SELECT '100:00:2b:01:02:03'::macaddr;",
+    "SELECT '08:00:2b:11:22:01:02:03'::macaddr8::macaddr;"
+  ],
+  "expectation": "match"
+}

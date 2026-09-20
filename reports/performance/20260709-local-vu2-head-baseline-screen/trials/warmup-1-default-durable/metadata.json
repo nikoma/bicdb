@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "trial_id": "warmup-1-default-durable",
+  "lane": "default-durable",
+  "rep": -1,
+  "position": 1,
+  "warmup": true,
+  "started_at": "2026-07-09T13:49:06,443435054-07:00",
+  "source": {
+    "git_commit": "06aadd4f822145fca5481e3db609a2c1f27121f8",
+    "git_dirty": true,
+    "diff_sha256": "edfe79002e5fa776421257c0e9b3a6dbbcfdced86261e9b929c156db3370c2e1",
+    "binary": "/home/benchmark/bicdb/target/release/bicdb",
+    "binary_sha256": "154ad7dbd2593234bec3fdf37ad95785d138a299b941dc9788d8f778ca52a937",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25);binary: rustc;commit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96;commit-date: 2026-05-25;host: x86_64-unknown-linux-gnu;release: 1.96.0;LLVM version: 22.1.2;"
+  },
+  "seed": {
+    "path": "/dev/shm/bicdb-tpcc-seed",
+    "manifest_sha256": "aab37b9805f4bd6cc566d7879bc00b8c3f59e7496308cc03851996b19f69ec5d"
+  },
+  "host": {
+    "hostname": "development.example.com",
+    "kernel": "Linux 6.8.0-111-generic x86_64 GNU/Linux",
+    "cpu_model": "AMD Ryzen 9 7900X 12-Core Processor",
+    "logical_cpus": 24,
+    "data_root": "/dev/shm",
+    "filesystem": "tmpfs  tmpfs  rw,nosuid,nodev,inode64"
+  },
+  "workload": {
+    "name": "hammerdb-tpcc",
+    "vu": 2,
+    "rampup_minutes": 1,
+    "duration_minutes": 2,
+    "time_profile": true
+  },
+  "server": {
+    "port": 55433,
+    "args": [
+      "serve-pg",
+      "/dev/shm/bicdb-warmup-1-default-durable",
+      "--host",
+      "0.0.0.0",
+      "--port",
+      "55433",
+      "--allow-remote-no-auth",
+      "--wal-sync",
+      "durable",
+      "--max-result-rows",
+      "1000000"
+    ],
+    "common_env": [
+      "BICDB_MEM_GUARD_MB=8192",
+      "BICDB_MEM_TRACE=1",
+      "BICDB_MEM_TRACE_SECS=1",
+      "BICDB_PROC_MIX_TRACE=1",
+      "MIMALLOC_SHOW_STATS=1"
+    ],
+    "lane_env": []
+  },
+  "container": {
+    "image": "tpcorg/hammerdb:postgres",
+    "image_id": "sha256:1864056c02b3a3bf011a4405b22f8c2f0c45b060b47fff47f433e68d4cf1b58d"
+  },
+  "profiling": {
+    "allocation_trace": false
+  }
+}

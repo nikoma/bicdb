@@ -1,0 +1,37 @@
+{
+  "id": "type_matrix_enum_types",
+  "description": "PostgreSQL 18 enum creation, ordering, casts, arrays, indexes, catalogs, ALTER lifecycle, dependencies, and cascade",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_enum_rows CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_priority CASCADE;",
+    "DROP TYPE IF EXISTS type_matrix_task_priority CASCADE;"
+  ],
+  "sql": [
+    "CREATE TYPE type_matrix_priority AS ENUM ('medium', 'low', 'high');",
+    "CREATE TABLE type_matrix_enum_rows (id TEXT PRIMARY KEY, status type_matrix_priority NOT NULL DEFAULT 'medium', history type_matrix_priority[]);",
+    "CREATE INDEX type_matrix_enum_status_idx ON type_matrix_enum_rows (status);",
+    "INSERT INTO type_matrix_enum_rows (id, status, history) VALUES ('high', 'high', '{medium,high}'), ('medium', 'medium', '{medium}'), ('low', 'low', '[0:1]={low,NULL}'), ('defaulted', DEFAULT, '{}');",
+    "SELECT id, status, array_dims(history), history, pg_typeof(status), pg_typeof(history) FROM type_matrix_enum_rows ORDER BY id;",
+    "SELECT id FROM type_matrix_enum_rows ORDER BY status, id;",
+    "SELECT status, count(*) AS count FROM type_matrix_enum_rows GROUP BY status ORDER BY status;",
+    "SELECT t.typtype, t.typcategory, t.typinput, t.typoutput, t.typreceive, t.typsend, a.typcategory AS array_category, a.typelem = t.oid AS array_element_matches FROM pg_type t JOIN pg_type a ON a.oid = t.typarray WHERE t.typname = 'type_matrix_priority';",
+    "SELECT enumlabel, enumsortorder FROM pg_enum WHERE enumtypid = (SELECT oid FROM pg_type WHERE typname = 'type_matrix_priority') ORDER BY enumsortorder;",
+    "ALTER TYPE type_matrix_priority ADD VALUE 'urgent' BEFORE 'high';",
+    "ALTER TYPE type_matrix_priority ADD VALUE 'deferred' AFTER 'low';",
+    "ALTER TYPE type_matrix_priority ADD VALUE IF NOT EXISTS 'deferred';",
+    "ALTER TYPE type_matrix_priority RENAME VALUE 'low' TO 'normal';",
+    "INSERT INTO type_matrix_enum_rows VALUES ('urgent', 'urgent', '{normal,deferred,urgent}');",
+    "SELECT id, status, history FROM type_matrix_enum_rows ORDER BY status, id;",
+    "SELECT 'normal'::type_matrix_priority < 'urgent'::type_matrix_priority AS ordered, 'urgent'::type_matrix_priority > 'deferred'::type_matrix_priority AS after_ordered;",
+    "SELECT 'missing'::type_matrix_priority;",
+    "ALTER TYPE type_matrix_priority ADD VALUE 'other' BEFORE 'missing';",
+    "ALTER TYPE type_matrix_priority RENAME TO type_matrix_task_priority;",
+    "SELECT format_type(a.atttypid, a.atttypmod) FROM pg_attribute a WHERE a.attrelid = 'type_matrix_enum_rows'::regclass AND a.attname = 'status';",
+    "SELECT pg_typeof(status), status FROM type_matrix_enum_rows WHERE id = 'low';",
+    "DROP TYPE type_matrix_task_priority;",
+    "DROP TYPE type_matrix_task_priority CASCADE;",
+    "SELECT column_name FROM information_schema.columns WHERE table_name = 'type_matrix_enum_rows' ORDER BY ordinal_position;",
+    "SELECT count(*) AS count FROM pg_type WHERE typname IN ('type_matrix_priority', 'type_matrix_task_priority');"
+  ],
+  "expectation": "match"
+}

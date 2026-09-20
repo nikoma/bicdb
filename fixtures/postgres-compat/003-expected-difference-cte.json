@@ -1,0 +1,8 @@
+{
+  "id": "cte_select",
+  "description": "Non-recursive CTE SELECT parity",
+  "sql": [
+    "WITH one(value) AS (SELECT 1) SELECT value FROM one;"
+  ],
+  "expectation": "match"
+}

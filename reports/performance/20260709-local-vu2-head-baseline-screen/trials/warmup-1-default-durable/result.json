@@ -1,0 +1,203 @@
+{
+  "artifacts": {
+    "metadata": "metadata.json",
+    "raw": "raw"
+  },
+  "checkpoints": {
+    "attempted": 0,
+    "completed": 0,
+    "cycles": [],
+    "failed": 0
+  },
+  "cpu": {
+    "elapsed_ns": 224087408265,
+    "fs_available_min_bytes": 22369185792,
+    "major_faults": 0,
+    "mean_cores": 1.5504664125934573,
+    "mem_available_min_bytes": 12635156480,
+    "minor_faults": 141810,
+    "perf": {},
+    "read_bytes": 0,
+    "rss_end_bytes": 11981127680,
+    "rss_hwm_peak_bytes": 12007440384,
+    "rss_peak_bytes": 12007440384,
+    "sample_count": 220,
+    "system_ns": 12940000000,
+    "threads_peak": 34,
+    "user_ns": 334500000000,
+    "write_bytes": 208896
+  },
+  "duration_ns": 194237786293,
+  "latency_ns": {
+    "queue": {
+      "p50": 0,
+      "p95": 0,
+      "p99": 0
+    },
+    "transactions": {
+      "delivery": {
+        "calls": 24638,
+        "max_ns": 13806000,
+        "p50_ns": 3103000,
+        "p95_ns": 3735000,
+        "p99_ns": 4680000
+      },
+      "neword": {
+        "calls": 250944,
+        "max_ns": 11089000,
+        "p50_ns": 1255000,
+        "p95_ns": 1568000,
+        "p99_ns": 2007000
+      },
+      "ostat": {
+        "calls": 25266,
+        "max_ns": 4755000,
+        "p50_ns": 925000,
+        "p95_ns": 1312000,
+        "p99_ns": 1601000
+      },
+      "payment": {
+        "calls": 251278,
+        "max_ns": 3842000,
+        "p50_ns": 859000,
+        "p95_ns": 1230000,
+        "p99_ns": 1482000
+      },
+      "slev": {
+        "calls": 25410,
+        "max_ns": 11460000,
+        "p50_ns": 2670000,
+        "p95_ns": 3300000,
+        "p99_ns": 3990000
+      }
+    }
+  },
+  "memory": {
+    "allocated_bytes": null,
+    "allocation_count": null,
+    "profiled_separately": false,
+    "rss_end_bytes": 11981127680,
+    "rss_hwm_peak_bytes": 12007440384,
+    "rss_peak_bytes": 12007440384
+  },
+  "recovery": {
+    "initial_open_ns": 9385922948,
+    "post_run_open_ns": 57038610870
+  },
+  "run": {
+    "container": {
+      "image": "tpcorg/hammerdb:postgres",
+      "image_id": "sha256:1864056c02b3a3bf011a4405b22f8c2f0c45b060b47fff47f433e68d4cf1b58d"
+    },
+    "host": {
+      "cpu_model": "AMD Ryzen 9 7900X 12-Core Processor",
+      "data_root": "/dev/shm",
+      "filesystem": "tmpfs  tmpfs  rw,nosuid,nodev,inode64",
+      "hostname": "development.example.com",
+      "kernel": "Linux 6.8.0-111-generic x86_64 GNU/Linux",
+      "logical_cpus": 24
+    },
+    "lane": "default-durable",
+    "position": 1,
+    "profiling": {
+      "allocation_trace": false
+    },
+    "rep": -1,
+    "schema_version": 1,
+    "seed": {
+      "manifest_sha256": "aab37b9805f4bd6cc566d7879bc00b8c3f59e7496308cc03851996b19f69ec5d",
+      "path": "/dev/shm/bicdb-tpcc-seed"
+    },
+    "server": {
+      "args": [
+        "serve-pg",
+        "/dev/shm/bicdb-warmup-1-default-durable",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "55433",
+        "--allow-remote-no-auth",
+        "--wal-sync",
+        "durable",
+        "--max-result-rows",
+        "1000000"
+      ],
+      "common_env": [
+        "BICDB_MEM_GUARD_MB=8192",
+        "BICDB_MEM_TRACE=1",
+        "BICDB_MEM_TRACE_SECS=1",
+        "BICDB_PROC_MIX_TRACE=1",
+        "MIMALLOC_SHOW_STATS=1"
+      ],
+      "lane_env": [],
+      "port": 55433
+    },
+    "source": {
+      "binary": "/home/benchmark/bicdb/target/release/bicdb",
+      "binary_sha256": "154ad7dbd2593234bec3fdf37ad95785d138a299b941dc9788d8f778ca52a937",
+      "diff_sha256": "edfe79002e5fa776421257c0e9b3a6dbbcfdced86261e9b929c156db3370c2e1",
+      "git_commit": "06aadd4f822145fca5481e3db609a2c1f27121f8",
+      "git_dirty": true,
+      "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25);binary: rustc;commit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96;commit-date: 2026-05-25;host: x86_64-unknown-linux-gnu;release: 1.96.0;LLVM version: 22.1.2;"
+    },
+    "started_at": "2026-07-09T13:49:06,443435054-07:00",
+    "trial_id": "warmup-1-default-durable",
+    "warmup": true,
+    "workload": {
+      "duration_minutes": 2,
+      "name": "hammerdb-tpcc",
+      "rampup_minutes": 1,
+      "time_profile": true,
+      "vu": 2
+    }
+  },
+  "schema_version": 1,
+  "throughput": {
+    "district_sum_after": 605632,
+    "district_sum_before": 480160,
+    "district_sum_delta": 125472,
+    "district_sum_nopm": 41824.0,
+    "hammerdb": {
+      "all_complete": true,
+      "failed_vus": 0,
+      "reported_nopm": 41528,
+      "reported_tpm": 95381,
+      "successful_vus": 3
+    }
+  },
+  "validity": {
+    "reasons": [],
+    "valid": true,
+    "watermark_gap": 0
+  },
+  "wal": {
+    "commits_written": 263430,
+    "end_bytes": 2906100303,
+    "generated_bytes": 2906100303,
+    "max_batch_commits": 2,
+    "mean_bytes_per_write": 11338.00324990734,
+    "mean_commits_per_write": 1.0277588123988062,
+    "start_bytes": 0,
+    "sync_calls": 256315,
+    "write_calls": 256315
+  },
+  "work": {
+    "commit_seq_delta": 263430,
+    "failed_queries": 0,
+    "handled_failures": {
+      "deadlock_detected": 0,
+      "no_data_found": 0,
+      "other": 0,
+      "serialization_failure": 0
+    },
+    "procedures": {
+      "delivery": 12319,
+      "neword": 125472,
+      "ostat": 12633,
+      "payment": 125639,
+      "slev": 12705
+    },
+    "server_queries": 288783,
+    "writes_executed": 0
+  }
+}

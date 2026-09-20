@@ -1,0 +1,42 @@
+name: storage-phase0
+
+# Guards the Phase 0 groundwork for server-paged storage
+# (docs/server-paged-storage-todo.md).
+#
+# These checks are cheap and catch the specific ways Phase 0's guarantees rot:
+# a new direct reach into the resident shards that nobody classified, a storage
+# mode fence that stops fencing, memory accounting that quietly starts reporting
+# zero, or behavioural drift in the contract the second engine will be measured
+# against.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  storage-phase0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # Fails when a new direct access to CollectionState's shards appears
+      # without being classified into an operation group. That surface is the
+      # gate on Phase 2, so it must not grow unnoticed.
+      - name: Storage access inventory is current
+        run: ./scripts/storage-access-inventory.py --check
+
+      - name: Storage mode compatibility fence
+        run: cargo test -p bicdb-core --test storage_mode
+
+      - name: Resident memory accounting
+        run: cargo test -p bicdb-core --test residency
+
+      # The suite that a second storage engine must pass unchanged.
+      - name: Cross-mode behavioural conformance
+        run: cargo test -p bicdb-core --test storage_conformance

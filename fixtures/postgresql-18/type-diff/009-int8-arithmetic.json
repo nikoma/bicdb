@@ -1,0 +1,22 @@
+{
+  "id": "type_matrix_int8_arithmetic",
+  "description": "PostgreSQL 18 bigint overflow, integer arithmetic, promotion, and exact aggregate behavior",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_int8_arithmetic;"
+  ],
+  "sql": [
+    "SELECT (-9223372036854775808)::int8 AS int8_min, 9223372036854775807::int8 AS int8_max;",
+    "SELECT 9223372036854775807::int8 + 1::int8;",
+    "SELECT (-9223372036854775808)::int8 - 1::int8;",
+    "SELECT (-9223372036854775808)::int8 / (-1)::int8;",
+    "SELECT (-9223372036854775808)::int8 % (-1)::int8;",
+    "SELECT -((-9223372036854775808)::int8);",
+    "SELECT 1::int4 / 0::int4;",
+    "SELECT 7::int8 / (-3)::int8, 7::int8 % (-3)::int8;",
+    "CREATE TABLE type_matrix_int8_arithmetic (id INT4 PRIMARY KEY, small_value INT2, regular_value INT4, big_value INT8);",
+    "INSERT INTO type_matrix_int8_arithmetic VALUES (1, 1, 1, 9223372036854775807), (2, 2, 2, 9223372036854775807);",
+    "SELECT SUM(small_value), AVG(small_value), SUM(regular_value), AVG(regular_value), SUM(big_value), AVG(big_value) FROM type_matrix_int8_arithmetic;",
+    "SELECT AVG(value) FROM (VALUES (-1::int8), (0::int8)) AS values(value);"
+  ],
+  "expectation": "match"
+}

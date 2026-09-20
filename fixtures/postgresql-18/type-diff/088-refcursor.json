@@ -1,0 +1,17 @@
+{
+  "id": "type_matrix_refcursor",
+  "description": "PostgreSQL 18 refcursor scalar and array storage, casts, catalogs, text/binary transport, and unsupported comparison/index boundaries",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_refcursor;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_refcursor (id INTEGER PRIMARY KEY, cursor_name REFCURSOR, cursor_history REFCURSOR[]);",
+    "INSERT INTO type_matrix_refcursor VALUES (1, 'portal name', ARRAY['portal a', 'portal,b', '']::refcursor[]);",
+    "SELECT id, cursor_name, cursor_history, cursor_name::text, 'cast portal'::text::refcursor, pg_typeof(cursor_name)::text, pg_typeof(cursor_history)::text FROM type_matrix_refcursor;",
+    "SELECT oid, typname, typtype, typcategory, typlen, typbyval, typalign, typstorage, typarray, typinput::text, typoutput::text, typreceive::text, typsend::text FROM pg_type WHERE oid IN ('refcursor'::regtype, 'refcursor[]'::regtype) ORDER BY oid;",
+    "SELECT format_type('refcursor'::regtype, -1), format_type('refcursor[]'::regtype, -1);",
+    "SELECT 'portal name'::refcursor = 'portal name'::refcursor;",
+    "CREATE INDEX type_matrix_refcursor_name_idx ON type_matrix_refcursor (cursor_name);"
+  ],
+  "expectation": "match"
+}

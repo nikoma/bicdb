@@ -1,0 +1,22 @@
+{
+  "id": "type_matrix_pseudo_type_boundaries",
+  "description": "Pseudo-types are rejected in invalid function and procedure argument and return positions with PostgreSQL SQLSTATEs",
+  "cleanup_sql": [],
+  "sql": [
+    "CREATE FUNCTION type_matrix_bad_poly() RETURNS anyelement LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';",
+    "CREATE FUNCTION type_matrix_bad_internal() RETURNS internal LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';",
+    "CREATE FUNCTION type_matrix_bad_void_arg(value void) RETURNS int4 LANGUAGE sql AS 'SELECT 1';",
+    "CREATE FUNCTION type_matrix_bad_cstring_arg(value cstring) RETURNS int4 LANGUAGE plpgsql AS 'BEGIN RETURN 1; END';",
+    "CREATE FUNCTION type_matrix_bad_handler() RETURNS fdw_handler LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';",
+    "CREATE FUNCTION type_matrix_bad_sql_trigger() RETURNS trigger LANGUAGE sql AS 'SELECT NULL';",
+    "CREATE FUNCTION type_matrix_bad_trigger_arg(value int4) RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';",
+    "CREATE FUNCTION type_matrix_bad_event_arg(value int4) RETURNS event_trigger LANGUAGE plpgsql AS 'BEGIN RETURN; END';",
+    "CREATE PROCEDURE type_matrix_bad_proc(value cstring) LANGUAGE plpgsql AS 'BEGIN NULL; END';",
+    "CREATE FUNCTION type_matrix_bad_table_trigger() RETURNS TABLE(value trigger) LANGUAGE sql AS 'SELECT NULL';",
+    "CREATE FUNCTION type_matrix_bad_table_cstring() RETURNS TABLE(value cstring) LANGUAGE plpgsql AS 'BEGIN RETURN QUERY SELECT NULL; END';",
+    "CREATE FUNCTION type_matrix_bad_out_trigger(OUT value trigger) LANGUAGE sql AS 'SELECT NULL';",
+    "CREATE FUNCTION type_matrix_bad_out_cstring(OUT value cstring) LANGUAGE plpgsql AS 'BEGIN value := NULL; END';",
+    "CREATE FUNCTION type_matrix_bad_inout_trigger(INOUT value trigger) LANGUAGE plpgsql AS 'BEGIN RETURN; END';"
+  ],
+  "expectation": "match"
+}

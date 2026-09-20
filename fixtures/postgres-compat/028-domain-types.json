@@ -1,0 +1,25 @@
+{
+  "id": "domain_types",
+  "description": "Domain DDL, constraints, defaults, casts, and catalogs match PostgreSQL",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS diff_domain_rows;",
+    "DROP DOMAIN IF EXISTS diff_positive_int;"
+  ],
+  "sql": [
+    "CREATE DOMAIN diff_positive_int AS INT CHECK (VALUE > 0);",
+    "CREATE TABLE diff_domain_rows (id TEXT PRIMARY KEY, amount diff_positive_int);",
+    "INSERT INTO diff_domain_rows VALUES ('d1', 1);",
+    "SELECT id, amount FROM diff_domain_rows;"
+  ],
+  "expectation": "match",
+  "roadmap_items": [
+    "DT-0902",
+    "DT-0905",
+    "DT-0906"
+  ],
+  "roadmap_status": {
+    "DT-0902": "complete",
+    "DT-0905": "complete",
+    "DT-0906": "complete"
+  }
+}

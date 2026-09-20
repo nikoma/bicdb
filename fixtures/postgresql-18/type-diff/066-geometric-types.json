@@ -1,0 +1,27 @@
+{
+  "id": "type_matrix_geometric_types",
+  "description": "PostgreSQL 18 line, lseg, box, path, polygon, and circle input, canonical output, storage, and error parity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_geometric_types;"
+  ],
+  "sql": [
+    "SELECT '{1,2,3}'::line AS coefficients, '[(1,2),(3,4)]'::line AS bracket_points, '1,2,3,4'::line AS bare_points;",
+    "SELECT '[(1,2),(3,4)]'::lseg AS bracketed, '((1,2),(3,4))'::lseg AS parenthesized, '1,2,3,4'::lseg AS bare;",
+    "SELECT '(1,2),(3,4)'::box AS points, '((1,2),(3,4))'::box AS parenthesized, '1,2,3,4'::box AS bare;",
+    "SELECT '[(1,2),(3,4)]'::path AS open_path, '((1,2),(3,4))'::path AS closed_path, '1,2,3,4'::path AS bare_closed_path;",
+    "SELECT '((1,2),(3,4),(5,6))'::polygon AS wrapped, '1,2,3,4,5,6'::polygon AS bare;",
+    "SELECT '<(1,2),3>'::circle AS angled, '((1,2),3)'::circle AS parenthesized, '1,2,3'::circle AS bare;",
+    "SELECT '{NaN,Infinity,-0}'::line, '[(NaN,Infinity),(-Infinity,-0)]'::lseg, '(NaN,Infinity),(-Infinity,-0)'::box;",
+    "SELECT '[(NaN,Infinity),(-Infinity,-0)]'::path, '((NaN,Infinity),(-Infinity,-0),(0x1p2,3))'::polygon, '<(NaN,Infinity),Infinity>'::circle;",
+    "CREATE TABLE type_matrix_geometric_types (id int4 PRIMARY KEY, line_value line, segment_value lseg, box_value box, path_value path, polygon_value polygon, circle_value circle);",
+    "INSERT INTO type_matrix_geometric_types VALUES (1, '1,2,3,4', '1,2,3,4', '1,2,3,4', '1,2,3,4', '1,2,3,4,5,6', '1,2,Infinity');",
+    "SELECT * FROM type_matrix_geometric_types ORDER BY id;",
+    "SELECT '{0,0,0}'::line;",
+    "SELECT '[(1,2),(1,2)]'::line;",
+    "SELECT '[]'::path;",
+    "SELECT '()'::polygon;",
+    "SELECT '<(1,2),-1>'::circle;",
+    "SELECT '[(1e999,2),(3,4)]'::lseg;"
+  ],
+  "expectation": "match"
+}

@@ -1,0 +1,42 @@
+{
+  "id": "type_matrix_geometric_indexes",
+  "description": "PostgreSQL 18 planar geometric GiST, SP-GiST, BRIN, operator-class, predicate, KNN, and mutation parity",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS type_matrix_geometric_indexes;"
+  ],
+  "sql": [
+    "CREATE TABLE type_matrix_geometric_indexes (id int4 PRIMARY KEY, location point, region box, boundary polygon, radius circle, unsupported_line line);",
+    "INSERT INTO type_matrix_geometric_indexes VALUES (1, '(0,0)', '(0,0),(2,2)', '((0,0),(2,0),(2,2),(0,2))', '<(0,0),2>', '{1,-1,0}'), (2, '(2,2)', '(3,3),(5,5)', '((3,3),(5,3),(5,5),(3,5))', '<(5,5),1>', '{1,0,-2}'), (3, '(5,1)', '(-3,-1),(-1,1)', '((-3,-1),(-1,-1),(-1,1),(-3,1))', '<(-2,0),1>', '{0,1,-1}');",
+    "CREATE INDEX type_matrix_geometric_point_gist ON type_matrix_geometric_indexes USING gist (location);",
+    "CREATE INDEX type_matrix_geometric_point_kd ON type_matrix_geometric_indexes USING spgist (location kd_point_ops);",
+    "CREATE INDEX type_matrix_geometric_box_spgist ON type_matrix_geometric_indexes USING spgist (region);",
+    "CREATE INDEX type_matrix_geometric_box_brin ON type_matrix_geometric_indexes USING brin (region);",
+    "CREATE INDEX type_matrix_geometric_polygon_gist ON type_matrix_geometric_indexes USING gist (boundary);",
+    "CREATE INDEX type_matrix_geometric_circle_gist ON type_matrix_geometric_indexes USING gist (radius);",
+    "CREATE INDEX type_matrix_geometric_multi_gist ON type_matrix_geometric_indexes USING gist (location, region);",
+    "DROP INDEX type_matrix_geometric_multi_gist;",
+    "SELECT id FROM type_matrix_geometric_indexes WHERE location << point(3,0) ORDER BY id;",
+    "SELECT id FROM type_matrix_geometric_indexes WHERE point(3,0) >> location ORDER BY id;",
+    "SELECT id FROM type_matrix_geometric_indexes WHERE region && '(1,1),(4,4)'::box ORDER BY id;",
+    "SELECT id FROM type_matrix_geometric_indexes WHERE boundary @> '((1,1),(1.5,1),(1.5,1.5))'::polygon ORDER BY id;",
+    "SELECT id FROM type_matrix_geometric_indexes WHERE radius && '<(1,0),1>'::circle ORDER BY id;",
+    "SELECT id FROM type_matrix_geometric_indexes ORDER BY location <-> point(0,0) LIMIT 2;",
+    "UPDATE type_matrix_geometric_indexes SET location = point(1,1) WHERE id = 3;",
+    "SELECT id FROM type_matrix_geometric_indexes WHERE location << point(3,0) ORDER BY id;",
+    "INSERT INTO type_matrix_geometric_indexes (id, location) VALUES (4, NULL);",
+    "UPDATE type_matrix_geometric_indexes SET location = point(1,1) WHERE id = 4;",
+    "SELECT id FROM type_matrix_geometric_indexes WHERE location << point(3,0) ORDER BY id;",
+    "UPDATE type_matrix_geometric_indexes SET location = NULL WHERE id = 4;",
+    "DELETE FROM type_matrix_geometric_indexes WHERE id = 2;",
+    "SELECT id FROM type_matrix_geometric_indexes WHERE location << point(3,0) ORDER BY id;",
+    "DROP INDEX type_matrix_geometric_box_spgist;",
+    "SELECT id FROM type_matrix_geometric_indexes WHERE region @> point(1,1) ORDER BY id;",
+    "SELECT count(*) AS opclass_count FROM pg_opclass WHERE opcmethod IN (783, 3580, 4000) AND opcintype IN (600, 603, 604, 718);",
+    "SELECT indexname::text FROM pg_indexes WHERE tablename = 'type_matrix_geometric_indexes' AND indexname LIKE 'type_matrix_geometric_%' ORDER BY indexname;",
+    "CREATE INDEX type_matrix_invalid_point_btree ON type_matrix_geometric_indexes (location);",
+    "CREATE INDEX type_matrix_invalid_line_gist ON type_matrix_geometric_indexes USING gist (unsupported_line);",
+    "CREATE INDEX type_matrix_invalid_circle_spgist ON type_matrix_geometric_indexes USING spgist (radius);",
+    "CREATE INDEX type_matrix_invalid_box_opclass ON type_matrix_geometric_indexes USING gist (region point_ops);"
+  ],
+  "expectation": "match"
+}

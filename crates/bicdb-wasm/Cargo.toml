@@ -1,0 +1,24 @@
+[package]
+name = "bicdb-wasm"
+version = "1.0.438-beta"
+edition.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+
+# C-ABI reactor module for the browser worker (web/bicdb-client). Build with:
+#   cargo build --release -p bicdb-wasm --target wasm32-wasip1
+# The cdylib also compiles natively so `cargo check --workspace` covers it,
+# but the packed pointer/length return convention is only meaningful on
+# wasm32 (see src/lib.rs).
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta", default-features = false }
+bicdb-sql = { path = "../bicdb-sql", version = "1.0.438-beta", default-features = false }
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

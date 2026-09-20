@@ -1,0 +1,14 @@
+CREATE TABLE warehouse(w_id integer PRIMARY KEY,w_tax numeric(4,4));
+CREATE TABLE customer(c_w_id integer,c_d_id integer,c_id integer,c_discount numeric(4,4),c_last varchar(16),c_credit char(2),c_balance numeric(14,2) DEFAULT 0,c_delivery_cnt integer DEFAULT 0);
+CREATE TABLE district(d_w_id integer,d_id integer,d_next_o_id integer,d_tax numeric(4,4),PRIMARY KEY(d_w_id,d_id));
+CREATE TABLE item(i_id integer PRIMARY KEY,i_price numeric(5,2));
+CREATE TABLE orders(o_id integer,o_d_id integer,o_w_id integer,o_c_id integer,o_entry_d timestamp,o_ol_cnt integer,o_all_local integer,o_carrier_id integer,PRIMARY KEY(o_w_id,o_d_id,o_id));
+CREATE TABLE new_order(no_o_id integer,no_d_id integer,no_w_id integer,PRIMARY KEY(no_w_id,no_d_id,no_o_id));
+CREATE TABLE order_line(ol_o_id integer,ol_d_id integer,ol_w_id integer,ol_number integer,ol_i_id integer,ol_supply_w_id integer,ol_quantity integer,ol_amount numeric(6,2),ol_dist_info char(24),ol_delivery_d timestamp,PRIMARY KEY(ol_w_id,ol_d_id,ol_o_id,ol_number));
+CREATE TABLE stock(s_w_id integer,s_i_id integer,s_quantity integer,s_ytd integer DEFAULT 0,s_order_cnt integer DEFAULT 0,s_remote_cnt integer DEFAULT 0,s_dist_01 char(24), s_dist_02 char(24), s_dist_03 char(24), s_dist_04 char(24), s_dist_05 char(24), s_dist_06 char(24), s_dist_07 char(24), s_dist_08 char(24), s_dist_09 char(24), s_dist_10 char(24),PRIMARY KEY(s_w_id,s_i_id));
+INSERT INTO warehouse VALUES(1,0.1300);
+INSERT INTO customer(c_w_id,c_d_id,c_id,c_discount,c_last,c_credit) VALUES(1,1,1,0.2500,'fixture','GC');
+INSERT INTO district VALUES(1,1,3001,0.1700);
+INSERT INTO item VALUES(1,44.90),(2,44.90);
+INSERT INTO stock(s_w_id,s_i_id,s_quantity,s_dist_01) VALUES(1,1,50,'one'),(1,2,50,'two');
+CREATE OR REPLACE FUNCTION dbms_random(integer,integer) RETURNS double precision LANGUAGE sql AS $$SELECT 1.0$$;

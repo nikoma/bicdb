@@ -25,9 +25,11 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     version = tomllib.loads((root / 'crates/bicdb-cli/Cargo.toml').read_text())['package']['version']
-    assert re.fullmatch(r'[0-9a-f]{40}', args.revision), 'full source commit required'
+    if not re.fullmatch(r'[0-9a-f]{40}', args.revision):
+        parser.error('full source commit required')
     actual = subprocess.check_output([str(args.binary.resolve()), '--version'], text=True).strip()
-    assert actual == f'bicdb {version}', actual
+    if actual != f'bicdb {version}':
+        raise RuntimeError(f'binary version does not match source: {actual}')
     metadata = json.loads(args.metadata.read_text())
     packages = {p['id']: p for p in metadata['packages']}
     nodes = {n['id']: n for n in metadata['resolve']['nodes']}
@@ -75,7 +77,8 @@ def main():
             # including source for any weak-copyleft component. Check the lock hash.
             cache = source.parent.parent.parent / 'cache' / source.parent.name / f'{source.name}.crate'
             digest = hashlib.sha256(cache.read_bytes()).hexdigest()
-            assert digest == locked[(package['name'], package['version'])]['checksum'], pid
+            if digest != locked[(package['name'], package['version'])]['checksum']:
+                raise RuntimeError(f'registry source checksum mismatch: {pid}')
             shutil.copy2(cache, folder / cache.name)
             copied = []
             for file in source.rglob('*'):

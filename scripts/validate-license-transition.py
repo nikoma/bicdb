@@ -86,5 +86,6 @@ assert faq.count("| Separate commercial agreement required |") == 8
 for number in re.findall(r"Exception (\d+)", faq):
     assert number in {"1", "2", "3"}, number
 version = tomllib.loads((root / "crates/bicdb-core/Cargo.toml").read_text())["package"]["version"]
-assert f"Current release: {version}" in (root / "README.md").read_text()
+assert (f"[Download {version}]"
+        f"(https://github.com/nikoma/bicdb/releases/tag/v{version})") in (root / "README.md").read_text()
 print("active license: 17 community packages, 11 Apache exceptions, notices, 18 scenarios and links passed")

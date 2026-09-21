@@ -1,122 +1,112 @@
 # BicDB
 
-> **New operator or contributor?** Start with the
-> [BicDB Owner's Guide](docs/owners-guide.md), a book-length tour of the
-> architecture, storage engine, CLI, server protocols, Cells, clustering,
-> security, backup/recovery, and day-two operations.
+**Embed a database. Query it with PostgreSQL clients.**
 
-**One database—from an offline browser tab to a replicated server cluster.**
+BicDB is a Rust database with native search and durable local storage. Start
+with one local directory; use the same data through the PostgreSQL wire protocol.
 
-BicDB is a Rust database for builders who want fewer
-moving parts. Embed it like SQLite, connect with PostgreSQL or Redis clients,
-run it in a browser over OPFS, or operate it as a server. SQL, full-text and
-vector search, spatial and graph operations, analytics, durable streams, sync,
-and a sandboxed application runtime all share one transactional engine.
+[Download 1.0.438-beta](https://github.com/nikoma/bicdb/releases/tag/v1.0.438-beta)
+· [Compatibility](POSTGRES_COMPATIBILITY.md) · [Documentation](#documentation)
+· [License](#license)
 
-> **Current release: 1.0.438-beta.** BicDB powers
-> [Weowobo](https://weowobo.com), a web-search project indexing
-> **2.1 billion documents**, and a scientific corpus of **41 million PubMed
-> and other articles**. On a retained Common Crawl
-> benchmark, its packed full-text index is smaller than Tantivy's output and
-> builds the same single-segment artifact 2.4x faster. BicDB is still beta;
-> read [Current limitations](#current-limitations) before making it the only
-> copy of critical data.
+## Five-minute quickstart
 
-> **License: Apache 2.0 + three exceptions.** See the [BicDB License](LICENSE).
-> Commercial applications and application SaaS are permitted. Database-product
-> sales, general-purpose database hosting and console white-labeling require
-> separate commercial authorization. [Scope and details](#license)
+### 1. Download
 
-*BicDB officially means “Because I Can Database.”*
+For **Linux x86-64**, download the CLI and verify its checksum:
 
-## Why try BicDB?
+```sh
+curl -fLO https://github.com/nikoma/bicdb/releases/download/v1.0.438-beta/bicdb-1.0.438-beta-linux-x86_64.tar.gz
+curl -fLO https://github.com/nikoma/bicdb/releases/download/v1.0.438-beta/SHA256SUMS
+sha256sum -c SHA256SUMS
+tar -xzf bicdb-1.0.438-beta-linux-x86_64.tar.gz
+cd bicdb-1.0.438-beta-linux-x86_64
+./bicdb --version
+```
 
-BicDB is useful when your architecture has accumulated a database, search
-engine, cache, queue, vector store, sync service, and separate edge database—and
-you would rather operate one coherent system.
+See the [release notes](https://github.com/nikoma/bicdb/releases/tag/v1.0.438-beta)
+for Linux requirements. On other platforms, [build from source](#build-from-source);
+the initial compilation takes longer than this quickstart.
 
-- **One engine from browser to cluster.** Use the embedded Rust API, WASM +
-  OPFS, a standalone server, or the distributed range/replica machinery without
-  changing the data model.
-- **Search is part of the database.** Native BM25/BM25F full-text search,
-  phrases, weighted fields, Snowball stemming, filter pushdown, Block-Max WAND,
-  packed immutable index segments, bounded-memory parallel index builds —
-  optionally **progressive**, answering queries while the build runs — and
-  vector search eliminate a separate search service and its synchronization
-  lag.
-- **Use the clients you already have.** BicDB directly speaks the PostgreSQL
-  wire protocol and RESP2. Its public durable-stream API supports separate
-  AMQP 0-9-1, MQTT 3.1.1, Kafka, HTTP, and gRPC adapters without coupling those
-  integrations to the engine.
-- **Row-level security is a first-class boundary.** PostgreSQL-style RLS,
-  roles, grants, trusted tenant context, and fail-closed native collection
-  policies keep tenant isolation in the database instead of depending on every
-  application query to remember the right filter. RLS is one of BicDB's most
-  heavily used production features.
-- **Offline-first by construction.** No daemon or network is required. Durable
-  sync logs, browser OPFS support, encrypted storage, and explicit conflict
-  handling keep applications useful through unreliable connectivity.
-- **Durability is a product feature.** Checksummed storage, WAL recovery,
-  snapshot transactions, backup chains, point-in-time recovery, restore drills,
-  integrity tooling, replication, and HA are built in.
-- **More than rows.** SQL/JSON, vectors, full text, location intelligence
-  (H3 cells, vector tiles, isochrones, geofencing), incrementally maintained
-  OLAP cubes, graph projections, Arrow/DataFusion analytics, event streams,
-  queues, application packages, websites, and sandboxed WASM extensions share
-  one transactional substrate.
-- **Local-first replication.** BicDB Mesh synchronizes authorized peers over
-  whatever moves bytes — LAN discovery today; the cloud is just another peer —
-  with per-origin version vectors, transitive relay, ed25519-signed frames,
-  and surfaced, reviewable conflicts.
-- **Evidence over compatibility slogans.** PostgreSQL behavior is
-  differential-tested against PostgreSQL 18.4, real drivers run in the client
-  gauntlet, and crash/recovery boundaries are exercised directly.
+### 2. Store two rows and search them
 
-### The practical advantages
+Use a fresh `demo` directory:
 
-| Advantage | What it means for your project |
+```sh
+./bicdb sql ./demo "
+  CREATE TABLE notes (id BIGINT PRIMARY KEY, body TEXT NOT NULL);
+  INSERT INTO notes VALUES (1, 'Search works offline'), (2, 'Ship fewer services');
+  CREATE INDEX notes_search ON notes USING GIN (to_tsvector('english', body));
+"
+./bicdb sql ./demo --csv "
+  SELECT id, body FROM notes
+  WHERE to_tsvector('english', body) @@ plainto_tsquery('english', 'offline');
+"
+```
+
+Expected result:
+
+```csv
+id,body
+1,Search works offline
+```
+
+The second command opens the database in a new process. The rows and full-text
+index persist on disk; no separate search service is running.
+
+### 3. Query the same data with PostgreSQL tooling
+
+Start a local server:
+
+```sh
+./bicdb serve ./demo --host 127.0.0.1 --port 5433
+```
+
+In another terminal, with `psql` installed:
+
+```sh
+psql -h 127.0.0.1 -p 5433 -U bicdb -d bicdb -c 'SELECT * FROM notes ORDER BY id;'
+```
+
+Stop the server with Ctrl-C. This loopback demo has no authentication configured;
+follow [server setup](SERVER_MODE.md) before exposing a service remotely.
+
+BicDB is **beta**, with a tested subset of PostgreSQL behavior. Read
+[current limitations](#current-limitations) before choosing it for critical data.
+
+## What to explore next
+
+| Your next step | Start here |
 | --- | --- |
-| One transactional source of truth | Rows, search indexes, vectors, streams, graphs, and analytics do not drift across services. |
-| Start embedded, grow into a server | Prototype without infrastructure, then keep the same engine and data model as deployment grows. |
-| Familiar clients and SQL | Use `psql`, PostgreSQL drivers and ORMs, Redis clients, or the native Rust API instead of adopting a proprietary query language. |
-| Tenant isolation at the data boundary | PostgreSQL-style RLS and native collection policies enforce visibility and writes using trusted user, tenant, and role context—even when an application query forgets a tenant filter. |
-| Works offline and at the edge | Browser OPFS, local storage, encryption, sync logs, and explicit conflict handling keep applications useful without a reliable network. |
-| Search without an external pipeline | Full-text and vector indexes participate in the same backup, security, recovery, and transaction boundaries as source data. |
-| Operations are built in | WAL recovery, checksums, backup/PITR, integrity checks, replication, HA, metrics, and restore drills are part of the database. |
-| Open extension points | Public controller/provider APIs and capability-scoped WASM packages let you extend BicDB without forking its engine. |
-| Licensing | Source-available community terms permit commercial applications and reserve database-product/service uses. |
+| Embed in Rust | [Embedded example](#embedded-rust) |
+| Connect an application or ORM | [PostgreSQL compatibility](POSTGRES_COMPATIBILITY.md) |
+| Use Redis clients with durable keys | [Redis cache](docs/redis-cache.md) |
+| Run offline in a browser | [Browser client](web/bicdb-client/README.md) |
+| Add vectors, spatial data, or durable queues | [Capabilities](#capabilities) and [owner's guide](docs/owners-guide.md) |
+| Operate replication or a cluster | [Owner's guide](docs/owners-guide.md) |
 
-### Good first projects
+## Documentation
 
-- An offline-first desktop, mobile, field, or browser application.
-- A multi-tenant SaaS product that needs database-enforced row isolation.
-- A PostgreSQL-shaped service that also needs native search or vectors.
-- A local-AI application that must keep private data and embeddings nearby.
-- A durable cache, event stream, or queue that should survive restarts.
-- An edge deployment that may later need replication, HA, or centralized
-  operations.
+The [BicDB Owner's Guide](docs/owners-guide.md) covers architecture, operations,
+Cells, application hosting, and the boundaries between built-in protocols and
+separate messaging adapters. It is a reference for when you need those features.
 
-If you only need a tiny key-value store, BicDB may be more database than you
-need. If you need several of the capabilities above, the consolidation is the
-point.
+### Deployment and benchmark evidence
 
-## One engine, your protocols
+BicDB powers [Weowobo](https://weowobo.com), a web-search project indexing
+**2.1 billion documents**, and a scientific corpus of **41 million PubMed and
+other articles**. These are deployment descriptions, not capacity guarantees for
+your hardware. The retained [full-text findings](docs/fts-real-corpus-findings.md)
+describe the corpus, comparisons, and limits behind search performance claims.
+The [PostgreSQL compatibility report](POSTGRES_COMPATIBILITY.md) separates
+retained differential evidence from the current source version.
 
-| You have | Use | Documentation |
-| --- | --- | --- |
-| Rust | In-process `BicDb::open()` API | [Embedded quickstart](#embedded-rust) |
-| `psql`, an ORM, or a BI tool | PostgreSQL wire protocol with extended queries, SCRAM, and TLS | [Server mode](SERVER_MODE.md) |
-| Redis clients | RESP2 cache with durable keys and TTLs | [Redis cache](docs/redis-cache.md) |
-| RabbitMQ, MQTT, or Kafka clients | Optional protocol adapters over one durable event log | Build against the public broker API |
-| SQL producers and consumers | Consumer groups, DLQs, SQL broker functions, LISTEN/NOTIFY | [Stream broker](STREAM_BROKER.md) |
-| A browser | `@bicdb/client` in a Web Worker over OPFS | [Browser client](web/bicdb-client/README.md) |
-| A terminal | CLI and Ratatui TUI | [TUI](docs/tui.md) |
-| A signed application package | Capability-mediated ABI v2 application runtime and providers | [Author guide](docs/application-runtime-author-guide.md) |
-| A fail-closed single security cell | Capability-reduced `bicdb-cell` runtime with Cell-native apps, fleet lifecycle, cell-scoped HA/recovery, hardware-bound device replicas, recipient-encrypted object grants, and exact-build hardened-fleet evidence verification (Phase 8; regulated-data admission requires a complete threshold-signed bundle) | [Cell/admission operator contract](docs/cell-runtime-phase8.md) |
-| A custom fleet/controller | Public placement, host lifecycle, HA, sync, package, receipt, and verifier APIs | [Controller APIs](docs/public-controller-apis.md) |
-| A WASM extension | Sandboxed functions, routes, websites, and event handlers | [Extensions](docs/extensions.md) |
+**License: Apache 2.0 + three exceptions.** The combined [BicDB License](LICENSE)
+is source-available. Commercial applications and application SaaS are permitted;
+database-product sales, general-purpose database hosting, and console
+white-labeling require separate commercial authorization. See [scope](#license).
 
-## Quickstart
+## More ways to use BicDB
 
 ### Embedded Rust
 
@@ -418,6 +408,25 @@ checked-in evidence.
   runs are not complete.
 - Large transactional production certification still requires a fresh 100 GB
   evidence bundle.
+
+## Build from source
+
+Install the Rust toolchain from `rust-toolchain.toml` and native build
+prerequisites. On Ubuntu, these include `build-essential`, `pkg-config`,
+`libssl-dev`, `clang`, `libclang-dev`, and `cmake`. Then:
+
+```sh
+git clone https://github.com/nikoma/bicdb.git
+cd bicdb
+git checkout v1.0.438-beta
+cargo build --locked --release -p bicdb-cli
+./target/release/bicdb --version
+```
+
+Use `./target/release/bicdb` in place of `./bicdb` in the quickstart. A first
+release build is substantial and can take tens of minutes; the five-minute
+example starts after installation. Benchmark tooling is optional and is not
+included in the default CLI build.
 
 ## Development
 

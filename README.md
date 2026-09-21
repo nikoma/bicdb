@@ -93,7 +93,7 @@ separate messaging adapters. It is a reference for when you need those features.
 
 ### Deployment and benchmark evidence
 
-BicDB powers [Weowobo](https://weowobo.com), a web-search project indexing
+BicDB powers [Wewobo](https://wewobo.com) (Web Without Borders), a web-search project indexing
 **2.1 billion documents**, and a scientific corpus of **41 million PubMed and
 other articles**. These are deployment descriptions, not capacity guarantees for
 your hardware. The retained [full-text findings](docs/fts-real-corpus-findings.md)
@@ -231,7 +231,7 @@ ownership, and the sync server supports per-user working sets.
 ## Full-text search at web scale
 
 The project operates BicDB search in production for
-[Weowobo](https://weowobo.com) at **2.1 billion documents**, alongside a
+[Wewobo](https://wewobo.com) at **2.1 billion documents**, alongside a
 41-million-article scientific corpus, without Elasticsearch, OpenSearch, or an
 external synchronization pipeline. On a retained Common Crawl benchmark (123k
 documents, 0.97 GiB of text, frozen query set), the packed index measures

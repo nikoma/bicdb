@@ -1192,16 +1192,19 @@ mod tests {
             let snapshot = server.db.read().paged_storage_snapshot().unwrap().unwrap();
             if snapshot.buffer_pool.read_ahead_queue_depth == 0
                 && snapshot.buffer_pool.read_ahead_steps != 0
+                && snapshot.buffer_pool.read_ahead_pages_loaded > 0
             {
-                assert!(snapshot.buffer_pool.read_ahead_pages_loaded > 0);
+                // A candidate leaves the queue before its I/O completes. Wait
+                // for the loaded-page metric as well as the empty queue.
                 break;
             }
             assert!(Instant::now() < deadline, "read-ahead worker did not drain");
             thread::sleep(Duration::from_millis(1));
         }
-        assert_eq!(server.resource_governor.snapshot().background.active, 0);
         server.request_shutdown();
         worker.join().unwrap();
+        // Loading the page precedes releasing the governed batch permit.
+        assert_eq!(server.resource_governor.snapshot().background.active, 0);
     }
 
     #[test]

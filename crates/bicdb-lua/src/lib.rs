@@ -339,3 +339,42 @@ pub fn execute(
     };
     run().map_err(|err| ScriptError(err.to_string()))
 }
+
+/// JSON workflow runner. The same host method names are used by TypeScript/JS.
+/// This does not grant network or SQL access to RESP EVAL scripts: callers must
+/// supply an authorized workflow host and bound all blocking host operations.
+pub fn execute_workflow(
+    source: &str,
+    event: &serde_json::Value,
+    limits: &Limits,
+    mut host: impl FnMut(&str, serde_json::Value) -> Result<serde_json::Value, String>,
+) -> Result<serde_json::Value, ScriptError> {
+    let wrapper = format!(
+        "{}\nlocal function workflow()\n{source}\nend\nreturn cjson.encode(workflow())",
+        include_str!("workflow.lua")
+    );
+    let event = serde_json::to_vec(event).map_err(|e| ScriptError(e.to_string()))?;
+    if event.len() > limits.memory_bytes {
+        return Err(ScriptError("workflow event limit exceeded".into()));
+    }
+    let mut calls = 0;
+    let reply = execute(wrapper.as_bytes(), &[], &[event], limits, |args| {
+        calls += 1;
+        if calls > 1000 || args.len() != 3 || args[0] != b"__WORKFLOW" {
+            return Err("workflow host call rejected".into());
+        }
+        let method = std::str::from_utf8(&args[1]).map_err(|e| e.to_string())?;
+        let arguments = serde_json::from_slice(&args[2]).map_err(|e| e.to_string())?;
+        let result = serde_json::to_vec(&host(method, arguments)?).map_err(|e| e.to_string())?;
+        if result.len() > limits.memory_bytes {
+            return Err("workflow host response limit exceeded".into());
+        }
+        Ok(Reply::Bulk(result))
+    })?;
+    match reply {
+        Reply::Bulk(bytes) => {
+            serde_json::from_slice(&bytes).map_err(|e| ScriptError(e.to_string()))
+        }
+        _ => Err(ScriptError("invalid workflow result".into())),
+    }
+}

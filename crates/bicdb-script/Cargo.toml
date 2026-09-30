@@ -1,0 +1,20 @@
+[package]
+name = "bicdb-script"
+version = "1.0.438-beta"
+edition.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+description = "Bounded JavaScript execution and TypeScript compilation for BicDB workflows"
+
+[dependencies]
+oxc_allocator = "=0.152.0"
+oxc_codegen = "=0.152.0"
+oxc_parser = "=0.152.0"
+oxc_semantic = "=0.152.0"
+oxc_span = "=0.152.0"
+oxc_transformer = "=0.152.0"
+rquickjs = "0.14"
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true

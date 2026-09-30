@@ -8,9 +8,11 @@ executable evidence; protocol support does not imply all Redis functionality.
 - [x] Native database Lua API using ordinary transactions and access checks.
 - [x] Durable Redis hashes, sorted sets, streams, server time and script cache.
 - [x] Atomic Lua EVAL/EVALSHA with KEYS/ARGV, call/pcall and restart tests.
-- [ ] Run actual mail queue and send policy contract tests against BicDB.
-- [ ] Integrate BicDB durability checks and deployment into the mail platform.
-- [ ] Merge and push verified Lua/queue work in both repositories.
+- [x] Run actual mail queue and send policy contract tests against BicDB.
+- [x] Integrate BicDB durability checks and deployment into the mail platform.
+- [x] Merge and push verified Lua/queue work in both repositories (BicDB
+      `ac25db0`, mail `0c4f416`; six-service container/restart smoke passed).
+- [x] OXC TypeScript compiler, bounded QuickJS VM, and shared Lua/JS host methods.
 - [ ] Add TypeScript compilation to stored versioned JavaScript and a bounded
       JavaScript runtime sharing the Lua workflow host and authorization model.
 - [ ] Durable jobs triggered after booking commits; pinned active script version.

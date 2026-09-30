@@ -2,6 +2,7 @@
 members = [
   "crates/bicdb-core",
   "crates/bicdb-lua",
+  "crates/bicdb-script",
   "crates/bicdb-extension",
   "crates/bicdb-page",
   "crates/bicdb-sync",

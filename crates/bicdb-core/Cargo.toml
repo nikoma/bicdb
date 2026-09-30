@@ -39,7 +39,7 @@ petgraph.workspace = true
 rstar.workspace = true
 rustc-hash.workspace = true
 smallvec = "1"
-rust_decimal = { version = "1.42", features = ["serde"] }
+rust_decimal = { version = "1.43", features = ["serde"] }
 rustls = { workspace = true, optional = true }
 rustls-pemfile = { workspace = true, optional = true }
 serde.workspace = true

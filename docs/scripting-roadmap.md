@@ -22,8 +22,13 @@ executable evidence; protocol support does not imply all Redis functionality.
 - [x] EHR eligibility scenario: unique operation keys, fenced retry settlement,
       revision/stale-result protection, five-table atomic update and outbox.
 - [x] Activate revised workflow while running; verify old/new job version behavior.
-- [ ] Merge and push verified TypeScript/workflow work; resume mail enterprise
-      priorities in importance order through the full readiness backlog.
+- [x] Merge and push verified TypeScript/workflow work (`19b7f61`); seven EHR
+      tests, 149 runtime tests, broker fencing and TypeScript type checking passed.
+- [x] Harden runtime dependencies: Wasmtime 48.0.3, rustls 0.23.45, decimal
+      1.43.0, and ring RS256 verification; dependency audit has zero advisories.
+- [ ] Resume mail enterprise priorities in importance order through the full
+      readiness backlog. Functional scripting tests do not establish mail HA,
+      queue scale, an EHR deployment, or healthcare compliance.
 
 The EHR example is a requested acceptance scenario, not existing syntax. HTTP
 and secret access must not be added to transactional RESP queue scripts.

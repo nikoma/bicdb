@@ -98,13 +98,13 @@ regex = "1.12"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 redis = { version = "0.32.7", default-features = false, features = ["r2d2", "tls-rustls", "tls-rustls-webpki-roots"] }
 r2d2 = "0.8.10"
-rsa = { version = "0.9.8", features = ["sha2"] }
+ring = "0.17.14"
 rustc-hash = "2.1"
 rust-stemmers = "1.2"
 waken_snowball = "0.1"
 rstar = "0.12"
 ratatui = "0.30.2"
-rustls = "0.23"
+rustls = "0.23.45"
 rustls-pemfile = "2.2"
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = { version = "1.0", features = ["arbitrary_precision", "raw_value"] }

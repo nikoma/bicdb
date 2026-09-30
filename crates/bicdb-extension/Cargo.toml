@@ -19,7 +19,7 @@ semver.workspace = true
 thiserror.workspace = true
 sha2 = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
-wasmtime = { version = "46.0.1", optional = true }
+wasmtime = { version = "48.0.3", optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true

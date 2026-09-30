@@ -39,8 +39,8 @@ parking_lot.workspace = true
 phonenumber.workspace = true
 reqwest.workspace = true
 regex.workspace = true
-rsa.workspace = true
-rust_decimal = { version = "1.42", features = ["serde"] }
+ring.workspace = true
+rust_decimal = { version = "1.43", features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true
 semver.workspace = true
@@ -55,6 +55,5 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-rand_core = { version = "0.6", features = ["getrandom"] }
 tempfile.workspace = true
 wat = "1"

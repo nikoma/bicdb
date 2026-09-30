@@ -3,11 +3,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use bicdb_extension::abi_v2::{ActorContext, ApplicationAuthKindV1, ApplicationAuthSchemeV1};
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, VerifyingKey};
 use hmac::{Hmac, Mac};
-use rsa::pkcs1v15::{Signature as RsaSignature, VerifyingKey as RsaVerifyingKey};
-use rsa::traits::PublicKeyParts;
-use rsa::{BigUint, RsaPublicKey};
+use ring::signature::{RsaPublicKeyComponents, RSA_PKCS1_2048_8192_SHA256};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
@@ -96,7 +94,7 @@ enum JwtVerifier {
         require_key_id: bool,
     },
     OidcEd25519(BTreeMap<String, VerifyingKey>),
-    OidcRs256(BTreeMap<String, RsaVerifyingKey<Sha256>>),
+    OidcRs256(BTreeMap<String, RsaPublicKeyComponents<Vec<u8>>>),
 }
 
 impl JwtAuthenticator {
@@ -276,18 +274,37 @@ impl JwtAuthenticator {
                     "OIDC JWKS contains an unsupported or ambiguous signing key".to_string(),
                 ));
             }
-            let public_key = RsaPublicKey::new(
-                BigUint::from_bytes_be(&decode_url(&key.n)?),
-                BigUint::from_bytes_be(&decode_url(&key.e)?),
-            )
-            .map_err(|error| AppRuntimeError::Authentication(error.to_string()))?;
-            if public_key.n().bits() < 2_048 {
+            if key.n.len() > 1366 || key.e.len() > 7 {
                 return Err(AppRuntimeError::Authentication(
-                    "OIDC RSA public key must contain at least 2048 modulus bits".to_string(),
+                    "OIDC RSA key encoding exceeds supported bounds".into(),
+                ));
+            }
+            let n = decode_url(&key.n)?;
+            let e = decode_url(&key.e)?;
+            // JWK base64urlUInt is minimally encoded. Bound both integers
+            // before passing them to ring's RSA verification implementation.
+            let bits = n
+                .first()
+                .map_or(0, |first| n.len() * 8 - first.leading_zeros() as usize);
+            let exponent = e.iter().fold(0u64, |value, byte| {
+                value.wrapping_mul(256) + u64::from(*byte)
+            });
+            if !(2048..=8192).contains(&bits)
+                || n.first() == Some(&0)
+                || n.last().is_none_or(|last| last & 1 == 0)
+                || e.is_empty()
+                || e.len() > 5
+                || e.first() == Some(&0)
+                || exponent < 3
+                || exponent & 1 == 0
+                || exponent > (1u64 << 33) - 1
+            {
+                return Err(AppRuntimeError::Authentication(
+                    "OIDC RSA key requires a canonical 2048..8192-bit odd modulus and valid public exponent".to_string(),
                 ));
             }
             if keys
-                .insert(key.kid, RsaVerifyingKey::<Sha256>::new(public_key))
+                .insert(key.kid, RsaPublicKeyComponents { n, e })
                 .is_some()
             {
                 return Err(AppRuntimeError::Authentication(
@@ -571,12 +588,14 @@ impl JwtSchemeVerifier {
                         "OIDC JWT references an unknown key id".to_string(),
                     )
                 })?;
-                let signature = RsaSignature::try_from(signature.as_slice())
-                    .map_err(|error| AppRuntimeError::Authentication(error.to_string()))?;
-                key.verify(signing_input.as_bytes(), &signature)
-                    .map_err(|_| {
-                        AppRuntimeError::Authentication("JWT signature is invalid".to_string())
-                    })?;
+                key.verify(
+                    &RSA_PKCS1_2048_8192_SHA256,
+                    signing_input.as_bytes(),
+                    &signature,
+                )
+                .map_err(|_| {
+                    AppRuntimeError::Authentication("JWT signature is invalid".to_string())
+                })?;
             }
         }
         let claims: JwtClaims = serde_json::from_slice(&decode_url(payload)?)?;
@@ -657,10 +676,7 @@ fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use ed25519_dalek::{Signer, SigningKey};
-    use rand_core::OsRng;
-    use rsa::pkcs1v15::SigningKey as RsaSigningKey;
-    use rsa::signature::SignatureEncoding;
-    use rsa::RsaPrivateKey;
+    use ring::signature::RsaKeyPair;
     use serde_json::{json, Value};
 
     use super::*;
@@ -742,8 +758,9 @@ mod tests {
 
     #[test]
     fn oidc_rs256_jwks_verifies_and_rejects_algorithm_confusion() {
-        let private_key = RsaPrivateKey::new(&mut OsRng, 2_048).unwrap();
-        let public_key = private_key.to_public_key();
+        let private_key =
+            RsaKeyPair::from_pkcs8(include_bytes!("testdata/test-only-rs256.pk8.der")).unwrap();
+        let public_key: RsaPublicKeyComponents<Vec<u8>> = private_key.public().into();
         let jwks = serde_json::to_vec(&json!({
             "keys": [{
                 "kid": "current-rsa",
@@ -751,19 +768,25 @@ mod tests {
                 "alg": "RS256",
                 "use": "sig",
                 "n": base64::engine::general_purpose::URL_SAFE_NO_PAD
-                    .encode(public_key.n().to_bytes_be()),
+                    .encode(&public_key.n),
                 "e": base64::engine::general_purpose::URL_SAFE_NO_PAD
-                    .encode(public_key.e().to_bytes_be())
+                    .encode(&public_key.e)
             }]
         }))
         .unwrap();
         let authenticator = JwtAuthenticator::oidc_rs256(configuration(), &jwks).unwrap();
         let header = encoded(&json!({"alg":"RS256","typ":"JWT","kid":"current-rsa"}));
         let payload = encoded(&payload());
-        let signature = RsaSigningKey::<Sha256>::new(private_key)
-            .sign(format!("{header}.{payload}").as_bytes());
-        let signature =
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature.to_bytes());
+        let mut signature = vec![0u8; private_key.public().modulus_len()];
+        private_key
+            .sign(
+                &ring::signature::RSA_PKCS1_SHA256,
+                &ring::rand::SystemRandom::new(),
+                format!("{header}.{payload}").as_bytes(),
+                &mut signature,
+            )
+            .unwrap();
+        let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&signature);
         let token = format!("{header}.{payload}.{signature}");
         let actor = authenticator
             .authenticate(
@@ -787,6 +810,57 @@ mod tests {
                 now_ms() + 60_000,
             )
             .is_err());
+        let altered_payload =
+            encoded(&json!({"sub":"attacker","iss":"issuer","aud":"audience","exp":i64::MAX}));
+        assert!(authenticator
+            .authenticate(
+                &format!("{header}.{altered_payload}.{signature}"),
+                "tampered".into(),
+                None,
+                None,
+                now_ms() + 60_000
+            )
+            .is_err());
+        let unknown_header = encoded(&json!({"alg":"RS256","typ":"JWT","kid":"unknown-rsa"}));
+        assert!(authenticator
+            .authenticate(
+                &format!("{unknown_header}.{payload}.{signature}"),
+                "unknown-key".into(),
+                None,
+                None,
+                now_ms() + 60_000
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn oidc_rs256_rejects_weak_noncanonical_and_malformed_public_components() {
+        let private =
+            RsaKeyPair::from_pkcs8(include_bytes!("testdata/test-only-rs256.pk8.der")).unwrap();
+        let public: RsaPublicKeyComponents<Vec<u8>> = private.public().into();
+        let mut padded = vec![0];
+        padded.extend_from_slice(&public.n);
+        let mut even = public.n.clone();
+        *even.last_mut().unwrap() &= 0xfe;
+        let cases = [
+            (vec![0x81; 255], public.e.clone()),
+            (vec![0x81; 1025], public.e.clone()),
+            (padded, public.e.clone()),
+            (even, public.e.clone()),
+            (public.n.clone(), vec![2]),
+            (public.n.clone(), vec![0, 1, 0, 1]),
+            (public.n.clone(), vec![4, 0, 0, 0, 1]),
+            (vec![], public.e.clone()),
+        ];
+        for (n, e) in cases {
+            let document = serde_json::to_vec(
+                &json!({"keys":[{"kid":"rsa","kty":"RSA","alg":"RS256","use":"sig",
+                "n":base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(n),
+                "e":base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(e)}]}),
+            )
+            .unwrap();
+            assert!(JwtAuthenticator::oidc_rs256(configuration(), &document).is_err());
+        }
     }
 
     #[test]

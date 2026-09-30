@@ -10,7 +10,8 @@ rust-version.workspace = true
 # (browser/OPFS cache builds use --no-default-features). Turning a feature
 # off degrades that capability at runtime with a clear error; it never
 # changes behavior for builds that keep the defaults.
-default = ["embeddings", "tls-replication", "mmap", "osm-import", "compression"]
+default = ["embeddings", "tls-replication", "mmap", "osm-import", "compression", "lua"]
+lua = ["dep:bicdb-lua"]
 embeddings = ["dep:ort", "dep:tokenizers"]
 tls-replication = ["dep:rustls", "dep:rustls-pemfile"]
 mmap = ["dep:memmap2"]
@@ -18,6 +19,7 @@ osm-import = ["dep:osmpbfreader"]
 compression = ["dep:zstd"]
 
 [dependencies]
+bicdb-lua = { path = "../bicdb-lua", version = "1.0.438-beta", optional = true }
 bicdb-page = { path = "../bicdb-page", version = "1.0.438-beta" }
 argon2.workspace = true
 chacha20poly1305.workspace = true

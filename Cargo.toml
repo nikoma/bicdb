@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "crates/bicdb-core",
+  "crates/bicdb-lua",
   "crates/bicdb-extension",
   "crates/bicdb-page",
   "crates/bicdb-sync",

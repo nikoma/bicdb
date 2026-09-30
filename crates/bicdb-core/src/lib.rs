@@ -48,6 +48,10 @@ mod geometry;
 mod graph;
 mod hnsw;
 mod large_value;
+#[cfg(feature = "lua")]
+mod lua;
+#[cfg(feature = "lua")]
+pub use lua::{LuaLimits, LuaReply, LuaError};
 mod memory;
 mod memory_index;
 mod mutation;

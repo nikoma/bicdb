@@ -567,6 +567,188 @@ fn unsupported_commands_get_a_clear_error() {
 }
 
 #[test]
+fn lua_atomic_scripts_typed_commands_and_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = RespConfig {
+        fsync: true,
+        ..test_config()
+    };
+    let server = start_server(dir.path(), config.clone());
+    let mut client = Client::connect(&server);
+    assert_eq!(
+        client.cmd_str(&["HSET", "h", "a", "one", "b", "two"]),
+        Reply::Int(2)
+    );
+    assert_eq!(client.cmd_str(&["TYPE", "h"]), Reply::Simple("hash".into()));
+    assert!(matches!(client.cmd_str(&["GET", "h"]), Reply::Error(s) if s.starts_with("WRONGTYPE")));
+    assert_eq!(
+        client.cmd_str(&["HINCRBY", "counter", "n", "2"]),
+        Reply::Int(2)
+    );
+    assert_eq!(
+        client.cmd_str(&["ZADD", "z", "10", "a", "10", "b", "1", "c"]),
+        Reply::Int(3)
+    );
+    assert_eq!(
+        client.cmd_str(&["ZRANGE", "z", "0", "-1"]),
+        Reply::Array(vec![
+            Reply::Bulk(b"c".to_vec()),
+            Reply::Bulk(b"a".to_vec()),
+            Reply::Bulk(b"b".to_vec())
+        ])
+    );
+    assert_eq!(
+        client.cmd_str(&[
+            "ZRANGEBYSCORE",
+            "z",
+            "(1",
+            "+inf",
+            "WITHSCORES",
+            "LIMIT",
+            "1",
+            "1"
+        ]),
+        Reply::Array(vec![
+            Reply::Bulk(b"b".to_vec()),
+            Reply::Bulk(b"10".to_vec())
+        ])
+    );
+    let source = "local n=redis.call('HINCRBY',KEYS[1],'n',1); redis.call('ZADD',KEYS[2],n,ARGV[1]); redis.call('XADD',KEYS[3],'*','event',ARGV[1]); return {n,redis.call('TYPE',KEYS[1]).ok,cjson.decode(ARGV[2]).ok}";
+    let digest = client
+        .cmd_str(&["SCRIPT", "LOAD", source])
+        .bulk_str()
+        .to_owned();
+    assert_eq!(
+        client.cmd_str(&[
+            "EVALSHA",
+            &digest,
+            "3",
+            "counter",
+            "queue",
+            "events",
+            "job-1",
+            "{\"ok\":true}"
+        ]),
+        Reply::Array(vec![
+            Reply::Int(3),
+            Reply::Bulk(b"hash".to_vec()),
+            Reply::Int(1)
+        ])
+    );
+    assert_eq!(client.cmd_str(&["XLEN", "events"]), Reply::Int(1));
+    assert_eq!(
+        client
+            .cmd_str(&["XRANGE", "events", "-", "+"])
+            .array()
+            .len(),
+        1
+    );
+    assert!(matches!(
+        client.cmd_str(&[
+            "EVAL",
+            "redis.call('HSET','h','a','changed'); redis.call('SET','new','x'); error('abort')",
+            "0"
+        ]),
+        Reply::Error(_)
+    ));
+    assert_eq!(
+        client.cmd_str(&["HGET", "h", "a"]),
+        Reply::Bulk(b"one".to_vec())
+    );
+    assert_eq!(client.cmd_str(&["GET", "new"]), Reply::Nil);
+    assert!(matches!(
+        client.cmd_str(&[
+            "EVAL",
+            "redis.call('HSET','h','a','changed'); return redis.error_reply('abort')",
+            "0"
+        ]),
+        Reply::Error(_)
+    ));
+    assert_eq!(
+        client.cmd_str(&["HGET", "h", "a"]),
+        Reply::Bulk(b"one".to_vec())
+    );
+    assert_eq!(
+        client.cmd_str(&["EVAL", "return redis.pcall('GET','h').err ~= nil", "0"]),
+        Reply::Int(1)
+    );
+    assert_eq!(client.cmd_str(&["WAIT", "1", "1"]), Reply::Int(0));
+    let durability = client.cmd_str(&["BICDB.DURABILITY"]);
+    assert_eq!(durability.array()[1], Reply::Bulk(b"wal".to_vec()));
+    assert_eq!(durability.array()[3], Reply::Bulk(b"always".to_vec()));
+    drop(client);
+    server.shutdown();
+    let server = start_server(dir.path(), config);
+    let mut client = Client::connect(&server);
+    assert_eq!(
+        client.cmd_str(&["HGET", "h", "a"]),
+        Reply::Bulk(b"one".to_vec())
+    );
+    assert_eq!(
+        client.cmd_str(&["ZSCORE", "queue", "job-1"]),
+        Reply::Bulk(b"3".to_vec())
+    );
+    assert_eq!(client.cmd_str(&["XLEN", "events"]), Reply::Int(1));
+    assert!(
+        matches!(client.cmd_str(&["EVALSHA", &digest, "0"]), Reply::Error(s) if s.starts_with("NOSCRIPT"))
+    );
+    drop(client);
+    server.shutdown();
+}
+
+#[test]
+fn concurrent_lua_increments_are_atomic() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = start_server(dir.path(), test_config());
+    let addr = server.local_addr();
+    let workers = (0..4).map(|_| std::thread::spawn(move || {
+        let stream = TcpStream::connect(addr).unwrap();
+        let mut c = Client { writer: stream.try_clone().unwrap(), reader: BufReader::new(stream) };
+        for _ in 0..20 {
+            assert!(matches!(c.cmd_str(&["EVAL", "local n=tonumber(redis.call('GET',KEYS[1]) or '0'); redis.call('SET',KEYS[1],n+1); return n+1", "1", "n"]), Reply::Int(_)));
+        }
+    })).collect::<Vec<_>>();
+    for worker in workers {
+        worker.join().unwrap();
+    }
+    let mut c = Client::connect(&server);
+    assert_eq!(c.cmd_str(&["GET", "n"]), Reply::Bulk(b"80".to_vec()));
+    drop(c);
+    server.shutdown();
+}
+
+#[test]
+fn typed_keys_expiry_ephemeral_and_failed_capacity_are_atomic() {
+    for ephemeral in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let config = RespConfig {
+            max_keys: Some(1),
+            ephemeral,
+            ..test_config()
+        };
+        let server = start_server(dir.path(), config);
+        let mut c = Client::connect(&server);
+        assert_eq!(
+            c.cmd(&[b"HSET", &[0, 255], &[255, 0], b"value"]),
+            Reply::Int(1)
+        );
+        assert_eq!(
+            c.cmd(&[b"HGET", &[0, 255], &[255, 0]]),
+            Reply::Bulk(b"value".to_vec())
+        );
+        assert!(
+            matches!(c.cmd_str(&["EVAL", "redis.call('DEL',KEYS[1]); redis.call('HSET','new','x','y'); redis.call('ZADD','extra',1,'job'); return 1", "1", "missing"]), Reply::Error(s) if s.contains("OOM"))
+        );
+        assert_eq!(c.cmd_str(&["EXISTS", "new"]), Reply::Int(0));
+        assert_eq!(c.cmd(&[b"PEXPIRE", &[0, 255], b"1"]), Reply::Int(1));
+        std::thread::sleep(Duration::from_millis(5));
+        assert_eq!(c.cmd(&[b"TYPE", &[0, 255]]), Reply::Simple("none".into()));
+        drop(c);
+        server.shutdown();
+    }
+}
+
+#[test]
 fn max_keys_eviction_policies() {
     // noeviction: the 4th key is rejected.
     let dir = tempfile::tempdir().unwrap();

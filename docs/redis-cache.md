@@ -18,9 +18,8 @@ redis-cli -p 6379 GET session:42
 
 ## Scope
 
-v1 implements the **string + TTL command family** — what Rails.cache, the
-Django cache backend, session stores, rate limiters, and generic memoization
-actually use:
+The endpoint implements strings/TTLs and the transactional command families
+needed by durable queues. It does not implement every Redis command:
 
 | Area | Commands |
 |---|---|
@@ -30,11 +29,61 @@ actually use:
 | TTL | `EXPIRE` `PEXPIRE` `EXPIREAT` `PEXPIREAT` `TTL` `PTTL` `PERSIST` |
 | Databases | `SELECT` (0–15) `FLUSHDB` `FLUSHALL` |
 | Connection | `PING` `ECHO` `AUTH` `HELLO` `CLIENT` `COMMAND` `INFO` `QUIT` `RESET` |
+| Hashes | `HSET` `HSETNX` `HMSET` `HGET` `HMGET` `HGETALL` `HKEYS` `HVALS` `HLEN` `HEXISTS` `HDEL` `HINCRBY` |
+| Sorted sets | `ZADD` `ZREM` `ZSCORE` `ZCARD` `ZRANGE` `ZREVRANGE` `ZRANGEBYSCORE` `ZREVRANGEBYSCORE` `ZCOUNT` |
+| Streams | `XADD` `XRANGE` `XREVRANGE` `XLEN` `XDEL` `XTRIM` |
+| Scripting | `EVAL` `EVALSHA` `SCRIPT LOAD` `SCRIPT EXISTS` `SCRIPT FLUSH` `TIME` |
+| Durability | `BICDB.DURABILITY` `WAIT` |
 
-Not implemented (commands return a clear error): lists, hashes, sets, sorted
-sets, pub/sub, Lua scripting, `MULTI`/`EXEC` transactions, cluster protocol.
+Not implemented (commands return a clear error): lists, sets, pub/sub,
+`MULTI`/`EXEC` transactions, stream consumer groups and cluster protocol.
 RESP3 (`HELLO 3`) is refused with `NOPROTO` so clients fall back to RESP2
 automatically.
+
+Sorted-set scores must be finite; score-range bounds accept infinities and
+exclusive bounds. Stream trimming supports MAXLEN (approximate requests are
+trimmed exactly); MINID, blocking reads and consumer groups are unsupported.
+Strings and typed records share the same keyspace and TTLs. String reads and
+increments reject typed values with WRONGTYPE; SET replaces the type.
+
+### Lua and durability
+
+Lua 5.1 scripts receive KEYS and ARGV, `redis.call`, `redis.pcall`,
+`redis.status_reply`, `redis.error_reply`, and `cjson.encode`/`decode`/`null`.
+Scripts can use the hash, sorted-set, stream and time commands above, plus
+GET, SET, INCR/DECR/INCRBY/DECRBY, DEL/UNLINK/EXISTS, EXPIRE/PEXPIRE/
+EXPIREAT/PEXPIREAT, TTL/PTTL/PERSIST and TYPE. Other commands are refused
+inside scripts. AUTH and SELECT cannot change a script's execution context.
+
+Each script runs against a buffered write set while other commands and expiry
+are excluded. Successful writes commit in one engine transaction. **Unlike
+Redis, BicDB rolls back the script's writes on an uncaught error or an error
+reply.** A caught redis.pcall error lets the script continue. Queue callers
+must account for this deliberately stronger transaction boundary.
+
+The VM has fresh globals, no OS/file/network/module access, a 64 MiB Lua heap,
+5 million instruction budget, 2-second instruction-hook deadline, 1 MiB source
+limit, bounded reply depth/items/bytes and a 64 MiB/16,384-key write set.
+The hook deadline is cooperative and does not preempt a running native library
+call. Atomic commands reject excess key capacity rather than evict other keys
+partway through a transaction. The script cache is process-local, capped at
+1,024 scripts/16 MiB, and disappears on restart or SCRIPT FLUSH. Clients must
+handle NOSCRIPT by reloading their source.
+
+`BICDB.DURABILITY` returns the storage mode, fsync policy and eviction policy.
+Durable queues require `storage=wal`, `fsync=always`, and `eviction=noeviction`.
+BicDB does not pretend that its WAL is Redis AOF. This standalone RESP endpoint
+does not implement Redis replication: WAIT returns zero acknowledgments, and
+callers requiring replicas must fail closed. Local fsync durability is not HA.
+
+The native Rust database API exposes `BicDb::eval_lua` with the `lua` feature
+(enabled by default). It uses the same bounded VM and an ordinary engine
+transaction. `db.call('GET', collection, id)` returns a JSON Record;
+`PUT` takes a JSON Record; `EXISTS` and `DELETE` take collection and id.
+Collections must already exist. This is a trusted local API with existing
+collection access checks, not a SQL/RLS network entry point. External HTTP
+and tenant-scoped durable workflows are separate from RESP queue scripts;
+their implementation is tracked in [the scripting roadmap](scripting-roadmap.md).
 
 ## Semantics
 

@@ -23,6 +23,8 @@ use bicdb_core::{BicDb, BicDbError, DbConfig, Record};
 use parking_lot::{Mutex, RwLock};
 
 use crate::{RespServerError, Result};
+mod atomic;
+pub(crate) use atomic::{AtomicCache, TypedEntry};
 
 /// Identity every HotView statement runs as.
 ///
@@ -87,6 +89,7 @@ impl Default for CacheStoreConfig {
 struct MemEntry {
     value: Vec<u8>,
     expires_at_ms: Option<i64>,
+    kind: Option<String>,
 }
 
 fn mem_is_live(entry: &MemEntry, now: i64) -> bool {
@@ -109,6 +112,10 @@ pub enum TtlState {
 }
 
 pub struct CacheStore {
+    pub(crate) command_lock: Mutex<()>,
+    pub(crate) scripts: Mutex<std::collections::BTreeMap<String, Vec<u8>>>,
+    pub(crate) fsync: bool,
+    pub(crate) ephemeral: bool,
     db: RwLock<BicDb>,
     /// Ephemeral mode: one map per logical database, keyed by encoded key
     /// (same encoding as record ids, so the expiry heap is shared). `None`
@@ -148,7 +155,7 @@ fn encode_key(key: &[u8]) -> String {
 
 fn decode_key(id: &str) -> Vec<u8> {
     match id.as_bytes().first() {
-        Some(b's') => id[1..].as_bytes().to_vec(),
+        Some(b's') => id.as_bytes()[1..].to_vec(),
         Some(b'b') => BASE64.decode(&id[1..]).unwrap_or_default(),
         _ => id.as_bytes().to_vec(),
     }
@@ -168,6 +175,9 @@ fn absent_ok<T: Default>(result: bicdb_core::Result<T>) -> Result<T> {
 }
 
 impl CacheStore {
+    pub(crate) fn eviction_policy(&self) -> EvictionPolicy {
+        self.eviction
+    }
     pub fn open(path: impl AsRef<Path>, config: &CacheStoreConfig) -> Result<Self> {
         let db_config = DbConfig::default()
             .with_fsync(config.fsync)
@@ -179,6 +189,10 @@ impl CacheStore {
                 .collect()
         });
         let store = Self {
+            command_lock: Mutex::new(()),
+            scripts: Mutex::new(std::collections::BTreeMap::new()),
+            fsync: config.fsync,
+            ephemeral: config.ephemeral,
             db: RwLock::new(db),
             mem,
             expiry: Mutex::new(BinaryHeap::new()),
@@ -356,6 +370,7 @@ impl CacheStore {
                 MemEntry {
                     value,
                     expires_at_ms: deadline,
+                    kind: None,
                 },
             );
             if !existed {
@@ -553,6 +568,7 @@ impl CacheStore {
                 MemEntry {
                     value: new_bytes,
                     expires_at_ms: deadline,
+                    kind: None,
                 },
             );
             if !existed {
@@ -608,6 +624,7 @@ impl CacheStore {
                     MemEntry {
                         value: value.clone(),
                         expires_at_ms: None,
+                        kind: None,
                     },
                 );
                 if !existed {
@@ -662,6 +679,7 @@ impl CacheStore {
                 MemEntry {
                     value: suffix.to_vec(),
                     expires_at_ms: None,
+                    kind: None,
                 },
             );
             self.key_count.fetch_add(1, Ordering::Relaxed);
@@ -838,6 +856,7 @@ impl CacheStore {
     /// Drain due deadlines from the heap and delete records that are really
     /// expired (a newer write may have replaced the deadline — re-check).
     pub fn sweep_expired(&self) -> Result<usize> {
+        let _command = self.command_lock.lock();
         let now = now_ms();
         let mut due: Vec<(u8, String)> = Vec::new();
         {

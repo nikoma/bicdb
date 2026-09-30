@@ -1,16 +1,14 @@
 //! bicdb-resp: a Redis-compatible (RESP2) cache server backed by the bicdb
 //! engine.
 //!
-//! Scope: the string/TTL command family internal apps use for caching
-//! (Rails.cache, Django cache, session stores, memoization) — GET/SET and
-//! variants, counters, TTL management, key iteration, multiple logical
-//! databases, optional AUTH, and optional bounded-size eviction. Values are
-//! ordinary bicdb records, so the cache is durable across restarts (WAL),
-//! TTLs included. Lists, hashes, sets, and pub/sub are not implemented; those
-//! commands return an error.
+//! Strings/TTL, hashes, sorted sets, streams and bounded Lua 5.1 scripts use
+//! ordinary records and transactional WAL commits. This is a scoped Redis
+//! compatibility surface; lists, sets, pub/sub and cluster are unsupported.
 
+mod commands;
 mod hotview;
 mod resp;
+mod scripts;
 mod store;
 
 use std::io::{BufRead, BufReader, Write as IoWrite};
@@ -266,7 +264,7 @@ fn handle_connection(
         // longer window for the rest of the command.
         reader.get_ref().set_read_timeout(Some(IDLE_POLL_TIMEOUT))?;
         match reader.fill_buf() {
-            Ok(buf) if buf.is_empty() => return Ok(()),
+            Ok([]) => return Ok(()),
             Ok(_) => {}
             Err(err)
                 if matches!(
@@ -319,6 +317,7 @@ fn dispatch(
     args: &[Vec<u8>],
     out: &mut Vec<u8>,
 ) -> Action {
+    let _command = store.command_lock.lock();
     match dispatch_inner(store, hotviews, state, args, out) {
         Ok(action) => action,
         Err(err) => {
@@ -340,6 +339,106 @@ fn dispatch_inner(
 
     if !state.authed && !matches!(command.as_str(), "AUTH" | "HELLO" | "QUIT" | "RESET") {
         resp::write_error(out, "NOAUTH Authentication required.");
+        return Ok(Action::Continue);
+    }
+
+    if commands::supported(&command) {
+        let reply = store.atomic(state.db_index, |db| {
+            commands::execute(
+                db,
+                &std::iter::once(command.as_bytes().to_vec())
+                    .chain(args.iter().cloned())
+                    .collect::<Vec<_>>(),
+            )
+        })?;
+        scripts::write_reply(out, reply);
+        return Ok(Action::Continue);
+    }
+    if matches!(command.as_str(), "EVAL" | "EVALSHA" | "SCRIPT") {
+        let reply = scripts::dispatch(
+            store,
+            state.db_index,
+            &std::iter::once(command.as_bytes().to_vec())
+                .chain(args.iter().cloned())
+                .collect::<Vec<_>>(),
+        )?;
+        scripts::write_reply(out, reply);
+        return Ok(Action::Continue);
+    }
+    // Legacy string commands must not expose or modify the typed CBOR payload.
+    if matches!(
+        command.as_str(),
+        "GET"
+            | "GETDEL"
+            | "GETEX"
+            | "GETSET"
+            | "STRLEN"
+            | "APPEND"
+            | "INCR"
+            | "DECR"
+            | "INCRBY"
+            | "DECRBY"
+            | "INCRBYFLOAT"
+    ) && !args.is_empty()
+    {
+        store.atomic(state.db_index, |db| {
+            commands::execute(db, &[b"GET".to_vec(), args[0].clone()])
+        })?;
+    }
+    if command == "MGET" {
+        if args.is_empty() {
+            return Err(arity_error(&command));
+        }
+        let reply = store.atomic(state.db_index, |db| {
+            let mut values = Vec::new();
+            for key in args {
+                let entry = db.get(key)?;
+                values.push(
+                    entry
+                        .filter(|e| e.kind.is_none())
+                        .map_or(bicdb_lua::Reply::Nil, |e| bicdb_lua::Reply::Bulk(e.value)),
+                );
+            }
+            Ok(bicdb_lua::Reply::Array(values))
+        })?;
+        scripts::write_reply(out, reply);
+        return Ok(Action::Continue);
+    }
+    if command == "SET"
+        && args.len() >= 2
+        && args[2..].iter().any(|a| a.eq_ignore_ascii_case(b"GET"))
+    {
+        store.atomic(state.db_index, |db| {
+            commands::execute(db, &[b"GET".to_vec(), args[0].clone()])
+        })?;
+    }
+    if command == "BICDB.DURABILITY" {
+        if !args.is_empty() {
+            return Err(arity_error(&command));
+        }
+        resp::write_array_header(out, 6);
+        for s in [
+            "storage",
+            if store.ephemeral { "memory" } else { "wal" },
+            "fsync",
+            if store.fsync { "always" } else { "disabled" },
+            "eviction",
+            match store.eviction_policy() {
+                EvictionPolicy::NoEviction => "noeviction",
+                EvictionPolicy::AllKeysRandom => "allkeys-random",
+                EvictionPolicy::VolatileTtl => "volatile-ttl",
+            },
+        ] {
+            resp::write_bulk(out, s.as_bytes());
+        }
+        return Ok(Action::Continue);
+    }
+    if command == "WAIT" {
+        if args.len() != 2 || parse_int_arg(&args[0])? < 0 || parse_int_arg(&args[1])? < 0 {
+            return Err(arity_error(&command));
+        }
+        // This local endpoint has no Redis replication acknowledgments.
+        resp::write_int(out, 0);
         return Ok(Action::Continue);
     }
 
@@ -457,7 +556,7 @@ fn dispatch_inner(
             }
         }
         "MSET" => {
-            if args.is_empty() || args.len() % 2 != 0 {
+            if args.is_empty() || !args.len().is_multiple_of(2) {
                 Err(arity_error(&command))
             } else {
                 for pair in args.chunks(2) {
@@ -468,7 +567,7 @@ fn dispatch_inner(
             }
         }
         "MSETNX" => {
-            if args.is_empty() || args.len() % 2 != 0 {
+            if args.is_empty() || !args.len().is_multiple_of(2) {
                 Err(arity_error(&command))
             } else {
                 let pairs: Vec<(&[u8], Vec<u8>)> = args
@@ -658,12 +757,10 @@ fn dispatch_inner(
             resp::write_int(out, generation as i64);
             Ok(())
         }),
-        "HGET" | "HSET" | "HDEL" | "HGETALL" | "HMGET" | "HMSET" | "LPUSH" | "RPUSH" | "LPOP"
-        | "RPOP" | "LRANGE" | "SADD" | "SREM" | "SMEMBERS" | "ZADD" | "ZRANGE" | "SUBSCRIBE"
-        | "PSUBSCRIBE" | "PUBLISH" | "EVAL" | "EVALSHA" | "MULTI" | "EXEC" | "WATCH" => {
+        "LPUSH" | "RPUSH" | "LPOP" | "RPOP" | "LRANGE" | "SADD" | "SREM" | "SMEMBERS" | "SUBSCRIBE"
+        | "PSUBSCRIBE" | "PUBLISH" | "MULTI" | "EXEC" | "WATCH" => {
             Err(RespServerError::Command(format!(
-                "unsupported command '{}': bicdb-resp implements the string/TTL cache family; \
-                 lists, hashes, sets, pub/sub, scripting, and transactions are not available",
+                "unsupported command '{}': lists, sets, pub/sub and MULTI transactions are not available",
                 command.to_ascii_lowercase()
             )))
         }
@@ -682,6 +779,8 @@ fn write_command_error(out: &mut Vec<u8>, err: &RespServerError) {
                 || message.starts_with("NOAUTH")
                 || message.starts_with("NOPROTO")
                 || message.starts_with("WRONGPASS")
+                || message.starts_with("WRONGTYPE")
+                || message.starts_with("NOSCRIPT")
             {
                 message.clone()
             } else {
@@ -886,7 +985,7 @@ fn cmd_set(store: &CacheStore, db_index: u8, args: &[Vec<u8>], out: &mut Vec<u8>
             b"KEEPTTL" => deadline = Some(KEEP_TTL_SENTINEL),
             b"EX" | b"PX" | b"EXAT" | b"PXAT" => {
                 index += 1;
-                let amount = parse_int_arg(args.get(index).ok_or_else(|| syntax_error())?)?;
+                let amount = parse_int_arg(args.get(index).ok_or_else(syntax_error)?)?;
                 if matches!(option.as_slice(), b"EX" | b"PX") && amount <= 0 {
                     return Err(RespServerError::Command(
                         "invalid expire time in 'set' command".into(),
@@ -928,7 +1027,7 @@ fn cmd_getex(store: &CacheStore, db_index: u8, args: &[Vec<u8>], out: &mut Vec<u
             b"PERSIST" => ttl_change = Some(None),
             b"EX" | b"PX" | b"EXAT" | b"PXAT" => {
                 index += 1;
-                let amount = parse_int_arg(args.get(index).ok_or_else(|| syntax_error())?)?;
+                let amount = parse_int_arg(args.get(index).ok_or_else(syntax_error)?)?;
                 let deadline = match option.as_slice() {
                     b"EX" => now_ms().saturating_add(amount.saturating_mul(1000)),
                     b"PX" => now_ms().saturating_add(amount),
@@ -964,11 +1063,11 @@ fn cmd_scan(store: &CacheStore, db_index: u8, args: &[Vec<u8>], out: &mut Vec<u8
         match option.as_slice() {
             b"MATCH" => {
                 index += 1;
-                pattern = Some(args.get(index).ok_or_else(|| syntax_error())?.clone());
+                pattern = Some(args.get(index).ok_or_else(syntax_error)?.clone());
             }
             b"COUNT" => {
                 index += 1;
-                let value = parse_int_arg(args.get(index).ok_or_else(|| syntax_error())?)?;
+                let value = parse_int_arg(args.get(index).ok_or_else(syntax_error)?)?;
                 if value <= 0 {
                     return Err(syntax_error());
                 }
@@ -976,7 +1075,7 @@ fn cmd_scan(store: &CacheStore, db_index: u8, args: &[Vec<u8>], out: &mut Vec<u8
             }
             b"TYPE" => {
                 index += 1;
-                let kind = args.get(index).ok_or_else(|| syntax_error())?;
+                let kind = args.get(index).ok_or_else(syntax_error)?;
                 if !kind.eq_ignore_ascii_case(b"string") {
                     // Only strings exist; scanning another type yields nothing.
                     resp::write_array_header(out, 2);

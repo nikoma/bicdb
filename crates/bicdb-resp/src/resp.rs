@@ -68,7 +68,7 @@ fn read_inline_command<R: BufRead>(reader: &mut R) -> io::Result<Option<Vec<Vec<
 fn peek_byte<R: BufRead>(reader: &mut R) -> io::Result<Option<u8>> {
     loop {
         match reader.fill_buf() {
-            Ok(buf) if buf.is_empty() => return Ok(None),
+            Ok([]) => return Ok(None),
             Ok(buf) => return Ok(Some(buf[0])),
             Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
             Err(err) => return Err(err),
@@ -120,13 +120,19 @@ fn protocol_error(message: &str) -> io::Error {
 
 pub fn write_simple(out: &mut Vec<u8>, text: &str) {
     out.push(b'+');
-    out.extend_from_slice(text.as_bytes());
+    out.extend(
+        text.bytes()
+            .map(|b| if b == b'\r' || b == b'\n' { b' ' } else { b }),
+    );
     out.extend_from_slice(b"\r\n");
 }
 
 pub fn write_error(out: &mut Vec<u8>, text: &str) {
     out.push(b'-');
-    out.extend_from_slice(text.as_bytes());
+    out.extend(
+        text.bytes()
+            .map(|b| if b == b'\r' || b == b'\n' { b' ' } else { b }),
+    );
     out.extend_from_slice(b"\r\n");
 }
 

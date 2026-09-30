@@ -13,15 +13,15 @@ executable evidence; protocol support does not imply all Redis functionality.
 - [x] Merge and push verified Lua/queue work in both repositories (BicDB
       `ac25db0`, mail `0c4f416`; six-service container/restart smoke passed).
 - [x] OXC TypeScript compiler, bounded QuickJS VM, and shared Lua/JS host methods.
-- [ ] Add TypeScript compilation to stored versioned JavaScript and a bounded
+- [x] Add TypeScript compilation to stored versioned JavaScript and a bounded
       JavaScript runtime sharing the Lua workflow host and authorization model.
-- [ ] Durable jobs triggered after booking commits; pinned active script version.
+- [x] Durable jobs triggered after booking commits; pinned active script version.
 - [ ] Trusted tenant/permission context, parameterized SQL and atomic transactions.
 - [ ] External HTTP outside database transactions, destination allowlists,
       scoped secret access, deadlines, response limits and durable retries.
 - [ ] EHR eligibility scenario: unique operation keys, concurrent retries,
       revision/stale-result protection, five-table atomic update and outbox.
-- [ ] Activate revised workflow while running; verify old/new job version behavior.
+- [x] Activate revised workflow while running; verify old/new job version behavior.
 - [ ] Merge and push verified TypeScript/workflow work; resume mail enterprise
       priorities in importance order through the full readiness backlog.
 

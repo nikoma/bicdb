@@ -48,5 +48,20 @@ Hosts must roll back any open transaction when the runner fails, including
 interrupts and out-of-memory errors, and reject network requests while a
 transaction is open. They must persist retry requests and acknowledge the
 delivery only after successful completion. Stored version activation, durable
-jobs, capability integration and the EHR acceptance scenario remain in progress
+jobs are implemented in `bicdb-workflow`. Capability integration and the EHR acceptance scenario remain in progress
 in [the scripting roadmap](scripting-roadmap.md).
+
+`bicdb-workflow::publish_version` persists immutable Lua/JavaScript versions;
+TypeScript is compiled before persistence. `activate_version` changes an active
+pointer in an ordinary database transaction. `enqueue_on_commit` records an
+event receipt and buffers publication into BicDB's durable broker in the same
+transaction as the booking. Rollback discards both. Existing jobs retain their
+pinned version across activation, restart and retry. Reusing an event ID with
+different event data or a different principal is rejected.
+
+These are trusted native embedding APIs. Management authorization belongs to
+the caller; do not expose their storage collections or a direct publication
+endpoint to untrusted clients. Use a WAL-backed database with fsync enabled.
+The worker must revalidate the principal's current authority when executing,
+including revocations; serialized role names are not an authorization grant.
+Job receipt and inactive script retention require an operator policy.

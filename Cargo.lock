@@ -1322,6 +1322,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bicdb-workflow"
+version = "1.0.438-beta"
+dependencies = [
+ "bicdb-core",
+ "bicdb-lua",
+ "bicdb-script",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "bigdecimal"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"

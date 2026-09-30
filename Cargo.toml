@@ -63,7 +63,7 @@ fjall = "2.11.2"
 h3o = "0.8"
 hex = "0.4"
 geo-types = { version = "0.7", features = ["serde"] }
-geo = "0.29.3"
+geo = "0.31"
 geojson = { version = "1.0", default-features = false }
 getrandom = "0.3"
 handlebars = "=6.4.2"

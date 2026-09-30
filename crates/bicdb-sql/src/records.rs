@@ -2903,13 +2903,13 @@ pub(crate) fn eval_spatial_function_value(
             let tolerance = spatial_number("ST_Simplify", &args[1], "tolerance")?;
             let geometry = spatial_geometry("ST_Simplify", &args[0])?;
             SqlValue::Geometry(match geometry {
-                Geometry::LineString(line) => Geometry::LineString(line.simplify(&tolerance)),
-                Geometry::Polygon(polygon) => Geometry::Polygon(polygon.simplify(&tolerance)),
+                Geometry::LineString(line) => Geometry::LineString(line.simplify(tolerance)),
+                Geometry::Polygon(polygon) => Geometry::Polygon(polygon.simplify(tolerance)),
                 Geometry::MultiLineString(lines) => {
-                    Geometry::MultiLineString(lines.simplify(&tolerance))
+                    Geometry::MultiLineString(lines.simplify(tolerance))
                 }
                 Geometry::MultiPolygon(polygons) => {
-                    Geometry::MultiPolygon(polygons.simplify(&tolerance))
+                    Geometry::MultiPolygon(polygons.simplify(tolerance))
                 }
                 other => other,
             })
@@ -3455,14 +3455,14 @@ fn spatial_geodesic_length(geometry: &Geometry, perimeter: bool) -> f64 {
             if perimeter {
                 0.0
             } else {
-                line.length::<geo::Geodesic>()
+                geo::Geodesic.length(line)
             }
         }
         Geometry::MultiLineString(lines) => {
             if perimeter {
                 0.0
             } else {
-                lines.length::<geo::Geodesic>()
+                geo::Geodesic.length(lines)
             }
         }
         Geometry::Polygon(polygon) => {
@@ -3509,7 +3509,7 @@ fn spatial_point_buffer(geometry: &Geometry, meters: f64) -> Result<Geometry> {
         let ring: Vec<geo::Coord<f64>> = (0..=64)
             .map(|step| {
                 let bearing = 360.0 - f64::from(step) * 360.0 / 64.0;
-                let destination = Haversine::destination(center, bearing, meters);
+                let destination = Haversine.destination(center, bearing, meters);
                 geo::Coord {
                     x: destination.x(),
                     y: destination.y(),
@@ -3550,7 +3550,7 @@ pub(crate) fn spatial_distance_meters(left: &Geometry, right: &Geometry) -> Resu
     let mut best = f64::INFINITY;
     for left in &left_points {
         for right in &right_points {
-            best = best.min(Haversine::distance(*left, *right));
+            best = best.min(Haversine.distance(*left, *right));
         }
     }
     Ok(best)

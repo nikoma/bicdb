@@ -15,8 +15,10 @@ conditions on underlying BicDB code remain. Apache grants, warranties, patent te
 redistribution machinery and liability text are not rewritten. The previous custom
 30-day cure/reinstatement and custom patent language are not carried into this version.
 
-The full notice/scope follows [LICENSE-SCOPE.md](../LICENSE-SCOPE.md). Its seventeen
-covered engine packages and eleven retained permissive packages are unchanged.
+The full notice/scope follows [LICENSE-SCOPE.md](../LICENSE-SCOPE.md). At adoption,
+it listed seventeen covered engine packages and eleven retained permissive packages.
+The three scripting engine packages inherit those existing terms; the current
+inventory records twenty covered packages and the same eleven exclusions.
 The browser client, ABI, examples, Jepsen harness, dependencies and vendor material
 keep their separate terms. The client license does not relicense an engine WASM binary.
 

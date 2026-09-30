@@ -32,6 +32,7 @@ The covered Rust packages are:
 
 - bicdb-core, bicdb-page, bicdb-sync, bicdb-sql, bicdb-pgwire, bicdb-resp;
 - bicdb-wasm, bicdb-analytics, bicdb-bench, bicdb-app-runtime;
+- bicdb-lua, bicdb-script, bicdb-workflow;
 - bicdb-cell, bicdb-cell-admission, bicdb-cell-device, bicdb-cell-grant,
   bicdb-cell-ha, bicdb-fleet, bicdb-cli.
 

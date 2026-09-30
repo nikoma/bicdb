@@ -67,6 +67,25 @@ fn hash(bytes: &[u8]) -> String {
 fn key(parts: &[&str]) -> String {
     hash(&serde_json::to_vec(parts).expect("strings serialize"))
 }
+fn json_hash(value: &impl Serialize) -> Result<String> {
+    fn canonical(value: Value) -> Value {
+        match value {
+            Value::Object(map) => Value::Object(
+                map.into_iter()
+                    .collect::<std::collections::BTreeMap<_, _>>()
+                    .into_iter()
+                    .map(|(key, value)| (key, canonical(value)))
+                    .collect(),
+            ),
+            Value::Array(values) => Value::Array(values.into_iter().map(canonical).collect()),
+            other => other,
+        }
+    }
+    Ok(hash(
+        &serde_json::to_vec(&canonical(serde_json::to_value(value).map_err(error)?))
+            .map_err(error)?,
+    ))
+}
 fn names(parts: &[&str]) -> Result<()> {
     if parts
         .iter()
@@ -194,7 +213,7 @@ pub fn enqueue_on_commit(
         return Err(Error("invalid trusted roles".into()));
     }
     let job_key = key(&[&context.tenant, workflow, event_id]);
-    let event_hash = hash(&serde_json::to_vec(&event).map_err(error)?);
+    let event_hash = json_hash(&event)?;
     if let Some(existing) = tx.get(JOB_COLLECTION, &job_key).map_err(error)? {
         if existing.metadata["event_sha256"] != event_hash
             || existing.metadata["principal"] != context.principal
@@ -240,12 +259,14 @@ pub fn enqueue_on_commit(
         )
         .map_err(error)?;
     tx.insert(JOB_COLLECTION, Record::new(job_key).with_metadata(serde_json::json!({
-        "event_sha256":event_hash, "principal":job.context.principal, "message_id":message_id.to_string()
+        "event_sha256":event_hash, "principal":job.context.principal, "message_id":message_id.to_string(),
+        "job_sha256":json_hash(&job)?
     }))).map_err(error)?;
     Ok(message_id)
 }
 
 pub fn load_job_script(db: &BicDb, job: &WorkflowJob) -> Result<ScriptVersion> {
+    validate_job_receipt(db, job, None)?;
     names(&[&job.tenant, &job.workflow, &job.version])?;
     if job.context.tenant != job.tenant
         || job.context.principal.is_empty()
@@ -269,4 +290,27 @@ pub fn load_job_script(db: &BicDb, job: &WorkflowJob) -> Result<ScriptVersion> {
         return Err(Error("script integrity or scope mismatch".into()));
     }
     Ok(script)
+}
+
+/// Generic broker publishers cannot mint workflow execution authority. Match
+/// the native receipt committed with the booking; delivery workers also bind
+/// its broker message ID so copied envelopes cannot start additional jobs.
+pub fn validate_job_receipt(
+    db: &BicDb,
+    job: &WorkflowJob,
+    message_id: Option<uuid::Uuid>,
+) -> Result<()> {
+    let receipt = db
+        .get(
+            JOB_COLLECTION,
+            &key(&[&job.tenant, &job.workflow, &job.event_id]),
+        )
+        .map_err(error)?
+        .ok_or_else(|| Error("trusted workflow job receipt missing".into()))?;
+    if receipt.metadata["job_sha256"] != json_hash(job)?
+        || message_id.is_some_and(|id| receipt.metadata["message_id"] != id.to_string())
+    {
+        return Err(Error("workflow job does not match trusted receipt".into()));
+    }
+    Ok(())
 }

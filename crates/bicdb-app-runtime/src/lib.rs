@@ -19,6 +19,10 @@ mod program;
 mod providers;
 mod resource;
 mod runtime;
+mod script_workflow;
+pub use script_workflow::{
+    execute_script_delivery, execute_script_workflow, ScriptWorkflowOptions, ScriptWorkflowOutcome,
+};
 
 pub use auth::{JwtAudience, JwtAuthenticator, JwtClaims, JwtConfiguration};
 pub use bicdb_extension::abi_v2::{

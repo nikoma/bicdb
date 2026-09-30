@@ -14,6 +14,9 @@ axum.workspace = true
 axum-server.workspace = true
 bytes.workspace = true
 bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta" }
+bicdb-lua = { path = "../bicdb-lua", version = "1.0.438-beta" }
+bicdb-script = { path = "../bicdb-script", version = "1.0.438-beta" }
+bicdb-workflow = { path = "../bicdb-workflow", version = "1.0.438-beta" }
 bicdb-extension = { path = "../bicdb-extension", version = "1.0.438-beta", features = ["http"] }
 bicdb-sql = { path = "../bicdb-sql", version = "1.0.438-beta", default-features = false }
 chacha20poly1305.workspace = true

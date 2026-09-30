@@ -44,12 +44,34 @@ async function workflow(event: Booking) {
 }
 ```
 
-Hosts must roll back any open transaction when the runner fails, including
-interrupts and out-of-memory errors, and reject network requests while a
-transaction is open. They must persist retry requests and acknowledge the
-delivery only after successful completion. Stored version activation, durable
-jobs are implemented in `bicdb-workflow`. Capability integration and the EHR acceptance scenario remain in progress
-in [the scripting roadmap](scripting-roadmap.md).
+`bicdb-app-runtime::execute_script_workflow` supplies the shared capability
+adapter. It rolls back open transactions after every invocation, including VM
+interrupts, and rejects HTTP inside a transaction. SQL is matched to a declared
+statement ID or its exact SQL text, then executed through existing parameter,
+relation, tenant, role, mutation-grant and result checks. Declared SQL uses `$1`
+parameters; the proposed example's `?` placeholder syntax is not implemented.
+HTTP uses a declared policy and the configured egress provider. Production
+egress checks destinations, DNS/private addresses, redirects, concurrency,
+request/response sizes and deadlines. Secrets require an explicit plaintext
+read declaration. Retry requests cannot run inside a transaction or be followed
+by more host calls.
+
+`execute_script_delivery` loads the pinned version, clamps execution to the
+delivery lease and fresh actor deadline, then acknowledges completion or
+durably schedules a retry using BicDB's broker. Settlement checks the exact
+delivery attempt and unexpired lease, including reused consumer names. Errors
+remain unacknowledged; the worker chooses retry/dead-letter classification.
+The capability host uses current authority, ignoring serialized role snapshots.
+
+The [TypeScript eligibility example](../examples/workflows/eligibility.ts) and
+[Lua equivalent](../examples/workflows/eligibility.lua) exercise the EHR rule.
+Their acceptance tests use real BicDB SQL tables and an insurance API test
+provider: atomic five-table writes, validated external data, duplicate runs,
+revision checks, retry/restart, rollback and hot activation of the revised rule.
+Use [the ambient declarations](../examples/workflows/bicdb.d.ts) for editor support
+and `tsc --noEmit --strict --lib ES2022` type checking. The SQL declaration and
+tenant policy fixture is in `script_workflow_tests.rs`. These tests are not
+evidence of a production EHR deployment or healthcare compliance.
 
 `bicdb-workflow::publish_version` persists immutable Lua/JavaScript versions;
 TypeScript is compiled before persistence. `activate_version` changes an active
@@ -65,3 +87,8 @@ endpoint to untrusted clients. Use a WAL-backed database with fsync enabled.
 The worker must revalidate the principal's current authority when executing,
 including revocations; serialized role names are not an authorization grant.
 Job receipt and inactive script retention require an operator policy.
+Receipts bind the canonical job envelope and broker message ID. Generic broker
+publishers cannot forge another tenant/principal or replay a copied envelope.
+Receipt collections must remain inaccessible to untrusted management callers.
+Jobs created with the earlier receipt prototype without `job_sha256` are
+rejected; drain/requeue them through trusted booking data before upgrading.

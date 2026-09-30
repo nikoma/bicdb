@@ -47,7 +47,7 @@ for member in workspace["members"]:
         assert pkg.get("license-file") == {"workspace": True} and "license" not in pkg, name
 assert retained <= packages.keys()
 covered = packages.keys() - retained
-assert len(covered) == 17
+assert covered == set(config["covered_engine_packages"]), "Covered package inventory must match workspace"
 for path in config["retained_apache_paths"] + config["console_paths"]:
     assert (root / path).exists(), path
 for path in ["web/bicdb-client", "abi", "examples", "jepsen"]:
@@ -88,4 +88,4 @@ for number in re.findall(r"Exception (\d+)", faq):
 version = tomllib.loads((root / "crates/bicdb-core/Cargo.toml").read_text())["package"]["version"]
 assert (f"[Download {version}]"
         f"(https://github.com/nikoma/bicdb/releases/tag/v{version})") in (root / "README.md").read_text()
-print("active license: 17 community packages, 11 Apache exceptions, notices, 18 scenarios and links passed")
+print(f"active license: {len(covered)} community packages, {len(retained)} Apache exceptions, notices, 18 scenarios and links passed")

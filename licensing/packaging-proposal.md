@@ -6,7 +6,7 @@ identify the covered source revision and exclusions. No historical release is re
 
 ## Cargo and mixed scope
 
-The workspace uses `license-file = "LICENSE"`; 17 covered engine packages inherit
+The workspace uses `license-file = "LICENSE"`; 20 covered engine packages inherit
 `license-file.workspace = true`. They do not declare an Apache alternative.
 The 11 retained SDK/connector/example packages explicitly declare Apache-2.0.
 The browser JavaScript client, ABI, examples and Jepsen harness retain their terms.
@@ -26,7 +26,7 @@ The appended Apache text must remain byte-identical to LICENSES/Apache-2.0.txt;
 its presence is not a separate grant without the three exceptions for covered code.
 
 `deny.toml` uses hash-pinned license clarifications and explicit package-specific
-exceptions for the 17 first-party community packages. The dependency allowlist is
+exceptions for the 20 first-party community packages. The dependency allowlist is
 unchanged: a new third-party package does not inherit those exceptions. A license
 change requires deliberate hash/config review, not a lower detection threshold.
 

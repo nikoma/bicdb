@@ -20,6 +20,9 @@ Notable components and license choices include:
 | `hpke` RFC 9180 implementation | MIT or Apache-2.0 option |
 | `rust-stemmers`, `waken_snowball` | MIT/BSD-3-Clause |
 | `arrow-array` | Apache-2.0 and MIT |
+| Lua 5.1 and `mlua`/`lua-src` | MIT |
+| QuickJS and `rquickjs` | MIT |
+| OXC TypeScript parser, semantic analysis, transformer and code generator | MIT |
 | `@bjorn3/browser_wasi_shim` vendored under `web/bicdb-client/vendor/` | MIT (the included `LICENSE-MIT`) |
 
 EmbeddingGemma-300m weights are not included in this repository. If obtained

@@ -138,6 +138,14 @@ fn stored_javascript_and_commit_only_jobs_pin_versions_across_activation_and_res
     assert_eq!(deliveries.len(), 2);
     for (index, delivery) in deliveries.iter().enumerate() {
         let job: WorkflowJob = serde_json::from_value(delivery.payload.clone()).unwrap();
+        validate_job_receipt(&db, &job, Some(delivery.message_id)).unwrap();
+        assert!(validate_job_receipt(&db, &job, Some(uuid::Uuid::new_v4())).is_err());
+        let mut forged = job.clone();
+        forged.context.principal = "administrator".into();
+        assert!(load_job_script(&db, &forged).is_err());
+        let mut forged = job.clone();
+        forged.event["id"] = json!("altered");
+        assert!(load_job_script(&db, &forged).is_err());
         let script = load_job_script(&db, &job).unwrap();
         let result = bicdb_script::execute(
             &script.executable,

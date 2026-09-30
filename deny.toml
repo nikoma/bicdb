@@ -303,3 +303,30 @@ license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
 [[licenses.exceptions]]
 name = "bicdb-cli"
 allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-lua"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-lua"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-script"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-script"
+allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-workflow"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-workflow"
+allow = ["LicenseRef-BicDB-1.0"]

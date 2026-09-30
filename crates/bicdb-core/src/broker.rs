@@ -1120,6 +1120,64 @@ impl<'a> Broker<'a> {
         )
     }
 
+    /// Settle exactly this delivery attempt. A stale worker cannot acknowledge
+    /// a later attempt, even when a replacement reuses its consumer name.
+    pub fn ack_delivery(&mut self, consumer_id: &str, message: &BrokerMessage) -> Result<()> {
+        self.validate_delivery(consumer_id, message)?;
+        self.ack(
+            &message.queue,
+            &message.group,
+            consumer_id,
+            message.message_id,
+        )
+    }
+
+    /// Retry/dead-letter exactly this unexpired delivery attempt.
+    pub fn nack_delivery(
+        &mut self,
+        consumer_id: &str,
+        message: &BrokerMessage,
+        options: NackOptions,
+    ) -> Result<()> {
+        self.validate_delivery(consumer_id, message)?;
+        self.nack(
+            &message.queue,
+            &message.group,
+            consumer_id,
+            message.message_id,
+            options,
+        )
+    }
+
+    /// Validate ownership, exact attempt and unexpired lease without settling.
+    pub fn validate_delivery(&self, consumer_id: &str, message: &BrokerMessage) -> Result<()> {
+        self.check_in_flight(
+            &message.queue,
+            &message.group,
+            consumer_id,
+            message.message_id,
+        )?;
+        let delivery = &self
+            .stream
+            .broker_state
+            .group(&message.queue, &message.group)
+            .expect("checked delivery")
+            .deliveries[&message.message_id];
+        match delivery.status {
+            DeliveryStatus::InFlight {
+                visibility_deadline,
+            } if visibility_deadline > now_ms()
+                && visibility_deadline == message.visibility_deadline
+                && delivery.attempts == message.attempts =>
+            {
+                Ok(())
+            }
+            _ => Err(BicDbError::Broker(
+                "delivery lease expired or attempt changed".into(),
+            )),
+        }
+    }
+
     /// Negatively acknowledges a delivered message. With `requeue` it becomes
     /// available again after `delay_ms` (subject to `max_attempts`); without
     /// `requeue` — or when attempts are exhausted — it is dead-lettered.

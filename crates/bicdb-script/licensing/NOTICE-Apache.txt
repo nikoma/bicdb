@@ -1,0 +1,12 @@
+BicDB
+Copyright 2026 WalkNorth, Inc. and Nikolai Manek
+
+This product is licensed under the Apache License, Version 2.0.
+
+BicDB includes and interoperates with third-party components distributed under
+their own licenses. Required and informational attributions are recorded in
+THIRD_PARTY_NOTICES.md and alongside vendored components.
+
+The names BicDB and WalkNorth and their associated logos are not granted for
+use by the Apache License, except as required for reasonable and customary
+description of the origin of the work.

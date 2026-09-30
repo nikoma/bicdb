@@ -16,10 +16,10 @@ executable evidence; protocol support does not imply all Redis functionality.
 - [x] Add TypeScript compilation to stored versioned JavaScript and a bounded
       JavaScript runtime sharing the Lua workflow host and authorization model.
 - [x] Durable jobs triggered after booking commits; pinned active script version.
-- [ ] Trusted tenant/permission context, parameterized SQL and atomic transactions.
-- [ ] External HTTP outside database transactions, destination allowlists,
+- [x] Trusted tenant/permission context, parameterized SQL and atomic transactions.
+- [x] External HTTP outside database transactions, destination allowlists,
       scoped secret access, deadlines, response limits and durable retries.
-- [ ] EHR eligibility scenario: unique operation keys, concurrent retries,
+- [x] EHR eligibility scenario: unique operation keys, fenced retry settlement,
       revision/stale-result protection, five-table atomic update and outbox.
 - [x] Activate revised workflow while running; verify old/new job version behavior.
 - [ ] Merge and push verified TypeScript/workflow work; resume mail enterprise

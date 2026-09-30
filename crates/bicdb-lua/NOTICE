@@ -1,0 +1,21 @@
+BicDB
+Copyright 2026 WalkNorth, Inc. and Nikolai Manek
+
+The covered first-party BicDB product uses the BicDB License 1.0:
+Apache 2.0 + three exceptions (LicenseRef-BicDB-1.0). See LICENSE and LICENSE-SCOPE.md for
+operative terms, licensor identification, scope and separate-license exclusions.
+It is not licensed as a whole under unmodified Apache-2.0 and is not represented
+as OSI-approved open source. No unrestricted parallel Apache grant is made for
+newly covered rights.
+
+Previously granted Apache rights remain effective. LICENSES/Apache-2.0.txt is
+retained for underlying previously licensed portions and separately licensed
+components; its inclusion does not license new covered material under Apache.
+
+BicDB includes and interoperates with third-party components distributed under
+their own licenses. Required and informational attributions are recorded in
+THIRD_PARTY_NOTICES.md and alongside vendored components.
+
+The names BicDB and WalkNorth and their associated logos are not licensed beyond
+truthful customary origin identification and notices required by the applicable
+license. This notice asserts no trademark registration or patent ownership.

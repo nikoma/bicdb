@@ -18,10 +18,10 @@ No runtime code, dependency version, vendor notice, release tag or historical ar
 is changed. Existing permissive SDK/client/connector boundaries remain intact.
 
 Focused verification checks the appended Apache text byte-for-byte, exactly three
-numbered additional conditions, active metadata/scope, all 28 package legal copies,
+numbered additional conditions, active metadata/scope, all 31 package legal copies,
 18 scenario outcomes and licensing links. Package file lists, an actual no-compile
 archive fixture, npm dry-run and cargo-deny verify tooling and distribution behavior.
-The custom identifier is allowed only for the seventeen covered first-party packages,
+The custom identifier is allowed only for the twenty covered first-party packages,
 with hash-pinned clarifications, never as a blanket dependency permission.
 
 The owner authorized implementation and merging to main. The named licensors and

@@ -51,7 +51,7 @@ mod large_value;
 #[cfg(feature = "lua")]
 mod lua;
 #[cfg(feature = "lua")]
-pub use lua::{LuaLimits, LuaReply, LuaError};
+pub use lua::{LuaError, LuaLimits, LuaReply};
 mod memory;
 mod memory_index;
 mod mutation;

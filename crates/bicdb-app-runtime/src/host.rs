@@ -360,10 +360,8 @@ struct GrantBinding {
 
 #[derive(Clone)]
 struct DeliveryBinding {
-    queue: String,
-    group: String,
     consumer: String,
-    message_id: Uuid,
+    message: bicdb_core::BrokerMessage,
 }
 
 struct Upload {
@@ -578,6 +576,17 @@ impl CapabilityHost {
     /// Trusted immutable identity attached by the host to this invocation.
     pub fn actor(&self) -> &ActorContext {
         &self.actor
+    }
+
+    pub(crate) fn script_limits(&self) -> &bicdb_extension::ExtensionLimits {
+        &self.extension.limits
+    }
+
+    /// Trusted cleanup can release an owned transaction after an invocation's
+    /// deadline. This path cannot begin or commit work and is not a VM import.
+    pub(crate) fn rollback_script_transaction(&mut self, transaction: HostHandle) -> Result<()> {
+        self.transaction(TransactionRequest::Rollback { transaction })?;
+        Ok(())
     }
 
     pub(crate) fn replace_actor_deadline_unix_ms(&mut self, deadline_unix_ms: i64) -> i64 {
@@ -3326,10 +3335,8 @@ impl CapabilityHost {
                     self.deliveries.insert(
                         handle,
                         DeliveryBinding {
-                            queue: queue.clone(),
-                            group: group.clone(),
                             consumer: consumer.clone(),
-                            message_id: message.message_id,
+                            message: message.clone(),
                         },
                     );
                     output.push(AbiBrokerMessage {
@@ -3378,12 +3385,7 @@ impl CapabilityHost {
                     )
                 })?;
                 unsafe { self.db.as_ref() }.with_broker(|broker| {
-                    broker.ack(
-                        &binding.queue,
-                        &binding.group,
-                        &binding.consumer,
-                        binding.message_id,
-                    )
+                    broker.ack_delivery(&binding.consumer, &binding.message)
                 })?;
                 Ok(HostValue::Unit)
             }
@@ -3399,11 +3401,9 @@ impl CapabilityHost {
                     )
                 })?;
                 unsafe { self.db.as_ref() }.with_broker(|broker| {
-                    broker.nack(
-                        &binding.queue,
-                        &binding.group,
+                    broker.nack_delivery(
                         &binding.consumer,
-                        binding.message_id,
+                        &binding.message,
                         NackOptions {
                             requeue: retry,
                             delay_ms,
@@ -6609,7 +6609,7 @@ fn merge_record_patch(record: &mut Record, patch: Map<String, Value>) -> Result<
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 
     /// `Internal` is the strongest value in the lattice and gates cross-tenant
     /// support access, so it must be reachable only by naming it. Every
@@ -7031,7 +7031,7 @@ mod tests {
         .is_err());
     }
 
-    fn manifest() -> Arc<ExtensionManifest> {
+    pub(crate) fn manifest() -> Arc<ExtensionManifest> {
         Arc::new(ExtensionManifest {
             identity: ExtensionIdentity {
                 name: "security_test".to_string(),
@@ -7141,7 +7141,7 @@ mod tests {
         })
     }
 
-    fn actor(deadline_unix_ms: i64) -> ActorContext {
+    pub(crate) fn actor(deadline_unix_ms: i64) -> ActorContext {
         ActorContext {
             user_id: Some("user-1".to_string()),
             service_id: None,
@@ -7165,7 +7165,7 @@ mod tests {
         }
     }
 
-    fn services(root: &Path) -> InvocationServices {
+    pub(crate) fn services(root: &Path) -> InvocationServices {
         InvocationServices::new(
             Arc::new(InMemorySecretProvider::default()),
             Arc::new(ProductionEgressProvider::new().unwrap()),

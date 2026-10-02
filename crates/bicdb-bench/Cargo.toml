@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-bench"
-version = "1.0.439-beta"
+version = "1.0.438-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
@@ -12,11 +12,11 @@ rust-version.workspace = true
 allocation-counter = { workspace = true, optional = true }
 anyhow.workspace = true
 arrow.workspace = true
-bicdb-analytics = { path = "../bicdb-analytics", version = "1.0.439-beta" }
-bicdb-core = { path = "../bicdb-core", version = "1.0.439-beta" }
-bicdb-page = { path = "../bicdb-page", version = "1.0.439-beta" }
-bicdb-pgwire = { path = "../bicdb-pgwire", version = "1.0.439-beta" }
-bicdb-sql = { path = "../bicdb-sql", version = "1.0.439-beta" }
+bicdb-analytics = { path = "../bicdb-analytics", version = "1.0.438-beta" }
+bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta" }
+bicdb-page = { path = "../bicdb-page", version = "1.0.438-beta" }
+bicdb-pgwire = { path = "../bicdb-pgwire", version = "1.0.438-beta" }
+bicdb-sql = { path = "../bicdb-sql", version = "1.0.438-beta" }
 fjall = { workspace = true, optional = true }
 hex.workspace = true
 postgres = "0.19.14"

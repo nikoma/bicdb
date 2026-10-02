@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-core"
-version = "1.0.439-beta"
+version = "1.0.438-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
@@ -19,8 +19,8 @@ osm-import = ["dep:osmpbfreader"]
 compression = ["dep:zstd"]
 
 [dependencies]
-bicdb-lua = { path = "../bicdb-lua", version = "1.0.439-beta", optional = true }
-bicdb-page = { path = "../bicdb-page", version = "1.0.439-beta" }
+bicdb-lua = { path = "../bicdb-lua", version = "1.0.438-beta", optional = true }
+bicdb-page = { path = "../bicdb-page", version = "1.0.438-beta" }
 argon2.workspace = true
 chacha20poly1305.workspace = true
 crc32fast.workspace = true

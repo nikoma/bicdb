@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-lua"
-version = "1.0.439-beta"
+version = "1.0.438-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true

@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-pgwire"
-version = "1.0.439-beta"
+version = "1.0.438-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
@@ -10,8 +10,8 @@ axum.workspace = true
 axum-server.workspace = true
 argon2.workspace = true
 base64.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "1.0.439-beta" }
-bicdb-sql = { path = "../bicdb-sql", version = "1.0.439-beta" }
+bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta" }
+bicdb-sql = { path = "../bicdb-sql", version = "1.0.438-beta" }
 ctrlc.workspace = true
 hex.workspace = true
 hmac.workspace = true

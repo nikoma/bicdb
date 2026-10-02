@@ -2027,7 +2027,14 @@ impl BicDb {
         Ok(())
     }
 
-    pub(crate) fn commit_transaction(&self, tx: &mut Transaction) -> Result<u64> {
+    /// The commit body. `flashback_scn` is `Some` only when the caller
+    /// (`commit_transaction` in db/flashback.rs) holds the flashback clock and
+    /// this transaction writes a flashback-tracked collection.
+    pub(super) fn commit_transaction_inner(
+        &self,
+        tx: &mut Transaction,
+        flashback_scn: Option<u64>,
+    ) -> Result<u64> {
         if tx.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -2058,6 +2065,12 @@ impl BicDb {
         // rebuild their records FIRST, so every later stage — index mutations,
         // conflict detection, WAL encode, apply — sees the final record.
         self.repair_conflicting_delta_writes(tx)?;
+        // Flashback history rows join this transaction after repair (so they
+        // carry the final row images) and before every later stage, so they
+        // are validated, logged, applied and recovered exactly like the data.
+        if let Some(scn) = flashback_scn {
+            self.flashback_inject_history(tx, scn)?;
+        }
         let writes_by_collection = tx_writes_by_collection(&tx.writes);
         let structural_schema_records_changed = writes_by_collection
             .keys()

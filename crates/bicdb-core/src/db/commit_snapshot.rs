@@ -212,6 +212,7 @@ impl BicDb {
                     policy: None,
                     mutation_policy: None,
                     mesh_sync_enabled: false,
+                    flashback: None,
                 };
                 self.collections.insert(
                     write.collection.clone(),
@@ -763,6 +764,11 @@ impl BicDb {
         let write_clock = self.write_clock_value();
         let mut events = Vec::new();
         for (collection, mutations) in index_mutations_by_collection {
+            if is_flashback_history_collection(collection) {
+                // History rows restate their source rows' changes; auditing
+                // them would record every tracked change twice.
+                continue;
+            }
             let collection_mode = self.collection_state(collection)?.meta.mode.clone();
             for mutation in mutations {
                 match (mutation.old_record.record()?, mutation.new_record.record()?) {

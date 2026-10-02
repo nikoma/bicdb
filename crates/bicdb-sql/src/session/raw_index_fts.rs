@@ -1369,6 +1369,8 @@ impl<'db> SqlSession<'db> {
         Ok(records)
     }
 
+    /// Candidate records for an UPDATE, and whether they came from an index
+    /// lookup (`false` means a full scan the caller must filter itself).
     pub(crate) fn update_candidate_records(
         &self,
         table: &str,
@@ -1376,7 +1378,7 @@ impl<'db> SqlSession<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
         ctes: &BTreeMap<String, CteResult>,
-    ) -> Result<Vec<Record>> {
+    ) -> Result<(Vec<Record>, bool)> {
         let row_engine = self.sql_engine_with_ctes(ctes.clone());
         if let Some(ids) = row_engine.indexed_record_ids_for_table_selection(
             table,
@@ -1392,12 +1394,12 @@ impl<'db> SqlSession<'db> {
                 schema,
             )?;
             sql_profile_records_materialized(&records);
-            return Ok(records);
+            return Ok((records, true));
         }
         let records = self.scan_session_records_for_action(table, PolicyAction::Update)?;
         sql_profile_full_scan();
         sql_profile_records_materialized(&records);
-        Ok(records)
+        Ok((records, false))
     }
 
     pub(crate) fn filter_rls_records(

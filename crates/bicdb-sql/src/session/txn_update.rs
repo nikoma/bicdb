@@ -1558,7 +1558,12 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
-        let predicate_covered_by_key = predicate_covered_by_key || ir_point_ids.is_some();
+        let ir_point_lookup = ir_point_ids.is_some();
+        // The key covers the predicate only for candidates that the key
+        // lookup itself produced. A declined lookup (a security context, a
+        // key that is a subquery or NULL, ...) falls back to scanning every
+        // row, and skipping the WHERE there updated the whole table.
+        let mut candidates_from_key_lookup = false;
         let candidate_pairs: Vec<(SlotRow, Record)> = match cell_fields.as_ref() {
             Some(fields) => match match ir_point_ids {
                 Some(ids) => Some(ids),
@@ -1571,6 +1576,7 @@ impl<'db> SqlSession<'db> {
             } {
                 Some(ids) => {
                     sql_profile_index_lookup();
+                    candidates_from_key_lookup = true;
                     let pairs = self.update_candidate_pairs_from_cells(
                         &row_engine,
                         table,
@@ -1597,17 +1603,23 @@ impl<'db> SqlSession<'db> {
                         .collect::<Result<Vec<_>>>()?
                 }
             },
-            None => self
-                .update_candidate_records(table, target_alias, schema, selection, ctes)?
-                .into_iter()
-                .map(|record| {
-                    Ok((
-                        slot_row_from_record(table, target_alias, schema, &record)?,
-                        record,
-                    ))
-                })
-                .collect::<Result<Vec<_>>>()?,
+            None => {
+                let (records, from_key_lookup) =
+                    self.update_candidate_records(table, target_alias, schema, selection, ctes)?;
+                candidates_from_key_lookup = from_key_lookup;
+                records
+                    .into_iter()
+                    .map(|record| {
+                        Ok((
+                            slot_row_from_record(table, target_alias, schema, &record)?,
+                            record,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>>>()?
+            }
         };
+        let predicate_covered_by_key =
+            ir_point_lookup || (predicate_covered_by_key && candidates_from_key_lookup);
         for (idx, (target_row, record)) in candidate_pairs.into_iter().enumerate() {
             if idx % 1024 == 0 {
                 self.cancellation.check()?;
@@ -1795,7 +1807,7 @@ impl<'db> SqlSession<'db> {
                 for using_row in &using_rows.rows {
                     let using_outer_row = OuterSlotRow::from_slot(&using_rows.columns, using_row);
                     let row_engine = build_row_engine(Some(using_outer_row));
-                    let candidate_records = if let Some(ids) = row_engine
+                    let (candidate_records, from_key_lookup) = if let Some(ids) = row_engine
                         .indexed_record_ids_for_table_selection(
                             &table,
                             &target_alias,
@@ -1810,7 +1822,7 @@ impl<'db> SqlSession<'db> {
                             schema.as_ref(),
                         )?;
                         sql_profile_records_materialized(&records);
-                        records
+                        (records, true)
                     } else {
                         if fallback_records.is_none() {
                             let records =
@@ -1819,10 +1831,12 @@ impl<'db> SqlSession<'db> {
                             sql_profile_records_materialized(&records);
                             fallback_records = Some(records);
                         }
-                        fallback_records.clone().unwrap_or_default()
+                        (fallback_records.clone().unwrap_or_default(), false)
                     };
-                    let predicate_covered_by_key = if let (Some(schema), Some(selection)) =
-                        (schema.as_ref(), delete.selection.as_ref())
+                    // Only key-lookup candidates are covered by the key; a
+                    // full-scan fallback must still evaluate the WHERE.
+                    let predicate_covered_by_key = if let (true, Some(schema), Some(selection)) =
+                        (from_key_lookup, schema.as_ref(), delete.selection.as_ref())
                     {
                         row_engine.exact_primary_key_selection_covers_predicate(
                             &table,
@@ -1887,7 +1901,7 @@ impl<'db> SqlSession<'db> {
                 }
             } else {
                 let row_engine = build_row_engine(None);
-                let candidate_records = if let Some(ids) = row_engine
+                let (candidate_records, from_key_lookup) = if let Some(ids) = row_engine
                     .indexed_record_ids_for_table_selection(
                         &table,
                         &target_alias,
@@ -1902,16 +1916,19 @@ impl<'db> SqlSession<'db> {
                         schema.as_ref(),
                     )?;
                     sql_profile_records_materialized(&records);
-                    records
+                    (records, true)
                 } else {
                     let records =
                         self.scan_session_records_for_action(&table, PolicyAction::Delete)?;
                     sql_profile_full_scan();
                     sql_profile_records_materialized(&records);
-                    records
+                    (records, false)
                 };
-                let predicate_covered_by_key = if let (Some(schema), Some(selection)) =
-                    (schema.as_ref(), delete.selection.as_ref())
+                // Only key-lookup candidates are covered by the key; a
+                // full-scan fallback (e.g. the lookup declined under a
+                // security context) must still evaluate the WHERE.
+                let predicate_covered_by_key = if let (true, Some(schema), Some(selection)) =
+                    (from_key_lookup, schema.as_ref(), delete.selection.as_ref())
                 {
                     row_engine.exact_primary_key_selection_covers_predicate(
                         &table,

@@ -8794,6 +8794,99 @@ fn extended_dml_returning_wildcards_keep_schema_oids_for_binary_results() {
     server.join().unwrap();
 }
 
+/// Regression: an UPDATE/DELETE keyed by an empty scalar subquery compares the
+/// key with NULL and must affect no row. On an authenticated server (whose
+/// sessions carry a security context, so the key lookup declines) it used to
+/// report `UPDATE 2` / `DELETE 2` and rewrite or delete the whole table.
+#[test]
+fn empty_scalar_subquery_key_updates_and_deletes_no_rows_over_wire() {
+    let dir = tempfile::tempdir().unwrap();
+    bicdb_pgwire::create_user(dir.path(), "bicdb", "owner-password").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(
+        dir.path(),
+        PgWireConfig {
+            require_auth: true,
+            ..PgWireConfig::default()
+        },
+    )
+    .unwrap();
+    let serving = server.clone();
+    let server_thread = thread::spawn(move || {
+        bicdb_pgwire::serve_existing_listener(serving, listener).unwrap();
+    });
+
+    let mut client = TcpStream::connect(address).unwrap();
+    startup_with_scram(&mut client, "bicdb", "owner-password");
+    read_until_ready(&mut client);
+    let run = |client: &mut TcpStream, sql: &str| -> (Vec<String>, usize) {
+        send_query(client, sql);
+        let mut tags = Vec::new();
+        let mut rows = 0;
+        loop {
+            let (tag, payload) = read_message(client);
+            match tag {
+                b'C' => tags.push(
+                    String::from_utf8_lossy(payload.strip_suffix(&[0]).unwrap_or(&payload))
+                        .to_string(),
+                ),
+                b'D' => rows += 1,
+                b'E' => panic!("{sql}: {}", String::from_utf8_lossy(&payload)),
+                b'Z' => return (tags, rows),
+                _ => {}
+            }
+        }
+    };
+    run(
+        &mut client,
+        "CREATE TABLE tj (id uuid PRIMARY KEY, status text, created_at timestamptz);
+         INSERT INTO tj VALUES
+           ('00000000-0000-0000-0000-000000000001', 'done', now()),
+           ('00000000-0000-0000-0000-000000000002', 'done', now());",
+    );
+    for (sql, tag) in [
+        (
+            "UPDATE tj SET status = 'x' WHERE id = (SELECT id FROM tj WHERE status = 'queued')",
+            "UPDATE 0",
+        ),
+        (
+            // Row-locking subqueries need a transaction block.
+            "BEGIN; UPDATE tj SET status = 'x' WHERE id = (SELECT id FROM tj \
+             WHERE status = 'queued' ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED) \
+             RETURNING id; COMMIT;",
+            "UPDATE 0",
+        ),
+        (
+            "DELETE FROM tj WHERE id = (SELECT id FROM tj WHERE status = 'nope')",
+            "DELETE 0",
+        ),
+        (
+            "DELETE FROM tj WHERE id = (SELECT id FROM tj WHERE status = 'nope' LIMIT 1) \
+             RETURNING id",
+            "DELETE 0",
+        ),
+    ] {
+        let (tags, rows) = run(&mut client, sql);
+        // RETURNING statements currently complete with a `SELECT n` tag, so
+        // only the plain statements' tags are pinned here.
+        if !sql.contains("RETURNING") {
+            assert_eq!(tags, vec![tag.to_string()], "{sql}");
+        }
+        assert_eq!(rows, 0, "{sql}");
+        send_query(&mut client, "SELECT count(*) FROM tj WHERE status = 'done'");
+        assert_eq!(
+            read_query_rows(&mut client),
+            vec![vec!["2".to_string()]],
+            "{sql}"
+        );
+    }
+
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.request_shutdown();
+    server_thread.join().unwrap();
+}
+
 #[test]
 fn repeated_application_migration_count_bigint_returns_zero_row() {
     let dir = tempfile::tempdir().unwrap();

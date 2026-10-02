@@ -7486,3 +7486,141 @@ fn plpgsql_sis_boundaries_ignore_sql_keywords_and_quoted_bodies() {
         matching_end_if("IF true THEN ALTER TABLE x ADD COLUMN IF NOT EXISTS v TEXT;").is_err()
     );
 }
+
+/// A key predicate whose value is an empty (or NULL) scalar subquery compares
+/// against NULL and must match no row. UPDATE/DELETE treated an exact
+/// primary-key predicate as "covered by the key lookup" even when the lookup
+/// declined (as it does for authenticated sessions) and the statement fell
+/// back to a full scan, so the WHERE was never evaluated and every row was
+/// updated or deleted.
+#[test]
+fn update_delete_with_empty_scalar_subquery_key_match_no_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    {
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE TABLE tj (id uuid PRIMARY KEY, status text, created_at timestamptz)")
+            .unwrap();
+        sql.execute("CREATE TABLE tc (a int, b int, status text, PRIMARY KEY (a, b))")
+            .unwrap();
+    }
+    let reset = |sql: &mut SqlSession<'_>| {
+        sql.execute("DELETE FROM tj WHERE true").unwrap();
+        sql.execute(
+            "INSERT INTO tj VALUES
+               ('00000000-0000-0000-0000-000000000001', 'done', now()),
+               ('00000000-0000-0000-0000-000000000002', 'done', now())",
+        )
+        .unwrap();
+        sql.execute("DELETE FROM tc WHERE true").unwrap();
+        sql.execute("INSERT INTO tc VALUES (1, 1, 'done'), (1, 2, 'done')")
+            .unwrap();
+    };
+    let count = |sql: &mut SqlSession<'_>, query: &str| -> Vec<Vec<SqlValue>> {
+        sql.execute(query).unwrap().rows
+    };
+    let statements = [
+        "UPDATE tj SET status = 'x' WHERE id = (SELECT id FROM tj WHERE status = 'queued')",
+        "UPDATE tj SET status = 'x' WHERE id = (SELECT id FROM tj WHERE status = 'queued' LIMIT 1)",
+        "UPDATE tj SET status = 'x' WHERE id = (SELECT id FROM tj WHERE status = 'queued' \
+         ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED)",
+        "UPDATE tj SET status = 'x' WHERE id = (SELECT NULL::uuid)",
+        "UPDATE tj SET status = 'x' WHERE id IN (SELECT id FROM tj WHERE status = 'queued')",
+        "UPDATE tj SET status = 'x' WHERE status = (SELECT status FROM tj WHERE status = 'queued')",
+        "UPDATE tc SET status = 'x' WHERE a = 1 AND b = (SELECT b FROM tc WHERE status = 'queued')",
+        "DELETE FROM tj WHERE id = (SELECT id FROM tj WHERE status = 'nope')",
+        "DELETE FROM tj WHERE id = (SELECT id FROM tj WHERE status = 'nope' LIMIT 1)",
+        "DELETE FROM tj WHERE id = (SELECT id FROM tj WHERE status = 'nope' \
+         ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED)",
+        "DELETE FROM tj WHERE id = (SELECT NULL::uuid)",
+        "DELETE FROM tj WHERE id IN (SELECT id FROM tj WHERE status = 'nope')",
+        "DELETE FROM tj WHERE status = (SELECT status FROM tj WHERE status = 'nope')",
+        "DELETE FROM tc WHERE a = 1 AND b = (SELECT b FROM tc WHERE status = 'nope')",
+    ];
+    // An authenticated (pgwire `--require-auth`) session carries a security
+    // context, which makes the key locators decline and exposed the bug.
+    for secure in [false, true] {
+        let mut sql = if secure {
+            SqlSession::new_secure(&mut db, SecurityContext::new("owner", "org-a"))
+        } else {
+            SqlSession::new(&mut db)
+        };
+        for in_tx in [false, true] {
+            for statement in statements {
+                // Row-locking subqueries need a transaction-backed session.
+                if !in_tx && statement.contains("FOR UPDATE") {
+                    continue;
+                }
+                for returning in [false, true] {
+                    reset(&mut sql);
+                    if in_tx {
+                        sql.execute("BEGIN").unwrap();
+                    }
+                    let text = if returning {
+                        format!("{statement} RETURNING status")
+                    } else {
+                        statement.to_string()
+                    };
+                    let context = format!("{text} (secure={secure}, in_tx={in_tx})");
+                    let result = sql.execute(&text).unwrap();
+                    let verb = if statement.starts_with("UPDATE") {
+                        "UPDATE"
+                    } else {
+                        "DELETE"
+                    };
+                    // RETURNING results carry rows and no command tag here;
+                    // the wire layer derives the tag from the row count.
+                    if !returning {
+                        assert_eq!(
+                            result.command_tag.as_deref(),
+                            Some(format!("{verb} 0").as_str()),
+                            "{context}"
+                        );
+                    }
+                    assert!(result.rows.is_empty(), "{context}");
+                    if in_tx {
+                        sql.execute("COMMIT").unwrap();
+                    }
+                    assert_eq!(
+                        count(&mut sql, "SELECT count(*) FROM tj WHERE status = 'done'"),
+                        vec![vec![SqlValue::Int(2)]],
+                        "{context}"
+                    );
+                    assert_eq!(
+                        count(&mut sql, "SELECT count(*) FROM tc WHERE status = 'done'"),
+                        vec![vec![SqlValue::Int(2)]],
+                        "{context}"
+                    );
+                }
+            }
+        }
+        // A subquery that does yield a key still targets exactly that row.
+        reset(&mut sql);
+        let result = sql
+            .execute(
+                "UPDATE tj SET status = 'x' WHERE id = (SELECT id FROM tj ORDER BY id LIMIT 1) \
+                 RETURNING id::text",
+            )
+            .unwrap();
+        assert_eq!(
+            result.rows,
+            vec![vec![SqlValue::String(
+                "00000000-0000-0000-0000-000000000001".to_string()
+            )]],
+            "secure={secure}"
+        );
+        let result = sql
+            .execute("DELETE FROM tj WHERE id = (SELECT id FROM tj WHERE status = 'x')")
+            .unwrap();
+        assert_eq!(
+            result.command_tag.as_deref(),
+            Some("DELETE 1"),
+            "secure={secure}"
+        );
+        assert_eq!(
+            count(&mut sql, "SELECT count(*) FROM tj"),
+            vec![vec![SqlValue::Int(1)]],
+            "secure={secure}"
+        );
+    }
+}

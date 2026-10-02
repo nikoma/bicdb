@@ -27901,6 +27901,72 @@ mod index_maintenance_tests {
     }
 
     #[test]
+    /// A secure (authenticated) delete of rows whose insert is still only in
+    /// the transaction log must survive restart. It used to append a segment
+    /// tombstone directly; recovery replays segments before the committed
+    /// transaction log, so the deleted rows came back and a re-inserted unique
+    /// key made the database refuse to open (`unique index ... has duplicate
+    /// keys`).
+    fn secure_delete_then_reinsert_of_unique_key_survives_restart() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let temp = tempfile::tempdir().unwrap();
+            let config = DbConfig::default()
+                .with_fsync(false)
+                .with_storage_mode(mode.clone());
+            let ctx = SecurityContext::new("owner", "org-a");
+            let unique = IndexDefinition {
+                name: "s_key_key".to_string(),
+                collection: "s".to_string(),
+                fields: vec![IndexField::MetadataPath(vec!["key".to_string()])],
+                unique: true,
+                kind: IndexKind::BTree,
+                predicate: None,
+                exclusion: None,
+            };
+            {
+                let mut db = BicDb::open_with_config(temp.path(), config.clone()).unwrap();
+                db.create_collection("s").unwrap();
+                db.create_index(unique.clone()).unwrap();
+                for (id, key) in [("old-a", "a"), ("old-b", "b")] {
+                    db.insert("s", Record::new(id).with_metadata(json!({"key": key})))
+                        .unwrap();
+                }
+                db.close().unwrap();
+            }
+            {
+                let mut db = BicDb::open_with_config(temp.path(), config.clone()).unwrap();
+                assert_eq!(
+                    db.secure(&ctx)
+                        .batch_delete("s", ["old-a", "old-b"])
+                        .unwrap(),
+                    2,
+                    "{mode:?}"
+                );
+                for (id, key) in [("new-a", "a"), ("new-b", "b")] {
+                    db.secure(&ctx)
+                        .insert("s", Record::new(id).with_metadata(json!({"key": key})))
+                        .unwrap();
+                }
+                db.close().unwrap();
+            }
+            let db = BicDb::open_with_config(temp.path(), config).unwrap();
+            for id in ["old-a", "old-b"] {
+                assert!(
+                    db.get_unchecked("s", id).unwrap().is_none(),
+                    "{mode:?} {id}"
+                );
+            }
+            for id in ["new-a", "new-b"] {
+                assert!(
+                    db.get_unchecked("s", id).unwrap().is_some(),
+                    "{mode:?} {id}"
+                );
+            }
+            assert!(db.verify_index("s_key_key").unwrap().valid, "{mode:?}");
+        }
+    }
+
+    #[test]
     /// Pinned to `embedded_memory`: this asserts the *segment log* is what
     /// determines record visibility, by writing frames straight into the segment
     /// file and reopening. In `server_paged` the page store owns records, so

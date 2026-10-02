@@ -8868,11 +8868,7 @@ fn empty_scalar_subquery_key_updates_and_deletes_no_rows_over_wire() {
         ),
     ] {
         let (tags, rows) = run(&mut client, sql);
-        // RETURNING statements currently complete with a `SELECT n` tag, so
-        // only the plain statements' tags are pinned here.
-        if !sql.contains("RETURNING") {
-            assert_eq!(tags, vec![tag.to_string()], "{sql}");
-        }
+        assert!(tags.iter().any(|t| t == tag), "{sql}: {tags:?}");
         assert_eq!(rows, 0, "{sql}");
         send_query(&mut client, "SELECT count(*) FROM tj WHERE status = 'done'");
         assert_eq!(
@@ -8885,6 +8881,61 @@ fn empty_scalar_subquery_key_updates_and_deletes_no_rows_over_wire() {
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.request_shutdown();
     server_thread.join().unwrap();
+}
+
+/// Regression: on an authenticated server an autocommit DELETE wrote its
+/// tombstones straight into the segment log, so after a restart the deleted
+/// rows came back and a re-inserted unique key made the server refuse to open
+/// the data directory (`unique index ... has duplicate keys`).
+#[test]
+fn authenticated_delete_and_reinsert_of_unique_key_survives_restarts() {
+    let dir = tempfile::tempdir().unwrap();
+    bicdb_pgwire::create_user(dir.path(), "bicdb", "owner-password").unwrap();
+    let run_server = |statements: &[&str]| -> Vec<Vec<String>> {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open(
+            dir.path(),
+            PgWireConfig {
+                require_auth: true,
+                ..PgWireConfig::default()
+            },
+        )
+        .unwrap();
+        let serving = server.clone();
+        let server_thread = thread::spawn(move || {
+            bicdb_pgwire::serve_existing_listener(serving, listener).unwrap();
+        });
+        let mut client = TcpStream::connect(address).unwrap();
+        startup_with_scram(&mut client, "bicdb", "owner-password");
+        read_until_ready(&mut client);
+        for statement in statements {
+            send_query(&mut client, statement);
+            read_query_rows(&mut client);
+        }
+        send_query(&mut client, "SELECT key, value FROM s ORDER BY key");
+        let rows = read_query_rows(&mut client);
+        client.write_all(b"X\0\0\0\x04").unwrap();
+        server.request_shutdown();
+        server_thread.join().unwrap();
+        rows
+    };
+    run_server(&[
+        "CREATE TABLE s (id UUID PRIMARY KEY, key TEXT UNIQUE NOT NULL, value TEXT NOT NULL)",
+        "INSERT INTO s VALUES (gen_random_uuid(), 'a', '1'), (gen_random_uuid(), 'b', '1')",
+    ]);
+    let expected = vec![
+        vec!["a".to_string(), "2".to_string()],
+        vec!["b".to_string(), "2".to_string()],
+    ];
+    assert_eq!(
+        run_server(&[
+            "DELETE FROM s WHERE key IN ('a', 'b')",
+            "INSERT INTO s VALUES (gen_random_uuid(), 'a', '2'), (gen_random_uuid(), 'b', '2')",
+        ]),
+        expected
+    );
+    assert_eq!(run_server(&[]), expected);
 }
 
 #[test]

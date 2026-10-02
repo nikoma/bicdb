@@ -954,163 +954,46 @@ impl BicDb {
         if ids_to_delete.is_empty() {
             return Ok(0);
         }
-        let collection_mode = self.collection_state(collection)?.meta.mode.clone();
-
-        let removed = {
+        let existing_ids = {
             let state = self.collection_state(collection)?;
-            let mut removed = Vec::new();
-            for id in &ids_to_delete {
-                let entry = {
-                    let shard = state.shard(id).read();
-                    shard.get_record(id).map(|entry| Arc::clone(&entry.record))
-                };
-                if let Some(record) = entry {
-                    removed.push((id.clone(), record));
+            let mut existing_ids = Vec::new();
+            for id in ids_to_delete {
+                if state.shard(&id).read().get_record(&id).is_some() {
+                    existing_ids.push(id);
                 } else if state.paged_lazy {
                     // Untouched row of a lazy collection: exists only in the
-                    // page store. Resolve it there, as a stub the downstream
-                    // index bookkeeping can materialize on demand.
+                    // page store.
                     if let Some(paged) = &self.paged_records {
-                        let snapshot = paged.latest_snapshot();
-                        if let Some(full) = paged.get(&snapshot, collection, id)? {
-                            let fetch: PagedStubFetch = {
-                                let paged = Arc::clone(paged);
-                                let name: Arc<str> = Arc::from(collection);
-                                Arc::new(move |pk: &str| paged.get(&snapshot, &name, pk))
-                            };
-                            let stub = StoredRecord::evicted_stub(
-                                &full,
-                                crate::record::EvictedPayload {
-                                    fetch,
-                                    pk: Arc::from(id.as_str()),
-                                },
-                            );
-                            removed.push((id.clone(), Arc::new(stub)));
+                        if paged
+                            .get(&paged.latest_snapshot(), collection, &id)?
+                            .is_some()
+                        {
+                            existing_ids.push(id);
                         }
                     }
                 }
             }
-            removed
+            existing_ids
         };
-        if removed.is_empty() {
+        if existing_ids.is_empty() {
             return Ok(0);
         }
 
-        // In server-paged mode the page store is the durable home for rows and
-        // durable index postings.  The legacy direct-delete path below writes a
-        // segment tombstone and mutates resident shards, neither of which can
-        // delete an untouched row that exists only on pages.  It also cannot
-        // resolve that row's index RowId, which made SQL/PLpgSQL autocommit
-        // deletes fail with `index ... apply missing rowid for record`.
-        //
-        // Route the already-authorized, existence-filtered ids through the
-        // normal transaction path.  That path deletes the page-store row and
-        // durable postings atomically, seeds a lazy row's locator before index
-        // apply, and preserves the same audit/sync hooks as every other paged
-        // mutation.
-        if self.paged_records.is_some() {
-            let ids = removed.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>();
-            let count = ids.len();
-            let mut tx = self.begin_transaction()?;
-            tx.delete_many(collection, ids)?;
-            tx.commit()?;
-            return Ok(count);
-        }
-
-        let mut index_mutations = removed
-            .iter()
-            .map(|(_, record)| {
-                Ok(IndexRecordMutation {
-                    old_record: OldImage::from_stored(Arc::clone(record)),
-                    new_record: OldImage::none(),
-                    rowid: None,
-                    changed: None,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        // Capture each deleted record's locator NOW, before its record/version
-        // state (and registry entry) is removed below — the index apply needs it
-        // to drop the right entry.
-        self.fill_index_mutation_rowids(collection, &mut index_mutations)?;
-        self.validate_collection_index_mutations(collection, &index_mutations)?;
-
-        let payloads = removed
-            .iter()
-            .map(|(id, _)| serde_json::to_vec(&RecordFrame::Delete { id: id.clone() }))
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        storage::append_frames(
-            &self.segment_path(collection),
-            FrameKind::Record,
-            &payloads,
-            self.config.fsync,
-            &self.config.compression,
-            &self.encryption,
-        )?;
-
-        if self.config.sync_outbox {
-            let timestamp = unix_timestamp();
-            let ops = removed
-                .iter()
-                .map(|(id, record)| {
-                    Ok(SyncOp {
-                        op_id: Uuid::new_v4(),
-                        collection: collection.to_string(),
-                        record_id: id.clone(),
-                        op_type: OpType::Delete,
-                        timestamp,
-                        hash: record.content_hash()?,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?;
-            self.sync_log.lock().append_ops(&ops)?;
-        }
-
-        let gc_watermark = self.gc_watermark();
-        {
-            let state = self.collection_state_mut(collection)?;
-            let mut rebuild_vector_store = false;
-            for (id, record) in &removed {
-                let shard = state.shard_mut(id);
-                let Some(rowid) = shard.rowid_of(id) else {
-                    continue;
-                };
-                shard.records.remove(&rowid);
-                apply_versioned_delete(
-                    &mut shard.versions,
-                    &mut shard.pk_to_rowid,
-                    &mut shard.gc_pending,
-                    rowid,
-                    TransactionId(0),
-                    gc_watermark,
-                );
-                rebuild_vector_store |= record.vector.is_some();
-            }
-            if rebuild_vector_store {
-                state.rebuild_vector_store();
-            }
-            state.generation.fetch_add(1, AtomicOrdering::Relaxed);
-        }
-        self.apply_collection_index_mutations(collection, &mut index_mutations)?;
-        self.tombstone_hnsw_records(collection, removed.iter().map(|(id, _)| id.as_str()))?;
-
-        if self.config.audit_events {
-            // Captured before appending (and outside the events lock — the
-            // vector computation takes it internally).
-            let write_context = self.sync_vector()?;
-            let write_clock = self.write_clock_value();
-            for (_, record) in &removed {
-                self.events.lock().append(record_deleted_event(
-                    collection,
-                    &collection_mode,
-                    &record.to_record()?,
-                    Some(&write_context),
-                    Some(&write_clock),
-                )?)?;
-            }
-        }
-        self.refresh_graph_projections()?;
-
-        Ok(removed.len())
+        // Deletes go through the transaction log like every other write.
+        // Recovery replays the segment logs first and the committed
+        // transaction log after them as ordered redo, so a tombstone written
+        // straight into the segment while the row's insert was still only in
+        // the transaction log was undone on restart: the deleted row came
+        // back, and a re-inserted unique key then failed the startup index
+        // check (`unique index ... has duplicate keys`). The transaction path
+        // also deletes page-store rows and durable postings atomically in
+        // server-paged mode and keeps the audit/sync hooks. The caller has
+        // already authorized these ids.
+        let count = existing_ids.len();
+        let mut tx = self.begin_transaction()?;
+        tx.delete_many_unchecked(collection, existing_ids)?;
+        tx.commit()?;
+        Ok(count)
     }
 
     pub fn events(&self) -> parking_lot::MutexGuard<'_, EventStream> {

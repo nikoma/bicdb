@@ -7624,3 +7624,106 @@ fn update_delete_with_empty_scalar_subquery_key_match_no_rows() {
         );
     }
 }
+
+/// Authenticated autocommit DELETEs once wrote their tombstones straight into
+/// the segment log. Recovery replays the committed transaction log after the
+/// segments, so rows whose insert was still only in that log came back after
+/// a restart, and a re-inserted unique key made the database refuse to open
+/// (`unique index ... has duplicate keys`).
+#[test]
+fn secure_autocommit_delete_and_unique_rewrites_survive_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = || SecurityContext::new("owner", "org-a");
+    let rows = |db: &mut BicDb| {
+        SqlSession::new_secure(db, ctx())
+            .execute("SELECT key, value FROM s ORDER BY key")
+            .unwrap()
+            .rows
+    };
+    {
+        let mut db = BicDb::open(dir.path()).unwrap();
+        let mut sql = SqlSession::new_secure(&mut db, ctx());
+        sql.execute(
+            "CREATE TABLE s (id uuid PRIMARY KEY, key text UNIQUE NOT NULL, value text NOT NULL)",
+        )
+        .unwrap();
+        sql.execute(
+            "INSERT INTO s VALUES
+               ('00000000-0000-0000-0000-000000000001', 'a', '1'),
+               ('00000000-0000-0000-0000-000000000002', 'b', '1'),
+               ('00000000-0000-0000-0000-000000000003', 'c', '1'),
+               ('00000000-0000-0000-0000-000000000004', 'd', '1')",
+        )
+        .unwrap();
+    }
+    {
+        let mut db = BicDb::open(dir.path()).unwrap();
+        let mut sql = SqlSession::new_secure(&mut db, ctx());
+        let deleted = sql
+            .execute("DELETE FROM s WHERE key IN ('a', 'b')")
+            .unwrap();
+        assert_eq!(deleted.command_tag.as_deref(), Some("DELETE 2"));
+        sql.execute(
+            "INSERT INTO s VALUES
+               ('00000000-0000-0000-0000-000000000011', 'a', '2'),
+               ('00000000-0000-0000-0000-000000000012', 'b', '2')",
+        )
+        .unwrap();
+        // Delete by primary key, then reuse its unique key.
+        sql.execute("DELETE FROM s WHERE id = '00000000-0000-0000-0000-000000000003'")
+            .unwrap();
+        sql.execute("INSERT INTO s VALUES ('00000000-0000-0000-0000-000000000013', 'c', '2')")
+            .unwrap();
+        // Move a unique key to a new value and reuse the old one.
+        sql.execute("UPDATE s SET key = 'e' WHERE key = 'd'")
+            .unwrap();
+        sql.execute("INSERT INTO s VALUES ('00000000-0000-0000-0000-000000000014', 'd', '2')")
+            .unwrap();
+    }
+    let expected = vec![
+        vec![SqlValue::String("a".into()), SqlValue::String("2".into())],
+        vec![SqlValue::String("b".into()), SqlValue::String("2".into())],
+        vec![SqlValue::String("c".into()), SqlValue::String("2".into())],
+        vec![SqlValue::String("d".into()), SqlValue::String("2".into())],
+        vec![SqlValue::String("e".into()), SqlValue::String("1".into())],
+    ];
+    for _ in 0..2 {
+        let mut db = BicDb::open(dir.path()).unwrap();
+        assert_eq!(rows(&mut db), expected);
+    }
+}
+
+/// INSERT/UPDATE/DELETE ... RETURNING complete with their own command tag and
+/// the affected-row count, as in PostgreSQL, not `SELECT n`.
+#[test]
+fn returning_statements_report_their_own_command_tags() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut sql = SqlSession::new(&mut db);
+    sql.execute("CREATE TABLE rt (id int PRIMARY KEY, v text)")
+        .unwrap();
+    for (statement, tag, rows) in [
+        (
+            "INSERT INTO rt VALUES (1, 'a'), (2, 'b') RETURNING id",
+            "INSERT 0 2",
+            2,
+        ),
+        (
+            "UPDATE rt SET v = 'c' WHERE id = 1 RETURNING id",
+            "UPDATE 1",
+            1,
+        ),
+        (
+            "UPDATE rt SET v = 'c' WHERE id = 9 RETURNING id",
+            "UPDATE 0",
+            0,
+        ),
+        ("DELETE FROM rt WHERE v = 'b' RETURNING id", "DELETE 1", 1),
+        ("DELETE FROM rt WHERE v = 'z' RETURNING *", "DELETE 0", 0),
+    ] {
+        let result = sql.execute(statement).unwrap();
+        assert_eq!(result.command_tag.as_deref(), Some(tag), "{statement}");
+        assert_eq!(result.rows.len(), rows, "{statement}");
+        assert!(!result.columns.is_empty(), "{statement}");
+    }
+}

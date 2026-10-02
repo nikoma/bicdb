@@ -1066,9 +1066,15 @@ impl<'db> SqlSession<'db> {
             } => self.execute_drop_procedure(*if_exists, proc_desc),
             Statement::DropTrigger(drop_trigger) => self.execute_drop_trigger(drop_trigger),
             Statement::Call(function) => self.execute_call(function),
-            Statement::Insert(insert) => self.execute_insert(insert),
-            Statement::Update(update) => self.execute_update(update),
-            Statement::Delete(delete) => self.execute_delete(delete),
+            Statement::Insert(insert) => self
+                .execute_insert(insert)
+                .map(|result| with_returning_command_tag(result, "INSERT 0")),
+            Statement::Update(update) => self
+                .execute_update(update)
+                .map(|result| with_returning_command_tag(result, "UPDATE")),
+            Statement::Delete(delete) => self
+                .execute_delete(delete)
+                .map(|result| with_returning_command_tag(result, "DELETE")),
             Statement::Truncate(truncate) => self.execute_truncate(truncate),
             Statement::Analyze(analyze) => self.execute_analyze(analyze.table_name.as_ref()),
             Statement::Discard { object_type } => {
@@ -1925,4 +1931,14 @@ impl<'db> SqlSession<'db> {
         };
         Ok(Some(SqlResult::command(command)))
     }
+}
+
+/// A data-modifying statement with RETURNING produces rows but completes with
+/// its own command tag (`UPDATE n`, `DELETE n`, `INSERT 0 n`), as in
+/// PostgreSQL; without one the wire layer reported `SELECT n`.
+fn with_returning_command_tag(mut result: SqlResult, verb: &str) -> SqlResult {
+    if result.command_tag.is_none() {
+        result.command_tag = Some(format!("{verb} {}", result.rows.len()));
+    }
+    result
 }

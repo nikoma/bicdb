@@ -13,9 +13,11 @@
 //!
 //! The engine's `commit_seq` rebases after checkpoints, so it cannot name a
 //! point in time durably. Flashback owns a hybrid logical clock instead:
-//! `scn = max(previous + 1, unix_millis << 10)`. SCNs therefore increase across
-//! restarts, encode their commit time (`scn >> 10` milliseconds), and map a
-//! timestamp to exactly one SCN (`ms << 10 | 1023`).
+//! `scn = max(previous + 1, unix_micros)`. SCNs therefore increase across
+//! restarts and *are* their commit time in Unix microseconds (PostgreSQL's
+//! timestamp resolution): `AS OF TIMESTAMP t` is exactly `AS OF SCN t`. Only
+//! when more than one tracked commit lands in the same microsecond does an SCN
+//! run ahead of the wall clock, by at most the number of such commits.
 //!
 //! The clock mutex is held for the whole commit of any transaction that writes
 //! a tracked collection. Tracked commits are therefore serialized, and their
@@ -33,8 +35,6 @@ use super::*;
 /// tracked themselves.
 pub const FLASHBACK_HISTORY_PREFIX: &str = "__bicdb_fb_";
 
-const SCN_TIME_SHIFT: u32 = 10;
-const SCN_TIME_MASK: u64 = (1 << SCN_TIME_SHIFT) - 1;
 const FLASHBACK_WRITE_BATCH: usize = 1_000;
 const MAX_COLLECTION_NAME_BYTES: usize = 255;
 
@@ -46,8 +46,8 @@ pub struct FlashbackConfig {
     pub retention_secs: u64,
     /// Oldest SCN that can be queried. Raised by enabling and by purges.
     pub since_scn: u64,
-    /// Wall-clock time flashback was (last) enabled.
-    pub enabled_at_ms: i64,
+    /// Wall-clock time flashback was (last) enabled, in Unix microseconds.
+    pub enabled_at_micros: i64,
     /// False while the baseline copy of existing rows is being written. Reads
     /// are refused until it completes; an interrupted baseline is rebuilt at
     /// open with a new `since_scn`.
@@ -59,7 +59,8 @@ pub struct FlashbackConfig {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FlashbackPoint {
     Scn(u64),
-    TimestampMillis(i64),
+    /// Unix microseconds.
+    TimestampMicros(i64),
 }
 
 /// The operation that produced a row version.
@@ -154,19 +155,26 @@ pub fn is_flashback_history_collection(name: &str) -> bool {
     name.starts_with(FLASHBACK_HISTORY_PREFIX)
 }
 
-/// Commit time of an SCN, in Unix milliseconds.
-pub fn scn_to_unix_millis(scn: u64) -> i64 {
-    (scn >> SCN_TIME_SHIFT) as i64
+/// Commit time of an SCN, in Unix microseconds.
+pub fn scn_to_unix_micros(scn: u64) -> i64 {
+    i64::try_from(scn).unwrap_or(i64::MAX)
 }
 
-/// The last SCN of a Unix millisecond: `AS OF TIMESTAMP t` == `AS OF SCN
-/// unix_millis_to_scn(t)`.
-pub fn unix_millis_to_scn(millis: i64) -> u64 {
-    ((millis.max(0) as u64) << SCN_TIME_SHIFT) | SCN_TIME_MASK
+/// The SCN of a Unix microsecond: `AS OF TIMESTAMP t` == `AS OF SCN
+/// unix_micros_to_scn(t)`.
+pub fn unix_micros_to_scn(micros: i64) -> u64 {
+    micros.max(0) as u64
+}
+
+fn unix_timestamp_micros() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| i64::try_from(duration.as_micros()).unwrap_or(i64::MAX))
+        .unwrap_or_default()
 }
 
 fn wall_clock_scn() -> u64 {
-    (unix_timestamp_millis().max(0) as u64) << SCN_TIME_SHIFT
+    unix_micros_to_scn(unix_timestamp_micros())
 }
 
 fn history_record_id(rid: &str, scn: u64) -> String {
@@ -195,7 +203,7 @@ fn history_record(
             "row": row,
         }),
         geometry: None,
-        timestamp: Some(scn_to_unix_millis(scn)),
+        timestamp: Some(scn_to_unix_micros(scn)),
         payload: None,
     })
 }
@@ -394,18 +402,18 @@ impl BicDb {
     fn flashback_resolve_point(&self, point: FlashbackPoint) -> Result<u64> {
         let scn = match point {
             FlashbackPoint::Scn(scn) => scn,
-            FlashbackPoint::TimestampMillis(millis) => {
-                if millis < 0 {
+            FlashbackPoint::TimestampMicros(micros) => {
+                if micros < 0 {
                     return Err(BicDbError::Flashback(
                         "flashback timestamp precedes the Unix epoch".to_string(),
                     ));
                 }
-                unix_millis_to_scn(millis)
+                unix_micros_to_scn(micros)
             }
         };
         let mut clock = self.flashback_clock.lock();
         self.flashback_ensure_clock(&mut clock)?;
-        let ceiling = clock.last_scn.max(wall_clock_scn() | SCN_TIME_MASK);
+        let ceiling = clock.last_scn.max(wall_clock_scn());
         if scn > ceiling {
             return Err(BicDbError::Flashback(format!(
                 "SCN {scn} is in the future (current SCN is {})",
@@ -475,7 +483,7 @@ impl BicDb {
         let config = FlashbackConfig {
             retention_secs,
             since_scn,
-            enabled_at_ms: unix_timestamp_millis(),
+            enabled_at_micros: unix_timestamp_micros(),
             baseline_complete: false,
         };
         self.collection_state_mut(collection)?.meta.flashback = Some(config);
@@ -625,9 +633,10 @@ impl BicDb {
             Some(point) => self.flashback_resolve_point(point)?,
             None if config.retention_secs == 0 => return Ok(0),
             None => {
-                let retention_ms =
-                    i64::try_from(config.retention_secs.saturating_mul(1_000)).unwrap_or(i64::MAX);
-                unix_millis_to_scn(unix_timestamp_millis().saturating_sub(retention_ms))
+                let retention_micros =
+                    i64::try_from(config.retention_secs.saturating_mul(1_000_000))
+                        .unwrap_or(i64::MAX);
+                unix_micros_to_scn(unix_timestamp_micros().saturating_sub(retention_micros))
             }
         };
         if horizon <= config.since_scn {
@@ -712,9 +721,8 @@ impl BicDb {
     ) -> Result<()> {
         if scn < config.since_scn {
             return Err(BicDbError::Flashback(format!(
-                "snapshot too old: `{collection}` has history from SCN {} ({} ms); requested SCN {scn}",
-                config.since_scn,
-                scn_to_unix_millis(config.since_scn)
+                "snapshot too old: `{collection}` has history from SCN {}; requested SCN {scn}",
+                config.since_scn
             )));
         }
         Ok(())

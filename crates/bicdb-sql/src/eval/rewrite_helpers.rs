@@ -327,6 +327,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     let mut rewritten = sql.to_string();
     let mut changed = false;
 
+    if let Some(next) = crate::engine::flashback::rewrite_flashback_clauses(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = rewrite_variadic_builtin_calls(&rewritten) {
         rewritten = next;
         changed = true;

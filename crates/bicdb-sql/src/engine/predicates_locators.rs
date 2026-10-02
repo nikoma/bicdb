@@ -531,6 +531,14 @@ impl<'db> SqlEngine<'db> {
         // relation reference. Routine catalog names remain logically schema
         // qualified; relation_name() would instead encode a non-public schema
         // as an internal __bicdb_s_* collection name.
+        if let Some(request) = args
+            .as_ref()
+            .map(flashback::flashback_request)
+            .transpose()?
+            .flatten()
+        {
+            return self.flashback_row_set(name, alias.as_ref(), request);
+        }
         let table = if args.is_some() {
             normalize_object_name(&object_name(name)?)
         } else {
@@ -4398,6 +4406,16 @@ impl<'db> SqlEngine<'db> {
         };
         // Keep schema-qualified function names in their logical catalog form.
         // Physical schema isolation applies to relations, never routines.
+        if args
+            .as_ref()
+            .map(flashback::flashback_request)
+            .transpose()?
+            .flatten()
+            .is_some()
+        {
+            // Historical columns depend on the rows; callers fall back to them.
+            return Ok(None);
+        }
         let table = if args.is_some() {
             normalize_object_name(&object_name(name)?)
         } else {

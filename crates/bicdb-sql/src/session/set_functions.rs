@@ -26,6 +26,12 @@ fn plpgsql_table_call(
             (object_name(name)?, args, alias.clone(), *with_ordinality)
         }
         TableFactor::Table {
+            args: Some(args), ..
+        } if crate::engine::flashback::flashback_request(args)?.is_some() => {
+            // A flashback relation, not a function call.
+            return Ok(None);
+        }
+        TableFactor::Table {
             name,
             args: Some(args),
             alias,

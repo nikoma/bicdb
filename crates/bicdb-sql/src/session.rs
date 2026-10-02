@@ -5,6 +5,7 @@
 //! resolving; `lib.rs` re-exports this module via `pub use session::*;`.
 
 mod domain_types;
+mod flashback;
 pub(crate) mod functions_insert;
 mod privilege_projection;
 mod raw_ddl_analyze;
@@ -2742,6 +2743,10 @@ impl<'db> SqlSession<'db> {
             return self.execute_parsed_sql(sql);
         }
         if let Some(result) = self.execute_raw_reset(sql)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.execute_raw_flashback(sql)? {
             return Ok(result);
         }
 

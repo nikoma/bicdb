@@ -110,6 +110,45 @@ pub(crate) fn eval_db_catalog_function_value(
     if let Some(value) = eval_fts_db_function_value(db, name, args, session_gucs)? {
         return Ok(Some(value));
     }
+    // Flashback SCN functions (Oracle DBMS_FLASHBACK / SCN_TO_TIMESTAMP).
+    // They expose only the clock, never data, so they need no privilege.
+    match bare_name {
+        "current_scn" => {
+            require_arg_count(bare_name, args, 0)?;
+            let scn = db.current_scn()?;
+            return Ok(Some(SqlValue::Int(i64::try_from(scn).map_err(|_| {
+                SqlError::InvalidSql(format!("SCN {scn} exceeds int8"))
+            })?)));
+        }
+        "scn_to_timestamp" => {
+            require_arg_count(bare_name, args, 1)?;
+            if matches!(args[0], SqlValue::Null) {
+                return Ok(Some(SqlValue::Null));
+            }
+            let scn = sql_value_i64(&args[0])
+                .and_then(|scn| u64::try_from(scn).ok())
+                .ok_or_else(|| {
+                    SqlError::InvalidSql(format!("invalid SCN {}", args[0].to_cell()))
+                })?;
+            return Ok(Some(SqlValue::String(
+                crate::engine::flashback::timestamp_text_from_unix_micros(
+                    bicdb_core::scn_to_unix_micros(scn),
+                ),
+            )));
+        }
+        "timestamp_to_scn" => {
+            require_arg_count(bare_name, args, 1)?;
+            if matches!(args[0], SqlValue::Null) {
+                return Ok(Some(SqlValue::Null));
+            }
+            let micros =
+                crate::engine::flashback::unix_micros_from_timestamp_text(&args[0].to_cell())?;
+            return Ok(Some(SqlValue::Int(
+                bicdb_core::unix_micros_to_scn(micros) as i64
+            )));
+        }
+        _ => {}
+    }
     match name {
         // REPAIR: advance the transaction floor past a corrupt future xid
         // (permanently-unwritable-row corruption). Online and durable: the

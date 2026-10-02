@@ -971,10 +971,14 @@ impl<'db> SqlEngine<'db> {
             return self.typed_row_result(result, select, schema_ref);
         }
 
+        let hide_flashback_pseudo = flashback::select_has_flashback_versions(select);
         let wildcard_columns = row_set
             .columns
             .iter()
             .filter(|column| !is_postgres_system_column(column))
+            .filter(|column| {
+                !(hide_flashback_pseudo && flashback::is_flashback_pseudo_column(column))
+            })
             .cloned()
             .collect::<Vec<_>>();
         self.apply_row_windows(select, query, &mut row_set.rows, &mut row_set.columns)?;
@@ -2677,6 +2681,8 @@ impl<'db> SqlEngine<'db> {
             "pg_current_snapshot" => return Some("pg_snapshot".to_string()),
             "txid_current_snapshot" => return Some("txid_snapshot".to_string()),
             "txid_current" => return Some("int8".to_string()),
+            "current_scn" | "timestamp_to_scn" => return Some("int8".to_string()),
+            "scn_to_timestamp" => return Some("timestamptz".to_string()),
             "pg_snapshot_xmin" | "pg_snapshot_xmax" | "pg_snapshot_xip" => {
                 return Some("xid8".to_string());
             }

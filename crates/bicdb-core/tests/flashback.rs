@@ -5,7 +5,7 @@
 //! commit, recovery and checkpoint paths.
 
 use bicdb_core::{
-    flashback_history_collection, scn_to_unix_millis, BicDb, BicDbError, DbConfig,
+    flashback_history_collection, scn_to_unix_micros, BicDb, BicDbError, DbConfig,
     FlashbackOperation, FlashbackPoint, Record, StorageMode,
 };
 use serde_json::json;
@@ -127,15 +127,15 @@ fn timestamps_map_to_scns() {
         let before = db.current_scn().unwrap();
         std::thread::sleep(std::time::Duration::from_millis(5));
         upsert(&db, "a", 2);
-        let millis = scn_to_unix_millis(before);
+        let micros = scn_to_unix_micros(before);
         let rows = db
-            .flashback_rows("accounts", FlashbackPoint::TimestampMillis(millis))
+            .flashback_rows("accounts", FlashbackPoint::TimestampMicros(micros))
             .unwrap();
         assert_eq!(balances(&rows), pairs(&[("a", 1)]), "{mode}");
         let now = db
             .flashback_rows(
                 "accounts",
-                FlashbackPoint::TimestampMillis(scn_to_unix_millis(db.current_scn().unwrap())),
+                FlashbackPoint::TimestampMicros(scn_to_unix_micros(db.current_scn().unwrap())),
             )
             .unwrap();
         assert_eq!(balances(&now), pairs(&[("a", 2)]), "{mode}");
@@ -249,7 +249,7 @@ fn history_boundaries_are_enforced() {
             matches!(&too_old, Err(BicDbError::Flashback(message)) if message.contains("snapshot too old")),
             "{mode}: {too_old:?}"
         );
-        let future = db.current_scn().unwrap() + (10_000 << 10);
+        let future = db.current_scn().unwrap() + 10_000_000;
         assert!(
             matches!(
                 db.flashback_rows("accounts", FlashbackPoint::Scn(future)),

@@ -8,6 +8,7 @@
 // imports and the other split modules' re-exports) into scope so the moved
 // code compiles unchanged.
 use crate::*;
+pub(crate) mod flashback;
 mod joins_windows;
 pub(crate) mod materialize;
 mod pg_catalog;
@@ -2934,7 +2935,7 @@ pub(crate) enum RecordLocators {
 
 const POSTGRES_SYSTEM_COLUMNS: [&str; 6] = ["tableoid", "xmin", "xmax", "cmin", "cmax", "ctid"];
 
-fn is_postgres_system_column(column: &str) -> bool {
+pub(crate) fn is_postgres_system_column(column: &str) -> bool {
     let name = column.rsplit('.').next().unwrap_or(column);
     POSTGRES_SYSTEM_COLUMNS
         .iter()

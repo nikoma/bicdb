@@ -5,8 +5,8 @@ mod compact_wal;
 mod first_lock_tests;
 mod flashback;
 pub use flashback::{
-    flashback_history_collection, is_flashback_history_collection, scn_to_unix_millis,
-    unix_millis_to_scn, FlashbackConfig, FlashbackOperation, FlashbackPoint, FlashbackVersion,
+    flashback_history_collection, is_flashback_history_collection, scn_to_unix_micros,
+    unix_micros_to_scn, FlashbackConfig, FlashbackOperation, FlashbackPoint, FlashbackVersion,
     FLASHBACK_HISTORY_PREFIX,
 };
 mod fts_build;

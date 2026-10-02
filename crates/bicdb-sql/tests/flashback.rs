@@ -550,7 +550,10 @@ fn history_feeds_views_and_insert_select() {
         let [s0, ..] = seed(&mut s);
         // INSERT is statement-cached: its literals become $n placeholders, so
         // the SCN reaches the flashback clause as a bound parameter.
-        rows(&mut s, "CREATE TABLE recovered (id INT PRIMARY KEY, balance INT)");
+        rows(
+            &mut s,
+            "CREATE TABLE recovered (id INT PRIMARY KEY, balance INT)",
+        );
         rows(
             &mut s,
             &format!("INSERT INTO recovered SELECT id, balance FROM accounts AS OF SCN {s0}"),
@@ -562,10 +565,15 @@ fn history_feeds_views_and_insert_select() {
         );
         rows(
             &mut s,
-            &format!("CREATE VIEW opening_balances AS SELECT id, balance FROM accounts AS OF SCN {s0}"),
+            &format!(
+                "CREATE VIEW opening_balances AS SELECT id, balance FROM accounts AS OF SCN {s0}"
+            ),
         );
         assert_eq!(
-            balances(&mut s, "SELECT id, balance FROM opening_balances ORDER BY id"),
+            balances(
+                &mut s,
+                "SELECT id, balance FROM opening_balances ORDER BY id"
+            ),
             vec![(1, 100), (2, 200)],
             "{mode}"
         );

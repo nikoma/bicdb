@@ -80,6 +80,11 @@ pub enum BicDbError {
     #[error("authorization denied: {0}")]
     Authorization(String),
 
+    /// Flashback (time travel) request that cannot be answered: history not
+    /// enabled, requested point older than retained history, or in the future.
+    #[error("flashback error: {0}")]
+    Flashback(String),
+
     #[error("mutation authority denied: {0}")]
     MutationDenied(String),
 

@@ -285,6 +285,10 @@ structures together.
   ([security and RLS](docs/security.md#postgresql-rls-catalog-metadata)).
 - Full and incremental backup chains, verification, PITR, and executable
   restore drills ([backup and recovery](docs/backup-recovery.md)).
+- Flashback time travel: Oracle `AS OF SCN|TIMESTAMP` and `VERSIONS BETWEEN`,
+  SQL:2011 `FOR SYSTEM_TIME`, and `FLASHBACK TABLE ... TO SCN|TIMESTAMP` over
+  a durable, retention-managed row history with microsecond SCNs, enabled per
+  table with `ALTER TABLE ... FLASHBACK ARCHIVE` ([flashback](docs/flashback.md)).
 - Large values, governed temporary space, spillable sorting, resource
   admission, metrics, and maintenance tooling.
 - Lean storage: autovacuum and SQL `VACUUM`, filesystem hole-punching, a

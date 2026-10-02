@@ -1306,6 +1306,10 @@ pub struct CollectionMeta {
     /// accident; operators enable it only for provisioned shared schemas.
     #[serde(default)]
     pub mesh_sync_enabled: bool,
+    /// Flashback history (time travel) for this collection. `None` means the
+    /// collection keeps no row history; see `db/flashback.rs`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flashback: Option<crate::FlashbackConfig>,
 }
 
 impl CollectionMeta {
@@ -1317,6 +1321,7 @@ impl CollectionMeta {
             policy: None,
             mutation_policy: None,
             mesh_sync_enabled: false,
+            flashback: None,
         }
     }
 
@@ -1328,6 +1333,7 @@ impl CollectionMeta {
             policy: None,
             mutation_policy: None,
             mesh_sync_enabled: false,
+            flashback: None,
         }
     }
 }

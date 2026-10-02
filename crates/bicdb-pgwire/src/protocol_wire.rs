@@ -421,6 +421,7 @@ pub(crate) fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::TransactionConflict(_) => "40001",
         BicDbError::TransactionNotPending => "25P01",
         BicDbError::QueryCanceled | BicDbError::QueryTimedOut => "57014",
+        BicDbError::Flashback(message) => bicdb_core::flashback_error_sqlstate(message),
         BicDbError::EmptyRecordId
         | BicDbError::EmptyVector
         | BicDbError::NonFiniteVectorValue

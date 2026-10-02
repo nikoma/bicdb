@@ -3,6 +3,12 @@ mod commit_snapshot;
 mod compact_wal;
 #[cfg(test)]
 mod first_lock_tests;
+mod flashback;
+pub use flashback::{
+    flashback_error_sqlstate, flashback_history_collection, is_flashback_history_collection,
+    scn_to_unix_micros, unix_micros_to_scn, FlashbackConfig, FlashbackOperation, FlashbackPoint,
+    FlashbackVersion, FLASHBACK_HISTORY_PREFIX,
+};
 mod fts_build;
 mod fts_query;
 mod index_build;
@@ -3647,6 +3653,13 @@ pub struct BicDb {
     // concurrent path is unaffected. When on it serializes the whole commit
     // critical section, reproducing the old pre-removal `commit_lock` baseline.
     commit_lock: Mutex<()>,
+    // Flashback SCN clock. Held for the whole commit of a transaction that
+    // writes a flashback-tracked collection, so tracked commits receive SCNs in
+    // exactly their visibility order (see db/flashback.rs).
+    flashback_clock: Mutex<flashback::FlashbackClock>,
+    // Number of collections with flashback enabled; zero keeps the commit
+    // path free of any flashback work.
+    flashback_tracked: AtomicUsize,
     // Shared so a Transaction can hold its own handle and release its record
     // locks on drop without dereferencing the BicDb back-pointer (which would
     // be unsound while another thread holds the write lock).
@@ -9802,7 +9815,7 @@ impl BicDb {
         let fts_block_cache = Arc::new(crate::fts_cache::FullTextBlockCache::new(
             config.fts_block_cache_bytes,
         ));
-        Ok(Self {
+        let mut db = Self {
             path,
             _directory_lock: Some(directory_lock),
             config,
@@ -9845,6 +9858,8 @@ impl BicDb {
             index_generation: AtomicU64::new(0),
             serializable_commit_admission: RwLock::new(()),
             commit_lock: Mutex::new(()),
+            flashback_clock: Mutex::new(flashback::FlashbackClock::default()),
+            flashback_tracked: AtomicUsize::new(0),
             write_locks: Arc::new(row_lock_waiters::RowLockTable::with_shards(
                 orch_shard_count(),
             )),
@@ -9853,7 +9868,9 @@ impl BicDb {
             exclusion_claims: Mutex::new(Vec::new()),
             active_snapshots: Arc::new(ActiveSnapshots::with_shards(orch_shard_count())),
             tx_log,
-        })
+        };
+        db.flashback_after_open()?;
+        Ok(db)
     }
 
     /// Highest durable commit sequence assigned so far. Monotonic and gap-free.
@@ -11174,6 +11191,7 @@ impl BicDb {
             policy: None,
             mutation_policy: None,
             mesh_sync_enabled: false,
+            flashback: None,
         };
         self.collections
             .insert(name.to_string(), RwLock::new(CollectionState::new(meta)));
@@ -11738,7 +11756,7 @@ impl BicDb {
         }
     }
 
-    pub fn drop_collection(&mut self, name: &str) -> Result<bool> {
+    pub(super) fn drop_collection_inner(&mut self, name: &str) -> Result<bool> {
         validate_collection_name(name)?;
         if !self.collections.contains_key(name) {
             return Ok(false);

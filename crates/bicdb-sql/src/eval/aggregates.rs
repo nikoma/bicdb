@@ -1447,6 +1447,12 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if unqualified_name == "txid_current" {
             return Some("int8".to_string());
         }
+        if matches!(unqualified_name, "current_scn" | "timestamp_to_scn") {
+            return Some("int8".to_string());
+        }
+        if unqualified_name == "scn_to_timestamp" {
+            return Some("timestamptz".to_string());
+        }
         if matches!(
             unqualified_name,
             "pg_snapshot_xmin" | "pg_snapshot_xmax" | "pg_snapshot_xip"

@@ -971,10 +971,14 @@ impl<'db> SqlEngine<'db> {
             return self.typed_row_result(result, select, schema_ref);
         }
 
+        let hide_flashback_pseudo = flashback::select_has_flashback_versions(select);
         let wildcard_columns = row_set
             .columns
             .iter()
             .filter(|column| !is_postgres_system_column(column))
+            .filter(|column| {
+                !(hide_flashback_pseudo && flashback::is_flashback_pseudo_column(column))
+            })
             .cloned()
             .collect::<Vec<_>>();
         self.apply_row_windows(select, query, &mut row_set.rows, &mut row_set.columns)?;
@@ -1447,6 +1451,9 @@ impl<'db> SqlEngine<'db> {
             found
         };
 
+        let hide_flashback_pseudo = flashback::select_has_flashback_versions(select);
+        let wildcard_visible =
+            |name: &str| !(hide_flashback_pseudo && flashback::is_flashback_pseudo_column(name));
         let mut metadata = Vec::new();
         for item in &select.projection {
             match item {
@@ -1456,6 +1463,7 @@ impl<'db> SqlEngine<'db> {
                             relation
                                 .columns
                                 .iter()
+                                .filter(|(name, _)| wildcard_visible(name))
                                 .map(|(_, metadata)| metadata.clone()),
                         );
                     }
@@ -1471,6 +1479,7 @@ impl<'db> SqlEngine<'db> {
                         relation
                             .columns
                             .iter()
+                            .filter(|(name, _)| wildcard_visible(name))
                             .map(|(_, metadata)| metadata.clone()),
                     );
                 }
@@ -1488,6 +1497,20 @@ impl<'db> SqlEngine<'db> {
         factor: &TableFactor,
         relations: &mut Vec<RelationColumnMetadata>,
     ) -> Option<()> {
+        if let Some((base, versions)) = flashback::flashback_base_factor(factor) {
+            let before = relations.len();
+            self.collect_relation_column_metadata(&base, relations)?;
+            if versions {
+                if let Some(relation) = relations.get_mut(before) {
+                    relation.columns.extend(
+                        flashback::FLASHBACK_PSEUDO_COLUMNS
+                            .iter()
+                            .map(|column| (column.to_string(), SqlColumnMetadata::default())),
+                    );
+                }
+            }
+            return Some(());
+        }
         match factor {
             TableFactor::NestedJoin {
                 table_with_joins,
@@ -1757,20 +1780,27 @@ impl<'db> SqlEngine<'db> {
                 .collect();
         }
         let env = self.from_relation_columns(&select.from)?;
+        let hide_flashback_pseudo = flashback::select_has_flashback_versions(select);
+        let wildcard_visible =
+            |name: &str| !(hide_flashback_pseudo && flashback::is_flashback_pseudo_column(name));
         let mut out: Vec<(String, Option<String>)> = Vec::new();
         for item in &select.projection {
             match item {
                 SelectItem::Wildcard(_) => {
                     for relation in &env {
                         for (name, ty) in &relation.columns {
-                            out.push((name.clone(), ty.clone()));
+                            if wildcard_visible(name) {
+                                out.push((name.clone(), ty.clone()));
+                            }
                         }
                     }
                 }
                 SelectItem::QualifiedWildcard(qualifier, _) => {
                     let relation = self.qualified_wildcard_relation(qualifier, &env)?;
                     for (name, ty) in &relation.columns {
-                        out.push((name.clone(), ty.clone()));
+                        if wildcard_visible(name) {
+                            out.push((name.clone(), ty.clone()));
+                        }
                     }
                 }
                 SelectItem::UnnamedExpr(expr) => out.push((
@@ -1896,6 +1926,18 @@ impl<'db> SqlEngine<'db> {
         factor: &TableFactor,
         env: &mut Vec<RelationColumns>,
     ) -> Option<()> {
+        if let Some((base, versions)) = flashback::flashback_base_factor(factor) {
+            let before = env.len();
+            self.collect_relation_columns(&base, env)?;
+            if versions {
+                if let Some(relation) = env.get_mut(before) {
+                    relation
+                        .columns
+                        .extend(flashback::flashback_pseudo_column_types());
+                }
+            }
+            return Some(());
+        }
         if let Some(call) = json_set_returning_call(factor).ok().flatten() {
             let (alias, columns) = json_set_function_columns(&call).ok()?;
             let output_types = json_set_function_output_pg_types(&call).ok()?;
@@ -2677,6 +2719,8 @@ impl<'db> SqlEngine<'db> {
             "pg_current_snapshot" => return Some("pg_snapshot".to_string()),
             "txid_current_snapshot" => return Some("txid_snapshot".to_string()),
             "txid_current" => return Some("int8".to_string()),
+            "current_scn" | "timestamp_to_scn" => return Some("int8".to_string()),
+            "scn_to_timestamp" => return Some("timestamptz".to_string()),
             "pg_snapshot_xmin" | "pg_snapshot_xmax" | "pg_snapshot_xip" => {
                 return Some("xid8".to_string());
             }

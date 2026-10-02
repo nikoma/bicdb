@@ -541,3 +541,42 @@ fn keywords_in_ordinary_predicates_are_not_flashback_clauses() {
         assert_eq!(aliased.len(), 2, "{mode}");
     }
 }
+
+#[test]
+fn history_feeds_views_and_insert_select() {
+    for (mode, config) in modes() {
+        let (_dir, mut db) = open(config);
+        let mut s = SqlSession::new(&mut db);
+        let [s0, ..] = seed(&mut s);
+        // INSERT is statement-cached: its literals become $n placeholders, so
+        // the SCN reaches the flashback clause as a bound parameter.
+        rows(&mut s, "CREATE TABLE recovered (id INT PRIMARY KEY, balance INT)");
+        rows(
+            &mut s,
+            &format!("INSERT INTO recovered SELECT id, balance FROM accounts AS OF SCN {s0}"),
+        );
+        assert_eq!(
+            balances(&mut s, "SELECT id, balance FROM recovered ORDER BY id"),
+            vec![(1, 100), (2, 200)],
+            "{mode}"
+        );
+        rows(
+            &mut s,
+            &format!("CREATE VIEW opening_balances AS SELECT id, balance FROM accounts AS OF SCN {s0}"),
+        );
+        assert_eq!(
+            balances(&mut s, "SELECT id, balance FROM opening_balances ORDER BY id"),
+            vec![(1, 100), (2, 200)],
+            "{mode}"
+        );
+        // FLASHBACK TABLE inside an explicit transaction joins it.
+        rows(&mut s, "BEGIN");
+        rows(&mut s, &format!("FLASHBACK TABLE accounts TO SCN {s0}"));
+        rows(&mut s, "ROLLBACK");
+        assert_eq!(
+            balances(&mut s, "SELECT id, balance FROM accounts ORDER BY id"),
+            vec![(1, 150), (3, 300)],
+            "{mode}: rolled back with the caller's transaction"
+        );
+    }
+}

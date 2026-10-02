@@ -1,15 +1,15 @@
 [package]
 name = "bicdb-workflow"
-version = "1.0.438-beta"
+version = "1.0.439-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
 description = "Stored script versions and transactional workflow jobs for BicDB"
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta", default-features = false }
-bicdb-lua = { path = "../bicdb-lua", version = "1.0.438-beta" }
-bicdb-script = { path = "../bicdb-script", version = "1.0.438-beta" }
+bicdb-core = { path = "../bicdb-core", version = "1.0.439-beta", default-features = false }
+bicdb-lua = { path = "../bicdb-lua", version = "1.0.439-beta" }
+bicdb-script = { path = "../bicdb-script", version = "1.0.439-beta" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

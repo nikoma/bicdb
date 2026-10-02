@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-analytics"
-version = "1.0.438-beta"
+version = "1.0.439-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
@@ -11,7 +11,7 @@ analytics = []
 
 [dependencies]
 arrow.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta" }
+bicdb-core = { path = "../bicdb-core", version = "1.0.439-beta" }
 datafusion.workspace = true
 hex.workspace = true
 serde.workspace = true

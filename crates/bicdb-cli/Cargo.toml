@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-cli"
-version = "1.0.438-beta"
+version = "1.0.439-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
@@ -19,24 +19,24 @@ bench-comparison-engines = ["bench", "bicdb-bench/comparison-engines"]
 
 [dependencies]
 anyhow.workspace = true
-bicdb-analytics = { path = "../bicdb-analytics", version = "1.0.438-beta" }
+bicdb-analytics = { path = "../bicdb-analytics", version = "1.0.439-beta" }
 base64.workspace = true
-bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.438-beta" }
-bicdb-blob-s3 = { path = "../bicdb-blob-s3", version = "1.0.438-beta" }
-bicdb-bench = { path = "../bicdb-bench", version = "1.0.438-beta", optional = true }
-bicdb-cell = { path = "../bicdb-cell", version = "1.0.438-beta" }
-bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta" }
-bicdb-pgwire = { path = "../bicdb-pgwire", version = "1.0.438-beta" }
-bicdb-page = { path = "../bicdb-page", version = "1.0.438-beta" }
-runtime-redis-provider = { package = "bicdb-provider-redis", path = "../bicdb-provider-redis", version = "1.0.438-beta" }
-runtime-email-provider = { package = "bicdb-provider-email", path = "../bicdb-provider-email", version = "1.0.438-beta" }
-runtime-grpc-provider = { package = "bicdb-provider-grpc", path = "../bicdb-provider-grpc", version = "1.0.438-beta" }
-runtime-tokenizer-provider = { package = "bicdb-provider-tokenizer", path = "../bicdb-provider-tokenizer", version = "1.0.438-beta" }
-runtime-embeddings-provider = { package = "bicdb-provider-embeddings", path = "../bicdb-provider-embeddings", version = "1.0.438-beta" }
-runtime-llm-provider = { package = "bicdb-provider-llm", path = "../bicdb-provider-llm", version = "1.0.438-beta" }
-bicdb-resp = { path = "../bicdb-resp", version = "1.0.438-beta" }
-bicdb-sql = { path = "../bicdb-sql", version = "1.0.438-beta" }
-bicdb-sync = { path = "../bicdb-sync", version = "1.0.438-beta" }
+bicdb-app-runtime = { path = "../bicdb-app-runtime", version = "1.0.439-beta" }
+bicdb-blob-s3 = { path = "../bicdb-blob-s3", version = "1.0.439-beta" }
+bicdb-bench = { path = "../bicdb-bench", version = "1.0.439-beta", optional = true }
+bicdb-cell = { path = "../bicdb-cell", version = "1.0.439-beta" }
+bicdb-core = { path = "../bicdb-core", version = "1.0.439-beta" }
+bicdb-pgwire = { path = "../bicdb-pgwire", version = "1.0.439-beta" }
+bicdb-page = { path = "../bicdb-page", version = "1.0.439-beta" }
+runtime-redis-provider = { package = "bicdb-provider-redis", path = "../bicdb-provider-redis", version = "1.0.439-beta" }
+runtime-email-provider = { package = "bicdb-provider-email", path = "../bicdb-provider-email", version = "1.0.439-beta" }
+runtime-grpc-provider = { package = "bicdb-provider-grpc", path = "../bicdb-provider-grpc", version = "1.0.439-beta" }
+runtime-tokenizer-provider = { package = "bicdb-provider-tokenizer", path = "../bicdb-provider-tokenizer", version = "1.0.439-beta" }
+runtime-embeddings-provider = { package = "bicdb-provider-embeddings", path = "../bicdb-provider-embeddings", version = "1.0.439-beta" }
+runtime-llm-provider = { package = "bicdb-provider-llm", path = "../bicdb-provider-llm", version = "1.0.439-beta" }
+bicdb-resp = { path = "../bicdb-resp", version = "1.0.439-beta" }
+bicdb-sql = { path = "../bicdb-sql", version = "1.0.439-beta" }
+bicdb-sync = { path = "../bicdb-sync", version = "1.0.439-beta" }
 clap.workspace = true
 ctrlc.workspace = true
 crossterm.workspace = true

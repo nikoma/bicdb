@@ -390,3 +390,154 @@ fn archive_ddl_and_schema_qualified_tables() {
         );
     }
 }
+
+#[test]
+fn errors_carry_postgres_sqlstates() {
+    for (mode, config) in modes() {
+        let (_dir, mut db) = open(config);
+        let mut s = SqlSession::new(&mut db);
+        rows(&mut s, "CREATE TABLE t (id INT PRIMARY KEY)");
+        let not_archived = s.execute("SELECT * FROM t AS OF SCN 1").unwrap_err();
+        assert_eq!(not_archived.sqlstate(), "55000", "{mode}: {not_archived}");
+        rows(&mut s, "ALTER TABLE t FLASHBACK ARCHIVE");
+        let too_old = s.execute("SELECT * FROM t AS OF SCN 1").unwrap_err();
+        assert_eq!(too_old.sqlstate(), "72000", "{mode}: {too_old}");
+        assert!(too_old.to_string().contains("UTC"), "{mode}: {too_old}");
+        let future = s
+            .execute("SELECT * FROM t AS OF SCN 9000000000000000")
+            .unwrap_err();
+        assert_eq!(future.sqlstate(), "22023", "{mode}: {future}");
+    }
+}
+
+#[test]
+fn describe_types_and_parameters_follow_the_base_table() {
+    for (mode, config) in modes() {
+        let (_dir, mut db) = open(config);
+        {
+            let mut s = SqlSession::new(&mut db);
+            seed(&mut s);
+        }
+        let params =
+            bicdb_sql::infer_parameter_types(&db, "SELECT * FROM accounts AS OF SCN $1").unwrap();
+        assert_eq!(params, vec![Some("int8".to_string())], "{mode}");
+        let params = bicdb_sql::infer_parameter_types(
+            &db,
+            "SELECT * FROM accounts VERSIONS BETWEEN TIMESTAMP $1 AND $2",
+        )
+        .unwrap();
+        assert_eq!(
+            params,
+            vec![
+                Some("timestamptz".to_string()),
+                Some("timestamptz".to_string())
+            ],
+            "{mode}"
+        );
+        let typed = |sql: &str| {
+            bicdb_sql::infer_query_result_columns(&db, sql)
+                .unwrap()
+                .unwrap_or_else(|| panic!("{mode}: no inferred columns for {sql}"))
+        };
+        assert_eq!(
+            typed("SELECT * FROM accounts AS OF SCN 1"),
+            vec![
+                ("id".to_string(), Some("int4".to_string())),
+                ("balance".to_string(), Some("int4".to_string()))
+            ],
+            "{mode}"
+        );
+        assert_eq!(
+            typed(
+                "SELECT *, versions_starttime, versions_operation \
+                 FROM accounts VERSIONS BETWEEN SCN MINVALUE AND MAXVALUE"
+            ),
+            vec![
+                ("id".to_string(), Some("int4".to_string())),
+                ("balance".to_string(), Some("int4".to_string())),
+                (
+                    "versions_starttime".to_string(),
+                    Some("timestamptz".to_string())
+                ),
+                ("versions_operation".to_string(), Some("text".to_string())),
+            ],
+            "{mode}"
+        );
+    }
+}
+
+#[test]
+fn clause_rewrite_handles_real_world_sql_shapes() {
+    for (mode, config) in modes() {
+        let (_dir, mut db) = open(config);
+        let mut s = SqlSession::new(&mut db);
+        let [s0, s1, ..] = seed(&mut s);
+        // Multi-line SQL with comments, a quoted table name, a subquery, and a
+        // BETWEEN bound that itself contains AND inside parentheses.
+        let sql = format!(
+            "-- what did account 1 look like?\n\
+             SELECT a.id,\n       a.balance /* then */\n\
+             FROM \"accounts\"\n  AS OF SCN ({s0})\n  a\n\
+             WHERE a.id IN (SELECT id FROM accounts AS OF SCN {s0} WHERE balance > 0 AND id < 2)"
+        );
+        assert_eq!(balances(&mut s, &sql), vec![(1, 100)], "{mode}");
+        let between = format!(
+            "SELECT id, balance FROM accounts VERSIONS BETWEEN SCN (CASE WHEN 1 = 1 AND 2 = 2 THEN {s0} END) \
+             AND {s1} WHERE id = 1 ORDER BY balance"
+        );
+        assert_eq!(
+            balances(&mut s, &between),
+            vec![(1, 100), (1, 150)],
+            "{mode}"
+        );
+        let from_to = format!(
+            "SELECT id, balance FROM accounts FOR SYSTEM_TIME FROM {s0} TO {s1} WHERE id = 2"
+        );
+        assert_eq!(balances(&mut s, &from_to), vec![(2, 200)], "{mode}");
+        // `v.*` hides the pseudocolumns just like `*`.
+        let qualified = s
+            .execute("SELECT v.* FROM accounts VERSIONS BETWEEN SCN MINVALUE AND MAXVALUE v")
+            .unwrap();
+        assert_eq!(
+            qualified.columns,
+            vec!["id".to_string(), "balance".to_string()],
+            "{mode}"
+        );
+        // A table or column literally named like the keywords still works.
+        rows(
+            &mut s,
+            "CREATE TABLE versions (id INT PRIMARY KEY, scn INT)",
+        );
+        rows(&mut s, "INSERT INTO versions VALUES (1, 2)");
+        assert_eq!(
+            balances(&mut s, "SELECT id, scn FROM versions"),
+            vec![(1, 2)],
+            "{mode}"
+        );
+    }
+}
+
+#[test]
+fn keywords_in_ordinary_predicates_are_not_flashback_clauses() {
+    for (mode, config) in modes() {
+        let (_dir, mut db) = open(config);
+        let mut s = SqlSession::new(&mut db);
+        rows(
+            &mut s,
+            "CREATE TABLE releases (id INT PRIMARY KEY, versions TIMESTAMP, of INT)",
+        );
+        rows(
+            &mut s,
+            "INSERT INTO releases VALUES (1, '2026-01-05 00:00:00', 7), (2, '2027-01-05 00:00:00', 8)",
+        );
+        let found = rows(
+            &mut s,
+            "SELECT id FROM releases WHERE versions BETWEEN TIMESTAMP '2026-01-01 00:00:00' \
+             AND TIMESTAMP '2026-12-31 00:00:00'",
+        );
+        assert_eq!(found.len(), 1, "{mode}: {found:?}");
+        assert_eq!(int(&found[0][0]), 1, "{mode}");
+        let aliased = rows(&mut s, "SELECT of AS of FROM releases ORDER BY of");
+        assert_eq!(aliased.len(), 2, "{mode}");
+    }
+}

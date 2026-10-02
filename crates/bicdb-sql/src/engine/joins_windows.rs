@@ -1209,6 +1209,16 @@ impl<'db> SqlEngine<'db> {
                     for (source_column, output_column) in
                         qualified_wildcard_columns(qualifier, row_columns)?
                     {
+                        // `alias.*` hides VERSIONS pseudocolumns exactly when `*`
+                        // does (they are absent from `wildcard_columns`).
+                        if !wildcard_columns.is_empty()
+                            && super::flashback::is_flashback_pseudo_column(&source_column)
+                            && !wildcard_columns
+                                .iter()
+                                .any(|column| column == &source_column)
+                        {
+                            continue;
+                        }
                         let Some(idx) = slot_row_column_index(row_columns, &source_column) else {
                             return Err(SqlError::UndefinedColumn {
                                 table: qualifier.to_string(),

@@ -275,6 +275,64 @@ pub(crate) fn start_background_tasks_for_scope(
     // two short bookend phases (boundary capture + WAL tail copy), not for a full-dataset
     // rewrite. It is therefore a low-pause online checkpointer, not just an OOM valve;
     // a smaller threshold checkpoints more often (lower WAL peak, more append overhead).
+    // Flashback retention: every BICDB_FLASHBACK_PURGE_SECS (default 600; 0
+    // disables) raise expired history floors under a brief write lock (a
+    // catalog change), then delete the obsolete history rows under the shared
+    // lock as ordinary transactions, concurrently with client commits.
+    if start_database_tasks {
+        let flashback_server = server.clone();
+        thread::spawn(move || {
+            let worker = BackgroundWorker::register(flashback_server.clone());
+            let interval_secs: u64 = std::env::var("BICDB_FLASHBACK_PURGE_SECS")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(600);
+            if interval_secs == 0 {
+                return;
+            }
+            while worker.sleep_until_shutdown(Duration::from_secs(interval_secs)) {
+                let has_retention = match flashback_server.read_db() {
+                    Ok(db) => db
+                        .flashback_collections()
+                        .iter()
+                        .any(|(_, config)| config.retention_secs > 0),
+                    Err(_) => continue,
+                };
+                if !has_retention {
+                    continue;
+                }
+                let raised = {
+                    let Ok(admission) = flashback_server.try_admit_write() else {
+                        continue;
+                    };
+                    match flashback_server.write_db_with_admission(&admission) {
+                        Ok(mut db) => match db.flashback_raise_expired_floors() {
+                            Ok(raised) => raised,
+                            Err(error) => {
+                                eprintln!("bicdb flashback retention error: {error}");
+                                continue;
+                            }
+                        },
+                        Err(_) => continue,
+                    }
+                };
+                for collection in raised {
+                    let Ok(db) = flashback_server.read_db() else {
+                        break;
+                    };
+                    match db.flashback_delete_obsolete(&collection) {
+                        Ok(0) => {}
+                        Ok(removed) => eprintln!(
+                            "bicdb flashback retention: removed {removed} history rows of {collection}"
+                        ),
+                        Err(error) => {
+                            eprintln!("bicdb flashback retention error on {collection}: {error}")
+                        }
+                    }
+                }
+            }
+        });
+    }
     if start_database_tasks {
         let compact_server = server.clone();
         thread::spawn(move || {

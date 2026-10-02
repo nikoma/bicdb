@@ -101,6 +101,33 @@ impl Rewriter<'_> {
         byte_offset(self.sql, &self.line_starts, self.tokens[idx].span.end)
     }
 
+    /// True when the token before `idx` ends a table name (`t`, `s.t`,
+    /// `"T"`) that itself follows `FROM`, `JOIN` or a `,`, so a column that
+    /// happens to be called `versions` in a WHERE clause is never mistaken for
+    /// a flashback clause.
+    fn follows_table_reference(&self, idx: usize) -> bool {
+        let Some(mut cursor) = prev_solid(&self.tokens, idx) else {
+            return false;
+        };
+        loop {
+            if !matches!(self.tokens[cursor].token, Token::Word(_)) {
+                return false;
+            }
+            let Some(before) = prev_solid(&self.tokens, cursor) else {
+                return false;
+            };
+            if self.tokens[before].token == Token::Period {
+                let Some(qualifier) = prev_solid(&self.tokens, before) else {
+                    return false;
+                };
+                cursor = qualifier;
+                continue;
+            }
+            let token = &self.tokens[before].token;
+            return *token == Token::Comma || is_word(token, "FROM") || is_word(token, "JOIN");
+        }
+    }
+
     /// Parses one bound expression starting at token `from`. Returns its source
     /// text and the index of its last token. `MINVALUE`/`MAXVALUE` become NULL.
     fn bound(&self, from: usize, stop_before_and: bool) -> Option<(String, usize)> {
@@ -135,9 +162,7 @@ impl Rewriter<'_> {
     /// text and the index of the clause's last token.
     fn clause(&self, idx: usize) -> Option<(String, usize)> {
         let token = &self.tokens[idx].token;
-        // A clause must follow a table reference (a name or a quoted name).
-        let previous = prev_solid(&self.tokens, idx)?;
-        if !matches!(self.tokens[previous].token, Token::Word(_)) {
+        if !self.follows_table_reference(idx) {
             return None;
         }
         let at = |offset: usize| next_solid(&self.tokens, offset);
@@ -284,6 +309,19 @@ pub(crate) struct FlashbackRequest {
     bounds: Vec<Expr>,
 }
 
+impl FlashbackRequest {
+    /// The bound expressions with the PostgreSQL type a placeholder in them
+    /// takes (`int8` for SCN, `timestamptz` for TIMESTAMP).
+    pub(crate) fn typed_bounds(&self) -> impl Iterator<Item = (&Expr, Option<&'static str>)> {
+        let pg_type = match self.kind {
+            PointKind::Scn => Some("int8"),
+            PointKind::Timestamp => Some("timestamptz"),
+            PointKind::Auto => None,
+        };
+        self.bounds.iter().map(move |bound| (bound, pg_type))
+    }
+}
+
 /// Decodes the marker arguments of a flashback relation, if `args` carry them.
 pub(crate) fn flashback_request(args: &TableFunctionArgs) -> Result<Option<FlashbackRequest>> {
     // PostgreSQL's `name => value` parses as `ExprNamed`; accept both forms.
@@ -343,6 +381,33 @@ pub(crate) fn flashback_request(args: &TableFunctionArgs) -> Result<Option<Flash
     }))
 }
 
+/// For a flashback relation: the same table reference without the flashback
+/// arguments (whose schema types the relation's columns), and whether it is a
+/// `VERSIONS` source.
+pub(crate) fn flashback_base_factor(factor: &TableFactor) -> Option<(TableFactor, bool)> {
+    let TableFactor::Table {
+        args: Some(args), ..
+    } = factor
+    else {
+        return None;
+    };
+    let request = flashback_request(args).ok()??;
+    let mut base = factor.clone();
+    if let TableFactor::Table { args, .. } = &mut base {
+        *args = None;
+    }
+    Some((base, request.versions))
+}
+
+/// Logical types of the `VERSIONS` pseudocolumns, in [`FLASHBACK_PSEUDO_COLUMNS`] order.
+pub(crate) fn flashback_pseudo_column_types() -> Vec<(String, Option<String>)> {
+    FLASHBACK_PSEUDO_COLUMNS
+        .iter()
+        .zip(["int8", "timestamptz", "int8", "timestamptz", "int8", "text"])
+        .map(|(column, pg_type)| (column.to_string(), Some(pg_type.to_string())))
+        .collect()
+}
+
 /// True when a `SELECT` reads a `VERSIONS` source, whose pseudocolumns `*`
 /// must not expand to.
 pub(crate) fn select_has_flashback_versions(select: &Select) -> bool {
@@ -398,8 +463,15 @@ fn point_from_value(kind: PointKind, value: SqlValue) -> Result<Option<Flashback
 }
 
 impl SqlEngine<'_> {
+    /// Evaluates a flashback bound with the full row evaluator over an empty
+    /// row (CASE, boolean logic, functions, placeholders, `current_scn()`).
+    pub(crate) fn eval_flashback_bound(&self, expr: &Expr) -> Result<SqlValue> {
+        let (_scope, context) = self.bound_row_context(&[]);
+        self.eval_slot_row_value(&SlotRow::new(), &context, expr)
+    }
+
     fn flashback_point(&self, kind: PointKind, expr: &Expr) -> Result<Option<FlashbackPoint>> {
-        point_from_value(kind, self.eval_select_constant_expr(expr)?)
+        point_from_value(kind, self.eval_flashback_bound(expr)?)
     }
 
     /// Rows of `name` as of a past point, or every version in a range, with

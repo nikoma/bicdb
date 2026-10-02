@@ -326,6 +326,18 @@ impl ParameterTypeResolver<'_, '_> {
     }
 
     fn collect_relation_columns(&self, factor: &TableFactor, env: &mut Vec<RelationColumns>) {
+        if let Some((base, versions)) = flashback::flashback_base_factor(factor) {
+            let before = env.len();
+            self.collect_relation_columns(&base, env);
+            if versions {
+                if let Some(relation) = env.get_mut(before) {
+                    relation
+                        .columns
+                        .extend(flashback::flashback_pseudo_column_types());
+                }
+            }
+            return;
+        }
         if let Some(call) = json_set_returning_call(factor).ok().flatten() {
             if let Ok((alias, columns)) = json_set_function_columns(&call) {
                 let Ok(output_types) = json_set_function_output_pg_types(&call) else {
@@ -497,7 +509,11 @@ impl ParameterTypeResolver<'_, '_> {
             TableFactor::Table {
                 args: Some(args), ..
             } => {
-                if let Ok(args) = table_function_expr_args(args) {
+                if let Ok(Some(request)) = flashback::flashback_request(args) {
+                    for (bound, pg_type) in request.typed_bounds() {
+                        self.expr(bound, &[], pg_type);
+                    }
+                } else if let Ok(args) = table_function_expr_args(args) {
                     for arg in args {
                         self.expr(&arg, &[], None);
                     }

@@ -186,9 +186,9 @@ pub use db::{
     SCHEMA_COMPATIBILITY_FORMAT_VERSION, SIGNED_CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION,
 };
 pub use db::{
-    flashback_history_collection, is_flashback_history_collection, scn_to_unix_micros,
-    unix_micros_to_scn, FlashbackConfig, FlashbackOperation, FlashbackPoint, FlashbackVersion,
-    FLASHBACK_HISTORY_PREFIX,
+    flashback_error_sqlstate, flashback_history_collection, is_flashback_history_collection,
+    scn_to_unix_micros, unix_micros_to_scn, FlashbackConfig, FlashbackOperation, FlashbackPoint,
+    FlashbackVersion, FLASHBACK_HISTORY_PREFIX,
 };
 pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,

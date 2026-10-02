@@ -138,6 +138,23 @@ struct HistoryEntry {
     row: Option<Record>,
 }
 
+/// PostgreSQL SQLSTATE for a [`BicDbError::Flashback`] message: `72000`
+/// (snapshot_too_old) for purged or pre-archive points, `22023`
+/// (invalid_parameter_value) for future points, `55000`
+/// (object_not_in_prerequisite_state) otherwise (not archived, initializing).
+pub fn flashback_error_sqlstate(message: &str) -> &'static str {
+    if message.starts_with("snapshot too old") {
+        "72000"
+    } else if message.contains("is in the future")
+        || message.contains("precedes the Unix epoch")
+        || message.contains("lower bound")
+    {
+        "22023"
+    } else {
+        "55000"
+    }
+}
+
 /// The history collection that stores `source`'s versions.
 pub fn flashback_history_collection(source: &str) -> String {
     let name = format!("{FLASHBACK_HISTORY_PREFIX}{source}");
@@ -164,6 +181,31 @@ pub fn scn_to_unix_micros(scn: u64) -> i64 {
 /// unix_micros_to_scn(t)`.
 pub fn unix_micros_to_scn(micros: i64) -> u64 {
     micros.max(0) as u64
+}
+
+/// `YYYY-MM-DD HH:MM:SS.ffffff UTC` for an SCN, for error messages.
+fn scn_utc_text(scn: u64) -> String {
+    let micros = scn_to_unix_micros(scn);
+    let secs = micros.div_euclid(1_000_000);
+    let fraction = micros.rem_euclid(1_000_000);
+    let days = secs.div_euclid(86_400);
+    let day_secs = secs.rem_euclid(86_400);
+    // Howard Hinnant's days-to-civil.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02}.{fraction:06} UTC",
+        day_secs / 3_600,
+        (day_secs / 60) % 60,
+        day_secs % 60
+    )
 }
 
 fn unix_timestamp_micros() -> i64 {
@@ -415,9 +457,11 @@ impl BicDb {
         self.flashback_ensure_clock(&mut clock)?;
         let ceiling = clock.last_scn.max(wall_clock_scn());
         if scn > ceiling {
+            let current = clock.last_scn.max(wall_clock_scn());
             return Err(BicDbError::Flashback(format!(
-                "SCN {scn} is in the future (current SCN is {})",
-                clock.last_scn.max(wall_clock_scn())
+                "SCN {scn} ({}) is in the future (current SCN is {current}, {})",
+                scn_utc_text(scn),
+                scn_utc_text(current)
             )));
         }
         clock.last_scn = clock.last_scn.max(scn);
@@ -627,11 +671,26 @@ impl BicDb {
         collection: &str,
         before: Option<FlashbackPoint>,
     ) -> Result<usize> {
+        if self.flashback_raise_floor(collection, before)?.is_none() {
+            return Ok(0);
+        }
+        self.flashback_delete_obsolete(collection)
+    }
+
+    /// Purge phase 1 (catalog change, needs exclusive access): raises the
+    /// queryable floor of `collection` to `before` (default: retention). From
+    /// then on no reader may ask for a point phase 2 is about to make
+    /// unanswerable. Returns the new floor, or `None` if it did not move.
+    pub fn flashback_raise_floor(
+        &mut self,
+        collection: &str,
+        before: Option<FlashbackPoint>,
+    ) -> Result<Option<u64>> {
         self.ensure_writable("purge flashback history")?;
         let config = self.flashback_ready_config(collection)?;
         let horizon = match before {
             Some(point) => self.flashback_resolve_point(point)?,
-            None if config.retention_secs == 0 => return Ok(0),
+            None if config.retention_secs == 0 => return Ok(None),
             None => {
                 let retention_micros =
                     i64::try_from(config.retention_secs.saturating_mul(1_000_000))
@@ -640,10 +699,8 @@ impl BicDb {
             }
         };
         if horizon <= config.since_scn {
-            return Ok(0);
+            return Ok(None);
         }
-        // Raise the floor first: from here on no reader may ask for a point the
-        // deletions below are about to make unanswerable.
         if let Some(config) = self
             .collection_state_mut(collection)?
             .meta
@@ -653,7 +710,17 @@ impl BicDb {
             config.since_scn = horizon;
         }
         self.persist_catalog()?;
+        Ok(Some(horizon))
+    }
 
+    /// Purge phase 2 (ordinary transactions, runs alongside other commits):
+    /// deletes history rows that no query at or after the floor can need. For
+    /// each row, only the newest version at or before the floor stays, and not
+    /// even that one when it is a delete. Idempotent: a crash between the
+    /// phases is healed by running this again. Returns rows removed.
+    pub fn flashback_delete_obsolete(&self, collection: &str) -> Result<usize> {
+        let config = self.flashback_ready_config(collection)?;
+        let horizon = config.since_scn;
         let history = flashback_history_collection(collection);
         let mut per_row: FxHashMap<String, Vec<(u64, FlashbackOperation, String)>> =
             FxHashMap::default();
@@ -671,7 +738,7 @@ impl BicDb {
             entries.sort_by_key(|(scn, _, _)| *scn);
             let (_, last_op, last_id) = entries.pop().expect("grouped rows are non-empty");
             obsolete.extend(entries.into_iter().map(|(_, _, id)| id));
-            // A row deleted before the horizon has no state left to answer.
+            // A row deleted before the floor has no state left to answer.
             if last_op == FlashbackOperation::Delete {
                 obsolete.push(last_id);
             }
@@ -690,12 +757,27 @@ impl BicDb {
     /// Applies every tracked collection's retention. Returns rows removed.
     pub fn purge_expired_flashback(&mut self) -> Result<usize> {
         let mut removed = 0;
-        for (collection, config) in self.flashback_collections() {
-            if config.retention_secs > 0 && config.baseline_complete {
-                removed += self.purge_flashback(&collection, None)?;
-            }
+        for collection in self.flashback_raise_expired_floors()? {
+            removed += self.flashback_delete_obsolete(&collection)?;
         }
         Ok(removed)
+    }
+
+    /// Phase 1 of [`Self::purge_expired_flashback`] for every tracked
+    /// collection with a retention. Returns the collections whose floor moved;
+    /// run [`Self::flashback_delete_obsolete`] on each (no exclusive access
+    /// needed).
+    pub fn flashback_raise_expired_floors(&mut self) -> Result<Vec<String>> {
+        let mut raised = Vec::new();
+        for (collection, config) in self.flashback_collections() {
+            if config.retention_secs > 0
+                && config.baseline_complete
+                && self.flashback_raise_floor(&collection, None)?.is_some()
+            {
+                raised.push(collection);
+            }
+        }
+        Ok(raised)
     }
 
     // ------------------------------------------------------------------ reads
@@ -721,8 +803,10 @@ impl BicDb {
     ) -> Result<()> {
         if scn < config.since_scn {
             return Err(BicDbError::Flashback(format!(
-                "snapshot too old: `{collection}` has history from SCN {}; requested SCN {scn}",
-                config.since_scn
+                "snapshot too old: `{collection}` has history from SCN {} ({}); requested SCN {scn} ({})",
+                config.since_scn,
+                scn_utc_text(config.since_scn),
+                scn_utc_text(scn)
             )));
         }
         Ok(())
@@ -924,5 +1008,35 @@ impl BicDb {
     ) -> Result<Vec<FlashbackVersion>> {
         self.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         self.flashback_versions_unchecked(collection, from, to)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scn_utc_text_matches_the_civil_calendar() {
+        for (micros, expected) in [
+            (0, "1970-01-01 00:00:00.000000 UTC"),
+            (1_790_943_628_123_456, "2026-10-02 12:20:28.123456 UTC"),
+            (951_782_400_000_001, "2000-02-29 00:00:00.000001 UTC"),
+            (4_102_444_799_999_999, "2099-12-31 23:59:59.999999 UTC"),
+        ] {
+            assert_eq!(scn_utc_text(unix_micros_to_scn(micros)), expected);
+        }
+    }
+
+    #[test]
+    fn history_ids_and_records_round_trip() {
+        let row = Record::new("a@b").with_metadata(json!({ "v": 1 }));
+        let record = history_record("a@b", 42, FlashbackOperation::Update, 7, Some(&row)).unwrap();
+        assert_eq!(record.id, "a@b@00000000000000000042");
+        let entry = decode_history(&record).unwrap();
+        assert_eq!(entry.rid, "a@b");
+        assert_eq!(entry.scn, 42);
+        assert_eq!(entry.op, FlashbackOperation::Update);
+        assert_eq!(entry.xid, 7);
+        assert_eq!(entry.row, Some(row));
     }
 }

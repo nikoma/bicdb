@@ -195,7 +195,7 @@ impl<'db> SqlSession<'db> {
     fn execute_flashback_table(&mut self, request: FlashbackTable) -> Result<()> {
         let point = {
             let engine = self.sql_engine();
-            let value = engine.eval_select_constant_expr(&request.point)?;
+            let value = engine.eval_flashback_bound(&request.point)?;
             if matches!(value, SqlValue::Null) {
                 return Err(SqlError::InvalidSql(
                     "FLASHBACK TABLE target cannot be NULL".to_string(),

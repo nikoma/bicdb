@@ -3682,6 +3682,11 @@ pub struct BicDb {
     sync_quorum: Arc<SyncQuorum>,
     // Runtime replication role, epoch and persisted standby positions.
     ha_node: Arc<ha_node::HaNode>,
+    // Index catalog last announced to standbys (primary).
+    announced_index_catalog: Mutex<Option<Vec<IndexDefinition>>>,
+    // Set while a standby builds or drops an index of its own: local derived
+    // structures, not writes to replicated data.
+    local_index_maintenance: bool,
     // Commit sequence at the last `checkpoint_begin`: everything at or below it
     // is materialized before the checkpoint's keep-from offset.
     checkpoint_boundary_seq: AtomicU64,
@@ -9958,6 +9963,8 @@ impl BicDb {
                 Arc::new(quorum)
             },
             ha_node: Arc::new(ha_node),
+            announced_index_catalog: Mutex::new(None),
+            local_index_maintenance: false,
             checkpoint_boundary_seq: AtomicU64::new(0),
             index_generation: AtomicU64::new(0),
             serializable_commit_admission: RwLock::new(()),

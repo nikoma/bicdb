@@ -286,6 +286,18 @@ pub(crate) fn start(server: Arc<PgWireServer>, config: HaServerConfig) -> Result
             db.record_primary_sql_address(config.advertise_sql.clone())
                 .map_err(PgWireError::from)?;
         }
+        drop(db);
+        {
+            let admission = server.try_admit_write()?;
+            server
+                .write_db_with_admission(&admission)?
+                .ensure_catalog_log()
+                .map_err(PgWireError::from)?;
+        }
+        let announcer = server.clone();
+        std::thread::Builder::new()
+            .name("bicdb-replication-catalog".to_string())
+            .spawn(move || announce_index_catalog(announcer))?;
     }
     if let Some(HaServerRole::Primary { listen, .. }) = config.primary_settings() {
         let listener = std::net::TcpListener::bind(listen)?;
@@ -1145,6 +1157,34 @@ fn watch_primary_lease(server: Arc<PgWireServer>, config: HaServerConfig) {
                         let _ = db.observe_replication_epoch(theirs);
                     }
                     break;
+                }
+            }
+        }
+    }
+}
+
+/// Primary: tells standbys about index changes, so they build the same
+/// indexes from their own rows.
+fn announce_index_catalog(server: Arc<PgWireServer>) {
+    let mut last_error = None::<String>;
+    while !server.is_shutdown_requested() {
+        std::thread::sleep(KEEPALIVE);
+        let announced = server
+            .read_db()
+            .map_err(|error| error.to_string())
+            .and_then(|db| {
+                if db.replication_role() != NodeRole::Primary {
+                    return Ok(false);
+                }
+                db.announce_index_catalog()
+                    .map_err(|error| error.to_string())
+            });
+        match announced {
+            Ok(_) => last_error = None,
+            Err(error) => {
+                if last_error.as_ref() != Some(&error) {
+                    eprintln!("bicdb replication: index catalog announcement failed: {error}");
+                    last_error = Some(error);
                 }
             }
         }

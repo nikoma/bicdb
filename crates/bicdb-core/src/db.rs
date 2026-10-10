@@ -11133,7 +11133,10 @@ impl BicDb {
         self.replication_state.last_applied_commit_seq = frame.commit_seq;
         self.replication_state.last_applied_at = Some(unix_timestamp());
         self.replication_state.last_error = None;
-        self.persist_replication_state()
+        // The applied position is durable in the transaction log (open takes
+        // the larger of the two), so this descriptive file needs no fsync of
+        // its own: a standby's commit costs one fsync, not two.
+        persist_replication_state(&self.path, &self.replication_state, false)
     }
 
     fn record_replication_apply_error(&mut self, message: String) -> Result<()> {
@@ -17256,13 +17259,17 @@ fn load_replication_state(
     recovered_commit_seq: u64,
 ) -> Result<ReplicationApplyState> {
     let state_path = path.join(DEFAULT_REPLICATION_STATE);
+    let fresh = || ReplicationApplyState::new(config.cluster_id.clone(), recovered_commit_seq);
     let mut state = match fs::read(&state_path) {
-        Ok(bytes) => serde_json::from_slice::<ReplicationApplyState>(&bytes)?,
+        // Written without fsync after each applied commit: a crash can leave
+        // it empty or torn. The position it records is also in the
+        // transaction log, so it is rebuilt from there.
+        Ok(bytes) => match serde_json::from_slice::<ReplicationApplyState>(&bytes) {
+            Ok(state) => state,
+            Err(_) => return Ok(fresh()),
+        },
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(ReplicationApplyState::new(
-                config.cluster_id.clone(),
-                recovered_commit_seq,
-            ));
+            return Ok(fresh());
         }
         Err(error) => return Err(error.into()),
     };

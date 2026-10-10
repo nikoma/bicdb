@@ -128,6 +128,16 @@ pub struct FlashbackVersion {
 pub(crate) struct FlashbackClock {
     last_scn: u64,
     initialized: bool,
+    /// SCNs handed to commits that have not finished yet. Readers wait for
+    /// those at or below the SCN they read at, so a past state never changes
+    /// once observed.
+    in_flight: BTreeSet<u64>,
+}
+
+impl FlashbackClock {
+    fn busy_through(&self, scn: u64) -> bool {
+        self.in_flight.first().is_some_and(|first| *first <= scn)
+    }
 }
 
 struct HistoryEntry {
@@ -320,13 +330,49 @@ impl BicDb {
         {
             return self.commit_transaction_inner(tx, None);
         }
-        let mut clock = self.flashback_clock.lock();
-        self.flashback_ensure_clock(&mut clock)?;
-        let scn = clock.last_scn.saturating_add(1).max(wall_clock_scn());
+        // Commits to the same archived table stay in SCN order (a row's
+        // versions are ordered by SCN); commits to different tables run in
+        // parallel. Locks are taken in name order.
+        let tables = tx
+            .writes
+            .iter()
+            .map(|write| write.collection.as_str())
+            .filter(|collection| self.flashback_is_tracked(collection))
+            .collect::<BTreeSet<_>>();
+        let table_locks = {
+            let mut locks = self.flashback_table_locks.lock();
+            tables
+                .iter()
+                .map(|table| {
+                    Arc::clone(
+                        locks
+                            .entry((*table).to_string())
+                            .or_insert_with(|| Arc::new(Mutex::new(()))),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let _table_guards = table_locks
+            .iter()
+            .map(|lock| lock.lock())
+            .collect::<Vec<_>>();
+        let scn = {
+            let mut clock = self.flashback_clock.lock();
+            self.flashback_ensure_clock(&mut clock)?;
+            let scn = clock.last_scn.saturating_add(1).max(wall_clock_scn());
+            clock.last_scn = scn;
+            clock.in_flight.insert(scn);
+            scn
+        };
         let base_len = tx.writes.len();
         let result = self.commit_transaction_inner(tx, Some(scn));
+        {
+            let mut clock = self.flashback_clock.lock();
+            clock.in_flight.remove(&scn);
+            self.flashback_clock_changed.notify_all();
+        }
         match &result {
-            Ok(_) => clock.last_scn = scn,
+            Ok(_) => {}
             Err(_) => {
                 // The transaction may be retried or rolled back by its owner;
                 // it must not keep history rows it never committed.
@@ -473,6 +519,11 @@ impl BicDb {
     pub fn current_scn(&self) -> Result<u64> {
         let mut clock = self.flashback_clock.lock();
         self.flashback_ensure_clock(&mut clock)?;
+        // Commits already numbered finish first: their SCNs are below ours.
+        let numbered = clock.last_scn;
+        while clock.busy_through(numbered) {
+            self.flashback_clock_changed.wait(&mut clock);
+        }
         let scn = clock.last_scn.max(wall_clock_scn());
         clock.last_scn = scn;
         Ok(scn)
@@ -504,6 +555,10 @@ impl BicDb {
             )));
         }
         clock.last_scn = clock.last_scn.max(scn);
+        // Commits numbered at or below the point finish before it is read.
+        while clock.busy_through(scn) {
+            self.flashback_clock_changed.wait(&mut clock);
+        }
         Ok(scn)
     }
 

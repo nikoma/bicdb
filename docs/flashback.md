@@ -199,8 +199,11 @@ on the primary.
 ## Costs
 
 Tables without an archive pay one atomic load per commit. Commits that write
-archived tables are serialized with each other, which is what makes SCN order
-equal visibility order, and they write one extra row per changed row. Each
+archived tables write one extra row per changed row. Commits to the same
+archived table are serialized, which keeps each row's versions in SCN order;
+commits to different archived tables run in parallel. A flashback read waits
+for the commits numbered at or below its SCN to finish, so a past state never
+changes once it has been read. Each
 history is indexed by row: `AS OF` and `VERSIONS BETWEEN` queries with an
 equality on the primary key (`WHERE id = 42`) read only that row's versions,
 as fast as a current-row lookup however long the history grows. Queries over

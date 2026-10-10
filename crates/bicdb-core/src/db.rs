@@ -3704,6 +3704,10 @@ pub struct BicDb {
     // writes a flashback-tracked collection, so tracked commits receive SCNs in
     // exactly their visibility order (see db/flashback.rs).
     flashback_clock: Mutex<flashback::FlashbackClock>,
+    // Signalled when a flashback-tracked commit finishes.
+    flashback_clock_changed: Condvar,
+    // Serializes commits per archived table.
+    flashback_table_locks: Mutex<FxHashMap<String, Arc<Mutex<()>>>>,
     // Number of collections with flashback enabled; zero keeps the commit
     // path free of any flashback work.
     flashback_tracked: AtomicUsize,
@@ -9970,6 +9974,8 @@ impl BicDb {
             serializable_commit_admission: RwLock::new(()),
             commit_lock: Mutex::new(()),
             flashback_clock: Mutex::new(flashback::FlashbackClock::default()),
+            flashback_clock_changed: Condvar::new(),
+            flashback_table_locks: Mutex::new(FxHashMap::default()),
             flashback_tracked: AtomicUsize::new(0),
             storage_aliases: RwLock::new(storage_aliases),
             write_locks: Arc::new(row_lock_waiters::RowLockTable::with_shards(

@@ -79,8 +79,9 @@ use bicdb_core::{
 use bicdb_page::{DirectoryLock, PageStore, PageStoreOptions, PagedPaths, TxStatus};
 use bicdb_pgwire::{
     create_user_with_identity, serve_cluster_with_host_services, serve_with_host_services,
-    set_user_security_identity, AllowedStandby, AuthMethod, HaServerConfig, HaServerRole,
-    ManualDistributionHostService, PgWireConfig, PgWireHostService, PgWireUserIdentity,
+    set_user_security_identity, AllowedStandby, AuthMethod, FailoverConfig, HaPeer, HaServerConfig,
+    HaServerRole, ManualDistributionHostService, PgWireConfig, PgWireHostService,
+    PgWireUserIdentity,
 };
 use bicdb_sql::{
     integrity_check, plan_migration_sql, split_migration_sql, MigrationStatementSafety, SqlResult,
@@ -5487,8 +5488,8 @@ fn main() -> Result<()> {
                 run_serve_command(path, config, host_services)?;
             }
             if bicdb_pgwire::restart_requested() {
-                // A standby staged a snapshot of its primary: start again so
-                // the database opens from it.
+                // This node changed its replication role or staged a snapshot
+                // of its primary: start again so the database opens with it.
                 use std::os::unix::process::CommandExt as _;
                 let error = std::process::Command::new(std::env::current_exe()?)
                     .args(std::env::args_os().skip(1))
@@ -8394,16 +8395,32 @@ struct ServeReplicationArgs {
     /// primary's address include it in the hint when they refuse a write.
     #[arg(long = "advertise-sql")]
     advertise_sql: Option<String>,
+    /// AUTOMATIC FAILOVER: another member of the group, as NODE_ID=HOST:PORT (its
+    /// replication address; repeatable). Every node lists all the others.
+    #[arg(long = "ha-peer")]
+    ha_peer: Vec<String>,
+    /// AUTOMATIC FAILOVER: elect a new primary after this much silence from the
+    /// current one (0 = manual failover only).
+    #[arg(long = "failover-timeout-ms", default_value_t = 0)]
+    failover_timeout_ms: u64,
 }
 
 impl ServeReplicationArgs {
     fn into_config(self) -> Result<Option<HaServerConfig>> {
-        let role = match (self.listen, self.standby_of) {
+        let failover = self.failover_timeout_ms > 0;
+        if !failover && !self.ha_peer.is_empty() {
+            bail!("--ha-peer needs --failover-timeout-ms");
+        }
+        if failover && self.listen.is_none() {
+            bail!("automatic failover needs --replication-listen on every node");
+        }
+        let primary_server_name = self.primary_server_name.clone();
+        let role = match (self.listen.clone(), self.standby_of) {
             (None, None) => return Ok(None),
-            (Some(_), Some(_)) => {
-                bail!("--replication-listen and --standby-of are mutually exclusive")
+            (Some(_), Some(_)) if !failover => {
+                bail!("--replication-listen and --standby-of are mutually exclusive without automatic failover")
             }
-            (Some(listen), None) => {
+            (Some(listen), standby_of) => {
                 let allowed_standbys = self
                     .allow_standby
                     .iter()
@@ -8426,18 +8443,31 @@ impl ServeReplicationArgs {
                     "degrade" => bicdb_core::SyncTimeoutPolicy::Degrade,
                     other => bail!("--synchronous-on-timeout must be fail or degrade, not {other}"),
                 };
-                HaServerRole::Primary {
+                let as_primary = HaServerRole::Primary {
                     listen,
                     allowed_standbys,
                     synchronous_standbys: self.synchronous_standbys,
                     synchronous_timeout: Duration::from_millis(self.synchronous_timeout_ms),
                     on_timeout,
+                };
+                match standby_of {
+                    Some(primary) => (
+                        HaServerRole::Standby {
+                            primary,
+                            primary_server_name: primary_server_name.clone(),
+                        },
+                        Some(as_primary),
+                    ),
+                    None => (as_primary.clone(), Some(as_primary)),
                 }
             }
-            (None, Some(primary)) => HaServerRole::Standby {
-                primary,
-                primary_server_name: self.primary_server_name,
-            },
+            (None, Some(primary)) => (
+                HaServerRole::Standby {
+                    primary,
+                    primary_server_name,
+                },
+                None,
+            ),
         };
         let tls = if self.dev_plaintext {
             ReplicationTlsConfig {
@@ -8469,10 +8499,66 @@ impl ServeReplicationArgs {
             tls: Some(tls),
             ..ReplicationConfig::default()
         };
+        let (role, as_primary) = role;
+        let failover = match (failover, as_primary) {
+            (true, Some(as_primary)) => {
+                let timeout = Duration::from_millis(self.failover_timeout_ms);
+                if timeout < bicdb_pgwire::MIN_FAILOVER_TIMEOUT {
+                    bail!(
+                        "--failover-timeout-ms must be at least {}",
+                        bicdb_pgwire::MIN_FAILOVER_TIMEOUT.as_millis()
+                    );
+                }
+                let peers = self
+                    .ha_peer
+                    .iter()
+                    .map(|entry| {
+                        let (node_id, address) = entry.split_once('=').with_context(|| {
+                            format!("--ha-peer {entry}: expected NODE_ID=HOST:PORT")
+                        })?;
+                        Ok(HaPeer {
+                            node_id: node_id.to_string(),
+                            address: address.to_string(),
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                if peers.len() < 2 {
+                    bail!(
+                        "automatic failover needs a group of at least three nodes (two --ha-peer): \
+                         with two, neither side can tell a dead peer from a lost network"
+                    );
+                }
+                let HaServerRole::Primary {
+                    allowed_standbys, ..
+                } = &as_primary
+                else {
+                    unreachable!("as_primary is a primary role");
+                };
+                for peer in &peers {
+                    if !allowed_standbys
+                        .iter()
+                        .any(|allowed| allowed.node_id == peer.node_id)
+                    {
+                        bail!(
+                            "--ha-peer {} must also be allowed with --allow-standby",
+                            peer.node_id
+                        );
+                    }
+                }
+                Some(FailoverConfig {
+                    peers,
+                    timeout,
+                    as_primary,
+                    peer_server_name: self.primary_server_name,
+                })
+            }
+            _ => None,
+        };
         Ok(Some(HaServerConfig {
             replication,
             role,
             advertise_sql: self.advertise_sql,
+            failover,
         }))
     }
 }

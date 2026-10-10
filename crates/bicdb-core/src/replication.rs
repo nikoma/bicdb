@@ -308,6 +308,38 @@ pub enum ReplicationFrame {
         /// Where clients reach the sending primary.
         #[serde(default)]
         primary_sql_address: Option<String>,
+        /// (epoch, commit sequence number at which it began), ascending. A
+        /// list: integer map keys do not survive this enum's JSON encoding.
+        #[serde(default)]
+        epoch_starts: Vec<(u64, u64)>,
+    },
+    /// A candidate asks for a vote to become primary in `term`.
+    VoteRequest {
+        cluster_id: String,
+        candidate: String,
+        term: u64,
+        /// Epoch of the primary whose commits the candidate holds last.
+        data_epoch: u64,
+        last_commit_seq: u64,
+    },
+    VoteResponse {
+        node_id: String,
+        term: u64,
+        granted: bool,
+        /// The voter's known primary epoch.
+        epoch: u64,
+    },
+    /// A primary checks whether its group still follows it.
+    Ping {
+        cluster_id: String,
+        node_id: String,
+        epoch: u64,
+    },
+    Pong {
+        node_id: String,
+        /// The responder's known primary epoch and primary.
+        epoch: u64,
+        primary_id: Option<String>,
     },
     SnapshotStart {
         cluster_id: String,

@@ -1776,6 +1776,12 @@ impl BicDb {
             "on a hot standby/read replica"
         } else if replication_role == Some(NodeRole::Fenced) {
             "on a former primary that a newer primary superseded (fenced)"
+        } else if let Some(refusal) =
+            replication_role.and_then(|_| self.sync_quorum.lease_refusal())
+        {
+            return Err(BicDbError::ReadOnlyStandby(format!(
+                "{operation} is refused: {refusal}"
+            )));
         } else {
             return Ok(());
         };

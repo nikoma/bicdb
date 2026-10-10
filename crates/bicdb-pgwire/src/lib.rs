@@ -16,7 +16,10 @@ pub(crate) use protocol_wire::*;
 mod checkpoint_driver;
 mod high_availability;
 pub(crate) use checkpoint_driver::*;
-pub use high_availability::{restart_requested, AllowedStandby, HaServerConfig, HaServerRole};
+pub use high_availability::{
+    restart_requested, AllowedStandby, FailoverConfig, HaPeer, HaServerConfig, HaServerRole,
+    MIN_FAILOVER_TIMEOUT,
+};
 mod tls_binding;
 mod validation;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -419,7 +422,8 @@ fn database_config_for_server(path: &Path, config: &PgWireConfig) -> Result<DbCo
         .with_paged_rowid_registry(config.paged_rowid_registry);
     if !path.join(DEFAULT_DISTRIBUTION_CONFIG).exists() {
         if let Some(ha) = config.high_availability.as_ref() {
-            db_config = db_config.with_replication(ha.database_replication());
+            let recorded = bicdb_core::read_persisted_ha_role(path)?;
+            db_config = db_config.with_replication(ha.resolved(recorded).database_replication());
         }
         return Ok(db_config);
     }

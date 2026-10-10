@@ -8,7 +8,9 @@ pub use ha_bootstrap::{
 };
 mod replication_live;
 use ha_node::PRIMARY_MARKER;
-pub use ha_node::{read_only_standby_hint, HaNodeStatus, NodeRole, HA_NODE_FILE};
+pub use ha_node::{
+    read_only_standby_hint, read_persisted_ha_role, HaNodeStatus, NodeRole, HA_NODE_FILE,
+};
 pub use replication_live::{
     take_thread_commit_seq, ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus,
     SyncTimeoutPolicy,

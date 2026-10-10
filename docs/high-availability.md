@@ -115,7 +115,65 @@ bicdb serve /srv/standby --port 5432 \
 - As with other databases' synchronous replication, a commit becomes visible
   on the primary slightly before its acknowledgement returns.
 
-### Failover (manual in this release)
+### Automatic failover
+
+A group of three or more nodes elects a new primary on its own when the
+primary goes silent. Start every node with the same group settings; only the
+initial standbys pass `--standby-of`:
+
+```bash
+# db1 (initial primary)
+bicdb serve /srv/db --port 5432 --advertise-sql 10.0.0.1:5432 \
+  --replication-cluster-id prod --replication-node-id db1 \
+  --replication-listen 10.0.0.1:5940 \
+  --ha-peer db2=10.0.0.2:5940 --ha-peer db3=10.0.0.3:5940 \
+  --allow-standby db2=<sha256> --allow-standby db3=<sha256> \
+  --synchronous-standbys 1 --failover-timeout-ms 5000 \
+  --replication-cert db1.crt --replication-key db1.key --replication-ca ca.crt
+
+# db2 and db3: the same, with their own ids and addresses, plus
+#   --standby-of 10.0.0.1:5940 --primary-server-name <name in the peers' certificates>
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--ha-peer ID=HOST:PORT` | Every other member of the group and its replication address. Each peer must also be allowed with `--allow-standby` |
+| `--failover-timeout-ms N` | Silence after which the standbys elect a new primary (at least 3000; 0 = manual failover) |
+
+How it works:
+
+- **Elections.** A standby that has not heard from the primary for the
+  failover timeout (plus a random delay, so candidates rarely collide) stands
+  for election in the next term. It becomes primary with the votes of a
+  majority of the group. A node votes once per term, only for a candidate
+  whose commits are at least as recent as its own, and only when it has not
+  heard from the primary for the failover timeout itself. With synchronous
+  standbys, every acknowledged commit is on a majority-overlapping set of
+  nodes, so the winner always holds every acknowledged commit.
+- **Write lease.** A primary admits writes only while it has heard from
+  enough standbys to form a majority within half the failover timeout. A
+  primary cut off from its group stops writing before the group can elect a
+  successor, so two primaries never accept writes at the same time. A
+  freshly started primary accepts writes once a standby has connected.
+- **Promotion and rejoining.** The winner records its promotion in the
+  database directory and restarts as the primary (a few seconds, the time it
+  takes to open the database). A former primary that comes back learns of the
+  newer epoch from its group, restarts as a standby and follows the new
+  primary; if it holds commits the new primary never had (written but never
+  acknowledged), it is bootstrapped from a snapshot. The recorded role wins
+  over `--standby-of` at every later start.
+- **Clients.** Writes sent to a standby fail with SQLSTATE `25006` and a hint
+  naming the current primary; connect with a multi-host connection string
+  and `target_session_attrs=read-write` to reach the primary automatically.
+
+Measured on a three-node group with a 4 s timeout: the new primary accepted
+writes 5 to 7 seconds after the old one was killed, with no acknowledged write
+lost across three consecutive kills.
+
+A two-node group cannot fail over automatically: neither node can tell a dead
+peer from a broken network. Use manual failover there, or add a third node.
+
+### Manual failover
 
 1. Make sure the old primary is stopped and cannot come back (fence it).
 2. Restart a synchronous standby as the primary (any synchronous standby has
@@ -137,7 +195,7 @@ then streams normally. A crash at any point leaves either the old or the new
 database whole. Commits on the primary pause while the snapshot archive is
 written locally; the network transfer runs without holding anything.
 
-Not yet available: automatic failover. Standbys do not build secondary indexes of their own; reads
+Standbys do not build secondary indexes of their own; reads
 on them stay correct and use scans.
 
 ## Architecture
@@ -220,10 +278,12 @@ verify zero lag, promote the standby, and then move clients.
   distributed `bicdb serve` data safety comes from the synchronous per-range
   command log, not from asynchronous post-commit frame export.
 - File shipping is async fallback replication, not streaming consensus.
-- BicDB has a durable consensus state machine for leader election, but no
-  automatic failover supervisor in `bicdb serve` yet.
+- Automatic failover needs a group of at least three nodes. With
+  asynchronous replication (`--synchronous-standbys 0`) a failover can lose
+  commits that were acknowledged but not yet replicated.
 - BicDB has no multi-writer mode.
-- Operators are responsible for fencing to prevent split brain.
+- Without automatic failover, operators are responsible for fencing to
+  prevent split brain.
 - The lag metric is byte/checkpoint based for the last completed ship, not a
   transaction LSN compatible with PostgreSQL.
 - Shipping should run when no external process is writing directly to the

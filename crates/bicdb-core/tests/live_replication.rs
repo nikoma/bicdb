@@ -623,3 +623,149 @@ fn pinned_standbys_retain_the_log_without_confirming_commits() {
     quorum.set_ack("fresh", 3);
     assert!(quorum.wait_for(4).is_err());
 }
+
+#[test]
+fn votes_go_to_one_up_to_date_candidate_per_term() {
+    for (mode, storage) in storage_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut voter = open(dir.path(), storage.clone(), ReplicationMode::Primary);
+        voter.create_collection("items").unwrap();
+        put(&voter, "a", 1);
+        let own = voter.last_applied_commit_seq();
+        drop(voter);
+        let voter = open(dir.path(), storage.clone(), ReplicationMode::Standby);
+        // Behind this node: refused.
+        assert!(!voter.consider_vote(1, "c1", 0, own - 1).unwrap(), "{mode}");
+        // Up to date: granted, once per term.
+        assert!(voter.consider_vote(1, "c1", 0, own).unwrap(), "{mode}");
+        assert!(voter.consider_vote(1, "c1", 0, own).unwrap(), "{mode}");
+        assert!(!voter.consider_vote(1, "c2", 0, own + 5).unwrap(), "{mode}");
+        // A later term is a new election.
+        assert!(voter.consider_vote(2, "c2", 0, own).unwrap(), "{mode}");
+        assert_eq!(
+            voter.ha_node_status().voted,
+            Some((2, "c2".to_string())),
+            "{mode}"
+        );
+        // A candidacy starts after every term seen and votes for itself.
+        assert_eq!(voter.begin_candidacy("me").unwrap(), 3, "{mode}");
+        assert!(!voter.consider_vote(3, "c3", 0, own).unwrap(), "{mode}");
+        // Terms at or below a known primary epoch are over.
+        voter
+            .record_primary("p", 5, None, &Default::default())
+            .unwrap();
+        assert!(!voter.consider_vote(5, "c5", 9, own).unwrap(), "{mode}");
+        // Commits from an older primary lose against a newer primary's.
+        assert!(
+            !voter.consider_vote(6, "c6", 4, own + 100).unwrap(),
+            "{mode}"
+        );
+        assert!(voter.consider_vote(6, "c6", 5, own).unwrap(), "{mode}");
+    }
+}
+
+#[test]
+fn a_primary_that_grants_a_vote_is_fenced() {
+    let dir = tempfile::tempdir().unwrap();
+    let primary = open(
+        dir.path(),
+        StorageMode::EmbeddedMemory,
+        ReplicationMode::Primary,
+    );
+    assert!(primary.consider_vote(1, "c1", 0, 0).unwrap());
+    assert_eq!(primary.replication_role(), NodeRole::Fenced);
+}
+
+#[test]
+fn a_promoted_primary_bootstraps_standbys_that_diverged_from_its_term() {
+    for (mode, storage) in storage_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let mut standby = open(dir.path(), storage.clone(), ReplicationMode::Primary);
+            standby.create_collection("items").unwrap();
+            put(&standby, "a", 1);
+            put(&standby, "b", 2);
+        }
+        let standby = open(dir.path(), storage.clone(), ReplicationMode::Standby);
+        let start = standby.last_applied_commit_seq();
+        standby.promote_by_election(2, "me", None).unwrap();
+        drop(standby);
+        let mut primary = open(dir.path(), storage.clone(), ReplicationMode::Primary);
+        assert_eq!(primary.replication_role(), NodeRole::Primary, "{mode}");
+        assert_eq!(primary.replication_epoch(), 2, "{mode}");
+        put(&primary, "c", 3);
+        // A former primary of term 0 with commits past the term-2 start has
+        // a history this primary does not share.
+        assert!(
+            matches!(
+                primary.standby_resume(0, start + 1).unwrap(),
+                StandbyResume::Snapshot(_)
+            ),
+            "{mode}"
+        );
+        // Up to the start it shares the history and streams.
+        assert_eq!(
+            primary.standby_resume(0, start).unwrap(),
+            StandbyResume::Stream,
+            "{mode}"
+        );
+        // A standby that already followed term 2 streams.
+        assert_eq!(
+            primary.standby_resume(2, start + 1).unwrap(),
+            StandbyResume::Stream,
+            "{mode}"
+        );
+        // The write lease refuses writes until a standby was heard from.
+        primary
+            .sync_quorum()
+            .configure_lease(Duration::from_secs(2), 1);
+        assert!(primary.create_collection("leased").is_err(), "{mode}");
+        primary.sync_quorum().record_ack("s1", 0);
+        primary.create_collection("leased").unwrap();
+    }
+}
+
+#[test]
+fn failover_frames_survive_the_wire_encoding() {
+    use bicdb_core::replication::ReplicationFrame;
+    use bicdb_core::replication_transport::{recv_frame, send_frame};
+    let frames = vec![
+        ReplicationFrame::Heartbeat {
+            cluster_id: "c".to_string(),
+            node_id: "n1".to_string(),
+            last_commit_seq: 9,
+            epoch: 3,
+            primary_sql_address: Some("db1:5432".to_string()),
+            epoch_starts: vec![(2, 7), (3, 9)],
+        },
+        ReplicationFrame::VoteRequest {
+            cluster_id: "c".to_string(),
+            candidate: "n2".to_string(),
+            term: 4,
+            data_epoch: 3,
+            last_commit_seq: 9,
+        },
+        ReplicationFrame::VoteResponse {
+            node_id: "n3".to_string(),
+            term: 4,
+            granted: true,
+            epoch: 3,
+        },
+        ReplicationFrame::Ping {
+            cluster_id: "c".to_string(),
+            node_id: "n1".to_string(),
+            epoch: 3,
+        },
+        ReplicationFrame::Pong {
+            node_id: "n2".to_string(),
+            epoch: 4,
+            primary_id: Some("n2".to_string()),
+        },
+    ];
+    for frame in frames {
+        let mut wire = Vec::new();
+        send_frame(&mut wire, &frame, 1 << 20).unwrap();
+        let decoded = recv_frame(&mut std::io::Cursor::new(wire), 1 << 20).unwrap();
+        assert_eq!(decoded, frame);
+    }
+}

@@ -285,6 +285,10 @@ structures together.
   ([security and RLS](docs/security.md#postgresql-rls-catalog-metadata)).
 - Full and incremental backup chains, verification, PITR, and executable
   restore drills ([backup and recovery](docs/backup-recovery.md)).
+- Synchronous streaming replication inside `bicdb serve`: commits are
+  acknowledged only after the configured number of standbys has them durably
+  (RPO = 0), standbys serve reads, and catalog changes replicate in order
+  ([high availability](docs/high-availability.md#synchronous-streaming-replication-bicdb-serve)).
 - Flashback time travel: `AS OF SCN|TIMESTAMP` and `VERSIONS BETWEEN`,
   SQL:2011 `FOR SYSTEM_TIME`, and `FLASHBACK TABLE ... TO SCN|TIMESTAMP` over
   a durable, retention-managed row history with microsecond SCNs, enabled per

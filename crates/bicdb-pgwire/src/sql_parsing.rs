@@ -560,9 +560,9 @@ pub(crate) fn ensure_server_writable(server: &Arc<PgWireServer>) -> Result<()> {
     }
     let db = server.read_db_for_transaction_progress()?;
     if db.ha_role() == HaRole::Standby {
-        return Err(PgWireError::Server(
-            "database is read-only standby; promote before accepting writes".to_string(),
-        ));
+        return Err(PgWireError::BicDb(bicdb_core::BicDbError::ReadOnlyStandby(
+            "writes are refused; promote before accepting writes".to_string(),
+        )));
     }
     Ok(())
 }

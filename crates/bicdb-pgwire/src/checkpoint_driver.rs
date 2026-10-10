@@ -290,7 +290,50 @@ pub(crate) fn start_background_tasks_for_scope(
             if interval_secs == 0 {
                 return;
             }
+            let bin_retention_secs: u64 = std::env::var("BICDB_RECYCLEBIN_RETENTION_SECS")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(7 * 24 * 3600);
             while worker.sleep_until_shutdown(Duration::from_secs(interval_secs)) {
+                if bin_retention_secs > 0 {
+                    let cutoff_micros = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|now| now.as_micros() as i64)
+                        .unwrap_or_default()
+                        .saturating_sub((bin_retention_secs as i64).saturating_mul(1_000_000));
+                    let expired = match flashback_server.read_db() {
+                        Ok(db) => db
+                            .scan_collection(bicdb_sql::RECYCLE_BIN_COLLECTION)
+                            .map(|entries| {
+                                entries.iter().any(|entry| {
+                                    entry
+                                        .metadata
+                                        .get("dropped_at_micros")
+                                        .and_then(|value| value.as_i64())
+                                        .is_some_and(|dropped| dropped < cutoff_micros)
+                                })
+                            })
+                            .unwrap_or(false),
+                        Err(_) => false,
+                    };
+                    if expired {
+                        if let Ok(admission) = flashback_server.try_admit_write() {
+                            if let Ok(mut db) = flashback_server.write_db_with_admission(&admission)
+                            {
+                                let mut session = bicdb_sql::SqlSession::new(&mut db);
+                                match session.purge_recycle_bin_older_than(cutoff_micros) {
+                                    Ok(0) => {}
+                                    Ok(purged) => eprintln!(
+                                        "bicdb recycle bin retention: purged {purged} dropped tables"
+                                    ),
+                                    Err(error) => {
+                                        eprintln!("bicdb recycle bin retention error: {error}")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 let has_retention = match flashback_server.read_db() {
                     Ok(db) => db
                         .flashback_collections()

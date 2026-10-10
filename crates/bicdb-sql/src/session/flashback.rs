@@ -26,8 +26,51 @@ struct ArchiveDdl {
 
 struct FlashbackTable {
     tables: Vec<ObjectName>,
-    scn: bool,
-    point: Expr,
+    target: FlashbackTarget,
+}
+
+enum FlashbackTarget {
+    Point { scn: bool, point: Expr },
+    BeforeDrop { rename_to: Option<ObjectName> },
+}
+
+/// Recycle bin management statements.
+enum RecycleBinStatement {
+    PurgeTable(ObjectName),
+    PurgeRecycleBin,
+    ShowRecycleBin,
+}
+
+/// `None` when the statement is not PURGE ... / SHOW RECYCLEBIN.
+fn parse_recycle_bin_statement(statement: &str) -> Option<Result<RecycleBinStatement>> {
+    let dialect = PostgreSqlDialect {};
+    let mut parser = Parser::new(&dialect).try_with_sql(statement).ok()?;
+    let first = parser.next_token().token;
+    let parsed = if is_word(&first, "PURGE") {
+        let next = parser.next_token().token;
+        if is_word(&next, "RECYCLEBIN") {
+            Ok(RecycleBinStatement::PurgeRecycleBin)
+        } else if is_word(&next, "TABLE") {
+            parser
+                .parse_object_name(false)
+                .map(RecycleBinStatement::PurgeTable)
+                .map_err(|error| SqlError::InvalidSql(error.to_string()))
+        } else {
+            return None;
+        }
+    } else if is_word(&first, "SHOW") {
+        if !is_word(&parser.next_token().token, "RECYCLEBIN") {
+            return None;
+        }
+        Ok(RecycleBinStatement::ShowRecycleBin)
+    } else {
+        return None;
+    };
+    Some(
+        parsed.and_then(|statement| {
+            expect_end(&mut parser, "recycle bin statement").map(|_| statement)
+        }),
+    )
 }
 
 fn retention_unit_seconds(unit: &str) -> Option<u64> {
@@ -133,24 +176,50 @@ fn parse_flashback_table(statement: &str) -> Option<Result<FlashbackTable>> {
             ));
         }
         let kind = parser.next_token().token;
-        let scn = if is_word(&kind, "SCN") {
-            true
-        } else if is_word(&kind, "TIMESTAMP") {
-            false
-        } else if is_word(&kind, "BEFORE") {
-            return Err(SqlError::Unsupported(
-                "FLASHBACK TABLE ... TO BEFORE DROP is not supported yet".to_string(),
-            ));
+        let target = if is_word(&kind, "BEFORE") {
+            if !parser.parse_keyword(Keyword::DROP) {
+                return Err(SqlError::InvalidSql(
+                    "FLASHBACK TABLE expects TO BEFORE DROP".to_string(),
+                ));
+            }
+            if tables.len() != 1 {
+                return Err(SqlError::InvalidSql(
+                    "FLASHBACK TABLE ... TO BEFORE DROP restores one table at a time".to_string(),
+                ));
+            }
+            let rename_to = if parser.parse_keyword(Keyword::RENAME) {
+                if !parser.parse_keyword(Keyword::TO) {
+                    return Err(SqlError::InvalidSql(
+                        "expected RENAME TO <name>".to_string(),
+                    ));
+                }
+                Some(
+                    parser
+                        .parse_object_name(false)
+                        .map_err(|error| SqlError::InvalidSql(error.to_string()))?,
+                )
+            } else {
+                None
+            };
+            FlashbackTarget::BeforeDrop { rename_to }
         } else {
-            return Err(SqlError::InvalidSql(
-                "FLASHBACK TABLE expects TO SCN <expr> or TO TIMESTAMP <expr>".to_string(),
-            ));
+            let scn = if is_word(&kind, "SCN") {
+                true
+            } else if is_word(&kind, "TIMESTAMP") {
+                false
+            } else {
+                return Err(SqlError::InvalidSql(
+                    "FLASHBACK TABLE expects TO SCN <expr>, TO TIMESTAMP <expr> or TO BEFORE DROP"
+                        .to_string(),
+                ));
+            };
+            let point = parser
+                .parse_expr()
+                .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+            FlashbackTarget::Point { scn, point }
         };
-        let point = parser
-            .parse_expr()
-            .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
         expect_end(&mut parser, statement)?;
-        Ok(FlashbackTable { tables, scn, point })
+        Ok(FlashbackTable { tables, target })
     })();
     Some(parsed)
 }
@@ -168,8 +237,28 @@ impl<'db> SqlSession<'db> {
         }
         if let Some(request) = parse_flashback_table(statement) {
             let request = request?;
-            self.execute_flashback_table(request)?;
+            match request.target {
+                FlashbackTarget::BeforeDrop { rename_to } => {
+                    self.execute_flashback_before_drop(&request.tables[0], rename_to.as_ref())?;
+                }
+                FlashbackTarget::Point { scn, point } => {
+                    self.execute_flashback_table(request.tables, scn, point)?;
+                }
+            }
             return Ok(Some(SqlResult::command("FLASHBACK")));
+        }
+        if let Some(statement) = parse_recycle_bin_statement(statement) {
+            return match statement? {
+                RecycleBinStatement::PurgeTable(name) => {
+                    self.execute_purge_table(&name)?;
+                    Ok(Some(SqlResult::command("PURGE")))
+                }
+                RecycleBinStatement::PurgeRecycleBin => {
+                    self.execute_purge_recycle_bin()?;
+                    Ok(Some(SqlResult::command("PURGE")))
+                }
+                RecycleBinStatement::ShowRecycleBin => Ok(Some(self.execute_show_recycle_bin()?)),
+            };
         }
         Ok(None)
     }
@@ -192,16 +281,21 @@ impl<'db> SqlSession<'db> {
         Ok(())
     }
 
-    fn execute_flashback_table(&mut self, request: FlashbackTable) -> Result<()> {
+    fn execute_flashback_table(
+        &mut self,
+        tables_named: Vec<ObjectName>,
+        scn: bool,
+        point_expr: Expr,
+    ) -> Result<()> {
         let point = {
             let engine = self.sql_engine();
-            let value = engine.eval_flashback_bound(&request.point)?;
+            let value = engine.eval_flashback_bound(&point_expr)?;
             if matches!(value, SqlValue::Null) {
                 return Err(SqlError::InvalidSql(
                     "FLASHBACK TABLE target cannot be NULL".to_string(),
                 ));
             }
-            if request.scn {
+            if scn {
                 let scn = sql_value_i64(&value)
                     .and_then(|scn| u64::try_from(scn).ok())
                     .ok_or_else(|| {
@@ -212,8 +306,8 @@ impl<'db> SqlSession<'db> {
                 FlashbackPoint::TimestampMicros(unix_micros_from_timestamp_text(&value.to_cell())?)
             }
         };
-        let mut tables = Vec::with_capacity(request.tables.len());
-        for name in &request.tables {
+        let mut tables = Vec::with_capacity(tables_named.len());
+        for name in &tables_named {
             let table = resolve_session_relation_name(self.db_ref(), &relation_name(name)?)?;
             self.check_flashback_table_allowed(&table)?;
             tables.push(table);

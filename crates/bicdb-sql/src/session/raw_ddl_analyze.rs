@@ -1033,8 +1033,9 @@ impl<'db> SqlSession<'db> {
                 if_exists,
                 names,
                 cascade,
+                purge,
                 ..
-            } => self.execute_drop(*object_type, *if_exists, names, *cascade),
+            } => self.execute_drop(*object_type, *if_exists, names, *cascade, *purge),
             Statement::AlterTable(alter_table) => self.execute_alter_table(alter_table),
             Statement::CreateIndex(create_index) => self.execute_create_index(create_index),
             Statement::CreateFunction(create_function) => {

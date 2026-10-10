@@ -2,9 +2,9 @@
 //!
 //! Accepted syntax, after a table reference:
 //!
-//! * Oracle: `AS OF SCN expr`, `AS OF TIMESTAMP expr`,
+//! * `AS OF SCN expr`, `AS OF TIMESTAMP expr`,
 //!   `VERSIONS BETWEEN {SCN | TIMESTAMP} {expr | MINVALUE} AND {expr | MAXVALUE}`
-//! * SQL:2011 / SQL Server / MariaDB: `FOR SYSTEM_TIME AS OF expr`,
+//! * SQL:2011 system time: `FOR SYSTEM_TIME AS OF expr`,
 //!   `FOR SYSTEM_TIME BETWEEN expr AND expr`, `FOR SYSTEM_TIME FROM expr TO expr`,
 //!   `FOR SYSTEM_TIME ALL`
 //!
@@ -27,8 +27,8 @@ use sqlparser::tokenizer::{Location, TokenWithSpan, Tokenizer};
 /// Named table-function argument that marks a flashback relation.
 pub(crate) const FLASHBACK_ARG: &str = "__bicdb_flashback";
 
-/// Oracle `VERSIONS BETWEEN` pseudocolumns. They are hidden from `*` in a
-/// `SELECT` whose `FROM` contains a `VERSIONS` source, as in Oracle.
+/// `VERSIONS BETWEEN` pseudocolumns. They are hidden from `*` in a `SELECT`
+/// whose `FROM` contains a `VERSIONS` source and must be selected by name.
 pub(crate) const FLASHBACK_PSEUDO_COLUMNS: [&str; 6] = [
     "versions_startscn",
     "versions_starttime",

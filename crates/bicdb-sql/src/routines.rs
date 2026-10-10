@@ -2175,6 +2175,34 @@ pub(crate) fn alter_table_rename_table(
     let primary_key_name = schema
         .primary_key_column()
         .map(|_| schema.primary_key_constraint_name());
+    // Outside a transaction block the rename is catalog-only: rows, indexes
+    // and flashback history stay where they are. Inside one, the copy path
+    // below provides the undo image; it is also the fallback when the
+    // storage layer cannot rename this collection in place.
+    if !track_undo {
+        match db.rename_collection(old_table, new_table) {
+            Ok(()) => {
+                let sequences = list_sequences(db)?
+                    .into_iter()
+                    .filter(|sequence| sequence.owned_by_table.as_deref() == Some(old_table))
+                    .collect::<Vec<_>>();
+                delete_schema(db, old_table)?;
+                schema.name = new_table.to_string();
+                if schema.primary_key_name.is_none() {
+                    schema.primary_key_name = primary_key_name;
+                }
+                for mut sequence in sequences {
+                    sequence.owned_by_table = Some(new_table.to_string());
+                    save_sequence(db, &sequence)?;
+                }
+                save_schema(db, schema)?;
+                sql_index_definitions_cache_clear();
+                return Ok(None);
+            }
+            Err(BicDbError::Unsupported(_)) => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
     let records = db.scan_collection(old_table)?;
     let indexes = db
         .index_definitions()

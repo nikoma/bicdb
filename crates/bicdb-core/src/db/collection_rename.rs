@@ -24,9 +24,22 @@ pub(crate) const CATALOG_LOG_COLLECTION: &str = "__bicdb_catalog_log";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub(crate) enum CatalogOp {
-    Create { name: String, mode: CollectionMode },
-    Drop { name: String },
-    Rename { from: String, to: String },
+    Create {
+        name: String,
+        mode: CollectionMode,
+    },
+    Drop {
+        name: String,
+    },
+    Rename {
+        from: String,
+        to: String,
+    },
+    /// The primary's complete index catalog; standbys build what they lack
+    /// from their own rows.
+    IndexCatalog {
+        definitions: Vec<IndexDefinition>,
+    },
 }
 
 impl BicDb {
@@ -131,9 +144,86 @@ impl BicDb {
                         self.rename_collection_unchecked(&from, &to)?;
                     }
                 }
+                CatalogOp::IndexCatalog { definitions } => {
+                    self.reconcile_local_indexes(&definitions);
+                }
             }
         }
         Ok(())
+    }
+
+    /// Creates the catalog log of a replicating primary if it is missing, so
+    /// catalog announcements need no exclusive access later.
+    pub fn ensure_catalog_log(&mut self) -> Result<()> {
+        if !self.replicates_catalog() || self.collections.contains_key(CATALOG_LOG_COLLECTION) {
+            return Ok(());
+        }
+        let meta = CollectionMeta::standard(CATALOG_LOG_COLLECTION);
+        self.collections.insert(
+            CATALOG_LOG_COLLECTION.to_string(),
+            RwLock::new(CollectionState::new(meta)),
+        );
+        self.persist_catalog()
+    }
+
+    /// Primary: announces the index catalog to standbys when it changed since
+    /// the last announcement. Returns whether it announced.
+    pub fn announce_index_catalog(&self) -> Result<bool> {
+        if !self.replicates_catalog() || !self.collections.contains_key(CATALOG_LOG_COLLECTION) {
+            return Ok(false);
+        }
+        let definitions = self.index_definitions();
+        let mut announced = self.announced_index_catalog.lock();
+        if announced.as_ref() == Some(&definitions) {
+            return Ok(false);
+        }
+        let op = CatalogOp::IndexCatalog {
+            definitions: definitions.clone(),
+        };
+        let record = Record::new(Uuid::new_v4().simple().to_string())
+            .with_metadata(serde_json::to_value(&op)?);
+        let mut tx = self.begin_transaction()?;
+        tx.insert(CATALOG_LOG_COLLECTION, record)?;
+        tx.commit()?;
+        *announced = Some(definitions);
+        Ok(true)
+    }
+
+    /// Standby: makes the local indexes match the primary's catalog, building
+    /// each from this node's own rows. A failed build is reported and skipped:
+    /// reads stay correct without the index.
+    fn reconcile_local_indexes(&mut self, wanted: &[IndexDefinition]) {
+        self.local_index_maintenance = true;
+        let local = self.index_definitions();
+        for existing in &local {
+            let keep = wanted.iter().any(|definition| definition == existing);
+            if !keep {
+                if let Err(error) = self.drop_index(&existing.name) {
+                    eprintln!(
+                        "bicdb replication: could not drop local index {}: {error}",
+                        existing.name
+                    );
+                }
+            }
+        }
+        for definition in wanted {
+            if self.indexes.contains_key(&definition.name)
+                || !self.collections.contains_key(&definition.collection)
+            {
+                continue;
+            }
+            match self.create_index_online(definition.clone()) {
+                Ok(_) => eprintln!(
+                    "bicdb replication: built local index {} on {}",
+                    definition.name, definition.collection
+                ),
+                Err(error) => eprintln!(
+                    "bicdb replication: could not build local index {}: {error}",
+                    definition.name
+                ),
+            }
+        }
+        self.local_index_maintenance = false;
     }
 
     /// Renames a collection without moving its rows. Its indexes, vector index,

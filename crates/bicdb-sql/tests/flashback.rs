@@ -588,3 +588,68 @@ fn history_feeds_views_and_insert_select() {
         );
     }
 }
+
+#[test]
+fn point_lookups_read_only_that_rows_history_and_agree_with_full_scans() {
+    for (mode, config) in modes() {
+        let (_dir, mut db) = open(config);
+        let mut session = SqlSession::new(&mut db);
+        rows(
+            &mut session,
+            "CREATE TABLE notes (id TEXT PRIMARY KEY, body TEXT)",
+        );
+        // Ids that share prefixes with history ids (`<rid>@<scn>`).
+        rows(
+            &mut session,
+            "INSERT INTO notes VALUES ('a', 'a0'), ('a@b', 'ab0'), ('a@00001', 'x0'), ('b', 'b0')",
+        );
+        rows(&mut session, "ALTER TABLE notes FLASHBACK ARCHIVE");
+        let mut points = vec![scn(&mut session)];
+        for round in 1..=3 {
+            rows(
+                &mut session,
+                &format!("UPDATE notes SET body = body || '{round}'"),
+            );
+            points.push(scn(&mut session));
+        }
+        rows(&mut session, "DELETE FROM notes WHERE id = 'a'");
+        points.push(scn(&mut session));
+        rows(&mut session, "INSERT INTO notes VALUES ('a', 'reborn')");
+        points.push(scn(&mut session));
+
+        for point in &points {
+            let all = rows(
+                &mut session,
+                &format!("SELECT id, body FROM notes AS OF SCN {point} ORDER BY id"),
+            );
+            for id in ["a", "a@b", "a@00001", "b", "missing"] {
+                let one = rows(
+                    &mut session,
+                    &format!("SELECT id, body FROM notes AS OF SCN {point} WHERE id = '{id}'"),
+                );
+                let expected = all
+                    .iter()
+                    .filter(|row| text(&row[0]) == id)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                assert_eq!(one, expected, "{mode}: id {id} at {point}");
+            }
+            // Other predicates still filter the looked-up row.
+            let none = rows(
+                &mut session,
+                &format!("SELECT id FROM notes AS OF SCN {point} WHERE id = 'b' AND body = 'nope'"),
+            );
+            assert!(none.is_empty(), "{mode}");
+        }
+        // VERSIONS BETWEEN for one row.
+        let versions = rows(
+            &mut session,
+            &format!(
+                "SELECT body FROM notes VERSIONS BETWEEN SCN {} AND MAXVALUE WHERE id = 'a@b' ORDER BY versions_startscn NULLS FIRST",
+                points[0]
+            ),
+        );
+        let bodies = versions.iter().map(|row| text(&row[0])).collect::<Vec<_>>();
+        assert_eq!(bodies, ["ab0", "ab01", "ab012", "ab0123"], "{mode}");
+    }
+}

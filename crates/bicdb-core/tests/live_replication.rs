@@ -769,3 +769,130 @@ fn failover_frames_survive_the_wire_encoding() {
         assert_eq!(decoded, frame);
     }
 }
+
+#[test]
+fn flashback_queries_work_on_standbys() {
+    use bicdb_core::FlashbackPoint;
+    for (mode, storage) in storage_modes() {
+        let primary_dir = tempfile::tempdir().unwrap();
+        let standby_dir = tempfile::tempdir().unwrap();
+        let mut primary = open(
+            primary_dir.path(),
+            storage.clone(),
+            ReplicationMode::Primary,
+        );
+        let mut standby = open(
+            standby_dir.path(),
+            storage.clone(),
+            ReplicationMode::Standby,
+        );
+        let mut cursor = ReplicationCursor::new(0);
+        primary.create_collection("items").unwrap();
+        put(&primary, "a", 1);
+        primary.enable_flashback("items", 3600).unwrap();
+        let before = primary.current_scn().unwrap();
+        put(&primary, "a", 2);
+        put(&primary, "b", 3);
+        ship(&primary, &mut standby, &mut cursor);
+
+        let as_of = |db: &BicDb| {
+            db.flashback_rows("items", FlashbackPoint::Scn(before))
+                .unwrap_or_else(|error| panic!("{mode}: {error}"))
+                .into_iter()
+                .map(|record| (record.id, record.metadata["value"].as_i64().unwrap()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(as_of(&primary), vec![("a".to_string(), 1)], "{mode}");
+        assert_eq!(as_of(&standby), as_of(&primary), "{mode}");
+        let one = standby
+            .flashback_rows_for_ids("items", FlashbackPoint::Scn(before), &["a".to_string()])
+            .unwrap();
+        assert_eq!(one.len(), 1, "{mode}");
+        // Still true after the standby restarts.
+        drop(standby);
+        let standby = open(
+            standby_dir.path(),
+            storage.clone(),
+            ReplicationMode::Standby,
+        );
+        assert_eq!(as_of(&standby), vec![("a".to_string(), 1)], "{mode}");
+    }
+}
+
+#[test]
+fn standbys_build_the_primarys_indexes_from_their_own_rows() {
+    use bicdb_core::{IndexDefinition, IndexField, IndexKind, IndexValue};
+    for (mode, storage) in storage_modes() {
+        let primary_dir = tempfile::tempdir().unwrap();
+        let standby_dir = tempfile::tempdir().unwrap();
+        let mut primary = open(
+            primary_dir.path(),
+            storage.clone(),
+            ReplicationMode::Primary,
+        );
+        let mut standby = open(
+            standby_dir.path(),
+            storage.clone(),
+            ReplicationMode::Standby,
+        );
+        let mut cursor = ReplicationCursor::new(0);
+        primary.ensure_catalog_log().unwrap();
+        primary.create_collection("items").unwrap();
+        for index in 0..50 {
+            put(&primary, &format!("k{index}"), index % 5);
+        }
+        let definition = IndexDefinition {
+            name: "items_value".to_string(),
+            collection: "items".to_string(),
+            fields: vec![IndexField::MetadataPath(vec!["value".to_string()])],
+            unique: false,
+            kind: IndexKind::default(),
+            predicate: None,
+            exclusion: None,
+        };
+        primary.create_index(definition.clone()).unwrap();
+        assert!(primary.announce_index_catalog().unwrap(), "{mode}");
+        assert!(
+            !primary.announce_index_catalog().unwrap(),
+            "{mode}: unchanged"
+        );
+        ship(&primary, &mut standby, &mut cursor);
+        assert_eq!(
+            standby.index_definitions(),
+            vec![definition.clone()],
+            "{mode}"
+        );
+        let lookup = |db: &BicDb| {
+            let mut ids = db
+                .lookup_index("items_value", &[IndexValue::Int(3)])
+                .unwrap();
+            ids.sort();
+            ids
+        };
+        assert_eq!(lookup(&standby), lookup(&primary), "{mode}");
+        assert_eq!(lookup(&standby).len(), 10, "{mode}");
+        // The build is local: the standby stays exactly where the stream left it.
+        assert_eq!(
+            standby.last_applied_commit_seq(),
+            primary.current_commit_seq(),
+            "{mode}"
+        );
+        // Later writes keep the standby's index current.
+        put(&primary, "late", 3);
+        ship(&primary, &mut standby, &mut cursor);
+        assert_eq!(lookup(&standby).len(), 11, "{mode}");
+        // Dropped on the primary, dropped on the standby.
+        primary.drop_index("items_value").unwrap();
+        primary.announce_index_catalog().unwrap();
+        put(&primary, "after-drop", 1);
+        ship(&primary, &mut standby, &mut cursor);
+        assert!(standby.index_definitions().is_empty(), "{mode}");
+        assert_eq!(
+            standby.last_applied_commit_seq(),
+            primary.current_commit_seq(),
+            "{mode}"
+        );
+        // Writes stay refused on the standby.
+        assert!(standby.create_collection("nope").is_err(), "{mode}");
+    }
+}

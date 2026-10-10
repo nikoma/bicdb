@@ -1769,6 +1769,9 @@ impl BicDb {
     }
 
     pub(crate) fn ensure_writable(&self, operation: &str) -> Result<()> {
+        if self.local_index_maintenance {
+            return Ok(());
+        }
         let replication_role = self.config.replication.enabled.then(|| self.ha_node.role());
         let reason = if self.ha_state.role == HaRole::Standby
             || replication_role == Some(NodeRole::Standby)

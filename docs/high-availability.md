@@ -195,8 +195,11 @@ then streams normally. A crash at any point leaves either the old or the new
 database whole. Commits on the primary pause while the snapshot archive is
 written locally; the network transfer runs without holding anything.
 
-Standbys do not build secondary indexes of their own; reads
-on them stay correct and use scans.
+Standbys build the primary's indexes from their own rows: the primary
+announces its index catalog through the replication stream whenever it
+changes (and once at start), and each standby builds what it lacks, rebuilds
+what changed and drops what is gone, without writing to the replicated data.
+Indexed queries on a standby run as fast as on the primary.
 
 ## Architecture
 

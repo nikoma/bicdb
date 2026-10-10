@@ -189,14 +189,23 @@ lets `ROLLBACK` undo it.
 - Transaction-level flashback queries, a per-row commit SCN pseudocolumn,
   `VERSIONS ... AS OF`, named archives, and whole-database flashback. For a
   whole-database rewind, use [PITR](backup-recovery.md).
-- `AS OF` on read-only standbys. History rows replicate, but the archive
-  setting is not yet part of the replicated catalog.
+
+## Standbys
+
+History rows and archive settings replicate with every commit, so `AS OF`,
+`VERSIONS BETWEEN` and `FOR SYSTEM_TIME` work on read-only standbys exactly as
+on the primary.
 
 ## Costs
 
 Tables without an archive pay one atomic load per commit. Commits that write
-archived tables are serialized with each other, which is what makes SCN order
-equal visibility order, and they write one extra row per changed row. History
-reads currently scan the table's history collection. They are fine for
-auditing and recovery, but not meant to be a hot query path on very large
-histories.
+archived tables write one extra row per changed row. Commits to the same
+archived table are serialized, which keeps each row's versions in SCN order;
+commits to different archived tables run in parallel. A flashback read waits
+for the commits numbered at or below its SCN to finish, so a past state never
+changes once it has been read. Each
+history is indexed by row: `AS OF` and `VERSIONS BETWEEN` queries with an
+equality on the primary key (`WHERE id = 42`) read only that row's versions,
+as fast as a current-row lookup however long the history grows. Queries over
+the whole table read the whole history once, holding only the newest
+version per row in memory.

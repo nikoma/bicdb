@@ -481,6 +481,7 @@ impl SqlEngine<'_> {
         name: &ObjectName,
         alias: Option<&TableAlias>,
         request: FlashbackRequest,
+        selection: Option<&Expr>,
     ) -> Result<RowSet> {
         let table = relation_name(name)?;
         let table = resolve_session_relation_name(self.db_ref(), &table)?;
@@ -489,12 +490,34 @@ impl SqlEngine<'_> {
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
         let db = self.db_ref();
+        // `WHERE <primary key> = ...` reads only that row's history. The
+        // WHERE clause is still applied to the result as usual.
+        let rids = match selection {
+            Some(selection) => match load_schema_shared(db, &table)? {
+                Some(schema) if !primary_key_requires_typed_identity(&schema) => {
+                    match self.primary_key_access_for_selection(
+                        &table,
+                        &alias_name,
+                        &schema,
+                        selection,
+                    )? {
+                        Some(PrimaryKeyAccess::Exact { record_id, .. }) => Some(vec![record_id]),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            },
+            None => None,
+        };
+        let rids = rids.as_deref();
         let (records, versions) = if request.versions {
             let low = self.flashback_point(request.kind, &request.bounds[0])?;
             let high = self.flashback_point(request.kind, &request.bounds[1])?;
             let versions = match self.security_context.as_ref() {
-                Some(ctx) => db.flashback_versions_with_context(ctx, &table, low, high),
-                None => db.flashback_versions(&table, low, high),
+                Some(ctx) => {
+                    db.flashback_versions_for_ids_with_context(ctx, &table, low, high, rids)
+                }
+                None => db.flashback_versions_for_ids(&table, low, high, rids),
             }?;
             let records = versions
                 .iter()
@@ -505,9 +528,13 @@ impl SqlEngine<'_> {
             let point = self
                 .flashback_point(request.kind, &request.bounds[0])?
                 .ok_or_else(|| SqlError::InvalidSql("AS OF point cannot be NULL".to_string()))?;
-            let records = match self.security_context.as_ref() {
-                Some(ctx) => db.flashback_rows_with_context(ctx, &table, point),
-                None => db.flashback_rows(&table, point),
+            let records = match (self.security_context.as_ref(), rids) {
+                (Some(ctx), Some(rids)) => {
+                    db.flashback_rows_for_ids_with_context(ctx, &table, point, rids)
+                }
+                (Some(ctx), None) => db.flashback_rows_with_context(ctx, &table, point),
+                (None, Some(rids)) => db.flashback_rows_for_ids(&table, point, rids),
+                (None, None) => db.flashback_rows(&table, point),
             }?;
             (records, None)
         };

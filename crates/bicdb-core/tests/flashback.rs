@@ -355,3 +355,76 @@ fn history_survives_compaction_and_reopen() {
         assert!(db.current_scn().unwrap() > s1, "{mode}");
     }
 }
+
+/// Commits to different archived tables run in parallel; a past state read
+/// at `current_scn()` never changes afterwards, and counters only grow.
+#[test]
+fn concurrent_archived_commits_keep_past_states_stable() {
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+    for (mode, config) in configs() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(dir.path(), config).unwrap();
+        for table in ["left", "right"] {
+            db.create_collection(table).unwrap();
+            for writer in 0..2 {
+                let mut tx = db.begin_transaction().unwrap();
+                tx.insert(table, row(&format!("w{writer}"), 0)).unwrap();
+                tx.commit().unwrap();
+            }
+            db.enable_flashback(table, 3600).unwrap();
+        }
+        let db = Arc::new(db);
+        let snapshot = |db: &BicDb, scn: u64| {
+            let mut state = BTreeMap::new();
+            for table in ["left", "right"] {
+                for record in db.flashback_rows(table, FlashbackPoint::Scn(scn)).unwrap() {
+                    state.insert(
+                        format!("{table}/{}", record.id),
+                        record.metadata["balance"].as_i64().unwrap(),
+                    );
+                }
+            }
+            state
+        };
+        let writers = (0..4)
+            .map(|writer| {
+                let db = Arc::clone(&db);
+                std::thread::spawn(move || {
+                    let table = if writer % 2 == 0 { "left" } else { "right" };
+                    let id = format!("w{}", writer / 2);
+                    for value in 1..=60 {
+                        loop {
+                            let mut tx = db.begin_transaction().unwrap();
+                            tx.insert(table, row(&id, value)).unwrap();
+                            if tx.commit().is_ok() {
+                                break;
+                            }
+                        }
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        let mut observed = Vec::new();
+        while writers.iter().any(|writer| !writer.is_finished()) {
+            let scn = db.current_scn().unwrap();
+            observed.push((scn, snapshot(&db, scn)));
+        }
+        for writer in writers {
+            writer.join().unwrap();
+        }
+        let scn = db.current_scn().unwrap();
+        observed.push((scn, snapshot(&db, scn)));
+        assert!(observed.len() > 1, "{mode}");
+        for window in observed.windows(2) {
+            for (key, value) in &window[0].1 {
+                assert!(window[1].1[key] >= *value, "{mode}: {key} went backwards");
+            }
+        }
+        for (scn, state) in &observed {
+            assert_eq!(&snapshot(&db, *scn), state, "{mode}: AS OF {scn} changed");
+        }
+        let last = &observed.last().unwrap().1;
+        assert!(last.values().all(|value| *value == 60), "{mode}: {last:?}");
+    }
+}

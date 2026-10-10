@@ -537,7 +537,7 @@ impl<'db> SqlEngine<'db> {
             .transpose()?
             .flatten()
         {
-            return self.flashback_row_set(name, alias.as_ref(), request);
+            return self.flashback_row_set(name, alias.as_ref(), request, selection);
         }
         let table = if args.is_some() {
             normalize_object_name(&object_name(name)?)

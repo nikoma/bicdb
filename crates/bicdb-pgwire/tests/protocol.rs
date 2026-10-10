@@ -993,6 +993,12 @@ fn standby_server_exposes_ha_status_and_rejects_writes() {
     let error = read_error_response(&mut client);
     assert!(error.contains("read-only standby"));
     assert!(error.contains("C25006"), "{error}");
+
+    // What client libraries ask to route read-write and standby sessions.
+    send_query(&mut client, "SHOW transaction_read_only;");
+    assert_eq!(read_query_rows(&mut client)[0][0], "on");
+    send_query(&mut client, "SELECT pg_catalog.pg_is_in_recovery();");
+    assert_eq!(read_query_rows(&mut client)[0][0], "t");
     client.write_all(b"X\0\0\0\x04").unwrap();
 
     server.request_shutdown();

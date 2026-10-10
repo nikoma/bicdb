@@ -54,6 +54,7 @@ tokio.workspace = true
 osmpbfreader.workspace = true
 protobuf.workspace = true
 tempfile.workspace = true
+tokio-postgres = "0.7.18"
 
 [[test]]
 name = "paged_recovery_cli"

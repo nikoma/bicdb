@@ -272,6 +272,13 @@ impl BicDb {
         self.ensure_writable("probe").is_err()
     }
 
+    /// True when this node is not the primary of its group: a standby, or a
+    /// former primary that was fenced.
+    pub fn is_standby_role(&self) -> bool {
+        self.ha_state.role == HaRole::Standby
+            || (self.config.replication.enabled && self.ha_node.role() != NodeRole::Primary)
+    }
+
     /// Drops the transaction log before `keep_from` (`u64::MAX`: all of it),
     /// where `dropped_through` is the highest commit sequence whose frames all
     /// lie before `keep_from`. Never drops a frame a standby has not yet

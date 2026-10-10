@@ -19,6 +19,24 @@
 //! locks: senders need a read lock to build frames.
 use super::*;
 
+thread_local! {
+    static THREAD_COMMIT_SEQ: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Records that the current thread committed `seq` (called by every commit).
+pub(crate) fn note_thread_commit(seq: u64) {
+    THREAD_COMMIT_SEQ.with(|cell| cell.set(cell.get().max(seq)));
+}
+
+/// The highest commit sequence number the current thread committed since the
+/// last call, if any. A server clears it before handling a client message and
+/// reads it before acknowledging, so synchronous replication covers every
+/// commit path (explicit COMMIT, autocommit statements, DDL) uniformly.
+pub fn take_thread_commit_seq() -> Option<u64> {
+    let seq = THREAD_COMMIT_SEQ.with(|cell| cell.replace(0));
+    (seq > 0).then_some(seq)
+}
+
 /// Wakes replication senders when the durable sequence advances.
 #[derive(Debug, Default)]
 pub(crate) struct DurableNotifier {
@@ -223,6 +241,11 @@ impl BicDb {
         Ok(out)
     }
 
+    /// True on a read-only standby (legacy HA standby or replication standby).
+    pub fn is_read_only_standby(&self) -> bool {
+        self.ensure_writable("probe").is_err()
+    }
+
     /// The synchronous-quorum tracker; pgwire senders record standby
     /// acknowledgements in it and committers wait on it.
     pub fn sync_quorum(&self) -> Arc<SyncQuorum> {
@@ -258,6 +281,9 @@ struct SyncQuorumState {
 pub struct SyncQuorum {
     state: Mutex<SyncQuorumState>,
     changed: Condvar,
+    /// Mirror of `state.required` so asynchronous servers skip the lock on
+    /// every commit.
+    required_fast: AtomicUsize,
 }
 
 impl Default for SyncQuorum {
@@ -272,6 +298,7 @@ impl Default for SyncQuorum {
                 max_requested: 0,
             }),
             changed: Condvar::new(),
+            required_fast: AtomicUsize::new(0),
         }
     }
 }
@@ -293,6 +320,7 @@ impl SyncQuorum {
         state.required = required;
         state.timeout = timeout;
         state.policy = policy;
+        self.required_fast.store(required, AtomicOrdering::Release);
         drop(state);
         self.changed.notify_all();
     }
@@ -339,6 +367,9 @@ impl SyncQuorum {
 
     /// Blocks until `required` standbys have durably applied `seq`.
     pub fn wait_for(&self, seq: u64) -> Result<()> {
+        if self.required_fast.load(AtomicOrdering::Acquire) == 0 {
+            return Ok(());
+        }
         let mut state = self.state.lock();
         if state.required == 0 || seq == 0 {
             return Ok(());

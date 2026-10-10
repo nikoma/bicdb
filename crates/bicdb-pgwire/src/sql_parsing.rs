@@ -391,6 +391,7 @@ pub(crate) fn commit_buffered_transaction(
                 durability?;
                 admission_finalization?;
                 finalization?;
+                server.sync_quorum.wait_for(commit_seq)?;
                 return Ok(SqlResult::command("COMMIT"));
             }
             Err(error) => {

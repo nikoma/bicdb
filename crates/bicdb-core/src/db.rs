@@ -3,7 +3,8 @@ mod collection_rename;
 mod commit_snapshot;
 mod replication_live;
 pub use replication_live::{
-    ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus, SyncTimeoutPolicy,
+    take_thread_commit_seq, ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus,
+    SyncTimeoutPolicy,
 };
 mod compact_wal;
 #[cfg(test)]

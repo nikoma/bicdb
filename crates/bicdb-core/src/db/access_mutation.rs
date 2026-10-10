@@ -767,7 +767,9 @@ impl BicDb {
         min_snapshot: u64,
         before_registration: impl FnOnce(),
     ) -> Result<Transaction> {
-        self.ensure_writable("begin write transaction")?;
+        // A standby may begin transactions to read; any write is refused when
+        // it is buffered and a read-only commit takes no sequence number (see
+        // `commit_transaction`).
         let tx_id = self.allocate_tx_id();
         self.tx_states.insert(tx_id.0, TxState::Pending);
         let mut applied_watermark = self.last_committed_tx.load(AtomicOrdering::SeqCst);

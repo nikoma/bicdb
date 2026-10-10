@@ -2199,6 +2199,11 @@ pub(crate) fn write_query_result(
     include_row_description: bool,
     include_command_complete: bool,
 ) -> Result<StreamWriteStats> {
+    // Synchronous replication: a statement that committed is acknowledged
+    // only once its synchronous standbys have it (every commit path ends here).
+    if let Some(seq) = bicdb_core::take_thread_commit_seq() {
+        server.sync_quorum.wait_for(seq)?;
+    }
     let mut stats = StreamWriteStats::default();
     if !result.columns.is_empty() {
         let db = server.read_db()?;

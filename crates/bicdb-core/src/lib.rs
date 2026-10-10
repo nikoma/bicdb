@@ -191,9 +191,12 @@ pub use db::{
     FlashbackVersion, FLASHBACK_HISTORY_PREFIX,
 };
 pub use db::{
+    take_thread_commit_seq, ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus,
+    SyncTimeoutPolicy,
+};
+pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,
 };
-pub use db::{ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus, SyncTimeoutPolicy};
 pub use distribution::{
     build_failure_repair_plan, build_rebalance_plan, distribution_key_token,
     filter_commit_frame_for_range, load_distribution_config, provision_cluster_member_directory,

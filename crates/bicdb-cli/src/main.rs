@@ -79,8 +79,8 @@ use bicdb_core::{
 use bicdb_page::{DirectoryLock, PageStore, PageStoreOptions, PagedPaths, TxStatus};
 use bicdb_pgwire::{
     create_user_with_identity, serve_cluster_with_host_services, serve_with_host_services,
-    set_user_security_identity, AuthMethod, ManualDistributionHostService, PgWireConfig,
-    PgWireHostService, PgWireUserIdentity,
+    set_user_security_identity, AllowedStandby, AuthMethod, HaServerConfig, HaServerRole,
+    ManualDistributionHostService, PgWireConfig, PgWireHostService, PgWireUserIdentity,
 };
 use bicdb_sql::{
     integrity_check, plan_migration_sql, split_migration_sql, MigrationStatementSafety, SqlResult,
@@ -509,6 +509,8 @@ enum Command {
         /// Storage sync mode. Buffered disables configured fsyncs and is not crash durable.
         #[arg(long, value_enum, default_value_t = CliStorageSync::Durable)]
         storage_sync: CliStorageSync,
+        #[command(flatten)]
+        replication: ServeReplicationArgs,
     },
     /// Serve the HTTP sync API for browser working-set caches
     /// (one BicDB scope database per user under --root).
@@ -686,6 +688,8 @@ enum Command {
         /// Storage sync mode. Buffered disables configured fsyncs and is not crash durable.
         #[arg(long, value_enum, default_value_t = CliStorageSync::Durable)]
         storage_sync: CliStorageSync,
+        #[command(flatten)]
+        replication: ServeReplicationArgs,
     },
     Vector {
         #[command(subcommand)]
@@ -5392,6 +5396,7 @@ fn main() -> Result<()> {
             redact_query_text,
             redact_fields,
             storage_sync,
+            replication,
         }
         | Command::ServePg {
             path,
@@ -5434,8 +5439,9 @@ fn main() -> Result<()> {
             redact_query_text,
             redact_fields,
             storage_sync,
+            replication,
         } => {
-            let config = pgwire_config_from_cli(
+            let mut config = pgwire_config_from_cli(
                 host,
                 port,
                 postgres_server_version,
@@ -5473,6 +5479,7 @@ fn main() -> Result<()> {
                 redact_fields,
                 storage_sync,
             )?;
+            config.high_availability = replication.into_config()?;
             let host_services = cli_host_services(&operator)?;
             if cluster {
                 serve_cluster_with_host_services(path, default_database, config, host_services)?;
@@ -8331,6 +8338,126 @@ fn run_serve_command(
     );
     serve_with_host_services(path, config, host_services)?;
     Ok(())
+}
+
+/// Streaming replication options for `serve`.
+#[derive(Debug, Clone, clap::Args)]
+struct ServeReplicationArgs {
+    /// Replication cluster id; primary and standbys must agree.
+    #[arg(long = "replication-cluster-id")]
+    cluster_id: Option<String>,
+    /// This node's replication id.
+    #[arg(long = "replication-node-id")]
+    node_id: Option<String>,
+    /// PRIMARY: listen for standbys on this address (host:port).
+    #[arg(long = "replication-listen")]
+    listen: Option<String>,
+    /// PRIMARY: a standby allowed to connect, as NODE_ID or NODE_ID=CERT_SHA256 (repeatable).
+    #[arg(long = "allow-standby")]
+    allow_standby: Vec<String>,
+    /// PRIMARY: standbys that must durably confirm each commit before the client is
+    /// acknowledged (0 = asynchronous replication).
+    #[arg(long = "synchronous-standbys", default_value_t = 0)]
+    synchronous_standbys: usize,
+    /// PRIMARY: how long a commit waits for its confirmations (0 = forever).
+    #[arg(long = "synchronous-timeout-ms", default_value_t = 0)]
+    synchronous_timeout_ms: u64,
+    /// PRIMARY: what a commit does when confirmations time out: `fail` reports an error,
+    /// `degrade` acknowledges and replicates asynchronously until standbys catch up.
+    #[arg(long = "synchronous-on-timeout", default_value = "fail")]
+    synchronous_on_timeout: String,
+    /// STANDBY: follow this primary's replication address (host:port).
+    #[arg(long = "standby-of")]
+    standby_of: Option<String>,
+    /// STANDBY: TLS server name of the primary's certificate.
+    #[arg(long = "primary-server-name", default_value = "localhost")]
+    primary_server_name: String,
+    #[arg(long = "replication-cert")]
+    cert: Option<PathBuf>,
+    #[arg(long = "replication-key")]
+    key: Option<PathBuf>,
+    #[arg(long = "replication-ca")]
+    ca: Option<PathBuf>,
+    /// Plaintext replication on loopback addresses only (development and tests).
+    #[arg(long = "replication-dev-plaintext")]
+    dev_plaintext: bool,
+}
+
+impl ServeReplicationArgs {
+    fn into_config(self) -> Result<Option<HaServerConfig>> {
+        let role = match (self.listen, self.standby_of) {
+            (None, None) => return Ok(None),
+            (Some(_), Some(_)) => {
+                bail!("--replication-listen and --standby-of are mutually exclusive")
+            }
+            (Some(listen), None) => {
+                let allowed_standbys = self
+                    .allow_standby
+                    .iter()
+                    .map(|entry| match entry.split_once('=') {
+                        Some((node_id, sha)) => AllowedStandby {
+                            node_id: node_id.to_string(),
+                            certificate_sha256: Some(sha.to_ascii_lowercase()),
+                        },
+                        None => AllowedStandby {
+                            node_id: entry.clone(),
+                            certificate_sha256: None,
+                        },
+                    })
+                    .collect::<Vec<_>>();
+                if allowed_standbys.is_empty() {
+                    bail!("--replication-listen requires at least one --allow-standby");
+                }
+                let on_timeout = match self.synchronous_on_timeout.as_str() {
+                    "fail" => bicdb_core::SyncTimeoutPolicy::Fail,
+                    "degrade" => bicdb_core::SyncTimeoutPolicy::Degrade,
+                    other => bail!("--synchronous-on-timeout must be fail or degrade, not {other}"),
+                };
+                HaServerRole::Primary {
+                    listen,
+                    allowed_standbys,
+                    synchronous_standbys: self.synchronous_standbys,
+                    synchronous_timeout: Duration::from_millis(self.synchronous_timeout_ms),
+                    on_timeout,
+                }
+            }
+            (None, Some(primary)) => HaServerRole::Standby {
+                primary,
+                primary_server_name: self.primary_server_name,
+            },
+        };
+        let tls = if self.dev_plaintext {
+            ReplicationTlsConfig {
+                cert_path: PathBuf::new(),
+                key_path: PathBuf::new(),
+                ca_path: PathBuf::new(),
+                require_client_cert: true,
+                dev_localhost_plaintext: true,
+            }
+        } else {
+            let (Some(cert), Some(key), Some(ca)) = (self.cert, self.key, self.ca) else {
+                bail!("replication needs --replication-cert, --replication-key and --replication-ca (or --replication-dev-plaintext on loopback)");
+            };
+            ReplicationTlsConfig {
+                cert_path: cert,
+                key_path: key,
+                ca_path: ca,
+                require_client_cert: true,
+                dev_localhost_plaintext: false,
+            }
+        };
+        let replication = ReplicationConfig {
+            cluster_id: self
+                .cluster_id
+                .context("replication needs --replication-cluster-id")?,
+            node_id: self
+                .node_id
+                .context("replication needs --replication-node-id")?,
+            tls: Some(tls),
+            ..ReplicationConfig::default()
+        };
+        Ok(Some(HaServerConfig { replication, role }))
+    }
 }
 
 #[derive(Debug, clap::Args)]

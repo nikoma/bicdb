@@ -213,6 +213,8 @@ impl BicDb {
                     mutation_policy: None,
                     mesh_sync_enabled: false,
                     flashback: None,
+                    storage_name: None,
+                    renamed_from: None,
                 };
                 self.collections.insert(
                     write.collection.clone(),
@@ -2834,7 +2836,7 @@ impl BicDb {
     }
 
     pub(crate) fn segment_path(&self, collection: &str) -> PathBuf {
-        segment_path_for(&self.path, collection)
+        segment_path_for(&self.path, &self.storage_name_of(collection))
     }
 
     /// Replays the audit stream and converges each record onto one winner.

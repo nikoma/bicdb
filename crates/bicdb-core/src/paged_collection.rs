@@ -60,6 +60,12 @@ pub struct PagedRecords {
     /// Opt-in zstd compression for newly written record values.
     value_compression: std::sync::atomic::AtomicBool,
     index_aliases: parking_lot::RwLock<BTreeMap<String, String>>,
+    /// Logical collection name -> physical storage name, only for collections
+    /// whose names differ (renamed, or created over a name another collection
+    /// still stores under). Empty in the common case, which `has_collection_aliases`
+    /// lets every row operation detect without taking the lock.
+    collection_aliases: parking_lot::RwLock<FxHashMap<String, String>>,
+    has_collection_aliases: std::sync::atomic::AtomicBool,
     /// Lazy cache over the durable `[0,0,15]` entry-format records: one
     /// durable read per index per handle lifetime, then a map probe on the
     /// write path. Write-through on [`Self::set_index_entry_format`] — the
@@ -233,6 +239,8 @@ impl PagedRecords {
             value_compression: std::sync::atomic::AtomicBool::new(false),
             store: Arc::new(store),
             index_aliases: parking_lot::RwLock::new(aliases),
+            collection_aliases: parking_lot::RwLock::new(FxHashMap::default()),
+            has_collection_aliases: std::sync::atomic::AtomicBool::new(false),
             entry_formats: parking_lot::RwLock::new(FxHashMap::default()),
             fts_segments: parking_lot::RwLock::new(FxHashMap::default()),
             fts_segments_root: dir.join("fts-segments"),
@@ -245,6 +253,28 @@ impl PagedRecords {
 
     pub(crate) fn page_size(&self) -> u32 {
         self.store.page_size()
+    }
+
+    /// Replaces the logical -> physical collection name map.
+    pub(crate) fn set_collection_aliases(&self, aliases: FxHashMap<String, String>) {
+        let mut guard = self.collection_aliases.write();
+        self.has_collection_aliases
+            .store(!aliases.is_empty(), std::sync::atomic::Ordering::Release);
+        *guard = aliases;
+    }
+
+    /// The physical storage name of a logical collection.
+    pub(crate) fn physical_collection<'a>(&self, collection: &'a str) -> std::borrow::Cow<'a, str> {
+        if !self
+            .has_collection_aliases
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return std::borrow::Cow::Borrowed(collection);
+        }
+        match self.collection_aliases.read().get(collection) {
+            Some(physical) => std::borrow::Cow::Owned(physical.clone()),
+            None => std::borrow::Cow::Borrowed(collection),
+        }
     }
 
     pub(crate) fn set_index_aliases(&self, aliases: BTreeMap<String, String>) {
@@ -280,6 +310,8 @@ impl PagedRecords {
 
     /// DEBUG: version chain of a record key.
     pub fn debug_chain(&self, collection: &str, id: &str) -> Vec<(u64, u64)> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         self.store.debug_chain(&record_key(collection, id))
     }
 
@@ -288,6 +320,8 @@ impl PagedRecords {
         collection: &str,
         id: &str,
     ) -> Result<VersionChainInspection> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         self.store
             .inspect_version_chain(&record_key(collection, id))
             .map_err(page_error)
@@ -335,6 +369,8 @@ impl PagedRecords {
         expected_head: TupleLocator,
         replacement: &Record,
     ) -> Result<VersionChainRepairReport> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         if replacement.id != id {
             return Err(BicDbError::PagedStorage(format!(
                 "replacement record id `{}` does not match requested id `{id}`",
@@ -385,6 +421,8 @@ impl PagedRecords {
     }
 
     pub fn put(&self, transaction: Xid, collection: &str, record: &Record) -> Result<TupleLocator> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let key = record_key(collection, &record.id);
         let value = self.encode_value(record)?;
         self.store
@@ -432,6 +470,8 @@ impl PagedRecords {
         field: bicdb_page::paged::HeaderStampField,
         expected: u64,
     ) -> Result<bicdb_page::paged::HeaderRepair> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let key = record_key(collection, id);
         self.store
             .repair_version_header_stamp(&key, field, expected)
@@ -452,6 +492,8 @@ impl PagedRecords {
     }
 
     pub fn get(&self, snapshot: &Snapshot, collection: &str, id: &str) -> Result<Option<Record>> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let key = record_key(collection, id);
         match self.store.get_as_of(snapshot, &key).map_err(page_error)? {
             Some(bytes) => Ok(Some(decode_record(&bytes)?)),
@@ -471,6 +513,8 @@ impl PagedRecords {
         collection: &str,
         ids: &[&str],
     ) -> Result<Vec<Option<Record>>> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let keys = ids
             .iter()
             .map(|id| record_key(collection, id))
@@ -485,6 +529,8 @@ impl PagedRecords {
 
     /// Delete a record. Returns whether it was present.
     pub fn delete(&self, transaction: Xid, collection: &str, id: &str) -> Result<bool> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let key = record_key(collection, id);
         self.store.delete(transaction, &key).map_err(page_error)
     }
@@ -496,6 +542,8 @@ impl PagedRecords {
         snapshot: &Snapshot,
         collection: &str,
     ) -> Result<impl Iterator<Item = Result<(Record, TupleLocator, Xid)>> + 'a> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let prefix = collection_prefix(collection);
         let cursor = self
             .store
@@ -522,6 +570,8 @@ impl PagedRecords {
         snapshot: &Snapshot,
         collection: &str,
     ) -> Result<impl Iterator<Item = Result<Record>> + 'a> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let prefix = collection_prefix(collection);
         let cursor = self
             .store
@@ -550,6 +600,8 @@ impl PagedRecords {
         max_rows: usize,
         max_bytes: usize,
     ) -> Result<Vec<Record>> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         if max_rows == 0 || max_bytes == 0 {
             return Err(BicDbError::PagedStorage(
                 "paged row batch limits must be non-zero".to_string(),
@@ -605,6 +657,8 @@ impl PagedRecords {
         max_rows: usize,
         max_bytes: usize,
     ) -> Result<Vec<Record>> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         if max_rows == 0 || max_bytes == 0 {
             return Err(BicDbError::PagedStorage(
                 "paged row batch limits must be non-zero".to_string(),
@@ -654,6 +708,8 @@ impl PagedRecords {
         max_rows: usize,
         max_bytes: usize,
     ) -> Result<Vec<(Record, TupleLocator, Xid)>> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         if max_rows == 0 || max_bytes == 0 {
             return Err(BicDbError::PagedStorage(
                 "paged row batch limits must be non-zero".to_string(),
@@ -709,6 +765,8 @@ impl PagedRecords {
         snapshot: &Snapshot,
         collection: &str,
     ) -> Result<impl Iterator<Item = Result<Record>> + 'a> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let prefix = collection_prefix(collection);
         let cursor = self
             .store
@@ -734,6 +792,8 @@ impl PagedRecords {
         collection: &str,
         after: Option<&str>,
     ) -> Result<impl Iterator<Item = Result<Record>> + 'a> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let prefix = collection_prefix(collection);
         let start = match after {
             Some(after) => record_key(collection, after),
@@ -772,6 +832,8 @@ impl PagedRecords {
         snapshot: &Snapshot,
         collection: &str,
     ) -> Result<impl Iterator<Item = Result<String>> + 'a> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let prefix = collection_prefix(collection);
         let prefix_len = prefix.len();
         let cursor = self
@@ -868,6 +930,8 @@ impl PagedRecords {
         cancellation: &CancellationToken,
         mut visit: impl FnMut(Vec<Record>) -> Result<bool>,
     ) -> Result<()> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let prefix = collection_prefix(collection);
         let mut resume = prefix.clone();
         if let Some(after_id) = after_id {
@@ -929,6 +993,8 @@ impl PagedRecords {
         cancellation: &CancellationToken,
         mut visit: impl FnMut(Vec<Record>) -> Result<bool>,
     ) -> Result<()> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let prefix = collection_prefix(collection);
         let mut resume = match after_id {
             Some(after_id) => {
@@ -976,6 +1042,8 @@ impl PagedRecords {
         collection: &str,
         cancellation: &CancellationToken,
     ) -> Result<usize> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let prefix = collection_prefix(collection);
         let mut cursor = self
             .store
@@ -3933,6 +4001,8 @@ impl PagedRecords {
         collection: &str,
         pk: &str,
     ) -> Result<Option<u64>> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         self.store
             .get_as_of(snapshot, &intern_rev_key(collection, pk))
             .map_err(page_error)?
@@ -3947,6 +4017,8 @@ impl PagedRecords {
         collection: &str,
         id: u64,
     ) -> Result<Option<String>> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         self.store
             .get_as_of(snapshot, &intern_fwd_key(collection, id))
             .map_err(page_error)?
@@ -3965,12 +4037,15 @@ impl PagedRecords {
     /// touches the same new row twice allocates exactly once, and the counter
     /// bump commits or aborts atomically with the entries that need it.
     pub fn intern_or_alloc(&self, transaction: Xid, collection: &str, pk: &str) -> Result<u64> {
+        let logical_collection = collection;
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let own_writes = Snapshot {
             xid: transaction,
             xmax: transaction + 1,
             in_flight: Arc::new(std::collections::BTreeSet::new()),
         };
-        if let Some(id) = self.intern_id_for_pk(&own_writes, collection, pk)? {
+        if let Some(id) = self.intern_id_for_pk(&own_writes, logical_collection, pk)? {
             return Ok(id);
         }
         let counter_key = intern_ctr_key(collection);
@@ -4095,6 +4170,8 @@ impl PagedRecords {
         collection: &str,
         format: IndexEntryFormat,
     ) -> Result<()> {
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let index = self.resolve_index_name(index);
         let value: Vec<u8> = match format {
             IndexEntryFormat::V2 => b"2".to_vec(),
@@ -4221,6 +4298,9 @@ impl PagedRecords {
         collection: &str,
         max_entries: usize,
     ) -> Result<u64> {
+        let logical_collection = collection;
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let resolved = self.resolve_index_name(index);
         let snapshot = self.latest_snapshot();
         let mut batch: Vec<(Vec<u8>, String, Vec<u8>)> = Vec::new();
@@ -4251,7 +4331,7 @@ impl PagedRecords {
         let (xid, _) = self.begin();
         let result: Result<()> = (|| {
             for (encoded, pk, value) in &batch {
-                let id = self.intern_or_alloc(xid, collection, pk)?;
+                let id = self.intern_or_alloc(xid, logical_collection, pk)?;
                 self.put_index_entry_intern(xid, &resolved, encoded, id, value)?;
                 self.delete_index_entry(xid, &resolved, encoded, pk)?;
             }
@@ -4273,12 +4353,15 @@ impl PagedRecords {
     /// older snapshots still resolve). A later re-insert of the same pk
     /// allocates a FRESH id — ids never span a delete boundary.
     pub fn retire_intern(&self, transaction: Xid, collection: &str, pk: &str) -> Result<()> {
+        let logical_collection = collection;
+        let physical = self.physical_collection(collection);
+        let collection: &str = &physical;
         let own_writes = Snapshot {
             xid: transaction,
             xmax: transaction + 1,
             in_flight: Arc::new(std::collections::BTreeSet::new()),
         };
-        if let Some(id) = self.intern_id_for_pk(&own_writes, collection, pk)? {
+        if let Some(id) = self.intern_id_for_pk(&own_writes, logical_collection, pk)? {
             self.store
                 .delete(transaction, &intern_fwd_key(collection, id))
                 .map_err(page_error)?;

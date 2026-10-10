@@ -32,6 +32,11 @@ pub(crate) fn user_collection_names(db: &BicDb) -> Vec<String> {
                 && name != DEFAULT_PRIVILEGE_COLLECTION
                 && name != MIGRATION_VERSION_COLLECTION
                 && name != MIGRATION_HISTORY_COLLECTION
+                && name != crate::session::RECYCLE_BIN_COLLECTION
+                // Flashback history and recycle-bin tables are reached only
+                // through AS OF / VERSIONS and FLASHBACK TABLE.
+                && !bicdb_core::is_flashback_history_collection(name)
+                && !crate::session::is_recycle_bin_name(name)
         })
         .collect::<Vec<_>>();
     names.sort();

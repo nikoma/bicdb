@@ -1,4 +1,4 @@
-//! Flashback (time travel) through SQL: Oracle `AS OF` / `VERSIONS BETWEEN`,
+//! Flashback (time travel) through SQL: `AS OF` / `VERSIONS BETWEEN`,
 //! SQL:2011 `FOR SYSTEM_TIME`, `FLASHBACK TABLE`, and their authorization.
 //! Every test runs against both storage engines.
 use bicdb_core::{BicDb, DbConfig, StorageMode};
@@ -126,7 +126,7 @@ fn as_of_queries_return_past_states_through_every_path() {
             vec![(1, 50)],
             "{mode}: join history with current"
         );
-        // SQL:2011 / SQL Server syntax with an SCN-valued bound.
+        // SQL:2011 system-time syntax with an SCN-valued bound.
         assert_eq!(
             balances(
                 &mut s,
@@ -163,7 +163,7 @@ fn as_of_queries_return_past_states_through_every_path() {
 }
 
 #[test]
-fn versions_between_exposes_oracle_pseudocolumns() {
+fn versions_between_exposes_pseudocolumns() {
     for (mode, config) in modes() {
         let (_dir, mut db) = open(config);
         let mut s = SqlSession::new(&mut db);
@@ -203,7 +203,7 @@ fn versions_between_exposes_oracle_pseudocolumns() {
             ],
             "{mode}"
         );
-        // `*` does not expand to the pseudocolumns, as in Oracle.
+        // `*` does not expand to the pseudocolumns.
         let star = s
             .execute(&format!(
                 "SELECT * FROM accounts VERSIONS BETWEEN SCN MINVALUE AND {s3}"

@@ -85,6 +85,10 @@ pub enum BicDbError {
     #[error("flashback error: {0}")]
     Flashback(String),
 
+    /// The operation is not supported for this object or configuration.
+    #[error("unsupported operation: {0}")]
+    Unsupported(String),
+
     #[error("mutation authority denied: {0}")]
     MutationDenied(String),
 

@@ -1094,7 +1094,7 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
-        self.execute_drop(ObjectType::Type, *if_exists, names, *cascade)?;
+        self.execute_drop(ObjectType::Type, *if_exists, names, *cascade, false)?;
         Ok(Some(SqlResult::command("DROP DOMAIN")))
     }
 

@@ -1,4 +1,5 @@
 mod access_mutation;
+mod collection_rename;
 mod commit_snapshot;
 mod compact_wal;
 #[cfg(test)]
@@ -3660,6 +3661,9 @@ pub struct BicDb {
     // Number of collections with flashback enabled; zero keeps the commit
     // path free of any flashback work.
     flashback_tracked: AtomicUsize,
+    // Logical collection name -> physical storage name, for collections whose
+    // storage name differs from their logical name (see CollectionMeta::storage_name).
+    storage_aliases: RwLock<FxHashMap<String, String>>,
     // Shared so a Transaction can hold its own handle and release its record
     // locks on drop without dereferencing the BicDb back-pointer (which would
     // be unsound while another thread holds the write lock).
@@ -9132,6 +9136,25 @@ impl BicDb {
             load_replication_state(&path, &config.replication, tx_recovery.last_commit_seq)?;
         open_trace!("tx_recovery");
         let metas = load_catalog(&path.join(DEFAULT_COLLECTION_CATALOG), &encryption)?;
+        // Physical storage names must be known before any row is read, and an
+        // interrupted rename (renamed_from still set) maps index definitions
+        // still recorded under the old name.
+        let storage_aliases = metas
+            .iter()
+            .filter(|meta| meta.storage() != meta.name)
+            .map(|meta| (meta.name.clone(), meta.storage().to_string()))
+            .collect::<FxHashMap<_, _>>();
+        let catalog_renames = metas
+            .iter()
+            .filter_map(|meta| {
+                meta.renamed_from
+                    .as_ref()
+                    .map(|old| (old.clone(), meta.name.clone()))
+            })
+            .collect::<FxHashMap<_, _>>();
+        if let Some(paged) = paged_records.as_ref() {
+            paged.set_collection_aliases(storage_aliases.clone());
+        }
         let mut collections = FxHashMap::default();
         let mut segment_replay = SegmentReplayIndex::default();
         // Which collections carry secondary indexes — read early because the
@@ -9140,7 +9163,11 @@ impl BicDb {
         // than restructuring open around it.
         let paged_index_catalog: Vec<IndexDefinition> =
             if paged_records.is_some() && config.load_secondary_indexes {
-                load_index_catalog(&path.join(DEFAULT_INDEX_CATALOG), &encryption)?
+                load_index_catalog(
+                    &path.join(DEFAULT_INDEX_CATALOG),
+                    &encryption,
+                    &catalog_renames,
+                )?
             } else {
                 Vec::new()
             };
@@ -9290,7 +9317,7 @@ impl BicDb {
 
         for mut meta in metas {
             validate_collection_name(&meta.name)?;
-            let segment_path = segment_path_for(&path, &meta.name);
+            let segment_path = segment_path_for(&path, meta.storage());
 
             // PAGED OPEN: in `server_paged` the page store is the durable home
             // for rows and segments carry none, so the segment/snapshot
@@ -9697,7 +9724,11 @@ impl BicDb {
         }
         let indexes = if config.load_secondary_indexes {
             build_indexes_with_paged(
-                load_index_catalog(&path.join(DEFAULT_INDEX_CATALOG), &encryption)?,
+                load_index_catalog(
+                    &path.join(DEFAULT_INDEX_CATALOG),
+                    &encryption,
+                    &catalog_renames,
+                )?,
                 &collections,
                 paged_records.as_ref(),
                 Some(&paged_fts_read_through_indexes),
@@ -9860,6 +9891,7 @@ impl BicDb {
             commit_lock: Mutex::new(()),
             flashback_clock: Mutex::new(flashback::FlashbackClock::default()),
             flashback_tracked: AtomicUsize::new(0),
+            storage_aliases: RwLock::new(storage_aliases),
             write_locks: Arc::new(row_lock_waiters::RowLockTable::with_shards(
                 orch_shard_count(),
             )),
@@ -11184,6 +11216,7 @@ impl BicDb {
             return Ok(());
         }
 
+        let storage_name = self.storage_name_for_new(name);
         let meta = CollectionMeta {
             name: name.to_string(),
             vector_dim: None,
@@ -11192,7 +11225,12 @@ impl BicDb {
             mutation_policy: None,
             mesh_sync_enabled: false,
             flashback: None,
+            storage_name: storage_name.clone(),
+            renamed_from: None,
         };
+        if let Some(storage) = storage_name {
+            self.set_storage_alias(name, &storage);
+        }
         self.collections
             .insert(name.to_string(), RwLock::new(CollectionState::new(meta)));
         self.persist_catalog()?;
@@ -11766,14 +11804,15 @@ impl BicDb {
         // DROP; otherwise a same-name CREATE exposes the prior relation's
         // rows and identity mappings. Cleanup is bounded and transactional in
         // pages via remove_raw_prefix.
+        let storage = self.storage_name_of(name);
         if let Some(paged) = self.paged_records.clone() {
             self.remove_raw_prefix(
                 &paged,
-                &crate::paged_collection::collection_storage_prefix(name),
+                &crate::paged_collection::collection_storage_prefix(&storage),
             )?;
             self.remove_raw_prefix(
                 &paged,
-                &crate::paged_collection::collection_intern_prefix(name),
+                &crate::paged_collection::collection_intern_prefix(&storage),
             )?;
         }
         self.collections.remove(name);
@@ -11794,11 +11833,12 @@ impl BicDb {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error.into()),
         }
-        match fs::remove_file(self.segment_path(name)) {
+        match fs::remove_file(segment_path_for(&self.path, &storage)) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error.into()),
         }
+        self.remove_storage_alias(name);
         self.refresh_graph_projections()?;
         self.schema_compatibility.invalidate();
         Ok(true)
@@ -19139,7 +19179,7 @@ fn verify_integrity_for(
     for meta in metas {
         validate_collection_name(&meta.name)?;
         let verification = storage::verify_frames(
-            &segment_path_for(path, &meta.name),
+            &segment_path_for(path, meta.storage()),
             FrameKind::Record,
             read_mode,
             encryption,
@@ -19206,7 +19246,11 @@ fn load_catalog(path: &Path, encryption: &EncryptionRuntime) -> Result<Vec<Colle
     Ok(catalog.collections)
 }
 
-fn load_index_catalog(path: &Path, encryption: &EncryptionRuntime) -> Result<Vec<IndexDefinition>> {
+fn load_index_catalog(
+    path: &Path,
+    encryption: &EncryptionRuntime,
+    renames: &FxHashMap<String, String>,
+) -> Result<Vec<IndexDefinition>> {
     let Some(bytes) = read_optional_sidecar(path, FrameKind::Index, encryption)? else {
         return Ok(Vec::new());
     };
@@ -19214,8 +19258,11 @@ fn load_index_catalog(path: &Path, encryption: &EncryptionRuntime) -> Result<Vec
         return Ok(Vec::new());
     }
 
-    let catalog: IndexCatalog = serde_json::from_slice(&bytes)?;
-    for definition in &catalog.indexes {
+    let mut catalog: IndexCatalog = serde_json::from_slice(&bytes)?;
+    for definition in &mut catalog.indexes {
+        if let Some(renamed) = renames.get(&definition.collection) {
+            definition.collection = renamed.clone();
+        }
         validate_index_definition(definition)?;
     }
     Ok(catalog.indexes)

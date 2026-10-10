@@ -6,6 +6,9 @@
 
 mod domain_types;
 mod flashback;
+mod recycle_bin;
+pub(crate) use recycle_bin::is_recycle_bin_name;
+pub use recycle_bin::RECYCLE_BIN_COLLECTION;
 pub(crate) mod functions_insert;
 mod privilege_projection;
 mod raw_ddl_analyze;
@@ -1828,6 +1831,16 @@ pub(crate) enum DdlUndo {
     },
     RestorePrivilege {
         grant: PrivilegeGrant,
+    },
+    /// Undo of a DROP TABLE that moved the table into the recycle bin.
+    RestoreFromRecycleBin {
+        bin_name: String,
+        target: String,
+    },
+    /// Undo of FLASHBACK TABLE ... TO BEFORE DROP.
+    ReturnToRecycleBin {
+        entry: Box<recycle_bin::RecycleBinEntry>,
+        target: String,
     },
     DeleteDefaultPrivilege {
         grant: DefaultPrivilegeGrant,
@@ -3864,6 +3877,24 @@ impl<'db> SqlSession<'db> {
             }
             DdlUndo::RestorePrivilege { grant } => {
                 save_privilege(self.db_mut()?, &grant)?;
+            }
+            DdlUndo::RestoreFromRecycleBin { bin_name, target } => {
+                if let Some(entry) = recycle_bin::list_recycle_bin(self.db_ref())?
+                    .into_iter()
+                    .find(|entry| entry.bin_name == bin_name)
+                {
+                    self.restore_from_recycle_bin(&entry, &target)?;
+                }
+            }
+            DdlUndo::ReturnToRecycleBin { entry, target } => {
+                if let Some(schema) = load_schema(self.db_ref(), &target)? {
+                    let moved = self.move_table_to_recycle_bin(&target, &schema)?;
+                    debug_assert!(
+                        moved,
+                        "{} restored from the bin can return to it",
+                        entry.bin_name
+                    );
+                }
             }
             DdlUndo::DeleteDefaultPrivilege { grant } => {
                 delete_default_privilege(self.db_mut()?, &grant)?;

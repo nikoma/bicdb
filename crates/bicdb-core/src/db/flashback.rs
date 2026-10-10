@@ -1,5 +1,5 @@
-//! Flashback: durable, SCN-ordered row history (Oracle Flashback Query /
-//! Flashback Data Archive semantics).
+//! Flashback: durable, SCN-ordered row history (flashback query and
+//! long-term history archive semantics).
 //!
 //! A collection with flashback enabled gets a companion history collection
 //! (`__bicdb_fb_<name>`). Every committed change to a tracked row adds one
@@ -75,7 +75,7 @@ pub enum FlashbackOperation {
 }
 
 impl FlashbackOperation {
-    /// Oracle `VERSIONS_OPERATION` code: `I`, `U`, `D`, or `None` for baseline.
+    /// `VERSIONS_OPERATION` code: `I`, `U`, `D`, or `None` for baseline.
     pub fn code(self) -> Option<&'static str> {
         match self {
             Self::Baseline => None,
@@ -108,16 +108,16 @@ impl FlashbackOperation {
 }
 
 /// One row version returned by [`BicDb::flashback_versions_unchecked`]
-/// (Oracle `VERSIONS BETWEEN`).
+/// (`VERSIONS BETWEEN`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct FlashbackVersion {
     /// The row image of this version. For a delete, the row as it was deleted.
     pub record: Record,
     /// SCN that created this version; `None` when it was created before the
-    /// lower bound or before history began (Oracle `VERSIONS_STARTSCN`).
+    /// lower bound or before history began (`VERSIONS_STARTSCN`).
     pub start_scn: Option<u64>,
     /// SCN that ended this version; `None` while it is still current and for
-    /// delete versions (Oracle `VERSIONS_ENDSCN`).
+    /// delete versions (`VERSIONS_ENDSCN`).
     pub end_scn: Option<u64>,
     pub operation: FlashbackOperation,
     /// Engine transaction id of the change (`VERSIONS_XID`); zero for baseline.
@@ -488,7 +488,7 @@ impl BicDb {
         Ok(dropped)
     }
 
-    /// Enables flashback history for `collection` (Oracle `ALTER TABLE ...
+    /// Enables flashback history for `collection` (`ALTER TABLE ...
     /// FLASHBACK ARCHIVE`). Existing rows are copied into history as the
     /// baseline, so the table can be queried as of any SCN from now on. If
     /// flashback is already enabled only the retention changes.
@@ -573,7 +573,7 @@ impl BicDb {
         Ok(config)
     }
 
-    /// Disables flashback for `collection` and discards its history (Oracle
+    /// Disables flashback for `collection` and discards its history (
     /// `ALTER TABLE ... NO FLASHBACK ARCHIVE`). Returns false if it was not
     /// enabled.
     pub fn disable_flashback(&mut self, collection: &str) -> Result<bool> {
@@ -615,7 +615,7 @@ impl BicDb {
         tracked
     }
 
-    fn flashback_refresh_tracked(&self) {
+    pub(super) fn flashback_refresh_tracked(&self) {
         let count = self
             .collections
             .values()
@@ -898,7 +898,7 @@ impl BicDb {
     }
 
     /// Every version of every row that existed at some point in `[from, to]`
-    /// (Oracle `VERSIONS BETWEEN`). `None` bounds mean the oldest retained
+    /// (`VERSIONS BETWEEN`). `None` bounds mean the oldest retained
     /// history and the current SCN (`MINVALUE` / `MAXVALUE`). Versions are
     /// ordered by row id, then by start SCN.
     pub fn flashback_versions_unchecked(

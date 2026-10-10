@@ -395,6 +395,7 @@ impl<'db> SqlSession<'db> {
         if_exists: bool,
         names: &[ObjectName],
         cascade: bool,
+        purge: bool,
     ) -> Result<SqlResult> {
         match object_type {
             ObjectType::Table => {
@@ -407,6 +408,9 @@ impl<'db> SqlSession<'db> {
                     let schema = load_schema(self.db_ref(), &table)?;
                     if let Some(schema) = &schema {
                         self.drop_table_row_type_dependents(schema, cascade)?;
+                        if !purge && self.move_table_to_recycle_bin(&table, schema)? {
+                            continue;
+                        }
                     }
                     let schema_existed = schema.is_some();
                     let existed = self.drop_session_collection(&table)?;

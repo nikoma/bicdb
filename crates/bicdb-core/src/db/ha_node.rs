@@ -77,6 +77,25 @@ pub(crate) struct HaNodeFile {
     /// Client-facing address of the current primary, as last announced.
     #[serde(default)]
     pub(crate) primary_sql_address: Option<String>,
+    /// Node id of the current primary, as last announced.
+    #[serde(default)]
+    pub(crate) primary_id: Option<String>,
+    /// Epoch of the primary whose commits this node holds last.
+    #[serde(default)]
+    pub(crate) data_epoch: u64,
+}
+
+/// Role and primary recorded in a database directory, read without opening
+/// the database (a server picks its replication role from it at start).
+pub fn read_persisted_ha_role(path: &Path) -> Result<(Option<NodeRole>, Option<String>)> {
+    match fs::read(path.join(HA_NODE_FILE)) {
+        Ok(bytes) => {
+            let file = serde_json::from_slice::<HaNodeFile>(&bytes)?;
+            Ok((file.role, file.primary_id))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok((None, None)),
+        Err(error) => Err(error.into()),
+    }
 }
 
 #[derive(Debug)]
@@ -137,7 +156,12 @@ pub struct HaNodeStatus {
     pub role: NodeRole,
     pub epoch: u64,
     pub primary_sql_address: Option<String>,
+    pub primary_id: Option<String>,
     pub epoch_starts: BTreeMap<u64, u64>,
+    /// Epoch of the primary whose commits this node holds last.
+    pub data_epoch: u64,
+    /// Latest vote cast: (election term, candidate).
+    pub voted: Option<(u64, String)>,
 }
 
 impl BicDb {
@@ -156,7 +180,10 @@ impl BicDb {
             role: self.ha_node.role(),
             epoch: file.epoch,
             primary_sql_address: file.primary_sql_address.clone(),
+            primary_id: file.primary_id.clone(),
             epoch_starts: file.epoch_starts.clone(),
+            data_epoch: file.data_epoch,
+            voted: file.voted.clone(),
         })
     }
 
@@ -202,6 +229,119 @@ impl BicDb {
         }
         self.ha_node
             .with_file(|file| file.primary_sql_address = address)
+    }
+
+    /// Records what a primary announced in a heartbeat this node applies:
+    /// who it is, where clients reach it, and the epoch history.
+    pub fn record_primary(
+        &self,
+        node_id: &str,
+        epoch: u64,
+        sql_address: Option<String>,
+        epoch_starts: &BTreeMap<u64, u64>,
+    ) -> Result<()> {
+        let unchanged = self.ha_node.read(|file| {
+            file.primary_id.as_deref() == Some(node_id)
+                && file.data_epoch == epoch
+                && file.primary_sql_address == sql_address
+                && epoch_starts
+                    .iter()
+                    .all(|(epoch, start)| file.epoch_starts.get(epoch) == Some(start))
+        });
+        if unchanged {
+            return Ok(());
+        }
+        self.ha_node.with_file(|file| {
+            file.primary_id = Some(node_id.to_string());
+            file.data_epoch = file.data_epoch.max(epoch);
+            file.epoch = file.epoch.max(epoch);
+            file.primary_sql_address = sql_address;
+            for (epoch, start) in epoch_starts {
+                file.epoch_starts.insert(*epoch, *start);
+            }
+        })
+    }
+
+    /// Starts an election: the next term after every epoch and vote this node
+    /// knows, with this node's own vote. Returns the term.
+    pub fn begin_candidacy(&self, node_id: &str) -> Result<u64> {
+        self.ha_node.with_file(|file| {
+            let term = file
+                .epoch
+                .max(file.voted.as_ref().map_or(0, |(term, _)| *term))
+                + 1;
+            file.voted = Some((term, node_id.to_string()));
+            term
+        })
+    }
+
+    /// Decides a vote request: `candidate` wants to become primary in `term`
+    /// and holds commits up to `candidate_seq` from a primary of
+    /// `candidate_data_epoch`. Grants at most one candidate per term, and
+    /// only one at least as up to date as this node. A primary that grants a
+    /// vote has lost its group and fences itself.
+    pub fn consider_vote(
+        &self,
+        term: u64,
+        candidate: &str,
+        candidate_data_epoch: u64,
+        candidate_seq: u64,
+    ) -> Result<bool> {
+        let own_seq = self.last_applied_commit_seq();
+        let granted = self.ha_node.read(|file| {
+            if term <= file.epoch {
+                return false;
+            }
+            if let Some((voted_term, voted_for)) = &file.voted {
+                if *voted_term > term || (*voted_term == term && voted_for != candidate) {
+                    return false;
+                }
+            }
+            (candidate_data_epoch, candidate_seq) >= (file.data_epoch, own_seq)
+        });
+        if !granted {
+            return Ok(false);
+        }
+        let was_primary = self.ha_node.role() == NodeRole::Primary;
+        self.ha_node.with_file(|file| {
+            file.voted = Some((term, candidate.to_string()));
+            if was_primary {
+                file.role = Some(NodeRole::Fenced);
+            }
+        })?;
+        if was_primary {
+            self.sync_quorum
+                .close("this primary voted for a successor and is fenced");
+        }
+        Ok(true)
+    }
+
+    /// Becomes the primary of `term` after winning its election. Takes
+    /// effect when the server restarts.
+    pub fn promote_by_election(
+        &self,
+        term: u64,
+        node_id: &str,
+        sql_address: Option<String>,
+    ) -> Result<()> {
+        let applied = self.last_applied_commit_seq();
+        self.ha_node.with_file(|file| {
+            file.role = Some(NodeRole::Primary);
+            file.epoch = file.epoch.max(term);
+            file.data_epoch = term;
+            file.epoch_starts.insert(term, applied);
+            file.primary_id = Some(node_id.to_string());
+            file.primary_sql_address = sql_address;
+        })
+    }
+
+    /// Becomes a standby (a fenced former primary rejoining its group).
+    /// Takes effect when the server restarts.
+    pub fn demote_to_standby(&self) -> Result<()> {
+        self.ha_node.with_file(|file| {
+            file.role = Some(NodeRole::Standby);
+            file.slots.clear();
+        })
     }
 
     /// Persists the standbys' acknowledged positions (log retention survives

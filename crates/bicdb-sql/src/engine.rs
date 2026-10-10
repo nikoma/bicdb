@@ -3545,6 +3545,27 @@ impl<'db> SqlEngine<'db> {
                     vec![vec![SqlValue::String(value)]],
                 )))
             }
+            // Client libraries route primary/standby sessions with this.
+            "select pg_is_in_recovery()" | "select pg_catalog.pg_is_in_recovery()" => Ok(Some(
+                SqlResult::new(
+                    vec!["pg_is_in_recovery".to_string()],
+                    vec![vec![SqlValue::Bool(self.db.is_standby_role())]],
+                )
+                .with_column_types(vec![Some("bool".to_string())]),
+            )),
+            // Client libraries route read-write sessions with these.
+            "show transaction_read_only" | "show default_transaction_read_only" => {
+                let name = normalized.trim_start_matches("show ").to_string();
+                let read_only = if self.db.is_read_only_standby() {
+                    "on"
+                } else {
+                    "off"
+                };
+                Ok(Some(SqlResult::new(
+                    vec![name],
+                    vec![vec![SqlValue::String(read_only.to_string())]],
+                )))
+            }
             "show transaction_isolation" | "show transaction.isolation.level" => {
                 Ok(Some(SqlResult::new(
                     vec!["transaction_isolation".to_string()],

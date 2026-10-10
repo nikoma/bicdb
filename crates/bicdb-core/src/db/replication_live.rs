@@ -18,6 +18,7 @@
 //! durably applied it (RPO = 0). Callers wait *after* releasing database
 //! locks: senders need a read lock to build frames.
 use super::*;
+use std::sync::atomic::AtomicBool;
 
 thread_local! {
     static THREAD_COMMIT_SEQ: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
@@ -271,6 +272,13 @@ impl BicDb {
         self.ensure_writable("probe").is_err()
     }
 
+    /// True when this node is not the primary of its group: a standby, or a
+    /// former primary that was fenced.
+    pub fn is_standby_role(&self) -> bool {
+        self.ha_state.role == HaRole::Standby
+            || (self.config.replication.enabled && self.ha_node.role() != NodeRole::Primary)
+    }
+
     /// Drops the transaction log before `keep_from` (`u64::MAX`: all of it),
     /// where `dropped_through` is the highest commit sequence whose frames all
     /// lie before `keep_from`. Never drops a frame a standby has not yet
@@ -329,6 +337,10 @@ struct SyncQuorumState {
     degraded: bool,
     /// Highest sequence a committer asked to have confirmed.
     max_requested: u64,
+    /// When each standby was last heard from (acknowledgements).
+    heard: BTreeMap<String, Instant>,
+    /// Write lease: (duration, peers that must have been heard within it).
+    lease: Option<(Duration, usize)>,
     /// Log positions held for standbys that are being bootstrapped: they
     /// retain the log but confirm nothing.
     pins: BTreeMap<String, u64>,
@@ -346,6 +358,8 @@ pub struct SyncQuorum {
     /// Mirror of `state.required` so asynchronous servers skip the lock on
     /// every commit.
     required_fast: AtomicUsize,
+    /// Whether a write lease is configured (skips the lock otherwise).
+    lease_fast: AtomicBool,
 }
 
 impl Default for SyncQuorum {
@@ -359,10 +373,13 @@ impl Default for SyncQuorum {
                 degraded: false,
                 max_requested: 0,
                 pins: BTreeMap::new(),
+                heard: BTreeMap::new(),
+                lease: None,
                 closed: None,
             }),
             changed: Condvar::new(),
             required_fast: AtomicUsize::new(0),
+            lease_fast: AtomicBool::new(false),
         }
     }
 }
@@ -389,6 +406,35 @@ impl SyncQuorum {
         self.changed.notify_all();
     }
 
+    /// Requires a write lease: writes are admitted only while at least
+    /// `peers` standbys were heard from within `duration` (a primary cut off
+    /// from the majority of its group stops writing before the group can
+    /// elect a successor).
+    pub fn configure_lease(&self, duration: Duration, peers: usize) {
+        self.state.lock().lease = Some((duration, peers));
+        self.lease_fast.store(true, AtomicOrdering::Release);
+    }
+
+    /// Why writes are refused under the write lease, if they are.
+    pub fn lease_refusal(&self) -> Option<String> {
+        if !self.lease_fast.load(AtomicOrdering::Acquire) {
+            return None;
+        }
+        let state = self.state.lock();
+        let (duration, peers) = state.lease?;
+        let now = Instant::now();
+        let heard = state
+            .heard
+            .values()
+            .filter(|at| now.saturating_duration_since(**at) <= duration)
+            .count();
+        (heard < peers).then(|| {
+            format!(
+                "this primary heard from {heard} of the {peers} standby(s) its write lease needs within {duration:?}"
+            )
+        })
+    }
+
     pub fn required(&self) -> usize {
         self.state.lock().required
     }
@@ -396,6 +442,7 @@ impl SyncQuorum {
     /// Records that `standby` has durably applied everything up to `seq`.
     pub fn record_ack(&self, standby: &str, seq: u64) {
         let mut state = self.state.lock();
+        state.heard.insert(standby.to_string(), Instant::now());
         let entry = state.acked.entry(standby.to_string()).or_insert(0);
         if seq > *entry {
             *entry = seq;
@@ -434,7 +481,10 @@ impl SyncQuorum {
     /// Records a (re)connecting standby's actual position, replacing what was
     /// known before: it may be lower after the standby lost data.
     pub fn set_ack(&self, standby: &str, seq: u64) {
-        self.state.lock().acked.insert(standby.to_string(), seq);
+        let mut state = self.state.lock();
+        state.acked.insert(standby.to_string(), seq);
+        state.heard.insert(standby.to_string(), Instant::now());
+        drop(state);
         self.changed.notify_all();
     }
 
@@ -488,6 +538,11 @@ impl SyncQuorum {
 
     /// Blocks until `required` standbys have durably applied `seq`.
     pub fn wait_for(&self, seq: u64) -> Result<()> {
+        if let Some(refusal) = self.lease_refusal() {
+            return Err(BicDbError::HighAvailability(format!(
+                "commit {seq} is durable on this node but is not acknowledged: {refusal}"
+            )));
+        }
         if self.required_fast.load(AtomicOrdering::Acquire) == 0 {
             return Ok(());
         }

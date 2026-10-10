@@ -1479,9 +1479,7 @@ pub(crate) fn execute_builtin_function(
         )),
         "pg_is_in_recovery" | "pg_catalog.pg_is_in_recovery" => Ok(SqlResult::new(
             vec![name.replace("pg_catalog.", "")],
-            vec![vec![SqlValue::Bool(
-                db.is_some_and(BicDb::is_replication_standby),
-            )]],
+            vec![vec![SqlValue::Bool(db.is_some_and(BicDb::is_standby_role))]],
         )
         .with_column_types(vec![Some("bool".to_string())])),
         "pg_advisory_lock"

@@ -71,6 +71,7 @@ bicdb serve /srv/standby --port 5432 \
 | `--synchronous-on-timeout fail\|degrade` | `fail` (default): the client gets an error; the commit stays durable on the primary and replicates when a standby reconnects. `degrade`: acknowledge and replicate asynchronously until the standbys catch up again, then synchronous commit resumes automatically |
 | `--allow-standby ID[=SHA256]` | Standbys allowed to connect. Fail-closed: an empty list authorizes nobody. With TLS each identity must be pinned to its certificate |
 | `--replication-dev-plaintext` | Plaintext on loopback addresses only, for development and tests |
+| `--advertise-sql HOST:PORT` | This node's client address. The primary announces it to standbys, which name it when they refuse a write |
 
 ### Guarantees
 
@@ -91,6 +92,26 @@ bicdb serve /srv/standby --port 5432 \
   a connected standby's acknowledged position, so a standby that lags or
   reconnects resumes where it stopped. Commit sequence numbers never repeat
   across restarts.
+- **Standby positions survive restarts.** Each standby's acknowledged
+  position is persisted on the primary (`ha-node.json`), so a standby that is
+  offline while the primary restarts still finds its log. Standbys removed
+  from `--allow-standby` stop holding log back at the next start.
+- **Epoch fencing.** Every primary term has an epoch, carried by every
+  replication message. A primary that hears of a newer epoch fences itself at
+  once and durably: it refuses writes, fails commits still waiting for
+  confirmation instead of acknowledging them, and stays fenced across
+  restarts. Standbys refuse a stream from a primary with an older epoch.
+- **Clients are told where to write.** A refused write on a standby or a
+  fenced node fails with SQLSTATE `25006` (read-only transaction) and, when
+  the primary's `--advertise-sql` address is known, a hint naming it:
+
+  ```text
+  ERROR:  25006: database is read-only standby: insert records is refused on a hot standby/read replica; current primary: 10.0.0.1:5432
+  HINT:  send writes to the primary at 10.0.0.1:5432
+  ```
+- **Shutdown never hangs on a missing standby.** Stopping the primary fails
+  commits that are still waiting for confirmations; they are durable on the
+  primary and replicate when a standby connects.
 - As with other databases' synchronous replication, a commit becomes visible
   on the primary slightly before its acknowledgement returns.
 
@@ -104,11 +125,9 @@ bicdb serve /srv/standby --port 5432 \
 3. Point clients at it. Re-create the old primary as a standby from a fresh
    copy.
 
-Not yet available: automatic failover with leases and epoch fencing, client
-redirection, snapshot bootstrap of a new standby over the stream (start a
-standby from an empty directory while the primary still has its full log, or
-from a copy), and log retention for standbys that were offline across a
-primary restart. Standbys do not build secondary indexes of their own; reads
+Not yet available: automatic failover, and snapshot bootstrap of a new
+standby over the stream (start a standby from an empty directory while the
+primary still has its full log, or from a copy). Standbys do not build secondary indexes of their own; reads
 on them stay correct and use scans.
 
 ## Architecture

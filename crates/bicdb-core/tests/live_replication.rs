@@ -3,8 +3,9 @@
 //! the synchronous quorum that holds commit acknowledgements.
 
 use bicdb_core::{
-    BicDb, DbConfig, Record, ReplicationConfig, ReplicationCursor, ReplicationMode,
-    ReplicationTlsConfig, StorageMode, SyncQuorum, SyncTimeoutPolicy,
+    read_only_standby_hint, BicDb, BicDbError, DbConfig, NodeRole, Record, ReplicationConfig,
+    ReplicationCursor, ReplicationMode, ReplicationTlsConfig, StorageMode, SyncQuorum,
+    SyncTimeoutPolicy,
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -353,4 +354,152 @@ fn the_log_is_retained_for_a_lagging_standby() {
             "{mode}"
         );
     }
+}
+
+#[test]
+fn standby_positions_survive_a_primary_restart() {
+    for (mode, storage) in storage_modes() {
+        let primary_dir = tempfile::tempdir().unwrap();
+        let standby_dir = tempfile::tempdir().unwrap();
+        let mut standby = open(
+            standby_dir.path(),
+            storage.clone(),
+            ReplicationMode::Standby,
+        );
+        {
+            let mut primary = open(
+                primary_dir.path(),
+                storage.clone(),
+                ReplicationMode::Primary,
+            );
+            primary.sync_quorum().record_ack("standby", 0);
+            primary.persist_standby_slots().unwrap();
+            let mut cursor = ReplicationCursor::new(0);
+            primary.create_collection("items").unwrap();
+            put(&primary, "a", 1);
+            ship(&primary, &mut standby, &mut cursor);
+            for index in 0..20 {
+                put(&primary, &format!("k{index}"), index);
+            }
+        }
+        // Restarted, the primary has heard nothing from the standby yet; the
+        // persisted position must still keep the log the standby needs.
+        let mut primary = open(
+            primary_dir.path(),
+            storage.clone(),
+            ReplicationMode::Primary,
+        );
+        assert!(
+            primary.sync_quorum().acknowledged().contains_key("standby"),
+            "{mode}"
+        );
+        primary.compact().unwrap();
+        put(&primary, "after", 99);
+        let mut cursor = ReplicationCursor::new(standby.last_applied_commit_seq());
+        ship(&primary, &mut standby, &mut cursor);
+        assert_eq!(value(&standby, "k19"), Some(19), "{mode}");
+        assert_eq!(value(&standby, "after"), Some(99), "{mode}");
+
+        // A standby removed from the allow-list stops pinning the log.
+        primary.retain_standby_slots(&[]).unwrap();
+        assert!(primary.sync_quorum().acknowledged().is_empty(), "{mode}");
+        drop(primary);
+        let mut primary = open(
+            primary_dir.path(),
+            storage.clone(),
+            ReplicationMode::Primary,
+        );
+        assert!(primary.sync_quorum().acknowledged().is_empty(), "{mode}");
+    }
+}
+
+#[test]
+fn a_primary_that_sees_a_newer_epoch_is_fenced_durably() {
+    for (mode, storage) in storage_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let mut primary = open(dir.path(), storage.clone(), ReplicationMode::Primary);
+            primary.create_collection("items").unwrap();
+            put(&primary, "a", 1);
+            assert_eq!(primary.replication_role(), NodeRole::Primary, "{mode}");
+            // Same or older epochs change nothing.
+            assert!(!primary.observe_replication_epoch(0).unwrap(), "{mode}");
+            assert!(primary.observe_replication_epoch(3).unwrap(), "{mode}");
+            assert_eq!(primary.replication_role(), NodeRole::Fenced, "{mode}");
+            let error = primary
+                .begin_transaction()
+                .and_then(|mut tx| {
+                    tx.insert("items", Record::new("b"))?;
+                    tx.commit()
+                })
+                .unwrap_err();
+            assert!(
+                matches!(&error, BicDbError::ReadOnlyStandby(message) if message.contains("fenced")),
+                "{mode}: {error}"
+            );
+            // Reads keep working.
+            assert_eq!(value(&primary, "a"), Some(1), "{mode}");
+        }
+        // The fence survives a restart even though the configuration still
+        // says primary.
+        let mut reopened = open(dir.path(), storage.clone(), ReplicationMode::Primary);
+        assert_eq!(reopened.replication_role(), NodeRole::Fenced, "{mode}");
+        assert_eq!(reopened.replication_epoch(), 3, "{mode}");
+        assert!(reopened.create_collection("other").is_err(), "{mode}");
+    }
+}
+
+#[test]
+fn standbys_follow_newer_epochs_and_point_writes_at_the_primary() {
+    for (mode, storage) in storage_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut standby = open(dir.path(), storage.clone(), ReplicationMode::Standby);
+        assert!(!standby.observe_replication_epoch(2).unwrap(), "{mode}");
+        assert_eq!(standby.replication_role(), NodeRole::Standby, "{mode}");
+        assert_eq!(standby.replication_epoch(), 2, "{mode}");
+
+        let refusal = |db: &mut BicDb| match db.create_collection("items") {
+            Err(BicDbError::ReadOnlyStandby(message)) => message,
+            other => panic!("{mode}: expected a read-only refusal, got {other:?}"),
+        };
+        assert_eq!(
+            read_only_standby_hint(&refusal(&mut standby)),
+            None,
+            "{mode}"
+        );
+        standby
+            .record_primary_sql_address(Some("db1.example:5432".to_string()))
+            .unwrap();
+        let message = refusal(&mut standby);
+        assert_eq!(
+            read_only_standby_hint(&message).as_deref(),
+            Some("send writes to the primary at db1.example:5432"),
+            "{mode}: {message}"
+        );
+        assert_eq!(
+            standby.ha_node_status().primary_sql_address.as_deref(),
+            Some("db1.example:5432"),
+            "{mode}"
+        );
+    }
+}
+
+#[test]
+fn closing_the_quorum_fails_waiting_commits_instead_of_hanging() {
+    let quorum = Arc::new(SyncQuorum::default());
+    // Wait forever for one standby.
+    quorum.configure(1, Duration::ZERO, SyncTimeoutPolicy::Fail);
+    let waiter = {
+        let quorum = Arc::clone(&quorum);
+        std::thread::spawn(move || quorum.wait_for(5))
+    };
+    std::thread::sleep(Duration::from_millis(50));
+    quorum.close("the server is shutting down");
+    let error = waiter.join().unwrap().unwrap_err();
+    assert!(error.to_string().contains("shutting down"), "{error}");
+    // Later waits fail at once.
+    assert!(quorum.wait_for(6).is_err());
+    // An already confirmed commit still succeeds.
+    quorum.record_ack("standby", 10);
+    assert!(quorum.wait_for(7).is_ok());
 }

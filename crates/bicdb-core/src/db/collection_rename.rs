@@ -71,7 +71,7 @@ impl BicDb {
     }
 
     fn replicates_catalog(&self) -> bool {
-        self.config.replication.enabled && self.config.replication.mode == ReplicationMode::Primary
+        self.config.replication.enabled && self.ha_node.role() == NodeRole::Primary
     }
 
     /// On a replication primary, ships `op` to standbys (see

@@ -8381,6 +8381,10 @@ struct ServeReplicationArgs {
     /// Plaintext replication on loopback addresses only (development and tests).
     #[arg(long = "replication-dev-plaintext")]
     dev_plaintext: bool,
+    /// Client-facing SQL address (host:port) of this node. Standbys that know the
+    /// primary's address include it in the hint when they refuse a write.
+    #[arg(long = "advertise-sql")]
+    advertise_sql: Option<String>,
 }
 
 impl ServeReplicationArgs {
@@ -8456,7 +8460,11 @@ impl ServeReplicationArgs {
             tls: Some(tls),
             ..ReplicationConfig::default()
         };
-        Ok(Some(HaServerConfig { replication, role }))
+        Ok(Some(HaServerConfig {
+            replication,
+            role,
+            advertise_sql: self.advertise_sql,
+        }))
     }
 }
 
@@ -9942,6 +9950,7 @@ fn replication_stream_send_for_ack<S: std::io::Read + std::io::Write>(
             protocol_version,
             cluster_id: hello_cluster_id,
             node_id: hello_node_id,
+            ..
         } => {
             if protocol_version != bicdb_core::replication::REPLICATION_PROTOCOL_VERSION {
                 send_replication_error(
@@ -10035,6 +10044,7 @@ fn replication_stream_send_for_ack<S: std::io::Read + std::io::Write>(
             cluster_id: ack_cluster_id,
             node_id: ack_node_id,
             commit_seq,
+            ..
         } => {
             if ack_cluster_id != cluster_id {
                 send_replication_error(stream, cluster_id, node_id, "ack cluster_id mismatch")?;
@@ -10126,6 +10136,7 @@ fn send_replication_hello_and_resume_ack<W: std::io::Write>(
             protocol_version: bicdb_core::replication::REPLICATION_PROTOCOL_VERSION,
             cluster_id: cluster_id.to_string(),
             node_id: node_id.to_string(),
+            epoch: 0,
         },
         1024 * 1024,
     )?;
@@ -10135,6 +10146,7 @@ fn send_replication_hello_and_resume_ack<W: std::io::Write>(
             cluster_id: cluster_id.to_string(),
             node_id: node_id.to_string(),
             commit_seq: db.last_applied_commit_seq(),
+            epoch: 0,
         },
         1024 * 1024,
     )?;

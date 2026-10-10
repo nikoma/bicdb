@@ -1,7 +1,10 @@
 mod access_mutation;
 mod collection_rename;
 mod commit_snapshot;
+mod ha_node;
 mod replication_live;
+use ha_node::PRIMARY_MARKER;
+pub use ha_node::{read_only_standby_hint, HaNodeStatus, NodeRole, HA_NODE_FILE};
 pub use replication_live::{
     take_thread_commit_seq, ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus,
     SyncTimeoutPolicy,
@@ -3665,6 +3668,8 @@ pub struct BicDb {
     commit_seq: Arc<AtomicU64>,
     // Synchronous replication: commits wait here for standby confirmations.
     sync_quorum: Arc<SyncQuorum>,
+    // Runtime replication role, epoch and persisted standby positions.
+    ha_node: Arc<ha_node::HaNode>,
     // Commit sequence at the last `checkpoint_begin`: everything at or below it
     // is materialized before the checkpoint's keep-from offset.
     checkpoint_boundary_seq: AtomicU64,
@@ -9883,6 +9888,15 @@ impl BicDb {
         let fts_block_cache = Arc::new(crate::fts_cache::FullTextBlockCache::new(
             config.fts_block_cache_bytes,
         ));
+        let ha_node = ha_node::HaNode::load(
+            &path,
+            if config.replication.enabled && config.replication.mode == ReplicationMode::Standby {
+                NodeRole::Standby
+            } else {
+                NodeRole::Primary
+            },
+            config.fsync,
+        )?;
         let mut db = Self {
             path,
             _directory_lock: Some(directory_lock),
@@ -9923,7 +9937,12 @@ impl BicDb {
             last_committed_tx: AtomicU64::new(tx_recovery.last_commit_seq),
             applied_watermark: Mutex::new(AppliedWatermark::new(tx_recovery.last_commit_seq)),
             commit_seq: Arc::new(AtomicU64::new(tx_recovery.last_commit_seq)),
-            sync_quorum: Arc::new(SyncQuorum::default()),
+            sync_quorum: {
+                let quorum = SyncQuorum::default();
+                quorum.seed(ha_node.read(|file| file.slots.clone()));
+                Arc::new(quorum)
+            },
+            ha_node: Arc::new(ha_node),
             checkpoint_boundary_seq: AtomicU64::new(0),
             index_generation: AtomicU64::new(0),
             serializable_commit_admission: RwLock::new(()),

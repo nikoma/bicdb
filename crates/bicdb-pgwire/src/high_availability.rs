@@ -16,7 +16,7 @@
 //! accepted only for loopback development configurations.
 use super::*;
 use bicdb_core::replication::{ReplicationFrame, REPLICATION_PROTOCOL_VERSION};
-use bicdb_core::{ReplicationCursor, SyncTimeoutPolicy};
+use bicdb_core::{NodeRole, ReplicationCursor, SyncTimeoutPolicy};
 use std::net::TcpStream;
 
 /// Frames per round sent to one standby.
@@ -60,6 +60,9 @@ pub struct HaServerConfig {
     /// Cluster id, this node's id, and TLS material.
     pub replication: ReplicationConfig,
     pub role: HaServerRole,
+    /// Address clients use to reach this node's SQL port; a primary announces
+    /// it so standbys can point refused writes at it.
+    pub advertise_sql: Option<String>,
 }
 
 impl HaServerConfig {
@@ -99,10 +102,10 @@ pub(crate) fn start(server: Arc<PgWireServer>, config: HaServerConfig) -> Result
     match &config.role {
         HaServerRole::Primary {
             listen,
+            allowed_standbys,
             synchronous_standbys,
             synchronous_timeout,
             on_timeout,
-            ..
         } => {
             if *synchronous_standbys > 0 && config.role_allowed_count() < *synchronous_standbys {
                 return Err(PgWireError::Server(format!(
@@ -113,6 +116,20 @@ pub(crate) fn start(server: Arc<PgWireServer>, config: HaServerConfig) -> Result
             server
                 .sync_quorum
                 .configure(*synchronous_standbys, *synchronous_timeout, *on_timeout);
+            {
+                let db = server.read_db()?;
+                // Standbys removed from the allow-list stop pinning the log.
+                let allowed = allowed_standbys
+                    .iter()
+                    .map(|standby| standby.node_id.clone())
+                    .collect::<Vec<_>>();
+                db.retain_standby_slots(&allowed)
+                    .map_err(PgWireError::from)?;
+                if db.replication_role() == NodeRole::Primary {
+                    db.record_primary_sql_address(config.advertise_sql.clone())
+                        .map_err(PgWireError::from)?;
+                }
+            }
             let listener = std::net::TcpListener::bind(listen)?;
             let tls = if config.plaintext() {
                 None
@@ -238,6 +255,7 @@ fn serve_standby(
             protocol_version,
             cluster_id,
             node_id,
+            epoch,
         } => {
             if protocol_version != REPLICATION_PROTOCOL_VERSION {
                 return Err(refuse(stream, "unsupported replication protocol version"));
@@ -265,6 +283,7 @@ fn serve_standby(
                     ));
                 }
             }
+            superseded_check(server, stream, epoch)?;
             node_id
         }
         _ => return Err(refuse(stream, "expected Hello")),
@@ -275,6 +294,11 @@ fn serve_standby(
     };
     // The standby's position is durable on its side.
     server.sync_quorum.record_ack(&standby, applied);
+    // Persist at once: a primary restart must keep retaining this standby's log.
+    server
+        .read_db()?
+        .persist_standby_slots()
+        .map_err(PgWireError::from)?;
     eprintln!("bicdb replication: standby {standby} connected at commit {applied}");
 
     let mut cursor = ReplicationCursor::new(applied);
@@ -282,12 +306,16 @@ fn serve_standby(
         if server.is_shutdown_requested() {
             return Ok(());
         }
-        let frames = {
+        let (frames, epoch) = {
             let db = server.read_db()?;
-            match db.replication_frames_after(&mut cursor, BATCH_COMMITS) {
+            if db.replication_role() != NodeRole::Primary {
+                return Err(refuse(stream, "this node is no longer the primary"));
+            }
+            let frames = match db.replication_frames_after(&mut cursor, BATCH_COMMITS) {
                 Ok(frames) => frames,
                 Err(error) => return Err(refuse(stream, &error.to_string())),
-            }
+            };
+            (frames, db.replication_epoch())
         };
         if frames.is_empty() {
             let durable = server
@@ -306,10 +334,15 @@ fn serve_standby(
                 cluster_id: config.replication.cluster_id.clone(),
                 node_id: config.replication.node_id.clone(),
                 last_commit_seq: cursor.sent_seq(),
+                epoch,
+                primary_sql_address: config.advertise_sql.clone(),
             },
         )?;
         match receive(stream)? {
-            ReplicationFrame::Ack { commit_seq, .. } => {
+            ReplicationFrame::Ack {
+                commit_seq, epoch, ..
+            } => {
+                superseded_check(server, stream, epoch)?;
                 server.sync_quorum.record_ack(&standby, commit_seq);
             }
             ReplicationFrame::Error { message, .. } => {
@@ -324,6 +357,26 @@ fn serve_standby(
             }
         }
     }
+}
+
+/// Fences this primary when a peer reports a newer epoch: another node was
+/// promoted, so this one must stop acknowledging writes.
+fn superseded_check(
+    server: &Arc<PgWireServer>,
+    stream: &mut dyn ReplicationStream,
+    epoch: u64,
+) -> Result<()> {
+    if server
+        .read_db()?
+        .observe_replication_epoch(epoch)
+        .map_err(PgWireError::from)?
+    {
+        return Err(refuse(
+            stream,
+            &format!("a newer primary (epoch {epoch}) exists; this node is fenced"),
+        ));
+    }
+    Ok(())
 }
 
 /// Standby side: connect, apply the stream, acknowledge, reconnect on loss.
@@ -360,13 +413,17 @@ fn follow_once(server: &Arc<PgWireServer>, config: &HaServerConfig) -> Result<()
         )
     };
     let stream = stream.as_mut();
-    let applied = server.read_db()?.last_applied_commit_seq();
+    let (applied, epoch) = {
+        let db = server.read_db()?;
+        (db.last_applied_commit_seq(), db.replication_epoch())
+    };
     send(
         stream,
         &ReplicationFrame::Hello {
             protocol_version: REPLICATION_PROTOCOL_VERSION,
             cluster_id: config.replication.cluster_id.clone(),
             node_id: config.replication.node_id.clone(),
+            epoch,
         },
     )?;
     send(
@@ -375,6 +432,7 @@ fn follow_once(server: &Arc<PgWireServer>, config: &HaServerConfig) -> Result<()
             cluster_id: config.replication.cluster_id.clone(),
             node_id: config.replication.node_id.clone(),
             commit_seq: applied,
+            epoch,
         },
     )?;
     eprintln!("bicdb replication: following {primary} from commit {applied}");
@@ -382,7 +440,26 @@ fn follow_once(server: &Arc<PgWireServer>, config: &HaServerConfig) -> Result<()
     loop {
         match receive(stream)? {
             ReplicationFrame::Commit(frame) => batch.push(frame),
-            ReplicationFrame::Heartbeat { .. } => {
+            ReplicationFrame::Heartbeat {
+                epoch,
+                primary_sql_address,
+                ..
+            } => {
+                {
+                    let db = server.read_db()?;
+                    let known = db.replication_epoch();
+                    if epoch < known {
+                        // A superseded primary: its stream must not be applied.
+                        return Err(refuse(
+                            stream,
+                            &format!("stale primary: epoch {epoch} < {known}"),
+                        ));
+                    }
+                    db.observe_replication_epoch(epoch)
+                        .map_err(PgWireError::from)?;
+                    db.record_primary_sql_address(primary_sql_address)
+                        .map_err(PgWireError::from)?;
+                }
                 let applied = if batch.is_empty() {
                     server.read_db()?.last_applied_commit_seq()
                 } else {
@@ -400,6 +477,7 @@ fn follow_once(server: &Arc<PgWireServer>, config: &HaServerConfig) -> Result<()
                         cluster_id: config.replication.cluster_id.clone(),
                         node_id: config.replication.node_id.clone(),
                         commit_seq: applied,
+                        epoch,
                     },
                 )?;
             }

@@ -363,6 +363,7 @@ pub struct SyncQuorum {
     required_fast: AtomicUsize,
     /// Whether a write lease is configured (skips the lock otherwise).
     lease_fast: AtomicBool,
+    stats: SyncWaitStats,
 }
 
 impl Default for SyncQuorum {
@@ -384,6 +385,7 @@ impl Default for SyncQuorum {
             changed: Condvar::new(),
             required_fast: AtomicUsize::new(0),
             lease_fast: AtomicBool::new(false),
+            stats: SyncWaitStats::default(),
         }
     }
 }
@@ -395,6 +397,29 @@ pub struct SyncQuorumStatus {
     pub quorum_seq: u64,
     pub degraded: bool,
     pub standbys: BTreeMap<String, u64>,
+    /// Milliseconds since each standby was last heard from.
+    pub last_heard_ms: BTreeMap<String, u64>,
+    /// Log held for local consumers (the commit log archive).
+    pub holds: BTreeMap<String, u64>,
+    /// Why writes are refused under the write lease, if they are.
+    pub lease_refusal: Option<String>,
+    pub lease_configured: bool,
+    /// Commits that waited for confirmations, and for how long in total.
+    pub waits: u64,
+    pub wait_micros: u64,
+    /// Waits that ended without the confirmations (timeout, shutdown,
+    /// fencing, lost lease).
+    pub failed_waits: u64,
+    /// Times synchronous replication degraded to asynchronous.
+    pub degraded_events: u64,
+}
+
+#[derive(Debug, Default)]
+struct SyncWaitStats {
+    waits: AtomicU64,
+    wait_micros: AtomicU64,
+    failed: AtomicU64,
+    degraded: AtomicU64,
 }
 
 impl SyncQuorum {
@@ -551,17 +576,49 @@ impl SyncQuorum {
     }
 
     pub fn status(&self) -> SyncQuorumStatus {
+        let lease_refusal = self.lease_refusal();
         let state = self.state.lock();
         SyncQuorumStatus {
             required: state.required,
             quorum_seq: Self::quorum_seq_of(&state),
             degraded: state.degraded,
             standbys: state.acked.clone(),
+            last_heard_ms: state
+                .heard
+                .iter()
+                .map(|(standby, at)| (standby.clone(), at.elapsed().as_millis() as u64))
+                .collect(),
+            holds: state.holds.clone(),
+            lease_refusal,
+            lease_configured: state.lease.is_some(),
+            waits: self.stats.waits.load(AtomicOrdering::Relaxed),
+            wait_micros: self.stats.wait_micros.load(AtomicOrdering::Relaxed),
+            failed_waits: self.stats.failed.load(AtomicOrdering::Relaxed),
+            degraded_events: self.stats.degraded.load(AtomicOrdering::Relaxed),
         }
     }
 
     /// Blocks until `required` standbys have durably applied `seq`.
     pub fn wait_for(&self, seq: u64) -> Result<()> {
+        if self.required_fast.load(AtomicOrdering::Acquire) == 0
+            && !self.lease_fast.load(AtomicOrdering::Acquire)
+        {
+            return Ok(());
+        }
+        let started = Instant::now();
+        let result = self.wait_for_confirmations(seq);
+        self.stats.waits.fetch_add(1, AtomicOrdering::Relaxed);
+        self.stats.wait_micros.fetch_add(
+            started.elapsed().as_micros() as u64,
+            AtomicOrdering::Relaxed,
+        );
+        if result.is_err() {
+            self.stats.failed.fetch_add(1, AtomicOrdering::Relaxed);
+        }
+        result
+    }
+
+    fn wait_for_confirmations(&self, seq: u64) -> Result<()> {
         if let Some(refusal) = self.lease_refusal() {
             return Err(BicDbError::HighAvailability(format!(
                 "commit {seq} is durable on this node but is not acknowledged: {refusal}"
@@ -594,6 +651,7 @@ impl SyncQuorum {
                             SyncTimeoutPolicy::Degrade => {
                                 if !state.degraded {
                                     state.degraded = true;
+                                    self.stats.degraded.fetch_add(1, AtomicOrdering::Relaxed);
                                     eprintln!(
                                         "bicdb synchronous replication: no quorum within {:?}; degraded to asynchronous",
                                         state.timeout

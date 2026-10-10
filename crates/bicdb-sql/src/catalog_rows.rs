@@ -7096,3 +7096,180 @@ pub(crate) fn index_field_attnum(
         IndexField::MetadataPath(_) | IndexField::Lower(_) | IndexField::Trim(_) => None,
     }
 }
+
+fn opt_text(value: Option<String>) -> SqlValue {
+    value.map(SqlValue::String).unwrap_or(SqlValue::Null)
+}
+
+/// One row per node the replication primary knows: standbys (by their
+/// acknowledged position) and local log holders such as the commit log
+/// archive.
+pub(crate) fn bicdb_replication_nodes_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    let status = db.sync_quorum().status();
+    let current = db.current_commit_seq();
+    let mut rows = Vec::new();
+    for (node, acked) in &status.standbys {
+        let heard = status.last_heard_ms.get(node).copied();
+        rows.push(virtual_row([
+            ("node_id", SqlValue::String(node.clone())),
+            ("kind", SqlValue::String("standby".to_string())),
+            ("acknowledged_commit_seq", SqlValue::Int(*acked as i64)),
+            (
+                "lag_commits",
+                SqlValue::Int(current.saturating_sub(*acked) as i64),
+            ),
+            (
+                "last_heard_ms",
+                heard.map_or(SqlValue::Null, |ms| SqlValue::Int(ms as i64)),
+            ),
+            (
+                "connected",
+                SqlValue::Bool(heard.is_some_and(|ms| ms < 5_000)),
+            ),
+        ]));
+    }
+    for (holder, seq) in &status.holds {
+        rows.push(virtual_row([
+            ("node_id", SqlValue::String(holder.clone())),
+            ("kind", SqlValue::String(holder.replace('-', "_"))),
+            ("acknowledged_commit_seq", SqlValue::Int(*seq as i64)),
+            (
+                "lag_commits",
+                SqlValue::Int(current.saturating_sub(*seq) as i64),
+            ),
+            ("last_heard_ms", SqlValue::Null),
+            ("connected", SqlValue::Null),
+        ]));
+    }
+    Ok(rows)
+}
+
+/// This node's place in its replication group.
+pub(crate) fn bicdb_replication_role_row(db: &BicDb) -> BTreeMap<String, SqlValue> {
+    let enabled = db.replication_config().enabled;
+    let node = db.ha_node_status();
+    let quorum = db.sync_quorum().status();
+    let role = if !enabled {
+        "standalone".to_string()
+    } else {
+        format!("{:?}", node.role).to_lowercase()
+    };
+    let lease = if !quorum.lease_configured {
+        "not configured".to_string()
+    } else {
+        quorum
+            .lease_refusal
+            .clone()
+            .unwrap_or_else(|| "held".to_string())
+    };
+    virtual_row([
+        ("replication", SqlValue::Bool(enabled)),
+        ("role", SqlValue::String(role)),
+        ("epoch", SqlValue::Int(node.epoch as i64)),
+        ("data_epoch", SqlValue::Int(node.data_epoch as i64)),
+        ("primary_id", opt_text(node.primary_id.clone())),
+        (
+            "primary_sql_address",
+            opt_text(node.primary_sql_address.clone()),
+        ),
+        (
+            "current_commit_seq",
+            SqlValue::Int(db.current_commit_seq() as i64),
+        ),
+        (
+            "last_applied_commit_seq",
+            SqlValue::Int(db.last_applied_commit_seq() as i64),
+        ),
+        (
+            "synchronous_standbys",
+            SqlValue::Int(quorum.required as i64),
+        ),
+        ("quorum_commit_seq", SqlValue::Int(quorum.quorum_seq as i64)),
+        ("degraded", SqlValue::Bool(quorum.degraded)),
+        ("write_lease", SqlValue::String(lease)),
+        (
+            "voted_term",
+            node.voted
+                .as_ref()
+                .map_or(SqlValue::Null, |(term, _)| SqlValue::Int(*term as i64)),
+        ),
+        (
+            "voted_for",
+            opt_text(node.voted.as_ref().map(|(_, candidate)| candidate.clone())),
+        ),
+    ])
+}
+
+/// How commits fared waiting for synchronous standbys.
+pub(crate) fn bicdb_sync_commit_stats_row(db: &BicDb) -> BTreeMap<String, SqlValue> {
+    let quorum = db.sync_quorum().status();
+    let seconds = quorum.wait_micros as f64 / 1_000_000.0;
+    let average_ms = if quorum.waits == 0 {
+        0.0
+    } else {
+        quorum.wait_micros as f64 / 1_000.0 / quorum.waits as f64
+    };
+    virtual_row([
+        (
+            "synchronous_standbys",
+            SqlValue::Int(quorum.required as i64),
+        ),
+        ("waits", SqlValue::Int(quorum.waits as i64)),
+        ("wait_seconds_total", SqlValue::Float(seconds)),
+        ("avg_wait_ms", SqlValue::Float(average_ms)),
+        ("failed_waits", SqlValue::Int(quorum.failed_waits as i64)),
+        ("degraded", SqlValue::Bool(quorum.degraded)),
+        (
+            "degraded_events",
+            SqlValue::Int(quorum.degraded_events as i64),
+        ),
+    ])
+}
+
+/// Archived tables and the size of their history.
+pub(crate) fn bicdb_flashback_storage_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    let mut rows = Vec::new();
+    for (table, config) in db.flashback_collections() {
+        let history = bicdb_core::flashback_history_collection(&table);
+        let history_rows = db.collection_record_count(&history).unwrap_or(0);
+        rows.push(virtual_row([
+            (
+                "table_name",
+                SqlValue::String(logical_relation_name(&table).unwrap_or(table)),
+            ),
+            (
+                "retention_seconds",
+                SqlValue::Int(config.retention_secs as i64),
+            ),
+            (
+                "archived_since",
+                SqlValue::String(crate::engine::flashback::timestamp_text_from_unix_micros(
+                    bicdb_core::scn_to_unix_micros(config.since_scn),
+                )),
+            ),
+            ("history_rows", SqlValue::Int(history_rows as i64)),
+        ]));
+    }
+    Ok(rows)
+}
+
+/// Dropped tables held in the recycle bin and their size.
+pub(crate) fn bicdb_recyclebin_storage_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    let mut rows = Vec::new();
+    for entry in crate::session::recycle_bin::list_recycle_bin(db)? {
+        let row_count = db.collection_record_count(&entry.bin_name).unwrap_or(0);
+        rows.push(virtual_row([
+            ("object_name", SqlValue::String(entry.bin_name.clone())),
+            ("original_name", SqlValue::String(entry.display_name())),
+            ("owner", SqlValue::String(entry.owner.clone())),
+            (
+                "dropped_at",
+                SqlValue::String(crate::engine::flashback::timestamp_text_from_unix_micros(
+                    entry.dropped_at_micros,
+                )),
+            ),
+            ("row_count", SqlValue::Int(row_count as i64)),
+        ]));
+    }
+    Ok(rows)
+}

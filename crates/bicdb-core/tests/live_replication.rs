@@ -896,3 +896,48 @@ fn standbys_build_the_primarys_indexes_from_their_own_rows() {
         assert!(standby.create_collection("nope").is_err(), "{mode}");
     }
 }
+
+#[test]
+fn a_torn_standby_state_file_is_rebuilt_from_the_log() {
+    for (mode, storage) in storage_modes() {
+        let primary_dir = tempfile::tempdir().unwrap();
+        let standby_dir = tempfile::tempdir().unwrap();
+        let mut primary = open(
+            primary_dir.path(),
+            storage.clone(),
+            ReplicationMode::Primary,
+        );
+        let mut standby = open(
+            standby_dir.path(),
+            storage.clone(),
+            ReplicationMode::Standby,
+        );
+        let mut cursor = ReplicationCursor::new(0);
+        primary.create_collection("items").unwrap();
+        for index in 0..5 {
+            put(&primary, &format!("k{index}"), index);
+        }
+        ship(&primary, &mut standby, &mut cursor);
+        let applied = standby.last_applied_commit_seq();
+        drop(standby);
+        // A crash right after an unsynced rewrite can leave it empty or torn.
+        for content in [&b""[..], &b"{\"cluster_id\": \"x"[..]] {
+            std::fs::write(standby_dir.path().join("replication-state.json"), content).unwrap();
+            let standby = open(
+                standby_dir.path(),
+                storage.clone(),
+                ReplicationMode::Standby,
+            );
+            assert_eq!(standby.last_applied_commit_seq(), applied, "{mode}");
+        }
+        let mut standby = open(
+            standby_dir.path(),
+            storage.clone(),
+            ReplicationMode::Standby,
+        );
+        put(&primary, "after", 9);
+        let mut cursor = ReplicationCursor::new(applied);
+        ship(&primary, &mut standby, &mut cursor);
+        assert_eq!(value(&standby, "after"), Some(9), "{mode}");
+    }
+}

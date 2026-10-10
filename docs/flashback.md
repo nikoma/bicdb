@@ -189,8 +189,12 @@ lets `ROLLBACK` undo it.
 - Transaction-level flashback queries, a per-row commit SCN pseudocolumn,
   `VERSIONS ... AS OF`, named archives, and whole-database flashback. For a
   whole-database rewind, use [PITR](backup-recovery.md).
-- `AS OF` on read-only standbys. History rows replicate, but the archive
-  setting is not yet part of the replicated catalog.
+
+## Standbys
+
+History rows and archive settings replicate with every commit, so `AS OF`,
+`VERSIONS BETWEEN` and `FOR SYSTEM_TIME` work on read-only standbys exactly as
+on the primary.
 
 ## Costs
 

@@ -769,3 +769,52 @@ fn failover_frames_survive_the_wire_encoding() {
         assert_eq!(decoded, frame);
     }
 }
+
+#[test]
+fn flashback_queries_work_on_standbys() {
+    use bicdb_core::FlashbackPoint;
+    for (mode, storage) in storage_modes() {
+        let primary_dir = tempfile::tempdir().unwrap();
+        let standby_dir = tempfile::tempdir().unwrap();
+        let mut primary = open(
+            primary_dir.path(),
+            storage.clone(),
+            ReplicationMode::Primary,
+        );
+        let mut standby = open(
+            standby_dir.path(),
+            storage.clone(),
+            ReplicationMode::Standby,
+        );
+        let mut cursor = ReplicationCursor::new(0);
+        primary.create_collection("items").unwrap();
+        put(&primary, "a", 1);
+        primary.enable_flashback("items", 3600).unwrap();
+        let before = primary.current_scn().unwrap();
+        put(&primary, "a", 2);
+        put(&primary, "b", 3);
+        ship(&primary, &mut standby, &mut cursor);
+
+        let as_of = |db: &BicDb| {
+            db.flashback_rows("items", FlashbackPoint::Scn(before))
+                .unwrap_or_else(|error| panic!("{mode}: {error}"))
+                .into_iter()
+                .map(|record| (record.id, record.metadata["value"].as_i64().unwrap()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(as_of(&primary), vec![("a".to_string(), 1)], "{mode}");
+        assert_eq!(as_of(&standby), as_of(&primary), "{mode}");
+        let one = standby
+            .flashback_rows_for_ids("items", FlashbackPoint::Scn(before), &["a".to_string()])
+            .unwrap();
+        assert_eq!(one.len(), 1, "{mode}");
+        // Still true after the standby restarts.
+        drop(standby);
+        let standby = open(
+            standby_dir.path(),
+            storage.clone(),
+            ReplicationMode::Standby,
+        );
+        assert_eq!(as_of(&standby), vec![("a".to_string(), 1)], "{mode}");
+    }
+}

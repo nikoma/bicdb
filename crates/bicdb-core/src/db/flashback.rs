@@ -615,7 +615,7 @@ impl BicDb {
         tracked
     }
 
-    fn flashback_refresh_tracked(&self) {
+    pub(super) fn flashback_refresh_tracked(&self) {
         let count = self
             .collections
             .values()

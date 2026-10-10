@@ -1310,9 +1310,24 @@ pub struct CollectionMeta {
     /// collection keeps no row history; see `db/flashback.rs`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flashback: Option<crate::FlashbackConfig>,
+    /// Physical name under which this collection's rows are stored (segment
+    /// file, paged key prefix). `None` means the logical `name`. It is fixed
+    /// at creation and survives renames, which is what makes a rename a
+    /// catalog-only change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_name: Option<String>,
+    /// Set while a rename from this logical name is being published; lets
+    /// open map index definitions still recorded under the old name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub renamed_from: Option<String>,
 }
 
 impl CollectionMeta {
+    /// The physical storage name (see [`CollectionMeta::storage_name`]).
+    pub fn storage(&self) -> &str {
+        self.storage_name.as_deref().unwrap_or(&self.name)
+    }
+
     pub fn standard(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -1322,6 +1337,8 @@ impl CollectionMeta {
             mutation_policy: None,
             mesh_sync_enabled: false,
             flashback: None,
+            storage_name: None,
+            renamed_from: None,
         }
     }
 
@@ -1334,6 +1351,8 @@ impl CollectionMeta {
             mutation_policy: None,
             mesh_sync_enabled: false,
             flashback: None,
+            storage_name: None,
+            renamed_from: None,
         }
     }
 }

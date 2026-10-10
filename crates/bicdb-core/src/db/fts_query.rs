@@ -1812,7 +1812,7 @@ impl BicDb {
             logical_index: name.to_string(),
             physical_index: physical.clone(),
             row_data: count(crate::paged_collection::collection_storage_prefix(
-                &collection,
+                &self.storage_name_of(&collection),
             ))?,
             document_terms: count(crate::paged_collection::index_document_terms_prefix(
                 &physical,

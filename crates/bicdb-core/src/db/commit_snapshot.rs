@@ -2315,6 +2315,11 @@ impl BicDb {
         // Flush any commits that landed since `begin`, then drop the prefix below
         // the boundary by copying only the retained tail bytes (no frame parsing).
         self.tx_log.flush_pending()?;
+        persist_commit_seq_floor(
+            &self.path,
+            self.commit_seq.load(AtomicOrdering::SeqCst),
+            self.config.fsync,
+        )?;
         copy_transaction_log_tail(&self.tx_log_path(), keep_from_offset, self.config.fsync)?;
         // Drop the stale log handle so the next commit reopens the truncated log.
         self.tx_log.invalidate();

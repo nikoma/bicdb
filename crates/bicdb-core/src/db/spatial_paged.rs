@@ -714,6 +714,16 @@ impl BicDb {
             }
             IncrementalCompactionPhase::CheckpointingLogs => {
                 self.tx_log.flush_pending()?;
+                persist_commit_seq_floor(
+                    &self.path,
+                    self.commit_seq.load(AtomicOrdering::SeqCst),
+                    self.config.fsync,
+                )?;
+                persist_commit_seq_floor(
+                    &self.path,
+                    self.commit_seq.load(AtomicOrdering::SeqCst),
+                    self.config.fsync,
+                )?;
                 truncate_log_file(&self.tx_log_path(), self.config.fsync)?;
                 self.tx_log.invalidate();
                 self.tx_states
@@ -1053,6 +1063,11 @@ impl BicDb {
         // the fresh (truncated) log. We hold the write lock, so no new commit can
         // enqueue concurrently.
         self.tx_log.flush_pending()?;
+        persist_commit_seq_floor(
+            &self.path,
+            self.commit_seq.load(AtomicOrdering::SeqCst),
+            self.config.fsync,
+        )?;
         truncate_log_file(&self.tx_log_path(), self.config.fsync)?;
         self.tx_log.invalidate();
         self.tx_states
@@ -1567,6 +1582,11 @@ impl BicDb {
             let log_path = self.tx_log_path();
             let log_len = file_len(&log_path)?;
             if log_len > 0 {
+                persist_commit_seq_floor(
+                    &self.path,
+                    self.commit_seq.load(AtomicOrdering::SeqCst),
+                    self.config.fsync,
+                )?;
                 copy_transaction_log_tail(&log_path, log_len, self.config.fsync)?;
             }
         }
@@ -1750,6 +1770,11 @@ impl BicDb {
             let log_path = self.tx_log_path();
             let log_len = file_len(&log_path)?;
             if log_len > 0 {
+                persist_commit_seq_floor(
+                    &self.path,
+                    self.commit_seq.load(AtomicOrdering::SeqCst),
+                    self.config.fsync,
+                )?;
                 copy_transaction_log_tail(&log_path, log_len, self.config.fsync)?;
             }
         }

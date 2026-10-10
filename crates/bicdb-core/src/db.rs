@@ -1,6 +1,10 @@
 mod access_mutation;
 mod collection_rename;
 mod commit_snapshot;
+mod replication_live;
+pub use replication_live::{
+    ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus, SyncTimeoutPolicy,
+};
 mod compact_wal;
 #[cfg(test)]
 mod first_lock_tests;
@@ -2513,6 +2517,8 @@ pub struct TxLogHandle {
     bytes_written: Arc<AtomicU64>,
     commits_written: Arc<AtomicU64>,
     max_batch_commits: Arc<AtomicU64>,
+    /// Wakes replication senders when the durable sequence advances.
+    durable_notifier: Arc<replication_live::DurableNotifier>,
     path: PathBuf,
     fsync: bool,
 }
@@ -2531,6 +2537,7 @@ impl TxLogHandle {
             bytes_written: Arc::new(AtomicU64::new(0)),
             commits_written: Arc::new(AtomicU64::new(0)),
             max_batch_commits: Arc::new(AtomicU64::new(0)),
+            durable_notifier: Arc::new(replication_live::DurableNotifier::default()),
             path,
             fsync,
         }
@@ -2602,6 +2609,7 @@ impl TxLogHandle {
         self.remove_written(from_seq, last);
         state.written_seq = last;
         self.written_seq.store(last, AtomicOrdering::Release);
+        self.durable_notifier.publish(last);
         Ok(())
     }
 
@@ -3366,6 +3374,7 @@ pub struct PagedStorageOpsHandle {
     paged: Arc<crate::paged_collection::PagedRecords>,
     path: PathBuf,
     fsync: bool,
+    commit_seq: Arc<AtomicU64>,
 }
 
 impl PagedStorageOpsHandle {
@@ -3393,6 +3402,11 @@ impl PagedStorageOpsHandle {
                 let log_path = self.path.join(DEFAULT_TRANSACTION_LOG);
                 let log_len = file_len(&log_path)?;
                 if log_len > 0 {
+                    persist_commit_seq_floor(
+                        &self.path,
+                        self.commit_seq.load(AtomicOrdering::SeqCst),
+                        self.fsync,
+                    )?;
                     copy_transaction_log_tail(&log_path, log_len, self.fsync)?;
                 }
                 Ok(())
@@ -3643,7 +3657,11 @@ pub struct BicDb {
     // in the WAL may not equal commit order once writers commit concurrently,
     // so recovery orders committed transactions by this sequence. Atomic so the
     // commit step (serialized by `commit_lock`) can assign it through `&self`.
-    commit_seq: AtomicU64,
+    // Shared (Arc) with storage-ops handles, which must persist it as the
+    // commit-sequence floor before they truncate the transaction log.
+    commit_seq: Arc<AtomicU64>,
+    // Synchronous replication: commits wait here for standby confirmations.
+    sync_quorum: Arc<SyncQuorum>,
     // Every commit takes the shared side while serializable commits take the
     // exclusive side. Ordinary commits therefore remain concurrent, while a
     // serializable validator observes a stable database through its apply.
@@ -9132,6 +9150,12 @@ impl BicDb {
             config.read_mode,
             &encryption,
         )?;
+        // The log can be truncated below the newest commit (checkpoints); the
+        // persisted floor keeps commit sequence numbers monotonic across
+        // restarts, which replication relies on.
+        tx_recovery.last_commit_seq = tx_recovery
+            .last_commit_seq
+            .max(read_commit_seq_floor(&path)?);
         let replication_state =
             load_replication_state(&path, &config.replication, tx_recovery.last_commit_seq)?;
         open_trace!("tx_recovery");
@@ -9811,6 +9835,7 @@ impl BicDb {
             let log_path = path.join(DEFAULT_TRANSACTION_LOG);
             let log_len = file_len(&log_path)?;
             if log_len > 0 {
+                persist_commit_seq_floor(&path, tx_recovery.last_commit_seq, config.fsync)?;
                 copy_transaction_log_tail(&log_path, log_len, config.fsync)?;
             }
         }
@@ -9885,7 +9910,8 @@ impl BicDb {
             instance_id: NEXT_DB_INSTANCE_ID.fetch_add(1, AtomicOrdering::Relaxed),
             last_committed_tx: AtomicU64::new(tx_recovery.last_commit_seq),
             applied_watermark: Mutex::new(AppliedWatermark::new(tx_recovery.last_commit_seq)),
-            commit_seq: AtomicU64::new(tx_recovery.last_commit_seq),
+            commit_seq: Arc::new(AtomicU64::new(tx_recovery.last_commit_seq)),
+            sync_quorum: Arc::new(SyncQuorum::default()),
             index_generation: AtomicU64::new(0),
             serializable_commit_admission: RwLock::new(()),
             commit_lock: Mutex::new(()),
@@ -17545,6 +17571,33 @@ fn path_entry_exists(path: &Path) -> Result<bool> {
     match fs::symlink_metadata(path) {
         Ok(_) => Ok(true),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// File holding the commit-sequence floor (see [`persist_commit_seq_floor`]).
+pub(crate) const COMMIT_SEQ_FLOOR_FILE: &str = "commit-seq.floor";
+
+/// Records that every commit sequence number up to `commit_seq` is in use.
+/// Written before the transaction log is truncated, so a reopen never hands
+/// out a sequence number twice.
+pub(crate) fn persist_commit_seq_floor(root: &Path, commit_seq: u64, fsync: bool) -> Result<()> {
+    if read_commit_seq_floor(root)? >= commit_seq {
+        return Ok(());
+    }
+    storage::write_atomic(
+        &root.join(COMMIT_SEQ_FLOOR_FILE),
+        format!("{commit_seq}\n").as_bytes(),
+        fsync,
+    )
+}
+
+pub(crate) fn read_commit_seq_floor(root: &Path) -> Result<u64> {
+    match fs::read_to_string(root.join(COMMIT_SEQ_FLOOR_FILE)) {
+        Ok(text) => text.trim().parse::<u64>().map_err(|error| {
+            BicDbError::FormatCompatibility(format!("corrupt {COMMIT_SEQ_FLOOR_FILE}: {error}"))
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(0),
         Err(error) => Err(error.into()),
     }
 }

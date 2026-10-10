@@ -201,6 +201,45 @@ changes (and once at start), and each standby builds what it lacks, rebuilds
 what changed and drops what is gone, without writing to the replicated data.
 Indexed queries on a standby run as fast as on the primary.
 
+### Monitoring
+
+`bicdb ha status --node HOST:PORT ...` shows a whole group from its servers'
+SQL ports: each server's role, epoch, commit position, primary and write
+lease, and the standbys each primary sees, with warnings for two primaries,
+no primary, fenced servers and degraded synchronous replication
+(`--json` for scripts; `--user`, `--password-env`, `--dbname` to connect).
+
+```text
+NODE                   ROLE         EPOCH     COMMIT    APPLIED  PRIMARY                      WRITE LEASE / SYNC
+127.0.0.1:56431        unreachable      -          -          -  -
+127.0.0.1:56433        primary          1          4          4  n2 (127.0.0.1:56433)         lease held, 1 sync standby(s), quorum at 4
+127.0.0.1:56435        standby          1          4          4  n2 (127.0.0.1:56433)
+
+Standbys of 127.0.0.1:56433:
+  NODE                 KIND            CONFIRMED      LAG   HEARD (ms) CONNECTED
+  n3                   standby                 4        0          226 t
+```
+
+The same information is queryable on every server:
+
+| View | Contents |
+| --- | --- |
+| `bicdb_replication_role` | Role (`standalone`, `primary`, `standby`, `fenced`), epoch, primary and its client address, commit positions, synchronous standbys, quorum position, degraded, write lease, latest vote |
+| `bicdb_replication_nodes` | On a primary: every standby's confirmed commit, lag and when it was last heard; log holders such as the commit log archive |
+| `bicdb_sync_commit_stats` | Commits that waited for confirmations, total and average wait, failed waits, degradations |
+| `bicdb_flashback_storage` | Archived tables, retention, archived since, history rows |
+| `bicdb_recyclebin_storage` | Dropped tables held in the recycle bin and their rows |
+
+`bicdb serve --metrics-listen 127.0.0.1:9187` serves the same as Prometheus
+metrics at `/metrics` (`bicdb_replication_role`, `bicdb_replication_epoch`,
+`bicdb_replication_standby_lag_commits`,
+`bicdb_replication_standby_last_heard_seconds`, `bicdb_sync_commit_waits_total`,
+`bicdb_sync_commit_wait_seconds_total`, `bicdb_sync_degraded`,
+`bicdb_write_lease_held`, `bicdb_log_hold_commit_seq`,
+`bicdb_flashback_history_rows`, `bicdb_recyclebin_rows`, plus connection and
+query counters). The endpoint has no authentication: bind it to a trusted
+interface.
+
 ## Architecture
 
 - Primary: normal BicDB server or local database path with `role=primary`.

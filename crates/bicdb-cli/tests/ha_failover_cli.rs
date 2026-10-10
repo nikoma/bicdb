@@ -251,6 +251,27 @@ fn killing_the_primary_loses_no_acknowledged_write() {
         .execute(0, "INSERT INTO t VALUES (-1, 'stale')")
         .unwrap_err();
     assert!(refused.starts_with("25006"), "{refused}");
+    // The cluster view agrees: one primary, two standbys following it.
+    let mut status = Command::new(env!("CARGO_BIN_EXE_bicdb"));
+    status.args(["ha", "status", "--json"]);
+    for node in &group.nodes {
+        status.args(["--node", &format!("127.0.0.1:{}", node.sql_port)]);
+    }
+    let output = status.output().unwrap();
+    let view: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| panic!("{error}: {}", String::from_utf8_lossy(&output.stdout)));
+    let roles = view["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["role"].as_str().unwrap_or("").to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(roles[primary], "primary", "{view}");
+    assert_eq!(
+        roles.iter().filter(|role| *role == "standby").count(),
+        2,
+        "{view}"
+    );
     for index in 0..3 {
         if index != primary {
             let standby = eventually(Duration::from_secs(20), || {

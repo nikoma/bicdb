@@ -49,12 +49,12 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 tokio.workspace = true
+tokio-postgres = "0.7.18"
 
 [dev-dependencies]
 osmpbfreader.workspace = true
 protobuf.workspace = true
 tempfile.workspace = true
-tokio-postgres = "0.7.18"
 
 [[test]]
 name = "paged_recovery_cli"

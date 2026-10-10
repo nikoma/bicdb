@@ -3586,6 +3586,10 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
             | "bicdb_replication_lag"
             | "bicdb_replication_nodes"
             | "bicdb_replication_errors"
+            | "bicdb_replication_role"
+            | "bicdb_sync_commit_stats"
+            | "bicdb_flashback_storage"
+            | "bicdb_recyclebin_storage"
             | "bicdb_consensus_status"
             | GRAPH_NODES_TABLE
             | GRAPH_EDGES_TABLE
@@ -3731,8 +3735,12 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "bicdb_notifications" => bicdb_notification_rows(db),
         "bicdb_replication_status" => bicdb_replication_status_rows(db),
         "bicdb_replication_lag" => bicdb_replication_lag_rows(db),
-        "bicdb_replication_nodes" => Ok(Vec::new()),
+        "bicdb_replication_nodes" => bicdb_replication_nodes_rows(db),
         "bicdb_replication_errors" => Ok(Vec::new()),
+        "bicdb_replication_role" => Ok(vec![bicdb_replication_role_row(db)]),
+        "bicdb_sync_commit_stats" => Ok(vec![bicdb_sync_commit_stats_row(db)]),
+        "bicdb_flashback_storage" => bicdb_flashback_storage_rows(db),
+        "bicdb_recyclebin_storage" => bicdb_recyclebin_storage_rows(db),
         "bicdb_consensus_status" => Ok(vec![bicdb_consensus_status_rows(db)]),
         other => Err(SqlError::Unsupported(format!(
             "virtual table {other} is not implemented"
@@ -4113,10 +4121,75 @@ pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
             .collect(),
         ),
         "bicdb_replication_nodes" => Some(
-            ["node_id", "role", "connected", "last_seen_at"]
-                .into_iter()
-                .map(str::to_string)
-                .collect(),
+            [
+                "node_id",
+                "kind",
+                "acknowledged_commit_seq",
+                "lag_commits",
+                "last_heard_ms",
+                "connected",
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        ),
+        "bicdb_replication_role" => Some(
+            [
+                "replication",
+                "role",
+                "epoch",
+                "data_epoch",
+                "primary_id",
+                "primary_sql_address",
+                "current_commit_seq",
+                "last_applied_commit_seq",
+                "synchronous_standbys",
+                "quorum_commit_seq",
+                "degraded",
+                "write_lease",
+                "voted_term",
+                "voted_for",
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        ),
+        "bicdb_sync_commit_stats" => Some(
+            [
+                "synchronous_standbys",
+                "waits",
+                "wait_seconds_total",
+                "avg_wait_ms",
+                "failed_waits",
+                "degraded",
+                "degraded_events",
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        ),
+        "bicdb_flashback_storage" => Some(
+            [
+                "table_name",
+                "retention_seconds",
+                "archived_since",
+                "history_rows",
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        ),
+        "bicdb_recyclebin_storage" => Some(
+            [
+                "object_name",
+                "original_name",
+                "owner",
+                "dropped_at",
+                "row_count",
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
         ),
         "bicdb_replication_errors" => Some(
             ["occurred_at", "node_id", "code", "message"]

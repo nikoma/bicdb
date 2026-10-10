@@ -1849,11 +1849,24 @@ enum BranchCommand {
 
 #[derive(Debug, Subcommand)]
 enum HaCommand {
+    /// HA state of a database directory, or with --node, of a running
+    /// replication group: each server's role, epoch, commit position, primary
+    /// and write lease, and the standbys each primary sees.
     Status {
         #[arg(default_value = ".")]
         path: PathBuf,
         #[arg(long)]
         json: bool,
+        /// A server of the group, as HOST:PORT (its SQL address; repeatable).
+        #[arg(long = "node")]
+        nodes: Vec<String>,
+        #[arg(long, default_value = "postgres")]
+        user: String,
+        /// Environment variable holding the password.
+        #[arg(long = "password-env")]
+        password_env: Option<String>,
+        #[arg(long, default_value = "bicdb")]
+        dbname: String,
     },
     Ship {
         primary: PathBuf,
@@ -5606,6 +5619,7 @@ fn main() -> Result<()> {
                 storage_sync,
             )?;
             config.log_archive = replication.log_archive_config()?;
+            config.metrics_listen = operator.metrics_listen;
             config.high_availability = replication.into_config()?;
             let host_services = cli_host_services(&operator)?;
             if cluster {
@@ -6222,9 +6236,27 @@ fn main() -> Result<()> {
             print_sql_result(&result, OutputMode::new(json, false)?)?;
         }
         Command::Ha { command } => match command {
-            HaCommand::Status { path, json } => {
-                let db = BicDb::open(&path)?;
-                print_ha_status(&db.ha_status()?, json)?;
+            HaCommand::Status {
+                path,
+                json,
+                nodes,
+                user,
+                password_env,
+                dbname,
+            } => {
+                if nodes.is_empty() {
+                    let db = BicDb::open(&path)?;
+                    print_ha_status(&db.ha_status()?, json)?;
+                } else {
+                    let password = match password_env {
+                        Some(name) => Some(
+                            std::env::var(&name)
+                                .with_context(|| format!("--password-env: {name} is not set"))?,
+                        ),
+                        None => None,
+                    };
+                    print_ha_cluster_status(&nodes, &user, password.as_deref(), &dbname, json)?;
+                }
             }
             HaCommand::Ship {
                 primary,
@@ -8773,6 +8805,10 @@ struct OperatorArgs {
     /// Stable operator identity recorded in the operation log; independent of SQL roles.
     #[arg(long, requires = "operator_listen")]
     operator_actor: Option<String>,
+    /// Serve Prometheus metrics at http://ADDRESS/metrics (no authentication:
+    /// bind it to a trusted interface).
+    #[arg(long)]
+    metrics_listen: Option<SocketAddr>,
 }
 
 fn cli_host_services(operator: &OperatorArgs) -> Result<Vec<Arc<dyn PgWireHostService>>> {
@@ -12303,4 +12339,232 @@ mod consensus_identity_tests {
         );
         assert_eq!(consensus_authenticated_node(&pins(), None).unwrap(), None);
     }
+}
+
+/// One server's answer for `bicdb ha status --node`.
+#[derive(Debug, Default, serde::Serialize)]
+struct HaNodeReport {
+    node: String,
+    error: Option<String>,
+    role: Option<String>,
+    epoch: Option<String>,
+    commit_seq: Option<String>,
+    applied_commit_seq: Option<String>,
+    primary_id: Option<String>,
+    primary_sql_address: Option<String>,
+    synchronous_standbys: Option<String>,
+    quorum_commit_seq: Option<String>,
+    degraded: Option<String>,
+    write_lease: Option<String>,
+    standbys: Vec<BTreeMap<String, Option<String>>>,
+}
+
+fn query_ha_node(
+    runtime: &tokio::runtime::Runtime,
+    node: &str,
+    user: &str,
+    password: Option<&str>,
+    dbname: &str,
+) -> HaNodeReport {
+    let mut report = HaNodeReport {
+        node: node.to_string(),
+        ..HaNodeReport::default()
+    };
+    let result: Result<()> = runtime.block_on(async {
+        let (host, port) = node
+            .rsplit_once(':')
+            .with_context(|| format!("{node}: expected HOST:PORT"))?;
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host(host)
+            .port(port.parse().with_context(|| format!("{node}: bad port"))?)
+            .user(user)
+            .dbname(dbname)
+            .connect_timeout(Duration::from_secs(3));
+        if let Some(password) = password {
+            config.password(password);
+        }
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await?;
+        tokio::spawn(connection);
+        let rows = |messages: Vec<tokio_postgres::SimpleQueryMessage>| {
+            messages
+                .into_iter()
+                .filter_map(|message| match message {
+                    tokio_postgres::SimpleQueryMessage::Row(row) => Some(
+                        row.columns()
+                            .iter()
+                            .enumerate()
+                            .map(|(index, column)| {
+                                (
+                                    column.name().to_string(),
+                                    row.get(index).map(str::to_string),
+                                )
+                            })
+                            .collect::<BTreeMap<_, _>>(),
+                    ),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let role = rows(
+            client
+                .simple_query(
+                    "SELECT role, epoch, current_commit_seq, last_applied_commit_seq, primary_id, \
+                     primary_sql_address, synchronous_standbys, quorum_commit_seq, degraded, \
+                     write_lease FROM bicdb_replication_role",
+                )
+                .await?,
+        );
+        let field = |name: &str| {
+            role.first()
+                .and_then(|row| row.get(name).cloned().flatten())
+        };
+        report.role = field("role");
+        report.epoch = field("epoch");
+        report.commit_seq = field("current_commit_seq");
+        report.applied_commit_seq = field("last_applied_commit_seq");
+        report.primary_id = field("primary_id");
+        report.primary_sql_address = field("primary_sql_address");
+        report.synchronous_standbys = field("synchronous_standbys");
+        report.quorum_commit_seq = field("quorum_commit_seq");
+        report.degraded = field("degraded");
+        report.write_lease = field("write_lease");
+        if report.role.as_deref() == Some("primary") {
+            report.standbys = rows(
+                client
+                    .simple_query(
+                        "SELECT node_id, kind, acknowledged_commit_seq, lag_commits, \
+                         last_heard_ms, connected FROM bicdb_replication_nodes",
+                    )
+                    .await?,
+            );
+        }
+        Ok(())
+    });
+    if let Err(error) = result {
+        report.error = Some(error.to_string());
+        report.role = Some("unreachable".to_string());
+    }
+    report
+}
+
+fn print_ha_cluster_status(
+    nodes: &[String],
+    user: &str,
+    password: Option<&str>,
+    dbname: &str,
+    json: bool,
+) -> Result<()> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let reports = nodes
+        .iter()
+        .map(|node| query_ha_node(&runtime, node, user, password, dbname))
+        .collect::<Vec<_>>();
+    let primaries = reports
+        .iter()
+        .filter(|report| report.role.as_deref() == Some("primary"))
+        .count();
+    let mut warnings = Vec::new();
+    match primaries {
+        0 => warnings.push("no primary is reachable".to_string()),
+        1 => {}
+        count => warnings.push(format!(
+            "{count} servers report themselves primary: only the one holding its write lease accepts writes"
+        )),
+    }
+    for report in &reports {
+        if report.role.as_deref() == Some("fenced") {
+            warnings.push(format!(
+                "{} is fenced (a newer primary exists)",
+                report.node
+            ));
+        }
+        if report.degraded.as_deref() == Some("t") {
+            warnings.push(format!(
+                "{} runs synchronous replication degraded to asynchronous",
+                report.node
+            ));
+        }
+        if let Some(error) = &report.error {
+            warnings.push(format!("{}: {error}", report.node));
+        }
+    }
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "nodes": reports,
+                "warnings": warnings,
+            }))?
+        );
+        return Ok(());
+    }
+    let dash = |value: &Option<String>| value.clone().unwrap_or_else(|| "-".to_string());
+    println!(
+        "{:<22} {:<12} {:>5} {:>10} {:>10}  {:<28} {}",
+        "NODE", "ROLE", "EPOCH", "COMMIT", "APPLIED", "PRIMARY", "WRITE LEASE / SYNC"
+    );
+    for report in &reports {
+        let primary = match (&report.primary_id, &report.primary_sql_address) {
+            (Some(id), Some(address)) => format!("{id} ({address})"),
+            (Some(id), None) => id.clone(),
+            (None, Some(address)) => address.clone(),
+            (None, None) => "-".to_string(),
+        };
+        let detail = if report.role.as_deref() == Some("primary") {
+            format!(
+                "lease {}, {} sync standby(s), quorum at {}",
+                dash(&report.write_lease),
+                dash(&report.synchronous_standbys),
+                dash(&report.quorum_commit_seq)
+            )
+        } else {
+            String::new()
+        };
+        println!(
+            "{:<22} {:<12} {:>5} {:>10} {:>10}  {:<28} {}",
+            report.node,
+            dash(&report.role),
+            dash(&report.epoch),
+            dash(&report.commit_seq),
+            dash(&report.applied_commit_seq),
+            primary,
+            detail
+        );
+    }
+    for report in reports.iter().filter(|report| !report.standbys.is_empty()) {
+        println!();
+        println!("Standbys of {}:", report.node);
+        println!(
+            "  {:<20} {:<12} {:>12} {:>8} {:>12} {}",
+            "NODE", "KIND", "CONFIRMED", "LAG", "HEARD (ms)", "CONNECTED"
+        );
+        for standby in &report.standbys {
+            let get = |name: &str| {
+                standby
+                    .get(name)
+                    .cloned()
+                    .flatten()
+                    .unwrap_or_else(|| "-".to_string())
+            };
+            println!(
+                "  {:<20} {:<12} {:>12} {:>8} {:>12} {}",
+                get("node_id"),
+                get("kind"),
+                get("acknowledged_commit_seq"),
+                get("lag_commits"),
+                get("last_heard_ms"),
+                get("connected")
+            );
+        }
+    }
+    if !warnings.is_empty() {
+        println!();
+        for warning in &warnings {
+            println!("warning: {warning}");
+        }
+    }
+    Ok(())
 }

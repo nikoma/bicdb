@@ -16,6 +16,7 @@ pub(crate) use protocol_wire::*;
 mod checkpoint_driver;
 mod high_availability;
 mod log_archive;
+mod metrics;
 pub(crate) use checkpoint_driver::*;
 pub use high_availability::{
     restart_requested, AllowedStandby, FailoverConfig, HaPeer, HaServerConfig, HaServerRole,
@@ -332,6 +333,8 @@ pub struct PgWireConfig {
     pub high_availability: Option<HaServerConfig>,
     /// Commit log archive for whole-database point-in-time recovery.
     pub log_archive: Option<LogArchiveConfig>,
+    /// Serve Prometheus metrics on this address (`GET /metrics`).
+    pub metrics_listen: Option<SocketAddr>,
 }
 
 impl Default for PgWireConfig {
@@ -402,6 +405,7 @@ impl Default for PgWireConfig {
             fsync: true,
             high_availability: None,
             log_archive: None,
+            metrics_listen: None,
         }
     }
 }

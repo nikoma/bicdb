@@ -1035,6 +1035,19 @@ impl<'db> SqlEngine<'db> {
         if role_has_table_privilege(self.db_ref(), &role, table, privilege)? {
             return Ok(());
         }
+        // A relation that does not exist is reported as such, not as a
+        // privilege failure.
+        let exists = self
+            .db_ref()
+            .collections()
+            .iter()
+            .any(|meta| meta.name == table)
+            || load_view(self.db_ref(), table)?.is_some();
+        if !exists {
+            return Err(SqlError::BicDb(BicDbError::CollectionNotFound(
+                unqualified_relation(table).to_string(),
+            )));
+        }
         Err(SqlError::BicDb(BicDbError::Authorization(format!(
             "permission denied for table {}",
             unqualified_relation(table)

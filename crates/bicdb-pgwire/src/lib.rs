@@ -861,6 +861,9 @@ pub struct PgWireServer {
     // write lock interleave while still overlapping execution.
     active_shared_writes: AtomicUsize,
     active_connections: AtomicUsize,
+    /// Sessions connected to this database (in cluster mode they may have
+    /// arrived through another database's listener).
+    database_sessions: AtomicUsize,
     active_connections_by_ip: Mutex<HashMap<IpAddr, usize>>,
     /// Bounds the short-lived tasks which half-close and drain refused TCP
     /// connections. Draining the already-sent startup packet prevents Linux
@@ -1805,13 +1808,13 @@ fn initialize_client_with_server_admitted(
     );
 
     if stream.is_tls() {
-        let registration = ConnectionRegistration {
-            server: Arc::clone(&data_server),
-            control_server: Arc::clone(&server),
-            connection_id: state.connection_id,
+        let registration = ConnectionRegistration::new(
+            Arc::clone(&data_server),
+            Arc::clone(&server),
+            state.connection_id,
             process_id,
             secret_key,
-        };
+        );
         Ok(InitializedClient::Blocking(Box::new(
             InitializedBlockingClient {
                 _registration: registration,
@@ -1828,13 +1831,13 @@ fn initialize_client_with_server_admitted(
         // Constructed before `into_plain()`, whose flush can fail if the peer
         // vanished during startup: the guard must already own the cleanup by
         // the time that `?` can return.
-        let registration = ConnectionRegistration {
-            server: Arc::clone(&data_server),
-            control_server: Arc::clone(&server),
-            connection_id: state.connection_id,
+        let registration = ConnectionRegistration::new(
+            Arc::clone(&data_server),
+            Arc::clone(&server),
+            state.connection_id,
             process_id,
             secret_key,
-        };
+        );
         let plain = stream.into_plain()?;
         Ok(InitializedClient::Plain(Box::new(InitializedPlainClient {
             _registration: registration,
@@ -3809,6 +3812,18 @@ fn capture_connection_guc_state(state: &mut ConnectionState, session: &SqlSessio
     state.session_state = session.session_guc_state();
 }
 
+/// Runs one statement as the bootstrap superuser against a cluster directory
+/// that no server has open (the `bicdb branch` commands).
+pub fn execute_cluster_statement(root: impl AsRef<Path>, sql: &str) -> Result<SqlResult> {
+    let cluster = PgWireCluster::open(root, "bicdb", PgWireConfig::default())?;
+    let server = cluster.default_server()?;
+    let mut state = ConnectionState::new(0, "bicdb".to_string(), None);
+    state
+        .session_state
+        .insert_session_guc("database".to_string(), cluster.default_database());
+    execute_server_sql(&server, &mut state, sql)
+}
+
 fn execute_server_sql(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
@@ -3877,13 +3892,38 @@ fn execute_server_sql_with_options_normalized(
         }
     }
     if let Some(cluster) = server.cluster.as_ref().and_then(Weak::upgrade) {
-        if let Some(DatabaseDdl::Create { name, owner }) = parse_database_ddl(sql)? {
-            if state.in_transaction {
-                return Err(PgWireError::Server(
-                    "CREATE DATABASE cannot run inside a transaction block".to_string(),
-                ));
+        match parse_database_ddl(sql)? {
+            Some(DatabaseDdl::Create {
+                name,
+                owner,
+                template,
+            }) => {
+                if state.in_transaction {
+                    return Err(PgWireError::Server(
+                        "CREATE DATABASE cannot run inside a transaction block".to_string(),
+                    ));
+                }
+                return cluster.create_database(
+                    server,
+                    state,
+                    sql,
+                    &name,
+                    owner.as_deref(),
+                    template.as_deref(),
+                );
             }
-            return cluster.create_database(server, state, sql, &name, owner.as_deref());
+            Some(DatabaseDdl::Drop { name, if_exists }) => {
+                if state.in_transaction {
+                    return Err(PgWireError::Server(
+                        "DROP DATABASE cannot run inside a transaction block".to_string(),
+                    ));
+                }
+                return cluster.drop_database(server, state, sql, &name, if_exists);
+            }
+            _ => {}
+        }
+        if let Some(statement) = parse_branch_statement(normalized) {
+            return cluster.execute_branch_statement(server, state, statement);
         }
     }
     let _permit = match server.acquire_query(query_kind_for_normalized_sql(normalized)) {

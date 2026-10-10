@@ -1245,6 +1245,15 @@ pub(crate) fn save_database_owner(db: &mut BicDb, name: &str, owner: &str) -> Re
     )
 }
 
+/// Removes a database from the catalog; false when it was not there.
+pub(crate) fn delete_database(db: &mut BicDb, name: &str) -> Result<bool> {
+    match db.delete(DATABASE_COLLECTION, &normalize_database_name(name)) {
+        Ok(deleted) => Ok(deleted),
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
 pub(crate) fn save_database(db: &mut BicDb, database: DatabaseSchema) -> Result<()> {
     ensure_database_collection(db)?;
     db.insert(

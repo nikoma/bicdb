@@ -728,6 +728,15 @@ enum Command {
         #[command(subcommand)]
         command: HaCommand,
     },
+    /// Database branches in a cluster directory (`bicdb serve --cluster`): an
+    /// exact copy of a database that then evolves on its own. Run these while
+    /// no server has the directory open; on a running server use SQL instead
+    /// (CREATE DATABASE <name> TEMPLATE <source>, SHOW BRANCHES,
+    /// SHOW BRANCH DIFF <name>, SHOW BRANCH CHANGES <name>, DROP DATABASE).
+    Branch {
+        #[command(subcommand)]
+        command: BranchCommand,
+    },
     Replication {
         #[command(subcommand)]
         command: ReplicationCommand,
@@ -1803,6 +1812,39 @@ enum HealthCommand {
         #[arg(long)]
         key_env: Option<String>,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum BranchCommand {
+    /// Create NAME as a branch of another database (default: bicdb).
+    Create {
+        root: PathBuf,
+        name: String,
+        #[arg(long, default_value = "bicdb")]
+        from: String,
+    },
+    /// List the databases and where each branch came from.
+    List {
+        root: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Compare a branch with its parent (or --against another database).
+    Diff {
+        root: PathBuf,
+        name: String,
+        #[arg(long)]
+        against: Option<String>,
+        /// List individual records instead of per-table counts.
+        #[arg(long)]
+        changes: bool,
+        #[arg(long, default_value_t = 1000)]
+        limit: usize,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Drop a branch (any database but the default one).
+    Drop { root: PathBuf, name: String },
 }
 
 #[derive(Debug, Subcommand)]
@@ -6142,6 +6184,43 @@ fn main() -> Result<()> {
             }
         },
         Command::Cluster { command } => run_cluster_command(command)?,
+        Command::Branch { command } => {
+            let quote = |name: &str| format!("\"{}\"", name.replace('"', "\"\""));
+            let (root, sql, json) = match command {
+                BranchCommand::Create { root, name, from } => (
+                    root,
+                    format!("CREATE DATABASE {} TEMPLATE {}", quote(&name), quote(&from)),
+                    false,
+                ),
+                BranchCommand::List { root, json } => (root, "SHOW BRANCHES".to_string(), json),
+                BranchCommand::Diff {
+                    root,
+                    name,
+                    against,
+                    changes,
+                    limit,
+                    json,
+                } => {
+                    let mut sql = format!(
+                        "SHOW BRANCH {} {}",
+                        if changes { "CHANGES" } else { "DIFF" },
+                        quote(&name)
+                    );
+                    if let Some(against) = against {
+                        sql.push_str(&format!(" AGAINST {}", quote(&against)));
+                    }
+                    if changes {
+                        sql.push_str(&format!(" LIMIT {limit}"));
+                    }
+                    (root, sql, json)
+                }
+                BranchCommand::Drop { root, name } => {
+                    (root, format!("DROP DATABASE {}", quote(&name)), false)
+                }
+            };
+            let result = bicdb_pgwire::execute_cluster_statement(&root, &sql)?;
+            print_sql_result(&result, OutputMode::new(json, false)?)?;
+        }
         Command::Ha { command } => match command {
             HaCommand::Status { path, json } => {
                 let db = BicDb::open(&path)?;

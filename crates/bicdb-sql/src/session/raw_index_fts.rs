@@ -1145,7 +1145,13 @@ impl<'db> SqlSession<'db> {
             return Ok(None);
         };
         match command {
-            DatabaseDdl::Create { name, owner } => {
+            DatabaseDdl::Create {
+                template: Some(template),
+                ..
+            } => Err(SqlError::Unsupported(format!(
+                "CREATE DATABASE ... TEMPLATE {template} (a branch) needs a server in cluster mode (bicdb serve --cluster)"
+            ))),
+            DatabaseDdl::Create { name, owner, .. } => {
                 let roles = list_roles(self.db_ref())?;
                 let current_role = current_user_from_gucs(&self.session_gucs);
                 let permitted = current_role.eq_ignore_ascii_case(&current_role_name())
@@ -1182,6 +1188,26 @@ impl<'db> SqlSession<'db> {
             DatabaseDdl::SetTablespace { name } => {
                 ensure_database_exists(self.db_ref(), &name)?;
                 Ok(Some(SqlResult::command("ALTER DATABASE")))
+            }
+            DatabaseDdl::Drop { name, if_exists } => {
+                let Some(database) = list_databases(self.db_ref())?
+                    .into_iter()
+                    .find(|database| database.name.eq_ignore_ascii_case(&name))
+                else {
+                    if if_exists {
+                        return Ok(Some(SqlResult::command("DROP DATABASE")));
+                    }
+                    return Err(SqlError::InvalidSql(format!(
+                        "database \"{name}\" does not exist"
+                    )));
+                };
+                self.require_object_ownership(
+                    &database.owner,
+                    &format!("database {name}"),
+                    "drop it",
+                )?;
+                delete_database(self.db_mut()?, &name)?;
+                Ok(Some(SqlResult::command("DROP DATABASE")))
             }
         }
     }

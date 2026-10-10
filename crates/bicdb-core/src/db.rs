@@ -1,4 +1,5 @@
 mod access_mutation;
+mod branching;
 mod collection_rename;
 mod commit_snapshot;
 mod ha_bootstrap;
@@ -8,6 +9,7 @@ pub use ha_bootstrap::{
 };
 mod log_archiving;
 mod replication_live;
+pub use branching::{diff_databases, CollectionDiff, DatabaseDiff, RecordChange, RecordChangeKind};
 use ha_node::PRIMARY_MARKER;
 pub use ha_node::{
     read_only_standby_hint, read_persisted_ha_role, HaNodeStatus, NodeRole, HA_NODE_FILE,

@@ -2094,6 +2094,10 @@ impl BicDb {
     pub fn checkpoint_begin(&self) -> Result<CheckpointPlan> {
         self.tx_log.flush_pending()?;
         let keep_from = self.wal_bytes();
+        self.checkpoint_boundary_seq.store(
+            self.commit_seq.load(AtomicOrdering::SeqCst),
+            AtomicOrdering::SeqCst,
+        );
         // Snapshot-and-clear each collection's dirty set. Under the exclusive write
         // lock no commit runs, so the boundary and the dirty sets form a consistent
         // cut: everything dirty (changed since the last checkpoint) is captured
@@ -2315,7 +2319,10 @@ impl BicDb {
         // Flush any commits that landed since `begin`, then drop the prefix below
         // the boundary by copying only the retained tail bytes (no frame parsing).
         self.tx_log.flush_pending()?;
-        copy_transaction_log_tail(&self.tx_log_path(), keep_from_offset, self.config.fsync)?;
+        self.cut_transaction_log(
+            keep_from_offset,
+            self.checkpoint_boundary_seq.load(AtomicOrdering::SeqCst),
+        )?;
         // Drop the stale log handle so the next commit reopens the truncated log.
         self.tx_log.invalidate();
         let after = self.wal_bytes();

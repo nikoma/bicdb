@@ -790,10 +790,14 @@ impl PgWireServer {
         // listening on `bicdb_broker__<queue>` wake without polling. The
         // handler runs inline on the appending thread: one mutex push.
         let notifications = Arc::new(Mutex::new(NotificationBus::default()));
-        let tx_log = {
+        let (tx_log, sync_quorum, replication_feed) = {
             let mut guard = db.write();
-            ensure_primary_key_indexes(&mut guard)?;
-            ensure_unique_constraint_indexes(&mut guard)?;
+            // A standby's catalog follows the primary; it builds no indexes
+            // of its own (reads stay correct without them).
+            if !guard.is_read_only_standby() {
+                ensure_primary_key_indexes(&mut guard)?;
+                ensure_unique_constraint_indexes(&mut guard)?;
+            }
             let bus = Arc::clone(&notifications);
             guard
                 .events_mut()
@@ -813,7 +817,11 @@ impl PgWireServer {
                         bus.notify(&format!("bicdb_broker__{queue}"), &payload, 0);
                     }
                 });
-            guard.tx_log_handle()
+            (
+                guard.tx_log_handle(),
+                guard.sync_quorum(),
+                guard.replication_feed(),
+            )
         };
         Ok(Arc::new(Self {
             path,
@@ -823,6 +831,8 @@ impl PgWireServer {
             distribution_router,
             resource_governor,
             tx_log,
+            sync_quorum,
+            replication_feed,
             started_at: Instant::now(),
             active_connections: AtomicUsize::new(0),
             active_connections_by_ip: Mutex::new(HashMap::new()),

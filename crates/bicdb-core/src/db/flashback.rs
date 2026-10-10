@@ -290,6 +290,19 @@ impl BicDb {
     /// collection take the flashback clock for their whole commit and carry
     /// their history rows; all others go straight to the commit body.
     pub(crate) fn commit_transaction(&self, tx: &mut Transaction) -> Result<u64> {
+        if tx.state == TxState::Pending && self.ensure_writable("commit").is_err() {
+            return self.commit_read_only_on_standby(tx);
+        }
+        let committed = self.commit_transaction_tracked(tx);
+        if let Ok(seq) = committed {
+            if !tx.writes.is_empty() {
+                replication_live::note_thread_commit(seq);
+            }
+        }
+        committed
+    }
+
+    fn commit_transaction_tracked(&self, tx: &mut Transaction) -> Result<u64> {
         if self.flashback_tracked.load(AtomicOrdering::Acquire) == 0
             || tx.bypass_commit_admission
             || tx.state != TxState::Pending
@@ -314,6 +327,22 @@ impl BicDb {
             }
         }
         result
+    }
+
+    /// On a standby the commit sequence belongs to the replication stream, so
+    /// a local read-only transaction finishes without taking a number; one
+    /// with writes is refused.
+    fn commit_read_only_on_standby(&self, tx: &mut Transaction) -> Result<u64> {
+        if !tx.writes.is_empty() {
+            self.ensure_writable("commit write transaction")?;
+        }
+        self.tx_states.remove(&tx.id.0);
+        let locked_keys = tx.locked_keys.get_mut().take_all();
+        release_owned_write_locks(&self.write_locks, tx.id, &locked_keys);
+        let applied = self.last_committed_tx.load(AtomicOrdering::Acquire);
+        tx.state = TxState::Committed;
+        tx.committed_seq = Some(applied);
+        Ok(applied)
     }
 
     fn flashback_tx_touches_tracked(&self, tx: &Transaction) -> Result<bool> {
@@ -478,6 +507,11 @@ impl BicDb {
             .get(name)
             .is_some_and(|state| state.read().meta.flashback.is_some());
         let dropped = self.drop_collection_inner(name)?;
+        if dropped {
+            self.log_catalog_op(super::collection_rename::CatalogOp::Drop {
+                name: name.to_string(),
+            })?;
+        }
         if tracked {
             self.flashback_refresh_tracked();
             let history = flashback_history_collection(name);

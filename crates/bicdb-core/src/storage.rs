@@ -18,7 +18,7 @@ use crate::error::{BicDbError, Result};
 
 const MAGIC: &[u8; 4] = b"BICF";
 const VERSION: u8 = 1;
-const HEADER_LEN: usize = 16;
+pub(crate) const HEADER_LEN: usize = 16;
 const MAX_PAYLOAD_LEN: usize = 128 * 1024 * 1024;
 const MAX_DECOMPRESSION_RATIO: usize = 1_024;
 const FLAG_ZSTD: u16 = 1;
@@ -1100,6 +1100,76 @@ pub(crate) fn read_frames_from(
         frames,
         truncated_bytes: file_len.saturating_sub(absolute_valid),
     })
+}
+
+/// `len` bytes at `offset`, or `None` when the file is shorter.
+pub(crate) fn read_bytes_at(path: &Path, offset: u64, len: usize) -> Result<Option<Vec<u8>>> {
+    let mut file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    if file.metadata()?.len() < offset + len as u64 {
+        return Ok(None);
+    }
+    file.seek(SeekFrom::Start(offset))?;
+    let mut bytes = vec![0_u8; len];
+    file.read_exact(&mut bytes)?;
+    Ok(Some(bytes))
+}
+
+/// Read-only tail reader for a log another thread may be appending to.
+///
+/// Unlike [`read_frames_from`] it never truncates: a frame still being written
+/// simply ends the scan. Returns each complete frame's start and end offsets
+/// with its decoded payload.
+pub(crate) fn read_frames_readonly_from(
+    path: &Path,
+    start_offset: u64,
+    expected_kind: FrameKind,
+    encryption: &EncryptionRuntime,
+) -> Result<Vec<(u64, u64, Vec<u8>)>> {
+    let mut file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error.into()),
+    };
+    let file_len = file.metadata()?.len();
+    if start_offset >= file_len {
+        return Ok(Vec::new());
+    }
+    file.seek(SeekFrom::Start(start_offset))?;
+    let mut data = Vec::with_capacity((file_len - start_offset) as usize);
+    file.read_to_end(&mut data)?;
+    let mut frames = Vec::new();
+    let mut cursor = 0_usize;
+    while data.len().saturating_sub(cursor) >= HEADER_LEN {
+        let start = cursor;
+        let mut header = [0_u8; HEADER_LEN];
+        header.copy_from_slice(&data[cursor..cursor + HEADER_LEN]);
+        let Some((kind, flags, len, expected_checksum)) = decode_header(&header) else {
+            break;
+        };
+        if kind != expected_kind || len > MAX_PAYLOAD_LEN {
+            break;
+        }
+        cursor += HEADER_LEN;
+        if data.len().saturating_sub(cursor) < len {
+            break;
+        }
+        let stored = &data[cursor..cursor + len];
+        cursor += len;
+        if expected_checksum != checksum(kind, flags, len as u32, stored) {
+            break;
+        }
+        let payload = decode_payload(path, kind, flags, stored, encryption)?;
+        frames.push((
+            start_offset + start as u64,
+            start_offset + cursor as u64,
+            payload,
+        ));
+    }
+    Ok(frames)
 }
 
 #[cfg(feature = "mmap")]

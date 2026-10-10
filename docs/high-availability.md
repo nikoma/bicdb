@@ -13,6 +13,9 @@ Native ordered commit-stream replication is the preferred production direction;
 the original whole-file shipping path remains supported as a legacy/fallback
 bootstrap and repair mechanism.
 
+For zero-data-loss replication between servers, use
+[synchronous streaming replication](#synchronous-streaming-replication-bicdb-serve).
+
 Native Raft-style consensus support exists for ordered commit coordination.
 It is separate from this legacy file-shipping HA path and does not make BicDB
 multi-writer. Operators must still fence the old primary before promoting a
@@ -35,6 +38,78 @@ Distributed range placement uses a different data-plane protocol: starting in
 the per-range command log described in
 `docs/distributed-cluster-operations.md`. Do not confuse that synchronous
 range quorum with the legacy whole-database streaming/HA commands below.
+
+## Synchronous streaming replication (`bicdb serve`)
+
+`bicdb serve` can run as a replication primary or standby itself. A primary
+streams every commit to its standbys over long-lived authenticated connections.
+With `--synchronous-standbys K`, a client's commit is acknowledged only after
+K standbys have made it durable (RPO = 0). Standbys keep serving read-only
+queries while they apply the stream.
+
+```bash
+# primary: accepts writes, waits for 1 standby on every commit
+bicdb serve /srv/primary --port 5432 \
+  --replication-cluster-id prod --replication-node-id db1 \
+  --replication-listen 10.0.0.1:5940 \
+  --allow-standby db2=<sha256 of db2's certificate> \
+  --allow-standby db3=<sha256 of db3's certificate> \
+  --synchronous-standbys 1 \
+  --replication-cert db1.crt --replication-key db1.key --replication-ca ca.crt
+
+# standby: read-only, follows the primary
+bicdb serve /srv/standby --port 5432 \
+  --replication-cluster-id prod --replication-node-id db2 \
+  --standby-of 10.0.0.1:5940 --primary-server-name db1.internal \
+  --replication-cert db2.crt --replication-key db2.key --replication-ca ca.crt
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--synchronous-standbys K` | Standbys that must confirm each commit (0 = asynchronous) |
+| `--synchronous-timeout-ms N` | How long a commit waits for confirmations (0 = forever, the default) |
+| `--synchronous-on-timeout fail\|degrade` | `fail` (default): the client gets an error; the commit stays durable on the primary and replicates when a standby reconnects. `degrade`: acknowledge and replicate asynchronously until the standbys catch up again, then synchronous commit resumes automatically |
+| `--allow-standby ID[=SHA256]` | Standbys allowed to connect. Fail-closed: an empty list authorizes nobody. With TLS each identity must be pinned to its certificate |
+| `--replication-dev-plaintext` | Plaintext on loopback addresses only, for development and tests |
+
+### Guarantees
+
+- **No acknowledged commit is lost.** Every commit path (explicit `COMMIT`,
+  autocommit statements, extended-protocol execution, DDL, `COPY`) holds the
+  client's acknowledgement until the synchronous standbys have the commit
+  durably. If the primary fails, a synchronous standby has every commit any
+  client was told succeeded. Killing the primary with `SIGKILL` mid-workload
+  was verified to lose no acknowledged write.
+- **Reads never wait.** Only statements that committed wait for standbys.
+- **Exact, ordered stream.** Every commit sequence number is shipped in order,
+  including commits that wrote nothing. Catalog changes (create, drop and
+  rename of tables, the recycle bin) travel in the same stream, so a standby
+  never mixes a dropped table's rows into a re-created one. Collection
+  policies (tenant scoping, field masking) and flashback settings follow the
+  primary.
+- **Standbys do not fall off.** Checkpoints never cut the transaction log past
+  a connected standby's acknowledged position, so a standby that lags or
+  reconnects resumes where it stopped. Commit sequence numbers never repeat
+  across restarts.
+- As with other databases' synchronous replication, a commit becomes visible
+  on the primary slightly before its acknowledgement returns.
+
+### Failover (manual in this release)
+
+1. Make sure the old primary is stopped and cannot come back (fence it).
+2. Restart a synchronous standby as the primary (any synchronous standby has
+   every acknowledged commit): drop `--standby-of`, add
+   `--replication-listen` and `--allow-standby` for the remaining nodes. It
+   builds its secondary indexes at start.
+3. Point clients at it. Re-create the old primary as a standby from a fresh
+   copy.
+
+Not yet available: automatic failover with leases and epoch fencing, client
+redirection, snapshot bootstrap of a new standby over the stream (start a
+standby from an empty directory while the primary still has its full log, or
+from a copy), and log retention for standbys that were offline across a
+primary restart. Standbys do not build secondary indexes of their own; reads
+on them stay correct and use scans.
 
 ## Architecture
 

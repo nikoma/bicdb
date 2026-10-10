@@ -14,7 +14,9 @@ pub(crate) use binary_codec::*;
 mod protocol_wire;
 pub(crate) use protocol_wire::*;
 mod checkpoint_driver;
+mod high_availability;
 pub(crate) use checkpoint_driver::*;
+pub use high_availability::{AllowedStandby, HaServerConfig, HaServerRole};
 mod tls_binding;
 mod validation;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -321,6 +323,8 @@ pub struct PgWireConfig {
     /// Sync database persistence before acknowledgement. Disable only for
     /// explicitly non-durable diagnostic benchmarks.
     pub fsync: bool,
+    /// Streaming replication role (primary with standbys, or standby).
+    pub high_availability: Option<HaServerConfig>,
 }
 
 impl Default for PgWireConfig {
@@ -389,6 +393,7 @@ impl Default for PgWireConfig {
             resource_governor: ResourceGovernorConfig::default(),
             automatic_anti_entropy_limits: AutomaticRangeAntiEntropyLimits::default(),
             fsync: true,
+            high_availability: None,
         }
     }
 }
@@ -413,7 +418,15 @@ fn database_config_for_server(path: &Path, config: &PgWireConfig) -> Result<DbCo
         .with_fsync(config.fsync)
         .with_paged_rowid_registry(config.paged_rowid_registry);
     if !path.join(DEFAULT_DISTRIBUTION_CONFIG).exists() {
+        if let Some(ha) = config.high_availability.as_ref() {
+            db_config = db_config.with_replication(ha.database_replication());
+        }
         return Ok(db_config);
+    }
+    if config.high_availability.is_some() {
+        return Err(PgWireError::Server(
+            "streaming replication cannot be combined with distributed placement".to_string(),
+        ));
     }
     let distribution = load_distribution_config(path)?;
     db_config = db_config.with_storage_mode(StorageMode::ServerPaged);
@@ -815,6 +828,11 @@ pub struct PgWireServer {
     // Decoupled group-commit writer handle: lets the durable WAL write run after
     // the database write lock is released so concurrent commits pipeline.
     tx_log: TxLogHandle,
+    // Synchronous replication: write acknowledgements wait here for standby
+    // confirmations (a lock-free no-op when no synchronous standby is set).
+    sync_quorum: Arc<bicdb_core::SyncQuorum>,
+    // Durable-progress feed for in-server replication senders.
+    replication_feed: bicdb_core::ReplicationFeed,
     started_at: Instant,
     // Server-wide gate for the concurrent (read-lock execute) write path. The
     // credit falls when shared commits conflict and rises when they succeed; the
@@ -2318,7 +2336,12 @@ fn handle_frontend_message(
                     ready_for_query_status(stream, state.transaction_status())?;
                 }
             }
-            b'c' => match finish_copy_in(server, state) {
+            b'c' => match finish_copy_in(server, state).and_then(|count| {
+                if let Some(seq) = bicdb_core::take_thread_commit_seq() {
+                    server.sync_quorum.wait_for(seq)?;
+                }
+                Ok(count)
+            }) {
                 Ok(count) => {
                     command_complete(stream, &format!("COPY {count}"))?;
                     ready_for_query_status(stream, state.transaction_status())?;
@@ -2371,6 +2394,7 @@ fn handle_frontend_message(
                 return Ok(true);
             }
 
+            let _ = bicdb_core::take_thread_commit_seq();
             match execute_server_query(stream, server, state, query) {
                 Ok(QueryFlow::Complete) => {
                     flush_notifications(stream, server, state.connection_id)?;
@@ -2427,7 +2451,15 @@ fn handle_frontend_message(
         }
         b'E' => {
             let source_sql = portal_source_sql_from_execute_payload(&payload, state);
-            match execute_message(&payload, server, state) {
+            // No reset here: the extended protocol may already have executed
+            // (and committed) this statement at Bind/Describe time.
+            let executed = execute_message(&payload, server, state).and_then(|executed| {
+                if let Some(seq) = bicdb_core::take_thread_commit_seq() {
+                    server.sync_quorum.wait_for(seq)?;
+                }
+                Ok(executed)
+            });
+            match executed {
                 Ok(executed) => {
                     let stats = write_query_result(
                         stream,
@@ -2458,6 +2490,15 @@ fn handle_frontend_message(
         }
         b'S' => {
             state.discard_until_sync = false;
+            // A statement executed at Bind/Describe time but never Executed
+            // still committed: hold ReadyForQuery for its synchronous standbys.
+            if let Some(seq) = bicdb_core::take_thread_commit_seq() {
+                if let Err(error) = server.sync_quorum.wait_for(seq) {
+                    let error = PgWireError::from(error);
+                    log_failed_query(server, state, None, &error);
+                    error_response_for_error(stream, &error)?;
+                }
+            }
             ready_for_query_status(stream, state.transaction_status())?;
         }
         b'C' => match close_message_with_server(&payload, server, state) {
@@ -3536,6 +3577,7 @@ fn execute_server_db_sql_for_state_inner(
                 durability?;
                 admission_finalization?;
                 finalization?;
+                server.sync_quorum.wait_for(commit_seq)?;
                 return Ok(res);
             }
             Err(BicDbError::TransactionConflict(_)) => {
@@ -3622,8 +3664,8 @@ fn execute_server_transaction_sql(
             ddl_undo_log,
         )
     };
-    let (result, session_state, pending_tx, catalog_cache, ddl_undo_log) = if matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access")
-    {
+    let ran_exclusive = matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access");
+    let (result, session_state, pending_tx, catalog_cache, ddl_undo_log) = if ran_exclusive {
         let Some(tx) = pending_tx else {
             return Err(PgWireError::Server(
                 "transaction is open but no transaction state is available".to_string(),
@@ -3660,6 +3702,13 @@ fn execute_server_transaction_sql(
             ddl_undo_log,
         )
     };
+    if ran_exclusive && result.is_ok() && pending_tx.is_none() {
+        // Exclusive statements commit inside the session; with the write lock
+        // released, hold the acknowledgement for the synchronous standbys.
+        server
+            .sync_quorum
+            .wait_for(server.replication_feed.durable_seq())?;
+    }
     state.session_state = session_state;
     state.tx = pending_tx;
     // The session — not the dispatcher's string match — is authoritative for
@@ -3691,16 +3740,26 @@ fn execute_server_write_sql(
     security_context: Option<&SecurityContext>,
 ) -> Result<SqlResult> {
     ensure_server_writable(server)?;
-    let admission = server.try_admit_write()?;
-    let mut db = server.write_db_with_admission(&admission)?;
-    let started = Instant::now();
-    let result = sql_session_for_server(server, &mut db)
-        .with_security_context(security_context.cloned())
-        .with_session_guc_state(session_state.clone())
-        .with_cancellation(cancellation.clone())
-        .execute(sql)
-        .map_err(PgWireError::from);
-    server.record_write_execution(duration_nanos_u64(started.elapsed()));
+    let result = {
+        let admission = server.try_admit_write()?;
+        let mut db = server.write_db_with_admission(&admission)?;
+        let started = Instant::now();
+        let result = sql_session_for_server(server, &mut db)
+            .with_security_context(security_context.cloned())
+            .with_session_guc_state(session_state.clone())
+            .with_cancellation(cancellation.clone())
+            .execute(sql)
+            .map_err(PgWireError::from);
+        server.record_write_execution(duration_nanos_u64(started.elapsed()));
+        result
+    };
+    // With the write lock released, hold the acknowledgement until the
+    // synchronous standbys have every commit made so far (ours included).
+    if result.is_ok() {
+        server
+            .sync_quorum
+            .wait_for(server.replication_feed.durable_seq())?;
+    }
     result
 }
 

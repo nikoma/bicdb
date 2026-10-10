@@ -92,6 +92,48 @@ Restore the latest full backup:
 cargo run -p bicdb-cli -- backup restore ./app-full.bicbackup ./restore --force
 ```
 
+## Point-in-time recovery from the commit log archive
+
+A server started with a commit log archive writes every commit to it as it
+becomes durable, and takes encrypted base backups into the same directory:
+
+```bash
+export ARCHIVE_KEY=...        # base backup encryption key
+bicdb serve /srv/db --log-archive /backup/archive \
+  --log-archive-key-env ARCHIVE_KEY \
+  --log-archive-base-hours 24 --log-archive-keep 7
+```
+
+Restore the whole database as it was at a moment, for example just before an
+accidental `DELETE`:
+
+```bash
+bicdb backup pitr /backup/archive /srv/restored \
+  --target-timestamp 1791654946 --key-env ARCHIVE_KEY
+# or an exact commit:   --target-commit 81234
+# or everything:        (no target)
+```
+
+`pitr` picks the newest base backup that precedes the target, restores it,
+and replays the archived commits up to the target, schema changes included.
+The result is an ordinary database. To replay onto a base backup taken some
+other way, use `bicdb backup restore <backup> <target> --log-archive DIR
+[--target-commit N] [--target-timestamp T]`.
+
+- Archiving needs no audit events and no settings on the tables: it archives
+  the same commit frames streaming replication sends to standbys.
+- A commit is archived once it is durable on the server; an archive append is
+  fsynced. The server keeps its transaction log until a commit is archived,
+  also across restarts, so a stalled archive directory cannot lose commits
+  (watch its free space: the log grows while archiving is stalled).
+- Base backups pause commits while they are written locally. Old base backups
+  beyond `--log-archive-keep`, and log segments only they needed, are removed.
+- Targets are commit sequence numbers or Unix seconds; commits that wrote
+  nothing do not stop a time-based replay.
+- In cluster mode each database archives into its own subdirectory.
+
+## Audit-event PITR
+
 Restore to a Unix timestamp using audit-event PITR:
 
 ```bash

@@ -6,10 +6,14 @@ mod ha_node;
 pub use ha_bootstrap::{
     finish_standby_bootstrap, stage_standby_bootstrap, standby_bootstrap_staging, StandbyResume,
 };
+mod log_archiving;
 mod replication_live;
 use ha_node::PRIMARY_MARKER;
 pub use ha_node::{
     read_only_standby_hint, read_persisted_ha_role, HaNodeStatus, NodeRole, HA_NODE_FILE,
+};
+pub use log_archiving::{
+    restore_from_log_archive, restore_point_in_time, LogReplayReport, LOG_ARCHIVE_HOLDER,
 };
 pub use replication_live::{
     take_thread_commit_seq, ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus,
@@ -9948,6 +9952,7 @@ impl BicDb {
             sync_quorum: {
                 let quorum = SyncQuorum::default();
                 quorum.seed(ha_node.read(|file| file.slots.clone()));
+                quorum.seed_holds(ha_node.read(|file| file.holds.clone()));
                 Arc::new(quorum)
             },
             ha_node: Arc::new(ha_node),

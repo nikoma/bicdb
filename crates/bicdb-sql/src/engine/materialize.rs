@@ -1476,8 +1476,7 @@ impl<'db> SqlEngine<'db> {
                         unqualified_relation(&object_name(qualifier).ok()?).to_ascii_lowercase();
                     let relation = relations.iter().find(|relation| relation.alias == alias)?;
                     metadata.extend(
-                        relation
-                            .columns
+                        single_wildcard_copy(&relation.columns)
                             .iter()
                             .filter(|(name, _)| wildcard_visible(name))
                             .map(|(_, metadata)| metadata.clone()),
@@ -1797,7 +1796,7 @@ impl<'db> SqlEngine<'db> {
                 }
                 SelectItem::QualifiedWildcard(qualifier, _) => {
                     let relation = self.qualified_wildcard_relation(qualifier, &env)?;
-                    for (name, ty) in &relation.columns {
+                    for (name, ty) in single_wildcard_copy(&relation.columns) {
                         if wildcard_visible(name) {
                             out.push((name.clone(), ty.clone()));
                         }
@@ -3448,4 +3447,22 @@ pub(crate) fn query_mentions_function(select: &Select, query: &Query, name: &str
         ControlFlow::Continue(())
     });
     flow.is_break()
+}
+
+/// An aliased base table lists its columns twice (an unqualified `*` over it
+/// yields both the `alias.col` and the `table.col` copy); `alias.*` yields
+/// one copy.
+fn single_wildcard_copy<T>(columns: &[(String, T)]) -> &[(String, T)] {
+    let half = columns.len() / 2;
+    let doubled = columns.len() % 2 == 0
+        && half > 0
+        && columns[..half]
+            .iter()
+            .zip(&columns[half..])
+            .all(|(first, second)| first.0 == second.0);
+    if doubled {
+        &columns[..half]
+    } else {
+        columns
+    }
 }

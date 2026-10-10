@@ -11313,15 +11313,15 @@ fn execute_sql_command(
             maybe_write_slow_query(slow_query, query, result.rows.len(), started.elapsed())?;
             print_sql_result(&result, output)
         }
-        Err(sql_error) => {
-            if let Some(analytics_error) = analytics_error {
-                Err(anyhow::anyhow!(
-                    "DataFusion analytics path failed: {analytics_error}; SQL fallback failed: {sql_error}"
-                ))
-            } else {
-                Err(sql_error.into())
-            }
-        }
+        Err(sql_error) => match (analytics_error, &sql_error) {
+            // The analytics engine matters only when the SQL engine cannot
+            // run the query at all; otherwise its error (a missing table, a
+            // type error) is the answer.
+            (Some(analytics_error), bicdb_sql::SqlError::Unsupported(_)) => Err(anyhow::anyhow!(
+                "{sql_error} (the analytics engine also failed: {analytics_error})"
+            )),
+            _ => Err(sql_error.into()),
+        },
     }
 }
 

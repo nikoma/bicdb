@@ -957,9 +957,17 @@ fn tcp_transport_moves_a_live_range_over_bounded_authenticated_node_rpcs() {
         if topology.relocation(relocation_id).unwrap().phase == RelocationPhase::Completed {
             break;
         }
-        driver
-            .drive_relocation(&mut topology, relocation_id, &actor, now_ms, &cancellation)
-            .unwrap();
+        match driver.drive_relocation(&mut topology, relocation_id, &actor, now_ms, &cancellation) {
+            Ok(_) => {}
+            // The target re-verifies its schema after each catalog change it
+            // applies; until then its fence rejects the step, and the driver
+            // (like a supervisor) retries on the next tick.
+            Err(error)
+                if error
+                    .to_string()
+                    .contains("local verified stale or missing") => {}
+            Err(error) => panic!("relocation step failed: {error}"),
+        }
         if !published_target_schema
             && target
                 .read()

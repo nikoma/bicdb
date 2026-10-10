@@ -16,14 +16,28 @@
 //! accepted only for loopback development configurations.
 use super::*;
 use bicdb_core::replication::{ReplicationFrame, REPLICATION_PROTOCOL_VERSION};
-use bicdb_core::{NodeRole, ReplicationCursor, SyncTimeoutPolicy};
+use bicdb_core::{NodeRole, ReplicationCursor, StandbyResume, SyncTimeoutPolicy};
+use sha2::{Digest, Sha256};
+use std::io::{Read as _, Write as _};
 use std::net::TcpStream;
+use std::sync::atomic::AtomicBool;
 
 /// Frames per round sent to one standby.
 const BATCH_COMMITS: usize = 512;
 /// Idle interval after which the primary sends a keepalive batch.
 const KEEPALIVE: Duration = Duration::from_secs(1);
 const MAX_FRAME_BYTES: usize = 256 * 1024 * 1024;
+/// Bytes per snapshot chunk frame.
+const SNAPSHOT_CHUNK_BYTES: usize = 1024 * 1024;
+
+static RESTART_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// True once a standby staged a snapshot of its primary and shut the server
+/// down: the process should start again (the next open installs the
+/// snapshot).
+pub fn restart_requested() -> bool {
+    RESTART_REQUESTED.load(Ordering::SeqCst)
+}
 
 /// A standby allowed to connect, optionally bound to its certificate.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -284,16 +298,26 @@ fn serve_standby(
                 }
             }
             superseded_check(server, stream, epoch)?;
-            node_id
+            (node_id, epoch)
         }
         _ => return Err(refuse(stream, "expected Hello")),
     };
+    let (standby, standby_epoch) = standby;
     let applied = match receive(stream)? {
         ReplicationFrame::Ack { commit_seq, .. } => commit_seq,
         _ => return Err(refuse(stream, "expected the standby's applied position")),
     };
-    // The standby's position is durable on its side.
-    server.sync_quorum.record_ack(&standby, applied);
+    let resume = server
+        .read_db()?
+        .standby_resume(standby_epoch, applied)
+        .map_err(PgWireError::from)?;
+    if let StandbyResume::Snapshot(reason) = resume {
+        eprintln!("bicdb replication: standby {standby} needs a snapshot: {reason}");
+        return send_snapshot(server, config, stream, &standby);
+    }
+    // The standby's position is durable on its side, and it is exact: a
+    // standby that lost data reports less than it once confirmed.
+    server.sync_quorum.set_ack(&standby, applied);
     // Persist at once: a primary restart must keep retaining this standby's log.
     server
         .read_db()?
@@ -357,6 +381,159 @@ fn serve_standby(
             }
         }
     }
+}
+
+/// Removes a file when dropped.
+struct RemoveOnDrop(std::path::PathBuf);
+
+impl Drop for RemoveOnDrop {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn sibling_file(path: &std::path::Path, suffix: &str) -> std::path::PathBuf {
+    let mut name = path
+        .file_name()
+        .map(|name| name.to_os_string())
+        .unwrap_or_default();
+    name.push(format!(".{suffix}"));
+    path.with_file_name(name)
+}
+
+/// Sends a consistent snapshot of the database to a standby that cannot
+/// continue from its own position; the standby installs it and reconnects.
+fn send_snapshot(
+    server: &Arc<PgWireServer>,
+    config: &HaServerConfig,
+    stream: &mut dyn ReplicationStream,
+    standby: &str,
+) -> Result<()> {
+    let snapshot_id = uuid::Uuid::new_v4().simple().to_string();
+    let key = format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    );
+    let (archive, snapshot_commit_seq) = {
+        let db = server.read_db()?;
+        // Keep the log after the snapshot point until the standby is back.
+        server.sync_quorum.pin(standby, db.current_commit_seq());
+        let archive = RemoveOnDrop(sibling_file(
+            db.data_path(),
+            &format!("snapshot-{snapshot_id}"),
+        ));
+        let seq = db
+            .create_standby_snapshot(&archive.0, &key)
+            .map_err(PgWireError::from)?;
+        (archive, seq)
+    };
+    send(
+        stream,
+        &ReplicationFrame::SnapshotStart {
+            cluster_id: config.replication.cluster_id.clone(),
+            source_node_id: config.replication.node_id.clone(),
+            snapshot_id: snapshot_id.clone(),
+            snapshot_commit_seq,
+            archive_key: key,
+        },
+    )?;
+    let mut file = std::fs::File::open(&archive.0)?;
+    let mut hash = Sha256::new();
+    let mut buffer = vec![0u8; SNAPSHOT_CHUNK_BYTES];
+    let mut offset = 0u64;
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        let bytes = buffer[..read].to_vec();
+        hash.update(&bytes);
+        send(
+            stream,
+            &ReplicationFrame::SnapshotChunk {
+                snapshot_id: snapshot_id.clone(),
+                offset,
+                checksum: Sha256::digest(&bytes).into(),
+                bytes,
+            },
+        )?;
+        offset += read as u64;
+    }
+    send(
+        stream,
+        &ReplicationFrame::SnapshotEnd {
+            snapshot_id,
+            snapshot_commit_seq,
+            snapshot_hash: hash.finalize().into(),
+        },
+    )?;
+    eprintln!(
+        "bicdb replication: sent standby {standby} a snapshot at commit {snapshot_commit_seq} ({offset} bytes)"
+    );
+    Ok(())
+}
+
+/// Standby side: receives a snapshot, stages it next to the database, and
+/// shuts the server down so the next start installs it.
+fn receive_snapshot(
+    server: &Arc<PgWireServer>,
+    stream: &mut dyn ReplicationStream,
+    snapshot_id: &str,
+    snapshot_commit_seq: u64,
+    key: &str,
+) -> Result<()> {
+    let path = server.read_db()?.data_path().to_path_buf();
+    eprintln!(
+        "bicdb replication: receiving a snapshot of the primary at commit {snapshot_commit_seq}"
+    );
+    let archive = RemoveOnDrop(sibling_file(&path, "bootstrap-archive"));
+    let mut file = std::fs::File::create(&archive.0)?;
+    let mut hash = Sha256::new();
+    let mut expected = 0u64;
+    loop {
+        match receive(stream)? {
+            ReplicationFrame::SnapshotChunk {
+                snapshot_id: id,
+                offset,
+                bytes,
+                checksum,
+            } => {
+                let digest: [u8; 32] = Sha256::digest(&bytes).into();
+                if id != snapshot_id || offset != expected || digest != checksum {
+                    return Err(PgWireError::Server(
+                        "snapshot chunk out of order or corrupt".to_string(),
+                    ));
+                }
+                hash.update(&bytes);
+                file.write_all(&bytes)?;
+                expected += bytes.len() as u64;
+            }
+            ReplicationFrame::SnapshotEnd {
+                snapshot_id: id,
+                snapshot_hash,
+                ..
+            } => {
+                let digest: [u8; 32] = hash.finalize().into();
+                if id != snapshot_id || digest != snapshot_hash {
+                    return Err(PgWireError::Server("snapshot hash mismatch".to_string()));
+                }
+                break;
+            }
+            other => {
+                return Err(PgWireError::Server(format!(
+                    "unexpected frame in a snapshot: {other:?}"
+                )));
+            }
+        }
+    }
+    file.sync_all()?;
+    drop(file);
+    bicdb_core::stage_standby_bootstrap(&path, &archive.0, key, true).map_err(PgWireError::from)?;
+    eprintln!("bicdb replication: snapshot staged ({expected} bytes); restarting to install it");
+    RESTART_REQUESTED.store(true, Ordering::SeqCst);
+    server.request_shutdown();
+    Ok(())
 }
 
 /// Fences this primary when a peer reports a newer epoch: another node was
@@ -480,6 +657,20 @@ fn follow_once(server: &Arc<PgWireServer>, config: &HaServerConfig) -> Result<()
                         epoch,
                     },
                 )?;
+            }
+            ReplicationFrame::SnapshotStart {
+                snapshot_id,
+                snapshot_commit_seq,
+                archive_key,
+                ..
+            } => {
+                return receive_snapshot(
+                    server,
+                    stream,
+                    &snapshot_id,
+                    snapshot_commit_seq,
+                    &archive_key,
+                );
             }
             ReplicationFrame::Error { message, .. } => {
                 return Err(PgWireError::Server(format!("primary refused: {message}")));

@@ -329,6 +329,9 @@ struct SyncQuorumState {
     degraded: bool,
     /// Highest sequence a committer asked to have confirmed.
     max_requested: u64,
+    /// Log positions held for standbys that are being bootstrapped: they
+    /// retain the log but confirm nothing.
+    pins: BTreeMap<String, u64>,
     /// Set when no confirmation may be awaited any more (shutdown, fencing):
     /// waiting commits fail instead of being acknowledged.
     closed: Option<String>,
@@ -355,6 +358,7 @@ impl Default for SyncQuorum {
                 acked: BTreeMap::new(),
                 degraded: false,
                 max_requested: 0,
+                pins: BTreeMap::new(),
                 closed: None,
             }),
             changed: Condvar::new(),
@@ -396,6 +400,9 @@ impl SyncQuorum {
         if seq > *entry {
             *entry = seq;
         }
+        if state.pins.get(standby).is_some_and(|pin| seq >= *pin) {
+            state.pins.remove(standby);
+        }
         if state.degraded && Self::quorum_seq_of(&state) >= state.max_requested {
             state.degraded = false;
             eprintln!(
@@ -424,6 +431,21 @@ impl SyncQuorum {
         self.changed.notify_all();
     }
 
+    /// Records a (re)connecting standby's actual position, replacing what was
+    /// known before: it may be lower after the standby lost data.
+    pub fn set_ack(&self, standby: &str, seq: u64) {
+        self.state.lock().acked.insert(standby.to_string(), seq);
+        self.changed.notify_all();
+    }
+
+    /// Retains the log after `seq` for `standby` without counting it as a
+    /// confirmation (the standby is being bootstrapped from a snapshot).
+    pub fn pin(&self, standby: &str, seq: u64) {
+        let mut state = self.state.lock();
+        state.acked.remove(standby);
+        state.pins.insert(standby.to_string(), seq);
+    }
+
     /// Seeds acknowledged positions persisted by an earlier run.
     pub(crate) fn seed(&self, acked: BTreeMap<String, u64>) {
         self.state.lock().acked.extend(acked);
@@ -445,7 +467,13 @@ impl SyncQuorum {
     /// Oldest position any known standby has acknowledged: the transaction
     /// log must keep every commit after it.
     pub fn retention_floor(&self) -> Option<u64> {
-        self.state.lock().acked.values().copied().min()
+        let state = self.state.lock();
+        state
+            .acked
+            .values()
+            .chain(state.pins.values())
+            .copied()
+            .min()
     }
 
     pub fn status(&self) -> SyncQuorumStatus {

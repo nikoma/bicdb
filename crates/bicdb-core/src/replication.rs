@@ -314,6 +314,9 @@ pub enum ReplicationFrame {
         source_node_id: String,
         snapshot_id: String,
         snapshot_commit_seq: u64,
+        /// Key of the encrypted snapshot archive (standby bootstrap).
+        #[serde(default)]
+        archive_key: String,
     },
     SnapshotChunk {
         snapshot_id: String,

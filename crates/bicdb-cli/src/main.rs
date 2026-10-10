@@ -5486,6 +5486,15 @@ fn main() -> Result<()> {
             } else {
                 run_serve_command(path, config, host_services)?;
             }
+            if bicdb_pgwire::restart_requested() {
+                // A standby staged a snapshot of its primary: start again so
+                // the database opens from it.
+                use std::os::unix::process::CommandExt as _;
+                let error = std::process::Command::new(std::env::current_exe()?)
+                    .args(std::env::args_os().skip(1))
+                    .exec();
+                bail!("restart after the standby bootstrap failed: {error}");
+            }
         }
         Command::Index { command } => match command {
             IndexCommand::Verify {

@@ -1769,15 +1769,21 @@ impl BicDb {
     }
 
     pub(crate) fn ensure_writable(&self, operation: &str) -> Result<()> {
-        if self.ha_state.role == HaRole::Standby
-            || (self.config.replication.enabled
-                && self.config.replication.mode == ReplicationMode::Standby)
+        let replication_role = self.config.replication.enabled.then(|| self.ha_node.role());
+        let reason = if self.ha_state.role == HaRole::Standby
+            || replication_role == Some(NodeRole::Standby)
         {
-            return Err(BicDbError::ReadOnlyStandby(format!(
-                "{operation} is refused on a hot standby/read replica"
-            )));
-        }
-        Ok(())
+            "on a hot standby/read replica"
+        } else if replication_role == Some(NodeRole::Fenced) {
+            "on a former primary that a newer primary superseded (fenced)"
+        } else {
+            return Ok(());
+        };
+        let primary = self.ha_node.read(|file| file.primary_sql_address.clone());
+        Err(BicDbError::ReadOnlyStandby(match primary {
+            Some(primary) => format!("{operation} is refused {reason}{PRIMARY_MARKER}{primary}"),
+            None => format!("{operation} is refused {reason}"),
+        }))
     }
 
     pub(crate) fn persist_ha_state(&self) -> Result<()> {

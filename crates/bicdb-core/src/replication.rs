@@ -289,6 +289,9 @@ pub enum ReplicationFrame {
         protocol_version: u32,
         cluster_id: String,
         node_id: String,
+        /// Highest primary epoch the sender knows of.
+        #[serde(default)]
+        epoch: u64,
     },
     Authenticate {
         node_id: String,
@@ -299,6 +302,12 @@ pub enum ReplicationFrame {
         cluster_id: String,
         node_id: String,
         last_commit_seq: u64,
+        /// The sending primary's epoch.
+        #[serde(default)]
+        epoch: u64,
+        /// Where clients reach the sending primary.
+        #[serde(default)]
+        primary_sql_address: Option<String>,
     },
     SnapshotStart {
         cluster_id: String,
@@ -322,6 +331,8 @@ pub enum ReplicationFrame {
         cluster_id: String,
         node_id: String,
         commit_seq: u64,
+        #[serde(default)]
+        epoch: u64,
     },
     Nack {
         cluster_id: String,

@@ -276,6 +276,8 @@ impl BicDb {
     /// lie before `keep_from`. Never drops a frame a standby has not yet
     /// acknowledged: the cut moves back to that standby's position instead.
     pub(crate) fn cut_transaction_log(&self, keep_from: u64, dropped_through: u64) -> Result<()> {
+        // Retention must survive a restart: persist the positions it is based on.
+        self.persist_standby_slots()?;
         let path = self.tx_log_path();
         let log_len = file_len(&path)?;
         let (keep_from, wal_base) = match self.sync_quorum.retention_floor() {
@@ -327,6 +329,9 @@ struct SyncQuorumState {
     degraded: bool,
     /// Highest sequence a committer asked to have confirmed.
     max_requested: u64,
+    /// Set when no confirmation may be awaited any more (shutdown, fencing):
+    /// waiting commits fail instead of being acknowledged.
+    closed: Option<String>,
 }
 
 /// Holds commit acknowledgements until `required` standbys have durably
@@ -350,6 +355,7 @@ impl Default for SyncQuorum {
                 acked: BTreeMap::new(),
                 degraded: false,
                 max_requested: 0,
+                closed: None,
             }),
             changed: Condvar::new(),
             required_fast: AtomicUsize::new(0),
@@ -409,6 +415,33 @@ impl SyncQuorum {
         acked.get(state.required - 1).copied().unwrap_or(0)
     }
 
+    /// Fails every current and future wait for confirmations with `reason`.
+    pub fn close(&self, reason: &str) {
+        let mut state = self.state.lock();
+        if state.closed.is_none() {
+            state.closed = Some(reason.to_string());
+        }
+        self.changed.notify_all();
+    }
+
+    /// Seeds acknowledged positions persisted by an earlier run.
+    pub(crate) fn seed(&self, acked: BTreeMap<String, u64>) {
+        self.state.lock().acked.extend(acked);
+    }
+
+    /// Acknowledged position per known standby.
+    pub fn acknowledged(&self) -> BTreeMap<String, u64> {
+        self.state.lock().acked.clone()
+    }
+
+    /// Forgets standbys not in `allowed`.
+    pub fn retain_standbys(&self, allowed: &[String]) {
+        self.state
+            .lock()
+            .acked
+            .retain(|standby, _| allowed.iter().any(|allowed| allowed == standby));
+    }
+
     /// Oldest position any known standby has acknowledged: the transaction
     /// log must keep every commit after it.
     pub fn retention_floor(&self) -> Option<u64> {
@@ -440,6 +473,11 @@ impl SyncQuorum {
         }
         let deadline = (!state.timeout.is_zero()).then(|| Instant::now() + state.timeout);
         while Self::quorum_seq_of(&state) < seq {
+            if let Some(reason) = &state.closed {
+                return Err(BicDbError::HighAvailability(format!(
+                    "commit {seq} is durable on this node but was not confirmed by a synchronous standby: {reason}"
+                )));
+            }
             match deadline {
                 Some(deadline) => {
                     if self.changed.wait_until(&mut state, deadline).timed_out()

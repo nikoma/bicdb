@@ -420,6 +420,7 @@ pub(crate) fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::InvalidCollectionName(_) => "42602",
         BicDbError::TransactionConflict(_) => "40001",
         BicDbError::TransactionNotPending => "25P01",
+        BicDbError::ReadOnlyStandby(_) => "25006",
         BicDbError::QueryCanceled | BicDbError::QueryTimedOut => "57014",
         BicDbError::Flashback(message) => bicdb_core::flashback_error_sqlstate(message),
         BicDbError::EmptyRecordId
@@ -437,6 +438,10 @@ pub(crate) fn bicdb_error_fields(error: &BicDbError) -> Vec<SqlErrorField> {
         BicDbError::CollectionNotFound(collection) => {
             vec![SqlErrorField::Table(collection.clone())]
         }
+        BicDbError::ReadOnlyStandby(message) => bicdb_core::read_only_standby_hint(message)
+            .map(SqlErrorField::Hint)
+            .into_iter()
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -488,6 +493,10 @@ pub(crate) fn error_response_with_fields(
             }
             SqlErrorField::Constraint(value) => {
                 payload.push(b'n');
+                cstr(&mut payload, value);
+            }
+            SqlErrorField::Hint(value) => {
+                payload.push(b'H');
                 cstr(&mut payload, value);
             }
         }

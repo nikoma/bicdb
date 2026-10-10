@@ -1043,8 +1043,14 @@ impl PgWireServer {
         if let Some(cluster) = self.cluster.as_ref().and_then(Weak::upgrade) {
             cluster.request_shutdown();
         } else {
-            self.shutdown.store(true, Ordering::SeqCst);
+            self.begin_shutdown();
         }
+    }
+
+    pub(crate) fn begin_shutdown(&self) {
+        self.shutdown.store(true, Ordering::SeqCst);
+        // Commits waiting for standbys would hold shutdown forever.
+        self.sync_quorum.close("the server is shutting down");
     }
 
     pub fn is_shutdown_requested(&self) -> bool {
@@ -2114,7 +2120,7 @@ impl PgWireCluster {
 
     pub(crate) fn request_shutdown(&self) {
         for server in self.servers.lock().unwrap().values() {
-            server.shutdown.store(true, Ordering::SeqCst);
+            server.begin_shutdown();
         }
     }
 

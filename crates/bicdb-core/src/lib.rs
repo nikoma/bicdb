@@ -191,8 +191,8 @@ pub use db::{
     FlashbackVersion, FLASHBACK_HISTORY_PREFIX,
 };
 pub use db::{
-    take_thread_commit_seq, ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus,
-    SyncTimeoutPolicy,
+    read_only_standby_hint, take_thread_commit_seq, HaNodeStatus, NodeRole, ReplicationCursor,
+    ReplicationFeed, SyncQuorum, SyncQuorumStatus, SyncTimeoutPolicy, HA_NODE_FILE,
 };
 pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,

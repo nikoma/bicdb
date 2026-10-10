@@ -992,6 +992,7 @@ fn standby_server_exposes_ha_status_and_rejects_writes() {
     send_query(&mut client, "INSERT INTO patients (id) VALUES ('p-2');");
     let error = read_error_response(&mut client);
     assert!(error.contains("read-only standby"));
+    assert!(error.contains("C25006"), "{error}");
     client.write_all(b"X\0\0\0\x04").unwrap();
 
     server.request_shutdown();

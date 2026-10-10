@@ -196,7 +196,9 @@ lets `ROLLBACK` undo it.
 
 Tables without an archive pay one atomic load per commit. Commits that write
 archived tables are serialized with each other, which is what makes SCN order
-equal visibility order, and they write one extra row per changed row. History
-reads currently scan the table's history collection. They are fine for
-auditing and recovery, but not meant to be a hot query path on very large
-histories.
+equal visibility order, and they write one extra row per changed row. Each
+history is indexed by row: `AS OF` and `VERSIONS BETWEEN` queries with an
+equality on the primary key (`WHERE id = 42`) read only that row's versions,
+as fast as a current-row lookup however long the history grows. Queries over
+the whole table read the whole history once, holding only the newest
+version per row in memory.

@@ -219,6 +219,16 @@ fn wall_clock_scn() -> u64 {
     unix_micros_to_scn(unix_timestamp_micros())
 }
 
+/// History rows read per batch.
+const HISTORY_BATCH_ROWS: usize = 4096;
+const HISTORY_BATCH_BYTES: usize = 32 * 1024 * 1024;
+
+/// Index of a history collection by row id: point lookups into the past
+/// read only that row's versions.
+fn history_rid_index(history: &str) -> String {
+    format!("{history}__rid")
+}
+
 fn history_record_id(rid: &str, scn: u64) -> String {
     format!("{rid}@{scn:020}")
 }
@@ -551,6 +561,7 @@ impl BicDb {
             self.drop_collection_inner(&history)?;
         }
         self.create_collection(&history)?;
+        self.flashback_ensure_rid_index(&history)?;
         let since_scn = {
             let mut clock = self.flashback_clock.lock();
             self.flashback_ensure_clock(&mut clock)?;
@@ -662,6 +673,12 @@ impl BicDb {
     /// any baseline a crash interrupted.
     pub(super) fn flashback_after_open(&mut self) -> Result<()> {
         self.flashback_refresh_tracked();
+        for (collection, _) in self.flashback_collections() {
+            let history = flashback_history_collection(&collection);
+            if self.collections.contains_key(&history) {
+                self.flashback_ensure_rid_index(&history)?;
+            }
+        }
         let interrupted = self
             .flashback_collections()
             .into_iter()
@@ -675,6 +692,7 @@ impl BicDb {
             let history = flashback_history_collection(&collection);
             if !self.collections.contains_key(&history) {
                 self.create_collection(&history)?;
+                self.flashback_ensure_rid_index(&history)?;
             }
             let since_scn = {
                 let mut clock = self.flashback_clock.lock();
@@ -846,11 +864,118 @@ impl BicDb {
         Ok(())
     }
 
-    fn flashback_history_entries(&self, collection: &str) -> Result<Vec<HistoryEntry>> {
-        self.scan_collection_unchecked(&flashback_history_collection(collection))?
-            .iter()
-            .map(decode_history)
-            .collect()
+    /// Creates the row id index of a history collection if it is missing
+    /// (histories created before it existed get it at the next open).
+    fn flashback_ensure_rid_index(&mut self, history: &str) -> Result<()> {
+        if self.flashback_rid_index_of(history).is_some()
+            || self.ensure_writable("index history").is_err()
+        {
+            return Ok(());
+        }
+        // Renames move indexes but keep their names: find a free one.
+        let mut name = history_rid_index(history);
+        let mut suffix = 1;
+        while self.indexes.contains_key(&name) {
+            suffix += 1;
+            name = format!("{}{suffix}", history_rid_index(history));
+        }
+        self.create_index(IndexDefinition {
+            name,
+            collection: history.to_string(),
+            fields: vec![IndexField::MetadataPath(vec!["rid".to_string()])],
+            unique: false,
+            kind: IndexKind::default(),
+            predicate: None,
+            exclusion: None,
+        })
+    }
+
+    /// The row id index of a history collection, wherever renames left it.
+    fn flashback_rid_index_of(&self, history: &str) -> Option<String> {
+        let field = IndexField::MetadataPath(vec!["rid".to_string()]);
+        self.indexes.iter().find_map(|(name, state)| {
+            let state = state.read();
+            (state.definition.collection == history && state.definition.fields == [field.clone()])
+                .then(|| name.clone())
+        })
+    }
+
+    /// Visits the history of `collection` in (row id, SCN) order: all of it,
+    /// or only the rows in `rids`. History ids are `<rid>@<scn>`, so the
+    /// history of one row is one contiguous key range, read in batches.
+    fn flashback_for_each_history(
+        &self,
+        collection: &str,
+        rids: Option<&[String]>,
+        mut visit: impl FnMut(HistoryEntry) -> Result<()>,
+    ) -> Result<()> {
+        let history = flashback_history_collection(collection);
+        let scan_range =
+            |prefix: Option<&str>, visit: &mut dyn FnMut(HistoryEntry) -> Result<()>| {
+                if self.paged_records.is_none() {
+                    // Resident rows have no ordered access; one pass over
+                    // them beats re-reading them per batch.
+                    for record in self.scan_collection_unchecked(&history)? {
+                        if prefix.is_none_or(|prefix| record.id.starts_with(prefix)) {
+                            visit(decode_history(&record)?)?;
+                        }
+                    }
+                    return Ok(());
+                }
+                let mut after = prefix.map(str::to_string);
+                loop {
+                    let batch = self.scan_collection_batch_after(
+                        &history,
+                        after.as_deref(),
+                        HISTORY_BATCH_ROWS,
+                        HISTORY_BATCH_BYTES,
+                    )?;
+                    let Some(last) = batch.last() else {
+                        return Ok(());
+                    };
+                    after = Some(last.id.clone());
+                    for record in &batch {
+                        if prefix.is_some_and(|prefix| !record.id.starts_with(prefix)) {
+                            return Ok(());
+                        }
+                        visit(decode_history(record)?)?;
+                    }
+                }
+            };
+        let index = self.flashback_rid_index_of(&history);
+        match rids {
+            None => scan_range(None, &mut visit),
+            Some(rids) if index.is_some() => {
+                let index = index.unwrap_or_default();
+                for rid in rids {
+                    let ids = self.lookup_index(&index, &[IndexValue::String(rid.clone())])?;
+                    let mut entries = Vec::with_capacity(ids.len());
+                    for id in ids {
+                        if let Some(record) = self.get_unchecked(&history, &id)? {
+                            entries.push(decode_history(&record)?);
+                        }
+                    }
+                    entries.sort_by_key(|entry| entry.scn);
+                    for entry in entries {
+                        visit(entry)?;
+                    }
+                }
+                Ok(())
+            }
+            Some(rids) => {
+                for rid in rids {
+                    let prefix = format!("{rid}@");
+                    // Other rows' ids may share the prefix (`a@b` for `a`).
+                    scan_range(Some(&prefix), &mut |entry: HistoryEntry| {
+                        if &entry.rid == rid {
+                            visit(entry)?;
+                        }
+                        Ok(())
+                    })?;
+                }
+                Ok(())
+            }
+        }
     }
 
     /// `collection` as of `point`, with no authorization. Rows are sorted by id.
@@ -859,13 +984,34 @@ impl BicDb {
         collection: &str,
         point: FlashbackPoint,
     ) -> Result<Vec<Record>> {
+        self.flashback_rows_filtered(collection, point, None)
+    }
+
+    /// Like [`Self::flashback_rows_unchecked`], for the rows with these ids
+    /// only: reads just their history (a point lookup into the past).
+    pub fn flashback_rows_for_ids_unchecked(
+        &self,
+        collection: &str,
+        point: FlashbackPoint,
+        rids: &[String],
+    ) -> Result<Vec<Record>> {
+        self.flashback_rows_filtered(collection, point, Some(rids))
+    }
+
+    fn flashback_rows_filtered(
+        &self,
+        collection: &str,
+        point: FlashbackPoint,
+        rids: Option<&[String]>,
+    ) -> Result<Vec<Record>> {
         let config = self.flashback_ready_config(collection)?;
         let scn = self.flashback_resolve_point(point)?;
         Self::flashback_check_available(collection, &config, scn)?;
+        // Only the newest version at or before the point is kept per row.
         let mut best: FxHashMap<String, HistoryEntry> = FxHashMap::default();
-        for entry in self.flashback_history_entries(collection)? {
+        self.flashback_for_each_history(collection, rids, |entry| {
             if entry.scn > scn {
-                continue;
+                return Ok(());
             }
             match best.get(&entry.rid) {
                 Some(current) if current.scn >= entry.scn => {}
@@ -873,7 +1019,8 @@ impl BicDb {
                     best.insert(entry.rid.clone(), entry);
                 }
             }
-        }
+            Ok(())
+        })?;
         let mut rows = best
             .into_values()
             .filter(|entry| entry.op != FlashbackOperation::Delete)
@@ -901,6 +1048,29 @@ impl BicDb {
     ) -> Result<Vec<Record>> {
         let records = self.flashback_rows_unchecked(collection, point)?;
         self.flashback_filter_with_context(ctx, collection, records)
+    }
+
+    /// [`Self::flashback_rows_with_context`] for the rows with these ids.
+    pub fn flashback_rows_for_ids_with_context(
+        &self,
+        ctx: &SecurityContext,
+        collection: &str,
+        point: FlashbackPoint,
+        rids: &[String],
+    ) -> Result<Vec<Record>> {
+        let records = self.flashback_rows_for_ids_unchecked(collection, point, rids)?;
+        self.flashback_filter_with_context(ctx, collection, records)
+    }
+
+    /// [`Self::flashback_rows`] for the rows with these ids.
+    pub fn flashback_rows_for_ids(
+        &self,
+        collection: &str,
+        point: FlashbackPoint,
+        rids: &[String],
+    ) -> Result<Vec<Record>> {
+        self.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.flashback_rows_for_ids_unchecked(collection, point, rids)
     }
 
     fn flashback_filter_with_context(
@@ -941,6 +1111,16 @@ impl BicDb {
         from: Option<FlashbackPoint>,
         to: Option<FlashbackPoint>,
     ) -> Result<Vec<FlashbackVersion>> {
+        self.flashback_versions_filtered(collection, from, to, None)
+    }
+
+    fn flashback_versions_filtered(
+        &self,
+        collection: &str,
+        from: Option<FlashbackPoint>,
+        to: Option<FlashbackPoint>,
+        rids: Option<&[String]>,
+    ) -> Result<Vec<FlashbackVersion>> {
         let config = self.flashback_ready_config(collection)?;
         let low = match from {
             Some(point) => {
@@ -960,9 +1140,10 @@ impl BicDb {
             )));
         }
         let mut per_row: BTreeMap<String, Vec<HistoryEntry>> = BTreeMap::new();
-        for entry in self.flashback_history_entries(collection)? {
+        self.flashback_for_each_history(collection, rids, |entry| {
             per_row.entry(entry.rid.clone()).or_default().push(entry);
-        }
+            Ok(())
+        })?;
         let mut versions = Vec::new();
         for (_, mut entries) in per_row {
             entries.sort_by_key(|entry| entry.scn);
@@ -1009,7 +1190,20 @@ impl BicDb {
         from: Option<FlashbackPoint>,
         to: Option<FlashbackPoint>,
     ) -> Result<Vec<FlashbackVersion>> {
-        let versions = self.flashback_versions_unchecked(collection, from, to)?;
+        self.flashback_versions_for_ids_with_context(ctx, collection, from, to, None)
+    }
+
+    /// [`Self::flashback_versions_with_context`], for the rows with these ids
+    /// only when `rids` is given.
+    pub fn flashback_versions_for_ids_with_context(
+        &self,
+        ctx: &SecurityContext,
+        collection: &str,
+        from: Option<FlashbackPoint>,
+        to: Option<FlashbackPoint>,
+        rids: Option<&[String]>,
+    ) -> Result<Vec<FlashbackVersion>> {
+        let versions = self.flashback_versions_filtered(collection, from, to, rids)?;
         let state = self.collection_state(collection)?;
         let Some(policy) = state.meta.policy.as_ref() else {
             return Ok(versions);
@@ -1042,6 +1236,19 @@ impl BicDb {
     ) -> Result<Vec<FlashbackVersion>> {
         self.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         self.flashback_versions_unchecked(collection, from, to)
+    }
+
+    /// [`Self::flashback_versions`], for the rows with these ids only when
+    /// `rids` is given.
+    pub fn flashback_versions_for_ids(
+        &self,
+        collection: &str,
+        from: Option<FlashbackPoint>,
+        to: Option<FlashbackPoint>,
+        rids: Option<&[String]>,
+    ) -> Result<Vec<FlashbackVersion>> {
+        self.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.flashback_versions_filtered(collection, from, to, rids)
     }
 }
 

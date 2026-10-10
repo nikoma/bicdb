@@ -16,7 +16,7 @@ pub(crate) use protocol_wire::*;
 mod checkpoint_driver;
 mod high_availability;
 pub(crate) use checkpoint_driver::*;
-pub use high_availability::{AllowedStandby, HaServerConfig, HaServerRole};
+pub use high_availability::{restart_requested, AllowedStandby, HaServerConfig, HaServerRole};
 mod tls_binding;
 mod validation;
 use rustc_hash::{FxHashMap, FxHashSet};

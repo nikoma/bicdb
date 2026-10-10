@@ -125,9 +125,19 @@ bicdb serve /srv/standby --port 5432 \
 3. Point clients at it. Re-create the old primary as a standby from a fresh
    copy.
 
-Not yet available: automatic failover, and snapshot bootstrap of a new
-standby over the stream (start a standby from an empty directory while the
-primary still has its full log, or from a copy). Standbys do not build secondary indexes of their own; reads
+### Adding a standby, and standbys that cannot continue
+
+Start a new standby from an empty directory. When it cannot continue from its
+own position, because the primary's log no longer reaches back that far, or
+because it is a former primary whose history diverged from the current
+primary's (detected from the epoch history), the primary sends it a consistent
+snapshot instead of the commit stream. The standby stages the snapshot next to
+its directory (`<dir>.bootstrap`), restarts itself, installs it on open and
+then streams normally. A crash at any point leaves either the old or the new
+database whole. Commits on the primary pause while the snapshot archive is
+written locally; the network transfer runs without holding anything.
+
+Not yet available: automatic failover. Standbys do not build secondary indexes of their own; reads
 on them stay correct and use scans.
 
 ## Architecture

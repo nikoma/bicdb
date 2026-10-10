@@ -3,9 +3,9 @@
 //! the synchronous quorum that holds commit acknowledgements.
 
 use bicdb_core::{
-    read_only_standby_hint, BicDb, BicDbError, DbConfig, NodeRole, Record, ReplicationConfig,
-    ReplicationCursor, ReplicationMode, ReplicationTlsConfig, StorageMode, SyncQuorum,
-    SyncTimeoutPolicy,
+    read_only_standby_hint, stage_standby_bootstrap, standby_bootstrap_staging, BicDb, BicDbError,
+    DbConfig, NodeRole, Record, ReplicationConfig, ReplicationCursor, ReplicationMode,
+    ReplicationTlsConfig, StandbyResume, StorageMode, SyncQuorum, SyncTimeoutPolicy,
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -502,4 +502,124 @@ fn closing_the_quorum_fails_waiting_commits_instead_of_hanging() {
     // An already confirmed commit still succeeds.
     quorum.record_ack("standby", 10);
     assert!(quorum.wait_for(7).is_ok());
+}
+
+#[test]
+fn a_standby_that_cannot_stream_is_bootstrapped_from_a_snapshot() {
+    for (mode, storage) in storage_modes() {
+        let root = tempfile::tempdir().unwrap();
+        let primary_dir = root.path().join("primary");
+        let standby_dir = root.path().join("standby");
+        let mut primary = open(&primary_dir, storage.clone(), ReplicationMode::Primary);
+        primary.create_collection("items").unwrap();
+        for index in 0..30 {
+            put(&primary, &format!("k{index}"), index);
+        }
+        // No standby holds the log back: it is cut.
+        primary.compact().unwrap();
+        put(&primary, "after-compact", 1);
+
+        // A brand-new standby cannot stream from commit 0 any more.
+        assert!(
+            matches!(
+                primary.standby_resume(0, 0).unwrap(),
+                StandbyResume::Snapshot(_)
+            ),
+            "{mode}"
+        );
+        // A standby ahead of the primary has diverged.
+        let ahead = primary.current_commit_seq() + 5;
+        assert!(
+            matches!(
+                primary.standby_resume(0, ahead).unwrap(),
+                StandbyResume::Snapshot(_)
+            ),
+            "{mode}"
+        );
+
+        {
+            let standby = open(&standby_dir, storage.clone(), ReplicationMode::Standby);
+            standby.observe_replication_epoch(4).unwrap();
+            standby
+                .record_primary_sql_address(Some("db1:5432".to_string()))
+                .unwrap();
+        }
+        let archive = root.path().join("snapshot.bak");
+        let key = "0123456789abcdef0123456789abcdef";
+        let snapshot_seq = primary.create_standby_snapshot(&archive, key).unwrap();
+        assert_eq!(snapshot_seq, primary.current_commit_seq(), "{mode}");
+        stage_standby_bootstrap(&standby_dir, &archive, key, false).unwrap();
+        assert!(standby_bootstrap_staging(&standby_dir).exists(), "{mode}");
+
+        // The next open installs the snapshot and keeps the standby's identity.
+        let mut standby = open(&standby_dir, storage.clone(), ReplicationMode::Standby);
+        assert!(!standby_bootstrap_staging(&standby_dir).exists(), "{mode}");
+        assert_eq!(standby.last_applied_commit_seq(), snapshot_seq, "{mode}");
+        assert_eq!(standby.replication_role(), NodeRole::Standby, "{mode}");
+        assert_eq!(standby.replication_epoch(), 4, "{mode}");
+        assert_eq!(
+            standby.ha_node_status().primary_sql_address.as_deref(),
+            Some("db1:5432"),
+            "{mode}"
+        );
+        assert_eq!(value(&standby, "k29"), Some(29), "{mode}");
+        assert_eq!(value(&standby, "after-compact"), Some(1), "{mode}");
+        assert!(standby.create_collection("x").is_err(), "{mode}");
+
+        // From there it streams normally.
+        assert_eq!(
+            primary.standby_resume(0, snapshot_seq).unwrap(),
+            StandbyResume::Stream,
+            "{mode}"
+        );
+        put(&primary, "streamed", 7);
+        let mut cursor = ReplicationCursor::new(snapshot_seq);
+        ship(&primary, &mut standby, &mut cursor);
+        assert_eq!(value(&standby, "streamed"), Some(7), "{mode}");
+        assert_eq!(
+            standby.last_applied_commit_seq(),
+            primary.current_commit_seq(),
+            "{mode}"
+        );
+    }
+}
+
+#[test]
+fn an_interrupted_bootstrap_leaves_the_old_database_whole() {
+    let root = tempfile::tempdir().unwrap();
+    let standby_dir = root.path().join("standby");
+    {
+        let mut primary = open(
+            &standby_dir,
+            StorageMode::EmbeddedMemory,
+            ReplicationMode::Primary,
+        );
+        primary.create_collection("items").unwrap();
+        put(&primary, "kept", 1);
+    }
+    // Staging without the completion marker is discarded on open.
+    let staging = standby_bootstrap_staging(&standby_dir);
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::write(staging.join("partial"), b"x").unwrap();
+    let primary = open(
+        &standby_dir,
+        StorageMode::EmbeddedMemory,
+        ReplicationMode::Primary,
+    );
+    assert!(!staging.exists());
+    assert_eq!(value(&primary, "kept"), Some(1));
+}
+
+#[test]
+fn pinned_standbys_retain_the_log_without_confirming_commits() {
+    let quorum = SyncQuorum::default();
+    quorum.configure(1, Duration::from_millis(50), SyncTimeoutPolicy::Fail);
+    quorum.pin("fresh", 10);
+    assert_eq!(quorum.retention_floor(), Some(10));
+    assert!(quorum.wait_for(5).is_err(), "a pin is not a confirmation");
+    quorum.set_ack("fresh", 12);
+    assert!(quorum.wait_for(12).is_ok());
+    // A reconnect with less data replaces the higher position.
+    quorum.set_ack("fresh", 3);
+    assert!(quorum.wait_for(4).is_err());
 }

@@ -1,7 +1,11 @@
 mod access_mutation;
 mod collection_rename;
 mod commit_snapshot;
+mod ha_bootstrap;
 mod ha_node;
+pub use ha_bootstrap::{
+    finish_standby_bootstrap, stage_standby_bootstrap, standby_bootstrap_staging, StandbyResume,
+};
 mod replication_live;
 use ha_node::PRIMARY_MARKER;
 pub use ha_node::{read_only_standby_hint, HaNodeStatus, NodeRole, HA_NODE_FILE};
@@ -9089,6 +9093,8 @@ impl BicDb {
         config.replication.validate()?;
         config.consensus.validate()?;
         let path = path.as_ref().to_path_buf();
+        // A standby bootstrap staged by the previous run is installed first.
+        ha_bootstrap::finish_standby_bootstrap(&path)?;
         let open_trace = std::env::var("BICDB_OPEN_TRACE").is_ok();
         let trace_start = std::time::Instant::now();
         macro_rules! open_trace {

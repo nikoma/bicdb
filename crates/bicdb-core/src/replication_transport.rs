@@ -211,6 +211,7 @@ pub fn snapshot_frames_from_reader<R: Read>(
         source_node_id: source_node_id.to_string(),
         snapshot_id: snapshot_id.to_string(),
         snapshot_commit_seq,
+        archive_key: String::new(),
     }];
     let mut offset = 0u64;
     let mut snapshot_hash = Sha256::new();

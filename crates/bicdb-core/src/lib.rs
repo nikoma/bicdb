@@ -72,6 +72,7 @@ mod resource_governor;
 // (no sockets there), and it carries the rustls dependency.
 pub mod aggregate_projection;
 pub mod aggregate_sketch;
+pub mod log_archive;
 #[cfg(feature = "tls-replication")]
 pub mod replication_transport;
 mod snapshot;
@@ -195,6 +196,9 @@ pub use db::{
     flashback_error_sqlstate, flashback_history_collection, is_flashback_history_collection,
     scn_to_unix_micros, unix_micros_to_scn, FlashbackConfig, FlashbackOperation, FlashbackPoint,
     FlashbackVersion, FLASHBACK_HISTORY_PREFIX,
+};
+pub use db::{
+    restore_from_log_archive, restore_point_in_time, LogReplayReport, LOG_ARCHIVE_HOLDER,
 };
 pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,

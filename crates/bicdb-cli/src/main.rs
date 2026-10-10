@@ -2081,12 +2081,40 @@ enum BackupCommand {
         force: bool,
         #[arg(long = "target-timestamp")]
         target_timestamp: Option<i64>,
+        /// Commit log archive (`bicdb serve --log-archive`) to replay after
+        /// the base backup: whole-database point-in-time recovery to
+        /// --target-commit and/or --target-timestamp (Unix seconds), or to the
+        /// end of the archive.
+        #[arg(long = "log-archive")]
+        log_archive: Option<PathBuf>,
+        /// With --log-archive: the last commit sequence number to restore.
+        #[arg(long = "target-commit", requires = "log_archive")]
+        target_commit: Option<u64>,
         #[arg(long, default_value_t = 1_024)]
         pitr_record_batch: usize,
         #[arg(long, default_value_t = 1_024)]
         pitr_event_batch: usize,
         #[arg(long, default_value_t = 8 * 1024 * 1024)]
         pitr_event_bytes: usize,
+        #[arg(long)]
+        key: Option<String>,
+        #[arg(long)]
+        key_env: Option<String>,
+    },
+    /// Whole-database point-in-time recovery from a commit log archive
+    /// (`bicdb serve --log-archive`): restores the newest base backup in the
+    /// archive that precedes the target and replays the archived commits up
+    /// to --target-commit and/or --target-timestamp (Unix seconds), or to the
+    /// end of the archive.
+    Pitr {
+        archive: PathBuf,
+        target: PathBuf,
+        #[arg(long = "target-commit")]
+        target_commit: Option<u64>,
+        #[arg(long = "target-timestamp")]
+        target_timestamp: Option<i64>,
+        #[arg(long)]
+        force: bool,
         #[arg(long)]
         key: Option<String>,
         #[arg(long)]
@@ -4989,6 +5017,8 @@ fn main() -> Result<()> {
                 target,
                 force,
                 target_timestamp,
+                log_archive,
+                target_commit,
                 pitr_record_batch,
                 pitr_event_batch,
                 pitr_event_bytes,
@@ -4996,6 +5026,30 @@ fn main() -> Result<()> {
                 key_env,
             } => {
                 let passphrase = backup_key(key, key_env)?;
+                if let Some(archive) = log_archive {
+                    if backup.len() > 1 {
+                        bail!("--log-archive replays onto a single full backup");
+                    }
+                    let report = bicdb_core::restore_from_log_archive(
+                        &backup[0],
+                        &target,
+                        BackupRestoreOptions { passphrase, force },
+                        &archive,
+                        bicdb_core::log_archive::ReplayTarget {
+                            commit_seq: target_commit,
+                            timestamp: target_timestamp,
+                        },
+                    )?;
+                    println!("Restored to a point in time from the commit log archive");
+                    println!("Base backup ends at commit: {}", report.base_commit_seq);
+                    println!("Commits replayed: {}", report.commits_applied);
+                    println!("Restored through commit: {}", report.restored_commit_seq);
+                    if let Some(timestamp) = report.restored_timestamp {
+                        println!("Last restored write at: {timestamp} (Unix seconds)");
+                    }
+                    println!("Target: {}", target.display());
+                    return Ok(());
+                }
                 if backup.len() > 1 {
                     if target_timestamp.is_some() {
                         bail!(
@@ -5056,6 +5110,35 @@ fn main() -> Result<()> {
                     );
                 }
                 println!("Target: {}", report.target_path.display());
+            }
+            BackupCommand::Pitr {
+                archive,
+                target,
+                target_commit,
+                target_timestamp,
+                force,
+                key,
+                key_env,
+            } => {
+                let key = backup_key(key, key_env)?;
+                let report = bicdb_core::restore_point_in_time(
+                    &archive,
+                    &target,
+                    &key,
+                    force,
+                    bicdb_core::log_archive::ReplayTarget {
+                        commit_seq: target_commit,
+                        timestamp: target_timestamp,
+                    },
+                )?;
+                println!("Restored to a point in time from the commit log archive");
+                println!("Base backup ends at commit: {}", report.base_commit_seq);
+                println!("Commits replayed: {}", report.commits_applied);
+                println!("Restored through commit: {}", report.restored_commit_seq);
+                if let Some(timestamp) = report.restored_timestamp {
+                    println!("Last restored write at: {timestamp} (Unix seconds)");
+                }
+                println!("Target: {}", target.display());
             }
             BackupCommand::Drill {
                 backup,
@@ -5480,6 +5563,7 @@ fn main() -> Result<()> {
                 redact_fields,
                 storage_sync,
             )?;
+            config.log_archive = replication.log_archive_config()?;
             config.high_availability = replication.into_config()?;
             let host_services = cli_host_services(&operator)?;
             if cluster {
@@ -8403,6 +8487,42 @@ struct ServeReplicationArgs {
     /// current one (0 = manual failover only).
     #[arg(long = "failover-timeout-ms", default_value_t = 0)]
     failover_timeout_ms: u64,
+
+    /// Archive every commit into this directory, for whole-database
+    /// point-in-time recovery with `bicdb backup pitr`.
+    #[arg(long = "log-archive")]
+    log_archive: Option<PathBuf>,
+    /// Environment variable holding the key of the base backups the archiver
+    /// takes into the archive (without it, only commits are archived).
+    #[arg(long = "log-archive-key-env", requires = "log_archive")]
+    log_archive_key_env: Option<String>,
+    /// Hours between base backups.
+    #[arg(long = "log-archive-base-hours", default_value_t = 24)]
+    log_archive_base_hours: u64,
+    /// Base backups to keep (older ones and the log only they need are removed).
+    #[arg(long = "log-archive-keep", default_value_t = 7)]
+    log_archive_keep: usize,
+}
+
+impl ServeReplicationArgs {
+    fn log_archive_config(&self) -> Result<Option<bicdb_pgwire::LogArchiveConfig>> {
+        let Some(dir) = self.log_archive.clone() else {
+            return Ok(None);
+        };
+        let base_backup_key = match &self.log_archive_key_env {
+            Some(name) => Some(
+                std::env::var(name)
+                    .with_context(|| format!("--log-archive-key-env: {name} is not set"))?,
+            ),
+            None => None,
+        };
+        Ok(Some(bicdb_pgwire::LogArchiveConfig {
+            dir,
+            base_backup_key,
+            base_backup_interval: Duration::from_secs(self.log_archive_base_hours.max(1) * 3600),
+            keep_base_backups: self.log_archive_keep.max(1),
+        }))
+    }
 }
 
 impl ServeReplicationArgs {

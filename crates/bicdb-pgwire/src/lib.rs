@@ -15,11 +15,13 @@ mod protocol_wire;
 pub(crate) use protocol_wire::*;
 mod checkpoint_driver;
 mod high_availability;
+mod log_archive;
 pub(crate) use checkpoint_driver::*;
 pub use high_availability::{
     restart_requested, AllowedStandby, FailoverConfig, HaPeer, HaServerConfig, HaServerRole,
     MIN_FAILOVER_TIMEOUT,
 };
+pub use log_archive::LogArchiveConfig;
 mod tls_binding;
 mod validation;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -328,6 +330,8 @@ pub struct PgWireConfig {
     pub fsync: bool,
     /// Streaming replication role (primary with standbys, or standby).
     pub high_availability: Option<HaServerConfig>,
+    /// Commit log archive for whole-database point-in-time recovery.
+    pub log_archive: Option<LogArchiveConfig>,
 }
 
 impl Default for PgWireConfig {
@@ -397,6 +401,7 @@ impl Default for PgWireConfig {
             automatic_anti_entropy_limits: AutomaticRangeAntiEntropyLimits::default(),
             fsync: true,
             high_availability: None,
+            log_archive: None,
         }
     }
 }
@@ -424,6 +429,10 @@ fn database_config_for_server(path: &Path, config: &PgWireConfig) -> Result<DbCo
         if let Some(ha) = config.high_availability.as_ref() {
             let recorded = bicdb_core::read_persisted_ha_role(path)?;
             db_config = db_config.with_replication(ha.resolved(recorded).database_replication());
+        } else if config.log_archive.is_some() {
+            // The archive needs complete commit frames, which a replication
+            // primary keeps; nothing listens.
+            db_config = db_config.with_replication(log_archive::local_replication());
         }
         return Ok(db_config);
     }

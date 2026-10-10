@@ -344,6 +344,9 @@ struct SyncQuorumState {
     /// Log positions held for standbys that are being bootstrapped: they
     /// retain the log but confirm nothing.
     pins: BTreeMap<String, u64>,
+    /// Log positions held by local consumers (the commit log archive):
+    /// persisted, never confirmations.
+    holds: BTreeMap<String, u64>,
     /// Set when no confirmation may be awaited any more (shutdown, fencing):
     /// waiting commits fail instead of being acknowledged.
     closed: Option<String>,
@@ -375,6 +378,7 @@ impl Default for SyncQuorum {
                 pins: BTreeMap::new(),
                 heard: BTreeMap::new(),
                 lease: None,
+                holds: BTreeMap::new(),
                 closed: None,
             }),
             changed: Condvar::new(),
@@ -496,6 +500,25 @@ impl SyncQuorum {
         state.pins.insert(standby.to_string(), seq);
     }
 
+    /// Keeps the log after `seq` for a local consumer such as the commit log
+    /// archive. Holds are persisted and never count as confirmations.
+    pub fn hold(&self, holder: &str, seq: u64) {
+        self.state.lock().holds.insert(holder.to_string(), seq);
+    }
+
+    /// Releases a hold.
+    pub fn release(&self, holder: &str) {
+        self.state.lock().holds.remove(holder);
+    }
+
+    pub fn holds(&self) -> BTreeMap<String, u64> {
+        self.state.lock().holds.clone()
+    }
+
+    pub(crate) fn seed_holds(&self, holds: BTreeMap<String, u64>) {
+        self.state.lock().holds.extend(holds);
+    }
+
     /// Seeds acknowledged positions persisted by an earlier run.
     pub(crate) fn seed(&self, acked: BTreeMap<String, u64>) {
         self.state.lock().acked.extend(acked);
@@ -522,6 +545,7 @@ impl SyncQuorum {
             .acked
             .values()
             .chain(state.pins.values())
+            .chain(state.holds.values())
             .copied()
             .min()
     }

@@ -284,7 +284,9 @@ structures together.
   path for CLI, pgwire simple queries, and prepared statements
   ([security and RLS](docs/security.md#postgresql-rls-catalog-metadata)).
 - Full and incremental backup chains, verification, PITR, and executable
-  restore drills ([backup and recovery](docs/backup-recovery.md)).
+  restore drills; a continuous commit log archive restores the whole
+  database to any commit or second (`bicdb backup pitr`)
+  ([backup and recovery](docs/backup-recovery.md)).
 - Synchronous streaming replication inside `bicdb serve`: commits are
   acknowledged only after the configured number of standbys has them durably
   (RPO = 0), standbys serve reads, and catalog changes replicate in order

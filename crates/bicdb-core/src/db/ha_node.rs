@@ -71,6 +71,9 @@ pub(crate) struct HaNodeFile {
     /// Acknowledged commit sequence per standby.
     #[serde(default)]
     pub(crate) slots: BTreeMap<String, u64>,
+    /// Log held for local consumers (the commit log archive).
+    #[serde(default)]
+    pub(crate) holds: BTreeMap<String, u64>,
     /// Commit sequence number after which each epoch's commits begin.
     #[serde(default)]
     pub(crate) epoch_starts: BTreeMap<u64, u64>,
@@ -348,10 +351,17 @@ impl BicDb {
     /// a primary restart).
     pub fn persist_standby_slots(&self) -> Result<()> {
         let slots = self.sync_quorum.acknowledged();
-        if self.ha_node.read(|file| file.slots == slots) {
+        let holds = self.sync_quorum.holds();
+        if self
+            .ha_node
+            .read(|file| file.slots == slots && file.holds == holds)
+        {
             return Ok(());
         }
-        self.ha_node.with_file(|file| file.slots = slots)
+        self.ha_node.with_file(|file| {
+            file.slots = slots;
+            file.holds = holds;
+        })
     }
 
     /// Forgets standbys that are no longer allowed to connect, so their old

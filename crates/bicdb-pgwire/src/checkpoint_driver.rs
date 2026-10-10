@@ -131,6 +131,7 @@ pub(crate) fn start_background_tasks_for_scope(
         if let Some(ha) = server.config.high_availability.clone() {
             high_availability::start(server.clone(), ha)?;
         }
+        log_archive::start(server.clone())?;
     }
 
     if start_database_tasks {

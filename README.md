@@ -297,6 +297,9 @@ structures together.
   table with `ALTER TABLE ... FLASHBACK ARCHIVE`; plus a recycle bin, so
   `DROP TABLE` is undone with `FLASHBACK TABLE ... TO BEFORE DROP`
   ([flashback](docs/flashback.md)).
+- Database branches: `CREATE DATABASE feature_x TEMPLATE bicdb` copies a live
+  database at an exact commit, and `SHOW BRANCH DIFF` compares it with its
+  parent ([branches](docs/branching.md)).
 - Large values, governed temporary space, spillable sorting, resource
   admission, metrics, and maintenance tooling.
 - Lean storage: autovacuum and SQL `VACUUM`, filesystem hole-punching, a

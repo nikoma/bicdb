@@ -12170,3 +12170,109 @@ fn copy_trigger_rejection_rolls_back_all_replayed_batches() {
     server.request_shutdown();
     serving.join().unwrap().unwrap();
 }
+
+#[test]
+fn cluster_branches_copy_diff_and_drop_databases() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let cluster = PgWireCluster::open(dir.path(), "bicdb", PgWireConfig::default()).unwrap();
+    let server = cluster.default_server().unwrap();
+    let server_for_thread = server.clone();
+    let server_thread =
+        thread::spawn(move || bicdb_pgwire::serve_existing_listener(server_for_thread, listener));
+
+    let mut root = TcpStream::connect(address).unwrap();
+    send_startup_for_database(&mut root, "bicdb", "bicdb");
+    read_until_ready(&mut root);
+    send_query(
+        &mut root,
+        "CREATE TABLE items (id INT PRIMARY KEY, v TEXT); INSERT INTO items VALUES (1, 'a'), (2, 'b'), (3, 'c');",
+    );
+    read_until_ready(&mut root);
+    send_query(&mut root, "CREATE DATABASE feature TEMPLATE bicdb;");
+    assert!(read_tags_until_ready(&mut root).0.contains(&b'C'));
+
+    // The branch starts as an exact copy and then evolves on its own.
+    let mut feature = TcpStream::connect(address).unwrap();
+    send_startup_for_database(&mut feature, "bicdb", "feature");
+    read_until_ready(&mut feature);
+    send_query(&mut feature, "SELECT count(*) FROM items;");
+    assert_eq!(read_query_rows(&mut feature), vec![vec!["3".to_string()]]);
+    send_query(
+        &mut feature,
+        "UPDATE items SET v = 'changed' WHERE id = 2; DELETE FROM items WHERE id = 3; INSERT INTO items VALUES (4, 'd');",
+    );
+    read_until_ready(&mut feature);
+    send_query(&mut root, "INSERT INTO items VALUES (5, 'main only');");
+    read_until_ready(&mut root);
+    send_query(&mut root, "SELECT count(*) FROM items;");
+    assert_eq!(read_query_rows(&mut root), vec![vec!["4".to_string()]]);
+
+    send_query(&mut root, "SHOW BRANCHES;");
+    let branches = read_query_rows(&mut root);
+    let row = branches.iter().find(|row| row[0] == "feature").unwrap();
+    assert_eq!(row[1], "bicdb");
+    assert!(row[3].starts_with("20"), "{row:?}");
+
+    send_query(&mut root, "SHOW BRANCH DIFF feature;");
+    let diff = read_query_rows(&mut root);
+    let items = diff
+        .iter()
+        .find(|row| row[0].ends_with("items"))
+        .unwrap_or_else(|| panic!("{diff:?}"));
+    // added: 4; removed: 3 and 5; changed: 2.
+    assert_eq!(&items[1..], &["changed", "1", "2", "1"], "{diff:?}");
+    send_query(&mut root, "SHOW BRANCH CHANGES feature LIMIT 10;");
+    let changes = read_query_rows(&mut root)
+        .into_iter()
+        .filter(|row| row[0].ends_with("items"))
+        .map(|row| row[2].clone())
+        .collect::<Vec<_>>();
+    assert_eq!(changes.len(), 4, "{changes:?}");
+
+    // A diff reveals data: only the owner of both databases may run it.
+    send_query(&mut root, "CREATE ROLE outsider LOGIN;");
+    read_until_ready(&mut root);
+    let mut outsider = TcpStream::connect(address).unwrap();
+    send_startup_for_database(&mut outsider, "outsider", "bicdb");
+    read_until_ready(&mut outsider);
+    send_query(&mut outsider, "SHOW BRANCH DIFF feature;");
+    let error = read_error_response(&mut outsider);
+    assert!(error.contains("C42501"), "{error}");
+    send_query(&mut outsider, "CREATE DATABASE stolen TEMPLATE bicdb;");
+    let error = read_error_response(&mut outsider);
+    assert!(error.contains("C42501"), "{error}");
+
+    // Dropping: not while connected, never the default database.
+    send_query(&mut root, "DROP DATABASE feature;");
+    let error = read_error_response(&mut root);
+    assert!(error.contains("being accessed"), "{error}");
+    feature.write_all(b"X\0\0\0\x04").unwrap();
+    drop(feature);
+    let mut dropped = false;
+    for _ in 0..50 {
+        send_query(&mut root, "DROP DATABASE feature;");
+        let (tags, _) = read_tags_until_ready(&mut root);
+        if tags.contains(&b'C') {
+            dropped = true;
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    assert!(dropped);
+    send_query(&mut root, "SHOW BRANCHES;");
+    assert!(read_query_rows(&mut root)
+        .iter()
+        .all(|row| row[0] != "feature"));
+    send_query(&mut root, "DROP DATABASE IF EXISTS feature;");
+    assert!(read_tags_until_ready(&mut root).0.contains(&b'C'));
+    send_query(&mut root, "DROP DATABASE bicdb;");
+    let error = read_error_response(&mut root);
+    assert!(error.contains("default database"), "{error}");
+
+    root.write_all(b"X\0\0\0\x04").unwrap();
+    outsider.write_all(b"X\0\0\0\x04").unwrap();
+    server.request_shutdown();
+    server_thread.join().unwrap().unwrap();
+}

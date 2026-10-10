@@ -8,6 +8,19 @@ use crate::*;
 pub(crate) struct ClusterDatabaseEntry {
     pub(crate) directory: String,
     pub(crate) owner: String,
+    /// Set when the database was created as a branch of another.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) branch: Option<BranchOrigin>,
+}
+
+/// Where a branch came from.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct BranchOrigin {
+    pub(crate) parent: String,
+    /// Commit sequence number of the parent the branch holds.
+    pub(crate) commit_seq: u64,
+    /// Unix seconds.
+    pub(crate) created_at: i64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -835,6 +848,7 @@ impl PgWireServer {
             replication_feed,
             started_at: Instant::now(),
             active_connections: AtomicUsize::new(0),
+            database_sessions: AtomicUsize::new(0),
             active_connections_by_ip: Mutex::new(HashMap::new()),
             rejection_drains,
             peak_active_connections: AtomicUsize::new(0),
@@ -1840,6 +1854,7 @@ impl PgWireCluster {
                 ClusterDatabaseEntry {
                     directory: directory.clone(),
                     owner: "bicdb".to_string(),
+                    branch: None,
                 },
             );
             let manifest = ClusterManifest {
@@ -1929,11 +1944,22 @@ impl PgWireCluster {
         sql: &str,
         name: &str,
         owner: Option<&str>,
+        template: Option<&str>,
     ) -> Result<SqlResult> {
         let name = normalize_cluster_database_name(name)?;
         let owner = owner
             .map(str::to_string)
             .unwrap_or_else(|| state.user.trim_matches('"').to_ascii_lowercase());
+        // A branch copies its template; resolve it before the manifest lock.
+        let template = match template {
+            Some(template) => {
+                let template = normalize_cluster_database_name(template)?;
+                self.require_database_owner(source, state, &template)?;
+                let server = self.server_for_database(&template)?;
+                Some((template, server))
+            }
+            None => None,
+        };
         let mut manifest = self.manifest.lock().unwrap();
         if manifest.databases.contains_key(&name) {
             return Err(PgWireError::DatabaseAlreadyExists(name));
@@ -1941,7 +1967,24 @@ impl PgWireCluster {
 
         let directory = Uuid::new_v4().to_string();
         let path = self.root.join("databases").join(&directory);
-        fs::create_dir(&path)?;
+        let branch = match &template {
+            Some((parent, template_server)) => {
+                let commit_seq = template_server
+                    .db
+                    .read()
+                    .create_branch(&path)
+                    .map_err(PgWireError::from)?;
+                Some(BranchOrigin {
+                    parent: parent.clone(),
+                    commit_seq,
+                    created_at: unix_timestamp(),
+                })
+            }
+            None => {
+                fs::create_dir(&path)?;
+                None
+            }
+        };
         let opened = (|| {
             let db =
                 BicDb::open_with_config(&path, database_config_for_server(&path, &self.config)?)?;
@@ -1971,6 +2014,7 @@ impl PgWireCluster {
         let entry = ClusterDatabaseEntry {
             directory,
             owner: owner.clone(),
+            branch,
         };
         manifest.databases.insert(name.clone(), entry.clone());
         if let Err(error) = persist_cluster_manifest(&self.root, &manifest) {
@@ -1989,7 +2033,15 @@ impl PgWireCluster {
             let mut db = source.db.write();
             let mut session =
                 with_connection_guc_state(sql_session_for_server(source, &mut db), source, state);
-            session.execute(sql)
+            // The catalog row; the copy itself is already made.
+            match &template {
+                Some(_) => session.execute(&format!(
+                    "CREATE DATABASE {} OWNER {}",
+                    quote_sql_identifier(&name),
+                    quote_sql_identifier(&owner)
+                )),
+                None => session.execute(sql),
+            }
         };
         if let Err(error) = create_result {
             manifest.databases.remove(&name);
@@ -2019,6 +2071,269 @@ impl PgWireCluster {
         }
         self.sync_database_catalogs()?;
         Ok(SqlResult::command("CREATE DATABASE"))
+    }
+
+    /// Fails unless the connection's user owns `database` or is a superuser.
+    fn require_database_owner(
+        &self,
+        source: &Arc<PgWireServer>,
+        state: &ConnectionState,
+        database: &str,
+    ) -> Result<()> {
+        let user = state.user.trim_matches('"').to_ascii_lowercase();
+        let owner = self
+            .manifest
+            .lock()
+            .unwrap()
+            .databases
+            .get(database)
+            .map(|entry| entry.owner.clone())
+            .ok_or_else(|| PgWireError::DatabaseNotFound(database.to_string()))?;
+        if owner == user || source.user_is_admin(&user) {
+            return Ok(());
+        }
+        Err(PgWireError::BicDb(BicDbError::Authorization(format!(
+            "must be the owner of database {database} or a superuser"
+        ))))
+    }
+
+    /// `DROP DATABASE`: removes the database, its files, and its catalog row
+    /// in every database of the cluster.
+    pub(crate) fn drop_database(
+        self: &Arc<Self>,
+        source: &Arc<PgWireServer>,
+        state: &ConnectionState,
+        sql: &str,
+        name: &str,
+        if_exists: bool,
+    ) -> Result<SqlResult> {
+        let name = normalize_cluster_database_name(name)?;
+        let Some(entry) = self.manifest.lock().unwrap().databases.get(&name).cloned() else {
+            if if_exists {
+                return Ok(SqlResult::command("DROP DATABASE"));
+            }
+            return Err(PgWireError::DatabaseNotFound(name));
+        };
+        if name == self.default_database() {
+            return Err(PgWireError::Server(format!(
+                "cannot drop the default database \"{name}\""
+            )));
+        }
+        let open = self.servers.lock().unwrap().get(&name).cloned();
+        if let Some(open) = &open {
+            if Arc::ptr_eq(open, source) {
+                return Err(PgWireError::Server(
+                    "cannot drop the currently open database".to_string(),
+                ));
+            }
+            if open.database_sessions.load(Ordering::SeqCst) > 0 {
+                return Err(PgWireError::Server(format!(
+                    "database \"{name}\" is being accessed by other users"
+                )));
+            }
+        }
+        self.require_database_owner(source, state, &name)?;
+        {
+            let mut db = source.db.write();
+            let mut session =
+                with_connection_guc_state(sql_session_for_server(source, &mut db), source, state);
+            session.execute(sql).map_err(PgWireError::Sql)?;
+        }
+        {
+            let mut manifest = self.manifest.lock().unwrap();
+            manifest.databases.remove(&name);
+            persist_cluster_manifest(&self.root, &manifest)?;
+        }
+        if let Some(open) = self.servers.lock().unwrap().remove(&name) {
+            open.begin_shutdown();
+        }
+        drop(open);
+        validate_cluster_directory(&entry.directory)?;
+        let path = self.root.join("databases").join(&entry.directory);
+        if let Err(error) = fs::remove_dir_all(&path) {
+            eprintln!(
+                "bicdb: dropped database {name} but could not remove {}: {error}",
+                path.display()
+            );
+        }
+        // Every other database's catalog forgets it too.
+        let others = self
+            .manifest
+            .lock()
+            .unwrap()
+            .databases
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        for other in others {
+            let server = self.server_for_database(&other)?;
+            if Arc::ptr_eq(&server, source) {
+                continue;
+            }
+            let mut db = server.db.write();
+            let mut session = sql_session_for_server(&server, &mut db);
+            session
+                .execute(&format!(
+                    "DROP DATABASE IF EXISTS {}",
+                    quote_sql_identifier(&name)
+                ))
+                .map_err(PgWireError::Sql)?;
+        }
+        Ok(SqlResult::command("DROP DATABASE"))
+    }
+
+    /// `SHOW BRANCHES`, `SHOW BRANCH DIFF` and `SHOW BRANCH CHANGES`.
+    pub(crate) fn execute_branch_statement(
+        self: &Arc<Self>,
+        source: &Arc<PgWireServer>,
+        state: &ConnectionState,
+        statement: BranchStatement,
+    ) -> Result<SqlResult> {
+        match statement {
+            BranchStatement::List => {
+                let manifest = self.manifest.lock().unwrap();
+                let rows = manifest
+                    .databases
+                    .iter()
+                    .map(|(name, entry)| {
+                        let origin = entry.branch.as_ref();
+                        vec![
+                            SqlValue::String(name.clone()),
+                            origin.map_or(SqlValue::Null, |origin| {
+                                SqlValue::String(origin.parent.clone())
+                            }),
+                            origin.map_or(SqlValue::Null, |origin| {
+                                SqlValue::Int(origin.commit_seq as i64)
+                            }),
+                            origin.map_or(SqlValue::Null, |origin| {
+                                SqlValue::String(format_unix_utc(origin.created_at))
+                            }),
+                            SqlValue::String(entry.owner.clone()),
+                        ]
+                    })
+                    .collect();
+                Ok(SqlResult::new(
+                    [
+                        "database",
+                        "parent",
+                        "branched_at_commit",
+                        "branched_at",
+                        "owner",
+                    ]
+                    .map(str::to_string)
+                    .to_vec(),
+                    rows,
+                )
+                .with_column_types(vec![
+                    Some("text".to_string()),
+                    Some("text".to_string()),
+                    Some("int8".to_string()),
+                    Some("timestamptz".to_string()),
+                    Some("text".to_string()),
+                ]))
+            }
+            BranchStatement::Diff {
+                name,
+                against,
+                detail,
+                limit,
+            } => {
+                let name = normalize_cluster_database_name(&name)?;
+                let base = match against {
+                    Some(against) => normalize_cluster_database_name(&against)?,
+                    None => self
+                        .manifest
+                        .lock()
+                        .unwrap()
+                        .databases
+                        .get(&name)
+                        .ok_or_else(|| PgWireError::DatabaseNotFound(name.clone()))?
+                        .branch
+                        .as_ref()
+                        .map(|origin| origin.parent.clone())
+                        .ok_or_else(|| {
+                            PgWireError::Server(format!(
+                                "{name} is not a branch; name the database to compare with: SHOW BRANCH DIFF {name} AGAINST <database>"
+                            ))
+                        })?,
+                };
+                // A diff reveals record ids: both databases must be the
+                // caller's own.
+                self.require_database_owner(source, state, &name)?;
+                self.require_database_owner(source, state, &base)?;
+                let diff = if name == base {
+                    bicdb_core::DatabaseDiff::default()
+                } else {
+                    let compared = self.server_for_database(&name)?;
+                    let base_server = self.server_for_database(&base)?;
+                    // Lock in name order so concurrent diffs cannot deadlock.
+                    let (first, second) = if name < base {
+                        (&compared, &base_server)
+                    } else {
+                        (&base_server, &compared)
+                    };
+                    let first = first.db.read();
+                    let second = second.db.read();
+                    let (compared_db, base_db) = if name < base {
+                        (&*first, &*second)
+                    } else {
+                        (&*second, &*first)
+                    };
+                    bicdb_core::diff_databases(compared_db, base_db, if detail { limit } else { 0 })
+                        .map_err(PgWireError::from)?
+                };
+                if detail {
+                    let rows = diff
+                        .changes
+                        .into_iter()
+                        .map(|change| {
+                            vec![
+                                SqlValue::String(change.collection),
+                                SqlValue::String(change.id),
+                                SqlValue::String(change.change.as_str().to_string()),
+                            ]
+                        })
+                        .collect();
+                    return Ok(SqlResult::new(
+                        ["table", "id", "change"].map(str::to_string).to_vec(),
+                        rows,
+                    ));
+                }
+                let rows = diff
+                    .collections
+                    .into_iter()
+                    .map(|collection| {
+                        let status = if collection.only_in_compared {
+                            format!("only in {name}")
+                        } else if collection.only_in_base {
+                            format!("only in {base}")
+                        } else {
+                            "changed".to_string()
+                        };
+                        vec![
+                            SqlValue::String(collection.collection),
+                            SqlValue::String(status),
+                            SqlValue::Int(collection.added as i64),
+                            SqlValue::Int(collection.removed as i64),
+                            SqlValue::Int(collection.changed as i64),
+                        ]
+                    })
+                    .collect();
+                Ok(SqlResult::new(
+                    ["table", "status", "added", "removed", "changed"]
+                        .map(str::to_string)
+                        .to_vec(),
+                    rows,
+                )
+                .with_column_types(vec![
+                    Some("text".to_string()),
+                    Some("text".to_string()),
+                    Some("int8".to_string()),
+                    Some("int8".to_string()),
+                    Some("int8".to_string()),
+                ]))
+            }
+        }
     }
 
     pub(crate) fn copy_role_catalog(
@@ -2362,8 +2677,28 @@ pub(crate) struct ConnectionRegistration {
     pub(crate) secret_key: i32,
 }
 
+impl ConnectionRegistration {
+    pub(crate) fn new(
+        server: Arc<PgWireServer>,
+        control_server: Arc<PgWireServer>,
+        connection_id: u64,
+        process_id: i32,
+        secret_key: i32,
+    ) -> Self {
+        server.database_sessions.fetch_add(1, Ordering::SeqCst);
+        Self {
+            server,
+            control_server,
+            connection_id,
+            process_id,
+            secret_key,
+        }
+    }
+}
+
 impl Drop for ConnectionRegistration {
     fn drop(&mut self) {
+        self.server.database_sessions.fetch_sub(1, Ordering::SeqCst);
         cleanup_client(
             &self.server,
             &self.control_server,
@@ -2587,4 +2922,114 @@ pub(crate) fn database_directory_size(path: &Path) -> io::Result<u64> {
         }
     }
     Ok(total)
+}
+
+/// A branch statement recognized in cluster mode.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum BranchStatement {
+    /// `SHOW BRANCHES`
+    List,
+    /// `SHOW BRANCH DIFF name [AGAINST other]` (per table) or
+    /// `SHOW BRANCH CHANGES name [AGAINST other] [LIMIT n]` (per record).
+    Diff {
+        name: String,
+        against: Option<String>,
+        detail: bool,
+        limit: usize,
+    },
+}
+
+/// Parses a normalized (lowercase, single-spaced) branch statement.
+pub(crate) fn parse_branch_statement(normalized: &str) -> Option<BranchStatement> {
+    let words = normalized
+        .trim_end_matches(';')
+        .split_whitespace()
+        .map(|word| word.trim_matches('"'))
+        .collect::<Vec<_>>();
+    match words.as_slice() {
+        ["show", "branches"] => Some(BranchStatement::List),
+        ["show", "branch", kind @ ("diff" | "changes"), name, rest @ ..] => {
+            let mut against = None;
+            let mut limit = 1000;
+            let mut rest = rest;
+            loop {
+                match rest {
+                    [] => break,
+                    ["against", other, tail @ ..] => {
+                        against = Some(other.to_string());
+                        rest = tail;
+                    }
+                    ["limit", count, tail @ ..] if *kind == "changes" => {
+                        limit = count.parse().ok()?;
+                        rest = tail;
+                    }
+                    _ => return None,
+                }
+            }
+            Some(BranchStatement::Diff {
+                name: name.to_string(),
+                against,
+                detail: *kind == "changes",
+                limit,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// `YYYY-MM-DD HH:MM:SS+00` for Unix seconds.
+fn format_unix_utc(seconds: i64) -> String {
+    let days = seconds.div_euclid(86_400);
+    let secs = seconds.rem_euclid(86_400);
+    // Civil date from days since 1970-01-01 (proleptic Gregorian).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02}+00",
+        secs / 3_600,
+        secs % 3_600 / 60,
+        secs % 60
+    )
+}
+
+#[cfg(test)]
+mod branch_statement_tests {
+    use super::*;
+
+    #[test]
+    fn parses_branch_statements() {
+        assert_eq!(
+            parse_branch_statement("show branches"),
+            Some(BranchStatement::List)
+        );
+        assert_eq!(
+            parse_branch_statement("show branch changes \"feature_x\" against main limit 5;"),
+            Some(BranchStatement::Diff {
+                name: "feature_x".to_string(),
+                against: Some("main".to_string()),
+                detail: true,
+                limit: 5,
+            })
+        );
+        assert_eq!(
+            parse_branch_statement("show branch diff feature_x"),
+            Some(BranchStatement::Diff {
+                name: "feature_x".to_string(),
+                against: None,
+                detail: false,
+                limit: 1000,
+            })
+        );
+        assert_eq!(parse_branch_statement("show branch diff"), None);
+        assert_eq!(parse_branch_statement("show branch diff a limit 3"), None);
+        assert_eq!(format_unix_utc(0), "1970-01-01 00:00:00+00");
+        assert_eq!(format_unix_utc(1_791_648_827), "2026-10-10 16:13:47+00");
+    }
 }

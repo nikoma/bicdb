@@ -3320,6 +3320,7 @@ pub fn parse_database_ddl(sql: &str) -> Result<Option<DatabaseDdl>> {
     if let Some(rest) = strip_prefix_ci(statement, "CREATE DATABASE ") {
         let (name, mut rest) = parse_leading_sql_identifier(rest)?;
         let mut owner = None;
+        let mut template = None;
         rest = rest.trim_start();
         if let Some(after_with) = strip_prefix_ci(rest, "WITH ") {
             rest = after_with.trim_start();
@@ -3337,13 +3338,17 @@ pub fn parse_database_ddl(sql: &str) -> Result<Option<DatabaseDdl>> {
                 continue;
             }
             if let Some(after_template) = strip_prefix_ci(rest, "TEMPLATE") {
-                let (_, trailing) = parse_leading_sql_identifier(
+                let (template_name, trailing) = parse_leading_sql_identifier(
                     after_template
                         .trim_start()
                         .strip_prefix('=')
                         .unwrap_or(after_template.trim_start())
                         .trim_start(),
                 )?;
+                let template_name = normalize_database_name(&template_name);
+                if !matches!(template_name.as_str(), "template0" | "template1") {
+                    template = Some(template_name);
+                }
                 rest = trailing.trim_start();
                 continue;
             }
@@ -3365,6 +3370,25 @@ pub fn parse_database_ddl(sql: &str) -> Result<Option<DatabaseDdl>> {
         return Ok(Some(DatabaseDdl::Create {
             name: normalize_database_name(&name),
             owner,
+            template,
+        }));
+    }
+
+    if let Some(rest) = strip_prefix_ci(statement, "DROP DATABASE ") {
+        let (if_exists, rest) = match strip_prefix_ci(rest.trim_start(), "IF EXISTS ") {
+            Some(rest) => (true, rest),
+            None => (false, rest),
+        };
+        let (name, trailing) = parse_leading_sql_identifier(rest.trim_start())?;
+        if !trailing.trim().is_empty() {
+            return Err(SqlError::Unsupported(format!(
+                "DROP DATABASE option {} is not supported",
+                trailing.trim()
+            )));
+        }
+        return Ok(Some(DatabaseDdl::Drop {
+            name: normalize_database_name(&name),
+            if_exists,
         }));
     }
 

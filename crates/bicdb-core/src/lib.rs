@@ -187,10 +187,10 @@ pub use db::{
     SCHEMA_COMPATIBILITY_FORMAT_VERSION, SIGNED_CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION,
 };
 pub use db::{
-    finish_standby_bootstrap, read_only_standby_hint, read_persisted_ha_role,
-    stage_standby_bootstrap, standby_bootstrap_staging, take_thread_commit_seq, HaNodeStatus,
-    NodeRole, ReplicationCursor, ReplicationFeed, StandbyResume, SyncQuorum, SyncQuorumStatus,
-    SyncTimeoutPolicy, HA_NODE_FILE,
+    diff_databases, finish_standby_bootstrap, read_only_standby_hint, read_persisted_ha_role,
+    stage_standby_bootstrap, standby_bootstrap_staging, take_thread_commit_seq, CollectionDiff,
+    DatabaseDiff, HaNodeStatus, NodeRole, RecordChange, RecordChangeKind, ReplicationCursor,
+    ReplicationFeed, StandbyResume, SyncQuorum, SyncQuorumStatus, SyncTimeoutPolicy, HA_NODE_FILE,
 };
 pub use db::{
     flashback_error_sqlstate, flashback_history_collection, is_flashback_history_collection,

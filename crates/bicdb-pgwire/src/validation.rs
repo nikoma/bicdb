@@ -1031,6 +1031,7 @@ mod tests {
             ClusterDatabaseEntry {
                 directory,
                 owner: "bicdb".to_string(),
+                branch: None,
             },
         );
         let secondary = cluster.server_for_database("secondary").unwrap();

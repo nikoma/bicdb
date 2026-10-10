@@ -3386,9 +3386,24 @@ enum RawRoleMembershipDdl {
 
 #[derive(Clone, Debug)]
 pub enum DatabaseDdl {
-    Create { name: String, owner: Option<String> },
-    AlterOwner { name: String, owner: String },
-    SetTablespace { name: String },
+    Create {
+        name: String,
+        owner: Option<String>,
+        /// `TEMPLATE source`: the new database starts as a copy (branch) of
+        /// `source`. `template0`/`template1` mean an empty database.
+        template: Option<String>,
+    },
+    Drop {
+        name: String,
+        if_exists: bool,
+    },
+    AlterOwner {
+        name: String,
+        owner: String,
+    },
+    SetTablespace {
+        name: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

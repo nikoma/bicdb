@@ -62,6 +62,9 @@ pub enum BicDbError {
     #[error("database is read-only standby: {0}")]
     ReadOnlyStandby(String),
 
+    #[error("branch error: {0}")]
+    Branch(String),
+
     #[error("memory error: {0}")]
     Memory(String),
 

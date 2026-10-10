@@ -387,6 +387,39 @@ pub fn create_backup_from_open_database(
     )
 }
 
+/// Files that describe a running node rather than its data: a copy of the
+/// database (a branch) starts without them.
+const NODE_LOCAL_FILES: &[&str] = &[
+    "store.lock",
+    "server.shutdown",
+    "ha-node.json",
+    "replication-state.json",
+];
+
+/// Copies the files of an open database into `target` behind the physical
+/// snapshot gate (writers cannot cross it). The caller quiesces commits
+/// first so the copy is an exact commit boundary. Uses the platform file
+/// copy, which shares blocks on copy-on-write filesystems.
+pub(crate) fn copy_open_database_files(db_path: &Path, target: &Path, fsync: bool) -> Result<()> {
+    let mut checkpoint = OnlineBackupCheckpoint::begin_open_database(db_path)?;
+    checkpoint.acquire_snapshot_gate(db_path)?;
+    for file in collect_source_files(db_path, None)? {
+        let relative = file.entry.path.as_str();
+        if NODE_LOCAL_FILES.contains(&relative) {
+            continue;
+        }
+        let destination = target.join(relative);
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(&file.source_path, &destination)?;
+        if fsync {
+            File::open(&destination)?.sync_all()?;
+        }
+    }
+    Ok(())
+}
+
 /// The base half of an ONLINE paged backup: page segments and the active WAL
 /// are copied fuzzily (size-pinned, streamed while writes continue), in
 /// pages-before-WAL order. The caller must hold the store's backup pin for

@@ -234,3 +234,123 @@ fn sync_quorum_holds_commits_until_standbys_confirm() {
         "caught-up standbys restore sync commit"
     );
 }
+
+/// What a server's replication sender does: ship, then record the standby's
+/// acknowledged position (which also pins the log for it).
+fn ship(primary: &BicDb, standby: &mut BicDb, cursor: &mut ReplicationCursor) {
+    loop {
+        let frames = primary.replication_frames_after(cursor, 1_000).unwrap();
+        if frames.is_empty() {
+            primary
+                .sync_quorum()
+                .record_ack("standby", standby.last_applied_commit_seq());
+            return;
+        }
+        standby.apply_replication_batch(&frames).unwrap();
+    }
+}
+
+fn ids(db: &BicDb, collection: &str) -> Option<Vec<String>> {
+    let mut ids = db
+        .scan_collection(collection)
+        .ok()?
+        .into_iter()
+        .map(|record| record.id)
+        .collect::<Vec<_>>();
+    ids.sort();
+    Some(ids)
+}
+
+#[test]
+fn catalog_operations_replicate_in_stream_order() {
+    for (mode, storage) in storage_modes() {
+        let primary_dir = tempfile::tempdir().unwrap();
+        let standby_dir = tempfile::tempdir().unwrap();
+        let mut primary = open(
+            primary_dir.path(),
+            storage.clone(),
+            ReplicationMode::Primary,
+        );
+        let mut standby = open(
+            standby_dir.path(),
+            storage.clone(),
+            ReplicationMode::Standby,
+        );
+        let mut cursor = ReplicationCursor::new(0);
+        primary.sync_quorum().record_ack("standby", 0);
+
+        // An empty collection exists on the standby too.
+        primary.create_collection("empty").unwrap();
+        primary.create_collection("items").unwrap();
+        put(&primary, "old", 1);
+        ship(&primary, &mut standby, &mut cursor);
+        assert_eq!(ids(&standby, "empty"), Some(vec![]), "{mode}");
+
+        // Drop + re-create with the same name: the standby must not keep the
+        // dropped collection's rows under the new one.
+        primary.drop_collection("items").unwrap();
+        primary.create_collection("items").unwrap();
+        put(&primary, "new", 2);
+        ship(&primary, &mut standby, &mut cursor);
+        assert_eq!(
+            ids(&standby, "items"),
+            Some(vec!["new".to_string()]),
+            "{mode}"
+        );
+
+        // Rename away (as the recycle bin does), re-create, rename back.
+        primary.rename_collection("items", "items_binned").unwrap();
+        primary.create_collection("items").unwrap();
+        put(&primary, "other", 3);
+        primary.drop_collection("items").unwrap();
+        primary.rename_collection("items_binned", "items").unwrap();
+        ship(&primary, &mut standby, &mut cursor);
+        assert_eq!(
+            ids(&standby, "items"),
+            Some(vec!["new".to_string()]),
+            "{mode}"
+        );
+        assert_eq!(ids(&standby, "items_binned"), None, "{mode}");
+        assert_eq!(ids(&primary, "items"), ids(&standby, "items"), "{mode}");
+    }
+}
+
+#[test]
+fn the_log_is_retained_for_a_lagging_standby() {
+    for (mode, storage) in storage_modes() {
+        let primary_dir = tempfile::tempdir().unwrap();
+        let standby_dir = tempfile::tempdir().unwrap();
+        let mut primary = open(
+            primary_dir.path(),
+            storage.clone(),
+            ReplicationMode::Primary,
+        );
+        let mut standby = open(
+            standby_dir.path(),
+            storage.clone(),
+            ReplicationMode::Standby,
+        );
+        primary.sync_quorum().record_ack("standby", 0);
+        let mut cursor = ReplicationCursor::new(0);
+        primary.create_collection("items").unwrap();
+        put(&primary, "a", 1);
+        ship(&primary, &mut standby, &mut cursor);
+        // The standby falls behind, then the primary compacts its log.
+        for index in 0..20 {
+            put(&primary, &format!("k{index}"), index);
+            read_only_commit(&primary);
+        }
+        primary.compact().unwrap();
+        put(&primary, "after", 99);
+        // A reconnecting standby (fresh cursor at its position) catches up.
+        let mut cursor = ReplicationCursor::new(standby.last_applied_commit_seq());
+        ship(&primary, &mut standby, &mut cursor);
+        assert_eq!(value(&standby, "k19"), Some(19), "{mode}");
+        assert_eq!(value(&standby, "after"), Some(99), "{mode}");
+        assert_eq!(
+            standby.last_applied_commit_seq(),
+            primary.current_commit_seq(),
+            "{mode}"
+        );
+    }
+}

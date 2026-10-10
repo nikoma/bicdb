@@ -15,6 +15,20 @@ use super::*;
 
 const STORAGE_NAME_PREFIX: &str = "__bicdb_st_";
 
+/// Internal collection through which a replication primary ships catalog
+/// operations (create, drop, rename collection). Catalog changes are not
+/// transactional writes, so each one is followed by a small commit here; a
+/// standby replays the operation when it applies that commit, in stream order.
+pub(crate) const CATALOG_LOG_COLLECTION: &str = "__bicdb_catalog_log";
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case")]
+pub(crate) enum CatalogOp {
+    Create { name: String, mode: CollectionMode },
+    Drop { name: String },
+    Rename { from: String, to: String },
+}
+
 impl BicDb {
     /// The physical storage name of a logical collection.
     pub(crate) fn storage_name_of(&self, collection: &str) -> String {
@@ -56,6 +70,72 @@ impl BicDb {
         }
     }
 
+    fn replicates_catalog(&self) -> bool {
+        self.config.replication.enabled && self.config.replication.mode == ReplicationMode::Primary
+    }
+
+    /// On a replication primary, ships `op` to standbys (see
+    /// [`CATALOG_LOG_COLLECTION`]).
+    pub(super) fn log_catalog_op(&mut self, op: CatalogOp) -> Result<()> {
+        if !self.replicates_catalog() {
+            return Ok(());
+        }
+        if !self.collections.contains_key(CATALOG_LOG_COLLECTION) {
+            let meta = CollectionMeta::standard(CATALOG_LOG_COLLECTION);
+            self.collections.insert(
+                CATALOG_LOG_COLLECTION.to_string(),
+                RwLock::new(CollectionState::new(meta)),
+            );
+            self.persist_catalog()?;
+        }
+        let record = Record::new(Uuid::new_v4().simple().to_string())
+            .with_metadata(serde_json::to_value(&op)?);
+        let mut tx = self.begin_transaction()?;
+        tx.insert(CATALOG_LOG_COLLECTION, record)?;
+        tx.commit()
+    }
+
+    /// Standby side: replays the catalog operations carried by `frame`.
+    pub(crate) fn apply_replicated_catalog_ops(&mut self, frame: &CommitFrame) -> Result<()> {
+        for write in &frame.writes {
+            if write.collection != CATALOG_LOG_COLLECTION
+                || write.operation == ReplicationOperationType::Delete
+            {
+                continue;
+            }
+            let record: Record = serde_json::from_slice(&write.payload)?;
+            let op: CatalogOp = serde_json::from_value(record.metadata)?;
+            match op {
+                CatalogOp::Create { name, mode } => {
+                    if !self.collections.contains_key(&name) {
+                        validate_collection_name(&name)?;
+                        let storage_name = self.storage_name_for_new(&name);
+                        let mut meta = CollectionMeta::standard(name.clone());
+                        meta.mode = mode;
+                        meta.storage_name = storage_name.clone();
+                        if let Some(storage) = storage_name {
+                            self.set_storage_alias(&name, &storage);
+                        }
+                        self.collections
+                            .insert(name.clone(), RwLock::new(CollectionState::new(meta)));
+                        self.persist_catalog()?;
+                    }
+                }
+                CatalogOp::Drop { name } => {
+                    if self.collections.contains_key(&name) {
+                        self.drop_collection(&name)?;
+                    }
+                }
+                CatalogOp::Rename { from, to } => {
+                    if self.collections.contains_key(&from) && !self.collections.contains_key(&to) {
+                        self.rename_collection_unchecked(&from, &to)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Renames a collection without moving its rows. Its indexes, vector index,
     /// planner statistics, policy and flashback history follow it.
     ///
@@ -65,6 +145,14 @@ impl BicDb {
     /// collection name.
     pub fn rename_collection(&mut self, old: &str, new: &str) -> Result<()> {
         self.ensure_writable("rename collection")?;
+        self.rename_collection_unchecked(old, new)?;
+        self.log_catalog_op(CatalogOp::Rename {
+            from: old.to_string(),
+            to: new.to_string(),
+        })
+    }
+
+    fn rename_collection_unchecked(&mut self, old: &str, new: &str) -> Result<()> {
         validate_collection_name(old)?;
         validate_collection_name(new)?;
         if old == new {
@@ -128,9 +216,6 @@ impl BicDb {
                 "collection `{collection}` cannot be renamed: {reason}"
             )))
         };
-        if self.config.replication.enabled {
-            return refuse("replication streams address collections by name");
-        }
         if self.commit_admission.read().is_some() || self.config.require_commit_admission {
             return refuse("distributed placement addresses collections by name");
         }

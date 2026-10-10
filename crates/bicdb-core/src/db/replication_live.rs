@@ -37,6 +37,31 @@ pub fn take_thread_commit_seq() -> Option<u64> {
     (seq > 0).then_some(seq)
 }
 
+/// Offset of the first frame belonging to a commit after `seq` (its first
+/// write, or the commit frame), or the log length when there is none.
+fn first_frame_offset_after(path: &Path, seq: u64, encryption: &EncryptionRuntime) -> Result<u64> {
+    let frames = storage::read_frames_readonly_from(path, 0, FrameKind::Transaction, encryption)?;
+    let mut first_offset_of_tx: FxHashMap<u64, u64> = FxHashMap::default();
+    let mut earliest: Option<u64> = None;
+    let mut end = 0;
+    for (start, frame_end, payload) in &frames {
+        end = *frame_end;
+        match decode_tx_frame(payload)? {
+            TxFrame::Write { tx_id, .. } | TxFrame::Truncate { tx_id, .. } => {
+                first_offset_of_tx.entry(tx_id.0).or_insert(*start);
+            }
+            TxFrame::Commit {
+                tx_id, commit_seq, ..
+            } if commit_seq > seq => {
+                let offset = first_offset_of_tx.get(&tx_id.0).copied().unwrap_or(*start);
+                earliest = Some(earliest.map_or(offset, |current: u64| current.min(offset)));
+            }
+            _ => {}
+        }
+    }
+    Ok(earliest.unwrap_or(end))
+}
+
 /// Wakes replication senders when the durable sequence advances.
 #[derive(Debug, Default)]
 pub(crate) struct DurableNotifier {
@@ -198,7 +223,7 @@ impl BicDb {
             }
         }
 
-        let base = read_commit_seq_floor(&self.path)?;
+        let base = read_wal_base(&self.path)?;
         let mut out = Vec::with_capacity((target - cursor.sent_seq) as usize);
         for seq in cursor.sent_seq + 1..=target {
             let (tx_id, timestamp, tx_writes) = match commits.get(&seq) {
@@ -244,6 +269,35 @@ impl BicDb {
     /// True on a read-only standby (legacy HA standby or replication standby).
     pub fn is_read_only_standby(&self) -> bool {
         self.ensure_writable("probe").is_err()
+    }
+
+    /// Drops the transaction log before `keep_from` (`u64::MAX`: all of it),
+    /// where `dropped_through` is the highest commit sequence whose frames all
+    /// lie before `keep_from`. Never drops a frame a standby has not yet
+    /// acknowledged: the cut moves back to that standby's position instead.
+    pub(crate) fn cut_transaction_log(&self, keep_from: u64, dropped_through: u64) -> Result<()> {
+        let path = self.tx_log_path();
+        let log_len = file_len(&path)?;
+        let (keep_from, wal_base) = match self.sync_quorum.retention_floor() {
+            Some(acked) if acked < dropped_through => (
+                keep_from.min(first_frame_offset_after(&path, acked, &self.encryption)?),
+                acked,
+            ),
+            _ => (keep_from, dropped_through),
+        };
+        persist_commit_seq_floor(
+            &self.path,
+            self.commit_seq.load(AtomicOrdering::SeqCst),
+            wal_base,
+            self.config.fsync,
+        )?;
+        if keep_from >= log_len {
+            truncate_log_file(&path, self.config.fsync)
+        } else if keep_from > 0 {
+            copy_transaction_log_tail(&path, keep_from, self.config.fsync)
+        } else {
+            Ok(())
+        }
     }
 
     /// The synchronous-quorum tracker; pgwire senders record standby
@@ -353,6 +407,12 @@ impl SyncQuorum {
         let mut acked = state.acked.values().copied().collect::<Vec<_>>();
         acked.sort_unstable_by(|a, b| b.cmp(a));
         acked.get(state.required - 1).copied().unwrap_or(0)
+    }
+
+    /// Oldest position any known standby has acknowledged: the transaction
+    /// log must keep every commit after it.
+    pub fn retention_floor(&self) -> Option<u64> {
+        self.state.lock().acked.values().copied().min()
     }
 
     pub fn status(&self) -> SyncQuorumStatus {

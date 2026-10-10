@@ -405,10 +405,11 @@ fn native_replication_stream_replays_and_resumes_to_standby() {
         Err(BicDbError::ReadOnlyStandby(_))
     ));
 
+    // A catalog commit (create collection) precedes the data commit.
     let first_batch = primary.export_replication_frames_since(0, 100).unwrap();
-    assert_eq!(first_batch.len(), 1);
+    assert_eq!(first_batch.len(), 2);
     let report = standby.apply_replication_batch(&first_batch).unwrap();
-    assert_eq!(report.applied, 1);
+    assert_eq!(report.applied, 2);
     assert_eq!(report.duplicates, 0);
     assert_eq!(standby.replication_lag(primary.current_commit_seq()), 0);
     assert_eq!(
@@ -471,7 +472,8 @@ fn native_replication_apply_state_persists_across_reopen() {
         assert_eq!(state.cluster_id, "cluster-a");
         assert_eq!(state.source_node_id.as_deref(), Some("primary-a"));
         assert_eq!(state.stream_id.as_deref(), Some("default"));
-        assert_eq!(state.last_applied_commit_seq, 1);
+        // Catalog commit + data commit.
+        assert_eq!(state.last_applied_commit_seq, 2);
         assert!(state.last_applied_at.is_some());
         assert!(state.last_error.is_none());
     }
@@ -479,7 +481,7 @@ fn native_replication_apply_state_persists_across_reopen() {
     let mut reopened = BicDb::open_with_config(standby_dir.path(), standby_config).unwrap();
     let state = reopened.replication_apply_state();
     assert_eq!(state.source_node_id.as_deref(), Some("primary-a"));
-    assert_eq!(state.last_applied_commit_seq, 1);
+    assert_eq!(state.last_applied_commit_seq, 2);
 
     primary
         .insert("items", Record::new("b").with_metadata(json!({"value": 2})))
@@ -495,7 +497,7 @@ fn native_replication_apply_state_persists_across_reopen() {
     );
     assert_eq!(
         reopened.replication_apply_state().last_applied_commit_seq,
-        2
+        3
     );
 }
 
@@ -561,16 +563,17 @@ fn native_replication_exports_public_direct_writes() {
             Record::new("direct").with_metadata(json!({"value": 10})),
         )
         .unwrap();
-    assert_eq!(primary.current_commit_seq(), 1);
-    let frames = primary.export_replication_frames_since(0, 10).unwrap();
-    assert_eq!(frames.len(), 1);
-    assert_eq!(frames[0].commit_seq, 1);
-    assert_eq!(frames[0].writes[0].record_id, "direct");
-
-    primary.delete("items", "direct").unwrap();
+    // Commit 1 is the replicated catalog operation that created `items`.
+    assert_eq!(primary.current_commit_seq(), 2);
     let frames = primary.export_replication_frames_since(1, 10).unwrap();
     assert_eq!(frames.len(), 1);
     assert_eq!(frames[0].commit_seq, 2);
+    assert_eq!(frames[0].writes[0].record_id, "direct");
+
+    primary.delete("items", "direct").unwrap();
+    let frames = primary.export_replication_frames_since(2, 10).unwrap();
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0].commit_seq, 3);
     assert_eq!(frames[0].writes[0].record_id, "direct");
 }
 
@@ -600,8 +603,11 @@ fn native_replication_preserves_collection_metadata() {
         .set_collection_policy("secure_events", policy.clone())
         .unwrap();
 
-    let frames = primary.export_replication_frames_since(0, 10).unwrap();
-    assert_eq!(frames.len(), 1);
+    // The catalog commit for the collection, then the data commit carrying
+    // the collection's metadata (mode and policy).
+    let all_frames = primary.export_replication_frames_since(0, 10).unwrap();
+    assert_eq!(all_frames.len(), 2);
+    let frames = all_frames[1..].to_vec();
     assert_eq!(
         frames[0].writes[0].collection_meta.as_ref().unwrap().mode,
         CollectionMode::TimeSeries
@@ -614,7 +620,7 @@ fn native_replication_preserves_collection_metadata() {
     let standby_config =
         DbConfig::default().with_replication(localhost_standby_replication_config());
     let mut standby = BicDb::open_with_config(standby_dir.path(), standby_config).unwrap();
-    standby.apply_replication_batch(&frames).unwrap();
+    standby.apply_replication_batch(&all_frames).unwrap();
 
     let meta = standby
         .collections()
@@ -715,10 +721,13 @@ fn native_replication_transport_streams_commit_frames_over_loopback() {
     let mut client =
         replication_transport::connect_localhost(addr, std::time::Duration::from_secs(2)).unwrap();
     let mut received = Vec::new();
-    let frame = replication_transport::recv_frame(&mut client, 1024 * 1024).unwrap();
-    match frame {
-        ReplicationFrame::Commit(commit) => received.push(commit),
-        other => panic!("unexpected replication frame: {other:?}"),
+    // Catalog commit (create collection) and data commit.
+    for _ in 0..2 {
+        let frame = replication_transport::recv_frame(&mut client, 1024 * 1024).unwrap();
+        match frame {
+            ReplicationFrame::Commit(commit) => received.push(commit),
+            other => panic!("unexpected replication frame: {other:?}"),
+        }
     }
 
     let standby_config =

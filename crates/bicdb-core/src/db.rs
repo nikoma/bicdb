@@ -3376,6 +3376,7 @@ pub struct PagedStorageOpsHandle {
     path: PathBuf,
     fsync: bool,
     commit_seq: Arc<AtomicU64>,
+    sync_quorum: Arc<SyncQuorum>,
 }
 
 impl PagedStorageOpsHandle {
@@ -3402,12 +3403,13 @@ impl PagedStorageOpsHandle {
                 self.paged.checkpoint()?;
                 let log_path = self.path.join(DEFAULT_TRANSACTION_LOG);
                 let log_len = file_len(&log_path)?;
-                if log_len > 0 {
-                    persist_commit_seq_floor(
-                        &self.path,
-                        self.commit_seq.load(AtomicOrdering::SeqCst),
-                        self.fsync,
-                    )?;
+                let current = self.commit_seq.load(AtomicOrdering::SeqCst);
+                let standby_needs_log = self
+                    .sync_quorum
+                    .retention_floor()
+                    .is_some_and(|acked| acked < current);
+                if log_len > 0 && !standby_needs_log {
+                    persist_commit_seq_floor(&self.path, current, current, self.fsync)?;
                     copy_transaction_log_tail(&log_path, log_len, self.fsync)?;
                 }
                 Ok(())
@@ -3663,6 +3665,9 @@ pub struct BicDb {
     commit_seq: Arc<AtomicU64>,
     // Synchronous replication: commits wait here for standby confirmations.
     sync_quorum: Arc<SyncQuorum>,
+    // Commit sequence at the last `checkpoint_begin`: everything at or below it
+    // is materialized before the checkpoint's keep-from offset.
+    checkpoint_boundary_seq: AtomicU64,
     // Every commit takes the shared side while serializable commits take the
     // exclusive side. Ordinary commits therefore remain concurrent, while a
     // serializable validator observes a stable database through its apply.
@@ -9832,11 +9837,17 @@ impl BicDb {
                 &encryption,
             )?;
         }
-        if paged_records.is_some() && broker_outbox_flushed {
+        // A replication primary keeps its log at open: standbys resume from it.
+        if paged_records.is_some() && broker_outbox_flushed && !config.replication.enabled {
             let log_path = path.join(DEFAULT_TRANSACTION_LOG);
             let log_len = file_len(&log_path)?;
             if log_len > 0 {
-                persist_commit_seq_floor(&path, tx_recovery.last_commit_seq, config.fsync)?;
+                persist_commit_seq_floor(
+                    &path,
+                    tx_recovery.last_commit_seq,
+                    tx_recovery.last_commit_seq,
+                    config.fsync,
+                )?;
                 copy_transaction_log_tail(&log_path, log_len, config.fsync)?;
             }
         }
@@ -9913,6 +9924,7 @@ impl BicDb {
             applied_watermark: Mutex::new(AppliedWatermark::new(tx_recovery.last_commit_seq)),
             commit_seq: Arc::new(AtomicU64::new(tx_recovery.last_commit_seq)),
             sync_quorum: Arc::new(SyncQuorum::default()),
+            checkpoint_boundary_seq: AtomicU64::new(0),
             index_generation: AtomicU64::new(0),
             serializable_commit_admission: RwLock::new(()),
             commit_lock: Mutex::new(()),
@@ -11058,6 +11070,7 @@ impl BicDb {
         self.ensure_replication_frame_collections(frame)?;
         let writes = replication_writes_to_tx_writes(frame)?;
         self.apply_imported_replication_commit(frame.tx_id, frame.commit_seq, &writes)?;
+        self.apply_replicated_catalog_ops(frame)?;
         self.record_replication_apply_success(frame)?;
         Ok(ReplicationApplyReport {
             applied: 1,
@@ -11089,7 +11102,27 @@ impl BicDb {
         let mut changed = false;
         for write in &frame.writes {
             validate_replication_collection_meta(write)?;
-            if self.collections.contains_key(&write.collection) {
+            if let Some(state) = self.collections.get(&write.collection) {
+                // The primary's current authorization and layout metadata
+                // always win: a collection created by a replicated catalog
+                // operation has no policy until its first data frame.
+                if let Some(primary) = write.collection_meta.as_ref() {
+                    let mut state = state.write();
+                    let local = &mut state.meta;
+                    if local.policy != primary.policy
+                        || local.mutation_policy != primary.mutation_policy
+                        || local.mode != primary.mode
+                        || local.mesh_sync_enabled != primary.mesh_sync_enabled
+                        || local.flashback != primary.flashback
+                    {
+                        local.policy = primary.policy.clone();
+                        local.mutation_policy = primary.mutation_policy.clone();
+                        local.mode = primary.mode.clone();
+                        local.mesh_sync_enabled = primary.mesh_sync_enabled;
+                        local.flashback = primary.flashback.clone();
+                        changed = true;
+                    }
+                }
                 continue;
             }
             validate_collection_name(&write.collection)?;
@@ -11106,6 +11139,8 @@ impl BicDb {
             changed = true;
         }
         if changed {
+            self.persist_catalog()?;
+            self.flashback_refresh_tracked();
             self.schema_compatibility.invalidate();
         }
         Ok(())
@@ -11244,6 +11279,7 @@ impl BicDb {
         }
 
         let storage_name = self.storage_name_for_new(name);
+        let logged_mode = mode.clone();
         let meta = CollectionMeta {
             name: name.to_string(),
             vector_dim: None,
@@ -11261,6 +11297,12 @@ impl BicDb {
         self.collections
             .insert(name.to_string(), RwLock::new(CollectionState::new(meta)));
         self.persist_catalog()?;
+        if name != collection_rename::CATALOG_LOG_COLLECTION {
+            self.log_catalog_op(collection_rename::CatalogOp::Create {
+                name: name.to_string(),
+                mode: logged_mode,
+            })?;
+        }
         self.schema_compatibility.invalidate();
         Ok(())
     }
@@ -17582,25 +17624,55 @@ pub(crate) const COMMIT_SEQ_FLOOR_FILE: &str = "commit-seq.floor";
 /// Records that every commit sequence number up to `commit_seq` is in use.
 /// Written before the transaction log is truncated, so a reopen never hands
 /// out a sequence number twice.
-pub(crate) fn persist_commit_seq_floor(root: &Path, commit_seq: u64, fsync: bool) -> Result<()> {
-    if read_commit_seq_floor(root)? >= commit_seq {
+/// `commit_seq`: every number up to it is in use (a reopen continues above
+/// it). `wal_base`: every commit at or below it may have been dropped from the
+/// log; commits above it are in the log or wrote nothing. Both only rise.
+pub(crate) fn persist_commit_seq_floor(
+    root: &Path,
+    commit_seq: u64,
+    wal_base: u64,
+    fsync: bool,
+) -> Result<()> {
+    let (floor, base) = read_commit_seq_floor_and_base(root)?;
+    let (next_floor, next_base) = (floor.max(commit_seq), base.max(wal_base));
+    if (next_floor, next_base) == (floor, base) {
         return Ok(());
     }
     storage::write_atomic(
         &root.join(COMMIT_SEQ_FLOOR_FILE),
-        format!("{commit_seq}\n").as_bytes(),
+        format!("{next_floor} {next_base}\n").as_bytes(),
         fsync,
     )
 }
 
+fn read_commit_seq_floor_and_base(root: &Path) -> Result<(u64, u64)> {
+    let text = match fs::read_to_string(root.join(COMMIT_SEQ_FLOOR_FILE)) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0, 0)),
+        Err(error) => return Err(error.into()),
+    };
+    let corrupt = |error: std::num::ParseIntError| {
+        BicDbError::FormatCompatibility(format!("corrupt {COMMIT_SEQ_FLOOR_FILE}: {error}"))
+    };
+    let mut parts = text.split_whitespace();
+    let floor = parts
+        .next()
+        .unwrap_or("0")
+        .parse::<u64>()
+        .map_err(corrupt)?;
+    let base = match parts.next() {
+        Some(base) => base.parse::<u64>().map_err(corrupt)?,
+        None => floor,
+    };
+    Ok((floor, base))
+}
+
 pub(crate) fn read_commit_seq_floor(root: &Path) -> Result<u64> {
-    match fs::read_to_string(root.join(COMMIT_SEQ_FLOOR_FILE)) {
-        Ok(text) => text.trim().parse::<u64>().map_err(|error| {
-            BicDbError::FormatCompatibility(format!("corrupt {COMMIT_SEQ_FLOOR_FILE}: {error}"))
-        }),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(0),
-        Err(error) => Err(error.into()),
-    }
+    Ok(read_commit_seq_floor_and_base(root)?.0)
+}
+
+pub(crate) fn read_wal_base(root: &Path) -> Result<u64> {
+    Ok(read_commit_seq_floor_and_base(root)?.1)
 }
 
 fn truncate_log_file(path: &Path, fsync: bool) -> Result<()> {

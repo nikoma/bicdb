@@ -507,6 +507,11 @@ impl BicDb {
             .get(name)
             .is_some_and(|state| state.read().meta.flashback.is_some());
         let dropped = self.drop_collection_inner(name)?;
+        if dropped {
+            self.log_catalog_op(super::collection_rename::CatalogOp::Drop {
+                name: name.to_string(),
+            })?;
+        }
         if tracked {
             self.flashback_refresh_tracked();
             let history = flashback_history_collection(name);

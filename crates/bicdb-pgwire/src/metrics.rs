@@ -122,6 +122,52 @@ fn render(server: &Arc<PgWireServer>) -> Result<String> {
         stats.failed_queries,
     );
 
+    let connectors = connectors::statuses(server);
+    out.metric(
+        "bicdb_connector_messages_total",
+        "counter",
+        "Messages a connector moved.",
+    );
+    for status in &connectors {
+        out.sample(
+            "bicdb_connector_messages_total",
+            &[
+                ("connector", &status.name),
+                ("kind", &status.kind),
+                ("system", &status.system),
+            ],
+            status.messages,
+        );
+    }
+    out.metric(
+        "bicdb_connector_failures_total",
+        "counter",
+        "Failed deliveries, reads or writes of a connector (each retried).",
+    );
+    for status in &connectors {
+        out.sample(
+            "bicdb_connector_failures_total",
+            &[
+                ("connector", &status.name),
+                ("kind", &status.kind),
+                ("system", &status.system),
+            ],
+            status.failures,
+        );
+    }
+    out.metric(
+        "bicdb_connector_retrying",
+        "gauge",
+        "1 while a connector is retrying after a failure.",
+    );
+    for status in &connectors {
+        out.sample(
+            "bicdb_connector_retrying",
+            &[("connector", &status.name)],
+            u8::from(status.state == "retrying"),
+        );
+    }
+
     let db = server.read_db()?;
     let current = db.current_commit_seq();
     out.gauge(

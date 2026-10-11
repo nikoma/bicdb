@@ -5620,6 +5620,11 @@ fn main() -> Result<()> {
             )?;
             config.log_archive = replication.log_archive_config()?;
             config.metrics_listen = operator.metrics_listen;
+            config.connectors = operator
+                .connectors
+                .as_deref()
+                .map(bicdb_pgwire::ConnectorsConfig::load)
+                .transpose()?;
             config.high_availability = replication.into_config()?;
             let host_services = cli_host_services(&operator)?;
             if cluster {
@@ -8809,6 +8814,11 @@ struct OperatorArgs {
     /// bind it to a trusted interface).
     #[arg(long)]
     metrics_listen: Option<SocketAddr>,
+    /// JSON file of connectors to external messaging systems: sinks that drain
+    /// broker queues to Redis or AMQP, sources that drain Redis streams or AMQP
+    /// queues into tables (see docs/connectors.md).
+    #[arg(long)]
+    connectors: Option<PathBuf>,
 }
 
 fn cli_host_services(operator: &OperatorArgs) -> Result<Vec<Arc<dyn PgWireHostService>>> {

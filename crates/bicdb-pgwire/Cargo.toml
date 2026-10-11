@@ -6,6 +6,9 @@ license-file.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+futures-core = "0.3"
+lapin = { version = "4.12", default-features = false, features = ["tokio", "rustls--ring", "rustls-webpki-roots-certs"] }
+redis.workspace = true
 axum.workspace = true
 axum-server.workspace = true
 argon2.workspace = true

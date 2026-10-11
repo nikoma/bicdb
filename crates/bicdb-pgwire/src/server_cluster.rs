@@ -849,6 +849,7 @@ impl PgWireServer {
             started_at: Instant::now(),
             active_connections: AtomicUsize::new(0),
             database_sessions: AtomicUsize::new(0),
+            connectors: Default::default(),
             active_connections_by_ip: Mutex::new(HashMap::new()),
             rejection_drains,
             peak_active_connections: AtomicUsize::new(0),

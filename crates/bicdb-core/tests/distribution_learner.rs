@@ -968,14 +968,15 @@ fn tcp_transport_moves_a_live_range_over_bounded_authenticated_node_rpcs() {
                     .contains("local verified stale or missing") => {}
             Err(error) => panic!("relocation step failed: {error}"),
         }
-        if !published_target_schema
-            && target
-                .read()
-                .schema_compatibility_fingerprint()
-                .unwrap()
-                .sha256
-                == source_schema_sha256
-        {
+        // Like a node's heartbeat, re-verify the target's schema every tick:
+        // applying catalog changes invalidates the verified fingerprint, and
+        // the fence rejects steps until it is verified again.
+        let target_schema = target
+            .read()
+            .schema_compatibility_fingerprint()
+            .unwrap()
+            .sha256;
+        if !published_target_schema && target_schema == source_schema_sha256 {
             let labels = BTreeMap::from([(
                 SCHEMA_COMPATIBILITY_NODE_LABEL.to_string(),
                 source_schema_sha256.clone(),
@@ -991,8 +992,14 @@ fn tcp_transport_moves_a_live_range_over_bounded_authenticated_node_rpcs() {
                 .labels = labels;
             published_target_schema = true;
         }
+        // A write while the relocation is in flight must reach the target.
+        // Catch-up can start and finish within one driver step, so inject as
+        // soon as the snapshot copy (or catch-up) is observed.
         if !injected_catch_up_write
-            && topology.relocation(relocation_id).unwrap().phase == RelocationPhase::CatchingUp
+            && matches!(
+                topology.relocation(relocation_id).unwrap().phase,
+                RelocationPhase::SnapshotCopying | RelocationPhase::CatchingUp
+            )
         {
             source
                 .write()

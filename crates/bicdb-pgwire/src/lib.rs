@@ -14,10 +14,12 @@ pub(crate) use binary_codec::*;
 mod protocol_wire;
 pub(crate) use protocol_wire::*;
 mod checkpoint_driver;
+pub mod connectors;
 mod high_availability;
 mod log_archive;
 mod metrics;
 pub(crate) use checkpoint_driver::*;
+pub use connectors::{ConnectorStatus, ConnectorsConfig};
 pub use high_availability::{
     restart_requested, AllowedStandby, FailoverConfig, HaPeer, HaServerConfig, HaServerRole,
     MIN_FAILOVER_TIMEOUT,
@@ -335,6 +337,8 @@ pub struct PgWireConfig {
     pub log_archive: Option<LogArchiveConfig>,
     /// Serve Prometheus metrics on this address (`GET /metrics`).
     pub metrics_listen: Option<SocketAddr>,
+    /// Connectors to external messaging systems (`--connectors FILE`).
+    pub connectors: Option<ConnectorsConfig>,
 }
 
 impl Default for PgWireConfig {
@@ -406,6 +410,7 @@ impl Default for PgWireConfig {
             high_availability: None,
             log_archive: None,
             metrics_listen: None,
+            connectors: None,
         }
     }
 }
@@ -868,6 +873,8 @@ pub struct PgWireServer {
     /// Sessions connected to this database (in cluster mode they may have
     /// arrived through another database's listener).
     database_sessions: AtomicUsize,
+    /// Status of the connectors this server runs.
+    connectors: connectors::ConnectorRegistry,
     active_connections_by_ip: Mutex<HashMap<IpAddr, usize>>,
     /// Bounds the short-lived tasks which half-close and drain refused TCP
     /// connections. Draining the already-sent startup packet prevents Linux
@@ -3579,6 +3586,11 @@ fn execute_server_db_sql_for_state_inner(
                     .map(|_| ())
                     .map_err(|error| BicDbError::Cluster(error.to_string()))
                     .and_then(|_| tx.finalize_commit_admission());
+                // Messages published with broker_publish_on_commit become
+                // visible once the commit is durable, never before.
+                if durability.is_ok() {
+                    tx.finalize_committed_broker_outbox();
+                }
                 let finalization = tx.finalize_committed_memory_jobs();
                 commit_phase_trace(
                     phase_exec,

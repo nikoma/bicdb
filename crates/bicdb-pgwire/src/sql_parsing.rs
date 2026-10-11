@@ -380,6 +380,11 @@ pub(crate) fn commit_buffered_transaction(
                     .map(|_| ())
                     .map_err(|error| BicDbError::Cluster(error.to_string()))
                     .and_then(|_| tx.finalize_commit_admission());
+                // Messages published with broker_publish_on_commit become
+                // visible once the commit is durable, never before.
+                if durability.is_ok() {
+                    tx.finalize_committed_broker_outbox();
+                }
                 let finalization = tx.finalize_committed_memory_jobs();
                 state.last_commit_seq = state.last_commit_seq.max(commit_seq);
                 server.record_write_execution(duration_nanos_u64(started.elapsed()));
@@ -688,6 +693,38 @@ pub(crate) fn execute_server_virtual_query_for_normalized(
                     "in_transaction".to_string(),
                     "active_query".to_string(),
                 ],
+                rows,
+            )))
+        }
+        "select * from bicdb_connectors" => {
+            let rows = connectors::statuses(server)
+                .into_iter()
+                .map(|status| {
+                    vec![
+                        SqlValue::String(status.name),
+                        SqlValue::String(status.kind),
+                        SqlValue::String(status.system),
+                        SqlValue::String(status.state),
+                        SqlValue::Int(status.messages as i64),
+                        SqlValue::Int(status.failures as i64),
+                        status.last_error.map_or(SqlValue::Null, SqlValue::String),
+                        status.last_message_at.map_or(SqlValue::Null, SqlValue::Int),
+                    ]
+                })
+                .collect();
+            Ok(Some(SqlResult::new(
+                [
+                    "name",
+                    "kind",
+                    "system",
+                    "state",
+                    "messages",
+                    "failures",
+                    "last_error",
+                    "last_message_at_ms",
+                ]
+                .map(str::to_string)
+                .to_vec(),
                 rows,
             )))
         }
@@ -1200,6 +1237,7 @@ pub(crate) fn is_server_status_query_normalized(normalized: &str) -> bool {
             | "select * from bicdb_server_connections"
             | "select * from bicdb_server_stats"
             | "select * from bicdb_ha_status"
+            | "select * from bicdb_connectors"
     )
 }
 

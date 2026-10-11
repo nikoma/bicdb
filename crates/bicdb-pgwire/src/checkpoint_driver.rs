@@ -133,6 +133,7 @@ pub(crate) fn start_background_tasks_for_scope(
             high_availability::start(server.clone(), ha)?;
         }
         log_archive::start(server.clone())?;
+        connectors::start(server.clone())?;
     }
 
     if start_database_tasks {

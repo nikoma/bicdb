@@ -297,6 +297,11 @@ structures together.
   table with `ALTER TABLE ... FLASHBACK ARCHIVE`; plus a recycle bin, so
   `DROP TABLE` is undone with `FLASHBACK TABLE ... TO BEFORE DROP`
   ([flashback](docs/flashback.md)).
+- Connectors to Redis and AMQP: triggers publish with
+  `broker_publish_on_commit` and a sink delivers to a Redis stream or a
+  RabbitMQ exchange; sources drain Redis streams or AMQP queues into tables in
+  batched, rate-limited transactions; at-least-once and crash-safe both ways
+  ([connectors](docs/connectors.md)).
 - Database branches: `CREATE DATABASE feature_x TEMPLATE bicdb` copies a live
   database at an exact commit, and `SHOW BRANCH DIFF` compares it with its
   parent ([branches](docs/branching.md)).

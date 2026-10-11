@@ -84,6 +84,28 @@ jobs:
     name: ${{ matrix.suite.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    # Message brokers for the connector tests (crates/bicdb-pgwire/tests/
+    # connectors.rs). Without these variables those tests skip themselves.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      rabbitmq:
+        image: rabbitmq:3-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: bicdb
+          RABBITMQ_DEFAULT_PASS: bicdb-ci
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 10s
+          --health-retries 20
+    env:
+      BICDB_TEST_REDIS_URL: redis://127.0.0.1:6379
+      BICDB_TEST_AMQP_URL: amqp://bicdb:bicdb-ci@127.0.0.1:5672/%2f
     strategy:
       fail-fast: false
       matrix:

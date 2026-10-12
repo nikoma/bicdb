@@ -297,6 +297,11 @@ structures together.
   table with `ALTER TABLE ... FLASHBACK ARCHIVE`; plus a recycle bin, so
   `DROP TABLE` is undone with `FLASHBACK TABLE ... TO BEFORE DROP`
   ([flashback](docs/flashback.md)).
+- Live queries: `SUBSCRIBE SELECT ...` streams a query's result and then
+  every change to it (`+`/`-` rows per commit), with the subscriber's
+  permissions, over any PostgreSQL driver or `COPY ... TO STDOUT`; a feed,
+  a dashboard or a notification stream is one statement
+  ([live queries](docs/live-queries.md)).
 - Connectors to Redis and AMQP: triggers publish with
   `broker_publish_on_commit` and a sink delivers to a Redis stream or a
   RabbitMQ exchange; sources drain Redis streams or AMQP queues into tables in

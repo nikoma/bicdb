@@ -122,6 +122,11 @@ fn render(server: &Arc<PgWireServer>) -> Result<String> {
         stats.failed_queries,
     );
 
+    out.gauge(
+        "bicdb_live_subscriptions",
+        "Open SUBSCRIBE statements.",
+        server.live_subscriptions.load(Ordering::SeqCst),
+    );
     let connectors = connectors::statuses(server);
     out.metric(
         "bicdb_connector_messages_total",

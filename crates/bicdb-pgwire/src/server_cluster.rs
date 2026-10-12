@@ -877,6 +877,7 @@ impl PgWireServer {
             queries_executed: AtomicU64::new(0),
             failed_queries: AtomicU64::new(0),
             canceled_queries: AtomicU64::new(0),
+            live_subscriptions: AtomicU64::new(0),
             timed_out_queries: AtomicU64::new(0),
             writes_executed: AtomicU64::new(0),
             proc_neword: AtomicU64::new(0),

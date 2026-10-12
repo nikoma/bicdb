@@ -2013,7 +2013,9 @@ pub(crate) fn parse_message(
         param_type_oids.push(read_i32(payload, &mut idx)?);
     }
     let db = server.read_db()?;
-    let inferred = infer_parameter_types(&db, &sql)?;
+    // Parameters of a SUBSCRIBE belong to the query it wraps.
+    let typed_sql = live_queries::subscribed_query(&sql).unwrap_or(&sql);
+    let inferred = infer_parameter_types(&db, typed_sql)?;
     param_type_oids = resolve_parameter_type_oids(&db, param_type_oids, inferred)?;
     Ok(ParsedStatementMessage {
         name,
@@ -2122,7 +2124,18 @@ pub(crate) fn describe_message(
                 PgWireError::Protocol(format!("prepared statement {name:?} not found"))
             })?;
             parameter_description(stream, &statement.param_type_oids)?;
-            if let Some(result) = returning_describe_result(server, &statement.sql)? {
+            if let Some(query) = live_queries::subscribed_query(&statement.sql) {
+                // Unbound parameters describe as NULL, as for a plain SELECT.
+                let null_params = vec!["NULL".to_string(); statement.param_type_oids.len()];
+                let describe_sql = substitute_parameters(query, &null_params)?;
+                let result = live_queries::describe_subscription(
+                    server,
+                    &describe_sql,
+                    &state.session_state,
+                    state.security_context.as_ref(),
+                )?;
+                describe_result(stream, server, &result, &[], None)?;
+            } else if let Some(result) = returning_describe_result(server, &statement.sql)? {
                 describe_result(stream, server, &result, &[], Some(&statement.sql))?;
             } else if is_describable_query(&statement.sql) && !statement.sql.contains('$') {
                 let result = execute_server_sql_for_describe_with_session(
@@ -2160,7 +2173,15 @@ pub(crate) fn describe_message(
                     portal.result_formats.clone(),
                 )
             };
-            if let Some(result) = returning_describe_result(server, &portal_sql)? {
+            if let Some(query) = live_queries::subscribed_query(&portal_sql) {
+                let result = live_queries::describe_subscription(
+                    server,
+                    query,
+                    &state.session_state,
+                    state.security_context.as_ref(),
+                )?;
+                describe_result(stream, server, &result, &portal_result_formats, None)?;
+            } else if let Some(result) = returning_describe_result(server, &portal_sql)? {
                 describe_result(
                     stream,
                     server,
@@ -2223,6 +2244,17 @@ pub(crate) fn portal_source_sql_from_execute_payload(
         .portals
         .get(&portal_name)
         .map(|portal| portal.source_sql.clone())
+}
+
+/// The bound SQL and result formats of the portal an Execute names.
+pub(crate) fn portal_sql_and_formats_from_execute_payload(
+    payload: &[u8],
+    state: &ConnectionState,
+) -> Option<(String, Vec<i16>)> {
+    let mut idx = 0;
+    let portal_name = read_cstr(payload, &mut idx).ok()?;
+    let portal = state.portals.get(&portal_name)?;
+    Some((portal.sql.clone(), portal.result_formats.clone()))
 }
 
 pub(crate) fn execute_message(

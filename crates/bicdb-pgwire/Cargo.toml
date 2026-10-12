@@ -36,6 +36,7 @@ uuid.workspace = true
 x509-parser.workspace = true
 
 [dev-dependencies]
+futures-util = "0.3"
 openssl = "0.10"
 postgres-openssl = "0.5.3"
 serde_json.workspace = true

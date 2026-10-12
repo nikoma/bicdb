@@ -1247,6 +1247,7 @@ dependencies = [
  "bicdb-sql",
  "ctrlc",
  "futures-core",
+ "futures-util",
  "hex",
  "hmac 0.12.1",
  "lapin",

@@ -16,6 +16,7 @@ pub(crate) use protocol_wire::*;
 mod checkpoint_driver;
 pub mod connectors;
 mod high_availability;
+mod live_queries;
 mod log_archive;
 mod metrics;
 pub(crate) use checkpoint_driver::*;
@@ -943,6 +944,8 @@ pub struct PgWireServer {
     last_checkpoint: Mutex<Option<i64>>,
     connections: Mutex<HashMap<u64, ServerConnectionSnapshot>>,
     cancel_tokens: Mutex<HashMap<(i32, i32), Arc<AtomicBool>>>,
+    /// Open `SUBSCRIBE` statements.
+    live_subscriptions: AtomicU64,
     last_cancel: Mutex<Option<CancelMetadata>>,
     shutdown: AtomicBool,
     database_background_started: AtomicBool,
@@ -2478,6 +2481,32 @@ fn handle_frontend_message(
         }
         b'E' => {
             let source_sql = portal_source_sql_from_execute_payload(&payload, state);
+            // A SUBSCRIBE portal streams until the client cancels it; the
+            // Describe that preceded it (if any) sent the row description.
+            // The portal's SQL has the bound parameters substituted.
+            let subscription = portal_sql_and_formats_from_execute_payload(&payload, state)
+                .and_then(|(sql, formats)| {
+                    live_queries::subscribed_query(&sql).map(|query| (query.to_string(), formats))
+                });
+            if let Some((query, formats)) = subscription {
+                let outcome = delegation::validate_delegation(server, state).and_then(|()| {
+                    live_queries::run_subscription(
+                        stream, server, state, &query, None, false, &formats,
+                    )
+                });
+                if let Err(error) = outcome {
+                    state.failed_queries += 1;
+                    server.failed_queries.fetch_add(1, Ordering::SeqCst);
+                    state.record_query_error();
+                    state.discard_until_sync = true;
+                    log_failed_query(server, state, source_sql.as_deref(), &error);
+                    error_response_for_error(stream, &error)?;
+                    if error.closes_connection() {
+                        return Ok(false);
+                    }
+                }
+                return Ok(true);
+            }
             // No reset here: the extended protocol may already have executed
             // (and committed) this statement at Bind/Describe time.
             let executed = execute_message(&payload, server, state).and_then(|executed| {
@@ -2963,8 +2992,33 @@ fn execute_server_query(
             }
         }
     }
+    if let Some(query) = live_queries::subscribed_query(sql) {
+        delegation::validate_delegation(server, state)?;
+        live_queries::run_subscription(stream, server, state, query, None, true, &[])?;
+        return Ok(QueryFlow::Complete);
+    }
     if let Some(copy) = parse_copy_statement(sql)? {
         delegation::validate_delegation(server, state)?;
+        if let (CopyDirection::ToStdout, Some(query)) = (
+            copy.direction,
+            copy.query
+                .as_deref()
+                .and_then(live_queries::subscribed_query),
+        ) {
+            if state.failed_transaction {
+                return Err(PgWireError::InFailedTransaction);
+            }
+            live_queries::run_subscription(
+                stream,
+                server,
+                state,
+                query,
+                Some(copy.format),
+                true,
+                &[],
+            )?;
+            return Ok(QueryFlow::Complete);
+        }
         match copy.direction {
             CopyDirection::FromStdin => {
                 if state.failed_transaction {

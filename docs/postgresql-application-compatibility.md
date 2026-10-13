@@ -16,7 +16,10 @@ Each item below now behaves as in PostgreSQL; regression tests are in
 | `CROSS JOIN LATERAL unnest(t.arr) r(x)`, `t, unnest(t.arr)` inside UNION branches and views | "joins and grouped queries support only table references" | correlated `unnest` per outer row, `WITH ORDINALITY`, multiple arrays |
 | Views over UNION | every column typed `text` (integers sorted as text) | result column types kept |
 | Non-ASCII text in function bodies (`$$ ... 'Ä' ... $$`) | statement panic (contained) | works (byte-safe dollar-quote scanning in all rewrite scanners) |
-| `translate()`, `left()`, `right()` | unsupported | implemented with PostgreSQL semantics |
+| `translate`, `left`, `right`, `strpos`, `lpad`, `rpad`, two-argument `ltrim`/`rtrim`/`btrim`, `repeat`, `reverse`, `starts_with`, `power`, `sqrt`, `cbrt`, `exp`, `ln`, `log`, `ceil`/`floor`, `regexp_match`, `regexp_split_to_array`, `age`, `make_interval` (named arguments), `date_bin`, `to_date`, `timezone`, `similarity` (pg_trgm) | unsupported | implemented with PostgreSQL semantics |
+| `POSITION(a IN b)`, `EXTRACT`, `SUBSTRING(x FROM a FOR b)`, `CEIL`, `FLOOR`, `AT TIME ZONE` in a single-table SELECT list | "unsupported field expression" | evaluated (the record fast path now hands every non-field expression to the row evaluator) |
+| `real`/`double precision` compared with a numeric literal (`r > 0.5`) | always false (operands treated as incomparable) | compared as double precision |
+| `CREATE EXTENSION pgcrypto` (and other trusted extensions) by the database owner | superuser only | allowed for the database owner, as in PostgreSQL 13+; untrusted extensions still need a superuser |
 | PL/pgSQL `LOOP`, `WHILE ... LOOP`, `EXIT [WHEN]` | not implemented | implemented; `EXIT` leaves the innermost loop |
 | `ALTER DATABASE name SET setting = value` / `RESET setting` / `RESET ALL` | unsupported | stored per database; new sessions start with the value, `SET` overrides it, `RESET` returns to it |
 | Transaction delegation for identities without a tenant | always refused | refused unless the operator passes `bicdb user delegate ... --allow-no-tenant` |

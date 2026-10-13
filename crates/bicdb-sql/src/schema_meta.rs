@@ -814,6 +814,32 @@ pub(crate) fn load_schema_shared(
         .map(Some)
 }
 
+/// Column names of a FROM table reference, for resolving `ORDER BY n` over `SELECT *`.
+pub(crate) fn table_factor_column_names(db: &BicDb, relation: &TableFactor) -> Option<Vec<String>> {
+    let TableFactor::Table { name, args: None, .. } = relation else {
+        return None;
+    };
+    let table = relation_name(name).ok()?;
+    if let Some(schema) = load_schema(db, &table).ok().flatten() {
+        return Some(
+            schema
+                .columns
+                .iter()
+                .filter(|column| !column.hidden)
+                .map(|column| column.name.clone())
+                .collect(),
+        );
+    }
+    let view = load_view(db, &table).ok()??;
+    Some(
+        view.columns
+            .iter()
+            .filter(|column| !column.hidden)
+            .map(|column| column.name.clone())
+            .collect(),
+    )
+}
+
 pub(crate) fn load_schema(db: &BicDb, table: &str) -> Result<Option<TableSchema>> {
     let Some(schema) = load_schema_raw(db, table)? else {
         return Ok(None);
@@ -1184,6 +1210,7 @@ pub(crate) fn default_database_schema() -> DatabaseSchema {
     DatabaseSchema {
         name: "bicdb".to_string(),
         owner: current_role_name(),
+        settings: BTreeMap::new(),
     }
 }
 
@@ -1241,8 +1268,48 @@ pub(crate) fn save_database_owner(db: &mut BicDb, name: &str, owner: &str) -> Re
         DatabaseSchema {
             name: normalize_database_name(name),
             owner: normalize_role_name(owner),
+            settings: database_settings(db, name)?,
         },
     )
+}
+
+/// Session defaults set with `ALTER DATABASE name SET ...` (empty when none).
+pub(crate) fn database_settings(db: &BicDb, name: &str) -> Result<BTreeMap<String, String>> {
+    let records = match db.scan_collection(DATABASE_COLLECTION) {
+        Ok(records) => records,
+        Err(BicDbError::CollectionNotFound(_)) => return Ok(BTreeMap::new()),
+        Err(error) => return Err(error.into()),
+    };
+    for record in records {
+        let database = serde_json::from_value::<DatabaseSchema>(record.metadata)?;
+        if database.name.eq_ignore_ascii_case(name) {
+            return Ok(database.settings);
+        }
+    }
+    Ok(BTreeMap::new())
+}
+
+/// Sets (`Some`) or clears (`None`) one database-level session default; `None` setting clears all.
+pub(crate) fn save_database_setting(
+    db: &mut BicDb,
+    name: &str,
+    setting: Option<&str>,
+    value: Option<&str>,
+) -> Result<()> {
+    let mut database = list_databases(db)?
+        .into_iter()
+        .find(|database| database.name.eq_ignore_ascii_case(name))
+        .ok_or_else(|| SqlError::InvalidSql(format!("database \"{name}\" does not exist")))?;
+    match (setting, value) {
+        (Some(setting), Some(value)) => {
+            database.settings.insert(setting.to_string(), value.to_string());
+        }
+        (Some(setting), None) => {
+            database.settings.remove(setting);
+        }
+        (None, _) => database.settings.clear(),
+    }
+    save_database(db, database)
 }
 
 /// Removes a database from the catalog; false when it was not there.

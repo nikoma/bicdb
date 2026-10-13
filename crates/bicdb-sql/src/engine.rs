@@ -739,7 +739,7 @@ impl ParameterTypeResolver<'_, '_> {
                 }
             }
             "lower" | "upper" | "trim" | "ltrim" | "rtrim" | "substr" | "substring" | "replace"
-            | "initcap" | "md5" | "left" | "right" | "repeat" | "reverse" | "length"
+            | "translate" | "initcap" | "md5" | "left" | "right" | "repeat" | "reverse" | "length"
             | "char_length" | "character_length" | "position" | "strpos" => Some("text"),
             "set_config" => Some("text"),
             "coalesce" | "nullif" | "greatest" | "least" | "ifnull" => common.as_deref(),
@@ -1213,6 +1213,58 @@ impl JsonSetReturningFunction {
         } else {
             0
         }
+    }
+}
+
+/// `unnest(...)` in a FROM list after another relation (`CROSS JOIN LATERAL unnest(t.a) r(x)`,
+/// `t, unnest(t.a) AS r(x)`, `JOIN unnest(...) ON ...`).
+#[derive(Clone, Debug)]
+pub(crate) struct LateralUnnestCall {
+    pub(crate) alias: Option<TableAlias>,
+    pub(crate) args: Vec<Expr>,
+    pub(crate) with_ordinality: bool,
+}
+
+pub(crate) fn lateral_unnest_call(relation: &TableFactor) -> Result<Option<LateralUnnestCall>> {
+    let is_unnest = |name: &str| {
+        let name = name.to_ascii_lowercase();
+        name == "unnest" || name == "pg_catalog.unnest"
+    };
+    match relation {
+        TableFactor::UNNEST {
+            alias,
+            array_exprs,
+            with_offset: false,
+            with_ordinality,
+            ..
+        } => Ok(Some(LateralUnnestCall {
+            alias: alias.clone(),
+            args: array_exprs.clone(),
+            with_ordinality: *with_ordinality,
+        })),
+        TableFactor::Table {
+            name,
+            alias,
+            args: Some(args),
+            with_ordinality,
+            ..
+        } if is_unnest(&name.to_string()) => Ok(Some(LateralUnnestCall {
+            alias: alias.clone(),
+            args: table_function_expr_args(args)?,
+            with_ordinality: *with_ordinality,
+        })),
+        TableFactor::Function {
+            name,
+            args,
+            with_ordinality,
+            alias,
+            ..
+        } if is_unnest(&name.to_string()) => Ok(Some(LateralUnnestCall {
+            alias: alias.clone(),
+            args: positional_json_set_table_args(args)?,
+            with_ordinality: *with_ordinality,
+        })),
+        _ => Ok(None),
     }
 }
 
@@ -3822,6 +3874,11 @@ impl<'db> SqlEngine<'db> {
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
         self.check_cancellation()?;
+        if let Some(rewritten) = rewrite_ordinal_order_by(query, &|relation| {
+            table_factor_column_names(self.db, relation)
+        }) {
+            return self.execute_query(&rewritten);
+        }
         if let Some(with) = &query.with {
             return self.execute_query_with_ctes(query, with);
         }

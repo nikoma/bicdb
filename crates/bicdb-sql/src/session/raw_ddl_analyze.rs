@@ -1559,7 +1559,7 @@ impl<'db> SqlSession<'db> {
         &mut self,
         create_extension: &CreateExtension,
     ) -> Result<SqlResult> {
-        self.require_superuser_for_admin_operation("create extensions")?;
+        self.require_extension_creation_authority(&ident_value(&create_extension.name))?;
         let extension = ExtensionSchema {
             name: ident_value(&create_extension.name),
             schema: create_extension
@@ -1578,7 +1578,7 @@ impl<'db> SqlSession<'db> {
         let Some((extension, if_not_exists)) = parse_raw_create_extension(sql)? else {
             return Ok(None);
         };
-        self.require_superuser_for_admin_operation("create extensions")?;
+        self.require_extension_creation_authority(&extension.name)?;
         reject_postgis_extension(&extension.name)?;
         save_extension_if_missing(self.db_mut()?, extension, if_not_exists)?;
         Ok(Some(SqlResult::command("CREATE EXTENSION")))

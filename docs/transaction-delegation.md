@@ -17,7 +17,11 @@ bicdb user delegate carrier_app --path /srv/bicdb/data \
 
 Repeat `--tenant` to authorize additional tenants. `--tenant '*'` explicitly
 trusts this application for every tenant; use it only for an application whose
-verified authentication and membership checks cover those tenants. Authorization
+verified authentication and membership checks cover those tenants. Identities
+that carry no tenant (`tenant_id: ""`, e.g. users of an application without
+organisations) are refused unless the operator also passes `--allow-no-tenant`;
+`'*'` does not imply it, and `--allow-no-tenant` alone authorizes only those
+tenantless identities. Authorization
 belongs to the application login, not to a SQL role an ordinary user can acquire.
 The server must require authentication (`--require-auth`). Use TLS when the
 application and database communicate across an untrusted network.

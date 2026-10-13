@@ -2840,6 +2840,7 @@ impl<'db> SqlEngine<'db> {
             | "concat"
             | "concat_ws"
             | "replace"
+            | "translate"
             | "split_part"
             | "initcap"
             | "md5"
@@ -2849,7 +2850,16 @@ impl<'db> SqlEngine<'db> {
             | "right"
             | "repeat"
             | "reverse"
+            | "lpad"
+            | "rpad"
+            | "btrim"
             | "bicdb_variadic_call" => Some("text".to_string()),
+            "starts_with" => Some("bool".to_string()),
+            "pow" | "cbrt" | "exp" | "ln" | "log" => Some("float8".to_string()),
+            "similarity" => Some("float4".to_string()),
+            "age" | "make_interval" => Some("interval".to_string()),
+            "to_date" => Some("date".to_string()),
+            "regexp_match" | "regexp_split_to_array" => Some("text[]".to_string()),
             "substr" | "substring" => match self.infer_env_expr_type(args.first()?, env).as_deref()
             {
                 Some("bit" | "varbit") => Some("bit".to_string()),

@@ -586,7 +586,7 @@ pub(crate) fn rewrite_pgvector_l1_operator(input: &str) -> Option<String> {
             continue;
         }
         if let Some(delimiter) = dollar_quote.as_ref() {
-            if input[idx..].starts_with(delimiter) {
+            if input.as_bytes()[idx..].starts_with(delimiter.as_bytes()) {
                 idx += delimiter.len();
                 dollar_quote = None;
             } else {
@@ -695,7 +695,7 @@ pub(crate) fn rewrite_postgres_interval_precision_literals(input: &str) -> Optio
             continue;
         }
         if let Some(delimiter) = dollar_quote.as_ref() {
-            if input[idx..].starts_with(delimiter) {
+            if input.as_bytes()[idx..].starts_with(delimiter.as_bytes()) {
                 idx += delimiter.len();
                 dollar_quote = None;
             } else {
@@ -852,7 +852,7 @@ pub(crate) fn rewrite_postgres_record_function_aliases(input: &str) -> Option<St
             continue;
         }
         if let Some(delimiter) = dollar_quote.as_ref() {
-            if input[idx..].starts_with(delimiter) {
+            if input.as_bytes()[idx..].starts_with(delimiter.as_bytes()) {
                 idx += delimiter.len();
                 dollar_quote = None;
             } else {
@@ -1042,7 +1042,7 @@ pub(crate) fn rewrite_postgres_operator_qualifiers(input: &str) -> Option<String
             continue;
         }
         if let Some(delimiter) = dollar_quote.as_ref() {
-            if input[idx..].starts_with(delimiter) {
+            if input.as_bytes()[idx..].starts_with(delimiter.as_bytes()) {
                 idx += delimiter.len();
                 dollar_quote = None;
             } else {
@@ -1167,7 +1167,7 @@ pub(crate) fn rewrite_qualified_current_user_calls(input: &str) -> Option<String
             continue;
         }
         if let Some(delimiter) = dollar_quote.as_ref() {
-            if input[idx..].starts_with(delimiter) {
+            if input.as_bytes()[idx..].starts_with(delimiter.as_bytes()) {
                 idx += delimiter.len();
                 dollar_quote = None;
             } else {
@@ -1384,4 +1384,147 @@ mod interval_parse_compat_tests {
         assert!(rewritten.contains("-- <+>"));
         assert!(rewritten.contains("/* <+> */"));
     }
+}
+
+/// `ON CONFLICT (cols) WHERE predicate DO ...` names a partial unique index by its columns and
+/// predicate (PostgreSQL index inference). The parser has no slot for the predicate, so it is dropped
+/// here; the conflict target then resolves by its columns to that index's arbiter, which applies the
+/// index's own predicate.
+pub(crate) fn rewrite_on_conflict_index_predicates(input: &str) -> Option<String> {
+    let bytes = input.as_bytes();
+    let lower = input.to_ascii_lowercase();
+    let lower = lower.as_bytes();
+    let word_at = |at: usize, word: &[u8]| {
+        lower.get(at..at + word.len()) == Some(word)
+            && (at == 0 || !(bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_'))
+            && bytes
+                .get(at + word.len())
+                .is_none_or(|next| !(next.is_ascii_alphanumeric() || *next == b'_'))
+    };
+    // Skips a quoted string, quoted identifier, comment or dollar-quoted body starting at `at`.
+    let skip_quoted = |at: usize| -> Option<usize> {
+        match bytes[at] {
+            b'\'' | b'"' => {
+                let quote = bytes[at];
+                let mut idx = at + 1;
+                while idx < bytes.len() {
+                    if bytes[idx] == quote {
+                        if bytes.get(idx + 1) == Some(&quote) {
+                            idx += 2;
+                            continue;
+                        }
+                        return Some(idx + 1);
+                    }
+                    idx += 1;
+                }
+                Some(bytes.len())
+            }
+            b'-' if bytes.get(at + 1) == Some(&b'-') => Some(
+                bytes[at..].iter().position(|b| *b == b'\n').map_or(bytes.len(), |p| at + p + 1),
+            ),
+            b'/' if bytes.get(at + 1) == Some(&b'*') => Some(
+                input[at + 2..].find("*/").map_or(bytes.len(), |p| at + 2 + p + 2),
+            ),
+            b'$' => dollar_quote_delimiter(&input[at..]).map(|delimiter| {
+                let body = at + delimiter.len();
+                input[body..]
+                    .find(&delimiter)
+                    .map_or(bytes.len(), |p| body + p + delimiter.len())
+            }),
+            _ => None,
+        }
+    };
+    let mut cuts = Vec::<(usize, usize)>::new();
+    let mut idx = 0usize;
+    while idx < bytes.len() {
+        if let Some(next) = skip_quoted(idx) {
+            idx = next;
+            continue;
+        }
+        if !word_at(idx, b"on") {
+            idx += 1;
+            continue;
+        }
+        let mut conflict_at = idx + 2;
+        while conflict_at < bytes.len() && bytes[conflict_at].is_ascii_whitespace() {
+            conflict_at += 1;
+        }
+        if conflict_at == idx + 2 || !word_at(conflict_at, b"conflict") {
+            idx += 1;
+            continue;
+        }
+        let mut at = conflict_at + "conflict".len();
+        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        if bytes.get(at) != Some(&b'(') {
+            idx = at;
+            continue;
+        }
+        // The column list, to its matching parenthesis.
+        let mut depth = 0usize;
+        while at < bytes.len() {
+            if let Some(next) = skip_quoted(at) {
+                at = next;
+                continue;
+            }
+            match bytes[at] {
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        at += 1;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            at += 1;
+        }
+        let mut where_at = at;
+        while where_at < bytes.len() && bytes[where_at].is_ascii_whitespace() {
+            where_at += 1;
+        }
+        if !word_at(where_at, b"where") {
+            idx = at;
+            continue;
+        }
+        // The predicate runs to the top-level DO.
+        let mut scan = where_at + "where".len();
+        let mut depth = 0usize;
+        let mut do_at = None;
+        while scan < bytes.len() {
+            if let Some(next) = skip_quoted(scan) {
+                scan = next;
+                continue;
+            }
+            match bytes[scan] {
+                b'(' => depth += 1,
+                b')' => depth = depth.saturating_sub(1),
+                _ if depth == 0 && word_at(scan, b"do") => {
+                    do_at = Some(scan);
+                    break;
+                }
+                _ => {}
+            }
+            scan += 1;
+        }
+        let Some(do_at) = do_at else {
+            idx = at;
+            continue;
+        };
+        cuts.push((where_at, do_at));
+        idx = do_at;
+    }
+    if cuts.is_empty() {
+        return None;
+    }
+    let mut output = String::with_capacity(input.len());
+    let mut last = 0usize;
+    for (start, end) in cuts {
+        output.push_str(&input[last..start]);
+        last = end;
+    }
+    output.push_str(&input[last..]);
+    Some(output)
 }

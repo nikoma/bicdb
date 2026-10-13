@@ -3315,6 +3315,94 @@ pub fn is_role_membership_ddl(sql: &str) -> bool {
     matches!(parse_raw_role_membership_ddl(sql), Ok(Some(_)))
 }
 
+/// `name.with.dots` or `"Quoted"` setting names, lower-cased like PostgreSQL GUC names.
+fn database_setting_name(raw: &str) -> Result<String> {
+    let name = raw.trim().trim_matches('"').to_ascii_lowercase();
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '.' || ch == '$')
+    {
+        return Err(SqlError::InvalidSql(format!(
+            "invalid configuration parameter name \"{}\"",
+            raw.trim()
+        )));
+    }
+    Ok(name)
+}
+
+/// `setting = value` / `setting TO value` / `setting TO DEFAULT` after `ALTER DATABASE name SET`.
+fn parse_database_setting_assignment(text: &str) -> Result<(String, Option<String>)> {
+    let text = text.trim();
+    let (raw_name, raw_value) = if let Some(index) = text.find('=') {
+        (&text[..index], &text[index + 1..])
+    } else {
+        let lower = text.to_ascii_lowercase();
+        let index = lower.find(" to ").ok_or_else(|| {
+            SqlError::InvalidSql(format!("expected = or TO in ALTER DATABASE SET {text}"))
+        })?;
+        (&text[..index], &text[index + 4..])
+    };
+    let name = database_setting_name(raw_name)?;
+    let raw_value = raw_value.trim();
+    if raw_value.eq_ignore_ascii_case("DEFAULT") {
+        return Ok((name, None));
+    }
+    if strip_prefix_ci(raw_value, "FROM CURRENT").is_some() {
+        return Err(SqlError::Unsupported(
+            "ALTER DATABASE ... SET ... FROM CURRENT is not supported".to_string(),
+        ));
+    }
+    // A list (search_path = a, b) keeps PostgreSQL's comma-space rendering; quotes are removed.
+    let parts = split_setting_list(raw_value)
+        .into_iter()
+        .map(|part| {
+            let part = part.trim();
+            if part.len() >= 2 && part.starts_with('\'') && part.ends_with('\'') {
+                part[1..part.len() - 1].replace("''", "'")
+            } else if part.len() >= 2 && part.starts_with('"') && part.ends_with('"') {
+                part[1..part.len() - 1].to_string()
+            } else {
+                part.to_string()
+            }
+        })
+        .collect::<Vec<_>>();
+    if raw_value.is_empty() {
+        return Err(SqlError::InvalidSql(format!(
+            "missing value in ALTER DATABASE SET {name}"
+        )));
+    }
+    Ok((name, Some(parts.join(", "))))
+}
+
+fn split_setting_list(value: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match quote {
+            Some(q) if ch == q => {
+                current.push(ch);
+                if q == '\'' && chars.peek() == Some(&'\'') {
+                    current.push(chars.next().unwrap());
+                } else {
+                    quote = None;
+                }
+            }
+            Some(_) => current.push(ch),
+            None if ch == '\'' || ch == '"' => {
+                quote = Some(ch);
+                current.push(ch);
+            }
+            None if ch == ',' => parts.push(std::mem::take(&mut current)),
+            None => current.push(ch),
+        }
+    }
+    parts.push(current);
+    parts
+}
+
 pub fn parse_database_ddl(sql: &str) -> Result<Option<DatabaseDdl>> {
     let statement = trim_sql_statement(sql);
     if let Some(rest) = strip_prefix_ci(statement, "CREATE DATABASE ") {
@@ -3418,6 +3506,27 @@ pub fn parse_database_ddl(sql: &str) -> Result<Option<DatabaseDdl>> {
             }
             return Ok(Some(DatabaseDdl::SetTablespace {
                 name: normalize_database_name(&name),
+            }));
+        }
+        if let Some(after_reset) = strip_prefix_ci(rest, "RESET ") {
+            let target = after_reset.trim();
+            if target.eq_ignore_ascii_case("ALL") {
+                return Ok(Some(DatabaseDdl::ResetAllSettings {
+                    name: normalize_database_name(&name),
+                }));
+            }
+            return Ok(Some(DatabaseDdl::SetSetting {
+                name: normalize_database_name(&name),
+                setting: database_setting_name(target)?,
+                value: None,
+            }));
+        }
+        if let Some(after_set) = strip_prefix_ci(rest, "SET ") {
+            let (setting, value) = parse_database_setting_assignment(after_set)?;
+            return Ok(Some(DatabaseDdl::SetSetting {
+                name: normalize_database_name(&name),
+                setting,
+                value,
             }));
         }
         return Err(SqlError::Unsupported(format!(

@@ -240,10 +240,22 @@ impl<'db> SqlSession<'db> {
             Err(metadata_error) => {
                 let query_result = self.sql_engine().execute_query(&create_view.query);
                 match query_result {
+                    // Keep the result's column types (integer, uuid, ...): a view over a UNION
+                    // typed everything as text, so its integers compared and sorted as text.
                     Ok(result) => result
                         .columns
                         .iter()
-                        .map(|name| text_column_schema(name.clone()))
+                        .enumerate()
+                        .map(|(idx, name)| {
+                            let mut column = text_column_schema(name.clone());
+                            if let Some(Some(pg_type)) = result.column_types.get(idx) {
+                                let array_ndims =
+                                    pg_type.matches("[]").count().try_into().unwrap_or(0);
+                                column.pg_type = pg_type.clone();
+                                column.array_ndims = array_ndims;
+                            }
+                            column
+                        })
                         .collect::<Vec<_>>(),
                     Err(SqlError::Unsupported(_) | SqlError::InvalidCollection(_)) => {
                         return Err(metadata_error);
@@ -1402,7 +1414,7 @@ impl<'db> SqlSession<'db> {
             let mut seen = BTreeSet::new();
             for record in records {
                 let values = unique_key_values(record, schema, &arbiter.key);
-                if unique_key_has_null(&values) {
+                if unique_key_has_null(&values) || !arbiter.applies_to(record)? {
                     continue;
                 }
                 let key = typed_unique_key_label(schema, &arbiter.key, &values)?;
@@ -2228,6 +2240,7 @@ impl<'db> SqlSession<'db> {
                     access_method: index_access_method_name(create_index.using.as_ref())
                         .to_string(),
                     metadata_only: true,
+                    predicate: None,
                 });
                 save_view(self.db_mut()?, &view)?;
                 return Ok(SqlResult::command("CREATE INDEX"));
@@ -2468,6 +2481,7 @@ impl<'db> SqlSession<'db> {
                 unique: false,
                 access_method,
                 metadata_only: false,
+                predicate: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -2512,6 +2526,7 @@ impl<'db> SqlSession<'db> {
                 unique: false,
                 access_method,
                 metadata_only: false,
+                predicate: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -2564,6 +2579,7 @@ impl<'db> SqlSession<'db> {
                 unique: false,
                 access_method,
                 metadata_only: false,
+                predicate: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -2680,6 +2696,7 @@ impl<'db> SqlSession<'db> {
                 unique: create_index.unique,
                 access_method,
                 metadata_only: false,
+                predicate: None,
             });
             self.save_session_schema(&schema)?;
             return Ok(SqlResult::command("CREATE INDEX"));
@@ -2702,18 +2719,34 @@ impl<'db> SqlSession<'db> {
                     unique: create_index.unique,
                     access_method,
                     metadata_only: true,
+                    predicate: None,
                 });
                 self.save_session_schema(&schema)?;
                 return Ok(SqlResult::command("CREATE INDEX"));
             }
         };
+        // A partial index (`WHERE predicate`) only holds the rows the predicate is true for. A UNIQUE
+        // one must enforce exactly that, so an untranslatable predicate is refused for it; a plain
+        // partial index may index every row instead (same query results, larger index).
+        let predicate = match create_index.predicate.as_ref() {
+            Some(predicate) => match partial_index_predicate(&schema, predicate) {
+                Ok(translated) => Some(translated),
+                Err(error) if create_index.unique => return Err(error),
+                Err(_) => None,
+            },
+            None => None,
+        };
+        let predicate_text = predicate
+            .as_ref()
+            .and(create_index.predicate.as_ref())
+            .map(|predicate| predicate.to_string());
         self.create_session_index(IndexDefinition {
             name: index_name.clone(),
             collection: table.clone(),
             fields,
             unique: create_index.unique,
             kind: IndexKind::BTree,
-            predicate: None,
+            predicate,
             exclusion: None,
         })?;
         schema.indexes.push(IndexSchema {
@@ -2726,6 +2759,7 @@ impl<'db> SqlSession<'db> {
             unique: create_index.unique,
             access_method,
             metadata_only: false,
+            predicate: predicate_text,
         });
         self.save_session_schema(&schema)?;
         Ok(SqlResult::command("CREATE INDEX"))

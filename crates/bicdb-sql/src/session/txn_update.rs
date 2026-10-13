@@ -3333,6 +3333,7 @@ impl<'db> SqlSession<'db> {
             RoutineControl::NextIteration => {
                 Err(SqlError::InvalidSql("CONTINUE escaped a loop".into()))
             }
+            RoutineControl::ExitLoop => Err(SqlError::InvalidSql("EXIT escaped a loop".into())),
             RoutineControl::Return(Some(value)) => Ok(value),
             RoutineControl::Return(None) => Ok(SqlValue::Null),
             RoutineControl::Continue => {
@@ -3528,6 +3529,28 @@ impl<'db> SqlSession<'db> {
     ) -> Result<RoutineControl> {
         match statement {
             RoutineStmt::ContinueLoop => Ok(RoutineControl::NextIteration),
+            RoutineStmt::ExitLoop => Ok(RoutineControl::ExitLoop),
+            RoutineStmt::Loop { body } => loop {
+                self.cancellation.check()?;
+                match self.execute_routine_statements(frame, body)? {
+                    RoutineControl::Continue | RoutineControl::NextIteration => {}
+                    RoutineControl::ExitLoop => break Ok(RoutineControl::Continue),
+                    returned => break Ok(returned),
+                }
+            },
+            RoutineStmt::WhileLoop { condition, body } => loop {
+                self.cancellation.check()?;
+                let condition =
+                    sql_value_truth(self.eval_routine_expr(frame, condition)?)?.unwrap_or(false);
+                if !condition {
+                    break Ok(RoutineControl::Continue);
+                }
+                match self.execute_routine_statements(frame, body)? {
+                    RoutineControl::Continue | RoutineControl::NextIteration => {}
+                    RoutineControl::ExitLoop => break Ok(RoutineControl::Continue),
+                    returned => break Ok(returned),
+                }
+            },
             RoutineStmt::Null => Ok(RoutineControl::Continue),
             RoutineStmt::Assignment { target, expr } => {
                 let value = self.eval_routine_expr(frame, expr)?;
@@ -3778,6 +3801,7 @@ impl<'db> SqlSession<'db> {
             frame.set(iterator, SqlValue::Int(value));
             match self.execute_routine_statements(frame, body)? {
                 RoutineControl::Continue | RoutineControl::NextIteration => {}
+                RoutineControl::ExitLoop => break,
                 returned => return Ok(returned),
             }
         }
@@ -3826,6 +3850,7 @@ impl<'db> SqlSession<'db> {
             frame.set(target, routine_record_value(&result.columns, &row));
             match self.execute_routine_statements(frame, body)? {
                 RoutineControl::Continue | RoutineControl::NextIteration => {}
+                RoutineControl::ExitLoop => break,
                 returned => return Ok(returned),
             }
         }
@@ -3846,6 +3871,7 @@ impl<'db> SqlSession<'db> {
             frame.assign(target, value)?;
             match self.execute_routine_statements(frame, body)? {
                 RoutineControl::Continue | RoutineControl::NextIteration => {}
+                RoutineControl::ExitLoop => break,
                 returned => return Ok(returned),
             }
         }

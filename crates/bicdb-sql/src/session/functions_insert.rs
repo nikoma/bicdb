@@ -1507,6 +1507,7 @@ impl<'db> SqlSession<'db> {
                     name: conflict_columns.join("_"),
                     key: UniqueKey::Columns(conflict_columns.to_vec()),
                     index_name: None,
+                    predicate: None,
                 },
                 records,
                 &existing_records,

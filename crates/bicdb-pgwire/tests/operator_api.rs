@@ -251,6 +251,7 @@ async fn online_lifecycle_preserves_queries_and_immutable_sessions() {
             Some(bicdb_pgwire::DelegationPolicy {
                 signing_key: "test-signing-key-only-12345678901234567890".into(),
                 tenants: vec!["tenant-one".into()],
+                allow_no_tenant: false,
             }),
         )
         .unwrap();

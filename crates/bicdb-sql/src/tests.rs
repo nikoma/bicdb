@@ -7727,3 +7727,40 @@ fn returning_statements_report_their_own_command_tags() {
         assert!(!result.columns.is_empty(), "{statement}");
     }
 }
+
+#[test]
+fn pg_dump_nested_joins_plan_like_flat_joins() {
+    // pg_dump renders view joins as `FROM ((a JOIN b ON ...) JOIN c ON ...)`. That form used to run as an
+    // opaque row set (every pair considered); it must plan exactly like the flat chain.
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE courses (id int PRIMARY KEY, org int); CREATE TABLE members (id int PRIMARY KEY, org int, subject text, status text, roles text[]); CREATE TABLE orgs (id int PRIMARY KEY, status text)")
+        .unwrap();
+    for n in 0..300 {
+        session
+            .execute(&format!(
+                "INSERT INTO courses VALUES ({n}, {org}); INSERT INTO members VALUES ({n}, {org}, 'u{n}', 'active', ARRAY['admin','editor']); INSERT INTO orgs VALUES ({n}, 'active')",
+                org = n % 50
+            ))
+            .unwrap();
+    }
+    let flat = "SELECT c.id, m.subject FROM courses c JOIN members m ON m.org = c.org AND m.status = 'active' JOIN orgs o ON o.id = m.org AND o.status = 'active' WHERE 'admin' = ANY (m.roles) ORDER BY 1, 2";
+    let nested = "SELECT c.id, m.subject FROM ((courses c JOIN members m ON (((m.org = c.org) AND (m.status = 'active'::text)))) JOIN orgs o ON (((o.id = m.org) AND (o.status = 'active'::text)))) WHERE ('admin'::text = ANY (m.roles)) ORDER BY 1, 2";
+    let measure = |session: &mut SqlSession, sql: &str| {
+        SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().push(SqlProfileStats::default()));
+        let rows = session.execute(sql).unwrap().rows;
+        let stats = SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+        (rows, stats.join_candidate_pairs)
+    };
+    let (flat_rows, flat_pairs) = measure(&mut session, flat);
+    let (nested_rows, nested_pairs) = measure(&mut session, nested);
+    assert_eq!(flat_rows.len(), 300 * 6);
+    assert_eq!(nested_rows, flat_rows);
+    assert!(nested_pairs <= flat_pairs, "nested {nested_pairs} vs flat {flat_pairs} candidate pairs");
+    // The same inside a UNION ALL branch and a view, as in a restored schema.
+    session.execute(&format!("CREATE VIEW staff AS SELECT c.id, 'owner' AS subject FROM courses c WHERE c.id < 0 UNION ALL {}", nested.trim_end_matches(" ORDER BY 1, 2"))).unwrap();
+    let (view_rows, _) = measure(&mut session, "SELECT * FROM staff ORDER BY 1, 2");
+    assert_eq!(view_rows, flat_rows);
+}

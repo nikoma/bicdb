@@ -745,6 +745,29 @@ pub(crate) struct UniqueConflictArbiter {
     pub(crate) name: String,
     pub(crate) key: UniqueKey,
     pub(crate) index_name: Option<String>,
+    /// A partial unique index's predicate: only rows it is true for take part in the check.
+    pub(crate) predicate: Option<bicdb_core::IndexPredicate>,
+}
+
+impl UniqueConflictArbiter {
+    /// Whether `record` takes part in this uniqueness rule (always, unless the index is partial).
+    pub(crate) fn applies_to(&self, record: &Record) -> Result<bool> {
+        match &self.predicate {
+            Some(predicate) => Ok(bicdb_core::index_predicate_matches(record, predicate)?),
+            None => Ok(true),
+        }
+    }
+
+    /// The rows of `records` this rule covers.
+    pub(crate) fn covered<'r>(&self, records: &'r [Record]) -> Result<Vec<&'r Record>> {
+        let mut covered = Vec::with_capacity(records.len());
+        for record in records {
+            if self.applies_to(record)? {
+                covered.push(record);
+            }
+        }
+        Ok(covered)
+    }
 }
 
 /// Memoized per thread on (schema generation, index generation); see
@@ -772,6 +795,7 @@ pub(crate) fn unique_arbiters_for_table_uncached(
             name: schema.primary_key_constraint_name(),
             index_name: unique_index_name_for_key(table, schema, &key, &executable_indexes),
             key,
+            predicate: None,
         });
     }
     arbiters.extend(
@@ -793,6 +817,7 @@ pub(crate) fn unique_arbiters_for_table_uncached(
                             &executable_indexes,
                         ),
                         key,
+                        predicate: None,
                     })
                 }
                 _ => None,
@@ -800,12 +825,12 @@ pub(crate) fn unique_arbiters_for_table_uncached(
     );
     for index in &schema.indexes {
         if index.unique {
-            let key = executable_indexes
-                .iter()
-                .find(|definition| {
-                    definition.collection.eq_ignore_ascii_case(table)
-                        && definition.name.eq_ignore_ascii_case(&index.name)
-                })
+            let definition = executable_indexes.iter().find(|definition| {
+                definition.collection.eq_ignore_ascii_case(table)
+                    && definition.name.eq_ignore_ascii_case(&index.name)
+            });
+            let predicate = definition.and_then(|definition| definition.predicate.clone());
+            let key = definition
                 .map(|definition| UniqueKey::IndexFields(definition.fields.clone()))
                 .unwrap_or_else(|| {
                     UniqueKey::Columns(
@@ -816,10 +841,17 @@ pub(crate) fn unique_arbiters_for_table_uncached(
                             .collect::<Vec<_>>(),
                     )
                 });
+            // A partial index holds exactly the rows its rule covers, so it is its own lookup index.
+            let index_name = if predicate.is_some() {
+                definition.map(|definition| definition.name.clone())
+            } else {
+                unique_index_name_for_key(table, schema, &key, &executable_indexes)
+            };
             arbiters.push(UniqueConflictArbiter {
                 name: index.name.clone(),
-                index_name: unique_index_name_for_key(table, schema, &key, &executable_indexes),
+                index_name,
                 key,
+                predicate,
             });
         }
     }
@@ -852,7 +884,7 @@ pub(crate) fn validate_unique_arbiter_records(
     let mut seen = BTreeMap::<Vec<String>, String>::new();
     for record in records {
         let key_values = unique_key_values(record, schema, &arbiter.key);
-        if unique_key_has_null(&key_values) {
+        if unique_key_has_null(&key_values) || !arbiter.applies_to(record)? {
             continue;
         }
         let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
@@ -888,10 +920,15 @@ pub(crate) fn validate_unique_arbiter_records(
             None => db.scan_collection_unchecked(table)?,
         };
         sql_profile_full_scan();
+        let existing_records = arbiter
+            .covered(&existing_records)?
+            .into_iter()
+            .cloned()
+            .collect::<Vec<_>>();
         let existing = unique_key_record_ids(schema, &arbiter.key, &existing_records)?;
         for record in records {
             let key_values = unique_key_values(record, schema, &arbiter.key);
-            if unique_key_has_null(&key_values) {
+            if unique_key_has_null(&key_values) || !arbiter.applies_to(record)? {
                 continue;
             }
             let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
@@ -908,7 +945,7 @@ pub(crate) fn validate_unique_arbiter_records(
 
     for record in records {
         let key_values = unique_key_values(record, schema, &arbiter.key);
-        if unique_key_has_null(&key_values) {
+        if unique_key_has_null(&key_values) || !arbiter.applies_to(record)? {
             continue;
         }
         sql_profile_index_lookup();
@@ -931,7 +968,7 @@ pub(crate) fn validate_unique_arbiter_records(
                     continue;
                 }
                 let pending_values = unique_key_values(&pending, schema, &arbiter.key);
-                if unique_key_has_null(&pending_values) {
+                if unique_key_has_null(&pending_values) || !arbiter.applies_to(&pending)? {
                     continue;
                 }
                 if typed_unique_key_label(schema, &arbiter.key, &pending_values)?
@@ -984,7 +1021,7 @@ pub(crate) fn non_conflicting_records(
     let mut inserted = Vec::new();
     for record in records {
         let key_values = unique_key_values(&record, schema, &arbiter.key);
-        if !unique_key_has_null(&key_values) {
+        if !unique_key_has_null(&key_values) && arbiter.applies_to(&record)? {
             let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
             if !seen.insert(key) {
                 continue;
@@ -1001,7 +1038,7 @@ pub(crate) fn non_conflicting_records(
                 let mut pending_conflict = false;
                 for pending in tx.pending_records(table) {
                     let pending_values = unique_key_values(&pending, schema, &arbiter.key);
-                    if unique_key_has_null(&pending_values) {
+                    if unique_key_has_null(&pending_values) || !arbiter.applies_to(&pending)? {
                         continue;
                     }
                     if typed_unique_key_label(schema, &arbiter.key, &pending_values)?
@@ -1316,12 +1353,17 @@ pub(crate) fn non_conflicting_records_from_scan(
     records: Vec<Record>,
     existing_records: &[Record],
 ) -> Result<Vec<Record>> {
-    let existing = unique_key_record_ids(schema, &arbiter.key, existing_records)?;
+    let existing_records = arbiter
+        .covered(existing_records)?
+        .into_iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    let existing = unique_key_record_ids(schema, &arbiter.key, &existing_records)?;
     let mut seen = BTreeSet::<Vec<String>>::new();
     let mut inserted = Vec::new();
     for record in records {
         let key_values = unique_key_values(&record, schema, &arbiter.key);
-        if !unique_key_has_null(&key_values) {
+        if !unique_key_has_null(&key_values) && arbiter.applies_to(&record)? {
             let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
             if existing.contains_key(&key) || !seen.insert(key) {
                 continue;
@@ -1361,6 +1403,7 @@ pub(crate) fn unique_index_name_for_key(
         .find(|index| {
             index.unique
                 && index.kind == IndexKind::BTree
+                && index.predicate.is_none()
                 && index.collection.eq_ignore_ascii_case(table)
                 && unique_key_matches_index(schema, key, index)
         })

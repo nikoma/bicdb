@@ -197,6 +197,12 @@ mod ddl_alter;
 pub use ddl_alter::*;
 mod mvt;
 mod records;
+mod partial_index;
+mod order_by_ordinal;
+mod pg_scalar_extra;
+pub(crate) use pg_scalar_extra::eval_pg_scalar_extra;
+pub(crate) use order_by_ordinal::rewrite_ordinal_order_by;
+pub(crate) use partial_index::partial_index_predicate;
 pub use records::*;
 mod engine;
 mod external_sort;
@@ -1078,6 +1084,9 @@ fn routine_statement_profile_kind(statement: &RoutineStmt) -> String {
         RoutineStmt::ForLoop { .. } => "ROUTINE_FOR_LOOP".to_string(),
         RoutineStmt::ForeachLoop { .. } => "ROUTINE_FOREACH_LOOP".to_string(),
         RoutineStmt::QueryForLoop { .. } => "ROUTINE_QUERY_FOR_LOOP".to_string(),
+        RoutineStmt::Loop { .. } => "ROUTINE_LOOP".to_string(),
+        RoutineStmt::WhileLoop { .. } => "ROUTINE_WHILE_LOOP".to_string(),
+        RoutineStmt::ExitLoop => "ROUTINE_EXIT".to_string(),
         RoutineStmt::OpenCursor { .. } => "ROUTINE_OPEN_CURSOR".to_string(),
         RoutineStmt::FetchCursor { .. } => "ROUTINE_FETCH_CURSOR".to_string(),
         RoutineStmt::CloseCursor { .. } => "ROUTINE_CLOSE_CURSOR".to_string(),
@@ -1137,6 +1146,9 @@ fn routine_statement_profile_signature(statement: &RoutineStmt) -> String {
             ..
         } => format!("FOREACH {target} SLICE {slice} IN ARRAY {array}"),
         RoutineStmt::QueryForLoop { target, query, .. } => format!("FOR {target} IN {query}"),
+        RoutineStmt::Loop { .. } => "LOOP".to_string(),
+        RoutineStmt::WhileLoop { condition, .. } => format!("WHILE {condition}"),
+        RoutineStmt::ExitLoop => "EXIT".to_string(),
         RoutineStmt::OpenCursor { name } => format!("OPEN {name}"),
         RoutineStmt::FetchCursor { name, targets } => {
             format!("FETCH {name} INTO {}", targets.join(","))
@@ -3134,6 +3146,9 @@ struct IndexSchema {
     access_method: String,
     #[serde(default)]
     metadata_only: bool,
+    /// `CREATE INDEX ... WHERE predicate` text of a partial index (PostgreSQL rendering for the catalog).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    predicate: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -3404,6 +3419,16 @@ pub enum DatabaseDdl {
     SetTablespace {
         name: String,
     },
+    /// `ALTER DATABASE name SET setting = value` (`value: None` for `RESET setting` / `SET ... TO DEFAULT`).
+    SetSetting {
+        name: String,
+        setting: String,
+        value: Option<String>,
+    },
+    /// `ALTER DATABASE name RESET ALL`.
+    ResetAllSettings {
+        name: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -3417,6 +3442,9 @@ struct NamespaceSchema {
 struct DatabaseSchema {
     name: String,
     owner: String,
+    /// `ALTER DATABASE name SET setting = value`: defaults for every session of this database.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    settings: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -4113,6 +4141,17 @@ enum RoutineStmt {
         query: Query,
         body: Vec<RoutineStmt>,
     },
+    /// `LOOP ... END LOOP`: repeats until EXIT or RETURN.
+    Loop {
+        body: Vec<RoutineStmt>,
+    },
+    /// `WHILE condition LOOP ... END LOOP`.
+    WhileLoop {
+        condition: RoutineExpr,
+        body: Vec<RoutineStmt>,
+    },
+    /// `EXIT` (`EXIT WHEN c` is an IF around it): leaves the innermost loop.
+    ExitLoop,
     OpenCursor {
         name: String,
     },
@@ -4136,6 +4175,7 @@ enum RoutineStmt {
 #[derive(Clone, Debug)]
 enum RoutineControl {
     NextIteration,
+    ExitLoop,
     Continue,
     Return(Option<SqlValue>),
 }
@@ -4200,10 +4240,12 @@ fn routine_statement_may_write(statement: &RoutineStmt) -> bool {
             else_body,
             ..
         } => routine_block_may_write(then_body) || routine_block_may_write(else_body),
-        RoutineStmt::ForLoop { body, .. } | RoutineStmt::ForeachLoop { body, .. } => {
-            routine_block_may_write(body)
-        }
+        RoutineStmt::ForLoop { body, .. }
+        | RoutineStmt::ForeachLoop { body, .. }
+        | RoutineStmt::Loop { body }
+        | RoutineStmt::WhileLoop { body, .. } => routine_block_may_write(body),
         RoutineStmt::ContinueLoop
+        | RoutineStmt::ExitLoop
         | RoutineStmt::Null
         | RoutineStmt::Assignment { .. }
         | RoutineStmt::OpenCursor { .. }

@@ -2852,7 +2852,6 @@ impl<'db> SqlEngine<'db> {
             | "reverse"
             | "lpad"
             | "rpad"
-            | "btrim"
             | "bicdb_variadic_call" => Some("text".to_string()),
             "starts_with" => Some("bool".to_string()),
             "pow" | "cbrt" | "exp" | "ln" | "log" => Some("float8".to_string()),

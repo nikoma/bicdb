@@ -1944,9 +1944,6 @@ pub(crate) fn eval_session_function_value(
     args: &[SqlValue],
     session_gucs: &HashMap<String, String>,
 ) -> Result<Option<SqlValue>> {
-    if let Some(value) = eval_pg_scalar_extra(name, args)? {
-        return Ok(Some(value));
-    }
     match name {
         "version" | "pg_catalog.version" if args.is_empty() => {
             Ok(Some(SqlValue::String(sql_version_banner(session_gucs))))
@@ -3012,6 +3009,10 @@ pub(crate) fn eval_compatibility_function_value(
         return Ok(Some(value));
     }
     if let Some(value) = eval_bytea_function_value(name, args, arg_types)? {
+        return Ok(Some(value));
+    }
+    // After the bytea overloads (reverse/ltrim/rtrim/btrim on bytea), which need argument types.
+    if let Some(value) = eval_pg_scalar_extra(name, args)? {
         return Ok(Some(value));
     }
     if let Some(value) = eval_polymorphic_array_function_value(name, args)? {

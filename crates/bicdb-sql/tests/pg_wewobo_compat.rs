@@ -283,6 +283,11 @@ fn common_postgresql_functions_work_on_table_rows() {
         assert_eq!(render(got), render(&expected), "{expr}");
     }
     assert_eq!(s.execute("SELECT strpos(NULL, 'a'), lpad(NULL, 3), age(NULL)").unwrap().rows, vec![vec![SqlValue::Null, SqlValue::Null, SqlValue::Null]]);
+    // The same functions without a FROM clause (the constant path).
+    assert_eq!(
+        s.execute("SELECT strpos('Hello', 'l'), lpad('x', 3, '*'), reverse('abc'), starts_with('abc', 'a'), regexp_match('ab', 'b')::text").unwrap().rows,
+        vec![vec![SqlValue::Int(3), text("**x"), text("cba"), SqlValue::Bool(true), text("{b}")]]
+    );
 }
 
 #[test]

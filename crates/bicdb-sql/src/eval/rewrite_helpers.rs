@@ -396,6 +396,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = rewrite_on_conflict_after_bare_projection(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = rewrite_qualified_current_user_calls(&rewritten) {
         rewritten = next;
         changed = true;

@@ -1528,3 +1528,103 @@ pub(crate) fn rewrite_on_conflict_index_predicates(input: &str) -> Option<String
     output.push_str(&input[last..]);
     Some(output)
 }
+
+/// `INSERT ... SELECT 1, 'x' ON CONFLICT ...` is valid PostgreSQL, but sqlparser
+/// takes the `ON` as an implicit alias of the last select item when that SELECT
+/// (or the last branch of a set operation) has no FROM or later clause. A
+/// `WHERE TRUE` there is neutral and ends the projection, so the conflict clause
+/// parses as part of the INSERT.
+pub(crate) fn rewrite_on_conflict_after_bare_projection(input: &str) -> Option<String> {
+    let bytes = input.as_bytes();
+    let skip_quoted = |at: usize| -> Option<usize> {
+        match bytes[at] {
+            b'\'' | b'"' => {
+                let quote = bytes[at];
+                let mut idx = at + 1;
+                while idx < bytes.len() {
+                    if bytes[idx] == quote {
+                        if bytes.get(idx + 1) == Some(&quote) {
+                            idx += 2;
+                            continue;
+                        }
+                        return Some(idx + 1);
+                    }
+                    idx += 1;
+                }
+                Some(bytes.len())
+            }
+            b'-' if bytes.get(at + 1) == Some(&b'-') => Some(
+                bytes[at..].iter().position(|b| *b == b'\n').map_or(bytes.len(), |p| at + p + 1),
+            ),
+            b'/' if bytes.get(at + 1) == Some(&b'*') => Some(
+                input[at + 2..].find("*/").map_or(bytes.len(), |p| at + 2 + p + 2),
+            ),
+            b'$' => dollar_quote_delimiter(&input[at..]).map(|delimiter| {
+                let body = at + delimiter.len();
+                input[body..]
+                    .find(&delimiter)
+                    .map_or(bytes.len(), |p| body + p + delimiter.len())
+            }),
+            _ => None,
+        }
+    };
+    let is_word_byte = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    // Top-level words of each statement: (lowercased word, start offset).
+    let mut words = Vec::<(String, usize)>::new();
+    let mut inserts = Vec::<usize>::new();
+    let mut depth = 0usize;
+    let mut idx = 0usize;
+    let mut flush = |words: &mut Vec<(String, usize)>, inserts: &mut Vec<usize>| {
+        if words.first().is_some_and(|(word, _)| word == "insert") {
+            for at in 1..words.len() {
+                if words[at].0 != "on" || words.get(at + 1).map(|(w, _)| w.as_str()) != Some("conflict") {
+                    continue;
+                }
+                let bare = words[..at].iter().rev().find_map(|(word, _)| match word.as_str() {
+                    "select" => Some(true),
+                    "from" | "where" | "group" | "having" | "window" | "order" | "limit"
+                    | "offset" | "fetch" | "values" | "returning" => Some(false),
+                    _ => None,
+                });
+                if bare == Some(true) {
+                    inserts.push(words[at].1);
+                }
+                break;
+            }
+        }
+        words.clear();
+    };
+    while idx < bytes.len() {
+        if let Some(next) = skip_quoted(idx) {
+            idx = next;
+            continue;
+        }
+        match bytes[idx] {
+            b'(' => depth += 1,
+            b')' => depth = depth.saturating_sub(1),
+            b';' if depth == 0 => flush(&mut words, &mut inserts),
+            b if is_word_byte(b) && (idx == 0 || !is_word_byte(bytes[idx - 1])) => {
+                let end = bytes[idx..]
+                    .iter()
+                    .position(|b| !is_word_byte(*b))
+                    .map_or(bytes.len(), |p| idx + p);
+                if depth == 0 {
+                    words.push((input[idx..end].to_ascii_lowercase(), idx));
+                }
+                idx = end;
+                continue;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    flush(&mut words, &mut inserts);
+    if inserts.is_empty() {
+        return None;
+    }
+    let mut output = input.to_string();
+    for at in inserts.into_iter().rev() {
+        output.insert_str(at, "WHERE TRUE ");
+    }
+    Some(output)
+}

@@ -1048,7 +1048,10 @@ impl<'db> SqlSession<'db> {
             return self.records_from_insert_values(table, schema, columns, values);
         }
 
-        if matches!(source.body.as_ref(), SetExpr::Select(_)) {
+        if matches!(
+            source.body.as_ref(),
+            SetExpr::Select(_) | SetExpr::SetOperation { .. } | SetExpr::Query(_)
+        ) {
             let result = if ctes.is_empty() {
                 self.execute_query(source)?
             } else {

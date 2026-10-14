@@ -485,3 +485,41 @@ fn coalesce_of_a_bigint_subquery_and_an_int_literal_is_bigint() {
     let rows = s.execute("SELECT id FROM plan_limits WHERE COALESCE((SELECT max(daily_limit) FROM plan_limits), -1) > 4000000000 ORDER BY id").unwrap().rows;
     assert_eq!(rows, vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]);
 }
+
+#[test]
+fn insert_accepts_a_union_all_source_with_returning_and_on_conflict() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE prices (id text PRIMARY KEY, product text NOT NULL, cents int NOT NULL, kind text)").unwrap();
+    let mut s = s.with_positional_parameters(vec![
+        text("p1"),
+        text("[{\"id\":\"a\",\"cents\":100},{\"id\":\"b\",\"cents\":250}]"),
+    ]);
+    let result = s.execute(
+        "INSERT INTO prices (id, product, cents, kind) \
+         SELECT p.id, $1, p.cents, 'one_time' FROM jsonb_to_recordset($2::jsonb) AS p(id text, cents int) \
+         UNION ALL SELECT 'free', $1, 0, 'free' \
+         RETURNING id, cents",
+    ).unwrap();
+    let mut returned = result.rows.clone();
+    returned.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+    assert_eq!(returned, vec![
+        vec![text("a"), SqlValue::Int(100)],
+        vec![text("b"), SqlValue::Int(250)],
+        vec![text("free"), SqlValue::Int(0)],
+    ]);
+    // ON CONFLICT applies to every branch's rows; UNION removes duplicates first.
+    s.execute(
+        "INSERT INTO prices (id, product, cents) SELECT 'a', 'p1', 1 UNION SELECT 'a', 'p1', 1 UNION SELECT 'c', 'p1', 3 \
+         ON CONFLICT (id) DO UPDATE SET cents = EXCLUDED.cents",
+    ).unwrap();
+    let rows = s.execute("SELECT id, cents FROM prices ORDER BY id").unwrap().rows;
+    assert_eq!(rows, vec![
+        vec![text("a"), SqlValue::Int(1)],
+        vec![text("b"), SqlValue::Int(250)],
+        vec![text("c"), SqlValue::Int(3)],
+        vec![text("free"), SqlValue::Int(0)],
+    ]);
+    let tag = s.execute("INSERT INTO prices (id, product, cents) SELECT 'd', 'p', 4 UNION ALL SELECT 'e', 'p', 5 ON CONFLICT DO NOTHING").unwrap();
+    assert_eq!(tag.command_tag.as_deref(), Some("INSERT 0 2"));
+}

@@ -464,3 +464,24 @@ fn regex_operators_and_replace_accept_lookahead() {
     assert_eq!(s.execute("SELECT regexp_replace('@ann_x and @bob', '@([a-z_]+)(?![a-z_])', '<\\1>', 'g')").unwrap().rows, vec![vec![text("<ann_x> and <bob>")]]);
     assert_eq!(s.execute("SELECT regexp_replace('aaa', 'a(?=a)', 'b')").unwrap().rows, vec![vec![text("baa")]]);
 }
+
+#[test]
+fn coalesce_of_a_bigint_subquery_and_an_int_literal_is_bigint() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE plan_limits (id int, daily_limit bigint); INSERT INTO plan_limits VALUES (1, 5000000000), (2, NULL)").unwrap();
+    for (sql, expected) in [
+        ("SELECT COALESCE((SELECT daily_limit FROM plan_limits WHERE id=1), -1)", SqlValue::Int(5_000_000_000)),
+        ("SELECT COALESCE((SELECT daily_limit FROM plan_limits WHERE id=2), -1)", SqlValue::Int(-1)),
+        ("SELECT COALESCE((SELECT daily_limit FROM plan_limits WHERE id=3), -1)", SqlValue::Int(-1)),
+        ("SELECT COALESCE(-1, (SELECT daily_limit FROM plan_limits WHERE id=1))", SqlValue::Int(-1)),
+    ] {
+        let result = s.execute(sql).unwrap();
+        assert_eq!(result.rows, vec![vec![expected]], "{sql}");
+        assert_eq!(result.column_types.first().cloned().flatten().as_deref(), Some("int8"), "{sql}");
+    }
+    let rows = s.execute("SELECT COALESCE(daily_limit, -1) FROM plan_limits ORDER BY id").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Int(5_000_000_000)], vec![SqlValue::Int(-1)]]);
+    let rows = s.execute("SELECT id FROM plan_limits WHERE COALESCE((SELECT max(daily_limit) FROM plan_limits), -1) > 4000000000 ORDER BY id").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]);
+}

@@ -1786,11 +1786,52 @@ thread_local! {
         const { std::cell::Cell::new(0) };
 }
 
+/// Type of a scalar subquery's single output column, when it is a plain
+/// `SELECT expr [FROM table]` whose expression types from that table. PostgreSQL
+/// resolves `COALESCE((SELECT bigint_col ...), -1)` to bigint this way.
+/// `shadowed` reports names bound to an enclosing CTE, which this does not type.
+pub(crate) fn scalar_subquery_pg_type(
+    db: &BicDb,
+    query: &Query,
+    shadowed: &dyn Fn(&str) -> bool,
+) -> Option<String> {
+    if query.with.is_some() {
+        return None;
+    }
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return None;
+    };
+    let [item] = select.projection.as_slice() else {
+        return None;
+    };
+    let (SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. }) = item else {
+        return None;
+    };
+    match select.from.as_slice() {
+        [] => projected_expr_pg_type_with_db(db, expr),
+        [from] if from.joins.is_empty() => {
+            let TableFactor::Table { name, args: None, .. } = &from.relation else {
+                return None;
+            };
+            let name = object_name(name).ok()?;
+            if shadowed(&name) {
+                return None;
+            }
+            let schema = load_schema_shared(db, &name).ok().flatten()?;
+            projected_expr_pg_type(expr, Some(&schema))
+        }
+        _ => None,
+    }
+}
+
 fn projected_expr_pg_type_with_db_uncached(db: &BicDb, expr: &Expr) -> Option<String> {
     #[cfg(test)]
     SQL_EXPR_TYPE_UNCACHED_CALLS.with(|calls| calls.set(calls.get() + 1));
     if let Expr::Nested(inner) | Expr::Collate { expr: inner, .. } = expr {
         return projected_expr_pg_type_with_db(db, inner);
+    }
+    if let Expr::Subquery(query) = expr {
+        return scalar_subquery_pg_type(db, query, &|_| false);
     }
     if let Expr::Cast { data_type, .. } | Expr::TypedString(TypedString { data_type, .. }) = expr {
         if let Ok(Some(user_type)) = user_type_column_from_data_type(db, data_type) {

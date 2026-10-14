@@ -2538,6 +2538,9 @@ impl<'db> SqlEngine<'db> {
                 }
                 self.common_branch_type(&branches, env)
             }
+            Expr::Subquery(query) => scalar_subquery_pg_type(self.db_ref(), query, &|name| {
+                self.ctes.contains_key(&cte_key(name))
+            }),
             _ => None,
         }
     }

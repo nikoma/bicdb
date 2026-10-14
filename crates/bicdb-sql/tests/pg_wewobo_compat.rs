@@ -754,3 +754,35 @@ fn group_by_keeps_every_group_and_order_by_an_aggregate_sorts_them() {
         vec![text("failed"), SqlValue::Int(1), SqlValue::Int(300), SqlValue::Int(330)],
     ]);
 }
+
+#[test]
+fn to_char_copies_double_quoted_text_and_non_pattern_characters() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    let fmt = "'YYYY-MM-DD\"T\"HH24:MI'";
+    for value in [
+        "TIMESTAMP '2026-10-14 10:30:00'",
+        "TIMESTAMPTZ '2026-10-14 10:30:00+00'",
+        "'2026-10-14 10:30:45.5'::timestamp",
+    ] {
+        let rows = s.execute(&format!("SELECT to_char({value}, {fmt})")).unwrap().rows;
+        assert_eq!(rows, vec![vec![text("2026-10-14T10:30")]], "{value}");
+    }
+    let rows = s.execute(&format!("SELECT to_char(DATE '2026-10-14', {fmt})")).unwrap().rows;
+    assert_eq!(rows, vec![vec![text("2026-10-14T00:00")]]);
+    // Quoted text keeps its case and may hold pattern words; a backslash escapes a quote.
+    let rows = s.execute(r#"SELECT to_char(TIMESTAMP '2026-10-14 10:30:00', '"Year" YYYY "at" HH24\"'), to_char(TIMESTAMP '2026-10-14 10:30:00', '"quote \" mark" MI')"#).unwrap().rows;
+    assert_eq!(rows, vec![vec![text("Year 2026 at 10\""), text("quote \" mark 30")]]);
+    // Characters that are not patterns pass through.
+    let rows = s.execute("SELECT to_char(TIMESTAMP '2026-10-14 10:30:00', 'YYYY/MM/DD xz HH24hMI')").unwrap().rows;
+    assert_eq!(rows, vec![vec![text("2026/10/14 xz 10h30")]]);
+    // Name, fill-mode and 12-hour patterns.
+    let rows = s.execute("SELECT to_char(TIMESTAMP '2026-10-04 15:05:09.123456', 'FMDay, FMMonth FMDDth YYYY HH12:MI:SS.MS PM US Dy Mon')").unwrap().rows;
+    assert_eq!(rows, vec![vec![text("Sunday, October 4th 2026 03:05:09.123 PM 123456 Sun Oct")]]);
+    // NOW() AT TIME ZONE 'UTC' is a timestamp without time zone.
+    let rows = s.execute(&format!("SELECT length(to_char(NOW() AT TIME ZONE 'UTC', {fmt})), to_char(NOW() AT TIME ZONE 'UTC', {fmt}) LIKE '____-__-__T__:__'")).unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Int(16), SqlValue::Bool(true)]]);
+    // WeWoBo's job scheduler key: the ten-minute bucket of a timestamp.
+    let rows = s.execute(&format!("SELECT to_char(date_trunc('hour',ts)+floor(extract(minute FROM ts)/10)*INTERVAL '10 minutes', {fmt}) FROM (SELECT TIMESTAMPTZ '2026-10-14 10:37:12+00' AS ts) t")).unwrap().rows;
+    assert_eq!(rows, vec![vec![text("2026-10-14T10:30")]]);
+}

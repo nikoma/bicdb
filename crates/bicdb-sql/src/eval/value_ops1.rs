@@ -3724,47 +3724,204 @@ pub(crate) fn format_timestamp_to_char(value: &str, format: &str) -> Result<Stri
     let (year, month, day) = parse_date_prefix(value)
         .ok_or_else(|| SqlError::InvalidSql(format!("to_char cannot parse timestamp {}", value)))?;
     let (hour, minute, second) = parse_time_prefix(value).unwrap_or((0, 0, 0));
-    let format = format.to_ascii_uppercase();
+    let micros = to_char_fraction_micros(value);
+    let days = days_from_civil(year, month, day);
+    // 0 = Sunday; 1970-01-01 was a Thursday.
+    let weekday = (days + 4).rem_euclid(7) as usize;
+    let day_of_year = (days - days_from_civil(year, 1, 1) + 1) as u32;
+    let upper = format.to_ascii_uppercase();
     let mut output = String::new();
     let mut idx = 0;
+    let mut fill_mode = false;
     while idx < format.len() {
-        if format[idx..].starts_with("YYYY") {
-            output.push_str(&format!("{year:04}"));
-            idx += 4;
-        } else if format[idx..].starts_with("HH24") {
-            output.push_str(&format!("{hour:02}"));
-            idx += 4;
-        } else if format[idx..].starts_with("YY") {
-            output.push_str(&format!("{:02}", year.rem_euclid(100)));
-            idx += 2;
-        } else if format[idx..].starts_with("MM") {
-            output.push_str(&format!("{month:02}"));
-            idx += 2;
-        } else if format[idx..].starts_with("DD") {
-            output.push_str(&format!("{day:02}"));
-            idx += 2;
-        } else if format[idx..].starts_with("MI") {
-            output.push_str(&format!("{minute:02}"));
-            idx += 2;
-        } else if format[idx..].starts_with("SS") {
-            output.push_str(&format!("{second:02}"));
-            idx += 2;
-        } else {
-            let ch = format[idx..].chars().next().unwrap();
-            if ch.is_ascii_alphabetic() {
-                return Err(SqlError::Unsupported(format!(
-                    "to_char timestamp format token {} is not supported",
-                    format[idx..]
-                        .chars()
-                        .take_while(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit())
-                        .collect::<String>()
-                )));
+        let rest = &format[idx..];
+        let upper_rest = &upper[idx..];
+        if rest.starts_with('"') {
+            // Double-quoted text is copied verbatim; a backslash escapes a quote inside it.
+            let mut chars = rest[1..].char_indices();
+            idx += 1;
+            loop {
+                match chars.next() {
+                    None => {
+                        idx = format.len();
+                        break;
+                    }
+                    Some((offset, '"')) => {
+                        idx += offset + 1;
+                        break;
+                    }
+                    Some((_, '\\')) => match chars.next() {
+                        Some((_, ch)) => output.push(ch),
+                        None => output.push('\\'),
+                    },
+                    Some((_, ch)) => output.push(ch),
+                }
             }
+            continue;
+        }
+        if rest.starts_with("\\\"") {
+            output.push('"');
+            idx += 2;
+            continue;
+        }
+        if upper_rest.starts_with("FM") {
+            fill_mode = true;
+            idx += 2;
+            continue;
+        }
+        let number = |value: i64, width: usize| {
+            if fill_mode {
+                value.to_string()
+            } else {
+                format!("{value:0width$}")
+            }
+        };
+        let cased = |name: &str, pattern: &str, width: usize| {
+            let text = if pattern.chars().all(|ch| ch.is_ascii_uppercase()) {
+                name.to_ascii_uppercase()
+            } else if pattern.chars().all(|ch| ch.is_ascii_lowercase()) {
+                name.to_ascii_lowercase()
+            } else {
+                name.to_string()
+            };
+            if fill_mode {
+                text
+            } else {
+                format!("{text:<width$}")
+            }
+        };
+        let hour12 = if hour % 12 == 0 { 12 } else { hour % 12 };
+        let (rendered, len, ordinal): (String, usize, Option<i64>) = if upper_rest.starts_with("HH24") {
+            (number(hour.into(), 2), 4, Some(hour.into()))
+        } else if upper_rest.starts_with("HH12") {
+            (number(hour12.into(), 2), 4, Some(hour12.into()))
+        } else if upper_rest.starts_with("HH") {
+            (number(hour12.into(), 2), 2, Some(hour12.into()))
+        } else if upper_rest.starts_with("MI") {
+            (number(minute.into(), 2), 2, Some(minute.into()))
+        } else if upper_rest.starts_with("SSSSS") || upper_rest.starts_with("SSSS") {
+            let seconds = i64::from(hour) * 3_600 + i64::from(minute) * 60 + i64::from(second);
+            let len = if upper_rest.starts_with("SSSSS") { 5 } else { 4 };
+            (seconds.to_string(), len, Some(seconds))
+        } else if upper_rest.starts_with("SS") {
+            (number(second.into(), 2), 2, Some(second.into()))
+        } else if upper_rest.starts_with("MS") {
+            (number(micros / 1_000, 3), 2, None)
+        } else if upper_rest.starts_with("US") {
+            (number(micros, 6), 2, None)
+        } else if upper_rest.starts_with("A.M.") || upper_rest.starts_with("P.M.") {
+            let marker = if hour < 12 { "a.m." } else { "p.m." };
+            (cased(marker, &rest[..4], 0), 4, None)
+        } else if upper_rest.starts_with("AM") || upper_rest.starts_with("PM") {
+            let marker = if hour < 12 { "am" } else { "pm" };
+            (cased(marker, &rest[..2], 0), 2, None)
+        } else if upper_rest.starts_with("Y,YYY") {
+            (format!("{},{:03}", year / 1_000, year.rem_euclid(1_000)), 5, None)
+        } else if upper_rest.starts_with("YYYY") {
+            (number(year.into(), 4), 4, Some(year.into()))
+        } else if upper_rest.starts_with("YYY") {
+            (number(year.rem_euclid(1_000).into(), 3), 3, None)
+        } else if upper_rest.starts_with("YY") {
+            (number(year.rem_euclid(100).into(), 2), 2, None)
+        } else if upper_rest.starts_with('Y') {
+            (year.rem_euclid(10).to_string(), 1, None)
+        } else if upper_rest.starts_with("MONTH") {
+            (cased(TO_CHAR_MONTHS[month as usize - 1], &rest[..5], 9), 5, None)
+        } else if upper_rest.starts_with("MON") {
+            (cased(&TO_CHAR_MONTHS[month as usize - 1][..3], &rest[..3], 0), 3, None)
+        } else if upper_rest.starts_with("MM") {
+            (number(month.into(), 2), 2, Some(month.into()))
+        } else if upper_rest.starts_with("DAY") {
+            (cased(TO_CHAR_DAYS[weekday], &rest[..3], 9), 3, None)
+        } else if upper_rest.starts_with("DY") {
+            (cased(&TO_CHAR_DAYS[weekday][..3], &rest[..2], 0), 2, None)
+        } else if upper_rest.starts_with("DDD") {
+            (number(day_of_year.into(), 3), 3, Some(day_of_year.into()))
+        } else if upper_rest.starts_with("DD") {
+            (number(day.into(), 2), 2, Some(day.into()))
+        } else if upper_rest.starts_with('D') {
+            let value = weekday as i64 + 1;
+            (value.to_string(), 1, Some(value))
+        } else if upper_rest.starts_with('Q') {
+            let value = i64::from((month - 1) / 3 + 1);
+            (value.to_string(), 1, Some(value))
+        } else if upper_rest.starts_with("WW") {
+            let value = i64::from((day_of_year - 1) / 7 + 1);
+            (number(value, 2), 2, Some(value))
+        } else if upper_rest.starts_with('W') {
+            let value = i64::from((day - 1) / 7 + 1);
+            (value.to_string(), 1, Some(value))
+        } else if upper_rest.starts_with('J') {
+            let value = days + 2_440_588;
+            (value.to_string(), 1, Some(value))
+        } else if let Some(pattern) = TO_CHAR_UNSUPPORTED_PATTERNS
+            .iter()
+            .find(|pattern| upper_rest.starts_with(**pattern))
+        {
+            return Err(SqlError::Unsupported(format!(
+                "to_char timestamp format token {pattern} is not supported"
+            )));
+        } else {
+            // Anything that is not a pattern is copied as is.
+            let ch = rest.chars().next().unwrap();
             output.push(ch);
             idx += ch.len_utf8();
+            continue;
+        };
+        output.push_str(&rendered);
+        idx += len;
+        fill_mode = false;
+        if let Some(value) = ordinal {
+            let suffix = &format[idx..];
+            if suffix.starts_with("TH") || suffix.starts_with("th") {
+                let ending = match (value % 100, value % 10) {
+                    (11..=13, _) => "th",
+                    (_, 1) => "st",
+                    (_, 2) => "nd",
+                    (_, 3) => "rd",
+                    _ => "th",
+                };
+                if suffix.starts_with("TH") {
+                    output.push_str(&ending.to_ascii_uppercase());
+                } else {
+                    output.push_str(ending);
+                }
+                idx += 2;
+            }
         }
     }
     Ok(output)
+}
+
+const TO_CHAR_MONTHS: [&str; 12] = [
+    "January", "February", "March", "April", "May", "June", "July", "August", "September",
+    "October", "November", "December",
+];
+
+const TO_CHAR_DAYS: [&str; 7] = [
+    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+];
+
+/// PostgreSQL template patterns this formatter does not render; they are refused rather than
+/// copied through as literal text.
+const TO_CHAR_UNSUPPORTED_PATTERNS: [&str; 22] = [
+    "A.D.", "B.C.", "AD", "BC", "CC", "FF1", "FF2", "FF3", "FF4", "FF5", "FF6", "IDDD", "IYYY",
+    "IYY", "IW", "ID", "IY", "OF", "RM", "TZH", "TZM", "TZ",
+];
+
+fn to_char_fraction_micros(value: &str) -> i64 {
+    let Some((_, time)) = value.split_once(' ') else {
+        return 0;
+    };
+    let Some((_, fraction)) = time.split_once('.') else {
+        return 0;
+    };
+    let digits = fraction
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit())
+        .take(6)
+        .collect::<String>();
+    format!("{digits:0<6}").parse().unwrap_or(0)
 }
 
 pub(crate) fn format_numeric_to_char(value: f64, format: &str) -> Result<String> {

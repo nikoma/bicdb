@@ -668,3 +668,47 @@ fn plpgsql_functions_per_row_respect_execute_privilege_and_security_definer() {
     assert!(r.execute("SELECT id, peek_invoker(id) FROM items").is_err(), "invoker rights cannot read secrets");
     assert!(r.execute("SELECT locked(id) FROM items").is_err(), "EXECUTE was revoked");
 }
+
+#[test]
+fn table_row_types_cast_populate_and_expand() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE network_spaces (id int PRIMARY KEY, name text NOT NULL, tenant_id text NOT NULL, parent_id int, access_people text[] NOT NULL DEFAULT '{}', created_at bigint)").unwrap();
+    s.execute("INSERT INTO network_spaces VALUES (1, 'Root', 't1', NULL, ARRAY['ann'], 10), (2, 'Child', 't1', 1, ARRAY['bob','cy'], 20)").unwrap();
+    // A NULL of the row type, and field access on it.
+    assert_eq!(s.execute("SELECT (NULL::network_spaces).name").unwrap().rows, vec![vec![SqlValue::Null]]);
+    // jsonb_populate_record takes its columns and types from the table.
+    let rows = s.execute("SELECT (jsonb_populate_record(NULL::network_spaces, '{\"id\":\"7\",\"name\":\"N\",\"extra\":1}'::jsonb)).id").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Int(7)]]);
+    let r = s.execute("SELECT x.id, x.name, x.tenant_id FROM network_spaces s CROSS JOIN LATERAL jsonb_populate_record(NULL::network_spaces, to_jsonb(s)) x ORDER BY x.id").unwrap();
+    assert_eq!(r.rows, vec![
+        vec![SqlValue::Int(1), text("Root"), text("t1")],
+        vec![SqlValue::Int(2), text("Child"), text("t1")],
+    ]);
+    let r = s.execute("SELECT * FROM jsonb_populate_record(NULL::network_spaces, '{\"id\":3,\"name\":\"x\"}')").unwrap();
+    assert_eq!(r.columns, vec!["id", "name", "tenant_id", "parent_id", "access_people", "created_at"]);
+    // (record).* expands to the table's columns with their names and types (actions.mjs:1777).
+    let mut p = s.with_positional_parameters(vec![SqlValue::Int(2)]);
+    let r = p.execute("SELECT (jsonb_populate_record(NULL::network_spaces,to_jsonb(s)||jsonb_build_object('tenant_id','','parent_id',NULL,'access_people','[]'::jsonb))).* FROM network_spaces s WHERE id=$1").unwrap();
+    drop(p);
+    assert_eq!(r.columns, vec!["id", "name", "tenant_id", "parent_id", "access_people", "created_at"]);
+    let mut s = SqlSession::new(&mut db);
+    let want = s.execute("SELECT 2, 'Child', '', NULL::int, ARRAY[]::text[], 20::bigint").unwrap().rows;
+    assert_eq!(r.rows, want);
+    assert_eq!(r.column_types.iter().map(|t| t.clone().unwrap_or_default()).collect::<Vec<_>>(), vec!["int4", "text", "text", "int4", "text[]", "int8"]);
+    // A CASE choosing between the whole row and a redacted copy (actions.mjs:1790).
+    let mut p = s.with_positional_parameters(vec![text("[{\"id\":1,\"role\":\"owner\",\"discoverable\":true},{\"id\":2,\"role\":\"member\",\"discoverable\":true}]")]);
+    let r = p.execute("WITH a AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS x(id int,role text,discoverable boolean)) SELECT (CASE WHEN a.role IN ('owner','admin') THEN s ELSE jsonb_populate_record(NULL::network_spaces,to_jsonb(s)||jsonb_build_object('tenant_id','','parent_id',NULL,'access_people','[]'::jsonb)) END).* FROM network_spaces s JOIN a ON a.id=s.id WHERE a.discoverable ORDER BY s.created_at DESC LIMIT 500").unwrap();
+    drop(p);
+    assert_eq!(r.columns, vec!["id", "name", "tenant_id", "parent_id", "access_people", "created_at"]);
+    let mut s = SqlSession::new(&mut db);
+    let want = s.execute("SELECT 2, 'Child', '', NULL::int, ARRAY[]::text[], 20::bigint UNION ALL SELECT 1, 'Root', 't1', NULL::int, ARRAY['ann'], 10::bigint").unwrap().rows;
+    assert_eq!(r.rows, want);
+    // Field access and star expansion of a plain whole-row reference.
+    let rows = s.execute("SELECT (s).name, (s).* FROM network_spaces s WHERE id = 1").unwrap().rows;
+    let want = s.execute("SELECT 'Root', 1, 'Root', 't1', NULL::int, ARRAY['ann'], 10::bigint").unwrap().rows;
+    assert_eq!(rows, want);
+    // A row literal cast to the table type.
+    let rows = s.execute("SELECT ('(5,Five,t9,,{},1)'::network_spaces).name, ('(5,Five,t9,,{},1)'::network_spaces).parent_id").unwrap().rows;
+    assert_eq!(rows, vec![vec![text("Five"), SqlValue::Null]]);
+}

@@ -1295,6 +1295,11 @@ impl<'db> SqlEngine<'db> {
                 self.execute_correlated_slot_subquery_values(row, context, query)?,
             ));
         }
+        if let Some(value) = eval_populate_record_call(self.db_ref(), function, |expr| {
+            self.eval_slot_row_value(row, context, expr)
+        })? {
+            return Ok(value);
+        }
         let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
         if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
             let arg_types = function_args(function)
@@ -2608,6 +2613,11 @@ impl<'db> SqlEngine<'db> {
         }
         if let (Some(query), true) = (array_subquery(function), name == "array") {
             return Ok(array_value(self.execute_correlated_subquery_values(row, query)?));
+        }
+        if let Some(value) =
+            eval_populate_record_call(self.db_ref(), function, |expr| self.eval_row_value(row, expr))?
+        {
+            return Ok(value);
         }
         if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
             for arg in function_args(function) {

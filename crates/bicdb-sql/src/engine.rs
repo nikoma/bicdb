@@ -3920,6 +3920,9 @@ impl<'db> SqlEngine<'db> {
         }) {
             return self.execute_query(&rewritten);
         }
+        if let Some(rewritten) = rewrite_row_type_constructs(self.db, query)? {
+            return self.execute_query(&rewritten);
+        }
         if let Some(with) = &query.with {
             return self.execute_query_with_ctes(query, with);
         }

@@ -3357,6 +3357,7 @@ impl<'db> SqlEngine<'db> {
         base: Option<SqlValue>,
         value: SqlValue,
     ) -> Result<RowSet> {
+        let value = coerce_unknown_json_literal(call, value)?;
         let values = if call.function.returns_record() {
             json_record_function_rows(call, base, value)?
         } else {
@@ -6097,4 +6098,28 @@ mod statement_scan_memo_tests {
             );
         }
     }
+}
+
+/// An untyped string literal passed as the JSON argument is json/jsonb input:
+/// PostgreSQL resolves an unknown-typed literal to the parameter's type.
+fn coerce_unknown_json_literal(call: &JsonSetReturningCall, value: SqlValue) -> Result<SqlValue> {
+    let SqlValue::String(text) = &value else {
+        return Ok(value);
+    };
+    let Some(Expr::Value(literal)) = call.args.get(call.function.json_argument_index()) else {
+        return Ok(value);
+    };
+    if !matches!(
+        literal.value,
+        Value::SingleQuotedString(_) | Value::EscapedStringLiteral(_) | Value::DollarQuotedString(_)
+    ) {
+        return Ok(value);
+    }
+    let parsed = PgJsonText::parse(text.clone())
+        .map_err(|error| json_set_function_type_error(call.function, error.to_string()))?;
+    Ok(if call.function.accepts_json_text() {
+        SqlValue::JsonText(parsed)
+    } else {
+        SqlValue::Json(parsed.parsed().clone())
+    })
 }

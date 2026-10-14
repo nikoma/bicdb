@@ -1628,3 +1628,101 @@ pub(crate) fn rewrite_on_conflict_after_bare_projection(input: &str) -> Option<S
     }
     Some(output)
 }
+
+/// `(expr).*` — every field of a row value — is valid in a PostgreSQL select
+/// list, but sqlparser cannot parse it. Rewrite it to the marker call
+/// `RECORD_STAR_MARKER((expr))`, which `rewrite_row_type_constructs` expands
+/// into the row type's fields once the catalogs are at hand. Only a
+/// parenthesized expression qualifies, not a function call's argument list.
+pub(crate) fn rewrite_record_star_items(input: &str) -> Option<String> {
+    if !input.contains(").*") {
+        return None;
+    }
+    let bytes = input.as_bytes();
+    let is_word_byte = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'$';
+    // A '(' opens a parenthesized expression (not a call's argument list)
+    // when no name precedes it, or the preceding word is a keyword that can
+    // start a select-list item.
+    let grouping_paren = |at: usize| -> bool {
+        let before = input[..at].trim_end();
+        let Some(last) = before.bytes().last() else {
+            return true;
+        };
+        if last == b')' || last == b']' || last == b'"' {
+            return false;
+        }
+        if !is_word_byte(last) {
+            return true;
+        }
+        let word_start = before
+            .bytes()
+            .rposition(|b| !is_word_byte(b))
+            .map_or(0, |p| p + 1);
+        matches!(
+            before[word_start..].to_ascii_lowercase().as_str(),
+            "select" | "distinct" | "all" | "returning"
+        )
+    };
+    let mut opens = Vec::<(usize, bool)>::new();
+    let mut edits = Vec::<(usize, usize)>::new(); // (open paren, close paren)
+    let mut idx = 0usize;
+    while idx < bytes.len() {
+        match bytes[idx] {
+            b'\'' | b'"' => {
+                let quote = bytes[idx];
+                idx += 1;
+                while idx < bytes.len() {
+                    if bytes[idx] == quote {
+                        if bytes.get(idx + 1) == Some(&quote) {
+                            idx += 2;
+                            continue;
+                        }
+                        break;
+                    }
+                    idx += 1;
+                }
+            }
+            b'-' if bytes.get(idx + 1) == Some(&b'-') => {
+                idx = bytes[idx..].iter().position(|b| *b == b'\n').map_or(bytes.len(), |p| idx + p);
+            }
+            b'/' if bytes.get(idx + 1) == Some(&b'*') => {
+                idx = input[idx + 2..].find("*/").map_or(bytes.len(), |p| idx + 2 + p + 1);
+            }
+            b'$' => {
+                if let Some(delimiter) = dollar_quote_delimiter(&input[idx..]) {
+                    let body = idx + delimiter.len();
+                    idx = input[body..]
+                        .find(&delimiter)
+                        .map_or(bytes.len(), |p| body + p + delimiter.len() - 1);
+                }
+            }
+            b'(' => opens.push((idx, grouping_paren(idx))),
+            b')' => {
+                if let Some((open, grouping)) = opens.pop() {
+                    if grouping && input[idx + 1..].starts_with(".*") {
+                        edits.push((open, idx));
+                    }
+                }
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    if edits.is_empty() {
+        return None;
+    }
+    // Apply from the end so earlier offsets stay valid; nested edits close
+    // before their enclosing ones, so sort by position.
+    let marker = format!("{RECORD_STAR_MARKER}(");
+    let mut inserts = Vec::new();
+    for (open, close) in edits {
+        inserts.push((close + 1, 2usize, ")"));
+        inserts.push((open, 0usize, marker.as_str()));
+    }
+    inserts.sort_by(|left, right| right.0.cmp(&left.0));
+    let mut output = input.to_string();
+    for (at, remove, text) in inserts {
+        output.replace_range(at..at + remove, text);
+    }
+    Some(output)
+}

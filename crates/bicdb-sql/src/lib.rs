@@ -200,8 +200,13 @@ mod records;
 mod partial_index;
 mod order_by_ordinal;
 mod pg_scalar_extra;
+mod row_types;
 pub(crate) use pg_scalar_extra::eval_pg_scalar_extra;
 pub(crate) use order_by_ordinal::rewrite_ordinal_order_by;
+pub(crate) use row_types::{
+    eval_populate_record_call, populate_record_call, populate_record_value,
+    rewrite_row_type_constructs, RECORD_STAR_MARKER,
+};
 pub(crate) use partial_index::partial_index_predicate;
 pub use records::*;
 mod engine;

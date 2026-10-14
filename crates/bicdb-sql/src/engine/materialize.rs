@@ -1873,6 +1873,9 @@ impl<'db> SqlEngine<'db> {
         &self,
         query: &Query,
     ) -> Option<Vec<(String, Option<String>)>> {
+        if let Ok(Some(rewritten)) = rewrite_row_type_constructs(self.db_ref(), query) {
+            return self.query_output_columns(&rewritten);
+        }
         if query.with.is_some() {
             // A subquery that introduces its own CTEs is not materialized at type
             // resolution time; bail to the value-independent fallback rather than

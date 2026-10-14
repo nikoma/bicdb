@@ -175,7 +175,12 @@
 - Broader SQL expressions, advanced join planning, recursive CTEs, CTE-fed
   mutations, and richer subquery forms.
 - Cost-based join planning, richer statistics, and optimizer rules.
-- Repeatable read and serializable transaction validation.
+- Repeatable read and serializable transaction validation (PostgreSQL parity gap). Today `SERIALIZABLE` and
+  read-write `REPEATABLE READ` are refused (docs/postgresql-transactions.md). Close it with serializable snapshot
+  isolation: track each transaction's reads (rows and predicate/range locks for scans), detect read-write
+  dependency cycles at commit, abort one side with SQLSTATE 40001, and keep the cost near PostgreSQL's (5–20 %).
+  Driver: WeWoBo requested SERIALIZABLE in 92 transactions; it moved to constraints and row locks (2026-10-14)
+  so BicDB could host it, but other PostgreSQL applications will need this.
 - Disk-backed vector pages.
 - Columnar time-series blocks.
 - Compression and rollups for wearable streams.

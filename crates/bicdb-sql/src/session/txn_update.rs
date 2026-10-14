@@ -2450,6 +2450,16 @@ impl<'db> SqlSession<'db> {
             Expr::Function(function) if is_set_config_function(function)? => {
                 self.eval_set_config_function(function)
             }
+            Expr::Function(function)
+                if matches!(function.args, FunctionArguments::Subquery(_))
+                    && object_name_lowercase(&function.name)? == "array" =>
+            {
+                let FunctionArguments::Subquery(query) = &function.args else {
+                    unreachable!()
+                };
+                let result = self.execute_query(query)?;
+                Ok(array_value(subquery_values(result)?))
+            }
             Expr::Function(function) => {
                 let dispatch_key = crate::eval::expr_type_scope()
                     .map(|(generation, ir)| (generation, ir, function as *const Function as usize));

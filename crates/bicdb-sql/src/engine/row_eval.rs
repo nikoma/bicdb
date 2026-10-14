@@ -796,7 +796,7 @@ impl<'db> SqlEngine<'db> {
             Expr::Value(_) | Expr::TypedString(_) => {
                 sql_value_truth(self.eval_slot_row_value(row, context, expr)?)
             }
-            Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Case { .. } => {
+            Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Case { .. } | Expr::Cast { .. } => {
                 match self.eval_slot_row_value(row, context, expr)? {
                     SqlValue::Bool(value) => Ok(Some(value)),
                     SqlValue::Null => Ok(None),
@@ -1289,6 +1289,11 @@ impl<'db> SqlEngine<'db> {
                 }
             }
             return Ok(SqlValue::Null);
+        }
+        if let (Some(query), true) = (array_subquery(function), name == "array") {
+            return Ok(array_value(
+                self.execute_correlated_slot_subquery_values(row, context, query)?,
+            ));
         }
         let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
         if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
@@ -2240,7 +2245,7 @@ impl<'db> SqlEngine<'db> {
             Expr::Subquery(query) => {
                 sql_value_truth(self.execute_correlated_scalar_subquery(row, query)?)
             }
-            Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Case { .. } => {
+            Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Case { .. } | Expr::Cast { .. } => {
                 match self.eval_row_value(row, expr)? {
                     SqlValue::Bool(value) => Ok(Some(value)),
                     SqlValue::Null => Ok(None),
@@ -2601,6 +2606,9 @@ impl<'db> SqlEngine<'db> {
             }
             return Ok(SqlValue::Null);
         }
+        if let (Some(query), true) = (array_subquery(function), name == "array") {
+            return Ok(array_value(self.execute_correlated_subquery_values(row, query)?));
+        }
         if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
             for arg in function_args(function) {
                 let value = self.eval_row_value(row, &arg)?;
@@ -2927,5 +2935,13 @@ impl<'db> SqlEngine<'db> {
             result.rows,
             negated,
         )?))
+    }
+}
+
+/// `ARRAY(SELECT ...)` parses as a function named ARRAY whose argument is a query.
+fn array_subquery(function: &Function) -> Option<&Query> {
+    match &function.args {
+        FunctionArguments::Subquery(query) => Some(query),
+        _ => None,
     }
 }

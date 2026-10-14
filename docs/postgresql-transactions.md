@@ -100,7 +100,11 @@ row; retry the entire transaction. `NOWAIT` reports `55P03` for an occupied lock
 can still require a `40001` retry. The executor does not wait for another commit
 while holding its shared database latch. Applications must handle these retries.
 
-FOR SHARE, tables without primary keys, outer-join locking, DISTINCT/grouped/window
+`FOR SHARE` (and `FOR KEY SHARE`/`FOR NO KEY UPDATE`) takes the same exclusive
+row lock as `FOR UPDATE`, so two transactions sharing one row conflict with `40001`
+where PostgreSQL would let both proceed.
+
+Tables without primary keys, outer-join locking, DISTINCT/grouped/window
 locking queries, projection set-returning functions with row locks, and FETCH
 with row locks are explicitly unsupported. Selection
 currently materializes eligible candidates before locking; this is correctness

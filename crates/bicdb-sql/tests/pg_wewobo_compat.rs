@@ -367,3 +367,59 @@ fn a_unique_value_freed_by_delete_can_be_reused_in_the_same_transaction() {
     s.execute("COMMIT").unwrap();
     assert_eq!(s.execute("SELECT id FROM people").unwrap().rows, vec![vec![text("p2")]]);
 }
+
+#[test]
+fn constant_where_accepts_a_cast_boolean() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    assert!(s.execute("SELECT ''::text AS subject, false AS pending WHERE false::BOOLEAN").unwrap().rows.is_empty());
+    assert_eq!(s.execute("SELECT 1 WHERE 'true'::boolean").unwrap().rows, vec![vec![SqlValue::Int(1)]]);
+    s.execute("CREATE TABLE t (a int); INSERT INTO t VALUES (1)").unwrap();
+    assert!(s.execute("SELECT a FROM t WHERE false::BOOLEAN").unwrap().rows.is_empty());
+}
+
+#[test]
+fn array_of_a_correlated_subquery_without_from() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    let rows = s.execute("WITH s AS (SELECT '{\"c\":[\"de\",\"at\"]}'::jsonb AS v) SELECT ARRAY(SELECT jsonb_array_elements_text(v->'c')) AS c FROM s").unwrap().rows;
+    assert_eq!(rows, s.execute("SELECT ARRAY['de','at']").unwrap().rows);
+    let joined = s.execute("WITH s AS (SELECT '{\"c\":[\"de\",\"at\"]}'::jsonb AS v) SELECT array_to_string(ARRAY(SELECT jsonb_array_elements_text(v->'c')), ',') FROM s").unwrap().rows;
+    assert_eq!(joined, vec![vec![text("de,at")]]);
+    assert_eq!(s.execute("SELECT ARRAY(SELECT x FROM generate_series(1,3) x)").unwrap().rows, s.execute("SELECT ARRAY[1,2,3]").unwrap().rows);
+}
+
+#[test]
+fn regexp_matches_is_a_table_function() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    let body = "Hi @ann_x and @Ben22, also @ann_x again; mail a@b.com @no";
+    let count = s.execute(&format!("SELECT (SELECT COUNT(DISTINCT lower(m[2])) FROM regexp_matches('{body}','(^|[^[:alnum:]_@/.])@([A-Za-z0-9_]{{3,30}})','g') AS r(m))::int")).unwrap().rows;
+    assert_eq!(count, vec![vec![SqlValue::Int(2)]]);
+    // Lookahead and WITH ORDINALITY, as in mention extraction.
+    let rows = s.execute(&format!("SELECT lower(r.m[2]) AS u, MIN(r.ord) FROM regexp_matches('{body}','(^|[^[:alnum:]_@/.])@([A-Za-z0-9_]{{3,30}})(?![A-Za-z0-9_])','g') WITH ORDINALITY AS r(m,ord) GROUP BY 1 ORDER BY 2")).unwrap().rows;
+    assert_eq!(rows, vec![vec![text("ann_x"), SqlValue::Int(1)], vec![text("ben22"), SqlValue::Int(2)]]);
+    // Without g only the first match; no groups gives the whole match.
+    assert_eq!(s.execute("SELECT COUNT(*) FROM regexp_matches('a1 b2','[a-z][0-9]')").unwrap().rows, vec![vec![SqlValue::Int(1)]]);
+    assert_eq!(s.execute("SELECT r[1] FROM regexp_matches('a1 b2','[a-z][0-9]','g') AS t(r) ORDER BY 1").unwrap().rows, vec![vec![text("a1")], vec![text("b2")]]);
+    assert_eq!(s.execute("SELECT COUNT(*) FROM regexp_matches('x http://a.io www.b.org','(https?://|www\\.)[^[:space:]]+','gi')").unwrap().rows, vec![vec![SqlValue::Int(2)]]);
+}
+
+#[test]
+fn for_share_locks_rows() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE spaces (id int PRIMARY KEY, name text); CREATE TABLE posts (id int PRIMARY KEY, space_id int)").unwrap();
+    s.execute("INSERT INTO spaces VALUES (1,'a'); INSERT INTO posts VALUES (10,1)").unwrap();
+    s.execute("BEGIN").unwrap();
+    assert_eq!(s.execute("SELECT name FROM spaces WHERE id=1 FOR SHARE").unwrap().rows, vec![vec![text("a")]]);
+    assert_eq!(s.execute("SELECT p.id FROM posts p JOIN spaces sp ON sp.id=p.space_id FOR SHARE OF sp").unwrap().rows, vec![vec![SqlValue::Int(10)]]);
+    s.execute("COMMIT").unwrap();
+}
+
+#[test]
+fn parameters_inside_in_subqueries_are_counted() {
+    let (_dir, db) = db();
+    let types = bicdb_sql::infer_parameter_types(&db, "SELECT 1 FROM t g WHERE g.a=$1 AND g.b IN (SELECT m.b FROM m WHERE m.c=$1 AND m.roles && $3::text[])").unwrap();
+    assert_eq!(types.len(), 3);
+}

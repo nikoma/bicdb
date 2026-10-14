@@ -2896,6 +2896,94 @@ pub(crate) fn is_regexp_split_to_table_function(table: &str) -> bool {
         || table.eq_ignore_ascii_case("pg_catalog.regexp_split_to_table")
 }
 
+pub(crate) fn is_regexp_matches_table_function(table: &str) -> bool {
+    table.eq_ignore_ascii_case("regexp_matches")
+        || table.eq_ignore_ascii_case("pg_catalog.regexp_matches")
+}
+
+/// `regexp_matches(source, pattern [, flags])`: one `text[]` row per match (every match with
+/// `g`, else the first), holding the capture groups, or the whole match when there are none.
+/// PostgreSQL's advanced regular expressions include lookahead, so this uses fancy-regex.
+pub(crate) fn regexp_matches_values(values: &[SqlValue]) -> Result<Vec<SqlValue>> {
+    if !(2..=3).contains(&values.len()) {
+        return Err(SqlError::InvalidSql(format!(
+            "regexp_matches expects 2 or 3 arguments, got {}",
+            values.len()
+        )));
+    }
+    if values.iter().any(|value| matches!(value, SqlValue::Null)) {
+        return Ok(Vec::new());
+    }
+    let source = values[0].to_cell();
+    let mut pattern = values[1].to_cell();
+    let flags = values.get(2).map(SqlValue::to_cell).unwrap_or_default();
+    let mut builder_flags = (false, false, true, false);
+    let mut global = false;
+    for flag in flags.chars() {
+        match flag {
+            'c' | 'e' | 't' => {}
+            'g' => global = true,
+            'i' => builder_flags.0 = true,
+            'm' | 'n' => {
+                builder_flags.1 = true;
+                builder_flags.2 = false;
+            }
+            'p' => builder_flags.2 = false,
+            'q' => pattern = regex::escape(&pattern),
+            's' => {
+                builder_flags.1 = false;
+                builder_flags.2 = true;
+            }
+            'w' => {
+                builder_flags.1 = true;
+                builder_flags.2 = true;
+            }
+            'x' => builder_flags.3 = true,
+            'b' => {
+                return Err(SqlError::Unsupported(
+                    "regexp_matches basic regular-expression mode is not supported".to_string(),
+                ));
+            }
+            other => {
+                return Err(SqlError::invalid_parameter_value(format!(
+                    "invalid regular expression option: {other}"
+                )));
+            }
+        }
+    }
+    let regex = fancy_regex::RegexBuilder::new(&pattern)
+        .case_insensitive(builder_flags.0)
+        .multi_line(builder_flags.1)
+        .dot_matches_new_line(builder_flags.2)
+        .ignore_whitespace(builder_flags.3)
+        .build()
+        .map_err(|error| {
+            SqlError::invalid_parameter_value(format!("invalid regular expression: {error}"))
+        })?;
+    let mut rows = Vec::new();
+    for captures in regex.captures_iter(&source) {
+        let captures = captures.map_err(|error| {
+            SqlError::invalid_parameter_value(format!("regular expression failed: {error}"))
+        })?;
+        let row = if captures.len() == 1 {
+            vec![SqlValue::String(captures[0].to_string())]
+        } else {
+            (1..captures.len())
+                .map(|group| {
+                    captures
+                        .get(group)
+                        .map_or(SqlValue::Null, |m| SqlValue::String(m.as_str().to_string()))
+                })
+                .collect()
+        };
+        rows.push(array_value(row));
+        if !global {
+            break;
+        }
+    }
+    Ok(rows)
+}
+
 pub(crate) fn regexp_split_to_table_values(values: &[SqlValue]) -> Result<Vec<SqlValue>> {
     if !(2..=3).contains(&values.len()) {
         return Err(SqlError::InvalidSql(format!(
@@ -5550,7 +5638,7 @@ pub(crate) fn eval_predicate_truth(record: &Record, expr: &Expr) -> Result<Optio
         ))),
         Expr::IsUnknown(expr) => Ok(Some(eval_predicate_truth(record, expr)?.is_none())),
         Expr::IsNotUnknown(expr) => Ok(Some(eval_predicate_truth(record, expr)?.is_some())),
-        Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Case { .. } => {
+        Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Case { .. } | Expr::Cast { .. } => {
             match eval_value(record, expr)? {
                 SqlValue::Bool(value) => Ok(Some(value)),
                 SqlValue::Null => Ok(None),

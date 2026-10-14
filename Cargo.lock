@@ -1388,6 +1388,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "crc32fast",
+ "fancy-regex 0.17.0",
  "geo",
  "h3o",
  "hex",

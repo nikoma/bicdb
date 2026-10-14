@@ -50,6 +50,18 @@ pub fn infer_parameter_types(db: &BicDb, sql: &str) -> Result<Vec<Option<String>
     for statement in &statements {
         resolver.statement(statement);
     }
+    // The resolver only types the shapes it understands; the parameter count
+    // must still cover every placeholder or Bind would reject the statement.
+    let mut highest = 0usize;
+    let _ = sqlparser::ast::visit_expressions(&statements, |expr| {
+        if let Some(index) = placeholder_index(expr) {
+            highest = highest.max(index);
+        }
+        std::ops::ControlFlow::<()>::Continue(())
+    });
+    if resolver.types.len() < highest {
+        resolver.types.resize(highest, None);
+    }
     Ok(resolver.types)
 }
 
@@ -692,6 +704,10 @@ impl ParameterTypeResolver<'_, '_> {
                 for element in &array.elem {
                     self.expr(element, env, element_type.as_deref());
                 }
+            }
+            Expr::InSubquery { expr, subquery, .. } => {
+                self.expr(expr, env, None);
+                self.query(subquery, None);
             }
             Expr::Subquery(query) => self.query(query, None),
             Expr::Exists { subquery, .. } => self.query(subquery, None),

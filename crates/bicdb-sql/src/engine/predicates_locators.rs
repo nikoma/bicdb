@@ -554,7 +554,7 @@ impl<'db> SqlEngine<'db> {
             if is_generate_series_table_function(&table) {
                 return self.generate_series_row_set(&table, table_alias, args, *with_ordinality);
             }
-            if is_regexp_split_to_table_function(&table) {
+            if is_regexp_split_to_table_function(&table) || is_regexp_matches_table_function(&table) {
                 return self.regexp_split_to_table_row_set(
                     &table,
                     table_alias,
@@ -3463,7 +3463,7 @@ impl<'db> SqlEngine<'db> {
         let mut source_columns = table_function_source_columns_for_alias(
             table_alias,
             &alias_name,
-            vec!["regexp_split_to_table".to_string()],
+            vec![table.rsplit('.').next().unwrap_or(table).to_ascii_lowercase()],
         );
         if with_ordinality {
             source_columns.push("ordinality".to_string());
@@ -3480,7 +3480,11 @@ impl<'db> SqlEngine<'db> {
             .iter()
             .map(|expr| self.eval_select_constant_expr(expr))
             .collect::<Result<Vec<_>>>()?;
-        let split_values = regexp_split_to_table_values(&values)?;
+        let split_values = if is_regexp_matches_table_function(table) {
+            regexp_matches_values(&values)?
+        } else {
+            regexp_split_to_table_values(&values)?
+        };
         let mut rows = Vec::with_capacity(split_values.len());
         for (idx, value) in split_values.into_iter().enumerate() {
             if idx % 1024 == 0 {
@@ -4544,11 +4548,11 @@ impl<'db> SqlEngine<'db> {
                 )?;
                 return Ok(Some(aliased_row_output_columns(&alias_name, &columns)));
             }
-            if is_regexp_split_to_table_function(&table) {
+            if is_regexp_split_to_table_function(&table) || is_regexp_matches_table_function(&table) {
                 let mut source_columns = table_function_source_columns_for_alias(
                     table_alias,
                     &alias_name,
-                    vec!["regexp_split_to_table".to_string()],
+                    vec![table.rsplit('.').next().unwrap_or(&table).to_ascii_lowercase()],
                 );
                 if *with_ordinality {
                     source_columns.push("ordinality".to_string());

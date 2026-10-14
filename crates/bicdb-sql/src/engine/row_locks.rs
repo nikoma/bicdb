@@ -1,6 +1,6 @@
 //! SELECT FOR UPDATE uses transaction row locks shared with ordinary DML.
 use super::*;
-use sqlparser::ast::{LockType, NonBlock};
+use sqlparser::ast::NonBlock;
 
 pub(crate) type RowLockTarget = (String, String, TableSchema, Vec<String>, Option<NonBlock>);
 
@@ -44,12 +44,9 @@ impl SqlEngine<'_> {
             }
         }
         let mut targets = Vec::new();
+        // FOR SHARE takes the same exclusive row lock as FOR UPDATE: never
+        // weaker than PostgreSQL, but two sharers of one row conflict (40001).
         for lock in &query.locks {
-            if lock.lock_type != LockType::Update {
-                return Err(SqlError::Unsupported(
-                    "FOR SHARE row locks are not implemented".into(),
-                ));
-            }
             let requested = lock.of.as_ref().map(object_name).transpose()?;
             let before = targets.len();
             for relation in &relations {
@@ -94,7 +91,7 @@ impl SqlEngine<'_> {
             }
             if targets.len() == before {
                 return Err(SqlError::InvalidSql(
-                    "FOR UPDATE OF target is not in the FROM clause".into(),
+                    "FOR UPDATE/SHARE OF target is not in the FROM clause".into(),
                 ));
             }
         }

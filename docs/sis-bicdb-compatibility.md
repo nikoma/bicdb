@@ -66,7 +66,7 @@ SIS production deployment result is claimed.
 
 See [transaction details](postgresql-transactions.md#locking-reads) for supported
 locking shapes and [procedural limits](postgresql-procedural.md) for remaining
-PL/pgSQL limitations. FOR SHARE, outer-join locking, locking without primary keys,
+PL/pgSQL limitations. FOR SHARE locks exclusively (like FOR UPDATE). Outer-join locking, locking without primary keys,
 and grouped/window/DISTINCT/FETCH locking queries remain explicitly unsupported.
 Dynamic EXECUTE INTO/USING and other procedural forms are not implemented by this
 patch. Do not infer that untested application paths pass, or promise that only a

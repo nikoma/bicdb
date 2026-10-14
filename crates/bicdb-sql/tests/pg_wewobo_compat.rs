@@ -444,3 +444,23 @@ fn pgcrypto_gen_random_bytes() {
     assert_eq!(distinct, vec![vec![SqlValue::Int(5)]]);
     assert!(s.execute("SELECT gen_random_bytes(0)").is_err());
 }
+
+#[test]
+fn timestamps_cast_to_time() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    assert_eq!(s.execute("SELECT '2026-10-14 10:29:59'::timestamp::time::text").unwrap().rows, vec![vec![text("10:29:59")]]);
+    assert_eq!(s.execute("SELECT '2026-10-14 10:29:59'::time::text").unwrap().rows, vec![vec![text("10:29:59")]]);
+    assert_eq!(s.execute("SELECT ('2026-10-14 03:20:00'::timestamp)::time >= '03:15'").unwrap().rows, vec![vec![SqlValue::Bool(true)]]);
+    assert_eq!(s.execute("SELECT (NOW() AT TIME ZONE 'UTC')::time IS NOT NULL").unwrap().rows, vec![vec![SqlValue::Bool(true)]]);
+    assert!(s.execute("SELECT 'not a time'::time").is_err());
+}
+
+#[test]
+fn regex_operators_and_replace_accept_lookahead() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    assert_eq!(s.execute("SELECT '[x](http://a)' ~ '\\]\\((?!https://)', '[x](https://a)' ~ '\\]\\((?!https://)'").unwrap().rows, vec![vec![SqlValue::Bool(true), SqlValue::Bool(false)]]);
+    assert_eq!(s.execute("SELECT regexp_replace('@ann_x and @bob', '@([a-z_]+)(?![a-z_])', '<\\1>', 'g')").unwrap().rows, vec![vec![text("<ann_x> and <bob>")]]);
+    assert_eq!(s.execute("SELECT regexp_replace('aaa', 'a(?=a)', 'b')").unwrap().rows, vec![vec![text("baa")]]);
+}

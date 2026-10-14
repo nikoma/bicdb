@@ -2210,15 +2210,26 @@ pub(crate) fn eval_pg_regex_operator(
     };
     let pattern = right.to_cell();
     crate::reject_oversized_regex(&pattern)?;
-    let regex = RegexBuilder::new(&pattern)
+    let matched = match RegexBuilder::new(&pattern)
         .case_insensitive(case_insensitive)
         .size_limit(1 << 20)
         .dfa_size_limit(1 << 20)
         .build()
-        .map_err(|error| {
-            SqlError::InvalidSql(format!("invalid regular expression {pattern:?}: {error}"))
-        })?;
-    let matched = regex.is_match(&left.to_cell());
+    {
+        Ok(regex) => regex.is_match(&left.to_cell()),
+        // Lookaround (valid in PostgreSQL's advanced regular expressions)
+        // needs the backtracking engine.
+        Err(error) => fancy_regex::RegexBuilder::new(&pattern)
+            .case_insensitive(case_insensitive)
+            .build()
+            .map_err(|_| {
+                SqlError::InvalidSql(format!("invalid regular expression {pattern:?}: {error}"))
+            })?
+            .is_match(&left.to_cell())
+            .map_err(|error| {
+                SqlError::InvalidSql(format!("regular expression {pattern:?} failed: {error}"))
+            })?,
+    };
     Ok(Some(if negated { !matched } else { matched }))
 }
 

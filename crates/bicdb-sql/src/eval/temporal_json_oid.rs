@@ -826,6 +826,7 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
         "time" => {
             let text = value.to_cell();
             PgTime::from_postgres_text(&text)
+                .or_else(|error| time_after_date_prefix(&text).ok_or(error))
                 .map(|time| SqlValue::String(time.to_iso_text()))
                 .map_err(|error| postgres_time_input_error(&text, error))
         }
@@ -3743,4 +3744,18 @@ mod numeric_identity_cast_tests {
             }
         }
     }
+}
+
+/// PostgreSQL's time input ignores a leading date, so `'2026-10-14 10:29:59'::time` and
+/// `timestamp::time` give `10:29:59`. A timestamptz is rendered in the session zone first, so its
+/// trailing offset is dropped as well.
+fn time_after_date_prefix(text: &str) -> Option<PgTime> {
+    let text = text.trim();
+    let (date, rest) = text.split_once([' ', 'T'])?;
+    PgDate::from_postgres_text(date).ok()?;
+    let rest = rest.trim();
+    PgTime::from_postgres_text(rest).ok().or_else(|| {
+        let cut = rest.rfind(['+', '-'])?;
+        PgTime::from_postgres_text(&rest[..cut]).ok()
+    })
 }

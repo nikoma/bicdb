@@ -2154,17 +2154,38 @@ pub(crate) fn eval_session_function_value(
                     }
                 }
             }
-            let regex = RegexBuilder::new(&pattern)
+            let regex = match RegexBuilder::new(&pattern)
                 .case_insensitive(case_insensitive)
                 .multi_line(multi_line)
                 .dot_matches_new_line(dot_matches_new_line)
                 .ignore_whitespace(ignore_whitespace)
                 .build()
-                .map_err(|error| {
-                    SqlError::invalid_parameter_value(format!(
-                        "invalid regular expression: {error}"
-                    ))
-                })?;
+            {
+                Ok(regex) => regex,
+                // PostgreSQL's advanced regular expressions include lookaround,
+                // which only the backtracking engine supports.
+                Err(error) => {
+                    let regex = fancy_regex::RegexBuilder::new(&pattern)
+                        .case_insensitive(case_insensitive)
+                        .multi_line(multi_line)
+                        .dot_matches_new_line(dot_matches_new_line)
+                        .ignore_whitespace(ignore_whitespace)
+                        .build()
+                        .map_err(|_| {
+                            SqlError::invalid_parameter_value(format!(
+                                "invalid regular expression: {error}"
+                            ))
+                        })?;
+                    let value = regex
+                        .try_replacen(&source, if global { 0 } else { 1 }, replacement.as_str())
+                        .map_err(|error| {
+                            SqlError::invalid_parameter_value(format!(
+                                "regular expression failed: {error}"
+                            ))
+                        })?;
+                    return Ok(Some(SqlValue::String(value.into_owned())));
+                }
+            };
             let value = if global {
                 regex.replace_all(&source, replacement.as_str())
             } else {

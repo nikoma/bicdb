@@ -712,3 +712,45 @@ fn table_row_types_cast_populate_and_expand() {
     let rows = s.execute("SELECT ('(5,Five,t9,,{},1)'::network_spaces).name, ('(5,Five,t9,,{},1)'::network_spaces).parent_id").unwrap().rows;
     assert_eq!(rows, vec![vec![text("Five"), SqlValue::Null]]);
 }
+
+#[test]
+fn group_by_keeps_every_group_and_order_by_an_aggregate_sorts_them() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE media_jobs (id TEXT PRIMARY KEY, source_type TEXT NOT NULL, source_size BIGINT NOT NULL, source_hash TEXT NOT NULL, state TEXT NOT NULL, attempts INTEGER, error TEXT, created_at BIGINT, updated_at BIGINT)").unwrap();
+    s.execute("INSERT INTO media_jobs VALUES \
+        ('j1','video',10,'h1','ready',1,NULL,100,110), ('j2','video',20,'h2','queued',0,NULL,200,200), \
+        ('j3','image',30,'h3','failed',3,'boom',300,330), ('j4','video',40,'h4','ready',1,NULL,400,440), \
+        ('j5','video',50,'h5','queued',0,NULL,500,500), ('j6','video',60,'h6','ready',2,NULL,600,660)").unwrap();
+    let rows = s.execute("SELECT state, count(*) FROM media_jobs GROUP BY 1 ORDER BY 1").unwrap().rows;
+    assert_eq!(rows, vec![
+        vec![text("failed"), SqlValue::Int(1)],
+        vec![text("queued"), SqlValue::Int(2)],
+        vec![text("ready"), SqlValue::Int(3)],
+    ]);
+    let mut unordered = s.execute("SELECT state, count(*) FROM media_jobs GROUP BY 1").unwrap().rows;
+    unordered.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+    assert_eq!(unordered, rows);
+    let rows = s.execute("SELECT state, count(*) FROM media_jobs GROUP BY state ORDER BY 2 DESC").unwrap().rows;
+    assert_eq!(rows, vec![
+        vec![text("ready"), SqlValue::Int(3)],
+        vec![text("queued"), SqlValue::Int(2)],
+        vec![text("failed"), SqlValue::Int(1)],
+    ]);
+    // ORDER BY an aggregate (by position, by expression or by alias) sorts the groups.
+    for sql in [
+        "SELECT state, count(*) FROM media_jobs GROUP BY state ORDER BY count(*) DESC LIMIT 2",
+        "SELECT state, count(*) AS n FROM media_jobs GROUP BY state ORDER BY n DESC LIMIT 2",
+    ] {
+        assert_eq!(s.execute(sql).unwrap().rows, vec![
+            vec![text("ready"), SqlValue::Int(3)],
+            vec![text("queued"), SqlValue::Int(2)],
+        ], "{sql}");
+    }
+    let rows = s.execute("SELECT state, count(*), min(created_at), max(updated_at) FROM media_jobs GROUP BY 1 ORDER BY 2 DESC").unwrap().rows;
+    assert_eq!(rows, vec![
+        vec![text("ready"), SqlValue::Int(3), SqlValue::Int(100), SqlValue::Int(660)],
+        vec![text("queued"), SqlValue::Int(2), SqlValue::Int(200), SqlValue::Int(500)],
+        vec![text("failed"), SqlValue::Int(1), SqlValue::Int(300), SqlValue::Int(330)],
+    ]);
+}

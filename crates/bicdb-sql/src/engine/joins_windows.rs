@@ -2096,52 +2096,62 @@ impl<'db> SqlEngine<'db> {
             for item in projection {
                 self.check_cancellation()?;
                 let (expr, _) = select_item_expr_and_alias(item)?;
-                if let Ok((aggregate, cast)) = row_aggregate_from_expr(expr) {
-                    // FILTER restricts the aggregate to the group's matching
-                    // rows (`COUNT(*) FILTER (WHERE ...)`).
-                    let filtered_group;
-                    let group = if let Some(filter) = aggregate_filter_from_expr(expr) {
-                        filtered_group =
-                            self.filter_bound_row_predicate(group.to_vec(), row_columns, filter)?;
-                        filtered_group.as_slice()
-                    } else {
-                        group.as_slice()
-                    };
-                    let value = aggregate.evaluate(self, group, row_columns)?;
-                    result_row.push(match cast {
-                        Some(data_type) => cast_value(value, data_type)?,
-                        None => value,
-                    });
-                } else if expr_contains_aggregate(expr) {
-                    // An aggregate nested inside a scalar expression
-                    // (`COALESCE(SUM(x), 0)`, `SUM(a) <= g.key`) evaluates
-                    // over the whole group. Group-key columns referenced
-                    // outside the aggregates are constant within the group,
-                    // so they inline as literals from its first row before
-                    // the aggregate evaluator runs.
-                    let (scope, context) = self.bound_row_context(row_columns);
-                    let mut expr = expr.clone();
-                    self.inline_group_scalars(&mut expr, first, &context)?;
-                    result_row
-                        .push(self.eval_bound_row_aggregate_expr(group, &expr, &scope, &context)?);
-                } else {
-                    let (scope, context) = self.bound_row_context(row_columns);
-                    let value = match scope.bind(expr) {
-                        Some(bound) => bound.eval(&BoundExprFrame {
-                            user_calls: &[],
-                            db: self.db_ref(),
-                            columns: BoundExprColumns::Values(first),
-                            vars: &context.var_values,
-                        })?,
-                        None => self.eval_slot_row_value(first, &context, expr)?,
-                    };
-                    result_row.push(value);
-                }
+                result_row.push(self.eval_group_value(group, first, expr, row_columns)?);
             }
             result_rows.push(result_row);
         }
 
         Ok(SqlResult::new(columns, result_rows))
+    }
+
+    /// One output value of a group: an aggregate over the group's rows, a
+    /// scalar expression over aggregates (group keys inlined from `first`),
+    /// or a group-key expression evaluated on `first`.
+    pub(crate) fn eval_group_value(
+        &self,
+        group: &[SlotRow],
+        first: &SlotRow,
+        expr: &Expr,
+        row_columns: &[String],
+    ) -> Result<SqlValue> {
+        if let Ok((aggregate, cast)) = row_aggregate_from_expr(expr) {
+            // FILTER restricts the aggregate to the group's matching
+            // rows (`COUNT(*) FILTER (WHERE ...)`).
+            let filtered_group;
+            let group = if let Some(filter) = aggregate_filter_from_expr(expr) {
+                filtered_group =
+                    self.filter_bound_row_predicate(group.to_vec(), row_columns, filter)?;
+                filtered_group.as_slice()
+            } else {
+                group
+            };
+            let value = aggregate.evaluate(self, group, row_columns)?;
+            return match cast {
+                Some(data_type) => cast_value(value, data_type),
+                None => Ok(value),
+            };
+        }
+        let (scope, context) = self.bound_row_context(row_columns);
+        if expr_contains_aggregate(expr) {
+            // An aggregate nested inside a scalar expression
+            // (`COALESCE(SUM(x), 0)`, `SUM(a) <= g.key`) evaluates
+            // over the whole group. Group-key columns referenced
+            // outside the aggregates are constant within the group,
+            // so they inline as literals from its first row before
+            // the aggregate evaluator runs.
+            let mut expr = expr.clone();
+            self.inline_group_scalars(&mut expr, first, &context)?;
+            return self.eval_bound_row_aggregate_expr(group, &expr, &scope, &context);
+        }
+        match scope.bind(expr) {
+            Some(bound) => bound.eval(&BoundExprFrame {
+                user_calls: &[],
+                db: self.db_ref(),
+                columns: BoundExprColumns::Values(first),
+                vars: &context.var_values,
+            }),
+            None => self.eval_slot_row_value(first, &context, expr),
+        }
     }
 
     pub(crate) fn execute_grouped_window_rows(
@@ -3182,11 +3192,6 @@ impl<'db> SqlEngine<'db> {
             return Ok(());
         }
         self.check_cancellation()?;
-        let (scope, context) = self.bound_row_context(columns);
-        let bounds = expressions
-            .iter()
-            .map(|order| scope.bind(&order.expr))
-            .collect::<Vec<_>>();
         let order_types = expressions
             .iter()
             .map(|order| {
@@ -3198,41 +3203,37 @@ impl<'db> SqlEngine<'db> {
                 .or_else(|| projected_expr_pg_type_with_db(self.db_ref(), &order.expr))
             })
             .collect::<Vec<_>>();
-        groups.sort_by(|left, right| {
+        // Sort keys per group, evaluated like select-list items so aggregate
+        // keys (`ORDER BY count(*) DESC`, `ORDER BY 2`) see the whole group.
+        let mut keys = Vec::with_capacity(groups.len());
+        for (index, group) in groups.iter().enumerate() {
+            if index % 1024 == 0 {
+                self.check_cancellation()?;
+            }
+            let mut values = Vec::with_capacity(expressions.len());
+            for (order, pg_type) in expressions.iter().zip(&order_types) {
+                let value = match group.first() {
+                    Some(first) => self.eval_group_value(group, first, &order.expr, columns)?,
+                    None => SqlValue::Null,
+                };
+                let typed = pg_type.as_deref().and_then(|pg_type| {
+                    pg_typed_index_key_for_db(self.db_ref(), pg_type, &value).ok()
+                });
+                values.push((value, typed));
+            }
+            keys.push(values);
+        }
+        let mut order = (0..groups.len()).collect::<Vec<_>>();
+        order.sort_by(|&left, &right| {
             expressions
                 .iter()
-                .zip(&bounds)
-                .zip(&order_types)
-                .map(|((order, bound), pg_type)| {
-                    let eval = |group: &[SlotRow]| {
-                        group
-                            .first()
-                            .and_then(|row| match bound {
-                                Some(bound) => bound
-                                    .eval(&BoundExprFrame {
-                                        user_calls: &[],
-                                        db: self.db_ref(),
-                                        columns: BoundExprColumns::Values(row),
-                                        vars: &context.var_values,
-                                    })
-                                    .ok(),
-                                None => self.eval_slot_row_value(row, &context, &order.expr).ok(),
-                            })
-                            .unwrap_or(SqlValue::Null)
-                    };
-                    let left = eval(left);
-                    let right = eval(right);
-                    let left_key = pg_type.as_deref().and_then(|pg_type| {
-                        pg_typed_index_key_for_db(self.db_ref(), pg_type, &left).ok()
-                    });
-                    let right_key = pg_type.as_deref().and_then(|pg_type| {
-                        pg_typed_index_key_for_db(self.db_ref(), pg_type, &right).ok()
-                    });
+                .zip(keys[left].iter().zip(&keys[right]))
+                .map(|(order, ((left, left_key), (right, right_key)))| {
                     typed_order_expr_value_ordering(
                         &order.expr,
-                        &left,
+                        left,
                         left_key.as_deref(),
-                        &right,
+                        right,
                         right_key.as_deref(),
                         &order.options,
                     )
@@ -3240,6 +3241,10 @@ impl<'db> SqlEngine<'db> {
                 .find(|ordering| *ordering != Ordering::Equal)
                 .unwrap_or(Ordering::Equal)
         });
+        let mut taken = groups.iter_mut().map(std::mem::take).collect::<Vec<_>>();
+        for (target, source) in order.into_iter().enumerate() {
+            groups[target] = std::mem::take(&mut taken[source]);
+        }
         self.check_cancellation()?;
         Ok(())
     }

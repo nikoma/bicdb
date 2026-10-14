@@ -1271,6 +1271,13 @@ pub(crate) fn is_mutating_with_sql(normalized: &str) -> bool {
             " update ",
             " delete from ",
             " merge into ",
+            // A data-modifying CTE written without a space: `ins AS (INSERT INTO ...)`.
+            // Missing it described the statement by running it outside the
+            // session's transaction, where the transaction's own writes are invisible.
+            "(insert into ",
+            "(update ",
+            "(delete from ",
+            "(merge into ",
         ]
         .iter()
         .any(|needle| normalized.contains(needle))

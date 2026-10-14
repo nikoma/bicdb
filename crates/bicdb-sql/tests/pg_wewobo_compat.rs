@@ -834,3 +834,74 @@ fn generate_series_steps_timestamps_by_an_interval() {
     let first_is_23h_ago = s.execute("SELECT min(h) = date_trunc('hour', now()) - interval '23 hours' FROM generate_series(date_trunc('hour',now())-interval '23 hours',date_trunc('hour',now()),interval '1 hour') h").unwrap().rows;
     assert_eq!(first_is_23h_ago, vec![vec![SqlValue::Bool(true)]]);
 }
+
+#[test]
+fn partial_unique_index_frees_a_key_when_the_transaction_moves_the_row_out_of_its_predicate() {
+    let (_dir, mut db) = db();
+    // $1/$2 are the WeWoBo statement's parameters; the other statements take none.
+    let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![text("00000000-0000-4000-8000-000000000001"), text("{b@x,c@x}"), text("member"), text("owner")]);
+    s.execute("CREATE TABLE network_space_email_invites (id UUID PRIMARY KEY, space_id UUID NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, invited_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), claimed_by TEXT, claimed_at TIMESTAMPTZ, revoked_at TIMESTAMPTZ)").unwrap();
+    s.execute("CREATE INDEX network_space_email_invites_space_idx ON network_space_email_invites (space_id)").unwrap();
+    s.execute("CREATE UNIQUE INDEX network_space_email_invites_open_uq ON network_space_email_invites (space_id, email) WHERE claimed_at IS NULL AND revoked_at IS NULL").unwrap();
+    s.execute("INSERT INTO network_space_email_invites (id, space_id, email, role, token_hash, invited_by) VALUES (gen_random_uuid(),'00000000-0000-4000-8000-000000000001','a@x','member',md5(random()::text),'owner'),(gen_random_uuid(),'00000000-0000-4000-8000-000000000001','b@x','member',md5(random()::text),'owner'),(gen_random_uuid(),'00000000-0000-4000-8000-000000000001','c@x','member',md5(random()::text),'owner'),(gen_random_uuid(),'00000000-0000-4000-8000-000000000001','d@x','member',md5(random()::text),'owner')").unwrap();
+    let open = |s: &mut SqlSession, email: &str| {
+        s.execute(&format!("SELECT count(*) FROM network_space_email_invites WHERE email='{email}' AND claimed_at IS NULL AND revoked_at IS NULL")).unwrap().rows[0][0].clone()
+    };
+    // Autocommit statements: each is its own transaction.
+    s.execute("UPDATE network_space_email_invites SET revoked_at=NOW() WHERE space_id='00000000-0000-4000-8000-000000000001' AND email='a@x' AND claimed_at IS NULL AND revoked_at IS NULL").unwrap();
+    s.execute("INSERT INTO network_space_email_invites (id, space_id, email, role, token_hash, invited_by) VALUES (gen_random_uuid(),'00000000-0000-4000-8000-000000000001','a@x','member',md5(random()::text),'owner')").unwrap();
+    // Revoke then re-invite inside one transaction.
+    s.execute("BEGIN ISOLATION LEVEL READ COMMITTED").unwrap();
+    s.execute("UPDATE network_space_email_invites SET revoked_at=NOW() WHERE space_id='00000000-0000-4000-8000-000000000001' AND email='a@x' AND claimed_at IS NULL AND revoked_at IS NULL").unwrap();
+    s.execute("INSERT INTO network_space_email_invites (id, space_id, email, role, token_hash, invited_by) VALUES (gen_random_uuid(),'00000000-0000-4000-8000-000000000001','a@x','member',md5(random()::text),'owner')").unwrap();
+    s.execute("COMMIT").unwrap();
+    assert_eq!(open(&mut s, "a@x"), SqlValue::Int(1));
+    // The WeWoBo form: parameterised revoke, then a CTE insert returning the new rows.
+    s.execute("BEGIN ISOLATION LEVEL READ COMMITTED").unwrap();
+    s.execute("UPDATE network_space_email_invites SET revoked_at=NOW() WHERE space_id=$1 AND email IN (SELECT lower(btrim(x)) FROM unnest($2::text[]) x) AND claimed_at IS NULL AND revoked_at IS NULL").unwrap();
+    let r = s.execute("WITH t AS (SELECT e.email, md5(random()::text) AS token FROM (SELECT DISTINCT lower(btrim(x)) AS email FROM unnest($2::text[]) x) e), ins AS (INSERT INTO network_space_email_invites (id,space_id,email,role,token_hash,invited_by,created_at) SELECT gen_random_uuid(),$1,t.email,$3,md5(t.token),$4,NOW() FROM t RETURNING id,email) SELECT ins.email FROM ins JOIN t ON t.email=ins.email ORDER BY ins.email").unwrap();
+    assert_eq!(r.rows, vec![vec![text("b@x")], vec![text("c@x")]]);
+    s.execute("COMMIT").unwrap();
+    assert_eq!(open(&mut s, "b@x"), SqlValue::Int(1));
+    assert_eq!(open(&mut s, "c@x"), SqlValue::Int(1));
+    // Claiming (another predicate column) and changing the key column also free the old key.
+    s.execute("BEGIN ISOLATION LEVEL READ COMMITTED").unwrap();
+    s.execute("UPDATE network_space_email_invites SET claimed_at=NOW() WHERE email='b@x' AND claimed_at IS NULL AND revoked_at IS NULL").unwrap();
+    s.execute("UPDATE network_space_email_invites SET email='e@x' WHERE email='c@x' AND claimed_at IS NULL AND revoked_at IS NULL").unwrap();
+    s.execute("INSERT INTO network_space_email_invites (id, space_id, email, role, token_hash, invited_by) VALUES (gen_random_uuid(),'00000000-0000-4000-8000-000000000001','b@x','member',md5(random()::text),'owner'),(gen_random_uuid(),'00000000-0000-4000-8000-000000000001','c@x','member',md5(random()::text),'owner')").unwrap();
+    s.execute("COMMIT").unwrap();
+    assert_eq!(open(&mut s, "b@x"), SqlValue::Int(1));
+    assert_eq!(open(&mut s, "c@x"), SqlValue::Int(1));
+    assert_eq!(open(&mut s, "e@x"), SqlValue::Int(1));
+    // ON CONFLICT on the partial index sees the freed key too.
+    s.execute("BEGIN ISOLATION LEVEL READ COMMITTED").unwrap();
+    s.execute("UPDATE network_space_email_invites SET revoked_at=NOW() WHERE email='d@x' AND claimed_at IS NULL AND revoked_at IS NULL").unwrap();
+    let r = s.execute("INSERT INTO network_space_email_invites (id, space_id, email, role, token_hash, invited_by) VALUES (gen_random_uuid(),'00000000-0000-4000-8000-000000000001','d@x','member',md5(random()::text),'owner') ON CONFLICT (space_id, email) WHERE claimed_at IS NULL AND revoked_at IS NULL DO NOTHING RETURNING email").unwrap();
+    assert_eq!(r.rows, vec![vec![text("d@x")]]);
+    s.execute("COMMIT").unwrap();
+    assert_eq!(open(&mut s, "d@x"), SqlValue::Int(1));
+    // A row that still matches the predicate after its update keeps its key.
+    s.execute("BEGIN ISOLATION LEVEL READ COMMITTED").unwrap();
+    s.execute("UPDATE network_space_email_invites SET role='admin' WHERE email='a@x' AND claimed_at IS NULL AND revoked_at IS NULL").unwrap();
+    let err = s.execute("INSERT INTO network_space_email_invites (id, space_id, email, role, token_hash, invited_by) VALUES (gen_random_uuid(),'00000000-0000-4000-8000-000000000001','a@x','member',md5(random()::text),'owner')").unwrap_err();
+    assert!(err.to_string().contains("network_space_email_invites_open_uq"), "{err}");
+    s.execute("ROLLBACK").unwrap();
+    s.execute("BEGIN ISOLATION LEVEL READ COMMITTED").unwrap();
+    s.execute("UPDATE network_space_email_invites SET role='admin' WHERE email='a@x' AND revoked_at IS NULL").unwrap();
+    let r = s.execute("INSERT INTO network_space_email_invites (id, space_id, email, role, token_hash, invited_by) VALUES (gen_random_uuid(),'00000000-0000-4000-8000-000000000001','a@x','member',md5(random()::text),'owner') ON CONFLICT (space_id, email) WHERE claimed_at IS NULL AND revoked_at IS NULL DO NOTHING RETURNING email").unwrap();
+    assert!(r.rows.is_empty(), "{:?}", r.rows);
+    s.execute("ROLLBACK").unwrap();
+    // A second new open row for a freed key, or a row moved back into the predicate, conflicts.
+    s.execute("BEGIN ISOLATION LEVEL READ COMMITTED").unwrap();
+    s.execute("UPDATE network_space_email_invites SET revoked_at=NOW() WHERE email='a@x' AND claimed_at IS NULL AND revoked_at IS NULL").unwrap();
+    s.execute("INSERT INTO network_space_email_invites (id, space_id, email, role, token_hash, invited_by) VALUES (gen_random_uuid(),'00000000-0000-4000-8000-000000000001','a@x','member',md5(random()::text),'owner')").unwrap();
+    assert!(s.execute("INSERT INTO network_space_email_invites (id, space_id, email, role, token_hash, invited_by) VALUES (gen_random_uuid(),'00000000-0000-4000-8000-000000000001','a@x','member',md5(random()::text),'owner')").is_err());
+    s.execute("ROLLBACK").unwrap();
+    s.execute("BEGIN ISOLATION LEVEL READ COMMITTED").unwrap();
+    s.execute("UPDATE network_space_email_invites SET email='z@x' WHERE email='a@x' AND claimed_at IS NULL AND revoked_at IS NULL").unwrap();
+    s.execute("INSERT INTO network_space_email_invites (id, space_id, email, role, token_hash, invited_by) VALUES (gen_random_uuid(),'00000000-0000-4000-8000-000000000001','a@x','member',md5(random()::text),'owner')").unwrap();
+    assert!(s.execute("UPDATE network_space_email_invites SET email='a@x' WHERE email='z@x'").is_err());
+    s.execute("ROLLBACK").unwrap();
+    assert_eq!(open(&mut s, "a@x"), SqlValue::Int(1));
+    assert_eq!(open(&mut s, "z@x"), SqlValue::Int(0));
+}

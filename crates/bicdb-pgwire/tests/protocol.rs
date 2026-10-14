@@ -3502,6 +3502,66 @@ fn extended_query_insert_returning_description_ignores_trailing_marginalia_comme
 }
 
 #[test]
+fn extended_query_data_modifying_cte_runs_inside_the_open_transaction() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_query(
+        &mut client,
+        "CREATE TABLE invites (id INT PRIMARY KEY, space_id INT NOT NULL, email TEXT NOT NULL, revoked_at TIMESTAMPTZ);
+         CREATE UNIQUE INDEX invites_open_uq ON invites (space_id, email) WHERE revoked_at IS NULL;
+         INSERT INTO invites VALUES (1, 7, 'a@x', NULL);",
+    );
+    read_query_rows(&mut client);
+
+    // Revoke and re-issue in one transaction, the way node-postgres sends it
+    // (Parse, Bind, Describe portal, Execute, Sync). The data-modifying CTE is
+    // described and run inside the open transaction, so it sees the revocation.
+    send_query(&mut client, "BEGIN");
+    read_query_rows(&mut client);
+    send_parse(
+        &mut client,
+        "",
+        "UPDATE invites SET revoked_at = NOW() WHERE space_id = $1 AND revoked_at IS NULL",
+        &[23],
+    );
+    send_bind(&mut client, "", "", &["7"]);
+    send_describe_portal(&mut client, "");
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    read_query_rows(&mut client);
+    send_parse(
+        &mut client,
+        "",
+        "WITH t AS (SELECT $2::text AS email),ins AS (INSERT INTO invites (id, space_id, email) SELECT 2, $1, t.email FROM t RETURNING id, email) SELECT ins.id, ins.email FROM ins JOIN t ON t.email = ins.email",
+        &[23, 25],
+    );
+    send_bind(&mut client, "", "", &["7", "a@x"]);
+    send_describe_portal(&mut client, "");
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    let (rows, oids) = read_query_rows_and_oids(&mut client);
+    assert_eq!(oids.len(), 2);
+    assert_eq!(rows, vec![vec!["2".to_string(), "a@x".to_string()]]);
+    send_query(&mut client, "COMMIT");
+    read_query_rows(&mut client);
+    send_query(&mut client, "SELECT id FROM invites WHERE revoked_at IS NULL ORDER BY id");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["2".to_string()]]);
+
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn authenticated_pgwire_context_is_immutable_and_isolated_per_connection() {
     let dir = tempfile::tempdir().unwrap();
     {

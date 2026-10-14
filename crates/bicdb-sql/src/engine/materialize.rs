@@ -170,7 +170,9 @@ impl<'db> SqlEngine<'db> {
                 }
             }
         }
-        if self.outer_row.is_some() {
+        // Subqueries (`SELECT EXISTS (SELECT ...)`, `SELECT (SELECT ...)`) need the
+        // engine, which only the row evaluator has; it runs them over an empty row.
+        if self.outer_row.is_some() || crate::planner::expr_contains_subquery(expr) {
             // The inherited row is correlated, not a local FROM row. Keeping
             // the local context empty preserves routine-variable precedence.
             let (_scope, context) = self.bound_row_context(&[]);

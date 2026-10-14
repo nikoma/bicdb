@@ -872,6 +872,18 @@ pub(crate) fn unique_arbiter_for_columns(
     Ok(None)
 }
 
+/// Index lookups see committed rows. A row this transaction has since deleted or rewritten no longer holds its
+/// committed key (its pending version, if any, is checked separately), so a key freed by DELETE can be reused in the
+/// same transaction, as in PostgreSQL.
+fn committed_ids_still_present(tx: Option<&Transaction>, table: &str, ids: Vec<String>) -> Vec<String> {
+    let Some(tx) = tx else { return ids };
+    if ids.is_empty() || !tx.has_pending_writes(table) {
+        return ids;
+    }
+    let pending: BTreeSet<String> = tx.pending_record_ids_for_collection(table).into_iter().collect();
+    ids.into_iter().filter(|id| !pending.contains(id)).collect()
+}
+
 pub(crate) fn validate_unique_arbiter_records(
     db: &BicDb,
     tx: Option<&Transaction>,
@@ -950,7 +962,7 @@ pub(crate) fn validate_unique_arbiter_records(
         }
         sql_profile_index_lookup();
         let index_values = unique_key_index_values(schema, &arbiter.key, &key_values)?;
-        let ids = db.lookup_index_exact(index_name, &index_values)?;
+        let ids = committed_ids_still_present(tx, table, db.lookup_index_exact(index_name, &index_values)?);
         if ids
             .iter()
             .any(|id| !allow_existing_same_id || id != &record.id)
@@ -1028,7 +1040,7 @@ pub(crate) fn non_conflicting_records(
             }
             sql_profile_index_lookup();
             let index_values = unique_key_index_values(schema, &arbiter.key, &key_values)?;
-            if !db.lookup_index_exact(index_name, &index_values)?.is_empty() {
+            if !committed_ids_still_present(tx, table, db.lookup_index_exact(index_name, &index_values)?).is_empty() {
                 continue;
             }
             // The index is committed state only. A row this transaction has

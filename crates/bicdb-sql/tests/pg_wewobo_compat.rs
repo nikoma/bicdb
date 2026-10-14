@@ -311,3 +311,59 @@ fn float_columns_compare_with_numeric_literals() {
     let ordered = s.execute("SELECT d FROM m ORDER BY d DESC").unwrap().rows;
     assert_eq!(ordered, vec![vec![SqlValue::Float(0.57)], vec![SqlValue::Float(0.25)]]);
 }
+
+#[test]
+fn select_without_from_runs_subqueries() {
+    // `SELECT EXISTS (...)` and scalar subqueries with no FROM are how applications ask yes/no and single-value
+    // questions (Carrier's sql.scalar_as("Bool", "SELECT EXISTS (...)")).
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE sanctions (subject text, lifted_at timestamptz, expires_at timestamptz)").unwrap();
+    s.execute("INSERT INTO sanctions VALUES ('a', NULL, NULL), ('b', now(), NULL)").unwrap();
+    let ask = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows[0][0].clone();
+    assert_eq!(ask(&mut s, "SELECT EXISTS (SELECT 1 FROM sanctions WHERE subject = 'a' AND lifted_at IS NULL AND (expires_at IS NULL OR expires_at > NOW()))"), SqlValue::Bool(true));
+    assert_eq!(ask(&mut s, "SELECT EXISTS (SELECT 1 FROM sanctions WHERE subject = 'b' AND lifted_at IS NULL)"), SqlValue::Bool(false));
+    assert_eq!(ask(&mut s, "SELECT NOT EXISTS (SELECT 1 FROM sanctions WHERE subject = 'z')"), SqlValue::Bool(true));
+    assert_eq!(ask(&mut s, "SELECT (SELECT count(*) FROM sanctions)"), SqlValue::Int(2));
+    assert_eq!(ask(&mut s, "SELECT COALESCE((SELECT subject FROM sanctions WHERE subject = 'z'), 'none')"), text("none"));
+    assert_eq!(ask(&mut s, "SELECT 'a' IN (SELECT subject FROM sanctions)"), SqlValue::Bool(true));
+    assert_eq!(ask(&mut s, "SELECT EXISTS (SELECT 1 FROM sanctions) AND (SELECT count(*) FROM sanctions) > 1"), SqlValue::Bool(true));
+}
+
+#[test]
+fn update_can_change_a_primary_key() {
+    // PostgreSQL allows UPDATE ... SET id = ...; applications and tests use it (e.g. to backdate a time-ordered id).
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE profiles (id text PRIMARY KEY, subject text UNIQUE, name text NOT NULL)").unwrap();
+    s.execute("INSERT INTO profiles VALUES ('p1','ann','Ann'),('p2','ben','Ben')").unwrap();
+    assert_eq!(s.execute("UPDATE profiles SET id='p0', name=name || '!' WHERE subject='ann'").unwrap().command_tag.as_deref(), Some("UPDATE 1"));
+    let rows = s.execute("SELECT id, subject, name FROM profiles ORDER BY id").unwrap().rows;
+    assert_eq!(rows, vec![vec![text("p0"), text("ann"), text("Ann!")], vec![text("p2"), text("ben"), text("Ben")]]);
+    // Moving onto an existing key is a unique violation, and nothing changes.
+    assert!(s.execute("UPDATE profiles SET id='p2' WHERE subject='ann'").is_err());
+    assert_eq!(s.execute("SELECT count(*) FROM profiles WHERE id='p0'").unwrap().rows[0][0], SqlValue::Int(1));
+    // Inside a transaction the move rolls back with it.
+    s.execute("BEGIN").unwrap();
+    s.execute("UPDATE profiles SET id='p9' WHERE subject='ben'").unwrap();
+    s.execute("ROLLBACK").unwrap();
+    assert_eq!(s.execute("SELECT id FROM profiles WHERE subject='ben'").unwrap().rows[0][0], text("p2"));
+    // A key other rows refer to is refused rather than risking a cascading delete.
+    s.execute("CREATE TABLE posts (id text PRIMARY KEY, author text REFERENCES profiles(id) ON DELETE CASCADE)").unwrap();
+    s.execute("INSERT INTO posts VALUES ('x','p2')").unwrap();
+    assert!(s.execute("UPDATE profiles SET id='p7' WHERE subject='ben'").is_err());
+    assert_eq!(s.execute("SELECT count(*) FROM posts").unwrap().rows[0][0], SqlValue::Int(1));
+}
+
+#[test]
+fn a_unique_value_freed_by_delete_can_be_reused_in_the_same_transaction() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE people (id text PRIMARY KEY, subject text UNIQUE)").unwrap();
+    s.execute("INSERT INTO people VALUES ('p1','ann')").unwrap();
+    s.execute("BEGIN").unwrap();
+    s.execute("DELETE FROM people WHERE subject='ann'").unwrap();
+    s.execute("INSERT INTO people VALUES ('p2','ann')").unwrap();
+    s.execute("COMMIT").unwrap();
+    assert_eq!(s.execute("SELECT id FROM people").unwrap().rows, vec![vec![text("p2")]]);
+}

@@ -701,6 +701,113 @@ impl<'db> SqlSession<'db> {
         Ok(Some(out))
     }
 
+    /// PostgreSQL lets UPDATE change a primary key. BicDB stores a row under its key, so a key change is a move:
+    /// the new rows are computed from the old ones, the old rows are deleted and the new rows inserted, in one
+    /// transaction and with the usual insert checks (types, NOT NULL, CHECK, unique keys). Refused where a delete and
+    /// insert could behave differently from an in-place update: a table whose key foreign keys refer to (the delete
+    /// could cascade or fail), a table with triggers, and UPDATE ... FROM / RETURNING.
+    pub(crate) fn try_move_primary_key(
+        &mut self,
+        update: &sqlparser::ast::Update,
+        table: &str,
+        schema: &TableSchema,
+    ) -> Result<Option<SqlResult>> {
+        let key = primary_key_columns_for_schema(schema);
+        let moves_key = update.assignments.iter().any(|assignment| match &assignment.target {
+            AssignmentTarget::ColumnName(name) => relation_name(name)
+                .map(|column| key.iter().any(|k| k.eq_ignore_ascii_case(&column)))
+                .unwrap_or(false),
+            _ => false,
+        });
+        if !moves_key {
+            return Ok(None);
+        }
+        let refuse = |why: &str| Err(SqlError::Unsupported(format!("UPDATE of a primary key {why} is not supported")));
+        if update.from.is_some() || update.returning.is_some() {
+            return refuse("with FROM or RETURNING");
+        }
+        if list_schemas_shared(self.db_ref())?.iter().any(|other| {
+            other.constraints.iter().any(|constraint| {
+                matches!(constraint, ConstraintSchema::ForeignKey { foreign_table, .. } if foreign_table.eq_ignore_ascii_case(table))
+            })
+        }) {
+            return refuse("that foreign keys refer to");
+        }
+        if list_triggers(self.db_ref())?
+            .iter()
+            .any(|trigger| trigger.enabled && trigger.table_name.eq_ignore_ascii_case(table))
+        {
+            return refuse("on a table with triggers");
+        }
+        let quote = |name: &str| format!("\"{}\"", name.replace('"', "\"\""));
+        let mut assigned: BTreeMap<String, String> = BTreeMap::new();
+        for assignment in &update.assignments {
+            let AssignmentTarget::ColumnName(name) = &assignment.target else {
+                return refuse("with tuple assignments");
+            };
+            assigned.insert(relation_name(name)?.to_ascii_lowercase(), assignment.value.to_string());
+        }
+        let columns: Vec<String> = schema.columns.iter().map(|column| column.name.clone()).collect();
+        let projection = columns
+            .iter()
+            .map(|column| match assigned.get(&column.to_ascii_lowercase()) {
+                Some(value) => format!("{value} AS {}", quote(column)),
+                None => format!("{} AS {}", quote(column), quote(column)),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let target = update.table.to_string();
+        let filter = update.selection.as_ref().map(|selection| format!(" WHERE {selection}")).unwrap_or_default();
+        let list = columns.iter().map(|column| quote(column)).collect::<Vec<_>>().join(", ");
+        let own_transaction = !self.in_transaction();
+        if own_transaction {
+            self.execute("BEGIN")?;
+        }
+        // The new rows are computed first (from the rows as they are), then the old rows are deleted and the new
+        // ones inserted; each value goes back in its PostgreSQL text form cast to its column type.
+        let moved = (|| -> Result<i64> {
+            let rows = self.execute(&format!("SELECT {projection} FROM {target}{filter}"))?.rows;
+            if rows.is_empty() {
+                return Ok(0);
+            }
+            self.execute(&format!("DELETE FROM {target}{filter}"))?;
+            for chunk in rows.chunks(500) {
+                let values = chunk
+                    .iter()
+                    .map(|row| {
+                        let cells = row
+                            .iter()
+                            .zip(&schema.columns)
+                            .map(|(value, column)| match value {
+                                SqlValue::Null => "NULL".to_string(),
+                                value => format!("'{}'::{}", value.to_cell().replace('\'', "''"), column.pg_type),
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        format!("({cells})")
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                self.execute(&format!("INSERT INTO {} ({list}) VALUES {values}", quote(table)))?;
+            }
+            Ok(rows.len() as i64)
+        })();
+        match moved {
+            Ok(count) => {
+                if own_transaction {
+                    self.execute("COMMIT")?;
+                }
+                Ok(Some(SqlResult::command(format!("UPDATE {count}"))))
+            }
+            Err(error) => {
+                if own_transaction {
+                    let _ = self.execute("ROLLBACK");
+                }
+                Err(error)
+            }
+        }
+    }
+
     pub(crate) fn update_repair_enabled(&self) -> bool {
         static ENV: OnceLock<bool> = OnceLock::new();
         if *ENV.get_or_init(|| {
@@ -734,6 +841,11 @@ impl<'db> SqlSession<'db> {
             ));
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        if let Some(schema) = schema.as_deref() {
+            if let Some(result) = self.try_move_primary_key(update, &table, schema)? {
+                return Ok(result);
+            }
+        }
         let from_rows = self.update_from_row_set(update.from.as_ref(), &ctes)?;
         let mut updated = 0usize;
         let mut updated_records = Vec::new();

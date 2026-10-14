@@ -2264,6 +2264,8 @@ pub(crate) fn json_projection_set_returning_call(
 pub(crate) enum ArrayProjectionSetReturningFunction {
     Unnest,
     GenerateSubscripts,
+    /// The form when the argument types settle it; otherwise resolved from the start value.
+    GenerateSeries(Option<GenerateSeriesKind>),
     PgSnapshotXip,
     TxidSnapshotXip,
 }
@@ -2294,9 +2296,24 @@ pub(crate) fn array_projection_set_returning_calls(
             "generate_subscripts" => ArrayProjectionSetReturningFunction::GenerateSubscripts,
             "pg_snapshot_xip" => ArrayProjectionSetReturningFunction::PgSnapshotXip,
             "txid_snapshot_xip" => ArrayProjectionSetReturningFunction::TxidSnapshotXip,
+            "generate_series" => ArrayProjectionSetReturningFunction::GenerateSeries(None),
             _ => continue,
         };
         let arguments = function_args(function);
+        let kind = match kind {
+            ArrayProjectionSetReturningFunction::GenerateSeries(_) => {
+                if !(2..=3).contains(&arguments.len()) {
+                    return Err(SqlError::InvalidSql(format!(
+                        "generate_series expects 2 or 3 arguments, got {}",
+                        arguments.len()
+                    )));
+                }
+                ArrayProjectionSetReturningFunction::GenerateSeries(
+                    generate_series_declared_kind(&arguments),
+                )
+            }
+            other => other,
+        };
         match kind {
             ArrayProjectionSetReturningFunction::Unnest if arguments.len() != 1 => {
                 return Err(SqlError::InvalidSql(format!(
@@ -2330,6 +2347,92 @@ pub(crate) fn array_projection_set_returning_calls(
         });
     }
     Ok(result)
+}
+
+/// The `generate_series` form its argument types settle, if they do.
+fn generate_series_declared_kind(arguments: &[Expr]) -> Option<GenerateSeriesKind> {
+    let types = arguments
+        .iter()
+        .take(2)
+        .map(|argument| projected_expr_pg_type(argument, None))
+        .collect::<Vec<_>>();
+    if types.iter().all(Option::is_none) {
+        return None;
+    }
+    Some(GenerateSeriesKind::resolve(&types, &SqlValue::Null))
+}
+
+/// The output type of a SELECT-list `generate_series`.
+pub(crate) fn generate_series_projection_pg_type(
+    call: &ArrayProjectionSetReturningCall,
+) -> Option<String> {
+    let types = call
+        .arguments
+        .iter()
+        .map(|argument| projected_expr_pg_type(argument, None))
+        .collect::<Vec<_>>();
+    generate_series_output_pg_type(&types)
+}
+
+/// PostgreSQL's `generate_series` result type for these argument types: the timestamp type it
+/// steps over, or int4/int8/numeric following integer arguments. None when no bound is typed.
+pub(crate) fn generate_series_output_pg_type(argument_types: &[Option<String>]) -> Option<String> {
+    if argument_types.iter().take(2).all(Option::is_none) {
+        return None;
+    }
+    if let Some(pg_type) = GenerateSeriesKind::resolve(argument_types, &SqlValue::Null).pg_type() {
+        return Some(pg_type.to_string());
+    }
+    let declared = |names: &[&str]| {
+        argument_types
+            .iter()
+            .any(|pg_type| pg_type.as_deref().is_some_and(|pg_type| names.contains(&pg_type)))
+    };
+    Some(
+        if declared(&["numeric", "decimal"]) {
+            "numeric"
+        } else if declared(&["int8", "bigint"]) {
+            "int8"
+        } else {
+            "int4"
+        }
+        .to_string(),
+    )
+}
+
+fn generate_series_integer_values(arguments: &[SqlValue]) -> Result<Vec<SqlValue>> {
+    if arguments.iter().any(|value| matches!(value, SqlValue::Null)) {
+        return Ok(Vec::new());
+    }
+    let integer = |value: &SqlValue| {
+        sql_value_i64(value).ok_or_else(|| {
+            SqlError::InvalidSql(format!(
+                "generate_series argument must be an integer-compatible value, got {}",
+                value.to_cell()
+            ))
+        })
+    };
+    let start = integer(&arguments[0])?;
+    let stop = integer(&arguments[1])?;
+    let step = arguments.get(2).map(integer).transpose()?.unwrap_or(1);
+    if step == 0 {
+        return Err(SqlError::InvalidSql(
+            "generate_series step size cannot equal zero".to_string(),
+        ));
+    }
+    let row_count = generate_series_row_count(start, stop, step)?;
+    let mut values = Vec::new();
+    values.try_reserve(row_count).map_err(|_| {
+        SqlError::Unsupported(format!(
+            "generate_series result has {row_count} rows and cannot be materialized"
+        ))
+    })?;
+    let mut value = i128::from(start);
+    for _ in 0..row_count {
+        values.push(SqlValue::Int(value as i64));
+        value += i128::from(step);
+    }
+    Ok(values)
 }
 
 pub(crate) fn array_projection_set_values(
@@ -2412,6 +2515,16 @@ pub(crate) fn array_projection_set_values(
             "txid_snapshot_xip",
             arguments.first().unwrap_or(&SqlValue::Null),
         ),
+        ArrayProjectionSetReturningFunction::GenerateSeries(kind) => {
+            let kind = kind.unwrap_or_else(|| {
+                GenerateSeriesKind::resolve(&[], arguments.first().unwrap_or(&SqlValue::Null))
+            });
+            if kind == GenerateSeriesKind::Integer {
+                generate_series_integer_values(&arguments)
+            } else {
+                generate_series_timestamp_values(kind, &arguments, |_| Ok(()))
+            }
+        }
     }
 }
 

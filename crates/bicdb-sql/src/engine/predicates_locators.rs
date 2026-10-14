@@ -3417,6 +3417,23 @@ impl<'db> SqlEngine<'db> {
                 .unwrap_or(&[]),
             &source_columns,
         )?;
+        if let Some((kind, values)) = generate_series_timestamp_args(args)? {
+            let series = generate_series_timestamp_values(kind, &values, |count| {
+                if count % 1024 == 0 {
+                    self.check_cancellation()?;
+                }
+                Ok(())
+            })?;
+            let rows = series
+                .into_iter()
+                .map(|value| slot_row_from_values(&columns, &[value]))
+                .collect::<Vec<_>>();
+            sql_profile_sql_rows_materialized(&rows);
+            return Ok(RowSet {
+                rows,
+                columns: aliased_row_output_columns(&alias_name, &columns),
+            });
+        }
         let Some((start, _stop, step, row_count)) = generate_series_bounds(args)? else {
             let output_columns = aliased_row_output_columns(&alias_name, &columns);
             return Ok(RowSet {

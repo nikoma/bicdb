@@ -1015,6 +1015,9 @@ impl<'db> SqlEngine<'db> {
                 ArrayProjectionSetReturningFunction::PgSnapshotXip => Some("xid8".to_string()),
                 ArrayProjectionSetReturningFunction::TxidSnapshotXip => Some("int8".to_string()),
                 ArrayProjectionSetReturningFunction::Unnest => column_types[output_index].clone(),
+                ArrayProjectionSetReturningFunction::GenerateSeries(_) => {
+                    generate_series_projection_pg_type(&calls[set_index])
+                }
             };
         }
         Ok(SqlResult::new(columns, result_rows).with_column_types(column_types))

@@ -786,3 +786,51 @@ fn to_char_copies_double_quoted_text_and_non_pattern_characters() {
     let rows = s.execute(&format!("SELECT to_char(date_trunc('hour',ts)+floor(extract(minute FROM ts)/10)*INTERVAL '10 minutes', {fmt}) FROM (SELECT TIMESTAMPTZ '2026-10-14 10:37:12+00' AS ts) t")).unwrap().rows;
     assert_eq!(rows, vec![vec![text("2026-10-14T10:30")]]);
 }
+
+#[test]
+fn generate_series_steps_timestamps_by_an_interval() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    let r = s.execute("SELECT count(*) FROM generate_series(TIMESTAMPTZ '2026-10-13 17:00:00+00', TIMESTAMPTZ '2026-10-13 20:00:00+00', INTERVAL '1 hour')").unwrap();
+    assert_eq!(r.rows, vec![vec![SqlValue::Int(4)]]);
+    // Inclusive bounds, type preserved.
+    let r = s.execute("SELECT g FROM generate_series(TIMESTAMPTZ '2026-10-13 17:00:00+00', TIMESTAMPTZ '2026-10-13 18:30:00+00', INTERVAL '30 minutes') g").unwrap();
+    let want = s.execute("SELECT TIMESTAMPTZ '2026-10-13 17:00:00+00' UNION ALL SELECT TIMESTAMPTZ '2026-10-13 17:30:00+00' UNION ALL SELECT TIMESTAMPTZ '2026-10-13 18:00:00+00' UNION ALL SELECT TIMESTAMPTZ '2026-10-13 18:30:00+00'").unwrap();
+    assert_eq!(r.rows, want.rows);
+    assert_eq!(r.column_types, want.column_types);
+    let r = s.execute("SELECT * FROM generate_series(TIMESTAMP '2026-10-13 20:00:00', TIMESTAMP '2026-10-13 17:00:00', INTERVAL '-90 minutes')").unwrap();
+    let want = s.execute("SELECT TIMESTAMP '2026-10-13 20:00:00' UNION ALL SELECT TIMESTAMP '2026-10-13 18:30:00' UNION ALL SELECT TIMESTAMP '2026-10-13 17:00:00'").unwrap();
+    assert_eq!(r.rows, want.rows);
+    assert_eq!(r.column_types, want.column_types);
+    // Month and day steps are added one after another, as PostgreSQL does.
+    let rows = s.execute("SELECT g::text FROM generate_series(TIMESTAMP '2026-01-31 08:00', TIMESTAMP '2026-05-01', INTERVAL '1 month') g").unwrap().rows;
+    assert_eq!(rows, vec![
+        vec![text("2026-01-31 08:00:00")],
+        vec![text("2026-02-28 08:00:00")],
+        vec![text("2026-03-28 08:00:00")],
+        vec![text("2026-04-28 08:00:00")],
+    ]);
+    let rows = s.execute("SELECT count(*) FROM generate_series(TIMESTAMP '2026-10-01', TIMESTAMP '2026-10-31 23:59', INTERVAL '1 day 12 hours')").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Int(21)]]);
+    // Empty when the step points away from the stop; a zero step is an error.
+    let rows = s.execute("SELECT count(*) FROM generate_series(TIMESTAMP '2026-10-13', TIMESTAMP '2026-10-12', INTERVAL '1 hour')").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Int(0)]]);
+    let err = s.execute("SELECT * FROM generate_series(TIMESTAMP '2026-10-13', TIMESTAMP '2026-10-14', INTERVAL '0 hours')").unwrap_err();
+    assert!(err.to_string().contains("step size cannot equal zero"), "{err}");
+    // In a projection.
+    let r = s.execute("SELECT generate_series(TIMESTAMPTZ '2026-10-13 17:00:00+00', TIMESTAMPTZ '2026-10-13 19:00:00+00', INTERVAL '1 hour')").unwrap();
+    let want = s.execute("SELECT TIMESTAMPTZ '2026-10-13 17:00:00+00' UNION ALL SELECT TIMESTAMPTZ '2026-10-13 18:00:00+00' UNION ALL SELECT TIMESTAMPTZ '2026-10-13 19:00:00+00'").unwrap();
+    assert_eq!(r.rows, want.rows);
+    assert_eq!(r.column_types, want.column_types);
+    // Hourly buckets for the last day, joined and grouped (WeWoBo's activity chart).
+    s.execute("CREATE TABLE events (id int, at timestamptz); INSERT INTO events VALUES (1, now()), (2, now() - interval '2 hours'), (3, now() - interval '2 hours'), (4, now() - interval '3 days')").unwrap();
+    let rows = s.execute("SELECT h, count(e.id) FROM generate_series(date_trunc('hour',now())-interval '23 hours',date_trunc('hour',now()),interval '1 hour') h LEFT JOIN events e ON date_trunc('hour', e.at) = h GROUP BY h ORDER BY h").unwrap().rows;
+    assert_eq!(rows.len(), 24);
+    let counts = rows.iter().map(|row| row[1].clone()).collect::<Vec<_>>();
+    let mut want = vec![SqlValue::Int(0); 24];
+    want[23] = SqlValue::Int(1);
+    want[21] = SqlValue::Int(2);
+    assert_eq!(counts, want);
+    let first_is_23h_ago = s.execute("SELECT min(h) = date_trunc('hour', now()) - interval '23 hours' FROM generate_series(date_trunc('hour',now())-interval '23 hours',date_trunc('hour',now()),interval '1 hour') h").unwrap().rows;
+    assert_eq!(first_is_23h_ago, vec![vec![SqlValue::Bool(true)]]);
+}

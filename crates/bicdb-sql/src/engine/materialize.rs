@@ -60,6 +60,9 @@ impl<'db> SqlEngine<'db> {
                         Some("int8".to_string())
                     }
                     ArrayProjectionSetReturningFunction::Unnest => None,
+                    ArrayProjectionSetReturningFunction::GenerateSeries(_) => {
+                        generate_series_projection_pg_type(call)
+                    }
                 });
                 base_row.push(SqlValue::Null);
             } else {
@@ -2037,6 +2040,46 @@ impl<'db> SqlEngine<'db> {
                     .as_ref()
                     .map(|alias| alias.columns.as_slice())
                     .unwrap_or(&[]);
+                env.push(RelationColumns {
+                    alias: alias_name.to_ascii_lowercase(),
+                    row_type: None,
+                    columns: rename_relation_columns(columns, alias_columns)?,
+                });
+                Some(())
+            }
+            TableFactor::Table {
+                name,
+                alias,
+                args: Some(args),
+                with_ordinality: false,
+                ..
+            } if relation_name(name)
+                .ok()
+                .is_some_and(|name| is_generate_series_table_function(&name)) =>
+            {
+                let argument_types = table_function_expr_args(args)
+                    .ok()?
+                    .iter()
+                    .map(|expr| self.infer_env_expr_type(expr, &[]))
+                    .collect::<Vec<_>>();
+                let alias_name = alias
+                    .as_ref()
+                    .map(|alias| alias.name.value.clone())
+                    .unwrap_or_else(|| "generate_series".to_string());
+                let alias_columns = alias
+                    .as_ref()
+                    .map(|alias| alias.columns.as_slice())
+                    .unwrap_or(&[]);
+                let column = table_function_source_columns_for_alias(
+                    alias.as_ref(),
+                    &alias_name,
+                    vec!["generate_series".to_string()],
+                )
+                .remove(0);
+                let columns = vec![(
+                    column.to_ascii_lowercase(),
+                    generate_series_output_pg_type(&argument_types),
+                )];
                 env.push(RelationColumns {
                     alias: alias_name.to_ascii_lowercase(),
                     row_type: None,

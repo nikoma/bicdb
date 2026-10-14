@@ -3192,6 +3192,9 @@ pub(crate) fn validate_zero_arg_table_function(
 }
 
 pub(crate) fn estimate_generate_series_rows(args: &TableFunctionArgs) -> Result<usize> {
+    if let Some((kind, values)) = generate_series_timestamp_args(args)? {
+        return estimate_generate_series_timestamp_rows(kind, &values);
+    }
     Ok(generate_series_bounds(args)?
         .map(|(_, _, _, rows)| rows)
         .unwrap_or_default())
@@ -3258,6 +3261,195 @@ pub(crate) fn generate_series_row_count(start: i64, stop: i64, step: i64) -> Res
             "generate_series result is too large to materialize on this platform".to_string(),
         )
     })
+}
+
+/// Which `generate_series` PostgreSQL resolves: the integer form or the
+/// `(timestamp[tz], timestamp[tz], interval)` form.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum GenerateSeriesKind {
+    Integer,
+    Timestamp,
+    Timestamptz,
+}
+
+impl GenerateSeriesKind {
+    /// Resolved from the bounds' declared types, falling back to the shape of the start value.
+    /// A date bound resolves to timestamptz, as in PostgreSQL.
+    pub(crate) fn resolve(bound_types: &[Option<String>], start: &SqlValue) -> Self {
+        let declared = |name: &str| {
+            bound_types
+                .iter()
+                .take(2)
+                .any(|pg_type| pg_type.as_deref() == Some(name))
+        };
+        if declared("timestamptz") {
+            return Self::Timestamptz;
+        }
+        if declared("timestamp") {
+            return Self::Timestamp;
+        }
+        if declared("date") {
+            return Self::Timestamptz;
+        }
+        let SqlValue::String(text) = start else {
+            return Self::Integer;
+        };
+        let text = text.trim();
+        if sql_value_i64(start).is_some() || parse_date_prefix(text).is_none() {
+            return Self::Integer;
+        }
+        match text.split_once(' ') {
+            Some((_, clock)) if !clock.contains(['+', '-']) => Self::Timestamp,
+            _ => Self::Timestamptz,
+        }
+    }
+
+    pub(crate) fn pg_type(self) -> Option<&'static str> {
+        match self {
+            Self::Integer => None,
+            Self::Timestamp => Some("timestamp"),
+            Self::Timestamptz => Some("timestamptz"),
+        }
+    }
+}
+
+/// The timestamp form of a `generate_series(...)` table function call, if its arguments resolve to it.
+pub(crate) fn generate_series_timestamp_args(
+    args: &TableFunctionArgs,
+) -> Result<Option<(GenerateSeriesKind, Vec<SqlValue>)>> {
+    let args = table_function_expr_args(args)?;
+    if args.len() != 3 {
+        return Ok(None);
+    }
+    let values = args
+        .iter()
+        .map(eval_constant_expr)
+        .collect::<Result<Vec<_>>>()?;
+    let types = args
+        .iter()
+        .take(2)
+        .map(|arg| projected_expr_pg_type(arg, None))
+        .collect::<Vec<_>>();
+    match GenerateSeriesKind::resolve(&types, &values[0]) {
+        GenerateSeriesKind::Integer => Ok(None),
+        kind => Ok(Some((kind, values))),
+    }
+}
+
+fn generate_series_timestamp(kind: GenerateSeriesKind, value: &SqlValue) -> Result<PgTimestamp> {
+    let text = value.to_cell();
+    let parsed = if kind == GenerateSeriesKind::Timestamptz {
+        parse_timestamptz(&text).map_err(|error| postgres_timestamptz_input_error(&text, error))?
+    } else {
+        PgTimestamp::from_postgres_text(&text, false)
+            .map_err(|error| postgres_timestamp_input_error(&text, error))?
+    };
+    if parsed.finite_micros().is_none() {
+        return Err(SqlError::InvalidSql(
+            "generate_series bounds must be finite timestamps".to_string(),
+        ));
+    }
+    Ok(parsed)
+}
+
+fn generate_series_step(step: &SqlValue) -> Result<(PgInterval, i128)> {
+    let text = step.to_cell();
+    let interval = PgInterval::from_postgres_text(&text).map_err(|_| {
+        SqlError::invalid_datetime_format(format!(
+            "invalid input syntax for type interval: \"{text}\""
+        ))
+    })?;
+    // Interval comparison as PostgreSQL does it: a month is 30 days, a day 24 hours.
+    const MICROS_PER_DAY: i128 = 86_400_000_000;
+    let span = i128::from(interval.months) * 30 * MICROS_PER_DAY
+        + i128::from(interval.days) * MICROS_PER_DAY
+        + i128::from(interval.micros);
+    if span == 0 {
+        return Err(SqlError::InvalidSql(
+            "generate_series step size cannot equal zero".to_string(),
+        ));
+    }
+    Ok((interval, span))
+}
+
+/// Approximate row count of a timestamp series, for planning.
+pub(crate) fn estimate_generate_series_timestamp_rows(
+    kind: GenerateSeriesKind,
+    values: &[SqlValue],
+) -> Result<usize> {
+    if values.iter().any(|value| matches!(value, SqlValue::Null)) {
+        return Ok(0);
+    }
+    let start = generate_series_timestamp(kind, &values[0])?.finite_micros().unwrap_or(0);
+    let stop = generate_series_timestamp(kind, &values[1])?.finite_micros().unwrap_or(0);
+    let (_, span) = generate_series_step(&values[2])?;
+    let distance = i128::from(stop) - i128::from(start);
+    if distance != 0 && (distance > 0) != (span > 0) {
+        return Ok(0);
+    }
+    Ok(usize::try_from(distance / span + 1).unwrap_or(usize::MAX))
+}
+
+/// `generate_series(start, stop, step)` over timestamps: inclusive bounds, the step added
+/// one at a time (so month steps clamp to shorter months as they go), counting down for a
+/// negative step. `check` runs before each value is produced, with the count so far.
+pub(crate) fn generate_series_timestamp_values(
+    kind: GenerateSeriesKind,
+    values: &[SqlValue],
+    mut check: impl FnMut(usize) -> Result<()>,
+) -> Result<Vec<SqlValue>> {
+    let [start, stop, step] = values else {
+        return Err(SqlError::InvalidSql(format!(
+            "generate_series expects 3 arguments for timestamps, got {}",
+            values.len()
+        )));
+    };
+    if [start, stop, step]
+        .iter()
+        .any(|value| matches!(value, SqlValue::Null))
+    {
+        return Ok(Vec::new());
+    }
+    let (_, span) = generate_series_step(step)?;
+    let stop = generate_series_timestamp(kind, stop)?.finite_micros().unwrap_or(0);
+    let render = |timestamp: PgTimestamp| {
+        SqlValue::String(if kind == GenerateSeriesKind::Timestamptz {
+            render_timestamptz(timestamp)
+        } else {
+            timestamp.to_iso_text(false)
+        })
+    };
+    let mut timestamp = generate_series_timestamp(kind, start)?;
+    let mut current = render(timestamp);
+    let mut series = Vec::new();
+    loop {
+        let micros = timestamp.finite_micros().unwrap_or(0);
+        if (span > 0 && micros > stop) || (span < 0 && micros < stop) {
+            return Ok(series);
+        }
+        check(series.len())?;
+        let next = if kind == GenerateSeriesKind::Timestamptz {
+            eval_typed_timestamptz_arithmetic(
+                &current,
+                &BinaryOperator::Plus,
+                step,
+                Some("timestamptz"),
+                Some("interval"),
+            )?
+        } else {
+            eval_typed_timestamp_arithmetic(
+                &current,
+                &BinaryOperator::Plus,
+                step,
+                Some("timestamp"),
+                Some("interval"),
+            )?
+        }
+        .unwrap_or(SqlValue::Null);
+        series.push(current);
+        timestamp = generate_series_timestamp(kind, &next)?;
+        current = next;
+    }
 }
 
 pub(crate) fn function_name_is(function: &Function, expected: &str) -> bool {

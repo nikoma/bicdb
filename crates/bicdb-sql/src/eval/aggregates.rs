@@ -1543,6 +1543,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
                 | "convert"
                 | "convert_to"
                 | "digest"
+                | "gen_random_bytes"
                 | "hmac"
                 | "set_byte"
                 | "sha224"
@@ -1954,7 +1955,15 @@ pub(crate) fn projected_binary_expr_pg_type(
         | BinaryOperator::AtAt
         | BinaryOperator::Question
         | BinaryOperator::QuestionAnd
-        | BinaryOperator::QuestionPipe => Some("bool".to_string()),
+        | BinaryOperator::QuestionPipe
+        | BinaryOperator::PGLikeMatch
+        | BinaryOperator::PGILikeMatch
+        | BinaryOperator::PGNotLikeMatch
+        | BinaryOperator::PGNotILikeMatch
+        | BinaryOperator::PGRegexMatch
+        | BinaryOperator::PGRegexIMatch
+        | BinaryOperator::PGRegexNotMatch
+        | BinaryOperator::PGRegexNotIMatch => Some("bool".to_string()),
         BinaryOperator::PGOverlap => {
             if left_type.as_deref() == Some("tsquery") && right_type.as_deref() == Some("tsquery") {
                 Some("tsquery".to_string())

@@ -30,6 +30,7 @@ num-bigint = "0.4"
 num-traits = "0.2"
 regex.workspace = true
 fancy-regex = "0.17"
+getrandom = "0.3"
 rustc-hash.workspace = true
 rust-stemmers.workspace = true
 waken_snowball.workspace = true

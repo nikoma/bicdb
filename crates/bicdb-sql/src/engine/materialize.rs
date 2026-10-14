@@ -2942,7 +2942,15 @@ impl<'db> SqlEngine<'db> {
             | BinaryOperator::AtQuestion
             | BinaryOperator::Question
             | BinaryOperator::QuestionAnd
-            | BinaryOperator::QuestionPipe => Some("bool".to_string()),
+            | BinaryOperator::QuestionPipe
+            | BinaryOperator::PGLikeMatch
+            | BinaryOperator::PGILikeMatch
+            | BinaryOperator::PGNotLikeMatch
+            | BinaryOperator::PGNotILikeMatch
+            | BinaryOperator::PGRegexMatch
+            | BinaryOperator::PGRegexIMatch
+            | BinaryOperator::PGRegexNotMatch
+            | BinaryOperator::PGRegexNotIMatch => Some("bool".to_string()),
             BinaryOperator::PGOverlap => {
                 let left = self.infer_env_expr_type(left, env);
                 let right = self.infer_env_expr_type(right, env);

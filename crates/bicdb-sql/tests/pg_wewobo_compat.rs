@@ -423,3 +423,24 @@ fn parameters_inside_in_subqueries_are_counted() {
     let types = bicdb_sql::infer_parameter_types(&db, "SELECT 1 FROM t g WHERE g.a=$1 AND g.b IN (SELECT m.b FROM m WHERE m.c=$1 AND m.roles && $3::text[])").unwrap();
     assert_eq!(types.len(), 3);
 }
+
+#[test]
+fn pattern_operators_on_parameters_are_boolean() {
+    // A client reading `$1 ~ '...'` as text 'f' treats it as true: WeWoBo's badge validation let '<script>' through.
+    let (_dir, db) = db();
+    for op in ["~", "~*", "!~", "!~*", "~~", "!~~"] {
+        let types = bicdb_sql::infer_query_result_types(&db, &format!("SELECT $1 {op} '^[a-z]*$' AS m")).unwrap();
+        assert_eq!(types, Some(vec![Some("bool".to_string())]), "{op}");
+    }
+}
+
+#[test]
+fn pgcrypto_gen_random_bytes() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    let rows = s.execute("WITH t AS (SELECT e AS email, encode(public.gen_random_bytes(24),'hex') AS token FROM unnest(ARRAY['a','b']) e) SELECT email, length(token), encode(public.digest(token,'sha256'),'hex') <> '' FROM t ORDER BY email").unwrap().rows;
+    assert_eq!(rows, vec![vec![text("a"), SqlValue::Int(48), SqlValue::Bool(true)], vec![text("b"), SqlValue::Int(48), SqlValue::Bool(true)]]);
+    let distinct = s.execute("SELECT count(DISTINCT encode(gen_random_bytes(16),'hex')) FROM generate_series(1,5)").unwrap().rows;
+    assert_eq!(distinct, vec![vec![SqlValue::Int(5)]]);
+    assert!(s.execute("SELECT gen_random_bytes(0)").is_err());
+}

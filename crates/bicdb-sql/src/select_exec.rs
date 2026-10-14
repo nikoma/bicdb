@@ -1656,6 +1656,8 @@ pub(crate) fn expr_contains_volatile_function(expr: &Expr) -> bool {
                     | "pg_catalog.clock_timestamp"
                     | "gen_random_uuid"
                     | "pg_catalog.gen_random_uuid"
+                    | "gen_random_bytes"
+                    | "public.gen_random_bytes"
                     | "uuid_generate_v4"
                     | "public.uuid_generate_v4"
                     | "uuidv4"

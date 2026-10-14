@@ -3028,6 +3028,20 @@ pub(crate) fn eval_compatibility_function_value(
             require_arg_count(name, args, 0)?;
             Ok(Some(SqlValue::String(uuid::Uuid::new_v4().to_string())))
         }
+        "gen_random_bytes" | "public.gen_random_bytes" => {
+            // pgcrypto: n cryptographically random bytes, 1 <= n <= 1024.
+            require_arg_count(name, args, 1)?;
+            if matches!(args[0], SqlValue::Null) {
+                return Ok(Some(SqlValue::Null));
+            }
+            let count = args[0].to_cell().trim().parse::<i64>().ok().filter(|n| (1..=1024).contains(n)).ok_or_else(|| {
+                SqlError::invalid_parameter_value("Length not in range")
+            })?;
+            let mut bytes = vec![0u8; count as usize];
+            getrandom::fill(&mut bytes)
+                .map_err(|error| SqlError::Unsupported(format!("gen_random_bytes: {error}")))?;
+            Ok(Some(SqlValue::String(format_bytea_hex(&bytes))))
+        }
         "uuidv7" | "pg_catalog.uuidv7" => eval_uuid_v7(args).map(Some),
         "uuid_extract_version" | "pg_catalog.uuid_extract_version" => {
             require_arg_count("uuid_extract_version", args, 1)?;

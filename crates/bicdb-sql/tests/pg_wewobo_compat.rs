@@ -560,3 +560,33 @@ fn to_jsonb_and_row_to_json_accept_a_whole_row_reference() {
     let want = s.execute("SELECT '[{\"id\":1,\"title\":\"One\"},{\"id\":2,\"title\":\"Two\"}]'::jsonb").unwrap().rows;
     assert_eq!(agg, want);
 }
+
+#[test]
+fn ordered_set_aggregates_percentile_and_mode() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE m (g text, x float8, n int)").unwrap();
+    s.execute("INSERT INTO m VALUES ('a',1,1),('a',2,1),('a',3,2),('a',4,2),('a',NULL,2),('b',10,7),('c',NULL,NULL)").unwrap();
+    let rows = s.execute("SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x), percentile_disc(0.5) WITHIN GROUP (ORDER BY x), mode() WITHIN GROUP (ORDER BY n) FROM m WHERE g = 'a'").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Float(2.5), SqlValue::Float(2.0), SqlValue::Int(2)]]);
+    let rows = s.execute("SELECT percentile_cont(0.25) WITHIN GROUP (ORDER BY x DESC) FROM m WHERE g = 'a'").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Float(3.25)]]);
+    let rows = s.execute("SELECT g, percentile_cont(0.5) WITHIN GROUP (ORDER BY x), percentile_disc(0.9) WITHIN GROUP (ORDER BY n) FROM m GROUP BY g ORDER BY g").unwrap().rows;
+    assert_eq!(rows, vec![
+        vec![text("a"), SqlValue::Float(2.5), SqlValue::Int(2)],
+        vec![text("b"), SqlValue::Float(10.0), SqlValue::Int(7)],
+        vec![text("c"), SqlValue::Null, SqlValue::Null],
+    ]);
+    // Empty input gives NULL.
+    let rows = s.execute("SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x), mode() WITHIN GROUP (ORDER BY n) FROM m WHERE false").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Null, SqlValue::Null]]);
+    // Array forms return one value per fraction.
+    let got = s.execute("SELECT percentile_cont(ARRAY[0.25,0.5,1]) WITHIN GROUP (ORDER BY x), percentile_disc(ARRAY[0.5,0.1]) WITHIN GROUP (ORDER BY x) FROM m WHERE g = 'a'").unwrap().rows;
+    let want = s.execute("SELECT ARRAY[1.75,2.5,4]::float8[], ARRAY[2,1]::float8[]").unwrap().rows;
+    assert_eq!(got, want);
+    // The WeWoBo shape: a scalar subquery over a CTE, inside jsonb_build_object.
+    s.execute("CREATE TABLE scans (status text, created_at timestamptz, completed_at timestamptz)").unwrap();
+    s.execute("INSERT INTO scans VALUES ('done','2026-01-01 00:00:00+00','2026-01-01 00:00:10+00'),('done','2026-01-01 00:00:00+00','2026-01-01 00:00:30+00'),('pending','2026-01-01 00:00:00+00',NULL)").unwrap();
+    let rows = s.execute("WITH d AS (SELECT * FROM scans) SELECT jsonb_build_object('scanned',(SELECT COUNT(*)::int FROM d WHERE status='done'),'median_seconds',(SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM completed_at-created_at)) FROM d WHERE completed_at IS NOT NULL)) = '{\"scanned\":2,\"median_seconds\":20}'::jsonb").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Bool(true)]]);
+}

@@ -1837,6 +1837,7 @@ pub(crate) enum RowAggregate {
         standard: bool,
         returning: Option<DataType>,
     },
+    OrderedSet(OrderedSetAggregate),
 }
 
 impl RowAggregate {
@@ -1844,6 +1845,9 @@ impl RowAggregate {
         let name = object_name(&function.name)?.to_ascii_lowercase();
         if name.ends_with("_encoding_error") {
             return Err(crate::jsonb::json_output_encoding_error());
+        }
+        if let Some(aggregate) = OrderedSetAggregate::from_function(function)? {
+            return Ok(Self::OrderedSet(aggregate));
         }
         let distinct = function_args_are_distinct(function);
         match name.as_str() {
@@ -1964,6 +1968,7 @@ impl RowAggregate {
 
     pub(crate) fn column_name(&self) -> String {
         match self {
+            Self::OrderedSet(aggregate) => aggregate.column_name(),
             Self::CountAll => "COUNT(*)".to_string(),
             Self::CountExpr(expr, distinct) => {
                 if *distinct {
@@ -2038,6 +2043,7 @@ impl RowAggregate {
         columns: &[String],
     ) -> Result<SqlValue> {
         match self {
+            Self::OrderedSet(aggregate) => row_ordered_set_value(engine, rows, columns, aggregate),
             Self::CountAll => Ok(SqlValue::Int(rows.len() as i64)),
             Self::CountExpr(expr, distinct) => {
                 row_aggregate_count(engine, rows, columns, expr, *distinct).map(SqlValue::Int)
@@ -2175,6 +2181,9 @@ impl RowAggregate {
         context: &BoundRowContext,
     ) -> Result<SqlValue> {
         match self {
+            Self::OrderedSet(aggregate) => {
+                row_ordered_set_value(engine, rows, context.column_keys(), aggregate)
+            }
             Self::CountAll => Ok(SqlValue::Int(rows.len() as i64)),
             Self::CountExpr(expr, distinct) => {
                 let bound = scope.bind(expr);
@@ -2708,6 +2717,34 @@ pub(crate) fn row_bound_extreme_value(
         }
     }
     Ok(best)
+}
+
+pub(crate) fn row_ordered_set_value(
+    engine: &SqlEngine<'_>,
+    rows: &[SlotRow],
+    columns: &[String],
+    aggregate: &OrderedSetAggregate,
+) -> Result<SqlValue> {
+    let (_, context) = engine.bound_row_context(columns);
+    let mut values = Vec::with_capacity(rows.len());
+    let mut fraction = SqlValue::Null;
+    for (idx, row) in rows.iter().enumerate() {
+        if idx % 1024 == 0 {
+            engine.check_cancellation()?;
+        }
+        if let Some(filter) = &aggregate.filter {
+            if !matches!(engine.eval_slot_row_truth(row, &context, filter)?, Some(true)) {
+                continue;
+            }
+        }
+        if values.is_empty() {
+            if let Some(expr) = &aggregate.fraction {
+                fraction = engine.eval_slot_row_value(row, &context, expr)?;
+            }
+        }
+        values.push(engine.eval_slot_row_value(row, &context, &aggregate.order.expr)?);
+    }
+    aggregate.finish(values, fraction)
 }
 
 pub(crate) fn row_array_agg_value(
@@ -6883,4 +6920,190 @@ pub(crate) fn information_schema_constraint_column_usage(
         }
     }
     Ok(rows)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OrderedSetKind {
+    PercentileCont,
+    PercentileDisc,
+    Mode,
+}
+
+/// An ordered-set aggregate: `percentile_cont(f) WITHIN GROUP (ORDER BY x)`,
+/// `percentile_disc(f) WITHIN GROUP (...)` (with `f` a fraction or an array of
+/// fractions) and `mode() WITHIN GROUP (ORDER BY x)`.
+#[derive(Clone, Debug)]
+pub(crate) struct OrderedSetAggregate {
+    pub(crate) kind: OrderedSetKind,
+    pub(crate) fraction: Option<Expr>,
+    pub(crate) order: sqlparser::ast::OrderByExpr,
+    pub(crate) filter: Option<Expr>,
+}
+
+impl OrderedSetAggregate {
+    pub(crate) fn kind_of(function: &Function) -> Option<OrderedSetKind> {
+        if function.within_group.is_empty() {
+            return None;
+        }
+        let name = object_name(&function.name).ok()?.to_ascii_lowercase();
+        match name.strip_prefix("pg_catalog.").unwrap_or(&name) {
+            "percentile_cont" => Some(OrderedSetKind::PercentileCont),
+            "percentile_disc" => Some(OrderedSetKind::PercentileDisc),
+            "mode" => Some(OrderedSetKind::Mode),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn from_function(function: &Function) -> Result<Option<Self>> {
+        let Some(kind) = Self::kind_of(function) else {
+            return Ok(None);
+        };
+        let [order] = function.within_group.as_slice() else {
+            return Err(SqlError::undefined_function(format!(
+                "function {}() WITHIN GROUP takes exactly one ORDER BY expression",
+                function.name
+            )));
+        };
+        if function_args_are_distinct(function) || function.over.is_some() {
+            return Err(SqlError::Unsupported(format!(
+                "{} WITHIN GROUP does not support DISTINCT or OVER",
+                function.name
+            )));
+        }
+        let args = function_args(function);
+        let fraction = match (kind, args.as_slice()) {
+            (OrderedSetKind::Mode, []) => None,
+            (OrderedSetKind::PercentileCont | OrderedSetKind::PercentileDisc, [fraction]) => {
+                Some(fraction.clone())
+            }
+            _ => {
+                return Err(SqlError::undefined_function(format!(
+                    "function {} has the wrong number of direct arguments",
+                    function.name
+                )));
+            }
+        };
+        Ok(Some(Self {
+            kind,
+            fraction,
+            order: order.clone(),
+            filter: function.filter.as_deref().cloned(),
+        }))
+    }
+
+    pub(crate) fn column_name(&self) -> String {
+        match self.kind {
+            OrderedSetKind::PercentileCont => "percentile_cont",
+            OrderedSetKind::PercentileDisc => "percentile_disc",
+            OrderedSetKind::Mode => "mode",
+        }
+        .to_string()
+    }
+
+    /// Result type from the sort input type: percentile_cont is double
+    /// precision (an array of them for an array of fractions); the others
+    /// return the input type.
+    pub(crate) fn result_pg_type(
+        &self,
+        input_type: Option<String>,
+        fraction_type: Option<String>,
+    ) -> Option<String> {
+        let array = fraction_type.is_some_and(|pg_type| pg_type.ends_with("[]"))
+            || matches!(self.fraction, Some(Expr::Array(_)));
+        let element = match self.kind {
+            OrderedSetKind::PercentileCont => Some("float8".to_string()),
+            OrderedSetKind::PercentileDisc | OrderedSetKind::Mode => input_type,
+        }?;
+        Some(if array { format!("{element}[]") } else { element })
+    }
+
+    /// `values` are the non-filtered sort-key values of the group; `fraction`
+    /// is the evaluated direct argument (ignored for mode).
+    pub(crate) fn finish(&self, values: Vec<SqlValue>, fraction: SqlValue) -> Result<SqlValue> {
+        let mut entries = values
+            .into_iter()
+            .filter(|value| !matches!(value, SqlValue::Null))
+            .map(|value| (value.clone(), vec![value]))
+            .collect::<Vec<_>>();
+        if entries.is_empty() {
+            return Ok(SqlValue::Null);
+        }
+        let order = std::slice::from_ref(&self.order);
+        entries.sort_by(|left, right| json_agg_entry_ordering(left, right, order));
+        let sorted = entries.into_iter().map(|(value, _)| value).collect::<Vec<_>>();
+        if self.kind == OrderedSetKind::Mode {
+            // The most frequent value; among equally frequent values the first
+            // in sort order wins, as in PostgreSQL's mode_final.
+            let mut best: Option<(usize, usize)> = None;
+            let mut start = 0;
+            while start < sorted.len() {
+                let key = sql_value_distinct_key(&sorted[start]);
+                let mut end = start + 1;
+                while end < sorted.len() && sql_value_distinct_key(&sorted[end]) == key {
+                    end += 1;
+                }
+                if best.is_none_or(|(_, count)| end - start > count) {
+                    best = Some((start, end - start));
+                }
+                start = end;
+            }
+            return Ok(best.map_or(SqlValue::Null, |(index, _)| sorted[index].clone()));
+        }
+        let pick = |fraction: f64| -> Result<SqlValue> {
+            if !(0.0..=1.0).contains(&fraction) {
+                return Err(SqlError::data_exception_public(
+                    "22003",
+                    format!("percentile value {fraction} is not between 0 and 1"),
+                    None,
+                ));
+            }
+            let count = sorted.len();
+            if self.kind == OrderedSetKind::PercentileDisc {
+                let position = (fraction * count as f64).ceil() as usize;
+                return Ok(sorted[position.max(1).min(count) - 1].clone());
+            }
+            let as_float = |value: &SqlValue| {
+                sql_value_f64(value).ok_or_else(|| {
+                    SqlError::undefined_function(format!(
+                        "function percentile_cont over {} is not supported",
+                        value.to_cell()
+                    ))
+                })
+            };
+            let position = fraction * (count - 1) as f64;
+            let lower = position.floor() as usize;
+            let upper = position.ceil() as usize;
+            let low = as_float(&sorted[lower])?;
+            if lower == upper {
+                return Ok(SqlValue::Float(low));
+            }
+            let high = as_float(&sorted[upper])?;
+            Ok(SqlValue::Float(low + (position - lower as f64) * (high - low)))
+        };
+        let fractions = match &fraction {
+            SqlValue::Json(_) => array_json_parts(&fraction, self.column_name().as_str())?,
+            _ => None,
+        };
+        if let Some((array, _)) = fractions {
+            let JsonValue::Array(fractions) = array else {
+                return Ok(SqlValue::Null);
+            };
+            let mut results = Vec::with_capacity(fractions.len());
+            for fraction in fractions {
+                results.push(match json_to_sql_value(fraction) {
+                    SqlValue::Null => SqlValue::Null,
+                    value => pick(sql_value_f64(&value).ok_or_else(|| {
+                        SqlError::InvalidSql("percentile fraction must be numeric".to_string())
+                    })?)?,
+                });
+            }
+            return sql_array_value(results);
+        }
+        match fraction {
+            SqlValue::Null => Ok(SqlValue::Null),
+            value => pick(sql_value_f64(&value).ok_or_else(|| {
+                SqlError::InvalidSql("percentile fraction must be numeric".to_string())
+            })?),
+        }
+    }
 }

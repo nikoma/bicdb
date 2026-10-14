@@ -2562,6 +2562,9 @@ pub(crate) fn subscript_contains_aggregate(subscript: &sqlparser::ast::Subscript
 }
 
 pub(crate) fn is_aggregate_function(function: &Function) -> bool {
+    if OrderedSetAggregate::kind_of(function).is_some() {
+        return true;
+    }
     matches!(
         object_name(&function.name)
             .unwrap_or_default()

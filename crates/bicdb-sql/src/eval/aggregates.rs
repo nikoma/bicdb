@@ -60,6 +60,7 @@ pub(crate) enum Aggregate {
         standard: bool,
         returning: Option<DataType>,
     },
+    OrderedSet(OrderedSetAggregate),
 }
 
 impl Aggregate {
@@ -67,6 +68,9 @@ impl Aggregate {
         let name = object_name(&function.name)?.to_ascii_lowercase();
         if name.ends_with("_encoding_error") {
             return Err(crate::jsonb::json_output_encoding_error());
+        }
+        if let Some(aggregate) = OrderedSetAggregate::from_function(function)? {
+            return Ok(Self::OrderedSet(aggregate));
         }
         let distinct = function_args_are_distinct(function);
         match name.as_str() {
@@ -224,6 +228,7 @@ impl Aggregate {
 
     pub(crate) fn column_name(&self) -> String {
         match self {
+            Self::OrderedSet(aggregate) => aggregate.column_name(),
             Self::CountAll => "COUNT(*)".to_string(),
             Self::CountField(field, distinct) => {
                 if *distinct {
@@ -293,6 +298,24 @@ impl Aggregate {
 
     pub(crate) fn evaluate(&self, records: &[Record]) -> Result<SqlValue> {
         match self {
+            Self::OrderedSet(aggregate) => {
+                let mut values = Vec::with_capacity(records.len());
+                let mut fraction = SqlValue::Null;
+                for record in records {
+                    if let Some(filter) = &aggregate.filter {
+                        if !matches!(eval_predicate_truth(record, filter)?, Some(true)) {
+                            continue;
+                        }
+                    }
+                    if values.is_empty() {
+                        if let Some(expr) = &aggregate.fraction {
+                            fraction = eval_value(record, expr)?;
+                        }
+                    }
+                    values.push(eval_value(record, &aggregate.order.expr)?);
+                }
+                aggregate.finish(values, fraction)
+            }
             Self::CountAll => Ok(SqlValue::Int(records.len() as i64)),
             Self::CountField(field, distinct) => {
                 record_aggregate_count(records, field, *distinct).map(SqlValue::Int)
@@ -916,6 +939,13 @@ pub(crate) fn aggregate_result_pg_type(
     schema: Option<&TableSchema>,
 ) -> Option<String> {
     match aggregate {
+        Aggregate::OrderedSet(aggregate) => aggregate.result_pg_type(
+            projected_expr_pg_type(&aggregate.order.expr, schema),
+            aggregate
+                .fraction
+                .as_ref()
+                .and_then(|fraction| projected_expr_pg_type(fraction, schema)),
+        ),
         Aggregate::CountAll | Aggregate::CountField(_, _) => Some("int8".to_string()),
         Aggregate::Min(field, _) | Aggregate::Max(field, _) => field_pg_type(field, schema),
         Aggregate::BoolAnd(_, _) | Aggregate::BoolOr(_, _) => Some("bool".to_string()),
@@ -3514,6 +3544,7 @@ pub(crate) fn is_collecting_aggregate(aggregate: &Aggregate) -> bool {
         aggregate,
         Aggregate::StringAgg { .. }
             | Aggregate::ArrayAgg { .. }
+            | Aggregate::OrderedSet(_)
             | Aggregate::RangeAgg { .. }
             | Aggregate::XmlAgg { .. }
             | Aggregate::JsonAgg { .. }

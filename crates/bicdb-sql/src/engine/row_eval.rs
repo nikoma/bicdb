@@ -2767,7 +2767,12 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         };
         if !routine.schema.language.eq_ignore_ascii_case("sql") {
-            return Ok(None);
+            // PL/pgSQL runs in the session's interpreter; the host applies the
+            // EXECUTE privilege check and SECURITY DEFINER itself.
+            return match self.routine_host {
+                Some(host) => host.call_function(self, name, args).map(Some),
+                None => Ok(None),
+            };
         }
         let role = current_user_from_gucs(&self.session_gucs);
         if !role_can_execute_routine(self.db_ref(), &role, name)? {

@@ -1364,7 +1364,7 @@ impl<'db> SqlSession<'db> {
         action: PolicyAction,
     ) -> Result<Vec<Record>> {
         let records = match self.security_context.as_ref() {
-            Some(ctx) => match self.tx.as_ref() {
+            Some(ctx) => match self.read_tx() {
                 Some(tx) => tx
                     .scan_collection_with_context(ctx, table)
                     .map_err(SqlError::from),
@@ -1373,7 +1373,7 @@ impl<'db> SqlSession<'db> {
                     .scan_collection_with_context(ctx, table)
                     .map_err(SqlError::from),
             },
-            None => match self.tx.as_ref() {
+            None => match self.read_tx() {
                 Some(tx) => tx.scan_collection(table).map_err(SqlError::from),
                 None => self.db_ref().scan_collection(table).map_err(SqlError::from),
             },

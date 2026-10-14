@@ -895,6 +895,14 @@ pub struct SqlSession<'db> {
     pub(crate) cancellation: CancellationToken,
     pub(crate) fts_limits: bicdb_core::FtsQueryLimits,
     pub(crate) tx: Option<Transaction>,
+    /// True only for the child session that runs a PL/pgSQL function for one
+    /// row of an engine-evaluated statement (`SqlSession::for_row_routine_call`).
+    /// Such a session never begins or owns a transaction and refuses
+    /// data-modifying statements.
+    pub(crate) row_routine_call: bool,
+    /// For that child session, the caller's transaction (if any), read through
+    /// `read_tx`.
+    pub(crate) parent_tx: Option<&'db Transaction>,
     pub(crate) savepoints: Vec<SavepointMark>,
     pub(crate) ddl_undo: Vec<DdlUndo>,
     pub(crate) settings: SqlSettings,
@@ -2158,6 +2166,8 @@ impl<'db> SqlSession<'db> {
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             tx: None,
+            row_routine_call: false,
+            parent_tx: None,
             savepoints: Vec::new(),
             ddl_undo: Vec::new(),
             settings: SqlSettings::default(),
@@ -2335,7 +2345,16 @@ impl<'db> SqlSession<'db> {
     /// Begin a transaction whose snapshot is floored at this session's
     /// `snapshot_floor` (connection read-your-writes).
     pub(crate) fn begin_session_transaction(&self) -> Result<Transaction> {
+        if self.row_routine_call {
+            return Err(row_routine_write_error());
+        }
         Ok(self.db_ref().begin_transaction_after(self.snapshot_floor)?)
+    }
+
+    /// The transaction this session reads through: its own, or for a per-row
+    /// routine call the caller's (see `parent_tx`).
+    pub(crate) fn read_tx(&self) -> Option<&Transaction> {
+        self.tx.as_ref().or(self.parent_tx)
     }
 
     /// Takes the pending (uncommitted) transaction produced by a deferred
@@ -2695,6 +2714,11 @@ impl<'db> SqlSession<'db> {
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        // A per-row routine call reaches raw SQL only through dynamic EXECUTE
+        // fallbacks for statements sqlparser cannot represent (DDL, grants).
+        if self.row_routine_call {
+            return Err(row_routine_write_error());
+        }
         // Statement-scoped only: CREATE/DROP INDEX between statements must
         // not be answered from a stale arbiter.
         self.conflict_arbiter_memo.borrow_mut().take();
@@ -3186,6 +3210,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_parsed_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
+        if self.row_routine_call && !statement_is_plain_query(statement) {
+            return Err(row_routine_write_error());
+        }
         if self.trigger_depth > 0
             && matches!(
                 statement,
@@ -5322,4 +5349,39 @@ fn h3_parent(
         Some(parent) => DimensionValue::Text(parent.to_string()),
         None => value.clone(),
     }
+}
+
+/// A PL/pgSQL function evaluated once per row of an engine-evaluated statement
+/// reads under the caller's transaction but cannot write through it. Raised
+/// before any write happens, as `Unsupported` so callers that can evaluate the
+/// call in the session itself (a row-independent UPDATE assignment) still do.
+pub(crate) fn row_routine_write_error() -> SqlError {
+    SqlError::Unsupported(
+        "a PL/pgSQL function called once per row of a query or UPDATE can only read data; \
+         data-modifying statements in such a function are not supported"
+            .to_string(),
+    )
+}
+
+/// A query without data-modifying CTEs or SELECT INTO.
+pub(crate) fn statement_is_plain_query(statement: &Statement) -> bool {
+    let Statement::Query(query) = statement else {
+        return false;
+    };
+    fn plain(query: &Query) -> bool {
+        let ctes_plain = query.with.as_ref().is_none_or(|with| {
+            with.cte_tables.iter().all(|cte| plain(&cte.query))
+        });
+        ctes_plain && body_plain(query.body.as_ref())
+    }
+    fn body_plain(body: &SetExpr) -> bool {
+        match body {
+            SetExpr::Select(select) => select.into.is_none(),
+            SetExpr::Query(query) => plain(query),
+            SetExpr::SetOperation { left, right, .. } => body_plain(left) && body_plain(right),
+            SetExpr::Values(_) | SetExpr::Table(_) => true,
+            _ => false,
+        }
+    }
+    plain(query)
 }

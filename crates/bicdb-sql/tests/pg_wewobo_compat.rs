@@ -590,3 +590,81 @@ fn ordered_set_aggregates_percentile_and_mode() {
     let rows = s.execute("WITH d AS (SELECT * FROM scans) SELECT jsonb_build_object('scanned',(SELECT COUNT(*)::int FROM d WHERE status='done'),'median_seconds',(SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM completed_at-created_at)) FROM d WHERE completed_at IS NOT NULL)) = '{\"scanned\":2,\"median_seconds\":20}'::jsonb").unwrap().rows;
     assert_eq!(rows, vec![vec![SqlValue::Bool(true)]]);
 }
+
+#[test]
+fn plpgsql_functions_run_once_per_row_in_update_and_select() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE learning_courses (id int, title text, slug text)").unwrap();
+    s.execute(r#"CREATE FUNCTION learning_course_slug(title text) RETURNS text LANGUAGE plpgsql AS $$
+DECLARE base text; cand text; n int := 1;
+BEGIN
+  base := trim(both '-' from regexp_replace(lower(COALESCE(title,'')),'[^a-z0-9]+','-','g'));
+  IF length(base) < 3 THEN base := 'course' || CASE WHEN base='' THEN '' ELSE '-' || base END; END IF;
+  LOOP
+    cand := CASE WHEN n=1 THEN base ELSE base || '-' || n END;
+    EXIT WHEN NOT EXISTS (SELECT 1 FROM learning_courses WHERE slug=cand);
+    n := n + 1;
+  END LOOP;
+  RETURN cand;
+END $$"#).unwrap();
+    s.execute("INSERT INTO learning_courses VALUES (1, 'Yoga Basics', 'yoga-basics'), (2, 'Yoga Basics', NULL), (3, 'Breath Work', NULL)").unwrap();
+    let rows = s.execute("SELECT id, learning_course_slug(title) FROM learning_courses ORDER BY id").unwrap().rows;
+    assert_eq!(rows, vec![
+        vec![SqlValue::Int(1), text("yoga-basics-2")],
+        vec![SqlValue::Int(2), text("yoga-basics-2")],
+        vec![SqlValue::Int(3), text("breath-work")],
+    ]);
+    let mut p = s.with_positional_parameters(vec![SqlValue::Int(2)]);
+    let updated = p.execute("UPDATE learning_courses SET slug=learning_course_slug(title) WHERE id=$1 AND slug IS NULL RETURNING slug").unwrap();
+    assert_eq!(updated.rows, vec![vec![text("yoga-basics-2")]]);
+    drop(p);
+    let mut s = SqlSession::new(&mut db);
+    // Each row sees the slugs written for earlier rows of the same statement only via its own queries;
+    // a plain WHERE filter and an expression argument also work.
+    s.execute("UPDATE learning_courses SET slug=learning_course_slug(title || ' ' || id) WHERE slug IS NULL").unwrap();
+    let rows = s.execute("SELECT id, slug FROM learning_courses ORDER BY id").unwrap().rows;
+    assert_eq!(rows, vec![
+        vec![SqlValue::Int(1), text("yoga-basics")],
+        vec![SqlValue::Int(2), text("yoga-basics-2")],
+        vec![SqlValue::Int(3), text("breath-work-3")],
+    ]);
+    let rows = s.execute("SELECT id FROM learning_courses WHERE learning_course_slug(title) = 'breath-work' ORDER BY id").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Int(3)]]);
+    // Inside an explicit transaction the function's queries see the transaction's own rows.
+    s.execute("BEGIN").unwrap();
+    s.execute("INSERT INTO learning_courses VALUES (4, 'Breath Work', 'breath-work')").unwrap();
+    let rows = s.execute("SELECT learning_course_slug(title) FROM learning_courses WHERE id = 3").unwrap().rows;
+    assert_eq!(rows, vec![vec![text("breath-work-2")]]);
+    s.execute("ROLLBACK").unwrap();
+    // BicDB boundary (PostgreSQL allows it): a function called per row may not modify data.
+    // The statement fails as a whole instead of writing part of its effects.
+    s.execute("CREATE FUNCTION touch(i int) RETURNS int LANGUAGE plpgsql AS $$ BEGIN INSERT INTO learning_courses VALUES (i + 100, 'x', NULL); RETURN i; END $$").unwrap();
+    assert!(s.execute("SELECT touch(id) FROM learning_courses").is_err());
+    assert_eq!(s.execute("SELECT count(*) FROM learning_courses").unwrap().rows, vec![vec![SqlValue::Int(3)]]);
+    // Called without FROM it runs in the session and may write.
+    assert_eq!(s.execute("SELECT touch(1)").unwrap().rows, vec![vec![SqlValue::Int(1)]]);
+    assert_eq!(s.execute("SELECT count(*) FROM learning_courses").unwrap().rows, vec![vec![SqlValue::Int(4)]]);
+}
+
+#[test]
+fn plpgsql_functions_per_row_respect_execute_privilege_and_security_definer() {
+    let (_dir, mut db) = db();
+    {
+        let mut admin = SqlSession::new(&mut db);
+        admin.execute("CREATE ROLE reader LOGIN").unwrap();
+        admin.execute("CREATE TABLE secrets (id int, v text); INSERT INTO secrets VALUES (1, 'hidden')").unwrap();
+        admin.execute("CREATE TABLE items (id int); INSERT INTO items VALUES (1), (2)").unwrap();
+        admin.execute("GRANT SELECT ON items TO reader").unwrap();
+        admin.execute("CREATE FUNCTION peek(i int) RETURNS text LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN RETURN (SELECT v FROM secrets WHERE id = i); END $$").unwrap();
+        admin.execute("CREATE FUNCTION peek_invoker(i int) RETURNS text LANGUAGE plpgsql AS $$ BEGIN RETURN (SELECT v FROM secrets WHERE id = i); END $$").unwrap();
+        admin.execute("CREATE FUNCTION locked(i int) RETURNS int LANGUAGE plpgsql AS $$ BEGIN RETURN i; END $$").unwrap();
+        admin.execute("REVOKE EXECUTE ON FUNCTION locked(int) FROM PUBLIC").unwrap();
+        admin.execute("GRANT EXECUTE ON FUNCTION peek(int), peek_invoker(int) TO reader").unwrap();
+    }
+    let mut r = SqlSession::new_unprivileged(&mut db, "reader");
+    let rows = r.execute("SELECT id, peek(id) FROM items ORDER BY id").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Int(1), text("hidden")], vec![SqlValue::Int(2), SqlValue::Null]]);
+    assert!(r.execute("SELECT id, peek_invoker(id) FROM items").is_err(), "invoker rights cannot read secrets");
+    assert!(r.execute("SELECT locked(id) FROM items").is_err(), "EXECUTE was revoked");
+}

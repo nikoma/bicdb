@@ -3130,6 +3130,21 @@ pub struct SqlEngine<'db> {
     /// Immutable per-query full-text work ceilings; exhaustion errors with
     /// `query_budget_exceeded` instead of silently widening the scan.
     pub(crate) fts_limits: bicdb_core::FtsQueryLimits,
+    /// Runs stored routines the row evaluators cannot interpret themselves
+    /// (PL/pgSQL) when a row expression calls one. Installed by `SqlSession`
+    /// on the engines it builds and inherited by their nested engines;
+    /// engines built for statement description leave it unset, so they never
+    /// execute a routine body.
+    pub(crate) routine_host: Option<&'static dyn RoutineCallHost>,
+}
+
+/// See [`SqlEngine::routine_host`].
+pub(crate) trait RoutineCallHost: std::fmt::Debug {
+    /// Call the stored function `name` with already-evaluated arguments for
+    /// one row of `engine`'s statement, under `engine`'s transaction, role and
+    /// settings.
+    fn call_function(&self, engine: &SqlEngine<'_>, name: &str, args: &[SqlValue])
+        -> Result<SqlValue>;
 }
 
 // Nested maps so a cache probe is two zero-allocation hash lookups
@@ -3237,6 +3252,7 @@ impl<'db> SqlEngine<'db> {
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
+            routine_host: None,
         }
     }
 
@@ -3268,6 +3284,7 @@ impl<'db> SqlEngine<'db> {
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
+            routine_host: None,
         }
     }
 
@@ -3319,6 +3336,7 @@ impl<'db> SqlEngine<'db> {
             bound_context_cache,
             cancellation,
             fts_limits,
+            routine_host: None,
         }
     }
 
@@ -3352,6 +3370,7 @@ impl<'db> SqlEngine<'db> {
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
+            routine_host: None,
         }
     }
 
@@ -3408,6 +3427,11 @@ impl<'db> SqlEngine<'db> {
         self
     }
 
+    pub(crate) fn with_routine_host(mut self, host: Option<&'static dyn RoutineCallHost>) -> Self {
+        self.routine_host = host;
+        self
+    }
+
     pub(crate) fn with_outer_slot_row(mut self, outer_row: OuterSlotRow) -> Self {
         self.outer_row = Some(outer_row);
         self
@@ -3448,7 +3472,8 @@ impl<'db> SqlEngine<'db> {
             .with_index_lookup_cache(self.index_lookup_cache.clone())
             .with_rowid_index_lookup_cache(self.rowid_index_lookup_cache.clone())
             .with_record_lookup_cache(self.record_lookup_cache.clone())
-            .with_optional_runtime(self.runtime.clone());
+            .with_optional_runtime(self.runtime.clone())
+            .with_routine_host(self.routine_host);
         if engine.outer_row.is_none() {
             engine.outer_row.clone_from(&self.outer_row);
         }
@@ -4434,6 +4459,7 @@ impl<'db> SqlEngine<'db> {
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: self.cancellation.clone(),
             fts_limits: self.fts_limits,
+            routine_host: self.routine_host,
         }
     }
 }

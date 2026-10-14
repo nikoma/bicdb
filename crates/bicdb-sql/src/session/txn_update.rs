@@ -302,7 +302,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn sql_engine_with_ctes(&self, ctes: BTreeMap<String, CteResult>) -> SqlEngine<'_> {
-        let tx = self.tx.as_ref();
+        let tx = self.read_tx();
         let caches = tx
             .filter(|_| txn_lookup_cache_enabled())
             .map(|tx| self.txn_shared_lookup_caches(tx));
@@ -330,6 +330,7 @@ impl<'db> SqlSession<'db> {
             self.cancellation.clone(),
             self.fts_limits,
         )
+        .with_routine_host(Some(&SESSION_ROUTINE_HOST))
     }
 
     fn extension_event_relation(table: &str) -> String {
@@ -2549,7 +2550,7 @@ impl<'db> SqlSession<'db> {
                     self.db_ref(),
                     &name,
                     &args,
-                    self.tx.as_ref().map(Transaction::visibility_watermark),
+                    self.read_tx().map(Transaction::visibility_watermark),
                     Some(&self.session_gucs),
                 )? {
                     return Ok(value);
@@ -2562,7 +2563,7 @@ impl<'db> SqlSession<'db> {
                         context: self.security_context.as_ref(),
                         superuser: session_role_is_superuser(self.db_ref(), &self.session_gucs),
                     },
-                    self.tx.as_ref(),
+                    self.read_tx(),
                 )? {
                     return Ok(value);
                 }
@@ -3028,6 +3029,27 @@ impl<'db> SqlSession<'db> {
             }
             _ => unreachable!(),
         }
+    }
+
+    /// The session that runs a PL/pgSQL function for one row of `engine`'s
+    /// statement: the engine's database, transaction (read-only), role,
+    /// settings and cancellation. See `SqlSession::parent_tx`.
+    pub(crate) fn for_row_routine_call<'e>(engine: &SqlEngine<'e>) -> SqlSession<'e> {
+        let db = engine.db_ref();
+        let mut session = SqlSession::from_parts(
+            NonNull::from(db),
+            false,
+            engine.security_context.clone(),
+            db.collection_generation(SCHEMA_COLLECTION),
+        );
+        session.row_routine_call = true;
+        session.parent_tx = engine.tx;
+        session.session_gucs = engine.session_gucs.clone();
+        session.settings = engine.settings;
+        session.runtime = engine.runtime.clone();
+        session.cancellation = engine.cancellation.clone();
+        session.fts_limits = engine.fts_limits;
+        session
     }
 
     pub(crate) fn eval_stored_function_value(
@@ -5621,5 +5643,26 @@ impl<'db> SqlSession<'db> {
             out.push((position, slot, Arc::clone(stored)));
         }
         Ok(Some(out))
+    }
+}
+
+/// Runs PL/pgSQL functions for the row evaluators of engines a session builds
+/// (`SqlEngine::routine_host`) in a child session over the same transaction.
+#[derive(Debug)]
+pub(crate) struct SessionRoutineHost;
+
+pub(crate) static SESSION_ROUTINE_HOST: SessionRoutineHost = SessionRoutineHost;
+
+impl RoutineCallHost for SessionRoutineHost {
+    fn call_function(
+        &self,
+        engine: &SqlEngine<'_>,
+        name: &str,
+        args: &[SqlValue],
+    ) -> Result<SqlValue> {
+        let mut session = SqlSession::for_row_routine_call(engine);
+        session.eval_stored_function_value(name, args)?.ok_or_else(|| {
+            SqlError::undefined_function(format!("function {name} does not exist"))
+        })
     }
 }

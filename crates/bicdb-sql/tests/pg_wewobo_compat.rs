@@ -539,3 +539,24 @@ fn distinct_on_expressions_need_only_lead_the_order_by() {
     assert_eq!(rows, vec![vec![SqlValue::Int(5)], vec![SqlValue::Int(2)], vec![SqlValue::Int(9)]]);
     assert!(s.execute("SELECT DISTINCT ON (lower(v)) v FROM u ORDER BY o").is_err(), "DISTINCT ON must match the leading ORDER BY");
 }
+
+#[test]
+fn to_jsonb_and_row_to_json_accept_a_whole_row_reference() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE cards (id int, title text, tags text[]); INSERT INTO cards VALUES (1, 'One', ARRAY['x']), (2, 'Two', '{}')").unwrap();
+    let expected = s.execute("SELECT '{\"id\": 1, \"tags\": [\"x\"], \"title\": \"One\"}'::jsonb").unwrap().rows;
+    for sql in [
+        "WITH c AS (SELECT * FROM cards WHERE id = 1) SELECT to_jsonb(c.*) FROM c",
+        "WITH c AS (SELECT * FROM cards WHERE id = 1) SELECT to_jsonb(c) FROM c",
+        "SELECT to_jsonb(c.*) FROM cards c WHERE c.id = 1",
+        "SELECT to_jsonb(c) FROM cards c WHERE c.id = 1",
+        "SELECT row_to_json(c.*)::jsonb FROM cards c WHERE c.id = 1",
+        "WITH c AS (SELECT * FROM cards WHERE id = 1) SELECT row_to_json(c.*)::jsonb FROM c",
+    ] {
+        assert_eq!(s.execute(sql).unwrap().rows, expected, "{sql}");
+    }
+    let agg = s.execute("WITH c AS (SELECT id, title FROM cards) SELECT jsonb_agg(to_jsonb(c.*) ORDER BY c.id) FROM c").unwrap().rows;
+    let want = s.execute("SELECT '[{\"id\":1,\"title\":\"One\"},{\"id\":2,\"title\":\"Two\"}]'::jsonb").unwrap().rows;
+    assert_eq!(agg, want);
+}

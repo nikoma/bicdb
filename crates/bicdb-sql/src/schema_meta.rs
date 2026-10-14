@@ -111,7 +111,33 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     // overflow the stack (aborting the process) on a hostile AST.
     reject_deep_expressions(&statements)?;
     restore_postgres_distinct_boolean_precedence(&mut statements);
+    restore_postgres_whole_row_function_args(&mut statements);
     Ok(statements)
+}
+
+/// PostgreSQL reads `f(alias.*)` as the whole-row value `f(alias)` (for example
+/// `to_jsonb(c.*)` or `row_to_json(t.*)`); sqlparser keeps it as a qualified
+/// wildcard argument that no evaluator accepts. Rewrite it to the whole-row
+/// identifier so every path sees the form it already supports.
+pub(crate) fn restore_postgres_whole_row_function_args(statements: &mut Vec<Statement>) {
+    let _ = visit_expressions_mut(statements, |expr| {
+        if let Expr::Function(function) = expr {
+            if let FunctionArguments::List(list) = &mut function.args {
+                for arg in &mut list.args {
+                    let FunctionArg::Unnamed(FunctionArgExpr::QualifiedWildcard(name)) = arg else {
+                        continue;
+                    };
+                    let [sqlparser::ast::ObjectNamePart::Identifier(alias)] = name.0.as_slice() else {
+                        continue;
+                    };
+                    *arg = FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
+                        alias.clone(),
+                    )));
+                }
+            }
+        }
+        std::ops::ControlFlow::<()>::Continue(())
+    });
 }
 
 /// sqlparser 0.62 parses the right operand of `IS [NOT] DISTINCT FROM` with

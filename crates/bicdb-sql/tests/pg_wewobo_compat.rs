@@ -523,3 +523,19 @@ fn insert_accepts_a_union_all_source_with_returning_and_on_conflict() {
     let tag = s.execute("INSERT INTO prices (id, product, cents) SELECT 'd', 'p', 4 UNION ALL SELECT 'e', 'p', 5 ON CONFLICT DO NOTHING").unwrap();
     assert_eq!(tag.command_tag.as_deref(), Some("INSERT 0 2"));
 }
+
+#[test]
+fn distinct_on_expressions_need_only_lead_the_order_by() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE u (v text, o int); INSERT INTO u VALUES ('Bob',2),('bob',1),('ALICE',5),('alice',3),('carl',9)").unwrap();
+    let rows = s.execute("SELECT DISTINCT ON (lower(v)) v, o FROM u ORDER BY lower(v), o").unwrap().rows;
+    assert_eq!(rows, vec![
+        vec![text("alice"), SqlValue::Int(3)],
+        vec![text("bob"), SqlValue::Int(1)],
+        vec![text("carl"), SqlValue::Int(9)],
+    ]);
+    let rows = s.execute("SELECT DISTINCT ON (lower(v)) o FROM u ORDER BY lower(v), o DESC").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Int(5)], vec![SqlValue::Int(2)], vec![SqlValue::Int(9)]]);
+    assert!(s.execute("SELECT DISTINCT ON (lower(v)) v FROM u ORDER BY o").is_err(), "DISTINCT ON must match the leading ORDER BY");
+}

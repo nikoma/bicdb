@@ -1072,7 +1072,7 @@ impl<'db> SqlEngine<'db> {
                 &projection_array_srfs,
             )?;
             result = self.typed_row_result(result, select, schema_ref)?;
-            self.apply_select_distinct(select, &mut result)?;
+            self.apply_select_distinct(select, query, &mut result, None)?;
             apply_row_limit(&mut result.rows, query)?;
             return Ok(result);
         }
@@ -1085,7 +1085,7 @@ impl<'db> SqlEngine<'db> {
                 call,
             )?;
             result = self.typed_row_result(result, select, schema_ref)?;
-            self.apply_select_distinct(select, &mut result)?;
+            self.apply_select_distinct(select, query, &mut result, None)?;
             apply_row_limit(&mut result.rows, query)?;
             return Ok(result);
         }
@@ -1096,7 +1096,12 @@ impl<'db> SqlEngine<'db> {
             &wildcard_columns,
         )?;
         let mut result = self.typed_row_result(result, select, schema_ref)?;
-        self.apply_select_distinct(select, &mut result)?;
+        self.apply_select_distinct(
+            select,
+            query,
+            &mut result,
+            Some((&row_set.rows, &row_set.columns)),
+        )?;
         if locks.is_none() {
             apply_row_limit(&mut result.rows, query)?;
         }
@@ -1147,10 +1152,15 @@ impl<'db> SqlEngine<'db> {
         Ok(())
     }
 
+    /// `source` holds the pre-projection rows (aligned 1:1 with the result
+    /// rows) when the projection did not expand set-returning functions; a
+    /// DISTINCT ON expression that is not an output column is evaluated there.
     pub(crate) fn apply_select_distinct(
         &self,
         select: &Select,
+        query: &Query,
         result: &mut SqlResult,
+        source: Option<(&[SlotRow], &[String])>,
     ) -> Result<()> {
         match select.distinct.as_ref() {
             None | Some(sqlparser::ast::Distinct::All) => Ok(()),
@@ -1174,35 +1184,59 @@ impl<'db> SqlEngine<'db> {
                 // DISTINCT ON keeps the first row per key in the sorted
                 // result; the surrounding branches apply ORDER BY before
                 // this dedup runs, exactly as PostgreSQL evaluates it. Keys
-                // resolve to projected columns by expression or alias.
-                let mut key_indices = Vec::with_capacity(on_exprs.len());
+                // resolve to projected columns by expression, alias or
+                // position; any other expression is evaluated on the source row.
+                validate_distinct_on_order(on_exprs, query, &select.projection)?;
+                enum DistinctKey<'a> {
+                    Output(usize),
+                    Source(&'a Expr),
+                }
+                let mut keys = Vec::with_capacity(on_exprs.len());
                 for on_expr in on_exprs {
                     let rendered = on_expr.to_string();
-                    let index = select
-                        .projection
-                        .iter()
-                        .position(|item| match item {
-                            SelectItem::UnnamedExpr(expr) => expr.to_string() == rendered,
-                            SelectItem::ExprWithAlias { expr, alias } => {
-                                expr.to_string() == rendered || alias.value == rendered
-                            }
-                            _ => false,
-                        })
-                        .ok_or_else(|| {
-                            SqlError::Unsupported(format!(
-                                "DISTINCT ON expression {rendered} must appear in the select list"
-                            ))
-                        })?;
-                    key_indices.push(index);
+                    let output = distinct_on_output_position(on_expr, &select.projection)
+                        .or_else(|| {
+                            select.projection.iter().position(|item| match item {
+                                SelectItem::UnnamedExpr(expr) => expr.to_string() == rendered,
+                                SelectItem::ExprWithAlias { expr, alias } => {
+                                    expr.to_string() == rendered || alias.value == rendered
+                                }
+                                _ => false,
+                            })
+                        });
+                    keys.push(match output {
+                        Some(index) => DistinctKey::Output(index),
+                        None if source.is_some_and(|(rows, _)| rows.len() == result.rows.len()) => {
+                            DistinctKey::Source(on_expr)
+                        }
+                        None => {
+                            return Err(SqlError::Unsupported(format!(
+                                "DISTINCT ON expression {rendered} must appear in the select list here"
+                            )));
+                        }
+                    });
                 }
+                let source = source.map(|(rows, columns)| (rows, self.bound_row_context(columns).1));
                 let mut seen = std::collections::BTreeSet::new();
-                result.rows.retain(|row| {
-                    let key = key_indices
-                        .iter()
-                        .map(|index| row.get(*index).map(SqlValue::to_cell))
-                        .collect::<Vec<_>>();
-                    seen.insert(key)
-                });
+                let mut keep = Vec::with_capacity(result.rows.len());
+                for (index, row) in result.rows.iter().enumerate() {
+                    let mut key = Vec::with_capacity(keys.len());
+                    for distinct_key in &keys {
+                        key.push(match (distinct_key, &source) {
+                            (DistinctKey::Output(column), _) => {
+                                row.get(*column).map(SqlValue::to_cell)
+                            }
+                            (DistinctKey::Source(expr), Some((rows, context))) => Some(
+                                self.eval_slot_row_value(&rows[index], context, expr)?
+                                    .to_cell(),
+                            ),
+                            (DistinctKey::Source(_), None) => None,
+                        });
+                    }
+                    keep.push(seen.insert(key));
+                }
+                let mut keep = keep.into_iter();
+                result.rows.retain(|_| keep.next().unwrap_or(false));
                 Ok(())
             }
         }
@@ -3487,4 +3521,66 @@ fn single_wildcard_copy<T>(columns: &[(String, T)]) -> &[(String, T)] {
     } else {
         columns
     }
+}
+
+/// `DISTINCT ON (1)` names an output column by position, as ORDER BY does.
+fn distinct_on_output_position(expr: &Expr, projection: &[SelectItem]) -> Option<usize> {
+    let Expr::Value(value) = expr else {
+        return None;
+    };
+    let sqlparser::ast::Value::Number(number, _) = &value.value else {
+        return None;
+    };
+    let position = number.parse::<usize>().ok()?;
+    (1..=projection.len()).contains(&position).then(|| position - 1)
+}
+
+/// PostgreSQL: "SELECT DISTINCT ON expressions must match initial ORDER BY
+/// expressions" — every ORDER BY item before the last DISTINCT ON key is
+/// matched must itself be a DISTINCT ON key.
+fn validate_distinct_on_order(
+    on_exprs: &[Expr],
+    query: &Query,
+    projection: &[SelectItem],
+) -> Result<()> {
+    let Some(order_by) = query.order_by.as_ref() else {
+        return Ok(());
+    };
+    let OrderByKind::Expressions(order_items) = &order_by.kind else {
+        return Ok(());
+    };
+    let canonical = |expr: &Expr| -> String {
+        if let Some(position) = distinct_on_output_position(expr, projection) {
+            if let Some(SelectItem::UnnamedExpr(item) | SelectItem::ExprWithAlias { expr: item, .. }) =
+                projection.get(position)
+            {
+                return item.to_string();
+            }
+        }
+        if let Expr::Identifier(ident) = expr {
+            for item in projection {
+                if let SelectItem::ExprWithAlias { expr: item, alias } = item {
+                    if alias.value.eq_ignore_ascii_case(&ident.value) {
+                        return item.to_string();
+                    }
+                }
+            }
+        }
+        expr.to_string()
+    };
+    let mut pending = on_exprs.iter().map(canonical).collect::<BTreeSet<_>>();
+    for order in order_items {
+        if pending.is_empty() {
+            break;
+        }
+        let key = canonical(&order.expr);
+        if !pending.remove(&key) && !on_exprs.iter().any(|on| canonical(on) == key) {
+            return Err(SqlError::data_exception_public(
+                "42P10",
+                "SELECT DISTINCT ON expressions must match initial ORDER BY expressions".to_string(),
+                None,
+            ));
+        }
+    }
+    Ok(())
 }

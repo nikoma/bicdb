@@ -1630,7 +1630,11 @@ pub(crate) fn expr_needs_row_evaluator(expr: &Expr) -> bool {
         | Expr::IsDistinctFrom(_, _)
         | Expr::IsNotDistinctFrom(_, _) => true,
         Expr::Function(function) => !is_spatial_predicate_function(function),
-        _ => false,
+        // Anything else the record projection cannot express as a field (POSITION, EXTRACT,
+        // SUBSTRING, CEIL/FLOOR, AT TIME ZONE, SIMILAR TO, OVERLAY, ...) needs the row evaluator;
+        // the fast path used to reject them with "unsupported field expression".
+        Expr::Identifier(_) | Expr::Value(_) | Expr::TypedString(_) => false,
+        other => FieldRef::from_expr_opt(other).is_none(),
     }
 }
 

@@ -2028,6 +2028,49 @@ pub(crate) fn eval_session_function_value(
                 args[2].to_cell().as_str(),
             ))))
         }
+        "left" | "pg_catalog.left" | "right" | "pg_catalog.right" => {
+            let from_left = name.ends_with("left");
+            require_arg_count(if from_left { "left" } else { "right" }, args, 2)?;
+            if args.iter().any(|value| matches!(value, SqlValue::Null)) {
+                return Ok(Some(SqlValue::Null));
+            }
+            let count = match &args[1] {
+                SqlValue::Int(value) => *value,
+                value => value.to_cell().trim().parse::<i64>().map_err(|_| {
+                    SqlError::invalid_parameter_value("character count must be an integer")
+                })?,
+            };
+            // PostgreSQL: n characters from that end; a negative n means all but |n| from the other end.
+            let chars = args[0].to_cell().chars().collect::<Vec<_>>();
+            let len = chars.len() as i64;
+            let keep = if count >= 0 { count.min(len) } else { (len + count).max(0) } as usize;
+            let text = if from_left {
+                chars[..keep].iter().collect::<String>()
+            } else {
+                chars[chars.len() - keep..].iter().collect::<String>()
+            };
+            Ok(Some(SqlValue::String(text)))
+        }
+        "translate" | "pg_catalog.translate" => {
+            require_arg_count("translate", args, 3)?;
+            if args.iter().any(|value| matches!(value, SqlValue::Null)) {
+                return Ok(Some(SqlValue::Null));
+            }
+            // PostgreSQL: each character of `from` maps to the character at the same position in
+            // `to`; characters of `from` beyond the end of `to` are deleted. The first occurrence
+            // of a repeated `from` character decides.
+            let from = args[1].to_cell().chars().collect::<Vec<_>>();
+            let to = args[2].to_cell().chars().collect::<Vec<_>>();
+            let translated = args[0]
+                .to_cell()
+                .chars()
+                .filter_map(|ch| match from.iter().position(|candidate| *candidate == ch) {
+                    Some(index) => to.get(index).copied(),
+                    None => Some(ch),
+                })
+                .collect::<String>();
+            Ok(Some(SqlValue::String(translated)))
+        }
         "split_part" | "pg_catalog.split_part" => {
             require_arg_count("split_part", args, 3)?;
             if args.iter().any(|value| matches!(value, SqlValue::Null)) {
@@ -2966,6 +3009,10 @@ pub(crate) fn eval_compatibility_function_value(
         return Ok(Some(value));
     }
     if let Some(value) = eval_bytea_function_value(name, args, arg_types)? {
+        return Ok(Some(value));
+    }
+    // After the bytea overloads (reverse/ltrim/rtrim/btrim on bytea), which need argument types.
+    if let Some(value) = eval_pg_scalar_extra(name, args)? {
         return Ok(Some(value));
     }
     if let Some(value) = eval_polymorphic_array_function_value(name, args)? {

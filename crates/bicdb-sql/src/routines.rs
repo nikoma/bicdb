@@ -194,12 +194,16 @@ pub(crate) fn collect_routine_stmt_symbols(
                 add_routine_symbol(target, names, seen);
                 collect_routine_stmt_symbols(body, names, seen);
             }
+            RoutineStmt::Loop { body } | RoutineStmt::WhileLoop { body, .. } => {
+                collect_routine_stmt_symbols(body, names, seen);
+            }
             RoutineStmt::FetchCursor { targets, .. } => {
                 for target in targets {
                     add_routine_symbol(target, names, seen);
                 }
             }
             RoutineStmt::ContinueLoop
+            | RoutineStmt::ExitLoop
             | RoutineStmt::Null
             | RoutineStmt::Sql(_)
             | RoutineStmt::DynamicExecute(_)
@@ -292,7 +296,11 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
                 array.bind(scope);
                 bind_routine_statement_exprs(body, scope);
             }
-            RoutineStmt::QueryForLoop { body, .. } => {
+            RoutineStmt::QueryForLoop { body, .. } | RoutineStmt::Loop { body } => {
+                bind_routine_statement_exprs(body, scope);
+            }
+            RoutineStmt::WhileLoop { condition, body } => {
+                condition.bind(scope);
                 bind_routine_statement_exprs(body, scope);
             }
             RoutineStmt::Return(Some(expr)) => expr.bind(scope),
@@ -307,6 +315,7 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
                 }
             }
             RoutineStmt::ContinueLoop
+            | RoutineStmt::ExitLoop
             | RoutineStmt::Null
             | RoutineStmt::SelectInto { .. }
             | RoutineStmt::Perform { .. }
@@ -820,6 +829,21 @@ pub(crate) fn next_plpgsql_statement(value: &str) -> Result<(&str, usize)> {
         let end = matching_end_loop(value)?;
         return Ok((&original[leading_len..leading_len + end], leading_len + end));
     }
+    // `WHILE cond LOOP ... END LOOP` and a bare `LOOP ... END LOOP` are one statement each.
+    let opens = |keyword: &str, extra: char| {
+        value
+            .get(..keyword.len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(keyword))
+            && value.get(keyword.len()..).is_some_and(|tail| {
+                tail.chars()
+                    .next()
+                    .is_none_or(|ch| ch.is_whitespace() || ch == extra)
+            })
+    };
+    if opens("WHILE", '(') || opens("LOOP", ';') {
+        let end = matching_end_loop(value)?;
+        return Ok((&original[leading_len..leading_len + end], leading_len + end));
+    }
     if value
         .get(..7)
         .is_some_and(|prefix| prefix.eq_ignore_ascii_case("FOREACH"))
@@ -904,8 +928,11 @@ fn routine_boundaries(value: &str) -> Result<Vec<(usize, usize, RoutineBoundary)
                 continue;
             } else if start && current == "IF" {
                 Some(RoutineBoundary::If)
-            } else if start && (current == "FOR" || current == "FOREACH") {
+            } else if start && (current == "FOR" || current == "FOREACH" || current == "WHILE") {
                 loop_header = true;
+                Some(RoutineBoundary::Loop)
+            } else if start && current == "LOOP" {
+                // A bare `LOOP` opens the block and its body at once.
                 Some(RoutineBoundary::Loop)
             } else if start && current == "ELSIF" {
                 Some(RoutineBoundary::Elsif)
@@ -924,7 +951,7 @@ fn routine_boundaries(value: &str) -> Result<Vec<(usize, usize, RoutineBoundary)
             let starts_body = current == "THEN"
                 || current == "ELSE"
                 || current == "BEGIN"
-                || (current == "LOOP" && loop_header);
+                || (current == "LOOP" && (loop_header || start));
             if current == "LOOP" && loop_header {
                 loop_header = false;
             }
@@ -1078,8 +1105,33 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
                 .is_none_or(|ch| ch.is_whitespace() || ch == ';')
         })
     {
+        return parse_routine_plain_loop(statement);
+    }
+    if statement
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("WHILE"))
+        && statement.get(5..).is_some_and(|tail| {
+            tail.chars()
+                .next()
+                .is_none_or(|ch| ch.is_whitespace() || ch == '(')
+        })
+    {
+        return parse_routine_while_loop(statement);
+    }
+    if keyword_matches_at(statement, "EXIT", 0) {
+        let rest = statement["EXIT".len()..].trim().trim_end_matches(';').trim();
+        if rest.is_empty() {
+            return Ok(RoutineStmt::ExitLoop);
+        }
+        if keyword_matches_at(rest, "WHEN", 0) {
+            return Ok(RoutineStmt::If {
+                condition: RoutineExpr::unbound(parse_routine_expr(rest[4..].trim())?),
+                then_body: vec![RoutineStmt::ExitLoop],
+                else_body: Vec::new(),
+            });
+        }
         return Err(SqlError::UnsupportedPlpgsqlFeature(
-            "LOOP blocks are not implemented".to_string(),
+            "EXIT with a label is not implemented".to_string(),
         ));
     }
     if let Some(rest) = strip_prefix_ci(statement, "RAISE") {
@@ -1399,6 +1451,37 @@ pub(crate) fn parse_routine_foreach_loop(statement: &str) -> Result<RoutineStmt>
     })
 }
 
+/// The statements between a loop's `LOOP` keyword and its closing `END LOOP`.
+fn routine_loop_body(after_loop: &str) -> Result<Vec<RoutineStmt>> {
+    let body = after_loop.trim().trim_end_matches(';').trim_end();
+    let lower = body.to_ascii_lowercase();
+    let Some(end) = lower.strip_suffix("end loop").map(str::len) else {
+        return Err(SqlError::InvalidSql("LOOP requires END LOOP".to_string()));
+    };
+    parse_routine_statements(body[..end].trim())
+}
+
+pub(crate) fn parse_routine_plain_loop(statement: &str) -> Result<RoutineStmt> {
+    let after = strip_prefix_ci(statement.trim(), "LOOP")
+        .ok_or_else(|| SqlError::InvalidSql("LOOP expected".to_string()))?;
+    Ok(RoutineStmt::Loop {
+        body: routine_loop_body(after)?,
+    })
+}
+
+pub(crate) fn parse_routine_while_loop(statement: &str) -> Result<RoutineStmt> {
+    let inner = strip_prefix_ci(statement.trim(), "WHILE")
+        .ok_or_else(|| SqlError::InvalidSql("WHILE loop expected".to_string()))?
+        .trim();
+    let Some(loop_idx) = find_top_level_keyword(inner, "LOOP") else {
+        return Err(SqlError::InvalidSql("WHILE loop requires LOOP".to_string()));
+    };
+    Ok(RoutineStmt::WhileLoop {
+        condition: RoutineExpr::unbound(parse_routine_expr(inner[..loop_idx].trim())?),
+        body: routine_loop_body(&inner[loop_idx + "LOOP".len()..])?,
+    })
+}
+
 pub(crate) fn parse_routine_fetch(rest: &str) -> Result<RoutineStmt> {
     let Some(into_idx) = find_top_level_keyword(rest, "INTO") else {
         return Err(SqlError::InvalidSql(
@@ -1709,7 +1792,7 @@ pub(crate) fn find_top_level_operator(sql: &str, operator: &str) -> Option<usize
             b'"' => double_quoted = true,
             b'(' => depth += 1,
             b')' => depth = depth.saturating_sub(1),
-            _ if depth == 0 && sql[idx..].starts_with(operator) => return Some(idx),
+            _ if depth == 0 && bytes[idx..].starts_with(operator.as_bytes()) => return Some(idx),
             _ => {}
         }
         idx += 1;
@@ -2289,6 +2372,11 @@ fn validate_routine_continue(statements: &[RoutineStmt], in_loop: bool) -> Resul
                     "CONTINUE cannot be used outside a loop".into(),
                 ))
             }
+            RoutineStmt::ExitLoop if !in_loop => {
+                return Err(SqlError::InvalidSql(
+                    "EXIT cannot be used outside a loop".into(),
+                ))
+            }
             RoutineStmt::If {
                 then_body,
                 else_body,
@@ -2299,7 +2387,9 @@ fn validate_routine_continue(statements: &[RoutineStmt], in_loop: bool) -> Resul
             }
             RoutineStmt::ForLoop { body, .. }
             | RoutineStmt::ForeachLoop { body, .. }
-            | RoutineStmt::QueryForLoop { body, .. } => validate_routine_continue(body, true)?,
+            | RoutineStmt::QueryForLoop { body, .. }
+            | RoutineStmt::Loop { body }
+            | RoutineStmt::WhileLoop { body, .. } => validate_routine_continue(body, true)?,
             _ => {}
         }
     }

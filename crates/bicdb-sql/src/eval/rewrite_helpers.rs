@@ -391,6 +391,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = rewrite_on_conflict_index_predicates(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = rewrite_qualified_current_user_calls(&rewritten) {
         rewritten = next;
         changed = true;
@@ -446,7 +451,7 @@ pub(crate) fn rewrite_variadic_builtin_calls(input: &str) -> Option<String> {
     let mut dollar_quote = None::<String>;
     while index < bytes.len() {
         if let Some(delimiter) = dollar_quote.as_deref() {
-            if input[index..].starts_with(delimiter) {
+            if bytes[index..].starts_with(delimiter.as_bytes()) {
                 index += delimiter.len();
                 dollar_quote = None;
             } else {

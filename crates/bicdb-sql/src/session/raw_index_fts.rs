@@ -229,6 +229,7 @@ impl<'db> SqlSession<'db> {
             unique: false,
             access_method: "gist".to_string(),
             metadata_only: false,
+            predicate: None,
         });
         self.save_session_schema(&schema)?;
         Ok(Some(SqlResult::command("CREATE INDEX")))
@@ -825,12 +826,18 @@ impl<'db> SqlSession<'db> {
             unique: index.unique,
             access_method: index.access_method,
             metadata_only: true,
+            predicate: None,
         });
         self.save_session_schema(&schema)?;
         Ok(Some(SqlResult::command("CREATE INDEX")))
     }
 
     pub(crate) fn execute_query(&mut self, query: &Query) -> Result<SqlResult> {
+        if let Some(rewritten) = rewrite_ordinal_order_by(query, &|relation| {
+            table_factor_column_names(self.db_ref(), relation)
+        }) {
+            return self.execute_query(&rewritten);
+        }
         // Own the entire statement, including CTEs and its final DML. A
         // correlated function must never commit independently of that DML.
         if query_may_write(query) && (self.tx.is_some() || self.mutation_has_row_triggers(query)?) {
@@ -1144,7 +1151,7 @@ impl<'db> SqlSession<'db> {
         let Some(command) = parse_database_ddl(sql)? else {
             return Ok(None);
         };
-        match command {
+        match command.clone() {
             DatabaseDdl::Create {
                 template: Some(template),
                 ..
@@ -1167,7 +1174,14 @@ impl<'db> SqlSession<'db> {
                 }
                 let owner = owner.unwrap_or(current_role);
                 ensure_known_role(&roles, &owner)?;
-                save_database_if_missing(self.db_mut()?, DatabaseSchema { name, owner })?;
+                save_database_if_missing(
+                    self.db_mut()?,
+                    DatabaseSchema {
+                        name,
+                        owner,
+                        settings: BTreeMap::new(),
+                    },
+                )?;
                 Ok(Some(SqlResult::command("CREATE DATABASE")))
             }
             DatabaseDdl::AlterOwner { name, owner } => {
@@ -1187,6 +1201,32 @@ impl<'db> SqlSession<'db> {
             }
             DatabaseDdl::SetTablespace { name } => {
                 ensure_database_exists(self.db_ref(), &name)?;
+                Ok(Some(SqlResult::command("ALTER DATABASE")))
+            }
+            DatabaseDdl::SetSetting { name, .. } | DatabaseDdl::ResetAllSettings { name } => {
+                // PostgreSQL: the database owner or a superuser may set its session defaults.
+                let owner = list_databases(self.db_ref())?
+                    .into_iter()
+                    .find(|database| database.name.eq_ignore_ascii_case(&name))
+                    .map(|database| database.owner)
+                    .ok_or_else(|| {
+                        SqlError::InvalidSql(format!("database \"{name}\" does not exist"))
+                    })?;
+                self.require_object_ownership(&owner, &format!("database {name}"), "alter it")?;
+                match &command {
+                    DatabaseDdl::SetSetting { setting, value, .. } => {
+                        if is_protected_security_setting(setting) {
+                            return Err(protected_security_setting_error(setting));
+                        }
+                        save_database_setting(
+                            self.db_mut()?,
+                            &name,
+                            Some(setting),
+                            value.as_deref(),
+                        )?;
+                    }
+                    _ => save_database_setting(self.db_mut()?, &name, None, None)?,
+                }
                 Ok(Some(SqlResult::command("ALTER DATABASE")))
             }
             DatabaseDdl::Drop { name, if_exists } => {

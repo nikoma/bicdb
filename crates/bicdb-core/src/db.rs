@@ -21339,6 +21339,11 @@ fn evaluate_index_predicate(record: &Record, predicate: &IndexPredicate) -> Resu
     })
 }
 
+/// Whether `record` belongs to a partial index with this predicate (true, not NULL or false).
+pub fn index_predicate_matches(record: &Record, predicate: &IndexPredicate) -> Result<bool> {
+    record_matches_index_predicate_parts(record, "partial", Some(predicate))
+}
+
 fn record_matches_index_predicate(record: &Record, definition: &IndexDefinition) -> Result<bool> {
     record_matches_index_predicate_parts(record, &definition.name, definition.predicate.as_ref())
 }

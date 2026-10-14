@@ -53,6 +53,17 @@ pub const PROTECTED_SECURITY_SETTINGS: [&str; 20] = [
     "carrier.authentication_strength",
 ];
 
+/// PostgreSQL's trusted contrib extensions (`trusted = true` in their control files).
+pub(crate) fn is_trusted_postgres_extension(name: &str) -> bool {
+    matches!(
+        name.trim_matches('"').to_ascii_lowercase().as_str(),
+        "btree_gin" | "btree_gist" | "citext" | "cube" | "dict_int" | "fuzzystrmatch" | "hstore"
+            | "intarray" | "isn" | "lo" | "ltree" | "pgcrypto" | "pg_trgm" | "plpgsql" | "seg"
+            | "tablefunc" | "tcn" | "tsm_system_rows" | "tsm_system_time" | "unaccent"
+            | "uuid-ossp"
+    )
+}
+
 pub fn is_protected_security_setting(name: &str) -> bool {
     PROTECTED_SECURITY_SETTINGS
         .iter()
@@ -2166,7 +2177,26 @@ impl<'db> SqlSession<'db> {
             txn_lookup_caches: std::cell::RefCell::new(None),
         };
         session.rebind_trusted_security_settings();
+        session.apply_database_setting_defaults();
         session
+    }
+
+    /// `ALTER DATABASE name SET setting = value` defaults: any setting this session has not set itself
+    /// starts at the database's value, and `RESET` returns to it (PostgreSQL's per-database defaults).
+    pub(crate) fn apply_database_setting_defaults(&mut self) {
+        let name = current_database_from_gucs(&self.session_gucs);
+        let Ok(settings) = database_settings(self.db_ref(), &name) else {
+            return;
+        };
+        if settings.is_empty() {
+            return;
+        }
+        let gucs = Arc::make_mut(&mut self.session_gucs);
+        for (setting, value) in settings {
+            if !is_protected_security_setting(&setting) {
+                gucs.entry(setting).or_insert(value);
+            }
+        }
     }
 
     /// Shared access to the database. Sound while the caller holds at least a
@@ -2223,6 +2253,7 @@ impl<'db> SqlSession<'db> {
     pub fn with_session_gucs(mut self, session_gucs: HashMap<String, String>) -> Self {
         self.session_gucs = Arc::new(session_gucs);
         self.rebind_trusted_security_settings();
+        self.apply_database_setting_defaults();
         self
     }
 
@@ -2240,6 +2271,7 @@ impl<'db> SqlSession<'db> {
         self.guc_local_settings_restore = state.local_settings_restore;
         self.currvals = state.currvals;
         self.rebind_trusted_security_settings();
+        self.apply_database_setting_defaults();
     }
 
     fn take_session_guc_state(&mut self) -> SqlSessionGucState {
@@ -4197,6 +4229,31 @@ impl<'db> SqlSession<'db> {
     /// and queue consumers), audit-history trimming, and the store-wide
     /// vacuum. None of these can be authorized against a relation, and all of
     /// them are administrative, so they take the administrative gate.
+    /// `CREATE EXTENSION`: PostgreSQL lets the database owner create *trusted* extensions (13+);
+    /// every other extension needs a superuser.
+    pub(crate) fn require_extension_creation_authority(&self, extension: &str) -> Result<()> {
+        if self.current_user_is_superuser()? {
+            return Ok(());
+        }
+        if is_trusted_postgres_extension(extension) {
+            let database = current_database_from_gucs(&self.session_gucs);
+            let owner = list_databases(self.db_ref())?
+                .into_iter()
+                .find(|candidate| candidate.name.eq_ignore_ascii_case(&database))
+                .map(|candidate| candidate.owner);
+            let role = current_user_from_gucs(&self.session_gucs);
+            if owner.is_some_and(|owner| owner.eq_ignore_ascii_case(&role)) {
+                return Ok(());
+            }
+            return Err(SqlError::BicDb(BicDbError::Authorization(format!(
+                "permission denied to create extension \"{extension}\": must be the database owner or a superuser"
+            ))));
+        }
+        Err(SqlError::BicDb(BicDbError::Authorization(format!(
+            "permission denied to create extension \"{extension}\": must be superuser"
+        ))))
+    }
+
     pub(crate) fn require_superuser_for_admin_operation(&self, operation: &str) -> Result<()> {
         if self.current_user_is_superuser()? {
             return Ok(());
@@ -4388,6 +4445,7 @@ impl<'db> SqlSession<'db> {
             let targets = self.reset_setting(&statement)?;
             self.reconcile_guc_assignments(previous_gucs, previous_settings, false);
             targets.clear_local_restore(self);
+            self.apply_database_setting_defaults();
         }
         Ok(Some(SqlResult::command("RESET")))
     }

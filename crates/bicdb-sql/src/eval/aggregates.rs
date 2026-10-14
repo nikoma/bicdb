@@ -1602,8 +1602,22 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
                     }
                 });
         }
-        if unqualified_name == "string_to_array" {
+        if matches!(unqualified_name, "string_to_array" | "regexp_match" | "regexp_split_to_array") {
             return Some("text[]".to_string());
+        }
+        // Result types of the scalar functions in pg_scalar_extra.rs.
+        match unqualified_name {
+            "strpos" => return Some("int4".to_string()),
+            // reverse/btrim/ltrim/rtrim keep their bytea-aware typing below.
+            "lpad" | "rpad" | "repeat" => return Some("text".to_string()),
+            "starts_with" => return Some("bool".to_string()),
+            "power" | "pow" | "sqrt" | "cbrt" | "exp" | "ln" | "log" => {
+                return Some("float8".to_string())
+            }
+            "similarity" => return Some("float4".to_string()),
+            "age" | "make_interval" => return Some("interval".to_string()),
+            "to_date" => return Some("date".to_string()),
+            _ => {}
         }
         if unqualified_name == "array_to_string" {
             return Some("text".to_string());

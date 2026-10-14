@@ -3755,6 +3755,11 @@ impl<'db> SqlEngine<'db> {
             };
         let effective_constraint = derived_constraint.as_ref().unwrap_or(constraint);
         if matches!(kind, RowJoinKind::Inner | RowJoinKind::Left) {
+            // `t CROSS JOIN LATERAL unnest(t.arr) r(x)` / `t, unnest(t.arr) r(x)`: PostgreSQL table
+            // functions are implicitly lateral, so the arrays are evaluated per left row.
+            if let Some(call) = lateral_unnest_call(&join.relation)? {
+                return self.apply_lateral_unnest_join(left, &call, kind, effective_constraint);
+            }
             if let Some(call) = json_set_returning_call(&join.relation)? {
                 if call.permits_correlation {
                     return self.apply_lateral_json_set_function_join(
@@ -3944,6 +3949,88 @@ impl<'db> SqlEngine<'db> {
                 columns.push(column);
             }
         }
+        sql_profile_join_rows(&rows, candidate_pairs);
+        Ok(RowSet { rows, columns })
+    }
+
+    pub(crate) fn apply_lateral_unnest_join(
+        &self,
+        left: RowSet,
+        call: &LateralUnnestCall,
+        kind: RowJoinKind,
+        constraint: &JoinConstraint,
+    ) -> Result<RowSet> {
+        if call.args.is_empty() {
+            return Err(SqlError::InvalidSql(
+                "UNNEST expects at least one array argument".to_string(),
+            ));
+        }
+        let alias = call.alias.as_ref();
+        let alias_name = alias
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| "unnest".to_string());
+        let source_columns = table_function_source_columns_for_alias(
+            alias,
+            &alias_name,
+            unnest_source_columns(call.args.len(), false, None, call.with_ordinality),
+        );
+        let columns = table_alias_columns(
+            "unnest",
+            &alias_name,
+            alias.map(|alias| alias.columns.as_slice()).unwrap_or(&[]),
+            &source_columns,
+        )?;
+        let right_columns = aliased_row_output_columns(&alias_name, &columns);
+        let null_right = null_slot_row_for_columns(&right_columns);
+        let (scope, context) = self.bound_row_context(&left.columns);
+        let bound_args = call.args.iter().map(|arg| scope.bind(arg)).collect::<Vec<_>>();
+        let mut rows = Vec::new();
+        let mut candidate_pairs = 0usize;
+        for (left_idx, left_row) in left.rows.iter().enumerate() {
+            if left_idx % 128 == 0 {
+                self.check_cancellation()?;
+            }
+            let mut value_sets = Vec::with_capacity(call.args.len());
+            for (arg, bound) in call.args.iter().zip(&bound_args) {
+                let value = match bound {
+                    Some(bound) => bound.eval(&BoundExprFrame {
+                        user_calls: &[],
+                        db: self.db_ref(),
+                        columns: BoundExprColumns::Values(left_row),
+                        vars: &context.var_values,
+                    })?,
+                    None => self.eval_slot_row_value(left_row, &context, arg)?,
+                };
+                value_sets.push(unnest_values_from_sql(value)?);
+            }
+            let count = value_sets.iter().map(Vec::len).max().unwrap_or_default();
+            candidate_pairs = candidate_pairs.saturating_add(count);
+            let mut matched_left = false;
+            for idx in 0..count {
+                let mut values = value_sets
+                    .iter()
+                    .map(|values| values.get(idx).cloned().unwrap_or(SqlValue::Null))
+                    .collect::<Vec<_>>();
+                if call.with_ordinality {
+                    values.push(SqlValue::Int(idx as i64 + 1));
+                }
+                let right_row = slot_row_from_values(&columns, &values);
+                if self.join_constraint_matches(
+                    left_row,
+                    &left.columns,
+                    &right_row,
+                    &right_columns,
+                    constraint,
+                )? {
+                    matched_left = true;
+                    rows.push(merge_slot_rows(left_row, &left.columns, &right_row, &right_columns));
+                }
+            }
+            if !matched_left && matches!(kind, RowJoinKind::Left) {
+                rows.push(merge_slot_rows(left_row, &left.columns, &null_right, &right_columns));
+            }
+        }
+        let columns = merge_row_set_columns(left.columns, right_columns);
         sql_profile_join_rows(&rows, candidate_pairs);
         Ok(RowSet { rows, columns })
     }

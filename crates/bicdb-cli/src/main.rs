@@ -1384,8 +1384,11 @@ enum UserCommand {
         #[arg(long, required_unless_present = "revoke", conflicts_with = "revoke")]
         signing_key_env: Option<String>,
         /// Allowed tenant IDs, or an explicit '*' for all tenants.
-        #[arg(long = "tenant", required_unless_present = "revoke")]
+        #[arg(long = "tenant", required_unless_present_any = ["revoke", "allow_no_tenant"])]
         tenants: Vec<String>,
+        /// Also delegate identities without a tenant (`tenant_id` empty); not implied by '*'.
+        #[arg(long, conflicts_with = "revoke")]
+        allow_no_tenant: bool,
         #[arg(long)]
         revoke: bool,
     },
@@ -6153,6 +6156,7 @@ fn main() -> Result<()> {
                 path,
                 signing_key_env,
                 tenants,
+                allow_no_tenant,
                 revoke,
             } => {
                 let policy = if revoke {
@@ -6165,6 +6169,7 @@ fn main() -> Result<()> {
                     Some(bicdb_pgwire::DelegationPolicy {
                         signing_key,
                         tenants,
+                        allow_no_tenant,
                     })
                 };
                 bicdb_pgwire::set_user_delegation_policy(&path, &username, policy)?;

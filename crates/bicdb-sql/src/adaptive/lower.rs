@@ -253,7 +253,10 @@ fn lower_stmt(stmt: &RoutineStmt, ctx: &mut LowerCtx) -> Option<ProcStmt> {
                 body: loop_out,
             })
         }
-        RoutineStmt::ForeachLoop { .. } => None,
+        RoutineStmt::ForeachLoop { .. }
+        | RoutineStmt::Loop { .. }
+        | RoutineStmt::WhileLoop { .. }
+        | RoutineStmt::ExitLoop => None,
         RoutineStmt::SelectInto {
             query,
             targets,

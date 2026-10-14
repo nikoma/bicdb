@@ -133,6 +133,7 @@ pub use consensus::{
     ConsensusRole, ConsensusState, ConsensusStatus, RequestVote, VoteResponse,
 };
 pub use db::effective_fts_partitions;
+pub use db::index_predicate_matches;
 pub use db::AuthenticationStrength;
 pub use db::FullTextBuildStep;
 pub use db::FullTextStoredTextPage;

@@ -1065,10 +1065,29 @@ pub(crate) fn values_equal_scalar(left: &SqlValue, right: &SqlValue) -> bool {
                 _ => false,
             }
         }
+        _ if float_and_numeric(left, right).is_some() => float_and_numeric(left, right)
+            .is_some_and(|(left, right)| postgres_float_ordering(left, right) == Ordering::Equal),
         _ => match (left.as_f64(), right.as_f64()) {
             (Some(left), Some(right)) => postgres_float_ordering(left, right) == Ordering::Equal,
             _ => left == right,
         },
+    }
+}
+
+/// `real/double precision <op> numeric`: PostgreSQL compares as double precision. A NUMERIC operand
+/// is held as decimal text, which neither the decimal path (no floats) nor `as_f64` (no text) took,
+/// so `real_col > 0.5` was "incomparable" and every such comparison came out false.
+pub(crate) fn float_and_numeric(left: &SqlValue, right: &SqlValue) -> Option<(f64, f64)> {
+    let numeric = |value: &SqlValue| match value {
+        SqlValue::String(text) if numeric_text_plausible(text) && is_valid_numeric_text(text) => {
+            text.trim().parse::<f64>().ok()
+        }
+        _ => None,
+    };
+    match (left, right) {
+        (SqlValue::Float(left), right) => Some((*left, numeric(right)?)),
+        (left, SqlValue::Float(right)) => Some((numeric(left)?, *right)),
+        _ => None,
     }
 }
 
@@ -2343,6 +2362,9 @@ pub(crate) fn value_ordering(left: &SqlValue, right: &SqlValue) -> Option<Orderi
             return sql_value_bool(left).map(|left| left.cmp(right));
         }
         _ => {}
+    }
+    if let Some((left, right)) = float_and_numeric(left, right) {
+        return Some(postgres_float_ordering(left, right));
     }
     match (left.as_f64(), right.as_f64()) {
         (Some(left), Some(right)) => Some(postgres_float_ordering(left, right)),

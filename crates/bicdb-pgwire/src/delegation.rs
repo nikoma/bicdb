@@ -9,6 +9,10 @@ pub struct DelegationPolicy {
     pub signing_key: String,
     /// Explicit tenant allowlist. A single `*` authorizes all tenants.
     pub tenants: Vec<String>,
+    /// Also delegate identities that carry no tenant (`tenant_id: ""`), e.g. users of an application
+    /// without organisations. Off unless the operator grants it explicitly; `*` does not imply it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allow_no_tenant: bool,
 }
 
 /// Operator API; never exposed through SQL or ordinary login credentials.
@@ -26,7 +30,7 @@ pub fn set_user_delegation_policy(
     }
     if let Some(policy) = &policy {
         if policy.signing_key.len() < 32
-            || policy.tenants.is_empty()
+            || (policy.tenants.is_empty() && !policy.allow_no_tenant)
             || policy.tenants.iter().any(|tenant| {
                 tenant.trim().is_empty() || tenant.len() > 1024 || tenant.contains('\0')
             })
@@ -310,7 +314,7 @@ pub(crate) fn execute_delegation(
             })
             || [
                 Some(claims.user_id.as_str()),
-                Some(claims.tenant_id.as_str()),
+                Some(claims.tenant_id.as_str()).filter(|tenant| !tenant.is_empty()),
                 claims.client_id.as_deref(),
                 claims.workspace_id.as_deref(),
             ]
@@ -318,11 +322,15 @@ pub(crate) fn execute_delegation(
             .flatten()
             .any(|value| value.trim().is_empty() || value.contains('\0') || value.len() > 1024)
             || claims.user_id.trim().is_empty()
-            || claims.tenant_id.trim().is_empty()
-            || !policy
-                .tenants
-                .iter()
-                .any(|tenant| tenant == "*" || tenant == &claims.tenant_id)
+            || !(if claims.tenant_id.is_empty() {
+                policy.allow_no_tenant
+            } else {
+                !claims.tenant_id.trim().is_empty()
+                    && policy
+                        .tenants
+                        .iter()
+                        .any(|tenant| tenant == "*" || tenant == &claims.tenant_id)
+            })
         {
             return Err(denied(
                 "delegation claims are expired or outside authorized scope",
@@ -394,6 +402,7 @@ mod tests {
             Some(DelegationPolicy {
                 signing_key: KEY.into(),
                 tenants: vec!["tenant-a".into(), "tenant-b".into()],
+                allow_no_tenant: false,
             }),
         )
         .unwrap();
@@ -431,6 +440,55 @@ mod tests {
             payload.replace('\'', "''"),
             hex::encode(mac.finalize().into_bytes())
         )
+    }
+
+    #[test]
+    fn tenantless_identities_need_explicit_operator_authority() {
+        let (dir, server, mut state) = fixture();
+        // Default policy (and even `*`): an identity without a tenant is refused.
+        execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+        let claims = envelope(&server, &mut state, "solo", "");
+        assert!(execute_delegation(&server, &mut state, &signed_call(&claims, KEY)).is_err());
+        execute_server_sql(&server, &mut state, "ROLLBACK").unwrap();
+        drop(state);
+        drop(server);
+        for tenants in [vec!["*".to_string()], vec![]] {
+            let allow = tenants.is_empty();
+            let result = set_user_delegation_policy(
+                dir.path(),
+                "app",
+                Some(DelegationPolicy {
+                    signing_key: KEY.into(),
+                    tenants: tenants.clone(),
+                    allow_no_tenant: allow,
+                }),
+            );
+            assert!(result.is_ok(), "{tenants:?}");
+            let server = PgWireServer::open(
+                dir.path(),
+                PgWireConfig {
+                    require_auth: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let context = connection_security_context(&server, "app", 1, None).unwrap();
+            let mut state =
+                ConnectionState::new_with_security_context(1, "app".into(), None, context);
+            execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+            let claims = envelope(&server, &mut state, "solo", "");
+            let delegated = execute_delegation(&server, &mut state, &signed_call(&claims, KEY));
+            assert_eq!(delegated.is_ok(), allow, "tenants {tenants:?}, allow_no_tenant {allow}");
+            if allow {
+                assert_eq!(state.security_context.as_ref().unwrap().user_id, "solo");
+                // A whitespace tenant is still malformed, and named tenants are not implied.
+                execute_server_sql(&server, &mut state, "ROLLBACK").unwrap();
+                execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+                let named = envelope(&server, &mut state, "solo", "tenant-a");
+                assert!(execute_delegation(&server, &mut state, &signed_call(&named, KEY)).is_err());
+            }
+            execute_server_sql(&server, &mut state, "ROLLBACK").unwrap();
+        }
     }
 
     #[test]
@@ -550,6 +608,7 @@ mod tests {
                             Some(DelegationPolicy {
                                 signing_key: KEY.into(),
                                 tenants: vec!["tenant-a".into()],
+                                allow_no_tenant: false,
                             }),
                         )
                         .unwrap();
@@ -722,6 +781,7 @@ mod tests {
                     Some(DelegationPolicy {
                         signing_key: "rotated-delegation-key-with-at-least-32-bytes".into(),
                         tenants: vec!["tenant-a".into()],
+                        allow_no_tenant: false,
                     }),
                 )
                 .unwrap();
@@ -737,6 +797,7 @@ mod tests {
             Some(DelegationPolicy {
                 signing_key: KEY.into(),
                 tenants: vec!["tenant-a".into()],
+                allow_no_tenant: false,
             }),
         )
         .unwrap();

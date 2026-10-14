@@ -6948,7 +6948,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
                 indexprs: (full_text || definition.fields.iter().any(index_field_is_expression))
                     .then(|| index.expression.clone()),
                 exclusion: false,
-                predicate: None,
+                predicate: index.predicate.clone(),
             });
         }
         for constraint in &schema.constraints {

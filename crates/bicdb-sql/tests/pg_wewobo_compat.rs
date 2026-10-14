@@ -283,6 +283,10 @@ fn common_postgresql_functions_work_on_table_rows() {
         assert_eq!(render(got), render(&expected), "{expr}");
     }
     assert_eq!(s.execute("SELECT strpos(NULL, 'a'), lpad(NULL, 3), age(NULL)").unwrap().rows, vec![vec![SqlValue::Null, SqlValue::Null, SqlValue::Null]]);
+    // CEIL/FLOOR syntax outside a table scan: constants and INSERT values.
+    assert_eq!(s.execute("SELECT floor(2.5), ceil(2.1), floor(-2.5)").unwrap().rows, vec![vec![text("2"), text("3"), text("-3")]]);
+    s.execute("CREATE TABLE fl (v int); INSERT INTO fl VALUES (floor(7 / 2.0)), (ceil(7 / 2.0))").unwrap();
+    assert_eq!(s.execute("SELECT v FROM fl ORDER BY v").unwrap().rows, vec![vec![SqlValue::Int(3)], vec![SqlValue::Int(4)]]);
     // The same functions without a FROM clause (the constant path).
     assert_eq!(
         s.execute("SELECT strpos('Hello', 'l'), lpad('x', 3, '*'), reverse('abc'), starts_with('abc', 'a'), regexp_match('ab', 'b')::text").unwrap().rows,

@@ -1644,6 +1644,14 @@ pub(crate) fn execute_builtin_function(
                     vec![vec![value]],
                 ));
             }
+            // Scalar functions shared with the row evaluator (bytea overloads first, then
+            // strpos/lpad/floor/...); CEIL/FLOOR syntax is normalized into these calls.
+            if let Some(value) = eval_compatibility_function_value(other, &args, Some(&arg_types))? {
+                return Ok(SqlResult::new(
+                    vec![name.replace("pg_catalog.", "")],
+                    vec![vec![value]],
+                ));
+            }
             eval_catalog_function_value(other, &args)
                 .map(|value| {
                     SqlResult::new(vec![name.replace("pg_catalog.", "")], vec![vec![value]])

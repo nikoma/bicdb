@@ -203,7 +203,7 @@ mod partial_index;
 mod pg_scalar_extra;
 mod records;
 mod row_types;
-pub(crate) use order_by_ordinal::rewrite_ordinal_order_by;
+pub(crate) use order_by_ordinal::{rewrite_dml_call_forms, rewrite_ordinal_order_by};
 pub(crate) use partial_index::partial_index_predicate;
 pub(crate) use pg_scalar_extra::eval_pg_scalar_extra;
 pub use records::*;

@@ -989,6 +989,14 @@ impl<'db> SqlSession<'db> {
         if matches!(
             statement,
             Statement::Insert(_) | Statement::Update(_) | Statement::Delete(_)
+        ) {
+            if let Some(rewritten) = rewrite_dml_call_forms(statement) {
+                return self.execute_statement(&rewritten);
+            }
+        }
+        if matches!(
+            statement,
+            Statement::Insert(_) | Statement::Update(_) | Statement::Delete(_)
         ) && (self.tx.is_some() || self.mutation_has_row_triggers(statement)?)
         {
             return self

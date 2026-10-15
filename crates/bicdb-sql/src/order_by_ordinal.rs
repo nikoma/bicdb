@@ -548,3 +548,35 @@ fn output_names(body: &SetExpr, columns: &RelationColumns<'_>) -> Option<Vec<Str
         _ => None,
     }
 }
+
+/// INSERT/UPDATE/DELETE with `make_interval(mins => n)` or plain `ceil(x)`/`floor(x)`: the same call
+/// normalization queries get, or the named arguments of make_interval were dropped (a zero interval).
+pub(crate) fn rewrite_dml_call_forms(statement: &Statement) -> Option<Statement> {
+    struct CallFinder(bool);
+    impl Visitor for CallFinder {
+        type Break = ();
+        fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+            if named_make_interval(expr) || plain_ceil_floor(expr) {
+                self.0 = true;
+                return ControlFlow::Break(());
+            }
+            ControlFlow::Continue(())
+        }
+    }
+    struct CallRewriter;
+    impl VisitorMut for CallRewriter {
+        type Break = ();
+        fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<()> {
+            let _ = positional_make_interval(expr) || ceil_floor_as_call(expr);
+            ControlFlow::Continue(())
+        }
+    }
+    let mut finder = CallFinder(false);
+    let _ = Visit::visit(statement, &mut finder);
+    if !finder.0 {
+        return None;
+    }
+    let mut rewritten = statement.clone();
+    let _ = VisitMut::visit(&mut rewritten, &mut CallRewriter);
+    Some(rewritten)
+}

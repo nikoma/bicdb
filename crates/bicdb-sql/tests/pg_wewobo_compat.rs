@@ -2080,3 +2080,21 @@ fn a_primary_key_added_after_the_rows_finds_and_guards_those_rows() {
     s.execute("INSERT INTO dupes VALUES ('a'),('a')").unwrap();
     assert!(s.execute("ALTER TABLE dupes ADD PRIMARY KEY (k)").is_err());
 }
+
+#[test]
+fn make_interval_with_named_arguments_works_in_insert_update_and_delete() {
+    // jobs_run requeues a stuck job with run_after = NOW() + make_interval(mins => attempts^2).
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE jobs (id int PRIMARY KEY, attempts int, run_after timestamptz, wait interval)").unwrap();
+    s.execute("INSERT INTO jobs VALUES (1, 2, now(), make_interval(secs => 30))").unwrap();
+    s.execute("UPDATE jobs SET run_after = NOW() + make_interval(mins => (attempts*attempts)::int) WHERE id = 1").unwrap();
+    let rows = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
+    assert_eq!(rows(&mut s, "SELECT run_after > NOW() + interval '3 minutes', run_after < NOW() + interval '5 minutes', wait::text FROM jobs"), vec![vec![SqlValue::Bool(true), SqlValue::Bool(true), text("00:00:30")]]);
+    s.execute("UPDATE jobs SET wait = make_interval(hours => 1, mins => attempts), attempts = ceil(attempts / 4.0) WHERE id = 1").unwrap();
+    assert_eq!(rows(&mut s, "SELECT wait::text, attempts FROM jobs"), vec![vec![text("01:02:00"), SqlValue::Int(1)]]);
+    s.execute("DELETE FROM jobs WHERE run_after > NOW() + make_interval(mins => 10)").unwrap();
+    assert_eq!(rows(&mut s, "SELECT count(*) FROM jobs"), vec![vec![SqlValue::Int(1)]]);
+    s.execute("DELETE FROM jobs WHERE run_after > NOW() + make_interval(mins => 1)").unwrap();
+    assert_eq!(rows(&mut s, "SELECT count(*) FROM jobs"), vec![vec![SqlValue::Int(0)]]);
+}

@@ -1282,8 +1282,44 @@ pub(crate) fn lateral_unnest_call(relation: &TableFactor) -> Result<Option<Later
             args: positional_json_set_table_args(args)?,
             with_ordinality: *with_ordinality,
         })),
+        // `p CROSS JOIN LATERAL regexp_split_to_table(p.text, pattern)` runs per
+        // left row as unnest(regexp_split_to_array(..)): the same values, in
+        // order, with the same ordinality.
+        TableFactor::Table {
+            name,
+            alias,
+            args: Some(args),
+            with_ordinality,
+            ..
+        } if is_regexp_split(&name.to_string()) => Ok(Some(LateralUnnestCall {
+            alias: alias.clone(),
+            args: vec![crate::order_by_ordinal::function_call(
+                "regexp_split_to_array",
+                table_function_expr_args(args)?,
+            )],
+            with_ordinality: *with_ordinality,
+        })),
+        TableFactor::Function {
+            name,
+            args,
+            with_ordinality,
+            alias,
+            ..
+        } if is_regexp_split(&name.to_string()) => Ok(Some(LateralUnnestCall {
+            alias: alias.clone(),
+            args: vec![crate::order_by_ordinal::function_call(
+                "regexp_split_to_array",
+                positional_json_set_table_args(args)?,
+            )],
+            with_ordinality: *with_ordinality,
+        })),
         _ => Ok(None),
     }
+}
+
+fn is_regexp_split(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name == "regexp_split_to_table" || name == "pg_catalog.regexp_split_to_table"
 }
 
 #[derive(Clone, Debug)]

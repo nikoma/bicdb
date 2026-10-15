@@ -199,7 +199,7 @@ const MAKE_INTERVAL_PARAMS: [&str; 7] =
     ["years", "months", "weeks", "days", "hours", "mins", "secs"];
 
 /// A plain function call node `name(args...)`.
-fn function_call(name: &str, args: Vec<Expr>) -> Expr {
+pub(crate) fn function_call(name: &str, args: Vec<Expr>) -> Expr {
     Expr::Function(Function {
         name: ObjectName::from(vec![Ident::new(name)]),
         uses_odbc_syntax: false,

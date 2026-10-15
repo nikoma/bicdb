@@ -2363,3 +2363,22 @@ fn a_range_on_a_primary_key_not_named_id_finds_its_rows() {
     assert_eq!(rows(&mut s, "SELECT MIN(seq) FROM live_events"), vec![vec![SqlValue::Int(1)]]);
 }
 
+#[test]
+fn lateral_regexp_split_to_table_runs_per_row() {
+    // Migration 0043's credentials backfill (re-run by the profile test).
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE profiles (subject text, credentials text)").unwrap();
+    s.execute("INSERT INTO profiles VALUES ('ann', E'RN\\n\\nBSc Nursing\\r\\nCPR'), ('ben', ''), ('cat', 'MD')").unwrap();
+    let rows = s.execute("SELECT l.subject, l.line, l.n FROM (SELECT p.subject, btrim(x.line) AS line, row_number() OVER (PARTITION BY p.subject ORDER BY x.o) AS n \
+        FROM profiles p CROSS JOIN LATERAL regexp_split_to_table(p.credentials, E'\\r?\\n') WITH ORDINALITY AS x(line, o) WHERE btrim(x.line) <> '') l WHERE l.n <= 30 ORDER BY l.subject, l.n").unwrap().rows;
+    assert_eq!(rows, vec![
+        vec![text("ann"), text("RN"), SqlValue::Int(1)],
+        vec![text("ann"), text("BSc Nursing"), SqlValue::Int(2)],
+        vec![text("ann"), text("CPR"), SqlValue::Int(3)],
+        vec![text("cat"), text("MD"), SqlValue::Int(1)],
+    ]);
+    let ordinals = s.execute("SELECT x.o, x.line FROM profiles p, LATERAL regexp_split_to_table(p.credentials, ',') WITH ORDINALITY AS x(line, o) WHERE p.subject = 'cat'").unwrap().rows;
+    assert_eq!(ordinals, vec![vec![SqlValue::Int(1), text("MD")]]);
+}
+

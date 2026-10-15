@@ -1598,7 +1598,7 @@ impl<'db> SqlEngine<'db> {
             }
             if let Some(range_column) = primary_key_columns.get(prefix_len) {
                 if !primary_key_requires_typed_identity(schema)
-                    && executable_primary_key_index_for_schema(self.db_ref(), schema).is_some()
+                    && readable_primary_key_index_for_schema(self.db_ref(), schema).is_some()
                 {
                     let field = IndexField::MetadataPath(vec![range_column.clone()]);
                     if self
@@ -3008,7 +3008,7 @@ impl<'db> SqlEngine<'db> {
                 }
                 if !primary_key_requires_typed_identity(schema) {
                     if let Some(index) =
-                        executable_primary_key_index_for_schema(self.db_ref(), schema)
+                        readable_primary_key_index_for_schema(self.db_ref(), schema)
                     {
                         let index_prefix = prefix_values
                             .iter()
@@ -3131,8 +3131,8 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         };
         let field = IndexField::MetadataPath(vec![range_column.clone()]);
-        if !primary_key_requires_typed_identity(schema) {
-            if let Some(index) = executable_primary_key_index_for_schema(self.db_ref(), schema) {
+        if !primary_key_index_is_unreadable(schema) {
+            if let Some(index) = readable_primary_key_index_for_schema(self.db_ref(), schema) {
                 let Some((lower, upper, has_null_bound)) =
                     self.dynamic_range_bounds(selection, table, alias, Some(schema), &field)?
                 else {

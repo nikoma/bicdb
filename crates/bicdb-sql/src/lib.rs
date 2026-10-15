@@ -1345,9 +1345,14 @@ fn sql_index_definitions_for_collection(db: &BicDb, collection: &str) -> Vec<Ind
     // Core B-tree keys are byte ordered. Keep locale-collated indexes durable so
     // they can enforce deterministic uniqueness, but do not use them for query
     // planning until the storage layer carries ICU sort keys.
-    let locale_ordered_indexes = load_schema_shared(db, collection)
-        .ok()
-        .flatten()
+    let schema = load_schema_shared(db, collection).ok().flatten();
+    // A key held in the record id is found by the id, not by its `_pkey`
+    // index (see `primary_key_index_is_unreadable`).
+    let unreadable_primary_key_index = schema
+        .as_deref()
+        .filter(|schema| primary_key_index_is_unreadable(schema))
+        .map(|schema| schema.primary_key_constraint_name().to_ascii_lowercase());
+    let locale_ordered_indexes = schema
         .map(|schema| {
             schema
                 .indexes
@@ -1371,6 +1376,7 @@ fn sql_index_definitions_for_collection(db: &BicDb, collection: &str) -> Vec<Ind
             index.collection == collection
                 && index.predicate.is_none()
                 && !locale_ordered_indexes.contains(&index.name.to_ascii_lowercase())
+                && unreadable_primary_key_index.as_deref() != Some(&index.name.to_ascii_lowercase())
         })
         .cloned()
         .collect::<Vec<_>>();

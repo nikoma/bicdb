@@ -1029,6 +1029,18 @@ pub(crate) fn executable_primary_key_index_for_schema(
         .cloned()
 }
 
+/// The primary-key index when the planner may read it (see
+/// `primary_key_index_is_unreadable`).
+pub(crate) fn readable_primary_key_index_for_schema(
+    db: &BicDb,
+    schema: &TableSchema,
+) -> Option<IndexDefinition> {
+    if primary_key_index_is_unreadable(schema) {
+        return None;
+    }
+    executable_primary_key_index_for_schema(db, schema)
+}
+
 pub(crate) fn primary_key_index_definition_for_schema(
     schema: &TableSchema,
 ) -> Option<IndexDefinition> {

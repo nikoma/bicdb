@@ -2342,3 +2342,24 @@ fn primary_key_equals_any_array_reads_only_those_rows() {
     assert_eq!(s.execute("SELECT count(*) FROM posts WHERE id = ANY(ARRAY[]::uuid[])").unwrap().rows, vec![vec![SqlValue::Int(0)]]);
     assert_eq!(s.execute("SELECT count(*) FROM posts WHERE id = ANY(ARRAY['00000000-0000-0000-0000-000000000003', NULL]::uuid[]) AND n > 2").unwrap().rows, vec![vec![SqlValue::Int(1)]]);
 }
+
+#[test]
+fn a_range_on_a_primary_key_not_named_id_finds_its_rows() {
+    // Live delivery reads WHERE seq > $1 ORDER BY seq from network_live_events (seq bigint PRIMARY KEY).
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE live_events (seq bigint PRIMARY KEY, kind text)").unwrap();
+    s.execute("INSERT INTO live_events SELECT i, 'message' FROM generate_series(1, 50) i").unwrap();
+    s.execute("CREATE TABLE chunks (media_id int, position int, body text, PRIMARY KEY (media_id, position))").unwrap();
+    s.execute("INSERT INTO chunks SELECT i % 3, i, 'x' FROM generate_series(1, 30) i").unwrap();
+    let rows = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
+    assert_eq!(rows(&mut s, "SELECT count(*) FROM live_events WHERE seq > 45"), vec![vec![SqlValue::Int(5)]]);
+    assert_eq!(rows(&mut s, "SELECT seq FROM live_events WHERE seq > 47 ORDER BY seq LIMIT 1000"), vec![vec![SqlValue::Int(48)], vec![SqlValue::Int(49)], vec![SqlValue::Int(50)]]);
+    assert_eq!(rows(&mut s, "SELECT count(*) FROM live_events WHERE seq BETWEEN 10 AND 19"), vec![vec![SqlValue::Int(10)]]);
+    assert_eq!(rows(&mut s, "SELECT count(*) FROM live_events WHERE seq = 7"), vec![vec![SqlValue::Int(1)]]);
+    assert_eq!(rows(&mut s, "SELECT count(*) FROM chunks WHERE media_id = 1 AND position > 20"), vec![vec![SqlValue::Int(3)]]);
+    assert_eq!(rows(&mut s, "SELECT seq FROM live_events ORDER BY seq DESC LIMIT 2"), vec![vec![SqlValue::Int(50)], vec![SqlValue::Int(49)]]);
+    assert_eq!(rows(&mut s, "SELECT COALESCE(MAX(seq),0) FROM live_events"), vec![vec![SqlValue::Int(50)]]);
+    assert_eq!(rows(&mut s, "SELECT MIN(seq) FROM live_events"), vec![vec![SqlValue::Int(1)]]);
+}
+

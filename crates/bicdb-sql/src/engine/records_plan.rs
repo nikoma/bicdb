@@ -875,7 +875,7 @@ impl<'db> SqlEngine<'db> {
             .collect::<Vec<_>>();
         let committed_primary_key_extreme_is_safe = self.tx.is_none_or(|tx| tx.write_len() == 0);
         if committed_primary_key_extreme_is_safe && !primary_key_requires_typed_identity(schema) {
-            if let Some(index) = executable_primary_key_index_for_schema(self.db_ref(), schema) {
+            if let Some(index) = readable_primary_key_index_for_schema(self.db_ref(), schema) {
                 let prefix = prefix_values
                     .iter()
                     .cloned()
@@ -1010,7 +1010,7 @@ impl<'db> SqlEngine<'db> {
         record_id_prefix: &str,
     ) -> Result<Rc<[String]>> {
         if self.security_context.is_none() && !primary_key_requires_typed_identity(schema) {
-            if let Some(index) = executable_primary_key_index_for_schema(self.db_ref(), schema) {
+            if let Some(index) = readable_primary_key_index_for_schema(self.db_ref(), schema) {
                 let prefix = prefix_values
                     .iter()
                     .cloned()
@@ -1306,7 +1306,7 @@ impl<'db> SqlEngine<'db> {
 
         let unusable_primary_key_index = schema
             .as_ref()
-            .filter(|schema| primary_key_requires_typed_identity(schema))
+            .filter(|schema| primary_key_index_is_unreadable(schema))
             .map(TableSchema::primary_key_constraint_name);
         let indexes = sql_index_definitions_for_collection(self.db_ref(), collection)
             .into_iter()
@@ -1995,7 +1995,7 @@ impl<'db> SqlEngine<'db> {
                     .min(total_rows.max(1));
                 if !primary_key_requires_typed_identity(schema) {
                     if let Some(index) =
-                        executable_primary_key_index_for_schema(self.db_ref(), schema)
+                        readable_primary_key_index_for_schema(self.db_ref(), schema)
                     {
                         let index_prefix = prefix_values
                             .iter()

@@ -2053,3 +2053,30 @@ fn select_for_update_waits_for_the_row_and_then_sees_the_committed_change() {
     assert_eq!(s.execute("SELECT version FROM courses").unwrap().rows, vec![vec![SqlValue::Int(2)]]);
     assert_eq!(s.execute("SELECT string_agg(position::text, ',' ORDER BY position) FROM modules").unwrap().rows, vec![vec![text("1,2")]]);
 }
+
+#[test]
+fn a_primary_key_added_after_the_rows_finds_and_guards_those_rows() {
+    // pg_dump order: CREATE TABLE, COPY the rows, then ADD CONSTRAINT ... PRIMARY KEY.
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE credential_categories (key text NOT NULL, label text NOT NULL)").unwrap();
+    s.execute("INSERT INTO credential_categories VALUES ('course_completion','Certificate of completion'),('training_certificate','Training certificate')").unwrap();
+    s.execute("ALTER TABLE ONLY credential_categories ADD CONSTRAINT credential_categories_pkey PRIMARY KEY (key)").unwrap();
+    s.execute("CREATE TABLE pairs (a int NOT NULL, b int NOT NULL, v text)").unwrap();
+    s.execute("INSERT INTO pairs VALUES (1,1,'x'),(1,2,'y')").unwrap();
+    s.execute("ALTER TABLE pairs ADD PRIMARY KEY (a, b)").unwrap();
+    s.execute("CREATE TABLE certs (code text, category text)").unwrap();
+    s.execute("INSERT INTO certs VALUES ('C1','training_certificate'),('C2',NULL)").unwrap();
+    let rows = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
+    assert_eq!(rows(&mut s, "SELECT label FROM credential_categories WHERE key='training_certificate'"), vec![vec![text("Training certificate")]]);
+    assert_eq!(rows(&mut s, "SELECT c.code, cc.label FROM certs c LEFT JOIN credential_categories cc ON cc.key=c.category ORDER BY c.code"), vec![vec![text("C1"), text("Training certificate")], vec![text("C2"), SqlValue::Null]]);
+    assert_eq!(rows(&mut s, "SELECT v FROM pairs WHERE a=1 AND b=2"), vec![vec![text("y")]]);
+    assert!(s.execute("INSERT INTO credential_categories VALUES ('course_completion','again')").is_err());
+    assert!(s.execute("INSERT INTO pairs VALUES (1,1,'again')").is_err());
+    s.execute("UPDATE credential_categories SET label='Completion' WHERE key='course_completion'").unwrap();
+    assert_eq!(rows(&mut s, "SELECT key, label FROM credential_categories ORDER BY key"), vec![vec![text("course_completion"), text("Completion")], vec![text("training_certificate"), text("Training certificate")]]);
+    // Rows that break the new key refuse it.
+    s.execute("CREATE TABLE dupes (k text NOT NULL)").unwrap();
+    s.execute("INSERT INTO dupes VALUES ('a'),('a')").unwrap();
+    assert!(s.execute("ALTER TABLE dupes ADD PRIMARY KEY (k)").is_err());
+}

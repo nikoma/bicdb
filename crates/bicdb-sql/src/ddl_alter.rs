@@ -234,6 +234,10 @@ pub(crate) fn alter_table_add_constraint(
             .map(ident_value)
             .unwrap_or_else(|| default_primary_key_name(table));
         apply_primary_key_constraint(db, table, schema, name, columns, not_valid)?;
+        // Rows stored before the table had this key (pg_dump's CREATE TABLE,
+        // COPY, then ADD CONSTRAINT ... PRIMARY KEY) are re-keyed, or key
+        // lookups and the uniqueness check would never find them.
+        rewrite_records_for_primary_key(db, table, schema)?;
         return Ok(None);
     }
 
@@ -419,12 +423,10 @@ pub(crate) fn rewrite_records_for_primary_key(
     }
 
     let mut rewritten = Vec::with_capacity(records.len());
-    let mut old_ids = BTreeSet::new();
     let mut unchanged_ids = BTreeSet::new();
     let mut new_ids = BTreeSet::new();
     for record in records {
         let old_id = record.id.clone();
-        old_ids.insert(old_id.clone());
         let fields = record_fields_for_schema(&record, schema);
         let new_record = record_from_fields(table, Some(schema), fields)?;
         if !new_ids.insert(new_record.id.clone()) {
@@ -445,8 +447,16 @@ pub(crate) fn rewrite_records_for_primary_key(
         }
     }
 
-    for old_id in old_ids {
-        db.delete(table, &old_id)?;
+    // Rows already stored under their key keep their record.
+    let rewritten = rewritten
+        .into_iter()
+        .filter(|(old_id, record)| old_id != &record.id)
+        .collect::<Vec<_>>();
+    if rewritten.is_empty() {
+        return Ok(());
+    }
+    for (old_id, _) in &rewritten {
+        db.delete(table, old_id)?;
     }
     db.batch_insert(
         table,

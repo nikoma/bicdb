@@ -51,7 +51,7 @@ use std::ops::Bound;
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, AtomicU8, AtomicUsize, Ordering as AtomicOrdering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -390,6 +390,14 @@ pub struct DbConfig {
     /// bounded makes file descriptors and merge memory independent of input
     /// size.
     pub query_merge_fan_in: usize,
+    /// Fold the transaction log into segments automatically once it grows past
+    /// this many bytes (0 disables). Every write appends to the log and every
+    /// open replays it, so an embedded store that is never compacted grows its
+    /// log and its startup memory without bound. Checked after each direct
+    /// commit and once at open; default 64 MiB, `BICDB_AUTO_CHECKPOINT_WAL_MB`
+    /// overrides it. The server runs its own background checkpointer and turns
+    /// this off.
+    pub auto_checkpoint_wal_bytes: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1202,6 +1210,7 @@ impl Default for DbConfig {
             query_temp_space_bytes: query_temp_space_bytes_default(),
             query_server_temp_space_bytes: query_server_temp_space_bytes_default(),
             query_merge_fan_in: query_merge_fan_in_default(),
+            auto_checkpoint_wal_bytes: auto_checkpoint_wal_bytes_default(),
         }
     }
 }
@@ -1612,6 +1621,17 @@ fn paged_extent_bytes_default() -> u64 {
         .unwrap_or(DEFAULT_PAGED_EXTENT_BYTES)
 }
 
+pub const DEFAULT_AUTO_CHECKPOINT_WAL_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Reads `BICDB_AUTO_CHECKPOINT_WAL_MB` (0 disables automatic checkpoints).
+fn auto_checkpoint_wal_bytes_default() -> u64 {
+    std::env::var("BICDB_AUTO_CHECKPOINT_WAL_MB")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(|mb| mb.saturating_mul(1024 * 1024))
+        .unwrap_or(DEFAULT_AUTO_CHECKPOINT_WAL_BYTES)
+}
+
 fn paged_wal_max_bytes_default() -> u64 {
     std::env::var("BICDB_PAGED_WAL_MAX_BYTES")
         .ok()
@@ -1914,6 +1934,13 @@ impl DbConfig {
     /// hydrate durable secondary-index results. A generation-backed FTS
     /// reader that hydrates by primary key can disable it to keep startup
     /// independent of corpus size.
+    /// Log size that triggers an automatic checkpoint (0 disables); see
+    /// [`DbConfig::auto_checkpoint_wal_bytes`].
+    pub fn with_auto_checkpoint_wal_bytes(mut self, bytes: u64) -> Self {
+        self.auto_checkpoint_wal_bytes = bytes;
+        self
+    }
+
     pub fn with_paged_rowid_registry(mut self, enabled: bool) -> Self {
         self.paged_rowid_registry = enabled;
         self
@@ -3694,6 +3721,9 @@ pub struct BicDb {
     // exclusive side. Ordinary commits therefore remain concurrent, while a
     // serializable validator observes a stable database through its apply.
     serializable_commit_admission: RwLock<()>,
+    /// Set while an automatic checkpoint runs, so concurrent committers that
+    /// also see a large log do not start a second one.
+    auto_checkpoint_running: AtomicBool,
     // Runtime-gated global commit lock for the lock-free-vs-serialized A/B.
     // Only acquired in `commit_transaction` when `global_commit_lock_enabled()`
     // (env `BICDB_GLOBAL_COMMIT_LOCK`); when off it is never taken, so the
@@ -9972,6 +10002,7 @@ impl BicDb {
             checkpoint_boundary_seq: AtomicU64::new(0),
             index_generation: AtomicU64::new(0),
             serializable_commit_admission: RwLock::new(()),
+            auto_checkpoint_running: AtomicBool::new(false),
             commit_lock: Mutex::new(()),
             flashback_clock: Mutex::new(flashback::FlashbackClock::default()),
             flashback_clock_changed: Condvar::new(),
@@ -9988,6 +10019,7 @@ impl BicDb {
             tx_log,
         };
         db.flashback_after_open()?;
+        db.auto_checkpoint_if_due();
         Ok(db)
     }
 
@@ -15961,7 +15993,9 @@ impl Transaction {
         unsafe { db.as_ref() }.tx_log.write_durable(commit_seq)?;
         self.finalize_commit_admission()?;
         self.finalize_committed_broker_outbox();
-        self.finalize_committed_memory_jobs()
+        self.finalize_committed_memory_jobs()?;
+        unsafe { db.as_ref() }.auto_checkpoint_if_due();
+        Ok(())
     }
 
     /// Checkpoint the range command as locally applied only after the caller's

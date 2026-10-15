@@ -432,7 +432,9 @@ fn default_max_queued_queries() -> usize {
 }
 
 fn database_config_for_server(path: &Path, config: &PgWireConfig) -> Result<DbConfig> {
+    // The server checkpoints from its own background worker (BICDB_AUTO_COMPACT_WAL_MB).
     let mut db_config = DbConfig::default()
+        .with_auto_checkpoint_wal_bytes(0)
         .with_fsync(config.fsync)
         .with_paged_rowid_registry(config.paged_rowid_registry);
     if !path.join(DEFAULT_DISTRIBUTION_CONFIG).exists() {

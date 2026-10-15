@@ -2311,6 +2311,12 @@ impl BicDb {
     /// or the suffix log, both of which reconstruct the committed state together
     /// with the segments. Returns the WAL size before/after for reporting.
     pub fn checkpoint_truncate_wal(&mut self, keep_from_offset: u64) -> Result<(u64, u64)> {
+        self.truncate_checkpointed_wal(keep_from_offset)
+    }
+
+    /// [`Self::checkpoint_truncate_wal`] for callers that exclude committers
+    /// through the commit gate instead of `&mut self`.
+    fn truncate_checkpointed_wal(&self, keep_from_offset: u64) -> Result<(u64, u64)> {
         let before = self.wal_bytes();
         // Catalog/index catalog must be durable and consistent with the segments
         // before we drop the log frames that would otherwise re-create them.
@@ -2327,6 +2333,53 @@ impl BicDb {
         self.tx_log.invalidate();
         let after = self.wal_bytes();
         Ok((before, after))
+    }
+
+    /// Automatic checkpoint: when the transaction log has grown past
+    /// [`DbConfig::auto_checkpoint_wal_bytes`], run the same three-phase fuzzy
+    /// checkpoint as the server's background checkpointer. Phases 0 and 2 hold
+    /// the commit gate exclusively (every commit holds it shared), phase 1 runs
+    /// alongside commits. Housekeeping only: the commit that triggered it is
+    /// already durable, so a failure is logged and left for the next attempt.
+    pub(crate) fn auto_checkpoint_if_due(&self) {
+        let threshold = self.config.auto_checkpoint_wal_bytes;
+        if threshold == 0
+            || self.config.storage_mode != StorageMode::EmbeddedMemory
+            || self.wal_bytes() < threshold
+            || self.is_read_only_standby()
+        {
+            return;
+        }
+        if self
+            .auto_checkpoint_running
+            .compare_exchange(false, true, AtomicOrdering::AcqRel, AtomicOrdering::Acquire)
+            .is_err()
+        {
+            return;
+        }
+        let started = Instant::now();
+        let result = (|| -> Result<(u64, u64)> {
+            let plan = {
+                let _quiesced = self.serializable_commit_admission.write();
+                self.checkpoint_begin()?
+            };
+            if let Err(error) = self.checkpoint_write_segments(&plan) {
+                // begin drained the dirty sets; restore them or a later
+                // truncation would drop log frames missing from segments.
+                self.checkpoint_abort(plan);
+                return Err(error);
+            }
+            let _quiesced = self.serializable_commit_admission.write();
+            self.truncate_checkpointed_wal(plan.keep_from())
+        })();
+        self.auto_checkpoint_running.store(false, AtomicOrdering::Release);
+        match result {
+            Ok((before, after)) => eprintln!(
+                "bicdb auto-checkpoint: transaction log {before} -> {after} bytes in {} ms",
+                started.elapsed().as_millis()
+            ),
+            Err(error) => eprintln!("bicdb auto-checkpoint failed (will retry): {error}"),
+        }
     }
 
     pub(crate) fn ensure_no_pending_transactions(&self) -> Result<()> {

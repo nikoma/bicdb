@@ -63,6 +63,9 @@ impl<'db> SqlEngine<'db> {
         if let Some(plan) = self.plan_cross_join_order(from, selection)? {
             return Ok(plan);
         }
+        if let Some(plan) = self.plan_inner_join_chain_order(from, selection)? {
+            return Ok(plan);
+        }
         if from.joins.len() != 1 || !is_reorderable_inner_join(&from.joins[0]) {
             return Ok((from.relation.clone(), from.joins.clone()));
         }
@@ -80,6 +83,155 @@ impl<'db> SqlEngine<'db> {
             return Ok((from.joins[0].relation.clone(), vec![join]));
         }
         Ok((from.relation.clone(), from.joins.clone()))
+    }
+
+    /// `outer.col` references in `selection` that a correlated subquery reads
+    /// from its enclosing row (never a relation of this FROM): constants for
+    /// one execution, so they bind index lookups like literals do.
+    fn outer_columns_named_in(
+        &self,
+        selection: &Expr,
+        relations: &[TableFactor],
+    ) -> Result<BTreeSet<String>> {
+        use sqlparser::ast::{Visit, Visitor};
+        use std::ops::ControlFlow;
+        let mut available = BTreeSet::new();
+        let Some(outer) = self.outer_row.as_ref() else {
+            return Ok(available);
+        };
+        let mut local = Vec::new();
+        for relation in relations {
+            if let TableFactor::Table { name, alias, .. } = relation {
+                let table = relation_name(name)?;
+                local.push(table.rsplit('.').next().unwrap_or(&table).to_ascii_lowercase());
+                if let Some(alias) = alias {
+                    local.push(alias.name.value.to_ascii_lowercase());
+                }
+            }
+        }
+        struct Qualified(Vec<Vec<String>>);
+        impl Visitor for Qualified {
+            type Break = ();
+            fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+                if let Expr::CompoundIdentifier(parts) = expr {
+                    if parts.len() == 2 {
+                        self.0.push(parts.iter().map(|part| part.value.clone()).collect());
+                    }
+                }
+                ControlFlow::Continue(())
+            }
+        }
+        let mut qualified = Qualified(Vec::new());
+        let _ = selection.visit(&mut qualified);
+        for parts in qualified.0 {
+            if local.contains(&parts[0].to_ascii_lowercase()) {
+                continue;
+            }
+            if outer.value_from_parts(&parts).is_some() {
+                available.insert(format!("{}.{}", parts[0], parts[1]));
+            }
+        }
+        Ok(available)
+    }
+
+    /// `a JOIN b ON .. JOIN c ON .. WHERE ..` (inner joins of plain tables):
+    /// order the tables as the comma-join planner would, from the combined
+    /// WHERE and ON terms, so an index-bound later table (`mp.space_id = $1`)
+    /// drives the join instead of a full scan of the first one. Each ON term
+    /// moves to the first join where every table it names is available.
+    pub(crate) fn plan_inner_join_chain_order(
+        &self,
+        from: &TableWithJoins,
+        selection: Option<&Expr>,
+    ) -> Result<Option<(TableFactor, Vec<Join>)>> {
+        if from.joins.is_empty() {
+            return Ok(None);
+        }
+        let mut on_terms = Vec::new();
+        for join in &from.joins {
+            match &join.join_operator {
+                JoinOperator::Join(JoinConstraint::On(on))
+                | JoinOperator::Inner(JoinConstraint::On(on)) => {
+                    on_terms.extend(and_terms(on).into_iter().cloned())
+                }
+                _ => return Ok(None),
+            }
+        }
+        let mut relations = Vec::with_capacity(from.joins.len() + 1);
+        relations.push(from.relation.clone());
+        relations.extend(from.joins.iter().map(|join| join.relation.clone()));
+        if !relations.iter().all(simple_reorderable_table_factor) {
+            return Ok(None);
+        }
+        let and = |left: Expr, right: Expr| Expr::BinaryOp {
+            left: Box::new(left),
+            op: BinaryOperator::And,
+            right: Box::new(right),
+        };
+        let combined = selection
+            .into_iter()
+            .cloned()
+            .chain(on_terms.iter().cloned())
+            .reduce(and)
+            .expect("joins have ON terms");
+        let as_cross = TableWithJoins {
+            relation: from.relation.clone(),
+            joins: relations[1..]
+                .iter()
+                .map(|relation| Join {
+                    relation: relation.clone(),
+                    global: false,
+                    join_operator: JoinOperator::CrossJoin(JoinConstraint::None),
+                })
+                .collect(),
+        };
+        let Some((first, rest)) = self.plan_cross_join_order(&as_cross, Some(&combined))? else {
+            return Ok(None);
+        };
+        let mut order = Vec::with_capacity(relations.len());
+        order.push(first);
+        order.extend(rest.into_iter().map(|join| join.relation));
+        if order == relations {
+            return Ok(None);
+        }
+        let mut names = Vec::with_capacity(order.len());
+        for relation in &order {
+            let TableFactor::Table { name, alias, .. } = relation else {
+                return Ok(None);
+            };
+            let table = relation_name(name)?;
+            let alias_name = alias
+                .as_ref()
+                .map(|alias| alias.name.value.clone())
+                .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
+            let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
+            let schema = load_schema_shared(self.db_ref(), &table)?;
+            names.push((table, alias_name, schema));
+        }
+        let mut join_terms: Vec<Vec<Expr>> = vec![Vec::new(); order.len()];
+        for term in on_terms {
+            let mut position = 1;
+            for (index, (table, alias, schema)) in names.iter().enumerate().skip(1) {
+                if self.expr_references_table(&term, table, alias, schema.as_deref())? {
+                    position = index;
+                }
+            }
+            join_terms[position].push(term);
+        }
+        let mut order = order.into_iter();
+        let first = order.next().expect("at least two relations");
+        let joins = order
+            .zip(join_terms.into_iter().skip(1))
+            .map(|(relation, terms)| Join {
+                relation,
+                global: false,
+                join_operator: JoinOperator::Inner(match terms.into_iter().reduce(and) {
+                    Some(on) => JoinConstraint::On(on),
+                    None => JoinConstraint::None,
+                }),
+            })
+            .collect::<Vec<_>>();
+        Ok(Some((first, joins)))
     }
 
     pub(crate) fn plan_cross_join_order(
@@ -107,7 +259,7 @@ impl<'db> SqlEngine<'db> {
         if !remaining.iter().all(simple_reorderable_table_factor) {
             return Ok(None);
         }
-        let initial_available_columns = BTreeSet::new();
+        let initial_available_columns = self.outer_columns_named_in(selection, &remaining)?;
         let has_bound_start = remaining.iter().try_fold(false, |found, relation| {
             let bound_terms = self.bound_where_term_count_for_relation(
                 selection,
@@ -125,7 +277,7 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         }
 
-        let mut available_columns = BTreeSet::new();
+        let mut available_columns = initial_available_columns;
         let mut ordered = Vec::with_capacity(remaining.len());
         while !remaining.is_empty() {
             let mut best_idx = 0usize;
@@ -1135,7 +1287,125 @@ impl<'db> SqlEngine<'db> {
             return Ok(Some(RecordLocators::Rowids(Vec::new())));
         }
         let strategy = self.locator_strategy_cached(table, alias, schema, selection)?;
-        self.execute_locator_strategy(table, alias, schema, selection, &strategy)
+        let located = self.execute_locator_strategy(table, alias, schema, selection, &strategy)?;
+        if located.is_some() {
+            return Ok(located);
+        }
+        self.or_union_locators(table, alias, schema, selection)
+    }
+
+    /// A conjunct `a OR b OR ..` whose every branch narrows the table by key
+    /// or index (`c.space_id = $1 OR c.id IN (SELECT course_id FROM ..)`):
+    /// the union of the branches' rows, instead of a full scan per call. The
+    /// caller still applies the whole WHERE to the rows found.
+    fn or_union_locators(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: Option<&TableSchema>,
+        selection: &Expr,
+    ) -> Result<Option<RecordLocators>> {
+        fn disjuncts<'e>(expr: &'e Expr, out: &mut Vec<&'e Expr>) {
+            match unwrap_nested_expr(expr) {
+                Expr::BinaryOp {
+                    left,
+                    op: BinaryOperator::Or,
+                    right,
+                } => {
+                    disjuncts(left, out);
+                    disjuncts(right, out);
+                }
+                other => out.push(other),
+            }
+        }
+        let Some(schema) = schema else {
+            return Ok(None);
+        };
+        if self.tx.is_some_and(|tx| tx.has_pending_writes(table)) {
+            return Ok(None);
+        }
+        for term in and_terms(selection) {
+            let mut branches = Vec::new();
+            disjuncts(term, &mut branches);
+            if branches.len() < 2 || branches.len() > 16 {
+                continue;
+            }
+            let mut rowids = Vec::new();
+            let mut covered = true;
+            for branch in branches {
+                match self.branch_rowids(table, alias, schema, branch)? {
+                    Some(found) => rowids.extend(found),
+                    None => {
+                        covered = false;
+                        break;
+                    }
+                }
+            }
+            if covered {
+                rowids.sort_unstable();
+                rowids.dedup();
+                return Ok(Some(RecordLocators::Rowids(rowids)));
+            }
+        }
+        Ok(None)
+    }
+
+    fn branch_rowids(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: &TableSchema,
+        branch: &Expr,
+    ) -> Result<Option<Vec<RowId>>> {
+        let pks = if let Expr::InSubquery {
+            expr,
+            subquery,
+            negated: false,
+        } = branch
+        {
+            let key = primary_key_columns_for_schema(schema);
+            let [column] = key.as_slice() else {
+                return Ok(None);
+            };
+            if !self.expr_matches_table_column(expr, table, alias, Some(schema), column)?
+                || !subquery_is_independent_of(self.db_ref(), subquery, table, alias, schema)
+            {
+                return Ok(None);
+            }
+            let Ok(result) = self.execute_query(subquery) else {
+                return Ok(None);
+            };
+            if result.columns.len() != 1 {
+                return Ok(None);
+            }
+            let mut pks = Vec::with_capacity(result.rows.len());
+            for row in result.rows {
+                let Some(value) = row.into_iter().next() else {
+                    continue;
+                };
+                if matches!(value, SqlValue::Null) {
+                    continue;
+                }
+                let Ok(pk) = record_id_from_column_values(table, schema, &key, &[value]) else {
+                    return Ok(None);
+                };
+                pks.push(pk);
+            }
+            pks
+        } else {
+            match self.locator_strategy_for_table_selection(table, alias, Some(schema), branch)? {
+                Some(RecordLocators::Rowids(rowids)) => return Ok(Some(rowids)),
+                Some(RecordLocators::Pks(pks)) => pks,
+                None => return Ok(None),
+            }
+        };
+        let mut rowids = Vec::with_capacity(pks.len());
+        for pk in pks {
+            if let Some(rowid) = self.db_ref().rowid_for(table, &pk)? {
+                rowids.push(rowid);
+            }
+        }
+        Ok(Some(rowids))
     }
 
     /// The statement's locator strategy: by routine IR node when the
@@ -3859,7 +4129,7 @@ impl<'db> SqlEngine<'db> {
         {
             return Ok(row_set);
         }
-        if let (RowJoinKind::Inner, Some((left_key, right_key))) = (
+        if let (RowJoinKind::Inner | RowJoinKind::Left, Some((left_key, right_key))) = (
             kind,
             equi_join_key_exprs(effective_constraint, &left.columns, &right.columns),
         ) {
@@ -3902,6 +4172,7 @@ impl<'db> SqlEngine<'db> {
                     left_key,
                     right_key,
                     right_key_type.as_deref(),
+                    kind,
                 );
             }
         }
@@ -4766,7 +5037,11 @@ impl<'db> SqlEngine<'db> {
         left_key: &Expr,
         right_key: &Expr,
         pg_type: Option<&str>,
+        kind: RowJoinKind,
     ) -> Result<RowSet> {
+        // LEFT JOIN: a left row without a match keeps one NULL-extended row.
+        let null_right = matches!(kind, RowJoinKind::Left)
+            .then(|| null_slot_row_for_columns(&right.columns));
         let mut right_by_key = BTreeMap::<String, Vec<usize>>::new();
         let (right_scope, right_context) = self.bound_row_context(&right.columns);
         let right_key_bound = right_scope.bind(right_key);
@@ -4819,13 +5094,12 @@ impl<'db> SqlEngine<'db> {
                 }
                 (None, value) => join_key_value(value),
             };
-            let Some(key) = key else {
-                continue;
-            };
-            let Some(matches) = right_by_key.get(&key) else {
-                continue;
-            };
+            let matches = key
+                .and_then(|key| right_by_key.get(&key))
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
             candidate_pairs = candidate_pairs.saturating_add(matches.len());
+            let mut matched_left = false;
             for right_idx in matches {
                 let right_row = &right.rows[*right_idx];
                 let typed_equality_is_complete = pg_type.is_some()
@@ -4845,6 +5119,7 @@ impl<'db> SqlEngine<'db> {
                         constraint,
                     )?
                 {
+                    matched_left = true;
                     rows.push(merge_slot_rows(
                         left_row,
                         &left.columns,
@@ -4852,6 +5127,14 @@ impl<'db> SqlEngine<'db> {
                         &right.columns,
                     ));
                 }
+            }
+            if let (false, Some(null_right)) = (matched_left, null_right.as_ref()) {
+                rows.push(merge_slot_rows(
+                    left_row,
+                    &left.columns,
+                    null_right,
+                    &right.columns,
+                ));
             }
         }
 
@@ -6164,5 +6447,67 @@ fn coerce_unknown_json_literal(call: &JsonSetReturningCall, value: SqlValue) -> 
         SqlValue::JsonText(parsed)
     } else {
         SqlValue::Json(parsed.parsed().clone())
+    })
+}
+
+/// Whether `subquery` can run on its own: it names neither `alias`/`table`
+/// nor, unqualified, a column of `table` that none of its own tables has.
+fn subquery_is_independent_of(
+    db: &BicDb,
+    subquery: &Query,
+    table: &str,
+    alias: &str,
+    schema: &TableSchema,
+) -> bool {
+    use sqlparser::ast::{Visit, Visitor};
+    use std::ops::ControlFlow;
+    #[derive(Default)]
+    struct Names {
+        relations: Vec<ObjectName>,
+        qualifiers: Vec<String>,
+        unqualified: Vec<String>,
+    }
+    impl Visitor for Names {
+        type Break = ();
+        fn pre_visit_relation(&mut self, relation: &ObjectName) -> ControlFlow<()> {
+            self.relations.push(relation.clone());
+            ControlFlow::Continue(())
+        }
+        fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+            match expr {
+                Expr::CompoundIdentifier(parts) if parts.len() >= 2 => {
+                    self.qualifiers.push(parts[parts.len() - 2].value.clone())
+                }
+                Expr::Identifier(ident) => self.unqualified.push(ident.value.clone()),
+                _ => {}
+            }
+            ControlFlow::Continue(())
+        }
+    }
+    let mut names = Names::default();
+    let _ = subquery.visit(&mut names);
+    if names
+        .qualifiers
+        .iter()
+        .any(|qualifier| qualifier.eq_ignore_ascii_case(alias) || qualifier.eq_ignore_ascii_case(table))
+    {
+        return false;
+    }
+    let mut inner = Vec::new();
+    for relation in &names.relations {
+        let Ok(name) = relation_name(relation) else {
+            return false;
+        };
+        let name = resolve_session_relation_name_if_exists(db, &name);
+        if name.eq_ignore_ascii_case(table) {
+            return false;
+        }
+        match load_schema_shared(db, &name) {
+            Ok(Some(schema)) => inner.push(schema),
+            _ => return false,
+        }
+    }
+    names.unqualified.iter().all(|column| {
+        schema.column(column).is_none() || inner.iter().any(|inner| inner.column(column).is_some())
     })
 }

@@ -2144,3 +2144,105 @@ fn pg_input_is_valid_checks_text_against_a_type() {
     assert_eq!(rows(&mut s, "SELECT issued_on FROM creds WHERE NOT pg_input_is_valid(issued_on,'date')"), vec![vec![text("2024-02-30")]]);
     assert_eq!(rows(&mut s, "SELECT CASE WHEN ('2024-02-30'::text IS NOT NULL AND ('2024-02-30' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' OR NOT pg_input_is_valid('2024-02-30','date'))) THEN 'invalid' ELSE '' END"), vec![vec![text("invalid")]]);
 }
+
+#[test]
+fn an_inner_join_chain_starts_from_the_table_its_where_clause_pins_by_index() {
+    // Explore's cover image: medias JOIN posts ON .. WHERE posts.space_id = <stream>, per Stream.
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE posts (id int PRIMARY KEY, space_id int, visibility text)").unwrap();
+    s.execute("CREATE INDEX posts_space ON posts (space_id)").unwrap();
+    s.execute("CREATE TABLE medias (id int PRIMARY KEY, post_id int, kind text)").unwrap();
+    s.execute("CREATE INDEX medias_post ON medias (post_id)").unwrap();
+    s.execute("CREATE TABLE notes (id int PRIMARY KEY, media_id int)").unwrap();
+    s.execute("INSERT INTO posts SELECT i, i % 50, CASE WHEN i % 3 = 0 THEN 'public' ELSE 'members' END FROM generate_series(1, 3000) i").unwrap();
+    s.execute("INSERT INTO medias SELECT i, i, 'image' FROM generate_series(1, 2000) i").unwrap();
+    s.execute("INSERT INTO notes SELECT i, i FROM generate_series(1, 10) i").unwrap();
+    let plan = |s: &mut SqlSession, sql: &str| -> String {
+        s.execute(&format!("EXPLAIN {sql}")).unwrap().rows.into_iter().map(|row| row[0].to_cell()).collect::<Vec<_>>().join("\n")
+    };
+    let one = "SELECT m.id FROM medias m JOIN posts p ON p.id = m.post_id WHERE p.space_id = 7 AND p.visibility = 'public' ORDER BY m.id DESC LIMIT 1";
+    assert!(plan(&mut s, one).contains("JoinOrder posts -> medias"), "{}", plan(&mut s, one));
+    assert_eq!(s.execute(one).unwrap().rows, vec![vec![SqlValue::Int(1857)]]);
+    let two = "SELECT count(*) FROM medias m JOIN posts p ON p.id = m.post_id AND p.visibility = 'public' JOIN notes n ON n.media_id = m.id WHERE p.space_id = 3";
+    assert!(plan(&mut s, two).starts_with("NestedLoopJoin") || plan(&mut s, two).contains("posts -> "), "{}", plan(&mut s, two));
+    assert_eq!(s.execute(two).unwrap().rows, vec![vec![SqlValue::Int(1)]]);
+    // Same answers as the written order for every Stream.
+    for space in [0, 3, 7, 49] {
+        let reordered = s.execute(&format!("SELECT string_agg(m.id::text, ',' ORDER BY m.id) FROM medias m JOIN posts p ON p.id = m.post_id WHERE p.space_id = {space}")).unwrap().rows;
+        let written = s.execute(&format!("SELECT string_agg(m.id::text, ',' ORDER BY m.id) FROM medias m LEFT JOIN posts p ON p.id = m.post_id WHERE p.space_id = {space}")).unwrap().rows;
+        assert_eq!(reordered, written);
+    }
+}
+
+#[test]
+fn or_of_indexed_branches_and_in_subquery_finds_the_same_rows() {
+    // Explore's course cover: courses of a Stream or of its cohorts, per Stream (correlated).
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE spaces (id int PRIMARY KEY)").unwrap();
+    s.execute("CREATE TABLE courses (id int PRIMARY KEY, space_id int, status text, cover int)").unwrap();
+    s.execute("CREATE INDEX courses_space ON courses (space_id)").unwrap();
+    s.execute("CREATE TABLE cohorts (id int PRIMARY KEY, course_id int, space_id int)").unwrap();
+    s.execute("CREATE INDEX cohorts_space ON cohorts (space_id)").unwrap();
+    s.execute("CREATE TABLE medias (id int PRIMARY KEY, ready bool)").unwrap();
+    s.execute("INSERT INTO spaces SELECT i FROM generate_series(1, 20) i").unwrap();
+    s.execute("INSERT INTO courses SELECT i, i % 20 + 1, CASE WHEN i % 2 = 0 THEN 'published' ELSE 'draft' END, i FROM generate_series(1, 400) i").unwrap();
+    s.execute("INSERT INTO cohorts SELECT i, i * 7, 21 - (i % 20) FROM generate_series(1, 30) i").unwrap();
+    s.execute("INSERT INTO medias SELECT i, i % 3 <> 0 FROM generate_series(1, 400) i").unwrap();
+    let fast = "SELECT s.id, (SELECT c.cover FROM courses c JOIN medias m ON m.id = c.cover AND m.ready WHERE (c.space_id = s.id OR c.id IN (SELECT course_id FROM cohorts WHERE space_id = s.id)) AND c.status = 'published' ORDER BY c.id DESC LIMIT 1), \
+        (SELECT count(*) FROM courses c WHERE c.space_id = s.id OR c.id IN (SELECT course_id FROM cohorts WHERE space_id = s.id)) FROM spaces s ORDER BY s.id";
+    // The same predicate the planner cannot split (NOT NOT keeps it opaque).
+    let slow = "SELECT s.id, (SELECT c.cover FROM courses c JOIN medias m ON m.id = c.cover AND m.ready WHERE NOT NOT (c.space_id = s.id OR c.id IN (SELECT course_id FROM cohorts WHERE space_id = s.id)) AND c.status = 'published' ORDER BY c.id DESC LIMIT 1), \
+        (SELECT count(*) FROM courses c WHERE NOT NOT (c.space_id = s.id OR c.id IN (SELECT course_id FROM cohorts WHERE space_id = s.id))) FROM spaces s ORDER BY s.id";
+    let expected = s.execute(slow).unwrap().rows;
+    assert_eq!(expected.len(), 20);
+    assert_eq!(s.execute(fast).unwrap().rows, expected);
+    // A branch that depends on the scanned table itself is never run on its own.
+    let own = "SELECT count(*) FROM courses c WHERE c.space_id = 3 OR c.id IN (SELECT course_id FROM cohorts WHERE cohorts.space_id = c.space_id)";
+    let own_slow = "SELECT count(*) FROM courses c WHERE NOT NOT (c.space_id = 3 OR c.id IN (SELECT course_id FROM cohorts WHERE cohorts.space_id = c.space_id))";
+    assert_eq!(s.execute(own).unwrap().rows, s.execute(own_slow).unwrap().rows);
+}
+
+#[test]
+fn a_correlated_join_chain_is_driven_by_the_outer_rows_index_key() {
+    // Explore's public tile image per Stream: medias JOIN posts WHERE posts.space_id = ids.id.
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE posts (id int PRIMARY KEY, space_id int, visibility text)").unwrap();
+    s.execute("CREATE INDEX posts_space ON posts (space_id)").unwrap();
+    s.execute("CREATE TABLE medias (id int PRIMARY KEY, post_id int, state text)").unwrap();
+    s.execute("CREATE INDEX medias_post ON medias (post_id)").unwrap();
+    s.execute("INSERT INTO posts SELECT i, i % 200, CASE WHEN i % 3 = 0 THEN 'public' ELSE 'members' END FROM generate_series(1, 6000) i").unwrap();
+    s.execute("INSERT INTO medias SELECT i, i, CASE WHEN i % 5 = 0 THEN 'pending' ELSE 'ready' END FROM generate_series(1, 4000) i").unwrap();
+    let sql = |pin: &str| format!("WITH ids AS (SELECT g AS id FROM generate_series(0, 199) g) SELECT ids.id, (SELECT m.id FROM medias m JOIN posts p ON p.id = m.post_id WHERE {pin} AND p.visibility = 'public' AND m.state = 'ready' ORDER BY m.id DESC LIMIT 1) FROM ids ORDER BY ids.id");
+    let started = std::time::Instant::now();
+    let fast = s.execute(&sql("p.space_id = ids.id")).unwrap().rows;
+    let fast_time = started.elapsed();
+    let slow = s.execute(&sql("p.space_id + 0 = ids.id")).unwrap().rows;
+    assert_eq!(fast, slow);
+    assert_eq!(fast[3], vec![SqlValue::Int(3), SqlValue::Int(3603)]);
+    assert!(fast_time < std::time::Duration::from_secs(2), "{fast_time:?}");
+}
+
+#[test]
+fn a_left_join_on_an_equality_keeps_unmatched_rows_and_is_hashed() {
+    // The feed: network_posts LEFT JOIN permitted (a jsonb CTE of Streams) ON s.id = p.space_id.
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE posts (id int PRIMARY KEY, space_id int, kind text)").unwrap();
+    s.execute("INSERT INTO posts SELECT i, CASE WHEN i % 7 = 0 THEN NULL ELSE i % 900 END, CASE WHEN i % 2 = 0 THEN 'a' ELSE 'b' END FROM generate_series(1, 9000) i").unwrap();
+    let sql = |on: &str| format!("WITH permitted AS (SELECT g AS id, CASE WHEN g % 3 = 0 THEN 'member' ELSE '' END AS role FROM generate_series(1, 600) g) \
+        SELECT count(*), count(s.id), count(*) FILTER (WHERE s.role = 'member'), sum(p.id) FILTER (WHERE s.id IS NULL) FROM posts p LEFT JOIN permitted s ON {on}");
+    let started = std::time::Instant::now();
+    let hashed = s.execute(&sql("s.id = p.space_id")).unwrap().rows;
+    let hashed_time = started.elapsed();
+    let nested = s.execute(&sql("s.id + 0 = p.space_id")).unwrap().rows;
+    assert_eq!(hashed, nested);
+    assert_eq!(hashed[0][0], SqlValue::Int(9000));
+    assert!(hashed_time < std::time::Duration::from_secs(2), "{hashed_time:?}");
+    // A residual condition on the left row only drops the match, never the row.
+    let residual = s.execute(&sql("s.id = p.space_id AND p.kind = 'a'")).unwrap().rows;
+    let residual_nested = s.execute(&sql("s.id + 0 = p.space_id AND p.kind = 'a'")).unwrap().rows;
+    assert_eq!(residual, residual_nested);
+}

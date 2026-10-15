@@ -2009,3 +2009,47 @@ fn a_column_cast_to_text_compares_as_text_in_lookups_and_joins() {
     assert_eq!(rows(&mut s, "SELECT v FROM n WHERE id::bigint = 7"), vec![vec![text("seven")]]);
     assert_eq!(rows(&mut s, "SELECT id FROM n WHERE v::text = 'seven'"), vec![vec![SqlValue::Int(7)]]);
 }
+
+#[test]
+fn select_for_update_waits_for_the_row_and_then_sees_the_committed_change() {
+    // learning_add_module: lock the course, count its modules, append one. Parallel adds must
+    // queue on the course row (READ COMMITTED), not fail with a serialization error.
+    let (_dir, mut db) = db();
+    {
+        let mut s = SqlSession::new(&mut db);
+        s.execute("CREATE TABLE courses (id int PRIMARY KEY, version int)").unwrap();
+        s.execute("CREATE TABLE modules (course int, position int)").unwrap();
+        s.execute("INSERT INTO courses VALUES (1, 0)").unwrap();
+    }
+    let mut first = SqlSession::new_shared(&db);
+    first.execute("BEGIN").unwrap();
+    first.execute("SELECT id FROM courses WHERE id=1 FOR UPDATE").unwrap();
+    std::thread::scope(|scope| {
+        let (done, result) = std::sync::mpsc::channel();
+        let db = &db;
+        scope.spawn(move || {
+            let mut second = SqlSession::new_shared(db);
+            second.execute("BEGIN").unwrap();
+            let outcome = (|| {
+                let locked = second.execute("SELECT id, version FROM courses WHERE id=1 FOR UPDATE")?.rows;
+                let count = second.execute("SELECT count(*) FROM modules WHERE course=1")?.rows;
+                second.execute("INSERT INTO modules VALUES (1, 2)")?;
+                second.execute("UPDATE courses SET version=version+1 WHERE id=1")?;
+                second.execute("COMMIT")?;
+                Ok::<_, bicdb_sql::SqlError>((locked, count))
+            })();
+            done.send(outcome.map_err(|error| error.to_string())).unwrap();
+        });
+        let early = result.recv_timeout(std::time::Duration::from_millis(200));
+        first.execute("INSERT INTO modules VALUES (1, 1)").unwrap();
+        first.execute("UPDATE courses SET version=version+1 WHERE id=1").unwrap();
+        first.execute("COMMIT").unwrap();
+        assert!(early.is_err(), "the second locker must wait for the first");
+        let (locked, count) = result.recv_timeout(std::time::Duration::from_secs(20)).unwrap().unwrap();
+        assert_eq!(locked, vec![vec![SqlValue::Int(1), SqlValue::Int(1)]]);
+        assert_eq!(count, vec![vec![SqlValue::Int(1)]]);
+    });
+    let mut s = SqlSession::new_shared(&db);
+    assert_eq!(s.execute("SELECT version FROM courses").unwrap().rows, vec![vec![SqlValue::Int(2)]]);
+    assert_eq!(s.execute("SELECT string_agg(position::text, ',' ORDER BY position) FROM modules").unwrap().rows, vec![vec![text("1,2")]]);
+}

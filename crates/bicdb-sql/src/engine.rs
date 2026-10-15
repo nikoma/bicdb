@@ -17,6 +17,7 @@ mod records_plan;
 mod row_eval;
 pub(crate) use row_eval::SubqueryMemo;
 mod row_locks;
+pub(crate) use row_locks::is_read_committed_lock_refresh;
 mod scan_fts;
 
 /// Rows resolved per batch by the streaming scan path.

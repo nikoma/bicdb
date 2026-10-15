@@ -867,6 +867,26 @@ impl<'db> SqlSession<'db> {
                 }
             };
         }
+        if self.tx.is_some() && query_has_row_locks(query) {
+            // READ COMMITTED FOR UPDATE: after waiting for a row another
+            // transaction changed, lock and return its latest version.
+            let mut attempts = 0;
+            loop {
+                match self.execute_query_inner(query) {
+                    Err(error)
+                        if crate::engine::is_read_committed_lock_refresh(&error) && attempts < 1000 => {
+                        attempts += 1;
+                        if let Some(tx) = self.tx.as_mut() {
+                            tx.refresh_read_committed_snapshot()?;
+                        }
+                        if attempts > 1 {
+                            std::thread::yield_now();
+                        }
+                    }
+                    result => return result,
+                }
+            }
+        }
         self.execute_query_inner(query)
     }
 

@@ -14767,6 +14767,61 @@ impl Transaction {
         Ok(true)
     }
 
+    /// Blocking sibling of [`Self::try_lock_visible_record`] for a READ
+    /// COMMITTED `SELECT ... FOR UPDATE`: wait for the row's owner like a READ
+    /// COMMITTED UPDATE does. Returns `Ok(false)` when the lock is held but the
+    /// row changed after this transaction's snapshot; the caller refreshes the
+    /// snapshot ([`Self::refresh_read_committed_snapshot`]) and re-reads, as
+    /// PostgreSQL locks and returns the latest row version. Other isolation
+    /// levels keep the retryable conflict.
+    pub fn lock_visible_record_waiting(
+        &self,
+        context: Option<&SecurityContext>,
+        collection: &str,
+        id: &str,
+    ) -> Result<bool> {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let visible = match context {
+            Some(context) => self.get_with_context(context, collection, id)?,
+            None => self.get(collection, id)?,
+        };
+        if visible.is_none() {
+            return Err(BicDbError::TransactionConflict(format!(
+                "row is not visible to lock: {collection}:{id}"
+            )));
+        }
+        let db = self.db_ref();
+        db.lock_tx_record_for_read_committed_update(self.id, collection, id, &self.locked_keys)?;
+        if self.last_pending_write(collection, id).is_none() {
+            let state = db.collection_state(collection)?;
+            let shard = state.shard(id).read();
+            let max_tx = shard
+                .rowid_of(id)
+                .map(|rowid| version_chain_max_tx(&shard.versions, rowid));
+            if max_tx.is_none_or(|max_tx| max_tx > self.applied_snapshot) {
+                if self.isolation == TransactionIsolation::ReadCommitted {
+                    // The lock pins the row from here on: this transaction now
+                    // works on its latest version, not the stale one it read
+                    // before waiting (which would otherwise fail its writes).
+                    if let Some(max_tx) = max_tx {
+                        self.observed_record_versions
+                            .lock()
+                            .entry(collection.to_string())
+                            .or_default()
+                            .insert(id.to_string(), max_tx);
+                    }
+                    return Ok(false);
+                }
+                return Err(BicDbError::TransactionConflict(format!(
+                    "row changed since locking query snapshot: {collection}:{id}"
+                )));
+            }
+        }
+        Ok(true)
+    }
+
     /// Snapshot-visible point read authorized by a [`SecurityContext`]. Pending
     /// writes from this transaction are overlaid before collection policy and
     /// protected-field projection are applied.

@@ -2,6 +2,15 @@
 use super::*;
 use sqlparser::ast::NonBlock;
 
+/// Message prefix of the conflict a READ COMMITTED `FOR UPDATE` returns after
+/// it waited for a row another transaction changed. The session refreshes its
+/// snapshot and re-runs the statement; anywhere else it stays a retryable 40001.
+pub(crate) const READ_COMMITTED_LOCK_REFRESH: &str = "row changed while waiting for its lock: ";
+
+pub(crate) fn is_read_committed_lock_refresh(error: &SqlError) -> bool {
+    matches!(error, SqlError::BicDb(BicDbError::TransactionConflict(message)) if message.starts_with(READ_COMMITTED_LOCK_REFRESH))
+}
+
 pub(crate) type RowLockTarget = (String, String, TableSchema, Vec<String>, Option<NonBlock>);
 
 impl SqlEngine<'_> {
@@ -192,6 +201,15 @@ impl SqlEngine<'_> {
             }
             let candidate_mark = tx.rollback_mark();
             for ((table, _, _, _, nonblock), id) in targets.iter().zip(ids) {
+                if nonblock.is_none() {
+                    self.check_cancellation()?;
+                    if !tx.lock_visible_record_waiting(self.security_context.as_ref(), table, &id)? {
+                        return Err(SqlError::BicDb(BicDbError::TransactionConflict(format!(
+                            "{READ_COMMITTED_LOCK_REFRESH}{table}:{id}"
+                        ))));
+                    }
+                    continue;
+                }
                 if !tx.try_lock_visible_record(self.security_context.as_ref(), table, &id)? {
                     match nonblock {
                         Some(NonBlock::SkipLocked) => {

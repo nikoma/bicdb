@@ -2287,3 +2287,18 @@ fn parameter_switches_in_filters_fold_before_rows_are_read() {
     let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![SqlValue::Null]);
     assert_eq!(s.execute("SELECT count(*) FROM enrollments WHERE ($1 = '' OR id < 3)").unwrap().rows, vec![vec![SqlValue::Int(2)]]);
 }
+
+#[test]
+fn a_union_of_three_branches_with_typed_nulls_matches_types() {
+    // learning_list: playlists, collections (NULL::uuid owner_org_id) and courses (owner_org_id uuid).
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE playlists (id int, status text)").unwrap();
+    s.execute("CREATE TABLE collections (id int, status text)").unwrap();
+    s.execute("CREATE TABLE courses (id int, status text, owner_org_id uuid)").unwrap();
+    s.execute("INSERT INTO playlists VALUES (1,'active')").unwrap();
+    s.execute("INSERT INTO collections VALUES (2,'active')").unwrap();
+    s.execute("INSERT INTO courses VALUES (3,'active','00000000-0000-0000-0000-00000000000a')").unwrap();
+    let rows = s.execute("SELECT o.id, o.owner_org_id FROM (SELECT id,status,NULL::uuid AS owner_org_id FROM playlists UNION ALL SELECT id,status,NULL::uuid FROM collections UNION ALL SELECT id,status,owner_org_id FROM courses) o WHERE o.status<>'archived' ORDER BY o.id").unwrap().rows;
+    assert_eq!(rows, vec![vec![SqlValue::Int(1), SqlValue::Null], vec![SqlValue::Int(2), SqlValue::Null], vec![SqlValue::Int(3), text("00000000-0000-0000-0000-00000000000a")]]);
+}

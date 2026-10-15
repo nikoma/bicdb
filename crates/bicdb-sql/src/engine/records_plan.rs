@@ -40,6 +40,11 @@ impl<'db> SqlEngine<'db> {
                     .iter()
                     .zip(&right.column_types)
                     .map(|(left, right)| {
+                        // Two untyped branches stay untyped: resolving them to
+                        // text here made a third uuid branch fail to match.
+                        if left.is_none() && right.is_none() {
+                            return Ok(None);
+                        }
                         select_common_pg_type(
                             self.db_ref(),
                             &[left.clone(), right.clone()],

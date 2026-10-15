@@ -41,6 +41,22 @@ fn partial_unique_index_only_constrains_rows_matching_its_predicate() {
 }
 
 #[test]
+fn a_partial_index_never_answers_a_query_for_rows_outside_its_predicate() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    // network_notifications: one unseen mention per (recipient, post), other kinds unconstrained.
+    s.execute("CREATE TABLE notes (id int PRIMARY KEY, recipient text, post int, kind text)").unwrap();
+    s.execute("CREATE UNIQUE INDEX notes_mention_once ON notes (recipient, post) WHERE kind = 'mention'").unwrap();
+    s.execute("INSERT INTO notes VALUES (1,'ben',1,'message'),(2,'ben',2,'message'),(3,'ben',3,'mention'),(4,'ann',1,'message')").unwrap();
+    let count = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
+    assert_eq!(count(&mut s, "SELECT count(*) FROM notes WHERE recipient='ben'"), vec![vec![SqlValue::Int(3)]]);
+    assert_eq!(count(&mut s, "SELECT count(*) FROM notes WHERE recipient='ben' AND post=1"), vec![vec![SqlValue::Int(1)]]);
+    assert_eq!(count(&mut s, "SELECT count(*) FROM notes WHERE recipient='ben' AND kind='mention'"), vec![vec![SqlValue::Int(1)]]);
+    let joined = count(&mut s, "SELECT count(*) FROM (VALUES ('ben'),('ann')) v(r) JOIN notes n ON n.recipient=v.r");
+    assert_eq!(joined, vec![vec![SqlValue::Int(4)]]);
+}
+
+#[test]
 fn lateral_set_returning_functions_work_inside_union_branches_and_views() {
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);

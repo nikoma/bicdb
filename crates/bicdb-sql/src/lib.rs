@@ -1358,10 +1358,14 @@ fn sql_index_definitions_for_collection(db: &BicDb, collection: &str) -> Vec<Ind
                 .collect::<BTreeSet<_>>()
         })
         .unwrap_or_default();
+    // A partial index holds only the rows its predicate admits, so answering a
+    // query from it would silently drop every other row; it stays a constraint
+    // (and an ON CONFLICT target) but is not offered to the planner.
     let indexes = index_definitions_shared(db)
         .iter()
         .filter(|index| {
             index.collection == collection
+                && index.predicate.is_none()
                 && !locale_ordered_indexes.contains(&index.name.to_ascii_lowercase())
         })
         .cloned()

@@ -3027,10 +3027,22 @@ pub(crate) fn row_columns_expr_pg_type<'a>(
             bare_name,
             "coalesce" | "nullif" | "greatest" | "least" | "ifnull"
         ) {
-            let arg_types = function_args(function)
+            let args = function_args(function);
+            let arg_types = args
                 .iter()
                 .map(|arg| row_columns_expr_pg_type(db, arg, columns.iter().copied()))
                 .collect::<Vec<_>>();
+            // Unknown here is not "unknown literal": an argument this typer
+            // cannot see (an aggregate over a function column) decides the
+            // type, so leave it to the caller rather than default to text.
+            if args
+                .iter()
+                .zip(&arg_types)
+                .any(|(arg, pg_type)| pg_type.is_none() && !matches!(arg, Expr::Value(_)))
+                && arg_types.iter().all(Option::is_none)
+            {
+                return None;
+            }
             return select_common_pg_type(db, &arg_types, &bare_name.to_ascii_uppercase()).ok();
         }
     }

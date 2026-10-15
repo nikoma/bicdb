@@ -1049,3 +1049,49 @@ fn array_agg_over_a_lateral_unnest_column_is_a_typed_array() {
     assert_eq!(described, Some(vec![Some("text[]".to_string())]));
     assert_eq!(bicdb_sql::pg_type_oid_by_name("text[]"), Some(1009));
 }
+
+#[test]
+fn coalesce_resolves_an_untyped_literal_to_the_other_arguments_type() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    let text_array = || Some("text[]".to_string());
+    for (sql, want) in [
+        ("SELECT COALESCE(array_agg(x), '{}') FROM unnest(ARRAY['a','b']) x", texts(&["a", "b"])),
+        ("SELECT COALESCE(array_agg(x), '{}') FROM unnest(ARRAY['a','b']) x WHERE false", texts(&[])),
+        ("SELECT COALESCE(array_agg(x ORDER BY x DESC), '{}') FROM unnest(ARRAY['a','b']) x", texts(&["b", "a"])),
+        ("SELECT CASE WHEN count(*) > 0 THEN array_agg(x) ELSE '{}' END FROM unnest(ARRAY['a','b']) x WHERE false", texts(&[])),
+        ("SELECT NULLIF(array_agg(x), '{}') FROM unnest(ARRAY['a','b']) x", texts(&["a", "b"])),
+    ] {
+        assert_eq!(typed_cell(&mut s, sql), (want, text_array()), "{sql}");
+    }
+    assert_eq!(s.execute("SELECT pg_typeof(COALESCE(array_agg(x), '{}')) FROM unnest(ARRAY['a','b']) x").unwrap().rows, vec![vec![text("text[]")]]);
+    // Literals alone stay text.
+    assert_eq!(typed_cell(&mut s, "SELECT COALESCE(NULL, 'x')"), (text("x"), Some("text".to_string())));
+
+    // The owner API's complimentary-entitlement lookup (billing.carrier).
+    s.execute("CREATE TABLE billing_complimentary_grants (scope_kind text, scope_id text, entitlements text[], revoked_at timestamptz, expires_at timestamptz)").unwrap();
+    s.execute("CREATE TABLE network_organizations (id uuid PRIMARY KEY, status text)").unwrap();
+    s.execute("CREATE TABLE network_org_members (org_id uuid, subject text, status text, roles text[])").unwrap();
+    s.execute("INSERT INTO network_organizations VALUES ('00000000-0000-0000-0000-00000000000a', 'active'), ('00000000-0000-0000-0000-00000000000b', 'closed')").unwrap();
+    s.execute("INSERT INTO network_org_members VALUES ('00000000-0000-0000-0000-00000000000a', 'ann', 'active', ARRAY['owner']), ('00000000-0000-0000-0000-00000000000b', 'ann', 'active', ARRAY['owner'])").unwrap();
+    s.execute("INSERT INTO billing_complimentary_grants VALUES \
+        ('user', 'ann', ARRAY['courses.publish','streams.pro'], NULL, NULL), \
+        ('user', 'ann', ARRAY['courses.publish'], NULL, now() + interval '1 day'), \
+        ('user', 'ann', ARRAY['ai.writer'], now(), NULL), \
+        ('org', '00000000-0000-0000-0000-00000000000a', ARRAY['org.analytics','courses.publish'], NULL, NULL), \
+        ('org', '00000000-0000-0000-0000-00000000000b', ARRAY['org.closed'], NULL, NULL), \
+        ('user', 'ben', ARRAY['streams.pro'], NULL, NULL)").unwrap();
+    let sql = "SELECT COALESCE(array_agg(DISTINCT e ORDER BY e),'{}') AS names FROM billing_complimentary_grants g CROSS JOIN LATERAL unnest(g.entitlements) e WHERE g.revoked_at IS NULL AND (g.expires_at IS NULL OR g.expires_at>NOW()) AND e=ANY($2::text[]) AND ((g.scope_kind='user' AND g.scope_id=$1) OR (g.scope_kind='org' AND g.scope_id IN (SELECT m.org_id::text FROM network_org_members m JOIN network_organizations o ON o.id=m.org_id AND o.status='active' WHERE m.subject=$1 AND m.status='active' AND m.roles && $3::text[])))";
+    let run = |db: &mut BicDb, subject: &str, wanted: &str, roles: &str| {
+        let mut p = SqlSession::new(db).with_positional_parameters(vec![text(subject), text(wanted), text(roles)]);
+        let result = p.execute(sql).unwrap();
+        (result.columns, result.rows, result.column_types)
+    };
+    drop(s);
+    let all = "{courses.publish,streams.pro,ai.writer,org.analytics,org.closed}";
+    assert_eq!(run(&mut db, "ann", all, "{owner,admin}"), (vec!["names".to_string()], vec![vec![texts(&["courses.publish", "org.analytics", "streams.pro"])]], vec![text_array()]));
+    assert_eq!(run(&mut db, "ann", all, "{member}").1, vec![vec![texts(&["courses.publish", "streams.pro"])]]);
+    assert_eq!(run(&mut db, "carl", all, "{owner}").1, vec![vec![texts(&[])]]);
+    let described = bicdb_sql::infer_query_result_types(&db, sql).unwrap();
+    assert_eq!(described, Some(vec![text_array()]));
+}

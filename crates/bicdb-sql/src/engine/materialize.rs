@@ -1371,6 +1371,21 @@ impl<'db> SqlEngine<'db> {
             }
         }
         let mut result = validate_integer_result_types(result)?;
+        // An array-typed column can still hold the text of an untyped literal
+        // that resolved to the array type (`COALESCE(array_agg(x), '{}')`):
+        // give it the array value PostgreSQL would.
+        for (column_index, pg_type) in result.column_types.iter().enumerate() {
+            let Some(pg_type) = pg_type.as_deref().filter(|pg_type| pg_type.ends_with("[]")) else {
+                continue;
+            };
+            for row in &mut result.rows {
+                if let Some(value @ SqlValue::String(_)) = row.get_mut(column_index) {
+                    if let Ok(array) = cast_value_to_pg_type(value.clone(), pg_type) {
+                        *value = array;
+                    }
+                }
+            }
+        }
         for (column_index, pg_type) in result.column_types.iter().enumerate() {
             if pg_type.as_deref() != Some("money") {
                 continue;

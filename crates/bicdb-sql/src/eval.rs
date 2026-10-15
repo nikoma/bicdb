@@ -176,6 +176,27 @@ pub(crate) fn is_row_constructor(function: &Function) -> bool {
     }
 }
 
+/// An untyped array value's type from its elements, the way a scalar's type
+/// falls back to its value: `["a","b"]` is `text[]`. `None` when the elements
+/// disagree, are numbers or arrays, or there are none.
+fn json_array_value_pg_type(value: &JsonValue) -> Option<String> {
+    let JsonValue::Array(elements) = value else {
+        return None;
+    };
+    let mut element_type = None;
+    for element in elements.iter().filter(|element| !element.is_null()) {
+        let pg_type = projected_value_pg_type(&json_to_sql_value(element)).to_string();
+        if element_type.get_or_insert_with(|| pg_type.clone()) != &pg_type {
+            return None;
+        }
+    }
+    // Only element kinds a value pins down; a JSON number may be any numeric
+    // type and a nested array is a dimension, not an element.
+    element_type
+        .filter(|element| matches!(element.as_str(), "text" | "boolean"))
+        .map(|element| format!("{element}[]"))
+}
+
 pub(crate) fn pg_typeof_result(
     declared_type: Option<&String>,
     value: Option<&SqlValue>,
@@ -188,7 +209,8 @@ pub(crate) fn pg_typeof_result(
                 .get("$bicdb_array_input")
                 .and_then(|input| input.get("declared_type"))
                 .and_then(JsonValue::as_str)
-                .map(str::to_string),
+                .map(str::to_string)
+                .or_else(|| json_array_value_pg_type(value)),
             Some(value) => Some(projected_value_pg_type(value).to_string()),
             None => None,
         })

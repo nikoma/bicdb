@@ -2006,19 +2006,27 @@ impl<'db> SqlEngine<'db> {
                     .as_ref()
                     .map(|alias| alias.name.value.clone())
                     .unwrap_or_else(|| "unnest".to_string());
-                let source_columns = unnest_source_columns(
-                    array_exprs.len(),
-                    *with_offset,
-                    with_offset_alias.as_ref(),
-                    *with_ordinality,
+                // A single-column function aliased without a column list names
+                // its column after the alias (`unnest(xs) e` yields `e`), and
+                // its argument may read earlier FROM items (implicitly LATERAL).
+                let source_columns = table_function_source_columns_for_alias(
+                    alias.as_ref(),
+                    &alias_name,
+                    unnest_source_columns(
+                        array_exprs.len(),
+                        *with_offset,
+                        with_offset_alias.as_ref(),
+                        *with_ordinality,
+                    ),
                 );
+                let prior: &[RelationColumns] = env;
                 let mut columns = array_exprs
                     .iter()
                     .enumerate()
                     .map(|(index, expr)| {
                         (
                             source_columns[index].to_ascii_lowercase(),
-                            self.infer_env_expr_type(expr, &[]).and_then(|pg_type| {
+                            self.infer_env_expr_type(expr, prior).and_then(|pg_type| {
                                 pg_type.strip_suffix("[]").map(str::to_string).or_else(|| {
                                     match pg_type.as_str() {
                                         "int2vector" => Some("int2".to_string()),
@@ -2087,30 +2095,29 @@ impl<'db> SqlEngine<'db> {
                 });
                 Some(())
             }
-            TableFactor::Table {
-                name,
-                alias,
-                args: Some(args),
-                with_ordinality,
-                ..
-            } if relation_name(name)
-                .ok()
-                .is_some_and(|name| name.eq_ignore_ascii_case("unnest")) =>
+            TableFactor::Table { .. } | TableFactor::Function { .. }
+                if matches!(lateral_unnest_call(factor), Ok(Some(_))) =>
             {
-                let array_exprs = table_function_expr_args(args).ok()?;
+                let call = lateral_unnest_call(factor).ok()??;
+                let (alias, array_exprs, with_ordinality) =
+                    (&call.alias, call.args, &call.with_ordinality);
                 let alias_name = alias
                     .as_ref()
                     .map(|alias| alias.name.value.clone())
                     .unwrap_or_else(|| "unnest".to_string());
-                let source_columns =
-                    unnest_source_columns(array_exprs.len(), false, None, *with_ordinality);
+                let source_columns = table_function_source_columns_for_alias(
+                    alias.as_ref(),
+                    &alias_name,
+                    unnest_source_columns(array_exprs.len(), false, None, *with_ordinality),
+                );
+                let prior: &[RelationColumns] = env;
                 let mut columns = array_exprs
                     .iter()
                     .enumerate()
                     .map(|(index, expr)| {
                         (
                             source_columns[index].to_ascii_lowercase(),
-                            self.infer_env_expr_type(expr, &[]).and_then(|pg_type| {
+                            self.infer_env_expr_type(expr, prior).and_then(|pg_type| {
                                 pg_type.strip_suffix("[]").map(str::to_string).or_else(|| {
                                     match pg_type.as_str() {
                                         "int2vector" => Some("int2".to_string()),

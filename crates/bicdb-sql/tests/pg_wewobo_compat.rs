@@ -1008,3 +1008,44 @@ fn memoized_subqueries_keep_null_semantics_and_correlated_ones_still_run_per_row
     let drawn = ids(&mut s, "SELECT count(*) FROM a WHERE (SELECT random()) < 0.5")[0];
     assert!(drawn > 0 && drawn < 31, "{drawn} of 31 rows: random() was drawn once");
 }
+
+fn texts(values: &[&str]) -> SqlValue {
+    SqlValue::Json(serde_json::Value::Array(values.iter().map(|v| serde_json::Value::String(v.to_string())).collect()))
+}
+
+/// One column's (value, planner type, statically described type) — the last is what pgwire's
+/// RowDescription uses before falling back to the planner type.
+fn typed_cell(s: &mut SqlSession, db_sql: &str) -> (SqlValue, Option<String>) {
+    let result = s.execute(db_sql).unwrap();
+    assert_eq!(result.rows.len(), 1, "{db_sql}");
+    (result.rows[0][0].clone(), result.column_types.first().cloned().flatten())
+}
+
+#[test]
+fn array_agg_over_a_lateral_unnest_column_is_a_typed_array() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE g (scope_id text, entitlements text[])").unwrap();
+    s.execute("INSERT INTO g VALUES ('u1', ARRAY['courses.publish','b.x']), ('u2', ARRAY['a.y'])").unwrap();
+    let text_array = || Some("text[]".to_string());
+    for (sql, want) in [
+        ("SELECT array_agg(DISTINCT e ORDER BY e) FROM g CROSS JOIN LATERAL unnest(g.entitlements) e WHERE g.scope_id = 'u1'", texts(&["b.x", "courses.publish"])),
+        ("SELECT array_agg(e ORDER BY e) FROM g CROSS JOIN LATERAL unnest(g.entitlements) e", texts(&["a.y", "b.x", "courses.publish"])),
+        ("SELECT array_agg(DISTINCT e) FROM g, unnest(g.entitlements) e WHERE g.scope_id = 'u2'", texts(&["a.y"])),
+        ("SELECT array_agg(e) FROM g CROSS JOIN LATERAL unnest(g.entitlements) AS e WHERE g.scope_id = 'u2'", texts(&["a.y"])),
+        ("SELECT array_agg(x) FROM unnest(ARRAY['a','b']) x", texts(&["a", "b"])),
+    ] {
+        assert_eq!(typed_cell(&mut s, sql), (want, text_array()), "{sql}");
+    }
+    for sql in [
+        "SELECT pg_typeof(array_agg(DISTINCT e ORDER BY e)) FROM g CROSS JOIN LATERAL unnest(g.entitlements) e",
+        "SELECT pg_typeof(array_agg(e)) FROM g CROSS JOIN LATERAL unnest(g.entitlements) e",
+    ] {
+        assert_eq!(s.execute(sql).unwrap().rows, vec![vec![text("text[]")]], "{sql}");
+    }
+    assert_eq!(s.execute("SELECT pg_typeof(e) FROM g CROSS JOIN LATERAL unnest(g.entitlements) e LIMIT 1").unwrap().rows, vec![vec![text("text")]]);
+    // Statement description (pgwire RowDescription) types the column text[] (OID 1009).
+    let described = bicdb_sql::infer_query_result_types(&db, "SELECT array_agg(DISTINCT e ORDER BY e) AS names FROM g CROSS JOIN LATERAL unnest(g.entitlements) e").unwrap();
+    assert_eq!(described, Some(vec![Some("text[]".to_string())]));
+    assert_eq!(bicdb_sql::pg_type_oid_by_name("text[]"), Some(1009));
+}

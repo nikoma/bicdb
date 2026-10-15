@@ -2749,6 +2749,10 @@ struct ConnectionState {
     tx_ddl_undo: SqlSessionDdlUndoLog,
     tx_collection_generations: HashMap<String, u64>,
     tx_write_tables: FxHashSet<String>,
+    /// REPEATABLE READ / SERIALIZABLE: one snapshot for the whole transaction.
+    /// Otherwise (READ COMMITTED, the default) every statement sees the
+    /// commits made before it starts, as in PostgreSQL.
+    tx_fixed_snapshot: bool,
     tx_shared_role_ddl: Vec<String>,
     committed_shared_role_ddl: Vec<String>,
     savepoints: Vec<SavepointMark>,
@@ -2864,6 +2868,7 @@ impl ConnectionState {
             tx_ddl_undo: SqlSessionDdlUndoLog::default(),
             tx_collection_generations: HashMap::new(),
             tx_write_tables: FxHashSet::default(),
+            tx_fixed_snapshot: false,
             tx_shared_role_ddl: Vec::new(),
             committed_shared_role_ddl: Vec::new(),
             savepoints: Vec::new(),
@@ -3754,6 +3759,10 @@ fn execute_server_db_sql_for_state_inner(
     result
 }
 
+fn isolation_fixes_snapshot(normalized: &str) -> bool {
+    normalized.contains("repeatable read") || normalized.contains("serializable")
+}
+
 fn execute_server_transaction_sql(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
@@ -3764,11 +3773,18 @@ fn execute_server_transaction_sql(
     cancellation
         .check()
         .map_err(|error| classify_bicdb_interrupt(server, state, error))?;
-    let Some(tx) = state.tx.take() else {
+    let Some(mut tx) = state.tx.take() else {
         return Err(PgWireError::Server(
             "transaction is open but no transaction state is available".to_string(),
         ));
     };
+    if !state.tx_fixed_snapshot {
+        // READ COMMITTED: each statement starts from the latest commits.
+        if let Err(error) = tx.refresh_read_committed_snapshot() {
+            state.tx = Some(tx);
+            return Err(error.into());
+        }
+    }
     let started = Instant::now();
     let catalog_cache = std::mem::take(&mut state.catalog_cache);
     let ddl_undo_log = std::mem::take(&mut state.tx_ddl_undo);
@@ -4069,11 +4085,16 @@ fn execute_server_sql_with_options_normalized(
     set_active_query(server, state, sql);
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if transaction_control == Some(Some(TransactionControl::Begin)) {
-            begin_buffered_transaction(server, state)
+            let result = begin_buffered_transaction(server, state);
+            state.tx_fixed_snapshot = isolation_fixes_snapshot(normalized);
+            result
         } else if transaction_control == Some(Some(TransactionControl::SetTransaction)) {
             if state.failed_transaction {
                 Err(PgWireError::InFailedTransaction)
             } else {
+                if state.in_transaction && isolation_fixes_snapshot(normalized) {
+                    state.tx_fixed_snapshot = true;
+                }
                 Ok(SqlResult::command("SET"))
             }
         } else if let Some(ending) = transaction_end {

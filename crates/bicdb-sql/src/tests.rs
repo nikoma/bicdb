@@ -430,7 +430,7 @@ fn current_date_uses_transaction_start_and_session_timezone() {
     let mut session = SqlSession::new(&mut db);
 
     session.execute("BEGIN").unwrap();
-    session.transaction_timestamp_seconds = Some(0);
+    session.transaction_timestamp_micros = Some(0);
     session
         .execute("SET TIME ZONE 'America/Los_Angeles'")
         .unwrap();

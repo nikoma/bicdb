@@ -2695,9 +2695,33 @@ pub(crate) fn unix_now() -> i64 {
         .unwrap_or_default()
 }
 
+/// Microseconds since the Unix epoch: `now()` and `clock_timestamp()` carry
+/// PostgreSQL's microsecond precision.
+pub(crate) fn unix_now_micros() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_micros() as i64)
+        .unwrap_or_default()
+}
+
+fn pg_timestamp_from_unix_micros(micros: i64) -> PgTimestamp {
+    PgTimestamp::Finite(micros - 946_684_800_000_000)
+}
+
+/// The transaction (or statement) start time in Unix microseconds.
+pub(crate) fn transaction_timestamp_micros() -> i64 {
+    SQL_TEMPORAL_CONTEXT
+        .with(|slot| {
+            slot.borrow()
+                .as_ref()
+                .map(|context| context.transaction_timestamp_micros)
+        })
+        .unwrap_or_else(unix_now_micros)
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct SqlTemporalContext {
-    transaction_timestamp_seconds: i64,
+    transaction_timestamp_micros: i64,
     timezone: String,
     interval_style: String,
 }
@@ -2712,12 +2736,12 @@ pub(crate) struct SqlTemporalScope {
 
 impl SqlTemporalScope {
     pub(crate) fn new(
-        transaction_timestamp_seconds: i64,
+        transaction_timestamp_micros: i64,
         timezone: impl Into<String>,
         interval_style: impl Into<String>,
     ) -> Self {
         let context = SqlTemporalContext {
-            transaction_timestamp_seconds,
+            transaction_timestamp_micros,
             timezone: timezone.into(),
             interval_style: interval_style.into(),
         };
@@ -2769,7 +2793,7 @@ pub(crate) fn timestamp_and_timezone() -> (i64, String) {
         .with(|slot| {
             slot.borrow().as_ref().map(|context| {
                 (
-                    context.transaction_timestamp_seconds,
+                    context.transaction_timestamp_micros.div_euclid(1_000_000),
                     context.timezone.clone(),
                 )
             })
@@ -3041,12 +3065,11 @@ pub(crate) fn eval_at_time_zone_value(
 }
 
 pub(crate) fn unix_now_timestamp_string() -> String {
-    render_timestamptz(pg_timestamp_from_unix_seconds(unix_now()))
+    render_timestamptz(pg_timestamp_from_unix_micros(unix_now_micros()))
 }
 
 pub(crate) fn transaction_timestamp_string() -> String {
-    let (seconds, _) = timestamp_and_timezone();
-    render_timestamptz(pg_timestamp_from_unix_seconds(seconds))
+    render_timestamptz(pg_timestamp_from_unix_micros(transaction_timestamp_micros()))
 }
 
 pub(crate) fn unix_now_date_string() -> String {
@@ -3172,6 +3195,23 @@ pub(crate) fn eval_date_interval_arithmetic(
                 (date_only_epoch_days(left), date_only_epoch_days(right))
             {
                 return Ok(Some(SqlValue::Int(i64::from(left_days - right_days))));
+            }
+            // Timestamps keep their microseconds and PostgreSQL's interval
+            // form (`now() - at` over bound columns reaches this fallback).
+            let pg_type = if timestamp_has_iso_offset(left) || timestamp_has_iso_offset(right) {
+                "timestamptz"
+            } else {
+                "timestamp"
+            };
+            let (left_value, right_value) =
+                (SqlValue::String(left.clone()), SqlValue::String(right.clone()));
+            let exact = if pg_type == "timestamptz" {
+                eval_typed_timestamptz_arithmetic(&left_value, op, &right_value, Some(pg_type), Some(pg_type))
+            } else {
+                eval_typed_timestamp_arithmetic(&left_value, op, &right_value, Some(pg_type), Some(pg_type))
+            };
+            if let Ok(Some(value)) = exact {
+                return Ok(Some(value));
             }
             Ok(Some(SqlValue::String(format_interval_seconds(
                 left_temporal.expect("guard checked temporal value")

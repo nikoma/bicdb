@@ -2098,3 +2098,34 @@ fn make_interval_with_named_arguments_works_in_insert_update_and_delete() {
     s.execute("DELETE FROM jobs WHERE run_after > NOW() + make_interval(mins => 1)").unwrap();
     assert_eq!(rows(&mut s, "SELECT count(*) FROM jobs"), vec![vec![SqlValue::Int(0)]]);
 }
+
+#[test]
+fn now_and_clock_timestamp_carry_microseconds() {
+    // Rapid progress heartbeats measure elapsed time with NOW(); whole seconds minted a second per call.
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    let micros = |s: &mut SqlSession, sql: &str| -> Vec<String> {
+        s.execute(sql).unwrap().rows.remove(0).into_iter().map(|value| value.to_cell()).collect()
+    };
+    let mut fractional = 0;
+    for _ in 0..5 {
+        let values = micros(&mut s, "SELECT now()::text, clock_timestamp()::text, (SELECT now()::text FROM (VALUES (1)) v(x))");
+        fractional += values.iter().filter(|value| value.contains('.')).count();
+        std::thread::sleep(std::time::Duration::from_millis(3));
+    }
+    assert!(fractional >= 13, "timestamps keep their fraction of a second ({fractional}/15)");
+    s.execute("CREATE TABLE beats (id int PRIMARY KEY, at timestamptz)").unwrap();
+    s.execute("INSERT INTO beats VALUES (1, now())").unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let elapsed = s.execute("SELECT EXTRACT(EPOCH FROM now() - at)::float8 FROM beats").unwrap().rows.remove(0).remove(0);
+    let elapsed = match elapsed { SqlValue::Float(f) => f, other => other.to_cell().parse::<f64>().unwrap() };
+    assert!(elapsed > 0.0 && elapsed < 0.9, "elapsed {elapsed}");
+    // now() is the transaction's start; clock_timestamp() moves on.
+    s.execute("BEGIN").unwrap();
+    let first = micros(&mut s, "SELECT now()::text");
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let again = micros(&mut s, "SELECT now()::text, (now() < clock_timestamp())::text");
+    s.execute("COMMIT").unwrap();
+    assert_eq!(first[0], again[0]);
+    assert_eq!(again[1], "true");
+}

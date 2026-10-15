@@ -925,7 +925,7 @@ pub struct SqlSession<'db> {
     pub(crate) settings: SqlSettings,
     pub(crate) session_gucs: Arc<HashMap<String, String>>,
     pub(crate) guc_transaction_start: Option<SqlSessionGucSnapshot>,
-    pub(crate) transaction_timestamp_seconds: Option<i64>,
+    pub(crate) transaction_timestamp_micros: Option<i64>,
     pub(crate) guc_local_restore: HashMap<String, Option<String>>,
     pub(crate) guc_local_settings_restore: SqlSettingsRestore,
     pub(crate) routine_vars: Arc<BTreeMap<String, SqlValue>>,
@@ -964,7 +964,7 @@ pub struct SqlSessionGucState {
     settings: SqlSettings,
     session_gucs: Arc<HashMap<String, String>>,
     transaction_start: Option<SqlSessionGucSnapshot>,
-    transaction_timestamp_seconds: Option<i64>,
+    transaction_timestamp_micros: Option<i64>,
     local_restore: HashMap<String, Option<String>>,
     local_settings_restore: SqlSettingsRestore,
     currvals: FxHashMap<String, i64>,
@@ -1009,7 +1009,7 @@ impl SqlSessionGucState {
                 settings: self.settings,
                 session_gucs: self.session_gucs.clone(),
             });
-            self.transaction_timestamp_seconds = Some(unix_now());
+            self.transaction_timestamp_micros = Some(unix_now_micros());
         }
     }
 
@@ -1031,7 +1031,7 @@ impl SqlSessionGucState {
             self.settings.ef_search = ef_search;
         }
         self.transaction_start = None;
-        self.transaction_timestamp_seconds = None;
+        self.transaction_timestamp_micros = None;
     }
 
     pub fn rollback_transaction(&mut self) {
@@ -1051,7 +1051,7 @@ impl SqlSessionGucState {
         }
         self.local_restore.clear();
         self.local_settings_restore = SqlSettingsRestore::default();
-        self.transaction_timestamp_seconds = None;
+        self.transaction_timestamp_micros = None;
     }
 
     pub fn restore_savepoint(&mut self, savepoint: &Self) {
@@ -1059,7 +1059,7 @@ impl SqlSessionGucState {
         self.settings = savepoint.settings;
         self.session_gucs = savepoint.session_gucs.clone();
         self.transaction_start = savepoint.transaction_start.clone();
-        self.transaction_timestamp_seconds = savepoint.transaction_timestamp_seconds;
+        self.transaction_timestamp_micros = savepoint.transaction_timestamp_micros;
         self.local_restore = savepoint.local_restore.clone();
         self.local_settings_restore = savepoint.local_settings_restore.clone();
         match lastval {
@@ -2190,7 +2190,7 @@ impl<'db> SqlSession<'db> {
             settings: SqlSettings::default(),
             session_gucs: Arc::new(HashMap::new()),
             guc_transaction_start: None,
-            transaction_timestamp_seconds: None,
+            transaction_timestamp_micros: None,
             guc_local_restore: HashMap::new(),
             guc_local_settings_restore: SqlSettingsRestore::default(),
             routine_vars: Arc::new(BTreeMap::new()),
@@ -2293,7 +2293,7 @@ impl<'db> SqlSession<'db> {
         self.settings = state.settings;
         self.session_gucs = state.session_gucs;
         self.guc_transaction_start = state.transaction_start;
-        self.transaction_timestamp_seconds = state.transaction_timestamp_seconds;
+        self.transaction_timestamp_micros = state.transaction_timestamp_micros;
         self.guc_local_restore = state.local_restore;
         self.guc_local_settings_restore = state.local_settings_restore;
         self.currvals = state.currvals;
@@ -2308,7 +2308,7 @@ impl<'db> SqlSession<'db> {
             settings: self.settings,
             session_gucs: std::mem::take(&mut self.session_gucs),
             transaction_start: self.guc_transaction_start.take(),
-            transaction_timestamp_seconds: self.transaction_timestamp_seconds.take(),
+            transaction_timestamp_micros: self.transaction_timestamp_micros.take(),
             local_restore: std::mem::take(&mut self.guc_local_restore),
             local_settings_restore: std::mem::take(&mut self.guc_local_settings_restore),
             currvals: std::mem::take(&mut self.currvals),
@@ -2467,7 +2467,7 @@ impl<'db> SqlSession<'db> {
             settings: self.settings,
             session_gucs: self.session_gucs.clone(),
             transaction_start: self.guc_transaction_start.clone(),
-            transaction_timestamp_seconds: self.transaction_timestamp_seconds,
+            transaction_timestamp_micros: self.transaction_timestamp_micros,
             local_restore: self.guc_local_restore.clone(),
             local_settings_restore: self.guc_local_settings_restore.clone(),
             currvals: self.currvals.clone(),
@@ -2488,8 +2488,8 @@ impl<'db> SqlSession<'db> {
         if started_guc_transaction {
             self.begin_guc_transaction();
         }
-        let transaction_timestamp_seconds =
-            self.transaction_timestamp_seconds.unwrap_or_else(unix_now);
+        let transaction_timestamp_micros =
+            self.transaction_timestamp_micros.unwrap_or_else(unix_now_micros);
         let timezone = self
             .session_gucs
             .get("timezone")
@@ -2505,7 +2505,7 @@ impl<'db> SqlSession<'db> {
             .unwrap_or("postgres")
             .to_string();
         let _temporal_scope =
-            SqlTemporalScope::new(transaction_timestamp_seconds, timezone, interval_style);
+            SqlTemporalScope::new(transaction_timestamp_micros, timezone, interval_style);
         let result = execute(self);
         if started_guc_transaction {
             match &result {
@@ -4663,7 +4663,7 @@ impl<'db> SqlSession<'db> {
                 .insert("server_version_num".to_string(), server_version_num);
         }
         self.guc_transaction_start = None;
-        self.transaction_timestamp_seconds = None;
+        self.transaction_timestamp_micros = None;
         self.guc_local_restore.clear();
         self.guc_local_settings_restore = SqlSettingsRestore::default();
         self.currvals.clear();

@@ -841,6 +841,9 @@ impl<'db> SqlSession<'db> {
         if let Some(rewritten) = rewrite_row_type_constructs(self.db_ref(), query)? {
             return self.execute_query(&rewritten);
         }
+        if let Some(folded) = fold_statement_constants(query, &self.routine_vars) {
+            return self.execute_query(&folded);
+        }
         // Own the entire statement, including CTEs and its final DML. A
         // correlated function must never commit independently of that DML.
         if query_may_write(query) && (self.tx.is_some() || self.mutation_has_row_triggers(query)?) {

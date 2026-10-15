@@ -2258,3 +2258,32 @@ fn an_array_subquery_over_a_parameter_is_described_as_an_array() {
     let keys = bicdb_sql::infer_query_result_types(&db, "SELECT ARRAY(SELECT jsonb_object_keys($1::jsonb))").unwrap();
     assert_eq!(keys, Some(vec![Some("text[]".to_string())]));
 }
+
+#[test]
+fn parameter_switches_in_filters_fold_before_rows_are_read() {
+    // The learners page: `$2='' OR name matches`, `CASE WHEN $3='all' ..`, `$6<>'needs_review' OR EXISTS ..`.
+    let (_dir, mut db) = db();
+    {
+        let mut s = SqlSession::new(&mut db);
+        s.execute("CREATE TABLE enrollments (id int PRIMARY KEY, subject text, status text, at int)").unwrap();
+        s.execute("CREATE TABLE subs (subject text, status text)").unwrap();
+        s.execute("INSERT INTO enrollments SELECT i, 'l-'||i, CASE WHEN i % 10 = 0 THEN 'requested' WHEN i % 33 = 0 THEN 'removed' ELSE 'active' END, i FROM generate_series(1, 20000) i").unwrap();
+        s.execute("INSERT INTO subs SELECT 'l-'||i, 'submitted' FROM generate_series(1, 40) i").unwrap();
+    }
+    let sql = "SELECT subject FROM enrollments e WHERE (CASE WHEN $1='all' THEN e.status<>'removed' ELSE e.status=$1 END) \
+        AND ($2='' OR strpos(e.subject, $2)>0) AND ($3<>'needs_review' OR EXISTS (SELECT 1 FROM subs u WHERE u.subject=e.subject AND u.status='submitted')) \
+        ORDER BY CASE WHEN $4='name' THEN e.subject END, e.at DESC, e.subject LIMIT 3";
+    let run = |db: &mut BicDb, params: [&str; 4]| -> Vec<Vec<SqlValue>> {
+        let mut s = SqlSession::new(db).with_positional_parameters(params.iter().map(|value| text(value)).collect());
+        s.execute(sql).unwrap().rows
+    };
+    let started = std::time::Instant::now();
+    assert_eq!(run(&mut db, ["active", "", "", "recent"]), vec![vec![text("l-19999")], vec![text("l-19997")], vec![text("l-19996")]]);
+    assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
+    assert_eq!(run(&mut db, ["all", "", "", "recent"]), vec![vec![text("l-20000")], vec![text("l-19999")], vec![text("l-19997")]]);
+    assert_eq!(run(&mut db, ["requested", "l-19", "", "name"]), vec![vec![text("l-190")], vec![text("l-1900")], vec![text("l-19000")]]);
+    assert_eq!(run(&mut db, ["active", "", "needs_review", "name"]), vec![vec![text("l-1")], vec![text("l-11")], vec![text("l-12")]]);
+    // NULL never folds: a NULL parameter keeps the comparison unknown.
+    let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![SqlValue::Null]);
+    assert_eq!(s.execute("SELECT count(*) FROM enrollments WHERE ($1 = '' OR id < 3)").unwrap().rows, vec![vec![SqlValue::Int(2)]]);
+}

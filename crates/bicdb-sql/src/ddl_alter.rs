@@ -455,9 +455,7 @@ pub(crate) fn rewrite_records_for_primary_key(
     if rewritten.is_empty() {
         return Ok(());
     }
-    for (old_id, _) in &rewritten {
-        db.delete(table, old_id)?;
-    }
+    db.batch_delete(table, rewritten.iter().map(|(old_id, _)| old_id.as_str()))?;
     db.batch_insert(
         table,
         rewritten

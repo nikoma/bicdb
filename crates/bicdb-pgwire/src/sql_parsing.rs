@@ -389,6 +389,10 @@ pub(crate) fn commit_buffered_transaction(
                 state.last_commit_seq = state.last_commit_seq.max(commit_seq);
                 server.record_write_execution(duration_nanos_u64(started.elapsed()));
                 state.committed_shared_role_ddl = std::mem::take(&mut state.tx_shared_role_ddl);
+                if durability.is_ok() {
+                    let notifications = std::mem::take(&mut state.tx_notifications);
+                    crate::deliver_notifications(server, state.connection_id, notifications);
+                }
                 clear_open_transaction_state(server, state);
                 server
                     .advisory_locks
@@ -513,6 +517,7 @@ pub(crate) fn clear_open_transaction_state(server: &PgWireServer, state: &mut Co
     state.tx_ddl_undo = SqlSessionDdlUndoLog::default();
     state.tx_collection_generations.clear();
     state.tx_write_tables.clear();
+    state.tx_notifications.clear();
     state.savepoints.clear();
 }
 

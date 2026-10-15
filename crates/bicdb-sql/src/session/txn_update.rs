@@ -484,13 +484,14 @@ impl<'db> SqlSession<'db> {
                     NotificationRecord {
                         id: notification_id,
                         channel: channel.clone(),
-                        payload,
+                        payload: payload.clone(),
                         table_name: trigger.table_name.clone(),
                         trigger_name: trigger.name.clone(),
                         function_name: trigger.function_name.clone(),
                         created_at: unix_now(),
                     },
                 )?;
+                self.pending_notifications.push((channel.clone(), payload));
             }
         }
         if general {

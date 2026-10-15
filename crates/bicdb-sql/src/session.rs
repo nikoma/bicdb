@@ -929,6 +929,9 @@ pub struct SqlSession<'db> {
     pub(crate) guc_local_restore: HashMap<String, Option<String>>,
     pub(crate) guc_local_settings_restore: SqlSettingsRestore,
     pub(crate) routine_vars: Arc<BTreeMap<String, SqlValue>>,
+    /// NOTIFY payloads raised by `pg_notify` AFTER INSERT triggers, for the
+    /// protocol layer to deliver to listeners once the writes commit.
+    pub(crate) pending_notifications: Vec<(String, String)>,
     /// The running routine frame's slots while one of its embedded statements
     /// executes (see `RoutineSlotBinding`); `None` outside routines.
     pub(crate) routine_slots: Option<crate::engine::RoutineSlotBinding>,
@@ -2194,6 +2197,7 @@ impl<'db> SqlSession<'db> {
             guc_local_restore: HashMap::new(),
             guc_local_settings_restore: SqlSettingsRestore::default(),
             routine_vars: Arc::new(BTreeMap::new()),
+            pending_notifications: Vec::new(),
             signed_mutation_grants: BTreeMap::new(),
             signed_application_security_guc_compatibility: false,
             currvals: FxHashMap::default(),
@@ -2376,6 +2380,12 @@ impl<'db> SqlSession<'db> {
 
     /// Takes the pending (uncommitted) transaction produced by a deferred
     /// autocommit execution, if one is present.
+    /// `(channel, payload)` notifications raised by this session's trigger
+    /// writes since the last call. Deliver them when those writes commit.
+    pub fn take_pending_notifications(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.pending_notifications)
+    }
+
     pub fn take_pending_transaction(&mut self) -> Option<Transaction> {
         self.tx.take()
     }

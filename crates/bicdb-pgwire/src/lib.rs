@@ -2753,6 +2753,9 @@ struct ConnectionState {
     /// Otherwise (READ COMMITTED, the default) every statement sees the
     /// commits made before it starts, as in PostgreSQL.
     tx_fixed_snapshot: bool,
+    /// Trigger `pg_notify` notifications of the open transaction, delivered
+    /// to listeners when it commits.
+    tx_notifications: Vec<(String, String)>,
     tx_shared_role_ddl: Vec<String>,
     committed_shared_role_ddl: Vec<String>,
     savepoints: Vec<SavepointMark>,
@@ -2869,6 +2872,7 @@ impl ConnectionState {
             tx_collection_generations: HashMap::new(),
             tx_write_tables: FxHashSet::default(),
             tx_fixed_snapshot: false,
+            tx_notifications: Vec::new(),
             tx_shared_role_ddl: Vec::new(),
             committed_shared_role_ddl: Vec::new(),
             savepoints: Vec::new(),
@@ -3753,10 +3757,30 @@ fn execute_server_db_sql_for_state_inner(
             .with_catalog_cache(catalog_cache)
             .with_cancellation(cancellation.clone());
     let result = session.execute(sql).map_err(PgWireError::from);
+    let notifications = session.take_pending_notifications();
+    if result.is_ok() {
+        deliver_notifications(server, state.connection_id, notifications);
+    }
     capture_connection_guc_state(state, &session);
     state.catalog_cache = session.into_catalog_cache();
     server.record_write_execution(duration_nanos_u64(started.elapsed()));
     result
+}
+
+/// Hand committed trigger notifications to every listening connection.
+pub(crate) fn deliver_notifications(
+    server: &PgWireServer,
+    connection_id: u64,
+    notifications: Vec<(String, String)>,
+) {
+    if notifications.is_empty() {
+        return;
+    }
+    if let Ok(mut bus) = server.notifications.lock() {
+        for (channel, payload) in notifications {
+            bus.notify(&channel, &payload, connection_id as i32);
+        }
+    }
 }
 
 fn isolation_fixes_snapshot(normalized: &str) -> bool {
@@ -3788,6 +3812,7 @@ fn execute_server_transaction_sql(
     let started = Instant::now();
     let catalog_cache = std::mem::take(&mut state.catalog_cache);
     let ddl_undo_log = std::mem::take(&mut state.tx_ddl_undo);
+    let mut notifications = Vec::new();
     let (result, session_state, pending_tx, catalog_cache, ddl_undo_log) = {
         let db = server.read_db_for_transaction_progress()?;
         let mut session =
@@ -3797,6 +3822,7 @@ fn execute_server_transaction_sql(
                 .with_cancellation(cancellation.clone())
                 .with_pending_transaction(tx);
         let result = session.execute(sql);
+        notifications = session.take_pending_notifications();
         let session_state = session.session_guc_state();
         let pending_tx = session.take_pending_transaction();
         let ddl_undo_log = session.take_ddl_undo_log();
@@ -3827,6 +3853,7 @@ fn execute_server_transaction_sql(
             .with_cancellation(cancellation.clone())
             .with_pending_transaction(tx);
         let result = session.execute(sql);
+        notifications = session.take_pending_notifications();
         let session_state = session.session_guc_state();
         let pending_tx = session.take_pending_transaction();
         let ddl_undo_log = session.take_ddl_undo_log();
@@ -3856,6 +3883,9 @@ fn execute_server_transaction_sql(
     }
     state.session_state = session_state;
     state.tx = pending_tx;
+    if result.is_ok() {
+        state.tx_notifications.extend(notifications);
+    }
     // The session — not the dispatcher's string match — is authoritative for
     // whether a transaction block is still open. Non-canonical spellings
     // (`ROLLBACK WORK`, `COMMIT WORK`, `END`, `ROLLBACK TRANSACTION`) reach

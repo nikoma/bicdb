@@ -2048,6 +2048,51 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         };
         for term in and_terms(selection) {
+            // `pk = ANY(ARRAY[...])`: the same point lookups as `pk IN (...)`.
+            if let Expr::AnyOp {
+                left,
+                compare_op: BinaryOperator::Eq,
+                right,
+                ..
+            } = term
+            {
+                if !self.expr_matches_table_column(left, table, alias, Some(schema), column)? {
+                    continue;
+                }
+                let Ok(SqlValue::Json(JsonValue::Array(elements))) = eval_constant_expr(right)
+                else {
+                    continue;
+                };
+                if elements.len() > MAX_IN_LIST_LOOKUPS {
+                    continue;
+                }
+                let mut record_ids = Vec::with_capacity(elements.len());
+                for element in elements {
+                    let value = match element {
+                        JsonValue::Null => continue,
+                        JsonValue::String(text) => SqlValue::String(text),
+                        JsonValue::Number(number) => match number.as_i64() {
+                            Some(value) => SqlValue::Int(value),
+                            None => return Ok(None),
+                        },
+                        _ => return Ok(None),
+                    };
+                    record_ids.push(record_id_from_column_values(
+                        table,
+                        schema,
+                        &columns,
+                        &[value],
+                    )?);
+                }
+                record_ids.sort_unstable();
+                record_ids.dedup();
+                let estimated_rows = record_ids.len();
+                return Ok(Some(QueryPlan {
+                    kind: PlanKind::PrimaryKeyInLookup { record_ids },
+                    estimated_rows,
+                    estimated_cost: 0.5 * estimated_rows as f64,
+                }));
+            }
             let Expr::InList {
                 expr,
                 list,

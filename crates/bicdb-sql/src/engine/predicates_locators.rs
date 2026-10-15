@@ -1326,7 +1326,52 @@ impl<'db> SqlEngine<'db> {
         if self.tx.is_some_and(|tx| tx.has_pending_writes(table)) {
             return Ok(None);
         }
+        let key = primary_key_columns_for_schema(schema);
         for term in and_terms(selection) {
+            // `pk = ANY(ARRAY[...])` with a constant array: point lookups.
+            if let (
+                [column],
+                Expr::AnyOp {
+                    left,
+                    compare_op: BinaryOperator::Eq,
+                    right,
+                    ..
+                },
+            ) = (key.as_slice(), unwrap_nested_expr(term))
+            {
+                if self.expr_matches_table_column(left, table, alias, Some(schema), column)? {
+                    if let Ok(SqlValue::Json(JsonValue::Array(elements))) = eval_constant_expr(right) {
+                        let mut rowids = Vec::with_capacity(elements.len());
+                        let mut usable = true;
+                        for element in elements {
+                            let value = match element {
+                                JsonValue::Null => continue,
+                                JsonValue::String(text) => SqlValue::String(text),
+                                JsonValue::Number(number) => match number.as_i64() {
+                                    Some(value) => SqlValue::Int(value),
+                                    None => {
+                                        usable = false;
+                                        break;
+                                    }
+                                },
+                                _ => {
+                                    usable = false;
+                                    break;
+                                }
+                            };
+                            let pk = record_id_from_column_values(table, schema, &key, &[value])?;
+                            if let Some(rowid) = self.db_ref().rowid_for(table, &pk)? {
+                                rowids.push(rowid);
+                            }
+                        }
+                        if usable {
+                            rowids.sort_unstable();
+                            rowids.dedup();
+                            return Ok(Some(RecordLocators::Rowids(rowids)));
+                        }
+                    }
+                }
+            }
             let mut branches = Vec::new();
             disjuncts(term, &mut branches);
             if branches.len() < 2 || branches.len() > 16 {

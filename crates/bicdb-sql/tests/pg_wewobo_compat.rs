@@ -2325,3 +2325,20 @@ fn a_filter_switched_off_by_a_parameter_reads_no_rows() {
     assert_eq!(s.execute("SELECT count(*) FROM enrollments WHERE $1 = 'course'").unwrap().rows, vec![vec![SqlValue::Int(0)]]);
     assert_eq!(s.execute("SELECT count(*) FROM enrollments e JOIN enrollments f ON f.id = e.id WHERE $1 = 'course'").unwrap().rows, vec![vec![SqlValue::Int(0)]]);
 }
+
+#[test]
+fn primary_key_equals_any_array_reads_only_those_rows() {
+    // SELECT * FROM network_posts WHERE id = ANY(ARRAY[...]::uuid[]) loads a page of posts.
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE posts (id uuid PRIMARY KEY, n int, body text)").unwrap();
+    s.execute("INSERT INTO posts SELECT ('00000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid, i, repeat('x', 200) FROM generate_series(1, 40000) i").unwrap();
+    let sql = "SELECT n FROM posts WHERE id = ANY(ARRAY['00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000039999','00000000-0000-0000-0000-999999999999']::uuid[]) ORDER BY n";
+    let started = std::time::Instant::now();
+    for _ in 0..20 {
+        assert_eq!(s.execute(sql).unwrap().rows, vec![vec![SqlValue::Int(7)], vec![SqlValue::Int(39999)]]);
+    }
+    assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
+    assert_eq!(s.execute("SELECT count(*) FROM posts WHERE id = ANY(ARRAY[]::uuid[])").unwrap().rows, vec![vec![SqlValue::Int(0)]]);
+    assert_eq!(s.execute("SELECT count(*) FROM posts WHERE id = ANY(ARRAY['00000000-0000-0000-0000-000000000003', NULL]::uuid[]) AND n > 2").unwrap().rows, vec![vec![SqlValue::Int(1)]]);
+}

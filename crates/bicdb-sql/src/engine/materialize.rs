@@ -2659,7 +2659,24 @@ impl<'db> SqlEngine<'db> {
     ) -> Option<String> {
         let name = object_name(&function.name).ok()?.to_ascii_lowercase();
         let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
+        // ARRAY(SELECT x ...) is an array of the subquery column's type.
+        if let (true, FunctionArguments::Subquery(query)) = (bare_name == "array", &function.args) {
+            let element = scalar_subquery_pg_type(self.db_ref(), query, &|name| {
+                self.ctes.contains_key(&cte_key(name))
+            })
+            .or_else(|| match self.query_output_columns(query)?.as_slice() {
+                [(_, pg_type)] => pg_type.clone(),
+                _ => None,
+            })?;
+            return Some(if element.ends_with("[]") { element } else { format!("{element}[]") });
+        }
         let args = function_args(function);
+        if matches!(
+            bare_name,
+            "jsonb_array_elements_text" | "json_array_elements_text" | "jsonb_object_keys" | "json_object_keys"
+        ) {
+            return Some("text".to_string());
+        }
         // PostgreSQL parses these unqualified, zero-argument spellings as
         // session-identity constructs. A same-named user routine in the search
         // path must not change either their value or their `name` type.

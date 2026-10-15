@@ -2246,3 +2246,15 @@ fn a_left_join_on_an_equality_keeps_unmatched_rows_and_is_hashed() {
     let residual_nested = s.execute(&sql("s.id + 0 = p.space_id AND p.kind = 'a'")).unwrap().rows;
     assert_eq!(residual, residual_nested);
 }
+
+#[test]
+fn an_array_subquery_over_a_parameter_is_described_as_an_array() {
+    // moderation_scopes: ARRAY(SELECT jsonb_array_elements_text($2::jsonb)) must reach the client as
+    // text[] (a JS array), or an empty '{}' string has length 2 and outsiders see the moderation queue.
+    let (_dir, mut db) = db();
+    let sql = "SELECT $1::boolean AS platform, ARRAY(SELECT jsonb_array_elements_text($2::jsonb)) AS streams";
+    let described = bicdb_sql::infer_query_result_types(&db, sql).unwrap();
+    assert_eq!(described, Some(vec![Some("bool".to_string()), Some("text[]".to_string())]));
+    let keys = bicdb_sql::infer_query_result_types(&db, "SELECT ARRAY(SELECT jsonb_object_keys($1::jsonb))").unwrap();
+    assert_eq!(keys, Some(vec![Some("text[]".to_string())]));
+}

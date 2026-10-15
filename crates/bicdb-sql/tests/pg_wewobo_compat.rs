@@ -2302,3 +2302,26 @@ fn a_union_of_three_branches_with_typed_nulls_matches_types() {
     let rows = s.execute("SELECT o.id, o.owner_org_id FROM (SELECT id,status,NULL::uuid AS owner_org_id FROM playlists UNION ALL SELECT id,status,NULL::uuid FROM collections UNION ALL SELECT id,status,owner_org_id FROM courses) o WHERE o.status<>'archived' ORDER BY o.id").unwrap().rows;
     assert_eq!(rows, vec![vec![SqlValue::Int(1), SqlValue::Null], vec![SqlValue::Int(2), SqlValue::Null], vec![SqlValue::Int(3), text("00000000-0000-0000-0000-00000000000a")]]);
 }
+
+#[test]
+fn a_filter_switched_off_by_a_parameter_reads_no_rows() {
+    // Progress heartbeats: SELECT cohort_id FROM learning_enrollments WHERE $1='course' AND ... outside a course.
+    let (_dir, mut db) = db();
+    {
+        let mut s = SqlSession::new(&mut db);
+        s.execute("CREATE TABLE enrollments (id int PRIMARY KEY, course_id text, subject text, cohort_id text)").unwrap();
+        s.execute("INSERT INTO enrollments SELECT i, 'c'||(i % 7), 'l-'||i, 'h'||i FROM generate_series(1, 60000) i").unwrap();
+    }
+    let sql = "SELECT COALESCE((SELECT cohort_id FROM enrollments WHERE $1='course' AND course_id=lower($2) AND subject=$3),'') AS cohort";
+    let started = std::time::Instant::now();
+    for _ in 0..20 {
+        let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![text("feed"), text("C3"), text("l-3")]);
+        assert_eq!(s.execute(sql).unwrap().rows, vec![vec![text("")]]);
+    }
+    assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
+    let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![text("course"), text("C3"), text("l-3")]);
+    assert_eq!(s.execute(sql).unwrap().rows, vec![vec![text("h3")]]);
+    let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![text("feed")]);
+    assert_eq!(s.execute("SELECT count(*) FROM enrollments WHERE $1 = 'course'").unwrap().rows, vec![vec![SqlValue::Int(0)]]);
+    assert_eq!(s.execute("SELECT count(*) FROM enrollments e JOIN enrollments f ON f.id = e.id WHERE $1 = 'course'").unwrap().rows, vec![vec![SqlValue::Int(0)]]);
+}

@@ -1283,7 +1283,9 @@ impl<'db> SqlEngine<'db> {
         // NULL equality depends on the current outer row (for example, a
         // correlated VALUES expression), so it must never enter the
         // statement-structure memo below.
-        if self.selection_has_null_equality_for_table(table, alias, schema, selection)? {
+        if self.selection_has_null_equality_for_table(table, alias, schema, selection)?
+            || selection_has_false_term(selection)
+        {
             return Ok(Some(RecordLocators::Rowids(Vec::new())));
         }
         let strategy = self.locator_strategy_cached(table, alias, schema, selection)?;
@@ -6509,5 +6511,16 @@ fn subquery_is_independent_of(
     }
     names.unqualified.iter().all(|column| {
         schema.column(column).is_none() || inner.iter().any(|inner| inner.column(column).is_some())
+    })
+}
+
+/// A conjunct that is the literal FALSE (a folded parameter switch such as
+/// `$1 = 'course'`): no row can match, so nothing is read.
+pub(crate) fn selection_has_false_term(selection: &Expr) -> bool {
+    and_terms(selection).into_iter().any(|term| {
+        matches!(
+            unwrap_nested_expr(term),
+            Expr::Value(value) if matches!(value.value, Value::Boolean(false))
+        )
     })
 }

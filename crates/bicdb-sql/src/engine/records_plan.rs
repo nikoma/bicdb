@@ -1271,6 +1271,15 @@ impl<'db> SqlEngine<'db> {
         let mut candidates = vec![full_scan];
 
         if let Some(selection) = &select.selection {
+            if crate::engine::predicates_locators::selection_has_false_term(selection) {
+                candidates.push(QueryPlan {
+                    kind: PlanKind::PrimaryKeyInLookup {
+                        record_ids: Vec::new(),
+                    },
+                    estimated_rows: 0,
+                    estimated_cost: 0.0,
+                });
+            }
             if let Some(IndexValue::String(record_id)) = equality_value(selection, &IndexField::Id)?
             {
                 candidates.push(QueryPlan {

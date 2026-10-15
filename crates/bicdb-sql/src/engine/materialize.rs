@@ -3168,6 +3168,21 @@ impl<'db> SqlEngine<'db> {
                 {
                     return Some("interval".to_string());
                 }
+                if matches!(op, BinaryOperator::Minus)
+                    && left.as_deref() == Some("date")
+                    && right.as_deref() == Some("date")
+                {
+                    return Some("int4".to_string());
+                }
+                if (left.as_deref() == Some("date")
+                    && right.as_deref().is_some_and(is_date_integer_type)
+                    && matches!(op, BinaryOperator::Plus | BinaryOperator::Minus))
+                    || (left.as_deref().is_some_and(is_date_integer_type)
+                        && right.as_deref() == Some("date")
+                        && matches!(op, BinaryOperator::Plus))
+                {
+                    return Some("date".to_string());
+                }
                 if left.as_deref() == Some("money") || right.as_deref() == Some("money") {
                     return money_arithmetic_pg_type(left.as_deref(), op, right.as_deref());
                 }

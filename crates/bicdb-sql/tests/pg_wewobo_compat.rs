@@ -1958,3 +1958,23 @@ fn quantified_comparison_over_a_subquery_compares_with_every_row() {
         .execute("SELECT id FROM a WHERE v = ANY (SELECT w, grp FROM b)")
         .is_err());
 }
+
+#[test]
+fn date_column_plus_or_minus_an_integer_is_a_day_offset() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE daily (subject text, day text)").unwrap();
+    s.execute("INSERT INTO daily VALUES ('ann','2026-10-10'),('ann','2026-10-12'),('ann','2026-10-13'),('ann','2026-10-14'),('ann','2026-10-14')").unwrap();
+    s.execute("CREATE TABLE dated (d date)").unwrap();
+    s.execute("INSERT INTO dated VALUES ('2026-10-13')").unwrap();
+    let rows = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
+    assert_eq!(rows(&mut s, "SELECT d - 1, d + 2, 3 + d FROM dated"), vec![vec![text("2026-10-12"), text("2026-10-15"), text("2026-10-16")]]);
+    assert_eq!(rows(&mut s, "WITH days AS (SELECT '2026-10-13'::date AS day) SELECT day - 1 FROM days"), vec![vec![text("2026-10-12")]]);
+    assert_eq!(rows(&mut s, "SELECT day - (ROW_NUMBER() OVER (ORDER BY day))::int FROM (VALUES (DATE '2026-10-13'),(DATE '2026-10-14')) v(day)"), vec![vec![text("2026-10-12")], vec![text("2026-10-12")]]);
+    // The flashcard streak (flashcards.carrier): consecutive days share a group.
+    let streak = "WITH mine AS (SELECT * FROM daily WHERE subject='ann'), days AS (SELECT DISTINCT day::date AS day FROM mine), \
+        g AS (SELECT day, day-(ROW_NUMBER() OVER (ORDER BY day))::int AS grp FROM days), \
+        last AS (SELECT grp FROM g WHERE day >= DATE '2026-10-15' - 1 ORDER BY day DESC LIMIT 1) \
+        SELECT COUNT(*)::int FROM g WHERE grp=(SELECT grp FROM last)";
+    assert_eq!(rows(&mut s, streak), vec![vec![SqlValue::Int(3)]]);
+}

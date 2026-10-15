@@ -703,6 +703,9 @@ pub(crate) fn eval_arithmetic_value_ref(
     if let Some(value) = eval_date_interval_arithmetic(&left, op, &right)? {
         return Ok(value);
     }
+    if let Some(value) = eval_untyped_date_day_arithmetic(left, op, right)? {
+        return Ok(value);
+    }
 
     let left = sql_value_f64(&left)
         .ok_or_else(|| SqlError::InvalidSql("arithmetic operands must be numeric".to_string()))?;
@@ -3188,5 +3191,33 @@ mod small_decimal_tests {
         assert!(!numeric_text_plausible("BARBAR"));
         assert!(!numeric_text_plausible(""));
         assert!(!numeric_text_plausible("x1"));
+    }
+}
+
+/// `date ± integer` when the operand types did not reach evaluation (bound
+/// projections over CTE, derived-table or table columns): a date-only text
+/// plus or minus an integer is a day offset, as PostgreSQL's `date + int4`.
+fn eval_untyped_date_day_arithmetic(
+    left: &SqlValue,
+    op: &BinaryOperator,
+    right: &SqlValue,
+) -> Result<Option<SqlValue>> {
+    let is_date = |text: &str| {
+        let text = text.trim();
+        !text.contains(':')
+            && !text.contains(' ')
+            && !text.contains('T')
+            && PgDate::from_postgres_text(text).is_ok()
+    };
+    match (left, op, right) {
+        (SqlValue::String(date), BinaryOperator::Plus | BinaryOperator::Minus, SqlValue::Int(_))
+            if is_date(date) =>
+        {
+            eval_typed_date_arithmetic(left, op, right, Some("date"), Some("int4"))
+        }
+        (SqlValue::Int(_), BinaryOperator::Plus, SqlValue::String(date)) if is_date(date) => {
+            eval_typed_date_arithmetic(left, op, right, Some("int4"), Some("date"))
+        }
+        _ => Ok(None),
     }
 }

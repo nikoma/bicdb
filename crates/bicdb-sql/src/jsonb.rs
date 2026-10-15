@@ -364,7 +364,8 @@ pub(crate) fn eval_json_function_call_value(
 ) -> Result<Option<SqlValue>> {
     let name = function.name.to_string().to_ascii_lowercase();
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
-    let normalized_args = normalize_jsonb_literal_arguments(function, bare_name, args)?;
+    let normalized_args = normalize_jsonb_literal_arguments(function, bare_name, args)?
+        .or_else(|| numeric_arguments_as_json_numbers(function, bare_name, args));
     let args = normalized_args.as_deref().unwrap_or(args);
     if bare_name.ends_with("_encoding_error") {
         return Err(json_output_encoding_error());
@@ -456,6 +457,51 @@ pub(crate) fn eval_json_function_call_value(
         _ => return eval_json_function_value(&name, args),
     };
     apply_json_returning(result, returning).map(Some)
+}
+
+/// A numeric argument (`round(x::numeric, 2)`, `1.5`) is a JSON number in
+/// PostgreSQL's json(b)_build_object/array and to_json(b), not a string.
+fn numeric_arguments_as_json_numbers(
+    function: &Function,
+    name: &str,
+    args: &[SqlValue],
+) -> Option<Vec<SqlValue>> {
+    let value_positions = |index: usize| match name {
+        "json_build_object" | "jsonb_build_object" => index % 2 == 1,
+        "json_build_array" | "jsonb_build_array" | "to_json" | "to_jsonb" => true,
+        _ => false,
+    };
+    if !matches!(
+        name,
+        "json_build_object" | "jsonb_build_object" | "json_build_array" | "jsonb_build_array" | "to_json" | "to_jsonb"
+    ) {
+        return None;
+    }
+    let expressions = crate::function_args(function);
+    let mut normalized = None::<Vec<SqlValue>>;
+    for (index, value) in args.iter().enumerate() {
+        let SqlValue::String(text) = value else {
+            continue;
+        };
+        if !value_positions(index) {
+            continue;
+        }
+        let Some(expr) = expressions.get(index) else {
+            continue;
+        };
+        if !matches!(
+            crate::projected_expr_pg_type(expr, None).as_deref(),
+            Some("numeric" | "decimal")
+        ) {
+            continue;
+        }
+        let Ok(number) = serde_json::from_str::<serde_json::Number>(text.trim()) else {
+            continue;
+        };
+        normalized.get_or_insert_with(|| args.to_vec())[index] =
+            SqlValue::Json(JsonValue::Number(number));
+    }
+    normalized
 }
 
 fn normalize_jsonb_literal_arguments(

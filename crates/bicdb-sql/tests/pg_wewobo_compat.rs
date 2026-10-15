@@ -1978,3 +1978,34 @@ fn date_column_plus_or_minus_an_integer_is_a_day_offset() {
         SELECT COUNT(*)::int FROM g WHERE grp=(SELECT grp FROM last)";
     assert_eq!(rows(&mut s, streak), vec![vec![SqlValue::Int(3)]]);
 }
+
+#[test]
+fn a_column_cast_to_text_compares_as_text_in_lookups_and_joins() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE grants (kind text, scope text)").unwrap();
+    s.execute("CREATE TABLE orgs (id uuid PRIMARY KEY, handle text)").unwrap();
+    s.execute("CREATE TABLE plain (id uuid, handle text)").unwrap();
+    s.execute("CREATE INDEX plain_id ON plain (id)").unwrap();
+    s.execute("INSERT INTO grants VALUES ('user','bob'),('org','00000000-0000-0000-0000-00000000000a')").unwrap();
+    s.execute("INSERT INTO orgs VALUES ('00000000-0000-0000-0000-00000000000a','acme')").unwrap();
+    s.execute("INSERT INTO plain VALUES ('00000000-0000-0000-0000-00000000000a','acme')").unwrap();
+    let rows = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
+    let none: Vec<Vec<SqlValue>> = vec![];
+    assert_eq!(rows(&mut s, "SELECT handle FROM orgs WHERE id::text = 'bob'"), none);
+    assert_eq!(rows(&mut s, "SELECT handle FROM plain WHERE id::text = 'bob'"), none);
+    assert_eq!(rows(&mut s, "SELECT handle FROM orgs WHERE id::text = '00000000-0000-0000-0000-00000000000a'"), vec![vec![text("acme")]]);
+    // A non-canonical spelling is a different text, though it is the same uuid.
+    assert_eq!(rows(&mut s, "SELECT handle FROM orgs WHERE id::text = '00000000-0000-0000-0000-00000000000A'"), none);
+    for table in ["orgs", "plain"] {
+        let sql = format!("SELECT g.scope, o.handle FROM grants g LEFT JOIN {table} o ON g.kind='org' AND o.id::text=g.scope ORDER BY g.scope");
+        assert_eq!(rows(&mut s, &sql), vec![vec![text("00000000-0000-0000-0000-00000000000a"), text("acme")], vec![text("bob"), SqlValue::Null]], "{sql}");
+        let sql = format!("SELECT g.scope FROM grants g WHERE EXISTS (SELECT 1 FROM {table} o WHERE o.id::text=g.scope)");
+        assert_eq!(rows(&mut s, &sql), vec![vec![text("00000000-0000-0000-0000-00000000000a")]], "{sql}");
+    }
+    // Casts that keep equality still find the row.
+    s.execute("CREATE TABLE n (id int PRIMARY KEY, v text)").unwrap();
+    s.execute("INSERT INTO n VALUES (7, 'seven')").unwrap();
+    assert_eq!(rows(&mut s, "SELECT v FROM n WHERE id::bigint = 7"), vec![vec![text("seven")]]);
+    assert_eq!(rows(&mut s, "SELECT id FROM n WHERE v::text = 'seven'"), vec![vec![SqlValue::Int(7)]]);
+}

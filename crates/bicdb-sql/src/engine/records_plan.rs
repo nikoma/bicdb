@@ -1058,7 +1058,7 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         primary_key_columns: &[String],
     ) -> Result<Option<usize>> {
-        let Some(Expr::Identifier(ident)) = normalize_table_field_expr(expr, table, alias, schema)
+        let Some(Expr::Identifier(ident)) = normalize_table_lookup_field_expr(expr, table, alias, schema)
         else {
             return Ok(None);
         };

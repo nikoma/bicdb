@@ -2884,6 +2884,62 @@ pub(crate) fn normalize_table_field_expr(
     }
 }
 
+/// `normalize_table_field_expr` for index, key and column-equality lookups: a
+/// cast over the column is looked through only when it cannot change which
+/// values compare equal (same type, text to text, integer widening). A lossy
+/// cast such as `uuid_col::text = $1` must compare the cast text, never coerce
+/// `$1` to the column type (which fails or matches differently).
+pub(crate) fn normalize_table_lookup_field_expr(
+    expr: &Expr,
+    table: &str,
+    alias: &str,
+    schema: Option<&TableSchema>,
+) -> Option<Expr> {
+    match expr {
+        Expr::Nested(inner) => normalize_table_lookup_field_expr(inner, table, alias, schema),
+        Expr::Cast {
+            expr: inner,
+            data_type,
+            ..
+        } => {
+            let normalized = normalize_table_lookup_field_expr(inner, table, alias, schema)?;
+            let Expr::Identifier(ident) = &normalized else {
+                return Some(normalized);
+            };
+            let Some(column) = schema.and_then(|schema| schema.column(&ident.value)) else {
+                return Some(normalized);
+            };
+            let (target, modifier) = pg_type_from_data_type(data_type).ok()?;
+            (modifier.is_none()
+                && lookup_cast_preserves_equality(
+                    &column.pg_type,
+                    column.user_type.is_some(),
+                    &target,
+                ))
+            .then_some(normalized)
+        }
+        _ => normalize_table_field_expr(expr, table, alias, schema),
+    }
+}
+
+fn lookup_cast_preserves_equality(column_type: &str, user_type: bool, target: &str) -> bool {
+    let text = |pg_type: &str| matches!(pg_type, "text" | "varchar");
+    let integer_rank = |pg_type: &str| match pg_type {
+        "int2" => Some(1),
+        "int4" => Some(2),
+        "int8" => Some(3),
+        _ => None,
+    };
+    if user_type {
+        return false;
+    }
+    column_type == target
+        || (text(column_type) && text(target))
+        || integer_rank(column_type)
+            .zip(integer_rank(target))
+            .is_some_and(|(column, target)| column <= target)
+}
+
 pub(crate) fn target_record_field_from_parts(
     table: &str,
     alias: &str,

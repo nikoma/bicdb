@@ -3217,7 +3217,7 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         field: &IndexField,
     ) -> Result<bool> {
-        let Some(normalized) = normalize_table_field_expr(expr, table, alias, schema) else {
+        let Some(normalized) = normalize_table_lookup_field_expr(expr, table, alias, schema) else {
             return Ok(false);
         };
         match schema {
@@ -3235,7 +3235,7 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         column: &str,
     ) -> Result<bool> {
-        let Some(normalized) = normalize_table_field_expr(expr, table, alias, schema) else {
+        let Some(normalized) = normalize_table_lookup_field_expr(expr, table, alias, schema) else {
             return Ok(false);
         };
         Ok(match normalized {

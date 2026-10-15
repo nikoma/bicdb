@@ -8950,6 +8950,86 @@ fn empty_scalar_subquery_key_updates_and_deletes_no_rows_over_wire() {
     server_thread.join().unwrap();
 }
 
+/// Regression (staging install): with SCRAM logins, after the owner ran
+/// `REVOKE CREATE ON SCHEMA public FROM PUBLIC`, a runtime login holding only
+/// DML grants could still `CREATE TABLE`. ALTER TABLE was already refused.
+#[test]
+fn revoked_public_schema_create_refuses_runtime_ddl_over_wire() {
+    let dir = tempfile::tempdir().unwrap();
+    bicdb_pgwire::create_user(dir.path(), "bicdb", "owner-password").unwrap();
+    bicdb_pgwire::create_user(dir.path(), "bot_runtime", "runtime-password").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(
+        dir.path(),
+        PgWireConfig {
+            require_auth: true,
+            ..PgWireConfig::default()
+        },
+    )
+    .unwrap();
+    let serving = server.clone();
+    let server_thread = thread::spawn(move || {
+        bicdb_pgwire::serve_existing_listener(serving, listener).unwrap();
+    });
+
+    let mut owner = TcpStream::connect(address).unwrap();
+    startup_with_scram(&mut owner, "bicdb", "owner-password");
+    read_until_ready(&mut owner);
+    for sql in [
+        "CREATE TABLE IF NOT EXISTS bot_tasks (id TEXT PRIMARY KEY, state TEXT)",
+        "CREATE ROLE bot_runtime LOGIN",
+        "REVOKE CREATE ON SCHEMA public FROM PUBLIC",
+        "GRANT USAGE ON SCHEMA public TO bot_runtime",
+        "GRANT SELECT, INSERT, UPDATE ON bot_tasks TO bot_runtime",
+    ] {
+        send_query(&mut owner, sql);
+        read_query_rows(&mut owner);
+    }
+
+    let mut runtime = TcpStream::connect(address).unwrap();
+    startup_with_scram(&mut runtime, "bot_runtime", "runtime-password");
+    read_until_ready(&mut runtime);
+    send_query(&mut runtime, "SELECT COUNT(*) FROM bot_tasks");
+    assert_eq!(read_query_rows(&mut runtime), vec![vec!["0".to_string()]]);
+    for sql in [
+        "BEGIN; ALTER TABLE bot_tasks ADD COLUMN unauthorized TEXT; ROLLBACK",
+        "BEGIN; CREATE TABLE unauthorized (id TEXT); ROLLBACK",
+        "CREATE TABLE unauthorized (id TEXT)",
+        "CREATE VIEW unauthorized_view AS SELECT id FROM bot_tasks",
+        "CREATE SEQUENCE unauthorized_seq",
+        "CREATE FUNCTION unauthorized_fn() RETURNS INT LANGUAGE SQL AS $$ SELECT 1 $$",
+    ] {
+        send_query(&mut runtime, sql);
+        let error = read_error_response(&mut runtime);
+        assert!(error.contains("42501"), "{sql}: {error}");
+        send_query(&mut runtime, "ROLLBACK");
+        read_until_ready(&mut runtime);
+    }
+    send_query(
+        &mut runtime,
+        "INSERT INTO bot_tasks VALUES ('t1', 'queued')",
+    );
+    read_query_rows(&mut runtime);
+
+    // The migration login keeps creating objects after the lockdown.
+    send_query(
+        &mut owner,
+        "CREATE TABLE bot_migrated (id TEXT PRIMARY KEY)",
+    );
+    read_query_rows(&mut owner);
+    send_query(
+        &mut owner,
+        "SELECT count(*) FROM pg_class WHERE relname = 'unauthorized'",
+    );
+    assert_eq!(read_query_rows(&mut owner), vec![vec!["0".to_string()]]);
+
+    runtime.write_all(b"X\0\0\0\x04").unwrap();
+    owner.write_all(b"X\0\0\0\x04").unwrap();
+    server.request_shutdown();
+    server_thread.join().unwrap();
+}
+
 /// Regression: on an authenticated server an autocommit DELETE wrote its
 /// tombstones straight into the segment log, so after a restart the deleted
 /// rows came back and a re-inserted unique key made the server refuse to open

@@ -2113,7 +2113,8 @@ pub(crate) fn validate_sequence_value(
     Ok(())
 }
 
-pub(crate) fn raw_create_sequence(sql: &str) -> Result<Option<(SequenceSchema, bool)>> {
+/// Returns the target schema, the sequence, and IF NOT EXISTS.
+pub(crate) fn raw_create_sequence(sql: &str) -> Result<Option<(String, SequenceSchema, bool)>> {
     // The raw compatibility parser normalizes the whole statement. Quoted
     // identifiers must retain their exact identity, so let the AST path handle
     // those statements.
@@ -2259,7 +2260,15 @@ pub(crate) fn raw_create_sequence(sql: &str) -> Result<Option<(SequenceSchema, b
     }
     sequence.last_value = sequence.start_value;
     validate_sequence_schema(&sequence)?;
-    Ok(Some((sequence, if_not_exists)))
+    let schema = match name.rsplit_once('.') {
+        Some((qualifier, _)) => qualifier
+            .rsplit('.')
+            .next()
+            .unwrap_or(qualifier)
+            .to_string(),
+        None => "public".to_string(),
+    };
+    Ok(Some((schema, sequence, if_not_exists)))
 }
 
 pub(crate) fn raw_sequence_option_i64(value: Option<&&str>, label: &str) -> Result<i64> {

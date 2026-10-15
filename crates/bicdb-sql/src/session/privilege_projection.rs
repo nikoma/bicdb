@@ -4,10 +4,7 @@ use super::*;
 
 impl<'db> SqlSession<'db> {
     pub(crate) fn save_session_privilege(&mut self, grant: &PrivilegeGrant) -> Result<()> {
-        let existed = self.tx.is_some()
-            && list_privileges(self.db_ref())?
-                .into_iter()
-                .any(|existing| existing == *grant);
+        let existed = self.tx.is_some() && privilege_exists(self.db_ref(), grant)?;
         save_privilege(self.db_mut()?, grant)?;
         if self.tx.is_some() && !existed {
             self.ddl_undo.push(DdlUndo::DeletePrivilege {
@@ -18,10 +15,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn delete_session_privilege(&mut self, grant: &PrivilegeGrant) -> Result<()> {
-        let existed = self.tx.is_some()
-            && list_privileges(self.db_ref())?
-                .into_iter()
-                .any(|existing| existing == *grant);
+        let existed = self.tx.is_some() && privilege_exists(self.db_ref(), grant)?;
         delete_privilege(self.db_mut()?, grant)?;
         if self.tx.is_some() && existed {
             self.ddl_undo.push(DdlUndo::RestorePrivilege {
@@ -163,6 +157,7 @@ impl<'db> SqlSession<'db> {
         if_not_exists: bool,
         or_replace: bool,
     ) -> Result<()> {
+        self.require_schema_create_privilege(&routine.schema)?;
         if load_routine(self.db_ref(), routine.kind, &routine.name)?.is_some() {
             if if_not_exists {
                 return Ok(());
@@ -204,6 +199,7 @@ impl<'db> SqlSession<'db> {
 
         let table = relation_name(&create_table.name)?;
         let schema_name = relation_schema_name(&create_table.name);
+        self.require_schema_create_privilege(&schema_name)?;
         if !matches!(
             schema_name.as_str(),
             "public" | "pg_catalog" | "information_schema"
@@ -476,6 +472,7 @@ impl<'db> SqlSession<'db> {
         representation: Option<&UserDefinedTypeRepresentation>,
     ) -> Result<SqlResult> {
         let (schema_name, name) = user_type_identity(name)?;
+        self.require_schema_create_privilege(&schema_name)?;
         let existing = load_user_type(self.db_ref(), &schema_name, &name)?;
         let finalizing_shell = matches!(
             (
@@ -956,6 +953,7 @@ impl<'db> SqlSession<'db> {
         create_domain: &sqlparser::ast::CreateDomain,
     ) -> Result<SqlResult> {
         let (schema_name, name) = user_type_identity(&create_domain.name)?;
+        self.require_schema_create_privilege(&schema_name)?;
         if (schema_name == "pg_catalog" && pg_type_oid_by_name(&name).is_some())
             || load_user_type(self.db_ref(), &schema_name, &name)?.is_some()
             || list_schemas(self.db_ref())?

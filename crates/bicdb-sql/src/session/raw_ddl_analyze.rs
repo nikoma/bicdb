@@ -34,12 +34,13 @@ impl<'db> SqlSession<'db> {
         }
         let mut sequences = Vec::new();
         for statement in &statements {
-            let Some((sequence, if_not_exists)) = raw_create_sequence(statement)? else {
+            let Some((schema, sequence, if_not_exists)) = raw_create_sequence(statement)? else {
                 return Ok(None);
             };
-            sequences.push((sequence, if_not_exists));
+            sequences.push((schema, sequence, if_not_exists));
         }
-        for (sequence, if_not_exists) in sequences {
+        for (schema, sequence, if_not_exists) in sequences {
+            self.require_schema_create_privilege(&schema)?;
             self.create_session_sequence_if_missing(sequence, if_not_exists)?;
         }
         Ok(Some(SqlResult::command("CREATE SEQUENCE")))
@@ -337,6 +338,8 @@ impl<'db> SqlSession<'db> {
                 change.schema_name
             )));
         }
+        // Moving an object into a schema creates it there.
+        self.require_schema_create_privilege(&change.schema_name)?;
         if schema.schema_name.eq_ignore_ascii_case(&change.schema_name) {
             return Ok(());
         }
@@ -391,6 +394,7 @@ impl<'db> SqlSession<'db> {
         &mut self,
         definition: RawCreateTableLike,
     ) -> Result<()> {
+        self.require_schema_create_privilege(&definition.schema_name)?;
         if !matches!(
             definition.schema_name.as_str(),
             "public" | "pg_catalog" | "information_schema"
@@ -526,6 +530,7 @@ impl<'db> SqlSession<'db> {
         &mut self,
         partition: RawCreatePartitionTable,
     ) -> Result<()> {
+        self.require_schema_create_privilege(&partition.partition_schema)?;
         if !matches!(
             partition.partition_schema.as_str(),
             "public" | "pg_catalog" | "information_schema"
@@ -1472,6 +1477,7 @@ impl<'db> SqlSession<'db> {
         if_not_exists: bool,
     ) -> Result<SqlResult> {
         let name = schema_name_value(schema_name)?;
+        self.require_database_create_privilege()?;
         let owner = match schema_name {
             SchemaName::Simple(_) => current_user_from_gucs(&self.session_gucs),
             SchemaName::NamedAuthorization(_, owner) | SchemaName::UnnamedAuthorization(owner) => {

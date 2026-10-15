@@ -2435,6 +2435,17 @@ impl<'db> SqlSession<'db> {
                         grantee: role.clone(),
                         privilege: privilege.clone(),
                     };
+                    if role == "public"
+                        && column.is_none()
+                        && is_implicit_public_privilege(*object_type, object_name, privilege)
+                    {
+                        let marker = revoked_default_marker(*object_type, object_name, privilege);
+                        if grant {
+                            self.delete_session_privilege(&marker)?;
+                        } else {
+                            self.save_session_privilege(&marker)?;
+                        }
+                    }
                     if grant {
                         self.save_session_privilege(&grant_row)?;
                     } else {

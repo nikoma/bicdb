@@ -216,6 +216,7 @@ impl<'db> SqlSession<'db> {
         }
 
         let view = relation_name(&create_view.name)?;
+        self.require_schema_create_privilege(&relation_schema_name(&create_view.name))?;
         if load_schema(self.db_ref(), &view)?.is_some()
             || load_sequence(self.db_ref(), &view)?.is_some()
             || user_collection_names(self.db_ref())
@@ -386,6 +387,7 @@ impl<'db> SqlSession<'db> {
         } else {
             "int8".to_string()
         };
+        self.require_schema_create_privilege(&relation_schema_name(name))?;
         let sequence_name = relation_name(name)?;
         let mut sequence =
             sequence_from_options(sequence_name, &sequence_data_type, sequence_options)?;

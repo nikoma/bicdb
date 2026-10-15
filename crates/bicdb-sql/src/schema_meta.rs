@@ -2168,7 +2168,168 @@ pub(crate) fn list_privileges(db: &BicDb) -> Result<Vec<PrivilegeGrant>> {
     records
         .into_iter()
         .map(|record| serde_json::from_value::<PrivilegeGrant>(record.metadata).map_err(Into::into))
+        // Revoked-default markers are not grants; see `revoked_default_marker`.
+        .filter(|grant| {
+            grant.as_ref().map_or(true, |grant| {
+                !grant.privilege.starts_with(REVOKED_DEFAULT_PREFIX)
+            })
+        })
         .collect()
+}
+
+pub(crate) fn privilege_exists(db: &BicDb, grant: &PrivilegeGrant) -> Result<bool> {
+    match db.get(PRIVILEGE_COLLECTION, &privilege_key(grant)) {
+        Ok(record) => Ok(record.is_some()),
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Privilege-name prefix of a revoked-default marker row.
+const REVOKED_DEFAULT_PREFIX: &str = "revoked_default:";
+
+/// Privileges PUBLIC holds without any stored grant, for compatibility with
+/// every BicDB database created before CREATE was enforced (and with
+/// PostgreSQL <= 14): CREATE on the `public` schema, and CREATE on a database
+/// (which is what lets anyone run `CREATE SCHEMA`). PostgreSQL 15+ grants
+/// neither by default; BicDB keeps them so upgrades do not break existing
+/// applications, and an explicit `REVOKE ... FROM PUBLIC` records a marker
+/// that takes the default away.
+pub(crate) fn is_implicit_public_privilege(
+    object_type: PrivilegeObjectType,
+    object_name: &str,
+    privilege: &str,
+) -> bool {
+    privilege.eq_ignore_ascii_case("CREATE")
+        && match object_type {
+            PrivilegeObjectType::Schema => object_name.eq_ignore_ascii_case("public"),
+            PrivilegeObjectType::Database => true,
+            _ => false,
+        }
+}
+
+/// The durable "PUBLIC's implicit privilege was revoked" record. It lives in
+/// the privilege catalog so that it shares the catalog's transactional undo,
+/// and is filtered out of `list_privileges` because it is not a grant.
+pub(crate) fn revoked_default_marker(
+    object_type: PrivilegeObjectType,
+    object_name: &str,
+    privilege: &str,
+) -> PrivilegeGrant {
+    PrivilegeGrant {
+        column: None,
+        object_type,
+        object_name: object_name.to_string(),
+        grantee: "public".to_string(),
+        privilege: format!("{REVOKED_DEFAULT_PREFIX}{}", privilege.to_ascii_uppercase()),
+    }
+}
+
+fn public_holds_implicit_privilege(
+    db: &BicDb,
+    object_type: PrivilegeObjectType,
+    object_name: &str,
+    privilege: &str,
+) -> Result<bool> {
+    Ok(
+        is_implicit_public_privilege(object_type, object_name, privilege)
+            && !privilege_exists(
+                db,
+                &revoked_default_marker(object_type, object_name, privilege),
+            )?,
+    )
+}
+
+fn closure_holds_grant(
+    db: &BicDb,
+    closure: &BTreeSet<String>,
+    object_type: PrivilegeObjectType,
+    object_name: &str,
+    privilege: &str,
+) -> Result<bool> {
+    if public_holds_implicit_privilege(db, object_type, object_name, privilege)? {
+        return Ok(true);
+    }
+    Ok(list_privileges(db)?.into_iter().any(|grant| {
+        grant.object_type == object_type
+            && grant.column.is_none()
+            && grant.object_name.eq_ignore_ascii_case(object_name)
+            && grant.privilege.eq_ignore_ascii_case(privilege)
+            && (grant.grantee.eq_ignore_ascii_case("public")
+                || closure.contains(&normalize_role_name(&grant.grantee)))
+    }))
+}
+
+fn role_is_superuser(db: &BicDb, role: &str) -> Result<bool> {
+    Ok(role == BOOTSTRAP_ROLE_NAME
+        || role_schema_shared(db, role)?.is_some_and(|role| role.superuser))
+}
+
+fn database_owner(db: &BicDb, database: &str) -> Result<String> {
+    Ok(list_databases(db)?
+        .into_iter()
+        .find(|candidate| candidate.name.eq_ignore_ascii_case(database))
+        .map(|candidate| candidate.owner)
+        .unwrap_or_else(|| BOOTSTRAP_ROLE_NAME.to_string()))
+}
+
+/// CREATE on a database: what `CREATE SCHEMA` requires.
+pub(crate) fn role_can_create_in_database(db: &BicDb, role: &str, database: &str) -> Result<bool> {
+    let role = normalize_role_name(role);
+    if role_is_superuser(db, &role)? {
+        return Ok(true);
+    }
+    let closure = role_privilege_closure(db, &role)?;
+    if closure.contains(&normalize_role_name(&database_owner(db, database)?)) {
+        return Ok(true);
+    }
+    closure_holds_grant(
+        db,
+        &closure,
+        PrivilegeObjectType::Database,
+        &database.to_ascii_lowercase(),
+        "CREATE",
+    )
+}
+
+/// CREATE on a schema: what creating any object inside it requires.
+///
+/// Granted to superusers, holders of the schema's owner role, explicit
+/// grantees (directly, through membership, or via PUBLIC), and PUBLIC's
+/// implicit privilege on `public` unless it was revoked. As in PostgreSQL 15+
+/// (where `public` belongs to `pg_database_owner`), the owner of `database`
+/// may always create in `public`. `pg_catalog` and `information_schema` are
+/// reserved for superusers. Returns `None` when the schema does not exist,
+/// so the caller can apply the database-level CREATE that creating it needs.
+pub(crate) fn role_can_create_in_schema(
+    db: &BicDb,
+    role: &str,
+    schema: &str,
+    database: Option<&str>,
+) -> Result<Option<bool>> {
+    let role = normalize_role_name(role);
+    let schema = schema.to_ascii_lowercase();
+    if role_is_superuser(db, &role)? {
+        return Ok(Some(true));
+    }
+    if matches!(schema.as_str(), "pg_catalog" | "information_schema") {
+        return Ok(Some(false));
+    }
+    let owner = match load_namespace(db, &schema)? {
+        Some(namespace) => namespace.owner,
+        None if schema == "public" => BOOTSTRAP_ROLE_NAME.to_string(),
+        None => return Ok(None),
+    };
+    let closure = role_privilege_closure(db, &role)?;
+    if closure.contains(&normalize_role_name(&owner)) {
+        return Ok(Some(true));
+    }
+    if let (true, Some(database)) = (schema == "public", database) {
+        if closure.contains(&normalize_role_name(&database_owner(db, database)?)) {
+            return Ok(Some(true));
+        }
+    }
+    closure_holds_grant(db, &closure, PrivilegeObjectType::Schema, &schema, "CREATE").map(Some)
 }
 
 pub(crate) fn privilege_key(grant: &PrivilegeGrant) -> String {
@@ -2892,6 +3053,9 @@ pub(crate) fn has_schema_privilege(db: &BicDb, args: &[SqlValue]) -> Result<bool
     let role = role.unwrap_or_else(current_role_name);
     if role == current_role_name() && is_known_schema(&schema) {
         return Ok(true);
+    }
+    if privilege == "CREATE" {
+        return Ok(role_can_create_in_schema(db, &role, &schema, None)?.unwrap_or(false));
     }
     Ok(list_privileges(db)?.into_iter().any(|grant| {
         grant.object_type == PrivilegeObjectType::Schema

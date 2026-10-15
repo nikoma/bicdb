@@ -4251,6 +4251,37 @@ impl<'db> SqlSession<'db> {
         ))))
     }
 
+    /// CREATE on the schema that will hold a new table, view, sequence, type,
+    /// domain or routine. Before this, nothing consulted it, so
+    /// `REVOKE CREATE ON SCHEMA public FROM PUBLIC` silently left every login
+    /// able to create objects. A schema that does not exist yet (several
+    /// CREATE paths create it on the fly) needs CREATE on the database, which
+    /// is what `CREATE SCHEMA` itself requires.
+    pub(crate) fn require_schema_create_privilege(&self, schema: &str) -> Result<()> {
+        let schema = normalize_object_name(schema);
+        let role = current_user_from_gucs(&self.session_gucs);
+        let database = current_database_from_gucs(&self.session_gucs);
+        match role_can_create_in_schema(self.db_ref(), &role, &schema, Some(&database))? {
+            Some(true) => Ok(()),
+            Some(false) => Err(SqlError::BicDb(BicDbError::Authorization(format!(
+                "permission denied for schema {schema}"
+            )))),
+            None => self.require_database_create_privilege(),
+        }
+    }
+
+    /// CREATE on the current database, required by `CREATE SCHEMA`.
+    pub(crate) fn require_database_create_privilege(&self) -> Result<()> {
+        let role = current_user_from_gucs(&self.session_gucs);
+        let database = current_database_from_gucs(&self.session_gucs);
+        if role_can_create_in_database(self.db_ref(), &role, &database)? {
+            return Ok(());
+        }
+        Err(SqlError::BicDb(BicDbError::Authorization(format!(
+            "permission denied for database {database}"
+        ))))
+    }
+
     /// Instance-wide operations with no per-table scope: extension install and
     /// activation (executable WASM that registers HTTP routes, event handlers
     /// and queue consumers), audit-history trimming, and the store-wide
@@ -4751,6 +4782,8 @@ impl<'db> SqlSession<'db> {
                 {
                     return Err(SqlError::InvalidCollection(schema_name));
                 }
+                // Moving an object into a schema creates it there.
+                self.require_schema_create_privilege(&schema_name)?;
                 if schema_name.eq_ignore_ascii_case(&user_type.schema_name) {
                     return Ok(Some(SqlResult::command(if domain {
                         "ALTER DOMAIN"

@@ -1095,3 +1095,28 @@ fn coalesce_resolves_an_untyped_literal_to_the_other_arguments_type() {
     let described = bicdb_sql::infer_query_result_types(&db, sql).unwrap();
     assert_eq!(described, Some(vec![text_array()]));
 }
+
+#[test]
+fn quantified_comparison_over_a_subquery_compares_with_every_row() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE a (id int PRIMARY KEY, grp int, v int)").unwrap();
+    s.execute("CREATE TABLE b (grp int, w int)").unwrap();
+    s.execute("INSERT INTO a SELECT i, i % 3, i FROM generate_series(1, 10) i").unwrap();
+    s.execute("INSERT INTO a VALUES (11, 0, NULL)").unwrap();
+    s.execute("INSERT INTO b VALUES (0, 3), (0, 6), (1, 4), (1, 5), (2, 8), (2, NULL)").unwrap();
+    let ids = |s: &mut SqlSession, sql: &str| -> Vec<SqlValue> {
+        s.execute(sql).unwrap().rows.into_iter().map(|row| row[0].clone()).collect()
+    };
+    let ints = |values: &[i64]| values.iter().map(|v| SqlValue::Int(*v)).collect::<Vec<_>>();
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v = ANY (SELECT w FROM b) ORDER BY id"), ints(&[3, 4, 5, 6, 8]));
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v = SOME (SELECT w FROM b WHERE w IS NOT NULL) ORDER BY id"), ints(&[3, 4, 5, 6, 8]));
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v = ANY (SELECT w FROM b WHERE b.grp = a.grp) ORDER BY id"), ints(&[3, 4, 6, 8]));
+    // ALL: true over no rows; a NULL in the list makes a non-failing comparison unknown.
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v > ALL (SELECT w FROM b WHERE w IS NOT NULL) ORDER BY id"), ints(&[9, 10]));
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v > ALL (SELECT w FROM b) ORDER BY id"), ints(&[]));
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v < ALL (SELECT w FROM b WHERE false) ORDER BY id"), ints(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]));
+    assert_eq!(ids(&mut s, "SELECT count(*) FROM a WHERE NOT (v = ANY (SELECT w FROM b))"), ints(&[0]));
+    assert_eq!(ids(&mut s, "SELECT count(*) FROM a WHERE NOT (v = ANY (SELECT w FROM b WHERE w IS NOT NULL))"), ints(&[5]));
+    assert!(s.execute("SELECT id FROM a WHERE v = ANY (SELECT w, grp FROM b)").is_err());
+}

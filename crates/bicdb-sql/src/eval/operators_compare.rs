@@ -1688,13 +1688,21 @@ pub(crate) fn eval_quantified_truth(
             ));
         }
     };
-    if values.is_empty() {
-        return Ok(Some(all));
-    }
+    eval_quantified_values_truth(&left, op, values.iter(), all)
+}
+
+/// `left op ANY/ALL (values)` with SQL three-valued logic; also the
+/// `ANY/ALL (subquery)` form over the subquery's single column.
+pub(crate) fn eval_quantified_values_truth<'a>(
+    left: &SqlValue,
+    op: &BinaryOperator,
+    values: impl Iterator<Item = &'a SqlValue>,
+    all: bool,
+) -> Result<Option<bool>> {
     let mut saw_null = false;
     let mut any_true = false;
     for value in values {
-        match compare_values(&left, op, &value)? {
+        match compare_values(left, op, value)? {
             Some(true) if !all => return Ok(Some(true)),
             Some(false) if all => return Ok(Some(false)),
             Some(true) => any_true = true,

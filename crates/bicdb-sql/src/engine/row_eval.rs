@@ -682,22 +682,25 @@ impl<'db> SqlEngine<'db> {
                 compare_op,
                 right,
                 ..
-            } => eval_quantified_truth(
-                self.eval_slot_row_value(row, context, left)?,
-                compare_op,
-                self.eval_slot_row_value(row, context, right)?,
-                false,
-            ),
-            Expr::AllOp {
+            }
+            | Expr::AllOp {
                 left,
                 compare_op,
                 right,
-            } => eval_quantified_truth(
-                self.eval_slot_row_value(row, context, left)?,
-                compare_op,
-                self.eval_slot_row_value(row, context, right)?,
-                true,
-            ),
+            } => {
+                let all = matches!(expr, Expr::AllOp { .. });
+                let left = self.eval_slot_row_value(row, context, left)?;
+                if let Some(query) = quantified_subquery(right) {
+                    let result = self.execute_correlated_slot_query(row, context, query)?;
+                    return eval_quantified_subquery_truth(&left, compare_op, &result, all);
+                }
+                eval_quantified_truth(
+                    left,
+                    compare_op,
+                    self.eval_slot_row_value(row, context, right)?,
+                    all,
+                )
+            }
             Expr::IsNull(expr) => Ok(Some(value_is_null_predicate(
                 &self.eval_slot_row_value(row, context, expr)?,
             ))),
@@ -2187,22 +2190,20 @@ impl<'db> SqlEngine<'db> {
                 compare_op,
                 right,
                 ..
-            } => eval_quantified_truth(
-                self.eval_row_value(row, left)?,
-                compare_op,
-                self.eval_row_value(row, right)?,
-                false,
-            ),
-            Expr::AllOp {
+            }
+            | Expr::AllOp {
                 left,
                 compare_op,
                 right,
-            } => eval_quantified_truth(
-                self.eval_row_value(row, left)?,
-                compare_op,
-                self.eval_row_value(row, right)?,
-                true,
-            ),
+            } => {
+                let all = matches!(expr, Expr::AllOp { .. });
+                let left = self.eval_row_value(row, left)?;
+                if let Some(query) = quantified_subquery(right) {
+                    let result = self.execute_correlated_query(row, query)?;
+                    return eval_quantified_subquery_truth(&left, compare_op, &result, all);
+                }
+                eval_quantified_truth(left, compare_op, self.eval_row_value(row, right)?, all)
+            }
             Expr::IsNull(expr) => Ok(Some(value_is_null_predicate(
                 &self.eval_row_value(row, expr)?,
             ))),
@@ -3002,6 +3003,37 @@ fn array_subquery(function: &Function) -> Option<&Query> {
         FunctionArguments::Subquery(query) => Some(query),
         _ => None,
     }
+}
+
+/// The subquery of `x op ANY (SELECT ...)` / `ALL (SELECT ...)`.
+fn quantified_subquery(right: &Expr) -> Option<&Query> {
+    match right {
+        Expr::Subquery(query) => Some(query),
+        Expr::Nested(inner) => quantified_subquery(inner),
+        _ => None,
+    }
+}
+
+fn eval_quantified_subquery_truth(
+    left: &SqlValue,
+    op: &BinaryOperator,
+    result: &SqlResult,
+    all: bool,
+) -> Result<Option<bool>> {
+    if result.columns.len() != 1 {
+        return Err(SqlError::InvalidSql(
+            "subquery has too many columns".to_string(),
+        ));
+    }
+    eval_quantified_values_truth(
+        left,
+        op,
+        result
+            .rows
+            .iter()
+            .map(|row| row.first().unwrap_or(&SqlValue::Null)),
+        all,
+    )
 }
 
 /// Per-engine memo of uncorrelated row-expression subquery results. Entries

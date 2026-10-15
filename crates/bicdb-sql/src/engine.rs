@@ -15,6 +15,7 @@ mod pg_catalog;
 mod predicates_locators;
 mod records_plan;
 mod row_eval;
+pub(crate) use row_eval::SubqueryMemo;
 mod row_locks;
 mod scan_fts;
 
@@ -3229,6 +3230,9 @@ pub struct SqlEngine<'db> {
     pub(crate) rowid_index_lookup_cache: RowIdIndexLookupCache,
     pub(crate) record_lookup_cache: RecordLookupCache,
     pub(crate) bound_var_cache: BoundVarCache,
+    /// Results of uncorrelated subqueries in row predicates, kept for the
+    /// outermost `execute_query` call on this engine (see `SubqueryMemo`).
+    pub(crate) subquery_memo: SubqueryMemo,
     /// Memoizes `bound_row_context` results. A `SqlEngine` binds
     /// `routine_vars` once at construction and never reassigns it, so for a given
     /// column layout the scope and context are stable for the engine's lifetime.
@@ -3362,6 +3366,7 @@ impl<'db> SqlEngine<'db> {
             rowid_index_lookup_cache: Rc::new(RefCell::new(FxHashMap::default())),
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
             bound_var_cache: RefCell::new(None),
+            subquery_memo: SubqueryMemo::default(),
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
@@ -3394,6 +3399,7 @@ impl<'db> SqlEngine<'db> {
             rowid_index_lookup_cache: Rc::new(RefCell::new(FxHashMap::default())),
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
             bound_var_cache: RefCell::new(None),
+            subquery_memo: SubqueryMemo::default(),
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
@@ -3446,6 +3452,7 @@ impl<'db> SqlEngine<'db> {
             rowid_index_lookup_cache,
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
             bound_var_cache: RefCell::new(None),
+            subquery_memo: SubqueryMemo::default(),
             bound_context_cache,
             cancellation,
             fts_limits,
@@ -3480,6 +3487,7 @@ impl<'db> SqlEngine<'db> {
             rowid_index_lookup_cache: Rc::new(RefCell::new(FxHashMap::default())),
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
             bound_var_cache: RefCell::new(None),
+            subquery_memo: SubqueryMemo::default(),
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
@@ -4027,6 +4035,13 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
+        self.subquery_memo.enter();
+        let result = self.execute_query_unscoped(query);
+        self.subquery_memo.leave();
+        result
+    }
+
+    fn execute_query_unscoped(&self, query: &Query) -> Result<SqlResult> {
         self.check_cancellation()?;
         if let Some(rewritten) = rewrite_ordinal_order_by(query, &|relation| {
             table_factor_column_names(self.db, relation)
@@ -4453,9 +4468,7 @@ pub(crate) fn extend_outer_slot_context(
     let Some(existing) = existing else {
         return OuterSlotRow::from_slot(columns, row);
     };
-    let values = merge_slot_rows(&existing.values, existing.columns(), row, columns);
-    let columns = merge_row_set_columns(existing.columns().to_vec(), columns.to_vec());
-    OuterSlotRow::new(columns, values)
+    existing.extend(columns, row)
 }
 
 pub(crate) fn extend_outer_slot_context_from_sql_row(
@@ -4463,7 +4476,10 @@ pub(crate) fn extend_outer_slot_context_from_sql_row(
     row: &SqlRow,
 ) -> OuterSlotRow {
     let row = OuterSlotRow::from_sql_row(row);
-    extend_outer_slot_context(existing, row.columns(), &row.values)
+    match existing {
+        Some(existing) => existing.extend(row.columns(), row.values_unprobed()),
+        None => row,
+    }
 }
 
 impl<'db> SqlEngine<'db> {
@@ -4572,6 +4588,7 @@ impl<'db> SqlEngine<'db> {
             rowid_index_lookup_cache: self.rowid_index_lookup_cache.clone(),
             record_lookup_cache: self.record_lookup_cache.clone(),
             bound_var_cache: RefCell::new(None),
+            subquery_memo: SubqueryMemo::default(),
             bound_context_cache: Rc::new(RefCell::new(BTreeMap::new())),
             cancellation: self.cancellation.clone(),
             fts_limits: self.fts_limits,

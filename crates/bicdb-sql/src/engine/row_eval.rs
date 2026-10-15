@@ -636,17 +636,23 @@ impl<'db> SqlEngine<'db> {
                     return Ok(truth);
                 }
                 let value = self.eval_slot_row_value(row, context, expr)?;
-                let values =
-                    self.execute_correlated_slot_subquery_values(row, context, subquery)?;
-                let matched = values
-                    .iter()
-                    .any(|candidate| values_equal(&value, candidate));
+                let result = self.execute_correlated_slot_query(row, context, subquery)?;
+                if result.columns.len() != 1 {
+                    return Err(SqlError::InvalidSql(
+                        "IN subquery must return one column".to_string(),
+                    ));
+                }
+                let values = || {
+                    result
+                        .rows
+                        .iter()
+                        .map(|row| row.first().unwrap_or(&SqlValue::Null))
+                };
+                let matched = values().any(|candidate| values_equal(&value, candidate));
                 if matched {
                     Ok(Some(!*negated))
                 } else if matches!(value, SqlValue::Null)
-                    || values
-                        .iter()
-                        .any(|candidate| matches!(candidate, SqlValue::Null))
+                    || values().any(|candidate| matches!(candidate, SqlValue::Null))
                 {
                     Ok(None)
                 } else {
@@ -1487,17 +1493,54 @@ impl<'db> SqlEngine<'db> {
         let result = self.execute_correlated_slot_query(row, context, query);
         sql_profile_scalar_subquery_elapsed(started);
         let result = result?;
-        scalar_subquery_value(result)
+        scalar_subquery_value(Rc::unwrap_or_clone(result))
     }
 
+    /// Runs a subquery of a row expression for one row. A subquery whose run
+    /// never reads the outer row is uncorrelated: its result is kept for the
+    /// rest of the statement instead of being recomputed for every row.
     pub(crate) fn execute_correlated_slot_query(
         &self,
         row: &SlotRow,
         context: &BoundRowContext,
         query: &Query,
+    ) -> Result<Rc<SqlResult>> {
+        let columns = context.row_lookup.columns();
+        match self.subquery_memo.lookup(query, columns) {
+            MemoLookup::Inactive | MemoLookup::Correlated => {
+                return self
+                    .run_slot_subquery(row, context, query, None)
+                    .map(Rc::new);
+            }
+            MemoLookup::Hit(result) => return Ok(result),
+            MemoLookup::Miss => {}
+        }
+        if !subquery_is_memoizable(self.db_ref(), query) {
+            self.subquery_memo.store(query, columns, None);
+            return self
+                .run_slot_subquery(row, context, query, None)
+                .map(Rc::new);
+        }
+        let probe = Rc::new(std::cell::Cell::new(false));
+        let result = Rc::new(self.run_slot_subquery(row, context, query, Some(probe.clone()))?);
+        let correlated = probe.get();
+        self.subquery_memo
+            .store(query, columns, (!correlated).then(|| result.clone()));
+        Ok(result)
+    }
+
+    fn run_slot_subquery(
+        &self,
+        row: &SlotRow,
+        context: &BoundRowContext,
+        query: &Query,
+        probe: Option<Rc<std::cell::Cell<bool>>>,
     ) -> Result<SqlResult> {
-        let outer_row =
+        let mut outer_row =
             extend_outer_slot_context(self.outer_row.as_ref(), context.row_lookup.columns(), row);
+        if let Some(probe) = probe {
+            outer_row = outer_row.with_read_probe(probe);
+        }
         self.inherit_transaction(SqlEngine::with_ctes_and_context(
             self.db_ref(),
             self.settings,
@@ -1518,7 +1561,7 @@ impl<'db> SqlEngine<'db> {
         query: &Query,
     ) -> Result<Vec<SqlValue>> {
         let result = self.execute_correlated_slot_query(row, context, query)?;
-        subquery_values(result)
+        subquery_values(Rc::unwrap_or_clone(result))
     }
 
     pub(crate) fn eval_slot_row_tuple_in_subquery_truth(
@@ -1539,7 +1582,7 @@ impl<'db> SqlEngine<'db> {
         }
         Ok(Some(eval_tuple_in_rows_truth(
             &value,
-            result.rows,
+            Rc::unwrap_or_clone(result).rows,
             negated,
         )?))
     }
@@ -2959,4 +3002,174 @@ fn array_subquery(function: &Function) -> Option<&Query> {
         FunctionArguments::Subquery(query) => Some(query),
         _ => None,
     }
+}
+
+/// Per-engine memo of uncorrelated row-expression subquery results. Entries
+/// live only while an `execute_query` call on the engine is running, so a
+/// result never outlives the statement that computed it. Entries are keyed by
+/// the subquery's address and the outer row's column layout (which decides how
+/// names resolve); a cached result is also checked against a copy of the
+/// subquery, so a reused address can never return another query's result.
+#[derive(Debug, Default)]
+pub(crate) struct SubqueryMemo {
+    depth: std::cell::Cell<usize>,
+    entries: RefCell<Vec<SubqueryMemoEntry>>,
+}
+
+#[derive(Debug)]
+struct SubqueryMemoEntry {
+    address: usize,
+    columns: Vec<String>,
+    /// `None`: correlated or not memoizable; run the subquery for every row.
+    cached: Option<(Box<Query>, Rc<SqlResult>)>,
+}
+
+enum MemoLookup {
+    Inactive,
+    Miss,
+    Correlated,
+    Hit(Rc<SqlResult>),
+}
+
+/// Bounds the memo; past it, further subqueries simply run per row.
+const SUBQUERY_MEMO_MAX_ENTRIES: usize = 64;
+
+impl SubqueryMemo {
+    pub(crate) fn enter(&self) {
+        self.depth.set(self.depth.get() + 1);
+    }
+
+    pub(crate) fn leave(&self) {
+        let depth = self.depth.get().saturating_sub(1);
+        self.depth.set(depth);
+        if depth == 0 {
+            self.entries.borrow_mut().clear();
+        }
+    }
+
+    fn lookup(&self, query: &Query, columns: &[String]) -> MemoLookup {
+        if self.depth.get() == 0 {
+            return MemoLookup::Inactive;
+        }
+        let address = query as *const Query as usize;
+        let mut entries = self.entries.borrow_mut();
+        let Some(index) = entries
+            .iter()
+            .position(|entry| entry.address == address && entry.columns == columns)
+        else {
+            return if entries.len() >= SUBQUERY_MEMO_MAX_ENTRIES {
+                MemoLookup::Correlated
+            } else {
+                MemoLookup::Miss
+            };
+        };
+        match &entries[index].cached {
+            None => MemoLookup::Correlated,
+            Some((cached, result)) if cached.as_ref() == query => MemoLookup::Hit(result.clone()),
+            Some(_) => {
+                entries.swap_remove(index);
+                MemoLookup::Miss
+            }
+        }
+    }
+
+    fn store(&self, query: &Query, columns: &[String], result: Option<Rc<SqlResult>>) {
+        if self.depth.get() == 0 {
+            return;
+        }
+        let mut entries = self.entries.borrow_mut();
+        if entries.len() >= SUBQUERY_MEMO_MAX_ENTRIES {
+            return;
+        }
+        entries.push(SubqueryMemoEntry {
+            address: query as *const Query as usize,
+            columns: columns.to_vec(),
+            cached: result.map(|result| (Box::new(query.clone()), result)),
+        });
+    }
+}
+
+/// Builtins whose result can differ between calls in one statement, or that
+/// act on session state; a subquery calling one runs for every row.
+fn function_is_volatile(name: &str) -> bool {
+    let bare = name.rsplit('.').next().unwrap_or(name).to_ascii_lowercase();
+    matches!(
+        bare.as_str(),
+        "random"
+            | "setseed"
+            | "nextval"
+            | "setval"
+            | "currval"
+            | "lastval"
+            | "clock_timestamp"
+            | "timeofday"
+            | "gen_random_uuid"
+            | "gen_random_bytes"
+            | "uuid_generate_v1"
+            | "uuid_generate_v1mc"
+            | "uuid_generate_v4"
+            | "uuidv4"
+            | "uuidv7"
+            | "set_config"
+            | "pg_notify"
+            | "txid_current"
+            | "pg_current_xact_id"
+    ) || bare.starts_with("pg_sleep")
+        || bare.starts_with("pg_advisory")
+        || bare.starts_with("pg_try_advisory")
+        || bare.starts_with("dblink")
+}
+
+/// Whether a subquery's result may be kept once it is shown not to read the
+/// outer row: it takes no row locks and calls no volatile builtin and no
+/// user-defined function (which may be volatile or write).
+fn subquery_is_memoizable(db: &BicDb, query: &Query) -> bool {
+    use sqlparser::ast::{TableFactor, Visit, Visitor};
+    use std::ops::ControlFlow;
+
+    struct Check<'a> {
+        db: &'a BicDb,
+    }
+    impl Check<'_> {
+        fn function(&self, name: &ObjectName) -> ControlFlow<()> {
+            let Ok(name) = object_name(name) else {
+                return ControlFlow::Break(());
+            };
+            if function_is_volatile(&name)
+                || !matches!(load_routine(self.db, RoutineKind::Function, &name), Ok(None))
+            {
+                return ControlFlow::Break(());
+            }
+            ControlFlow::Continue(())
+        }
+    }
+    impl Visitor for Check<'_> {
+        type Break = ();
+        fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
+            if query.locks.is_empty() {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            }
+        }
+        fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+            match expr {
+                Expr::Function(function) => self.function(&function.name),
+                _ => ControlFlow::Continue(()),
+            }
+        }
+        fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<()> {
+            match factor {
+                TableFactor::Table {
+                    name,
+                    args: Some(_),
+                    ..
+                }
+                | TableFactor::Function { name, .. } => self.function(name),
+                TableFactor::TableFunction { .. } => ControlFlow::Break(()),
+                _ => ControlFlow::Continue(()),
+            }
+        }
+    }
+    query.visit(&mut Check { db }).is_continue()
 }

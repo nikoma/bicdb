@@ -921,3 +921,90 @@ fn partial_unique_index_frees_a_key_when_the_transaction_moves_the_row_out_of_it
     assert_eq!(open(&mut s, "a@x"), SqlValue::Int(1));
     assert_eq!(open(&mut s, "z@x"), SqlValue::Int(0));
 }
+
+#[test]
+fn an_uncorrelated_in_subquery_runs_once_per_statement_not_once_per_row() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    // The owner API's "spaces holding these playlists/courses/collections" lookup
+    // (network.carrier). With the IN list recomputed for each of 20,000 posts it
+    // never finished and held the writer.
+    s.execute("CREATE TABLE network_posts (id uuid PRIMARY KEY, space_id uuid, body text)").unwrap();
+    s.execute("CREATE TABLE learning_playlist_items (playlist_id uuid, post_id uuid)").unwrap();
+    s.execute("CREATE TABLE learning_lessons (course_id uuid, post_id uuid)").unwrap();
+    s.execute("CREATE TABLE learning_collection_items (collection_id uuid, item_kind text, item_id uuid)").unwrap();
+    s.execute("INSERT INTO network_posts SELECT md5('post'||i)::uuid, CASE WHEN i % 10 = 0 THEN NULL ELSE md5('space'||(i % 50))::uuid END, 'b' FROM generate_series(1, 20000) i").unwrap();
+    s.execute("INSERT INTO learning_playlist_items SELECT md5('pl'||(i % 20))::uuid, md5('post'||i)::uuid FROM generate_series(1, 2000) i").unwrap();
+    s.execute("INSERT INTO learning_lessons SELECT md5('c'||(i % 20))::uuid, md5('post'||(i + 5000))::uuid FROM generate_series(1, 2000) i").unwrap();
+    s.execute("INSERT INTO learning_collection_items SELECT md5('col'||(i % 20))::uuid, CASE WHEN i % 2 = 0 THEN 'post' ELSE 'video' END, md5('post'||(i + 10000))::uuid FROM generate_series(1, 2000) i").unwrap();
+    let uuid = |s: &mut SqlSession, seed: &str| match &s.execute(&format!("SELECT md5('{seed}')::uuid::text")).unwrap().rows[0][0] {
+        SqlValue::String(value) => value.clone(),
+        other => panic!("uuid text: {other:?}"),
+    };
+    // playlist 1 -> spaces {1,11,21,31,41}; course 2 -> {2,12,22,32,42}; collection 4 -> {4,14,..};
+    // collection 3 holds only videos; playlist 10 holds only posts without a space.
+    let refs = [("playlist", "pl1"), ("course", "c2"), ("collection", "col4"), ("collection", "col3"), ("playlist", "pl10")]
+        .iter()
+        .map(|(kind, seed)| format!("{{\"kind\":\"{kind}\",\"id\":\"{}\"}}", uuid(&mut s, seed)))
+        .collect::<Vec<_>>();
+    let mut want = s.execute("SELECT md5('space'||k)::uuid FROM unnest(ARRAY[1,11,21,31,41,2,12,22,32,42,4,14,24,34,44]) k").unwrap().rows;
+    want.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+    let mut p = s.with_positional_parameters(vec![text(&format!("[{}]", refs.join(",")))]);
+    let started = std::time::Instant::now();
+    let result = p.execute(
+        "WITH r AS (SELECT * FROM jsonb_to_recordset($1::jsonb) AS x(kind text,id uuid)) \
+         SELECT DISTINCT p.space_id AS id FROM network_posts p \
+         WHERE p.space_id IS NOT NULL AND p.id IN ( \
+           SELECT post_id FROM learning_playlist_items WHERE playlist_id IN (SELECT id FROM r WHERE kind='playlist') \
+           UNION SELECT post_id FROM learning_lessons WHERE course_id IN (SELECT id FROM r WHERE kind='course') \
+           UNION SELECT item_id FROM learning_collection_items WHERE item_kind='post' AND collection_id IN (SELECT id FROM r WHERE kind='collection'))",
+    ).unwrap();
+    let elapsed = started.elapsed();
+    drop(p);
+    let mut rows = result.rows;
+    rows.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+    assert_eq!(rows, want);
+    assert!(elapsed < std::time::Duration::from_secs(3), "took {elapsed:?}");
+    eprintln!("uncorrelated IN over 20,000 posts: {elapsed:?}");
+}
+
+#[test]
+fn memoized_subqueries_keep_null_semantics_and_correlated_ones_still_run_per_row() {
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE a (id int PRIMARY KEY, grp int, v int)").unwrap();
+    s.execute("CREATE TABLE b (grp int, w int)").unwrap();
+    s.execute("CREATE TABLE n (w int)").unwrap();
+    s.execute("INSERT INTO a SELECT i, i % 3, i FROM generate_series(1, 30) i").unwrap();
+    s.execute("INSERT INTO a VALUES (31, 0, NULL)").unwrap();
+    s.execute("INSERT INTO b VALUES (0, 3), (0, 6), (1, 4), (1, 5), (2, 8), (2, 30)").unwrap();
+    s.execute("INSERT INTO n VALUES (1), (NULL)").unwrap();
+    let ids = |s: &mut SqlSession, sql: &str| -> Vec<i64> {
+        s.execute(sql).unwrap().rows.into_iter().map(|row| match row[0] {
+            SqlValue::Int(id) => id,
+            ref other => panic!("id: {other:?}"),
+        }).collect()
+    };
+    // NOT IN over a list holding NULL is never true; IN is true only on a match, else NULL.
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v NOT IN (SELECT w FROM n) ORDER BY id"), Vec::<i64>::new());
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE NOT (v IN (SELECT w FROM n)) ORDER BY id"), Vec::<i64>::new());
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v IN (SELECT w FROM n) ORDER BY id"), vec![1]);
+    assert_eq!(ids(&mut s, "SELECT count(*) FROM a WHERE (v IN (SELECT w FROM n)) IS NULL"), vec![30]);
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v NOT IN (SELECT w FROM n WHERE w IS NOT NULL) AND id < 4 ORDER BY id"), vec![2, 3]);
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE EXISTS (SELECT 1 FROM n WHERE w IS NULL) AND id <= 2 ORDER BY id"), vec![1, 2]);
+    // Correlated: the qualified outer column, an unqualified outer-only column, and a
+    // reference from a nested subquery each give the per-row answer.
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v IN (SELECT w FROM b WHERE b.grp = a.grp) ORDER BY id"), vec![3, 4, 6, 8]);
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE 1 IN (SELECT 1 FROM b WHERE b.w = v) ORDER BY id"), vec![3, 4, 5, 6, 8, 30]);
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v IN (SELECT w FROM b WHERE EXISTS (SELECT 1 FROM n WHERE n.w = a.id)) ORDER BY id"), Vec::<i64>::new());
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE 1 IN (SELECT w FROM n WHERE EXISTS (SELECT 1 FROM b WHERE b.w = a.v)) ORDER BY id"), vec![3, 4, 5, 6, 8, 30]);
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE 4 IN (SELECT w FROM b WHERE EXISTS (SELECT 1 FROM b b2 WHERE b2.w = a.v)) ORDER BY id"), vec![3, 4, 5, 6, 8, 30]);
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE EXISTS (SELECT 1 FROM b WHERE b.w = a.v) ORDER BY id"), vec![3, 4, 5, 6, 8, 30]);
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE (SELECT max(w) FROM b WHERE b.grp = a.grp) = v ORDER BY id"), vec![6]);
+    // An outer read that only some rows reach is still a correlation.
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE v IN (SELECT w FROM b WHERE CASE WHEN a.id > 5 THEN b.grp = a.grp ELSE true END) ORDER BY id"), vec![3, 4, 5, 6, 8]);
+    assert_eq!(ids(&mut s, "SELECT id FROM a WHERE id < 3 OR v IN (SELECT w FROM b WHERE b.grp = a.grp) ORDER BY id"), vec![1, 2, 3, 4, 6, 8]);
+    // A volatile subquery keeps per-row semantics: every row draws again.
+    let drawn = ids(&mut s, "SELECT count(*) FROM a WHERE (SELECT random()) < 0.5")[0];
+    assert!(drawn > 0 && drawn < 31, "{drawn} of 31 rows: random() was drawn once");
+}

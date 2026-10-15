@@ -3310,7 +3310,7 @@ impl<'db> SqlEngine<'db> {
     pub(crate) fn eval_dynamic_bound_expr(&self, expr: &Expr) -> Result<SqlValue> {
         if let Some(outer_row) = &self.outer_row {
             let (_scope, context) = self.bound_row_context(outer_row.columns());
-            return self.eval_slot_row_value(&outer_row.values, &context, expr);
+            return self.eval_slot_row_value(outer_row.values_for(expr), &context, expr);
         }
         self.eval_row_value(&SqlRow::default(), expr)
     }

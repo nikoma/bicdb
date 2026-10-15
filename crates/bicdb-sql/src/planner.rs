@@ -188,6 +188,18 @@ impl SlotRowLookup {
         &self.cols.columns
     }
 
+    /// The slot `value_for_key` reads for `key`, if any.
+    pub(crate) fn slot_for_key(&self, key: &str) -> Option<usize> {
+        let find = |key: &str| {
+            self.cols
+                .exact
+                .get(key)
+                .or_else(|| self.cols.lookup_unqualified.get(key))
+                .map(|id| id.0)
+        };
+        find(key).or_else(|| find(&key.to_ascii_lowercase()))
+    }
+
     pub(crate) fn value_for_key<'a>(&self, row: &'a [SqlValue], key: &str) -> Option<&'a SqlValue> {
         if let Some(value) = self
             .cols
@@ -327,8 +339,13 @@ impl SlotRowLookup {
 
 #[derive(Clone, Debug)]
 pub(crate) struct OuterSlotRow {
-    pub(crate) lookup: SlotRowLookup,
-    pub(crate) values: SlotRow,
+    lookup: SlotRowLookup,
+    values: SlotRow,
+    /// Read probes: a probe is set when a column at a slot below its bound is
+    /// read. An uncorrelated-subquery check (`execute_correlated_slot_query`)
+    /// installs one before running a subquery once: if the run never reads the
+    /// outer row, its result does not depend on that row.
+    probes: Vec<(Rc<std::cell::Cell<bool>>, usize)>,
 }
 
 impl OuterSlotRow {
@@ -336,6 +353,7 @@ impl OuterSlotRow {
         Self {
             lookup: SlotRowLookup::new(&columns),
             values,
+            probes: Vec::new(),
         }
     }
 
@@ -357,8 +375,107 @@ impl OuterSlotRow {
         self.lookup.columns()
     }
 
+    /// The row's values for evaluating `expr` against them: counts as reading
+    /// every column `expr` (or a subquery inside it) names, and the whole row
+    /// for a bare relation name or a wildcard.
+    pub(crate) fn values_for(&self, expr: &Expr) -> &SlotRow {
+        if !self.probes.is_empty() {
+            use sqlparser::ast::Visit;
+            let _ = expr.visit(&mut OuterReadMarker { row: self });
+        }
+        &self.values
+    }
+
+    /// The values of a row that carries no probes (a fresh row).
+    pub(crate) fn values_unprobed(&self) -> &SlotRow {
+        debug_assert!(self.probes.is_empty());
+        &self.values
+    }
+
+    /// This row followed by `row`'s novel columns. The probes carry over: the
+    /// extension keeps this row's slots as its prefix, so their bounds hold.
+    pub(crate) fn extend(&self, columns: &[String], row: &[SqlValue]) -> Self {
+        let values = merge_slot_rows(&self.values, self.columns(), row, columns);
+        let columns = merge_row_set_columns(self.columns().to_vec(), columns.to_vec());
+        let mut extended = Self::new(columns, values);
+        extended.probes = self.probes.clone();
+        extended
+    }
+
+    /// Adds a probe set when any column of this row is read.
+    pub(crate) fn with_read_probe(mut self, probe: Rc<std::cell::Cell<bool>>) -> Self {
+        let bound = self.values.len();
+        self.probes.push((probe, bound));
+        self
+    }
+
+    fn mark_read(&self, slot: usize) {
+        for (probe, bound) in &self.probes {
+            if slot < *bound {
+                probe.set(true);
+            }
+        }
+    }
+
     pub(crate) fn value_from_parts(&self, parts: &[String]) -> Option<SqlValue> {
-        self.lookup.value_from_parts(&self.values, parts)
+        let value = self.lookup.value_from_parts(&self.values, parts);
+        if !self.probes.is_empty() {
+            self.mark_parts(parts, value.is_some());
+        }
+        value
+    }
+
+    /// Marks every column `value_from_parts(parts)` may consult; whether a
+    /// later candidate is consulted can depend on an earlier one's value.
+    fn mark_parts(&self, parts: &[String], hit: bool) {
+        if parts.is_empty() {
+            return;
+        }
+        let mut keys = vec![parts.join("."), parts[0].clone()];
+        if parts.len() > 1 {
+            keys.push(parts[parts.len() - 1].clone());
+            keys.push(format!("{}.{}", parts[0], parts[1]));
+            if parts[0].eq_ignore_ascii_case("metadata") {
+                keys.push("metadata".to_string());
+            }
+        }
+        let mut matched = false;
+        for key in keys {
+            if let Some(slot) = self.lookup.slot_for_key(&key) {
+                matched = true;
+                self.mark_read(slot);
+            }
+        }
+        if hit && !matched {
+            self.mark_read(0);
+        }
+    }
+}
+
+struct OuterReadMarker<'a> {
+    row: &'a OuterSlotRow,
+}
+
+impl sqlparser::ast::Visitor for OuterReadMarker<'_> {
+    type Break = ();
+    fn pre_visit_expr(&mut self, expr: &Expr) -> std::ops::ControlFlow<()> {
+        match expr {
+            Expr::Identifier(ident) => self
+                .row
+                .mark_parts(std::slice::from_ref(&ident.value), true),
+            Expr::CompoundIdentifier(idents) => {
+                let parts = idents
+                    .iter()
+                    .map(|ident| ident.value.clone())
+                    .collect::<Vec<_>>();
+                self.row.mark_parts(&parts, true);
+            }
+            // `p.*` and `f(p.*)` read whole rows.
+            Expr::Wildcard(_) | Expr::QualifiedWildcard(..) => self.row.mark_read(0),
+            Expr::Function(function) if function.to_string().contains('*') => self.row.mark_read(0),
+            _ => {}
+        }
+        std::ops::ControlFlow::Continue(())
     }
 }
 

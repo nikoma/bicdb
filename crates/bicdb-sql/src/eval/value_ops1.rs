@@ -3013,6 +3013,18 @@ pub(crate) fn eval_compatibility_function_value(
     if arg_types.is_some_and(|arg_types| geometric_function_pg_type(name, arg_types).is_some()) {
         return Ok(None);
     }
+    if matches!(name, "pg_input_is_valid" | "pg_catalog.pg_input_is_valid") && args.len() == 2 {
+        if args.iter().any(|arg| matches!(arg, SqlValue::Null)) {
+            return Ok(Some(SqlValue::Null));
+        }
+        let type_name = args[1].to_cell();
+        let data_type = sqlparser::parser::Parser::new(&sqlparser::dialect::PostgreSqlDialect {})
+            .try_with_sql(&type_name)
+            .and_then(|mut parser| parser.parse_data_type())
+            .map_err(|_| SqlError::undefined_object(format!("type \"{type_name}\" does not exist")))?;
+        let valid = cast_value(SqlValue::String(args[0].to_cell()), &data_type).is_ok();
+        return Ok(Some(SqlValue::Bool(valid)));
+    }
     if name == "bicdb_variadic_call" {
         if args.len() < 2 {
             return Err(SqlError::InvalidSql(

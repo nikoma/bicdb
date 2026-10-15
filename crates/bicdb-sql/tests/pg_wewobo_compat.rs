@@ -2129,3 +2129,18 @@ fn now_and_clock_timestamp_carry_microseconds() {
     assert_eq!(first[0], again[0]);
     assert_eq!(again[1], "true");
 }
+
+#[test]
+fn pg_input_is_valid_checks_text_against_a_type() {
+    // Profile credentials validate issued_on/expires_on with pg_input_is_valid($1,'date').
+    let (_dir, mut db) = db();
+    let mut s = SqlSession::new(&mut db);
+    let rows = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
+    let b = SqlValue::Bool;
+    assert_eq!(rows(&mut s, "SELECT pg_input_is_valid('2024-02-28','date'), pg_input_is_valid('2024-02-30','date'), pg_input_is_valid('2024-13-01','date'), pg_input_is_valid('42','integer'), pg_input_is_valid('4x','int4'), pg_input_is_valid(NULL,'date')"),
+        vec![vec![b(true), b(false), b(false), b(true), b(false), SqlValue::Null]]);
+    s.execute("CREATE TABLE creds (issued_on text)").unwrap();
+    s.execute("INSERT INTO creds VALUES ('2024-01-02'),('2024-02-30')").unwrap();
+    assert_eq!(rows(&mut s, "SELECT issued_on FROM creds WHERE NOT pg_input_is_valid(issued_on,'date')"), vec![vec![text("2024-02-30")]]);
+    assert_eq!(rows(&mut s, "SELECT CASE WHEN ('2024-02-30'::text IS NOT NULL AND ('2024-02-30' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' OR NOT pg_input_is_valid('2024-02-30','date'))) THEN 'invalid' ELSE '' END"), vec![vec![text("invalid")]]);
+}

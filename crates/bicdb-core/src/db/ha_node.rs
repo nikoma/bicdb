@@ -102,6 +102,10 @@ pub(crate) struct HaNodeFile {
     /// Vote cast in an election: (epoch, candidate).
     #[serde(default)]
     pub(crate) voted: Option<(u64, String)>,
+    /// Highest observed election term, including requests refused because the
+    /// candidate's data was stale. Separate from a committed primary epoch.
+    #[serde(default)]
+    pub(crate) election_term: u64,
     /// Acknowledged commit sequence per standby.
     #[serde(default)]
     pub(crate) slots: BTreeMap<String, u64>,
@@ -305,10 +309,32 @@ impl BicDb {
         self.ha_node.with_file(|file| {
             let term = file
                 .epoch
+                .max(file.election_term)
                 .max(file.voted.as_ref().map_or(0, |(term, _)| *term))
                 + 1;
+            file.election_term = term;
             file.voted = Some((term, node_id.to_string()));
             term
+        })
+    }
+
+    /// Highest election term observed locally, including refused votes. This
+    /// does not advance the epoch of the committed primary or its data.
+    pub fn replication_election_term(&self) -> u64 {
+        self.ha_node.read(|file| {
+            file.election_term
+                .max(file.epoch)
+                .max(file.voted.as_ref().map_or(0, |(term, _)| *term))
+        })
+    }
+
+    /// Learn a peer's election term without treating a candidacy as a primary.
+    pub fn observe_election_term(&self, term: u64) -> Result<()> {
+        if self.replication_election_term() >= term {
+            return Ok(());
+        }
+        self.ha_node.with_file(|file| {
+            file.election_term = file.election_term.max(term);
         })
     }
 
@@ -324,33 +350,35 @@ impl BicDb {
         candidate_data_epoch: u64,
         candidate_seq: u64,
     ) -> Result<bool> {
+        let _quiesced = self.serializable_commit_admission.write();
         let own_seq = self.last_applied_commit_seq();
-        let granted = self.ha_node.read(|file| {
-            if term <= file.epoch {
-                return false;
+        // Eligibility and the durable ballot must share one lock; two
+        // concurrent requests cannot both win the same node's term.
+        let (granted, fenced) = self.ha_node.with_file(|file| {
+            if term <= file.epoch || term < file.election_term {
+                return (false, false);
             }
+            file.election_term = term;
             if let Some((voted_term, voted_for)) = &file.voted {
                 if *voted_term > term || (*voted_term == term && voted_for != candidate) {
-                    return false;
+                    return (false, false);
                 }
             }
-            (candidate_data_epoch, candidate_seq) >= (file.data_epoch, own_seq)
-        });
-        if !granted {
-            return Ok(false);
-        }
-        let was_primary = self.ha_node.role() == NodeRole::Primary;
-        self.ha_node.with_file(|file| {
+            if (candidate_data_epoch, candidate_seq) < (file.data_epoch, own_seq) {
+                return (false, false);
+            }
+            let was_primary = file.role.unwrap_or_else(|| self.ha_node.role()) == NodeRole::Primary;
             file.voted = Some((term, candidate.to_string()));
             if was_primary {
                 file.role = Some(NodeRole::Fenced);
             }
+            (true, was_primary)
         })?;
-        if was_primary {
+        if fenced {
             self.sync_quorum
                 .close("this primary voted for a successor and is fenced");
         }
-        Ok(true)
+        Ok(granted)
     }
 
     /// Becomes the primary of `term` after winning its election. Takes
@@ -362,14 +390,30 @@ impl BicDb {
         sql_address: Option<String>,
     ) -> Result<()> {
         let applied = self.last_applied_commit_seq();
-        self.ha_node.with_file(|file| {
+        let promoted = self.ha_node.with_file(|file| {
+            if term <= file.epoch
+                || term < file.election_term
+                || file.voted.as_ref().is_some_and(|(voted_term, candidate)| {
+                    *voted_term > term || (*voted_term == term && candidate != node_id)
+                })
+            {
+                return false;
+            }
             file.role = Some(NodeRole::Primary);
             file.epoch = file.epoch.max(term);
+            file.election_term = term;
             file.data_epoch = term;
             file.epoch_starts.insert(term, applied);
             file.primary_id = Some(node_id.to_string());
             file.primary_sql_address = sql_address;
-        })
+            true
+        })?;
+        if !promoted {
+            return Err(BicDbError::Replication(
+                "election term was superseded before promotion".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Becomes a standby (a fenced former primary rejoining its group).

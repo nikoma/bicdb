@@ -677,6 +677,70 @@ fn a_primary_that_grants_a_vote_is_fenced() {
 }
 
 #[test]
+fn refused_stale_candidates_advance_durable_terms_without_changing_data_epochs() {
+    for (mode, storage) in storage_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut voter = open(dir.path(), storage.clone(), ReplicationMode::Primary);
+        voter.create_collection("items").unwrap();
+        put(&voter, "a", 1);
+        let own = voter.last_applied_commit_seq();
+        drop(voter);
+        let voter = open(dir.path(), storage.clone(), ReplicationMode::Standby);
+        // The older replica campaigns first, repeatedly. Its refused term must
+        // still be learned, or the fresher replica can lag forever in ballots.
+        assert!(
+            !voter.consider_vote(7, "older", 0, own - 1).unwrap(),
+            "{mode}"
+        );
+        assert_eq!(voter.replication_election_term(), 7, "{mode}");
+        assert_eq!(voter.replication_epoch(), 0, "{mode}");
+        assert_eq!(voter.ha_node_status().data_epoch, 0, "{mode}");
+        drop(voter);
+        let voter = open(dir.path(), storage, ReplicationMode::Standby);
+        assert_eq!(voter.replication_election_term(), 7, "{mode}");
+        assert_eq!(voter.begin_candidacy("fresher").unwrap(), 8, "{mode}");
+        voter.observe_election_term(10).unwrap();
+        assert!(
+            voter.promote_by_election(8, "fresher", None).is_err(),
+            "{mode}"
+        );
+        assert_eq!(voter.replication_role(), NodeRole::Standby, "{mode}");
+        assert_eq!(voter.begin_candidacy("fresher").unwrap(), 11, "{mode}");
+    }
+}
+
+#[test]
+fn concurrent_candidates_cannot_receive_two_votes_in_one_term() {
+    let dir = tempfile::tempdir().unwrap();
+    let voter = open(
+        dir.path(),
+        StorageMode::EmbeddedMemory,
+        ReplicationMode::Standby,
+    );
+    let barrier = std::sync::Barrier::new(8);
+    let votes = std::thread::scope(|scope| {
+        let handles = (0..8)
+            .map(|candidate| {
+                let voter = &voter;
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    barrier.wait();
+                    voter
+                        .consider_vote(1, &format!("candidate-{candidate}"), 0, 0)
+                        .unwrap()
+                })
+            })
+            .collect::<Vec<_>>();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .filter(|granted| *granted)
+            .count()
+    });
+    assert_eq!(votes, 1);
+}
+
+#[test]
 fn a_promoted_primary_bootstraps_standbys_that_diverged_from_its_term() {
     for (mode, storage) in storage_modes() {
         let dir = tempfile::tempdir().unwrap();

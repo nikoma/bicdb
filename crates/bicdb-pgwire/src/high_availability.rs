@@ -654,7 +654,7 @@ fn serve_peer(
                 stream,
                 &ReplicationFrame::VoteResponse {
                     node_id: config.replication.node_id.clone(),
-                    term,
+                    term: db.replication_election_term(),
                     granted,
                     epoch: db.replication_epoch(),
                 },
@@ -1255,13 +1255,24 @@ fn run_election(
             receive(stream)
         })();
         match response {
-            Ok(ReplicationFrame::VoteResponse { granted, epoch, .. }) => {
-                if granted {
+            Ok(ReplicationFrame::VoteResponse {
+                node_id: voter,
+                term: voter_term,
+                granted,
+                epoch,
+            }) => {
+                if voter != peer.node_id {
+                    return Err(PgWireError::Server(
+                        "vote response identity differs from peer".into(),
+                    ));
+                }
+                if granted && voter_term == term {
                     votes += 1;
                 }
-                server
-                    .read_db()?
-                    .observe_replication_epoch(epoch)
+                let db = server.read_db()?;
+                db.observe_election_term(voter_term)
+                    .map_err(PgWireError::from)?;
+                db.observe_replication_epoch(epoch)
                     .map_err(PgWireError::from)?;
             }
             Ok(other) => eprintln!(
@@ -1277,7 +1288,7 @@ fn run_election(
         return Ok(());
     }
     let db = server.read_db()?;
-    if db.replication_epoch() >= term {
+    if db.replication_epoch() >= term || db.replication_election_term() != term {
         // Another node became primary in this term or later meanwhile.
         return Ok(());
     }

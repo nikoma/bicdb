@@ -355,6 +355,7 @@ pub enum ReplicationFrame {
     },
     VoteResponse {
         node_id: String,
+        /// The voter's highest observed election term, even for a refusal.
         term: u64,
         granted: bool,
         /// The voter's known primary epoch.

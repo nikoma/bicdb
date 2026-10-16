@@ -125,7 +125,17 @@ fn render(server: &Arc<PgWireServer>) -> Result<String> {
     out.gauge(
         "bicdb_live_subscriptions",
         "Open SUBSCRIBE statements.",
-        server.live_subscriptions.load(Ordering::SeqCst),
+        server.live_subscriptions.load(Ordering::SeqCst) + server.live_registry.len() as u64,
+    );
+    out.counter(
+        "bicdb_live_full_runs_total",
+        "Subscription evaluations that re-read the whole query.",
+        server.live_full_runs.load(Ordering::Relaxed),
+    );
+    out.counter(
+        "bicdb_live_incremental_runs_total",
+        "Subscription evaluations that re-read only the changed rows or groups.",
+        server.live_incremental_runs.load(Ordering::Relaxed),
     );
     let connectors = connectors::statuses(server);
     out.metric(

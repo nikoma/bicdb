@@ -2021,7 +2021,9 @@ pub(crate) fn parse_message(
     }
     let db = server.read_db()?;
     // Parameters of a SUBSCRIBE belong to the query it wraps.
-    let typed_sql = live_queries::subscribed_query(&sql).unwrap_or(&sql);
+    let typed_sql = live_queries::parse_subscribe(&sql)
+        .map(|subscribe| subscribe.query)
+        .unwrap_or(&sql);
     let inferred = infer_parameter_types(&db, typed_sql)?;
     param_type_oids = resolve_parameter_type_oids(&db, param_type_oids, inferred)?;
     Ok(ParsedStatementMessage {
@@ -2131,7 +2133,9 @@ pub(crate) fn describe_message(
                 PgWireError::Protocol(format!("prepared statement {name:?} not found"))
             })?;
             parameter_description(stream, &statement.param_type_oids)?;
-            if let Some(query) = live_queries::subscribed_query(&statement.sql) {
+            if let Some(query) =
+                live_queries::parse_subscribe(&statement.sql).map(|subscribe| subscribe.query)
+            {
                 // Unbound parameters describe as NULL, as for a plain SELECT.
                 let null_params = vec!["NULL".to_string(); statement.param_type_oids.len()];
                 let describe_sql = substitute_parameters(query, &null_params)?;
@@ -2180,7 +2184,9 @@ pub(crate) fn describe_message(
                     portal.result_formats.clone(),
                 )
             };
-            if let Some(query) = live_queries::subscribed_query(&portal_sql) {
+            if let Some(query) =
+                live_queries::parse_subscribe(&portal_sql).map(|subscribe| subscribe.query)
+            {
                 let result = live_queries::describe_subscription(
                     server,
                     query,
@@ -2323,7 +2329,26 @@ pub(crate) fn execute_message(
         )
     };
 
-    let result = execute_server_sql_with_options(server, state, &sql, !streaming_fetch)?;
+    // A registered subscription or an UNSUBSCRIBE is an ordinary statement
+    // with a result; the streaming form is handled before Execute.
+    let registration = match live_queries::parse_subscribe(&sql) {
+        Some(subscribe) => match subscribe.name {
+            Some(name) => Some(live_queries::register_subscription(
+                server,
+                state,
+                &name,
+                subscribe.query,
+            )?),
+            None => None,
+        },
+        None => live_queries::parse_unsubscribe(&sql)
+            .map(|name| live_queries::unsubscribe(server, state, name.as_deref()))
+            .transpose()?,
+    };
+    let result = match registration {
+        Some(result) => result,
+        None => execute_server_sql_with_options(server, state, &sql, !streaming_fetch)?,
+    };
     if !streaming_fetch || result.columns.is_empty() {
         return Ok(PortalExecuteResult {
             result,

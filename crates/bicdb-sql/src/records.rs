@@ -875,12 +875,19 @@ pub(crate) fn unique_arbiter_for_columns(
 /// Index lookups see committed rows. A row this transaction has since deleted or rewritten no longer holds its
 /// committed key (its pending version, if any, is checked separately), so a key freed by DELETE can be reused in the
 /// same transaction, as in PostgreSQL.
-fn committed_ids_still_present(tx: Option<&Transaction>, table: &str, ids: Vec<String>) -> Vec<String> {
+fn committed_ids_still_present(
+    tx: Option<&Transaction>,
+    table: &str,
+    ids: Vec<String>,
+) -> Vec<String> {
     let Some(tx) = tx else { return ids };
     if ids.is_empty() || !tx.has_pending_writes(table) {
         return ids;
     }
-    let pending: BTreeSet<String> = tx.pending_record_ids_for_collection(table).into_iter().collect();
+    let pending: BTreeSet<String> = tx
+        .pending_record_ids_for_collection(table)
+        .into_iter()
+        .collect();
     ids.into_iter().filter(|id| !pending.contains(id)).collect()
 }
 
@@ -962,7 +969,11 @@ pub(crate) fn validate_unique_arbiter_records(
         }
         sql_profile_index_lookup();
         let index_values = unique_key_index_values(schema, &arbiter.key, &key_values)?;
-        let ids = committed_ids_still_present(tx, table, db.lookup_index_exact(index_name, &index_values)?);
+        let ids = committed_ids_still_present(
+            tx,
+            table,
+            db.lookup_index_exact(index_name, &index_values)?,
+        );
         if ids
             .iter()
             .any(|id| !allow_existing_same_id || id != &record.id)
@@ -1040,7 +1051,13 @@ pub(crate) fn non_conflicting_records(
             }
             sql_profile_index_lookup();
             let index_values = unique_key_index_values(schema, &arbiter.key, &key_values)?;
-            if !committed_ids_still_present(tx, table, db.lookup_index_exact(index_name, &index_values)?).is_empty() {
+            if !committed_ids_still_present(
+                tx,
+                table,
+                db.lookup_index_exact(index_name, &index_values)?,
+            )
+            .is_empty()
+            {
                 continue;
             }
             // The index is committed state only. A row this transaction has
@@ -5243,4 +5260,26 @@ mod record_id_from_key_values_tests {
             assert_eq!(actual, expected, "{table} {columns:?} {values:?}");
         }
     }
+}
+
+/// The primary-key column of `collection` that identifies its rows, with the
+/// column's type, when a row's record id is exactly that column's text (a
+/// single integer or text-like key). `None` for tables whose ids carry typed
+/// or composite identity, hidden keys, or no table schema: those rows cannot
+/// be addressed by key from outside the engine.
+pub fn plain_primary_key_column(db: &BicDb, collection: &str) -> Result<Option<(String, String)>> {
+    let Some(schema) = load_schema_shared(db, collection)? else {
+        return Ok(None);
+    };
+    if schema.has_hidden_primary_key() || primary_key_requires_typed_identity(&schema) {
+        return Ok(None);
+    }
+    let columns = primary_key_columns_for_schema(&schema);
+    let [column] = columns.as_slice() else {
+        return Ok(None);
+    };
+    let Some(column_schema) = schema.column(column) else {
+        return Ok(None);
+    };
+    Ok(Some((column.clone(), column_schema.pg_type.clone())))
 }

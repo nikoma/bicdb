@@ -49,9 +49,15 @@ fn repeated_large_writes_keep_the_log_bounded_and_survive_reopen() {
         }
     }
     let db = BicDb::open(dir.path()).unwrap();
-    let latest = db.get("state", "mailbox").unwrap().expect("latest snapshot");
+    let latest = db
+        .get("state", "mailbox")
+        .unwrap()
+        .expect("latest snapshot");
     assert_eq!(latest.metadata["generation"], 199);
-    assert!(db.get("state", "gone").unwrap().is_none(), "the delete survives");
+    assert!(
+        db.get("state", "gone").unwrap().is_none(),
+        "the delete survives"
+    );
 }
 
 #[test]
@@ -68,7 +74,10 @@ fn a_large_log_left_by_an_older_version_is_folded_at_open() {
             db.insert("state", snapshot(generation)).unwrap();
         }
     }
-    assert!(log_bytes(dir.path()) > 1024 * 1024, "disabled: the log grows");
+    assert!(
+        log_bytes(dir.path()) > 1024 * 1024,
+        "disabled: the log grows"
+    );
     let db = BicDb::open_with_config(
         dir.path(),
         DbConfig::default().with_auto_checkpoint_wal_bytes(THRESHOLD),

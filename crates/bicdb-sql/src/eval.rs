@@ -619,12 +619,20 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
         Expr::Ceil { expr: inner, field } | Expr::Floor { expr: inner, field }
             if matches!(
                 field,
-                sqlparser::ast::CeilFloorKind::DateTimeField(sqlparser::ast::DateTimeField::NoDateTime)
+                sqlparser::ast::CeilFloorKind::DateTimeField(
+                    sqlparser::ast::DateTimeField::NoDateTime
+                )
             ) =>
         {
-            let name = if matches!(expr, Expr::Ceil { .. }) { "ceil" } else { "floor" };
+            let name = if matches!(expr, Expr::Ceil { .. }) {
+                "ceil"
+            } else {
+                "floor"
+            };
             crate::pg_scalar_extra::eval_pg_scalar_extra(name, &[eval_constant_expr(inner)?])?
-                .ok_or_else(|| SqlError::Unsupported(format!("unsupported constant expression {expr}")))
+                .ok_or_else(|| {
+                    SqlError::Unsupported(format!("unsupported constant expression {expr}"))
+                })
         }
         other => Err(SqlError::Unsupported(format!(
             "unsupported constant expression {other}"

@@ -805,16 +805,17 @@ impl<'db> SqlEngine<'db> {
             Expr::Value(_) | Expr::TypedString(_) => {
                 sql_value_truth(self.eval_slot_row_value(row, context, expr)?)
             }
-            Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Case { .. } | Expr::Cast { .. } => {
-                match self.eval_slot_row_value(row, context, expr)? {
-                    SqlValue::Bool(value) => Ok(Some(value)),
-                    SqlValue::Null => Ok(None),
-                    other => Err(SqlError::Unsupported(format!(
-                        "WHERE expression {expr} returned non-boolean {}",
-                        other.to_cell()
-                    ))),
-                }
-            }
+            Expr::Identifier(_)
+            | Expr::CompoundIdentifier(_)
+            | Expr::Case { .. }
+            | Expr::Cast { .. } => match self.eval_slot_row_value(row, context, expr)? {
+                SqlValue::Bool(value) => Ok(Some(value)),
+                SqlValue::Null => Ok(None),
+                other => Err(SqlError::Unsupported(format!(
+                    "WHERE expression {expr} returned non-boolean {}",
+                    other.to_cell()
+                ))),
+            },
             Expr::Function(function) => {
                 match self.eval_slot_row_function_value(row, context, function)? {
                     SqlValue::Bool(value) => Ok(Some(value)),
@@ -2294,16 +2295,17 @@ impl<'db> SqlEngine<'db> {
             Expr::Subquery(query) => {
                 sql_value_truth(self.execute_correlated_scalar_subquery(row, query)?)
             }
-            Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Case { .. } | Expr::Cast { .. } => {
-                match self.eval_row_value(row, expr)? {
-                    SqlValue::Bool(value) => Ok(Some(value)),
-                    SqlValue::Null => Ok(None),
-                    other => Err(SqlError::Unsupported(format!(
-                        "WHERE expression {expr} returned non-boolean {}",
-                        other.to_cell()
-                    ))),
-                }
-            }
+            Expr::Identifier(_)
+            | Expr::CompoundIdentifier(_)
+            | Expr::Case { .. }
+            | Expr::Cast { .. } => match self.eval_row_value(row, expr)? {
+                SqlValue::Bool(value) => Ok(Some(value)),
+                SqlValue::Null => Ok(None),
+                other => Err(SqlError::Unsupported(format!(
+                    "WHERE expression {expr} returned non-boolean {}",
+                    other.to_cell()
+                ))),
+            },
             Expr::Function(function) => match self.eval_row_function_value(row, function)? {
                 SqlValue::Bool(value) => Ok(Some(value)),
                 SqlValue::Null => Ok(None),
@@ -2656,11 +2658,13 @@ impl<'db> SqlEngine<'db> {
             return Ok(SqlValue::Null);
         }
         if let (Some(query), true) = (array_subquery(function), name == "array") {
-            return Ok(array_value(self.execute_correlated_subquery_values(row, query)?));
+            return Ok(array_value(
+                self.execute_correlated_subquery_values(row, query)?,
+            ));
         }
-        if let Some(value) =
-            eval_populate_record_call(self.db_ref(), function, |expr| self.eval_row_value(row, expr))?
-        {
+        if let Some(value) = eval_populate_record_call(self.db_ref(), function, |expr| {
+            self.eval_row_value(row, expr)
+        })? {
             return Ok(value);
         }
         if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
@@ -3168,7 +3172,10 @@ fn subquery_is_memoizable(db: &BicDb, query: &Query) -> bool {
                 return ControlFlow::Break(());
             };
             if function_is_volatile(&name)
-                || !matches!(load_routine(self.db, RoutineKind::Function, &name), Ok(None))
+                || !matches!(
+                    load_routine(self.db, RoutineKind::Function, &name),
+                    Ok(None)
+                )
             {
                 return ControlFlow::Break(());
             }

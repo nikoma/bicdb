@@ -42,7 +42,7 @@ use parking_lot::{Condvar, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rust_decimal::Decimal;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, VecDeque};
 use std::fs::{self, File};
 use std::hint::black_box;
 use std::io::{BufReader, Read, Write};
@@ -4135,6 +4135,11 @@ struct CollectionState {
     /// Monotonic per-collection change counter. Bumped on every applied write;
     /// atomic so concurrent committers under the shared read guard can advance it.
     generation: AtomicU64,
+    /// Record ids written by the most recent applied writes, per generation,
+    /// so a reader that knows an earlier generation can learn which rows
+    /// changed since without scanning (live queries). Bounded; a reader whose
+    /// generation fell out of the window gets `None` and rescans.
+    recent_changes: Mutex<RecentChanges>,
     /// Number of Record frames currently in this collection's segment file
     /// (live + superseded/tombstone garbage); bounds recovery read-amplification.
     segment_frame_count: u64,
@@ -4172,6 +4177,7 @@ impl CollectionState {
             shards,
             vector_store: RwLock::new(VectorStore::default()),
             generation: AtomicU64::new(0),
+            recent_changes: Mutex::new(RecentChanges::default()),
             segment_frame_count,
             paged_row_estimate: std::sync::OnceLock::new(),
             paged_lazy: false,
@@ -4194,6 +4200,7 @@ impl CollectionState {
             shards,
             vector_store: RwLock::new(VectorStore::default()),
             generation: AtomicU64::new(0),
+            recent_changes: Mutex::new(RecentChanges::default()),
             segment_frame_count,
             paged_row_estimate: std::sync::OnceLock::new(),
             paged_lazy: false,
@@ -4296,9 +4303,82 @@ impl CollectionState {
         self.generation.fetch_add(1, AtomicOrdering::Relaxed);
     }
 
+    /// Bump the change counter for applied `writes` and remember which rows
+    /// they touched.
+    fn bump_generation_with_changes(&self, writes: &[&TxWrite]) {
+        let generation = self.generation.fetch_add(1, AtomicOrdering::Relaxed) + 1;
+        self.recent_changes.lock().push(
+            generation,
+            writes.iter().map(|write| ChangedRecord {
+                record_id: write.record_id.clone(),
+                deleted: write.op == TxWriteOp::Delete,
+            }),
+        );
+    }
+
+    /// Rows written after `generation`, oldest first, or `None` when the
+    /// window no longer reaches back that far.
+    fn changed_since(&self, generation: u64) -> Option<Vec<ChangedRecord>> {
+        self.recent_changes.lock().since(generation)
+    }
+
     /// Current per-collection change counter.
     fn generation(&self) -> u64 {
         self.generation.load(AtomicOrdering::Relaxed)
+    }
+}
+
+/// A row touched by an applied write.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChangedRecord {
+    pub record_id: String,
+    pub deleted: bool,
+}
+
+/// Recent writes of one collection by generation, bounded by row count.
+#[derive(Debug, Default)]
+struct RecentChanges {
+    /// (generation, rows written by it), oldest first.
+    entries: VecDeque<(u64, Vec<ChangedRecord>)>,
+    rows: usize,
+    /// Generation of the oldest entry ever dropped (0: nothing dropped).
+    dropped_through: u64,
+}
+
+impl RecentChanges {
+    /// Rows remembered at most; beyond it the oldest generations are dropped.
+    const MAX_ROWS: usize = 65_536;
+
+    fn push(&mut self, generation: u64, rows: impl Iterator<Item = ChangedRecord>) {
+        let rows = rows.collect::<Vec<_>>();
+        // A single huge write is remembered as "everything changed".
+        if rows.len() > Self::MAX_ROWS {
+            self.entries.clear();
+            self.rows = 0;
+            self.dropped_through = generation;
+            return;
+        }
+        self.rows += rows.len();
+        self.entries.push_back((generation, rows));
+        while self.rows > Self::MAX_ROWS {
+            if let Some((dropped, rows)) = self.entries.pop_front() {
+                self.rows -= rows.len();
+                self.dropped_through = dropped;
+            }
+        }
+    }
+
+    fn since(&self, generation: u64) -> Option<Vec<ChangedRecord>> {
+        if generation < self.dropped_through {
+            return None;
+        }
+        Some(
+            self.entries
+                .iter()
+                .filter(|(at, _)| *at > generation)
+                .flat_map(|(_, rows)| rows.iter().cloned())
+                .collect(),
+        )
     }
 }
 

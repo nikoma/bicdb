@@ -127,7 +127,8 @@ pub(crate) fn restore_postgres_whole_row_function_args(statements: &mut Vec<Stat
                     let FunctionArg::Unnamed(FunctionArgExpr::QualifiedWildcard(name)) = arg else {
                         continue;
                     };
-                    let [sqlparser::ast::ObjectNamePart::Identifier(alias)] = name.0.as_slice() else {
+                    let [sqlparser::ast::ObjectNamePart::Identifier(alias)] = name.0.as_slice()
+                    else {
                         continue;
                     };
                     *arg = FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(
@@ -842,7 +843,10 @@ pub(crate) fn load_schema_shared(
 
 /// Column names of a FROM table reference, for resolving `ORDER BY n` over `SELECT *`.
 pub(crate) fn table_factor_column_names(db: &BicDb, relation: &TableFactor) -> Option<Vec<String>> {
-    let TableFactor::Table { name, args: None, .. } = relation else {
+    let TableFactor::Table {
+        name, args: None, ..
+    } = relation
+    else {
         return None;
     };
     let table = relation_name(name).ok()?;
@@ -1328,7 +1332,9 @@ pub(crate) fn save_database_setting(
         .ok_or_else(|| SqlError::InvalidSql(format!("database \"{name}\" does not exist")))?;
     match (setting, value) {
         (Some(setting), Some(value)) => {
-            database.settings.insert(setting.to_string(), value.to_string());
+            database
+                .settings
+                .insert(setting.to_string(), value.to_string());
         }
         (Some(setting), None) => {
             database.settings.remove(setting);

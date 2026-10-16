@@ -554,7 +554,8 @@ impl<'db> SqlEngine<'db> {
             if is_generate_series_table_function(&table) {
                 return self.generate_series_row_set(&table, table_alias, args, *with_ordinality);
             }
-            if is_regexp_split_to_table_function(&table) || is_regexp_matches_table_function(&table) {
+            if is_regexp_split_to_table_function(&table) || is_regexp_matches_table_function(&table)
+            {
                 return self.regexp_split_to_table_row_set(
                     &table,
                     table_alias,
@@ -3481,7 +3482,11 @@ impl<'db> SqlEngine<'db> {
         let mut source_columns = table_function_source_columns_for_alias(
             table_alias,
             &alias_name,
-            vec![table.rsplit('.').next().unwrap_or(table).to_ascii_lowercase()],
+            vec![table
+                .rsplit('.')
+                .next()
+                .unwrap_or(table)
+                .to_ascii_lowercase()],
         );
         if with_ordinality {
             source_columns.push("ordinality".to_string());
@@ -4005,7 +4010,11 @@ impl<'db> SqlEngine<'db> {
         let right_columns = aliased_row_output_columns(&alias_name, &columns);
         let null_right = null_slot_row_for_columns(&right_columns);
         let (scope, context) = self.bound_row_context(&left.columns);
-        let bound_args = call.args.iter().map(|arg| scope.bind(arg)).collect::<Vec<_>>();
+        let bound_args = call
+            .args
+            .iter()
+            .map(|arg| scope.bind(arg))
+            .collect::<Vec<_>>();
         let mut rows = Vec::new();
         let mut candidate_pairs = 0usize;
         for (left_idx, left_row) in left.rows.iter().enumerate() {
@@ -4045,11 +4054,21 @@ impl<'db> SqlEngine<'db> {
                     constraint,
                 )? {
                     matched_left = true;
-                    rows.push(merge_slot_rows(left_row, &left.columns, &right_row, &right_columns));
+                    rows.push(merge_slot_rows(
+                        left_row,
+                        &left.columns,
+                        &right_row,
+                        &right_columns,
+                    ));
                 }
             }
             if !matched_left && matches!(kind, RowJoinKind::Left) {
-                rows.push(merge_slot_rows(left_row, &left.columns, &null_right, &right_columns));
+                rows.push(merge_slot_rows(
+                    left_row,
+                    &left.columns,
+                    &null_right,
+                    &right_columns,
+                ));
             }
         }
         let columns = merge_row_set_columns(left.columns, right_columns);
@@ -4566,11 +4585,16 @@ impl<'db> SqlEngine<'db> {
                 )?;
                 return Ok(Some(aliased_row_output_columns(&alias_name, &columns)));
             }
-            if is_regexp_split_to_table_function(&table) || is_regexp_matches_table_function(&table) {
+            if is_regexp_split_to_table_function(&table) || is_regexp_matches_table_function(&table)
+            {
                 let mut source_columns = table_function_source_columns_for_alias(
                     table_alias,
                     &alias_name,
-                    vec![table.rsplit('.').next().unwrap_or(&table).to_ascii_lowercase()],
+                    vec![table
+                        .rsplit('.')
+                        .next()
+                        .unwrap_or(&table)
+                        .to_ascii_lowercase()],
                 );
                 if *with_ordinality {
                     source_columns.push("ordinality".to_string());
@@ -6128,7 +6152,9 @@ fn coerce_unknown_json_literal(call: &JsonSetReturningCall, value: SqlValue) -> 
     };
     if !matches!(
         literal.value,
-        Value::SingleQuotedString(_) | Value::EscapedStringLiteral(_) | Value::DollarQuotedString(_)
+        Value::SingleQuotedString(_)
+            | Value::EscapedStringLiteral(_)
+            | Value::DollarQuotedString(_)
     ) {
         return Ok(value);
     }

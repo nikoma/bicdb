@@ -846,6 +846,19 @@ impl BicDb {
             .collect()
     }
 
+    /// Rows of `collection` written after `generation` (its change counter),
+    /// oldest first; `None` when the collection is unknown or the window of
+    /// remembered writes no longer reaches back that far.
+    pub fn collection_changes_since(
+        &self,
+        collection: &str,
+        generation: u64,
+    ) -> Option<Vec<crate::db::ChangedRecord>> {
+        self.collections
+            .get(collection)
+            .and_then(|state| state.read().changed_since(generation))
+    }
+
     pub fn collection_generation(&self, collection: &str) -> u64 {
         self.collections
             .get(collection)

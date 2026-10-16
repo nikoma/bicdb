@@ -1420,10 +1420,15 @@ pub(crate) fn rewrite_on_conflict_index_predicates(input: &str) -> Option<String
                 Some(bytes.len())
             }
             b'-' if bytes.get(at + 1) == Some(&b'-') => Some(
-                bytes[at..].iter().position(|b| *b == b'\n').map_or(bytes.len(), |p| at + p + 1),
+                bytes[at..]
+                    .iter()
+                    .position(|b| *b == b'\n')
+                    .map_or(bytes.len(), |p| at + p + 1),
             ),
             b'/' if bytes.get(at + 1) == Some(&b'*') => Some(
-                input[at + 2..].find("*/").map_or(bytes.len(), |p| at + 2 + p + 2),
+                input[at + 2..]
+                    .find("*/")
+                    .map_or(bytes.len(), |p| at + 2 + p + 2),
             ),
             b'$' => dollar_quote_delimiter(&input[at..]).map(|delimiter| {
                 let body = at + delimiter.len();
@@ -1554,10 +1559,15 @@ pub(crate) fn rewrite_on_conflict_after_bare_projection(input: &str) -> Option<S
                 Some(bytes.len())
             }
             b'-' if bytes.get(at + 1) == Some(&b'-') => Some(
-                bytes[at..].iter().position(|b| *b == b'\n').map_or(bytes.len(), |p| at + p + 1),
+                bytes[at..]
+                    .iter()
+                    .position(|b| *b == b'\n')
+                    .map_or(bytes.len(), |p| at + p + 1),
             ),
             b'/' if bytes.get(at + 1) == Some(&b'*') => Some(
-                input[at + 2..].find("*/").map_or(bytes.len(), |p| at + 2 + p + 2),
+                input[at + 2..]
+                    .find("*/")
+                    .map_or(bytes.len(), |p| at + 2 + p + 2),
             ),
             b'$' => dollar_quote_delimiter(&input[at..]).map(|delimiter| {
                 let body = at + delimiter.len();
@@ -1577,15 +1587,20 @@ pub(crate) fn rewrite_on_conflict_after_bare_projection(input: &str) -> Option<S
     let mut flush = |words: &mut Vec<(String, usize)>, inserts: &mut Vec<usize>| {
         if words.first().is_some_and(|(word, _)| word == "insert") {
             for at in 1..words.len() {
-                if words[at].0 != "on" || words.get(at + 1).map(|(w, _)| w.as_str()) != Some("conflict") {
+                if words[at].0 != "on"
+                    || words.get(at + 1).map(|(w, _)| w.as_str()) != Some("conflict")
+                {
                     continue;
                 }
-                let bare = words[..at].iter().rev().find_map(|(word, _)| match word.as_str() {
-                    "select" => Some(true),
-                    "from" | "where" | "group" | "having" | "window" | "order" | "limit"
-                    | "offset" | "fetch" | "values" | "returning" => Some(false),
-                    _ => None,
-                });
+                let bare = words[..at]
+                    .iter()
+                    .rev()
+                    .find_map(|(word, _)| match word.as_str() {
+                        "select" => Some(true),
+                        "from" | "where" | "group" | "having" | "window" | "order" | "limit"
+                        | "offset" | "fetch" | "values" | "returning" => Some(false),
+                        _ => None,
+                    });
                 if bare == Some(true) {
                     inserts.push(words[at].1);
                 }
@@ -1683,10 +1698,15 @@ pub(crate) fn rewrite_record_star_items(input: &str) -> Option<String> {
                 }
             }
             b'-' if bytes.get(idx + 1) == Some(&b'-') => {
-                idx = bytes[idx..].iter().position(|b| *b == b'\n').map_or(bytes.len(), |p| idx + p);
+                idx = bytes[idx..]
+                    .iter()
+                    .position(|b| *b == b'\n')
+                    .map_or(bytes.len(), |p| idx + p);
             }
             b'/' if bytes.get(idx + 1) == Some(&b'*') => {
-                idx = input[idx + 2..].find("*/").map_or(bytes.len(), |p| idx + 2 + p + 1);
+                idx = input[idx + 2..]
+                    .find("*/")
+                    .map_or(bytes.len(), |p| idx + 2 + p + 1);
             }
             b'$' => {
                 if let Some(delimiter) = dollar_quote_delimiter(&input[idx..]) {

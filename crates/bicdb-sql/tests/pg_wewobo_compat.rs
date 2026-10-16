@@ -1628,8 +1628,11 @@ fn an_uncorrelated_in_subquery_runs_once_per_statement_not_once_per_row() {
     let mut rows = result.rows;
     rows.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
     assert_eq!(rows, want);
+    // Guards against the subquery running once per row (minutes), not
+    // against machine speed: the statement takes 2.7-3.6 s in a debug build
+    // on a shared host, so a 3 s bound failed on the same code at random.
     assert!(
-        elapsed < std::time::Duration::from_secs(3),
+        elapsed < std::time::Duration::from_secs(10),
         "took {elapsed:?}"
     );
     eprintln!("uncorrelated IN over 20,000 posts: {elapsed:?}");

@@ -1275,6 +1275,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "bicdb-platform"
+version = "1.0.438-beta"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64 0.22.1",
+ "bicdb-core",
+ "bicdb-sql",
+ "clap",
+ "libc",
+ "parking_lot",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlparser",
+ "subtle",
+ "tempfile",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "bicdb-provider-email"
 version = "1.0.438-beta"
 dependencies = [
@@ -9244,6 +9267,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2 0.6.4",
  "tokio-macros",
  "windows-sys 0.61.2",

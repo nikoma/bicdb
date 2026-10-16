@@ -1,0 +1,25 @@
+[Unit]
+Description=BicDB application platform
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bic
+Group=bic
+StateDirectory=bic-platform
+WorkingDirectory=/var/lib/bic-platform
+ExecStart=/usr/local/bin/bic --data /var/lib/bic-platform serve --listen 127.0.0.1:8788
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=45
+KillMode=control-group
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/bic-platform
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

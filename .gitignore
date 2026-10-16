@@ -23,6 +23,8 @@ perf.data
 perf.data.old
 
 # ---------- bicdb runtime artefacts ----------
+**/.bicdb-platform/
+*.token
 /tmp/
 **/tmp/
 *.db/

@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "name": "counter",
+  "version": "1.0.0",
+  "runtime": "node",
+  "entrypoint": "app.mjs",
+  "files": ["app.mjs", "001-counter.sql"],
+  "migrations": ["001-counter.sql"],
+  "resources": {
+    "memory_mb": 128,
+    "request_timeout_ms": 30000,
+    "max_concurrent_requests": 64
+  }
+}

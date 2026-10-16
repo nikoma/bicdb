@@ -78,6 +78,7 @@ BicDB is **beta**, with a tested subset of PostgreSQL behavior. Read
 
 | Your next step | Start here |
 | --- | --- |
+| Deploy an application with durable state | [Application platform](docs/stateful-application-platform.md) |
 | Embed in Rust | [Embedded example](#embedded-rust) |
 | Connect an application or ORM | [PostgreSQL compatibility](POSTGRES_COMPATIBILITY.md) |
 | Use Redis clients with durable keys | [Redis cache](docs/redis-cache.md) |

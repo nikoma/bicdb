@@ -813,6 +813,7 @@ impl BicDb {
             tx_states: Arc::clone(&self.tx_states),
             pending_broker_publishes: Mutex::new(Vec::new()),
             pending_record_audit_events: Vec::new(),
+            imported_projection: false,
             mutation_actor: None,
             deferred_hooks: Vec::new(),
             mutation_grants: BTreeMap::new(),

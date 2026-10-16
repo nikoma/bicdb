@@ -2182,13 +2182,20 @@ impl BicDb {
         } else {
             None
         };
-        let sync_ops = self.sync_ops_for_commit(&index_mutations_by_collection)?;
+        let sync_ops = if tx.imported_projection {
+            Vec::new()
+        } else {
+            self.sync_ops_for_commit(&index_mutations_by_collection)?
+        };
         if !sync_ops.is_empty() {
             // TODO: v0.2 should atomically group transaction commits and sync-log events.
             self.sync_log.lock().append_ops(&sync_ops)?;
         }
-        let record_audit_events =
-            self.record_audit_events_for_commit(&index_mutations_by_collection)?;
+        let record_audit_events = if tx.imported_projection {
+            Vec::new()
+        } else {
+            self.record_audit_events_for_commit(&index_mutations_by_collection)?
+        };
         test_commit_pause_after_validate();
         timer.lap(&commit_trace::VALIDATE);
         // Past every abort point: assign the sequence and enqueue the WAL bytes.

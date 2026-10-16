@@ -3023,8 +3023,6 @@ impl BicDb {
                 mutations_by_record.entry(key).or_default().push(mutation);
             }
         }
-        self.sync_state.last_reconciled_offset = log_end;
-
         let mut records_merged = 0;
         let mut conflicts_resolved = 0;
         for mutations in mutations_by_record.values() {
@@ -3072,6 +3070,7 @@ impl BicDb {
             }
         }
 
+        self.sync_state.last_reconciled_offset = log_end;
         Ok(AuditMergeReport {
             records_merged,
             conflicts_resolved,
@@ -3108,101 +3107,11 @@ impl BicDb {
                 )));
             }
         }
-        let mut prepared = self.prepare_mutations(collection, vec![record])?;
-        let Some(mutation) = prepared.pop() else {
-            return Ok(false);
-        };
-        let mut index_mutations =
-            self.prepared_index_mutations(collection, std::slice::from_ref(&mutation))?;
-        self.validate_collection_index_mutations(collection, &index_mutations)?;
-        // Durable record storage for `server_paged`. Replication and offline sync
-        // reach records through this path rather than through a transaction, so
-        // without this the imported row would be invisible in paged mode.
-        // Applied BEFORE the resident insert below, so the eviction stub's
-        // fetch already resolves when the stub becomes readable. In paged mode
-        // the segment append is skipped entirely — the page store is the
-        // durable home for rows, and segments carry none.
-        let replicated_index_defs = self.paged_durable_index_defs(collection)?;
-        let paged_xid = self.in_paged_transaction(|paged, xid| {
-            let pre_snapshot = bicdb_page::Snapshot {
-                xid: 0,
-                xmax: xid,
-                in_flight: empty_in_flight(),
-            };
-            let previous = if replicated_index_defs.is_empty() {
-                None
-            } else {
-                paged.get(&pre_snapshot, collection, &mutation.record.id)?
-            };
-            let locator = paged.put(xid, collection, &mutation.record)?;
-            apply_paged_index_upsert(
-                paged,
-                xid,
-                collection,
-                &replicated_index_defs,
-                previous.as_ref(),
-                &mutation.record,
-                Some((locator, xid)),
-            )?;
-            Ok(())
-        })?;
-        let offset = if paged_xid.is_none() {
-            let payload = serde_json::to_vec(&RecordFrame::Upsert {
-                record: mutation.record.clone(),
-            })?;
-            let offsets = storage::append_frames(
-                &self.segment_path(collection),
-                FrameKind::Record,
-                &[payload],
-                self.config.fsync,
-                &self.config.compression,
-                &self.encryption,
-            )?;
-            offsets[0]
-        } else {
-            0
-        };
-        let stub_fetch = paged_xid.and_then(|xid| self.paged_stub_fetch(collection, xid));
-        let state = self.collection_state_mut(collection)?;
-        let record_id = mutation.record.id.clone();
-        let old_record_had_vector = index_mutations
-            .first()
-            .is_some_and(|mutation| mutation.old_record.has_vector());
-        {
-            let stored = match &stub_fetch {
-                Some(fetch) => Arc::new(StoredRecord::evicted_stub(
-                    &mutation.record,
-                    crate::record::EvictedPayload {
-                        fetch: Arc::clone(fetch),
-                        pk: Arc::from(record_id.as_str()),
-                    },
-                )),
-                None => Arc::new(StoredRecord::from_record(&mutation.record)?),
-            };
-            let shard = state.shard_mut(&record_id);
-            let rowid = shard.rowid_or_alloc(&record_id);
-            shard.records.insert(
-                rowid,
-                RecordEntry {
-                    offset,
-                    record: stored,
-                },
-            );
-        }
-        if old_record_had_vector {
-            state.rebuild_vector_store();
-        } else {
-            let pushed = state
-                .shard_mut(&record_id)
-                .get_record(&record_id)
-                .map(|entry| entry.record.clone());
-            if let Some(record) = pushed {
-                state.vector_store.get_mut().push_record(&record);
-            }
-        }
-        state.generation.fetch_add(1, AtomicOrdering::Relaxed);
-        self.apply_collection_index_mutations(collection, &mut index_mutations)?;
-        self.refresh_hnsw_after_upsert(collection, true)?;
+        let mut tx = self.begin_transaction()?;
+        tx.imported_projection = true;
+        tx.enqueue_memory_jobs_on_commit = false;
+        tx.insert(collection, record)?;
+        tx.commit()?;
         Ok(true)
     }
 
@@ -3231,82 +3140,16 @@ impl BicDb {
                 )));
             }
         }
-        let mut index_mutations = self
-            .delete_index_mutation(collection, record_id)?
-            .into_iter()
-            .collect::<Vec<_>>();
-        // Capture the deleted record's locator before it is removed below.
-        self.fill_index_mutation_rowids(collection, &mut index_mutations)?;
-        self.validate_collection_index_mutations(collection, &index_mutations)?;
-        // Durable record storage for `server_paged` — see the matching comment in
-        // `apply_replicated_upsert`. In paged mode this, not the shard below, is
-        // what decides whether the record was really there to delete, and no
-        // segment tombstone is written: segments carry no rows in that mode.
-        let mut removed_from_paged = false;
-        let replicated_index_defs = self.paged_durable_index_defs(collection)?;
-        let paged_xid = self.in_paged_transaction(|paged, xid| {
-            let pre_snapshot = bicdb_page::Snapshot {
-                xid: 0,
-                xmax: xid,
-                in_flight: empty_in_flight(),
-            };
-            let previous = if replicated_index_defs.is_empty() {
-                None
-            } else {
-                paged.get(&pre_snapshot, collection, record_id)?
-            };
-            removed_from_paged = paged.delete(xid, collection, record_id)?;
-            if let Some(previous) = &previous {
-                apply_paged_index_delete(
-                    paged,
-                    xid,
-                    collection,
-                    &replicated_index_defs,
-                    previous,
-                    record_id,
-                )?;
-            }
-            Ok(())
-        })?;
-        if paged_xid.is_none() {
-            let payload = serde_json::to_vec(&RecordFrame::Delete {
-                id: record_id.to_string(),
-            })?;
-            storage::append_frames(
-                &self.segment_path(collection),
-                FrameKind::Record,
-                &[payload],
-                self.config.fsync,
-                &self.config.compression,
-                &self.encryption,
-            )?;
+        let existed = self.get(collection, record_id)?.is_some();
+        if !existed {
+            return Ok(false);
         }
-        let state = self.collection_state_mut(collection)?;
-        let removed = {
-            let shard = state.shard_mut(record_id);
-            match shard.rowid_of(record_id) {
-                Some(rowid) => {
-                    let removed = shard.records.remove(&rowid);
-                    // This replicated path keeps no version chain, so the key is gone
-                    // immediately; drop its registry entry.
-                    shard.forget_if_empty(record_id, rowid);
-                    removed
-                }
-                None => None,
-            }
-        };
-        if removed
-            .as_ref()
-            .is_some_and(|entry| entry.record.vector.is_some())
-        {
-            state.rebuild_vector_store();
-        }
-        if removed.is_some() {
-            state.generation.fetch_add(1, AtomicOrdering::Relaxed);
-        }
-        self.apply_collection_index_mutations(collection, &mut index_mutations)?;
-        self.tombstone_hnsw_record(collection, record_id)?;
-        Ok(removed.is_some() || removed_from_paged)
+        let mut tx = self.begin_transaction()?;
+        tx.imported_projection = true;
+        tx.enqueue_memory_jobs_on_commit = false;
+        tx.delete(collection, record_id)?;
+        tx.commit()?;
+        Ok(true)
     }
 
     pub(crate) fn write_attachment_unchecked(

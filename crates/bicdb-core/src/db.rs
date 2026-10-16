@@ -8319,6 +8319,9 @@ pub struct Transaction {
     // transaction WAL; this in-memory copy is published to the event segment
     // only after `write_durable` succeeds.
     pending_record_audit_events: Vec<Event>,
+    // Verified mesh projection: preserve the signed origin events rather than
+    // publishing a second locally-authored mutation for the same change.
+    imported_projection: bool,
     // Trusted application-runtime authority. Ordinary SQL, pgwire, direct API,
     // replication, and WASM data cannot manufacture these grants.
     mutation_actor: Option<MutationActor>,
@@ -11449,6 +11452,7 @@ impl BicDb {
         }
         state.meta.mesh_sync_enabled = enabled;
         self.persist_catalog()?;
+        self.invalidate_sync_vector_cache();
         self.schema_compatibility.invalidate();
         Ok(())
     }

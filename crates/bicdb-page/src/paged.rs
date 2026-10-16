@@ -972,6 +972,11 @@ impl PagedStore {
         // Page images from crash-lost transactions carry ids that never
         // reached a terminal record; those ids must not be reissued.
         transactions.ensure_next_xid_at_least(recovery.max_record_transaction.saturating_add(1));
+        // Nothing has begun yet: every id issued so far belongs to an earlier
+        // incarnation, and one with no terminal record anywhere died with it.
+        // This is what keeps crash-orphaned row versions from reading as an
+        // eternal concurrent writer once the exception region is full.
+        transactions.seal_previous_incarnations();
 
         // Nothing is in flight at open, so every recovered xid is terminal or
         // crash-dead. Advance the watermark across everything representable
@@ -1618,7 +1623,12 @@ impl PagedStore {
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
         self.pool.set_current_transaction(transaction);
-        let previous = self.index.get(key)?.and_then(|b| TupleLocator::decode(&b));
+        let head = self.index.get(key)?.and_then(|b| TupleLocator::decode(&b));
+        // Chain the new version onto the newest version that is not aborted:
+        // an aborted (or crash-orphaned) head is dead weight, and stamping it
+        // instead of the committed version beneath would leave that version
+        // live under the new one and strand it behind a reclaimable tuple.
+        let previous = self.write_base(transaction, head)?;
         if let Some(previous) = previous {
             self.check_write_conflict(transaction, previous, key)?;
         }
@@ -1641,6 +1651,49 @@ impl PagedStore {
         self.index.insert(key, &locator.encode())?;
         self.sync_roots()?;
         Ok(locator)
+    }
+
+    /// The newest version at or below `head` whose creator did not abort.
+    ///
+    /// Writers build on this version, never on an aborted one: its `xmax` is
+    /// what a delete or supersession must stamp for readers to stop seeing
+    /// it. Versions skipped here are left untouched — rewriting their links
+    /// could not be made crash-atomic with the index update — and vacuum
+    /// reclaims them once nothing beneath them is still needed.
+    fn write_base(
+        &self,
+        transaction: Xid,
+        head: Option<TupleLocator>,
+    ) -> Result<Option<TupleLocator>> {
+        let mut cursor = head;
+        for _ in 0..MAX_VERSION_CHAIN {
+            let Some(locator) = cursor else {
+                return Ok(None);
+            };
+            let header = match self
+                .heap
+                .read_prefix(locator, crate::mvcc::VERSION_HEADER_BYTES)
+            {
+                Ok(prefix) => VersionHeader::decode(&prefix).map(|(header, _)| header),
+                // Vacuumed history: nothing older to build on.
+                Err(PageError::StaleLocator { .. })
+                | Err(PageError::DeadSlot { .. })
+                | Err(PageError::NoSuchSlot { .. })
+                | Err(PageError::OutOfBounds { .. }) => return Ok(None),
+                Err(error) => return Err(error),
+            };
+            let Some(header) = header else {
+                return Ok(Some(locator));
+            };
+            if header.xmin == 0
+                || header.xmin == transaction
+                || self.transactions.status(header.xmin) != TxStatus::Aborted
+            {
+                return Ok(Some(locator));
+            }
+            cursor = header.prev;
+        }
+        Ok(cursor)
     }
 
     /// Refuse a write to a row a concurrent transaction has already written.
@@ -1954,7 +2007,12 @@ impl PagedStore {
         let Some(bytes) = self.index.get(key)? else {
             return Ok(false);
         };
-        let Some(locator) = TupleLocator::decode(&bytes) else {
+        let Some(head) = TupleLocator::decode(&bytes) else {
+            return Ok(false);
+        };
+        // Stamp the version readers actually see, not an aborted head above
+        // it: an `xmax` on a version nobody can see deletes nothing.
+        let Some(locator) = self.write_base(transaction, Some(head))? else {
             return Ok(false);
         };
         // Already invisible to this transaction? Then there is nothing to delete.
@@ -2853,7 +2911,15 @@ impl PagedStore {
                 };
                 report.versions_examined += 1;
 
-                let creator_aborted = self.transactions.status(header.xmin) == TxStatus::Aborted;
+                // An aborted version is reclaimable only once nothing beneath
+                // it is still needed. It may be the head the index points at
+                // (or a link of an older chain), with the committed version
+                // readers actually see as its `prev`; freeing it then
+                // truncates the chain there and that committed row reads as
+                // absent. So the version below must itself be gone or dead
+                // to every snapshot.
+                let creator_aborted = self.transactions.status(header.xmin) == TxStatus::Aborted
+                    && self.nothing_needed_below(header.prev, oldest_active)?;
                 let deleted_for_everyone = header.xmax != 0
                     && header.xmax < oldest_active
                     && self.transactions.status(header.xmax) == TxStatus::Committed;
@@ -2950,6 +3016,32 @@ impl PagedStore {
             });
         }
         Ok(report)
+    }
+
+    /// Whether the chain below an aborted version holds nothing any snapshot
+    /// can still reach: no previous version, a vacuumed one, or one deleted
+    /// for everyone (and so is everything older than it).
+    fn nothing_needed_below(&self, prev: Option<TupleLocator>, oldest_active: Xid) -> Result<bool> {
+        let Some(prev) = prev else {
+            return Ok(true);
+        };
+        let header = match self
+            .heap
+            .read_prefix(prev, crate::mvcc::VERSION_HEADER_BYTES)
+        {
+            Ok(prefix) => match VersionHeader::decode(&prefix) {
+                Some((header, _)) => header,
+                None => return Ok(false),
+            },
+            Err(PageError::StaleLocator { .. })
+            | Err(PageError::DeadSlot { .. })
+            | Err(PageError::NoSuchSlot { .. })
+            | Err(PageError::OutOfBounds { .. }) => return Ok(true),
+            Err(error) => return Err(error),
+        };
+        Ok(header.xmax != 0
+            && header.xmax < oldest_active
+            && self.transactions.status(header.xmax) == TxStatus::Committed)
     }
 
     /// INDEX-ENTRY GC: remove B-tree keys whose entire version chain has
@@ -5065,17 +5157,10 @@ impl crate::mvcc::OutcomeSpill for PagedOutcomeSpill {
         self.lookup_checked(xid)
     }
 
-    fn status(&self, xid: Xid) -> Option<TxStatus> {
-        match self.lookup_checked(xid) {
-            Ok(status) => status,
-            Err(_) => {
-                // Visibility falls back to the safe direction (in-progress,
-                // hence invisible); the counter flags the page file for
-                // integrity attention.
-                self.lookup_failures.fetch_add(1, Ordering::AcqRel);
-                None
-            }
-        }
+    /// Visibility falls back to the safe direction (in-progress, hence
+    /// invisible); the counter flags the page file for integrity attention.
+    fn note_lookup_failure(&self) {
+        self.lookup_failures.fetch_add(1, Ordering::AcqRel);
     }
 }
 
@@ -7199,6 +7284,132 @@ mod tests {
             Some(&b"yes"[..])
         );
         assert_eq!(store.transactions().resident_entries(), 0);
+    }
+
+    /// Fill the durable abort-exception region so the watermark pins, which
+    /// is the production shape (1006/1006 on an 8 KiB store): from then on a
+    /// crash-orphaned transaction can never be absorbed by the open-time
+    /// freeze and must be classified by the open horizon instead.
+    fn exhaust_abort_exceptions(store: &PagedStore) {
+        let capacity = store.snapshot().unwrap().abort_exception_capacity;
+        for _ in 0..capacity + 4 {
+            let doomed = store.begin();
+            store.abort(doomed).unwrap();
+        }
+        store.checkpoint().unwrap();
+        let snapshot = store.snapshot().unwrap();
+        assert_eq!(snapshot.abort_exceptions, capacity);
+    }
+
+    /// Leave `key` with a head version stamped by a transaction that never
+    /// reaches a terminal record — written, flushed to the page file by a
+    /// checkpoint (steal), then lost to a crash.
+    fn crash_with_orphaned_head(dir: &TempDir, key: &[u8]) -> Xid {
+        let store = open(dir);
+        exhaust_abort_exceptions(&store);
+        let setup = store.begin();
+        store.put(setup, key, b"committed").unwrap();
+        store.commit(setup).unwrap();
+        store.checkpoint().unwrap();
+        let orphan = store.begin();
+        store.put(orphan, key, b"orphaned").unwrap();
+        store.checkpoint().unwrap();
+        // Crash: no commit, no abort record.
+        drop(store);
+        orphan
+    }
+
+    #[test]
+    fn a_crash_orphaned_writer_does_not_wedge_its_rows_after_reopen() {
+        let dir = TempDir::new().unwrap();
+        let orphan = crash_with_orphaned_head(&dir, b"\0\x04jobs-1");
+
+        let (store, _) = PagedStore::open(dir.path(), options()).unwrap();
+        assert_eq!(
+            store.transactions().status(orphan),
+            TxStatus::Aborted,
+            "an xid from a previous incarnation with no terminal record must be aborted"
+        );
+        assert_eq!(
+            store.get(b"\0\x04jobs-1").unwrap().as_deref(),
+            Some(&b"committed"[..]),
+            "the orphaned version must be invisible and the committed one the base"
+        );
+        let writer = store.begin();
+        store
+            .put(writer, b"\0\x04jobs-1", b"recovered")
+            .expect("a crash-orphaned head must not read as a concurrent writer");
+        store.commit(writer).unwrap();
+        assert_eq!(
+            store.get(b"\0\x04jobs-1").unwrap().as_deref(),
+            Some(&b"recovered"[..])
+        );
+
+        // Survives another restart, and vacuum may reclaim the orphan
+        // without disturbing the committed chain.
+        drop(store);
+        let (store, _) = PagedStore::open(dir.path(), options()).unwrap();
+        store.vacuum(10_000).unwrap();
+        assert_eq!(
+            store.get(b"\0\x04jobs-1").unwrap().as_deref(),
+            Some(&b"recovered"[..])
+        );
+        let again = store.begin();
+        store.put(again, b"\0\x04jobs-1", b"again").unwrap();
+        store.commit(again).unwrap();
+    }
+
+    #[test]
+    fn vacuum_of_a_crash_orphaned_head_keeps_the_committed_base() {
+        let dir = TempDir::new().unwrap();
+        crash_with_orphaned_head(&dir, b"k");
+        let (store, _) = PagedStore::open(dir.path(), options()).unwrap();
+        store.vacuum(10_000).unwrap();
+        store.sweep_dead_index_entries(10_000).unwrap();
+        assert_eq!(
+            store.get(b"k").unwrap().as_deref(),
+            Some(&b"committed"[..]),
+            "vacuuming the orphaned head lost the committed version beneath it"
+        );
+        let writer = store.begin();
+        store.put(writer, b"k", b"next").unwrap();
+        store.commit(writer).unwrap();
+        assert_eq!(store.get(b"k").unwrap().as_deref(), Some(&b"next"[..]));
+    }
+
+    #[test]
+    fn vacuum_of_a_rolled_back_head_keeps_the_committed_base() {
+        let dir = TempDir::new().unwrap();
+        let store = open(&dir);
+        let setup = store.begin();
+        store.put(setup, b"k", b"committed").unwrap();
+        store.commit(setup).unwrap();
+        let doomed = store.begin();
+        store.put(doomed, b"k", b"rolled-back").unwrap();
+        store.abort(doomed).unwrap();
+        store.vacuum(10_000).unwrap();
+        assert_eq!(
+            store.get(b"k").unwrap().as_deref(),
+            Some(&b"committed"[..]),
+            "vacuuming the rolled-back head lost the committed version beneath it"
+        );
+    }
+
+    #[test]
+    fn a_live_concurrent_writer_still_conflicts_after_reopen() {
+        // The open horizon only classifies ids from previous incarnations;
+        // two transactions of this process keep first-updater-wins.
+        let dir = TempDir::new().unwrap();
+        crash_with_orphaned_head(&dir, b"k");
+        let (store, _) = PagedStore::open(dir.path(), options()).unwrap();
+        let first = store.begin();
+        let second = store.begin();
+        store.put(first, b"k", b"first").unwrap();
+        let error = store.put(second, b"k", b"second").unwrap_err();
+        assert!(error.is_write_conflict(), "unexpected: {error:?}");
+        store.commit(first).unwrap();
+        let error = store.put(second, b"k", b"second").unwrap_err();
+        assert!(error.is_write_conflict(), "unexpected: {error:?}");
     }
 
     #[test]

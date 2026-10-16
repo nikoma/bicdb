@@ -52,6 +52,48 @@ meta-page region is full, freezing degrades to its pre-1.0.85-beta stop
 behavior and reports it through checkpoint step reports, snapshots, and
 metrics.
 
+### Transactions orphaned by an earlier process
+
+A transaction that wrote row versions, had them flushed by a checkpoint
+(steal), and then died with its process (crash, kill, or a shutdown that never
+logged its abort) leaves versions stamped with an id that has no terminal
+record anywhere. When the exception region has room, the open-time freeze
+records such an id as an abort exception. When the region is full, the
+watermark stays where it is and cannot reach the id. Before the open horizon
+existed, `TransactionTable::status` reported such an id as in progress forever.
+Every row whose newest version it stamped then failed every write with `write
+conflict on row …: transaction N cannot write a row last written by
+transaction M (in xmin), which is concurrent with it`.
+
+At open, after recovery has raised `next_xid` past every id named by the meta
+page and the log, the table records that value as its **open horizon**. An id
+below the horizon that has no resident, recovered, spilled, or frozen record
+was issued by an earlier process and can never commit, so it reads as
+**aborted**. Its versions are invisible, as they already were. Writers build
+on the newest non-aborted version beneath them, and vacuum can reclaim them.
+An unreadable spill page is not proof that a record is missing: that lookup
+still reports in progress. Ids issued by the current process keep ordinary
+in-progress semantics, so first-updater-wins between live transactions is
+unchanged. Stores already in this state heal on the next open with no repair
+step.
+
+Writers never stamp an aborted head. `put` chains the new version onto the
+newest version whose creator did not abort, and `delete` stamps `xmax` on that
+version. Vacuum reclaims an aborted version only when nothing beneath it is
+still needed: there is no previous version, the previous version has already
+been reclaimed, or it was deleted for every snapshot. Before this rule, vacuum
+freed an aborted head even when the committed row sat beneath it, and that row
+then read as absent.
+
+### Rollback hazard: `commit-seq.floor`
+
+Newer engines persist `commit-seq.floor` in the database root when a paged
+open finds a non-empty transaction log, and then truncate that log. Engines
+that predate the file ignore it. They restart commit-sequence numbering below
+numbers that are already in use. Do not roll a store that has been opened by a
+floor-writing engine back to an older binary. If a rollback cannot be avoided,
+treat it as a restore from backup rather than a binary swap.
+
 ## Memory contract
 
 `MAX_WAL_RECORD_BYTES` is the hard maximum for a validated record: the 24-byte

@@ -175,10 +175,12 @@ async fn a_feed_subscription_streams_changes_and_stops_on_cancel() {
         text_rows(&subscriber, "SELECT count(*) FROM posts").await,
         vec![vec![Some("4".to_string())]]
     );
-    // A join is re-run whole on every change to its tables.
+    // The four observed result changes each require a full join evaluation.
+    // Initial evaluation is not counted, and the unrelated insert may be
+    // coalesced with the following update rather than evaluated separately.
     let (_, full, incremental) = running.server.live_query_stats();
     assert!(
-        full >= 5 && incremental == 0,
+        full >= 4 && incremental == 0,
         "full={full} incremental={incremental}"
     );
     running.stop();

@@ -542,3 +542,118 @@ fn sigterm_drains_the_supervisor_and_releases_storage_for_restart() {
     service.ready();
     assert_eq!(service.state()[1]["value"], 0);
 }
+
+#[test]
+fn encrypted_recovery_image_moves_data_jobs_and_release_to_an_inactive_catalog() {
+    let mut source = Service::start();
+    let package = fixture();
+    assert!(source.deploy(&package).status().is_success());
+    source
+        .client
+        .post(format!("{}/apps/counter/increment", source.base()))
+        .header("idempotency-key", "before-backup")
+        .send()
+        .unwrap()
+        .error_for_status()
+        .unwrap();
+    let files = tempfile::tempdir().unwrap();
+    let key = files.path().join("backup.key");
+    bicdb_platform::store::write_synced(&key, b"recovery-test-key-with-at-least-32-characters")
+        .unwrap();
+    let archive = files.path().join("counter.bicbak");
+    let output = Command::new(env!("CARGO_BIN_EXE_bic"))
+        .arg("--data")
+        .arg(source.root.path())
+        .args(["--endpoint", &source.base(), "backup", "counter"])
+        .arg(&archive)
+        .arg("--passphrase-file")
+        .arg(&key)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let target = tempfile::tempdir().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_bic"))
+        .arg("--data")
+        .arg(target.path())
+        .arg("restore")
+        .arg(&archive)
+        .arg("--passphrase-file")
+        .arg(&key)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let deployment: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(deployment["enabled"], false);
+    // Fence the previous runtime before activating the recovered identity.
+    source.child.kill().unwrap();
+    source.child.wait().unwrap();
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let recovered = Service {
+        child: spawn(target.path(), port),
+        root: target,
+        port,
+        client: source.client.clone(),
+    };
+    recovered.ready();
+    assert_eq!(
+        recovered
+            .client
+            .get(format!("{}/apps/counter", recovered.base()))
+            .send()
+            .unwrap()
+            .status(),
+        503
+    );
+    let response = recovered
+        .client
+        .post(format!("{}/v1/apps/counter/start", recovered.base()))
+        .bearer_auth(recovered.token())
+        .send()
+        .unwrap();
+    assert!(
+        response.status().is_success(),
+        "{}",
+        response.text().unwrap()
+    );
+    assert_eq!(recovered.state()[1]["value"], 1);
+    for _ in 0..2 {
+        recovered
+            .client
+            .post(format!(
+                "{}/apps/counter/increment-and-enqueue",
+                recovered.base()
+            ))
+            .header("idempotency-key", "atomic-job")
+            .send()
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+    }
+    wait(|| recovered.state()[0]["value"] == 1);
+    assert_eq!(recovered.state()[1]["value"], 2);
+    let again = Command::new(env!("CARGO_BIN_EXE_bic"))
+        .arg("--data")
+        .arg(recovered.root.path())
+        .arg("restore")
+        .arg(&archive)
+        .arg("--passphrase-file")
+        .arg(&key)
+        .output()
+        .unwrap();
+    assert!(
+        !again.status.success(),
+        "restore cannot replace a live catalog"
+    );
+}

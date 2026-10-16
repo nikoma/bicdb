@@ -272,6 +272,7 @@ pub fn router(platform: Arc<Platform>) -> Router {
         .route("/v1/apps/:name/:operation", post(operation))
         .route("/v1/apps/:name/logs", get(logs))
         .route("/v1/apps/:name/jobs", get(job_status))
+        .route("/v1/apps/:name/backup", post(backup))
         .route("/v1/apps/:name/identity", get(identity))
         .route("/v1/apps/:name/peers", get(peers).post(add_peer))
         .route(
@@ -683,7 +684,11 @@ async fn jobs(platform: Arc<Platform>) {
             let message = blocking({
                 let app = app.clone();
                 let consumer = consumer.clone();
-                move || app.database.lock().consume(&consumer, timeout)
+                move || {
+                    let mut database = app.database.lock();
+                    database.drain_outbox(32)?;
+                    database.consume(&consumer, timeout)
+                }
             })
             .await;
             let Ok(Some(message)) = message else {
@@ -1131,4 +1136,70 @@ async fn shutdown_signal() {
         }
     }
     let _ = tokio::signal::ctrl_c().await;
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BackupRequest {
+    passphrase: String,
+}
+
+async fn backup(
+    State(platform): State<Arc<Platform>>,
+    RoutePath(name): RoutePath<String>,
+    headers: HeaderMap,
+    Json(request): Json<BackupRequest>,
+) -> ApiResult<Response> {
+    platform.admin_auth(&headers)?;
+    if request.passphrase.len() < 32 || request.passphrase.len() > 4096 {
+        return Err(ApiError(
+            StatusCode::BAD_REQUEST,
+            "backup passphrase must contain 32 to 4096 bytes".into(),
+        ));
+    }
+    let _admin = platform.admin.lock().await;
+    let app = platform.app(&name)?;
+    let _gate = app.gate.write().await;
+    let path = blocking({
+        let app = app.clone();
+        let platform = platform.clone();
+        move || {
+            let deployment = app.deployment.lock().clone();
+            let release = platform.store.load_release(&name, &deployment.release)?;
+            let previous = deployment
+                .previous
+                .as_ref()
+                .map(|digest| platform.store.load_release(&name, digest))
+                .transpose()?;
+            let snapshots = platform.store.root.join("snapshots");
+            std::fs::create_dir_all(&snapshots)?;
+            let path = snapshots.join(format!("{}.bicbak", Uuid::new_v4()));
+            crate::recovery::snapshot(
+                &mut app.database.lock(),
+                deployment,
+                release,
+                previous,
+                &path,
+                &request.passphrase,
+            )?;
+            Ok(path)
+        }
+    })
+    .await?;
+    let file = std::fs::File::open(&path).map_err(anyhow::Error::from)?;
+    let size = file.metadata().map_err(anyhow::Error::from)?.len();
+    // Unix is the supervisor's supported host. The opened inode remains readable
+    // while unlinking prevents completed/interrupted downloads accumulating files.
+    std::fs::remove_file(&path).map_err(anyhow::Error::from)?;
+    let stream = tokio_util::io::ReaderStream::new(tokio::fs::File::from_std(file));
+    Response::builder()
+        .header("content-type", "application/octet-stream")
+        .header("content-length", size)
+        .body(Body::from_stream(stream))
+        .map_err(|_| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "backup response failed".into(),
+            )
+        })
 }

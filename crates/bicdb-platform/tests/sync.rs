@@ -42,6 +42,7 @@ fn query(database: &mut Database, sql: &str) -> anyhow::Result<Vec<bicdb_sql::Sq
             params: vec![],
         }],
         idempotency_key: None,
+        jobs: vec![],
     })
 }
 fn connect(left: &mut Database, right: &mut Database) {

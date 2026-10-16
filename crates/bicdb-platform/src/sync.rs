@@ -182,7 +182,9 @@ pub fn export(
 ) -> Result<Exchange> {
     let vector = database.db.sync_vector()?;
     vector.ensure_matching_equal_prefixes(peer)?;
-    let bundle = database.db.export_sync_bundle_delta(peer)?;
+    let bundle = database
+        .db
+        .export_sync_bundle_delta_bounded(peer, 10_000, 15 * 1024 * 1024)?;
     check_bundle(&bundle, release)?;
     ensure!(
         serde_json::to_vec(&bundle)?.len() <= 16 * 1024 * 1024,

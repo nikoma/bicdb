@@ -81,7 +81,7 @@ const rows = await env.DB.query(
 const results = await env.DB.transaction([
   { sql: 'UPDATE counters SET value = value + 1 WHERE id = $1 RETURNING value',
     params: ['requests'] }
-], { idempotencyKey: 'operation-123' });
+], { idempotencyKey: 'operation-123', jobs: [{ action: 'refresh' }] });
 
 const conflicts = await env.DB.conflicts('notes');
 
@@ -101,7 +101,10 @@ Job delivery is at least once, with bounded attempts, visibility leases and
 broker dead letters. A handler should use its stable message ID as a database
 idempotency key, as the counter example does. External effects require the
 receiving service's idempotency mechanism. A standalone `JOBS.send` is a separate
-durable operation from a preceding SQL transaction. Job storage remains local
+durable operation from a preceding SQL transaction. Use the transaction option
+`jobs` to commit queued work atomically with SQL effects. A durable outbox bridges
+committed jobs to delivery with a stable broker deduplication key, including a
+restart between publication and outbox removal. Job storage remains local
 to each application instance and does not enter record synchronization.
 
 ## Upgrades and recovery
@@ -121,9 +124,27 @@ than running old code against a potentially changed schema.
 
 `bic rollback counter` activates the previous package only when its migration
 history still covers every committed migration. It does not rewind database
-contents or reverse external effects. Recovery on another host, automated
-placement and failover are separate platform requirements; a local process
-restart does not establish those guarantees.
+contents or reverse external effects. An encrypted recovery image can transfer the application to a fresh host:
+
+```sh
+umask 077
+openssl rand -hex 32 > backup.key
+bic backup counter counter.bicbak --passphrase-file backup.key
+# On a target host with no running supervisor:
+bic --data ./recovered restore counter.bicbak --passphrase-file backup.key
+bic --data ./recovered serve
+```
+
+Restores publish a complete inactive application directory and refuse existing
+applications. The image contains the current and previous release, database,
+request receipts, pending transactional outbox and local broker state. It
+excludes management credentials and peer transport grants. Transfer the key
+separately and re-provision peer grants where needed. Stop or otherwise fence
+the previous writer before explicitly running `bic start counter` on the target.
+Recovery retains the database node identity; activating two restored copies is
+not a supported multi-writer topology. Database conflicts do not fence a former
+writer. Automated placement and failover require separate writer/route authority;
+manual restore and a local process restart do not establish those guarantees.
 
 ## Edge synchronization
 
@@ -185,8 +206,9 @@ that application's declared sync tables. It is not row-level user authorization.
 
 The loop retries after disconnection and derives coverage from the durable event
 log. Replayed bundles deduplicate. Peers must run the same release while
-exchanging changes. Each delta is currently bounded to 10,000 events and 16 MiB;
-larger backlogs fail explicitly until chunked delta transfer is implemented.
+exchanging changes. Each exchange transfers the next bounded prefix of missing events, up to
+10,000 events and 15 MiB of event data. Large backlogs resume across exchanges
+without acknowledging the untransferred tail. One oversized event is refused.
 Synchronization preserves record causality, not a distributed SQL transaction
 or cross-node foreign-key, inventory or uniqueness invariant.
 

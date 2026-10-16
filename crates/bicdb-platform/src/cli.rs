@@ -44,6 +44,19 @@ pub enum Command {
         #[arg(default_value = "bic.json")]
         manifest: PathBuf,
     },
+    /// Download an encrypted application recovery image, including local jobs.
+    Backup {
+        application: String,
+        output: PathBuf,
+        #[arg(long)]
+        passphrase_file: PathBuf,
+    },
+    /// Restore an application into an unused local catalog, always inactive.
+    Restore {
+        archive: PathBuf,
+        #[arg(long)]
+        passphrase_file: PathBuf,
+    },
     /// Inspect desired and running application state.
     List,
     /// Inspect the stable database node ID, signing key and active release.
@@ -90,18 +103,23 @@ pub enum PeerCommand {
 }
 
 pub fn token(path: &Path) -> Result<String> {
-    let metadata = std::fs::metadata(path)
-        .context("read management token; start `bic serve` or provide --token-file")?;
-    ensure!(metadata.len() <= 4096, "invalid token file");
+    use std::io::Read;
+    let file = std::fs::File::open(path)
+        .context("read secret file; provide the owner-only token or key file")?;
+    let metadata = file.metadata()?;
+    ensure!(metadata.len() <= 4096, "invalid secret file");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         ensure!(
             metadata.permissions().mode() & 0o077 == 0,
-            "management token file must have mode 0600"
+            "secret file must have mode 0600"
         );
     }
-    let value = std::fs::read_to_string(path)?.trim().to_owned();
+    let mut bytes = Vec::new();
+    file.take(4097).read_to_end(&mut bytes)?;
+    ensure!(bytes.len() <= 4096, "secret file exceeds size limit");
+    let value = String::from_utf8(bytes)?.trim().to_owned();
     ensure!(
         value.len() >= 32 && !value.chars().any(char::is_whitespace),
         "invalid management token"
@@ -121,6 +139,16 @@ pub fn run(cli: Cli) -> Result<()> {
                 format!("{}{}\n", Uuid::new_v4().simple(), Uuid::new_v4().simple()).as_bytes(),
             )?;
             println!("Created {}", output.display());
+            Ok(())
+        }
+        Command::Restore {
+            archive,
+            passphrase_file,
+        } => {
+            let passphrase = token(&passphrase_file)?;
+            let store = crate::store::Store::open(&cli.data)?;
+            let deployment = crate::recovery::restore(&store, &archive, &passphrase)?;
+            println!("{}", serde_json::to_string(&deployment)?);
             Ok(())
         }
         Command::Serve { listen, node } => {
@@ -164,10 +192,31 @@ pub fn run(cli: Cli) -> Result<()> {
                 .redirect(reqwest::redirect::Policy::none())
                 .build()?;
             let base = cli.endpoint.trim_end_matches('/');
+            let backup_output = if let Command::Backup { output, .. } = &command {
+                ensure!(!output.exists(), "backup output already exists");
+                Some(output.clone())
+            } else {
+                None
+            };
             let request = match command {
                 Command::Deploy { manifest } => client
                     .post(format!("{base}/v1/apps"))
                     .json(&Release::read(&manifest)?),
+                Command::Backup {
+                    application,
+                    output: _,
+                    passphrase_file,
+                } => {
+                    ensure!(
+                        crate::manifest::valid_name(&application),
+                        "invalid application name"
+                    );
+                    let passphrase = token(&passphrase_file)?;
+                    client
+                        .post(format!("{base}/v1/apps/{application}/backup"))
+                        .timeout(std::time::Duration::from_secs(3600))
+                        .json(&serde_json::json!({"passphrase":passphrase}))
+                }
                 Command::List => client.get(format!("{base}/v1/apps")),
                 Command::Jobs { application } => {
                     ensure!(
@@ -243,6 +292,39 @@ pub fn run(cli: Cli) -> Result<()> {
                 .send()
                 .context("contact application platform")?;
             let status = response.status();
+            if let Some(output) = backup_output {
+                ensure!(status.is_success(), "backup request failed: {status}");
+                let temporary = output.with_extension(format!("download-{}.tmp", Uuid::new_v4()));
+                let result = (|| -> Result<()> {
+                    let mut options = std::fs::OpenOptions::new();
+                    options.write(true).create_new(true);
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::OpenOptionsExt;
+                        options.mode(0o600);
+                    }
+                    let mut file = options.open(&temporary)?;
+                    let mut response = response;
+                    std::io::copy(&mut response, &mut file)?;
+                    file.sync_all()?;
+                    // Publish without replacing an existing file, even if it
+                    // appeared while the network download was in progress.
+                    std::fs::hard_link(&temporary, &output)?;
+                    std::fs::remove_file(&temporary)?;
+                    let parent = output
+                        .parent()
+                        .filter(|p| !p.as_os_str().is_empty())
+                        .unwrap_or(Path::new("."));
+                    std::fs::File::open(parent)?.sync_all()?;
+                    Ok(())
+                })();
+                if temporary.exists() {
+                    let _ = std::fs::remove_file(&temporary);
+                }
+                result?;
+                println!("{}", serde_json::json!({"backup":output}));
+                return Ok(());
+            }
             let text = response.text()?;
             ensure!(status.is_success(), "platform returned {status}: {text}");
             println!("{text}");

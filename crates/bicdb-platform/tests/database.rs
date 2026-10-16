@@ -40,6 +40,7 @@ fn batch(sql: &str, key: Option<&str>) -> QueryBatch {
             params: vec![],
         }],
         idempotency_key: key.map(str::to_owned),
+        jobs: vec![],
     }
 }
 
@@ -102,6 +103,7 @@ fn failed_batch_rolls_back_all_writes_and_parameter_binding_is_not_sql_interpola
             params: vec![json!(text), json!(7)],
         }],
         idempotency_key: None,
+        jobs: vec![],
     };
     database.query(&request).unwrap();
     let mut invalid = batch("UPDATE items SET value = 99", None);
@@ -162,4 +164,54 @@ fn release_paths_integrity_and_supervisor_ownership_are_enforced() {
     assert!(store.save_release(&package).is_err());
     assert!(store.app_dir("../escape").is_err());
     assert!(store.load_release("example", "../../outside").is_err());
+}
+
+#[test]
+fn transactional_job_outbox_commits_with_data_and_recovers_without_duplicate_publication() {
+    let root = tempfile::tempdir().unwrap();
+    let package = release(
+        "CREATE TABLE counts (id INT PRIMARY KEY, value INT); INSERT INTO counts VALUES (1, 0)",
+    );
+    let mut database = Database::open(root.path()).unwrap();
+    database.prepare(&package).unwrap();
+    let mut invalid = batch(
+        "UPDATE counts SET value = value + 1 WHERE id = 1",
+        Some("failed"),
+    );
+    invalid.jobs.push(json!({"action":"work"}));
+    invalid.statements.push(Query {
+        sql: "INSERT INTO absent VALUES (1)".into(),
+        params: vec![],
+    });
+    assert!(database.query(&invalid).is_err());
+    assert_eq!(database.drain_outbox(32).unwrap(), 0);
+    assert!(database.consume("worker", 1000).unwrap().is_none());
+    let mut valid = batch(
+        "UPDATE counts SET value = value + 1 WHERE id = 1 RETURNING value",
+        Some("valid"),
+    );
+    valid.jobs.push(json!({"action":"work"}));
+    let result = database.query(&valid).unwrap();
+    assert_eq!(database.query(&valid).unwrap(), result);
+    drop(database);
+    let mut database = Database::open(root.path()).unwrap();
+    database.prepare(&package).unwrap();
+    assert_eq!(database.drain_outbox(32).unwrap(), 1);
+    let message = database.consume("worker", 1000).unwrap().unwrap();
+    assert_eq!(message.payload, json!({"action":"work"}));
+    database.settle("worker", &message, true).unwrap();
+    assert_eq!(database.query(&valid).unwrap(), result);
+    assert_eq!(database.drain_outbox(32).unwrap(), 0);
+    assert!(database.consume("worker", 1000).unwrap().is_none());
+    assert_eq!(
+        serde_json::to_value(
+            database
+                .query(&batch("SELECT value FROM counts", None))
+                .unwrap()[0]
+                .rows
+                .clone()
+        )
+        .unwrap(),
+        json!([[1]])
+    );
 }

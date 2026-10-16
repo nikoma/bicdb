@@ -9,6 +9,14 @@ export default {
       ], { idempotencyKey: key });
       return Response.json(result[0][0]);
     }
+    if (request.method === 'POST' && path === '/increment-and-enqueue') {
+      const key = request.headers.get('idempotency-key');
+      if (!key) return Response.json({ error: 'idempotency-key header required' }, { status: 400 });
+      const result = await env.DB.transaction([
+        { sql: 'UPDATE counters SET value = value + 1 WHERE id = $1 RETURNING value', params: ['requests'] },
+      ], { idempotencyKey: key, jobs: [{ action: 'increment' }] });
+      return Response.json(result[0][0]);
+    }
     if (request.method === 'POST' && path === '/jobs') {
       const key = request.headers.get('idempotency-key');
       if (!key) return Response.json({ error: 'idempotency-key header required' }, { status: 400 });

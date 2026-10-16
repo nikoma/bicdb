@@ -25,7 +25,8 @@ serde_json.workspace = true
 sha2.workspace = true
 sqlparser.workspace = true
 subtle.workspace = true
-tokio = { workspace = true, features = ["signal"] }
+tokio = { workspace = true, features = ["signal", "fs"] }
+tokio-util = { version = "0.7", features = ["io"] }
 uuid.workspace = true
 
 [dev-dependencies]

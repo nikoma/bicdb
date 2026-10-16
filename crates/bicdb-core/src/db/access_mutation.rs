@@ -1682,9 +1682,40 @@ impl BicDb {
     /// and lets any pair of nodes converge without a shared hub. The returned
     /// bundle carries this node's own vector as `source_vector`.
     pub fn export_sync_bundle_delta(&mut self, peer: &SyncVector) -> Result<SyncBundle> {
+        self.export_sync_delta(peer, None)
+    }
+
+    /// Export the next bounded prefix of missing events. Coverage advertises
+    /// everything held locally, while the bundle contains at most `max_events`
+    /// and `max_event_bytes` of serialized events. Receivers derive their next
+    /// vector from their durable log and repeat until no events remain.
+    ///
+    /// The physical checkpoint fields are zero for this vector-based exchange;
+    /// they must not be used to acknowledge an untransferred event tail.
+    pub fn export_sync_bundle_delta_bounded(
+        &mut self,
+        peer: &SyncVector,
+        max_events: usize,
+        max_event_bytes: usize,
+    ) -> Result<SyncBundle> {
+        if max_events == 0 || max_event_bytes == 0 {
+            return Err(BicDbError::SyncBundle(
+                "delta limits must be positive".into(),
+            ));
+        }
+        self.export_sync_delta(peer, Some((max_events, max_event_bytes)))
+    }
+
+    fn export_sync_delta(
+        &mut self,
+        peer: &SyncVector,
+        bounds: Option<(usize, usize)>,
+    ) -> Result<SyncBundle> {
         let mut own_vector = SyncVector::default();
         let mut bundle_events = Vec::new();
         let mut next_offset = 0_u64;
+        let mut event_bytes = 0usize;
+        let mut stopped = false;
         {
             let events = self.events.lock();
             for stored in events.events_iter() {
@@ -1699,20 +1730,39 @@ impl BicDb {
                 )?;
                 self.sign_own_envelope(&mut entry);
                 own_vector.observe_envelope(&entry.envelope);
-                if peer.covers(&entry.envelope.node_id, entry.envelope.sequence) {
+                if stopped || peer.covers(&entry.envelope.node_id, entry.envelope.sequence) {
                     continue;
+                }
+                if let Some((max_events, max_bytes)) = bounds {
+                    let bytes = serde_json::to_vec(&entry)?.len();
+                    if bundle_events.is_empty() && bytes > max_bytes {
+                        return Err(BicDbError::SyncBundle(
+                            "one event exceeds the delta byte limit".into(),
+                        ));
+                    }
+                    if bundle_events.len() >= max_events
+                        || event_bytes.saturating_add(bytes) > max_bytes
+                    {
+                        stopped = true;
+                        continue;
+                    }
+                    event_bytes += bytes;
                 }
                 bundle_events.push(entry);
             }
         }
-        let bundle = SyncBundle::new(
+        let checkpoint = if bounds.is_some() {
+            SyncCheckpoint::default()
+        } else {
+            SyncCheckpoint::new(next_offset)
+        };
+        Ok(SyncBundle::new(
             self.node_id(),
             SyncCheckpoint::default(),
-            SyncCheckpoint::new(next_offset),
+            checkpoint,
             bundle_events,
         )?
-        .with_source_vector(own_vector);
-        Ok(bundle)
+        .with_source_vector(own_vector))
     }
 
     pub fn write_sync_bundle_since(

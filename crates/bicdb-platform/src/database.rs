@@ -14,6 +14,7 @@ use crate::manifest::{Release, TableSync};
 
 const MIGRATIONS: &str = "__bic_platform_migrations";
 const RECEIPTS: &str = "__bic_platform_receipts";
+const OUTBOX: &str = "__bic_platform_outbox";
 pub const JOB_QUEUE: &str = "bic.platform.jobs";
 pub const JOB_GROUP: &str = "application";
 
@@ -31,6 +32,9 @@ pub struct QueryBatch {
     pub statements: Vec<Query>,
     #[serde(default)]
     pub idempotency_key: Option<String>,
+    /// Jobs persisted atomically with the SQL effects and delivered after commit.
+    #[serde(default)]
+    pub jobs: Vec<Value>,
 }
 
 pub struct Database {
@@ -52,6 +56,7 @@ impl Database {
         let mut session = SqlSession::new(&mut db);
         session.execute(&format!("CREATE TABLE IF NOT EXISTS {MIGRATIONS} (position BIGINT PRIMARY KEY, name TEXT NOT NULL, digest TEXT NOT NULL)"))?;
         session.execute(&format!("CREATE TABLE IF NOT EXISTS {RECEIPTS} (key TEXT PRIMARY KEY, digest TEXT NOT NULL, result TEXT NOT NULL)"))?;
+        session.execute(&format!("CREATE TABLE IF NOT EXISTS {OUTBOX} (id TEXT PRIMARY KEY, position BIGINT NOT NULL, payload TEXT NOT NULL)"))?;
         drop(session);
         let jobs =
             BicDb::open_with_config(path.join("jobs"), DbConfig::default().with_fsync(true))?;
@@ -130,13 +135,20 @@ impl Database {
 
     pub fn query(&mut self, batch: &QueryBatch) -> Result<Vec<SqlResult>> {
         ensure!(
-            !batch.statements.is_empty() && batch.statements.len() <= 128,
+            (!batch.statements.is_empty() || !batch.jobs.is_empty())
+                && batch.statements.len() <= 128
+                && batch.jobs.len() <= 128,
             "invalid statement count"
         );
-        let digest = format!(
-            "{:x}",
-            Sha256::digest(serde_json::to_vec(&batch.statements)?)
-        );
+        // Retain the receipt digest of SQL-only requests across upgrades.
+        let content = if batch.jobs.is_empty() {
+            serde_json::to_vec(&batch.statements)?
+        } else {
+            serde_json::to_vec(
+                &serde_json::json!({"statements":batch.statements,"jobs":batch.jobs}),
+            )?
+        };
+        let digest = format!("{:x}", Sha256::digest(content));
         for query in &batch.statements {
             ensure!(
                 query.sql.len() <= 128 * 1024 && query.params.len() <= 1024,
@@ -205,6 +217,33 @@ impl Database {
                     return Err(error.into());
                 }
             }
+        }
+        let queued = (|| -> Result<()> {
+            if batch.jobs.is_empty() {
+                return Ok(());
+            }
+            let rows = session
+                .execute(&format!("SELECT COALESCE(MAX(position), 0) FROM {OUTBOX}"))?
+                .rows;
+            let SqlValue::Int(position) = rows[0][0] else {
+                bail!("invalid outbox position");
+            };
+            for (index, payload) in batch.jobs.iter().enumerate() {
+                let id = uuid::Uuid::new_v4().to_string();
+                let position = position
+                    .checked_add(index as i64 + 1)
+                    .context("outbox position exhausted")?;
+                session.execute(&format!(
+                    "INSERT INTO {OUTBOX} VALUES ({}, {position}, {})",
+                    quote(&id),
+                    quote(&serde_json::to_string(payload)?)
+                ))?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = queued {
+            let _ = session.execute("ROLLBACK");
+            return Err(error);
         }
         if let Some(key) = &batch.idempotency_key {
             let result = serde_json::to_string(&results)?;
@@ -309,6 +348,47 @@ impl Database {
             },
         )?;
         Ok(serde_json::json!({"id": receipt.message_id, "deduplicated": receipt.deduplicated}))
+    }
+
+    /// Bridge the transactional outbox into local durable delivery. A crash
+    /// after publish but before deletion reuses the same broker deduplication key.
+    pub fn drain_outbox(&mut self, limit: usize) -> Result<usize> {
+        ensure!((1..=128).contains(&limit), "invalid outbox batch size");
+        let mut session = SqlSession::new(&mut self.db);
+        let rows = session
+            .execute(&format!(
+                "SELECT id, payload FROM {OUTBOX} ORDER BY position LIMIT {limit}"
+            ))?
+            .rows;
+        let mut delivered = 0;
+        for row in rows {
+            let (SqlValue::String(id), SqlValue::String(payload)) = (&row[0], &row[1]) else {
+                bail!("invalid outbox entry");
+            };
+            self.jobs.broker().publish_with(
+                JOB_QUEUE,
+                serde_json::from_str(payload)?,
+                PublishOptions {
+                    idempotency_key: Some(format!("outbox:{id}")),
+                    ..Default::default()
+                },
+            )?;
+            session.execute(&format!("DELETE FROM {OUTBOX} WHERE id = {}", quote(id)))?;
+            delivered += 1;
+        }
+        Ok(delivered)
+    }
+
+    pub fn snapshot_jobs(&self, output: &Path, passphrase: &str) -> Result<()> {
+        bicdb_core::create_backup_from_open_database(
+            &self.jobs,
+            output,
+            bicdb_core::BackupCreateOptions {
+                passphrase: passphrase.into(),
+                base_backup: None,
+            },
+        )?;
+        Ok(())
     }
 
     pub fn job_status(&mut self) -> Value {

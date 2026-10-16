@@ -22,7 +22,7 @@ const env = Object.freeze({
     async conflicts(table) { return call('/conflicts', { table }); },
     async query(sql, params = []) { return rows((await call('/query', { statements: [{ sql, params }] }))[0]); },
     async transaction(statements, options = {}) {
-      return (await call('/query', { statements, idempotency_key: options.idempotencyKey ?? null })).map(rows);
+      return (await call('/query', { statements, idempotency_key: options.idempotencyKey ?? null, jobs: options.jobs ?? [] })).map(rows);
     },
   }),
   JOBS: Object.freeze({

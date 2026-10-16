@@ -353,12 +353,10 @@ pub(crate) trait OutcomeSpill: Send + Sync + std::fmt::Debug {
     /// committed transaction's visibility forever.
     fn status_checked(&self, xid: Xid) -> Result<Option<TxStatus>>;
 
-    /// Fail-safe variant for the visibility read path: an unanswerable
-    /// lookup degrades to `None`, which readers treat as in-progress
-    /// (invisible) — the safe direction for a transient fault.
-    fn status(&self, xid: Xid) -> Option<TxStatus> {
-        self.status_checked(xid).unwrap_or(None)
-    }
+    /// Record that a visibility lookup could not be answered. The read path
+    /// then degrades to in-progress (invisible) — the safe direction for a
+    /// transient fault.
+    fn note_lookup_failure(&self) {}
 }
 
 /// Transaction status with a bounded resident footprint.
@@ -387,6 +385,11 @@ struct TableInner {
     abort_exception_capacity: usize,
     /// Disk-backed outcomes evicted by a checkpoint's status spill.
     spill: Option<Arc<dyn OutcomeSpill>>,
+    /// `next_xid` when this incarnation opened the store (0: never sealed).
+    /// Every id below it was issued by an earlier process, so none of them
+    /// can still be running: one with no surviving terminal record was lost
+    /// to a crash or shutdown and can never commit. See [`TransactionTable::status`].
+    open_horizon: Xid,
 }
 
 impl Default for TransactionTable {
@@ -416,6 +419,7 @@ impl TransactionTable {
                 abort_exceptions: BTreeSet::new(),
                 abort_exception_capacity: capacity,
                 spill: None,
+                open_horizon: 0,
             }),
         }
     }
@@ -500,8 +504,19 @@ impl TransactionTable {
         }
         // Evicted by a checkpoint's status spill: resolve on demand from disk,
         // without holding the table lock across the read.
-        if let Some(status) = spill.as_ref().and_then(|spill| spill.status(xid)) {
-            return status;
+        if let Some(spill) = spill.as_ref() {
+            match spill.status_checked(xid) {
+                Ok(Some(status)) => return status,
+                Ok(None) => {}
+                // An unanswerable lookup is NOT proof of absence: report the
+                // safe direction (in-progress, hence invisible and never
+                // reclaimable) rather than letting the open horizon below
+                // classify a possibly-committed transaction as aborted.
+                Err(_) => {
+                    spill.note_lookup_failure();
+                    return TxStatus::InProgress;
+                }
+            }
         }
         // A spill miss is not yet proof of a crash-lost transaction: between
         // dropping the lock above and the lookup, a concurrent freeze +
@@ -521,12 +536,42 @@ impl TransactionTable {
             if let Some(status) = resident_terminal_status(&inner, xid) {
                 return status;
             }
+            // No record anywhere, and issued by an earlier incarnation: that
+            // transaction died with its process (crash, kill, or a shutdown
+            // that never wrote its abort). Its id is never reissued, so it can
+            // never commit — it is aborted, exactly what the open-time freeze
+            // would have recorded had the exception region had room.
+            //
+            // Reporting it as in-progress instead (the earlier behavior)
+            // wedged every row it had stamped: once the durable
+            // exception region is full the watermark never passes it, and
+            // the write-conflict check saw an eternal concurrent writer.
+            if xid < inner.open_horizon {
+                return TxStatus::Aborted;
+            }
         }
-        // A transaction we have no record of at or above the watermark never
-        // finished — it was lost to a crash. Treating an unknown transaction as
-        // in-progress (hence invisible) is the safe direction: the alternative
-        // exposes uncommitted rows.
+        // A transaction of THIS incarnation with no record is still running
+        // (or racing its own terminal record). In-progress — invisible, and a
+        // write conflict for anyone else — is the safe direction.
         TxStatus::InProgress
+    }
+
+    /// Declare that every id issued so far belongs to an earlier process.
+    ///
+    /// Called once at open, after recovery has raised `next_xid` past every
+    /// id named by the log or the checkpointed meta page and before any
+    /// transaction begins. From then on an id below the horizon with no
+    /// terminal record (resident, recovered, spilled, or frozen) reads as
+    /// aborted: no live transaction can own it. Ids this incarnation issues
+    /// are at or above the horizon and keep ordinary in-progress semantics.
+    pub fn seal_previous_incarnations(&self) {
+        let mut inner = self.inner.lock();
+        inner.open_horizon = inner.next_xid;
+    }
+
+    /// The id horizon set by [`Self::seal_previous_incarnations`].
+    pub fn open_horizon(&self) -> Xid {
+        self.inner.lock().open_horizon
     }
 
     /// Restore the watermarks and abort exceptions persisted by a checkpoint.
@@ -1379,5 +1424,66 @@ mod tests {
         table.commit(a);
         table.abort(c);
         assert_eq!(table.in_progress(), vec![b]);
+    }
+
+    #[derive(Debug)]
+    struct ScriptedSpill {
+        committed: Xid,
+        unreadable: Xid,
+    }
+
+    impl OutcomeSpill for ScriptedSpill {
+        fn status_checked(&self, xid: Xid) -> Result<Option<TxStatus>> {
+            if xid == self.unreadable {
+                return Err(crate::error::PageError::MetaCorruption {
+                    page_id: 9,
+                    reason: "scripted unreadable spill page".to_string(),
+                });
+            }
+            Ok((xid == self.committed).then_some(TxStatus::Committed))
+        }
+    }
+
+    #[test]
+    fn unrecorded_ids_from_a_previous_incarnation_read_as_aborted() {
+        // Restored the way PagedStore::open restores a store whose exception
+        // region is full: the watermark is pinned far below `next_xid`.
+        let table = TransactionTable::with_exception_capacity(0);
+        table.set_spill(Arc::new(ScriptedSpill {
+            committed: 500,
+            unreadable: 501,
+        }));
+        table.restore(10, 1_000, Vec::new());
+        // Before sealing, an unrecorded id is indistinguishable from a live one.
+        assert_eq!(table.status(700), TxStatus::InProgress);
+
+        table.seal_previous_incarnations();
+        assert_eq!(table.open_horizon(), 1_000);
+        assert_eq!(
+            table.status(700),
+            TxStatus::Aborted,
+            "orphan of a dead process"
+        );
+        assert_eq!(
+            table.status(500),
+            TxStatus::Committed,
+            "spilled outcome wins"
+        );
+        assert_eq!(table.status(5), TxStatus::Committed, "below the watermark");
+        assert_eq!(
+            table.status(501),
+            TxStatus::InProgress,
+            "an unreadable spill is not proof of absence"
+        );
+
+        // This incarnation's transactions keep ordinary semantics.
+        let (live, live_snapshot) = table.begin();
+        let (other, other_snapshot) = table.begin();
+        assert!(live >= 1_000);
+        assert_eq!(table.status(live), TxStatus::InProgress);
+        assert!(table.is_concurrent(live, &other_snapshot));
+        assert!(!table.is_concurrent(700, &live_snapshot));
+        assert!(!table.is_concurrent(700, &other_snapshot));
+        let _ = other;
     }
 }

@@ -616,6 +616,10 @@ pub(crate) fn describe_subscription(
 
 // ------------------------------------------------------------------ state
 
+/// Runs SQL for a subscription: as the connection, or as a saved session.
+/// The flag asks for the result-row limit to be enforced.
+type Evaluator<'a> = &'a mut dyn FnMut(&str, bool) -> Result<SqlResult>;
+
 /// What a subscription remembers between evaluations.
 enum Memory {
     Full {
@@ -670,6 +674,26 @@ struct Round {
 }
 
 impl Subscription {
+    fn new(db: &BicDb, query: &str) -> Self {
+        let statements = Parser::parse_sql(&PostgreSqlDialect {}, query).ok();
+        let (watched, plan) = match &statements {
+            Some(statements) => (watched_collections(db, statements), plan(db, statements)),
+            None => (None, Plan::Full),
+        };
+        let mut subscription = Self {
+            query: query.to_string(),
+            plan,
+            memory: Memory::Full {
+                counts: RowCounts::new(),
+            },
+            template: SqlResult::new(Vec::new(), Vec::new()),
+            watched,
+            generations: Vec::new(),
+        };
+        subscription.generations = subscription.generations(db);
+        subscription
+    }
+
     fn generations(&self, db: &BicDb) -> Vec<u64> {
         self.watched
             .as_ref()
@@ -683,17 +707,12 @@ impl Subscription {
     }
 
     /// Re-reads the whole query and adopts the result; returns the changes.
-    fn whole_round(
-        &mut self,
-        server: &Arc<PgWireServer>,
-        state: &mut ConnectionState,
-        commit_seq: u64,
-    ) -> Result<Round> {
+    fn whole_round(&mut self, eval: Evaluator<'_>, commit_seq: u64) -> Result<Round> {
         let (sql, hidden) = match &self.plan {
             Plan::Full => (self.query.clone(), 0),
             Plan::Filter(keyed) | Plan::Grouped(keyed) => (keyed.whole_sql(), 1),
         };
-        let split = split_hidden(execute_server_sql(server, state, &sql)?, hidden);
+        let split = split_hidden(eval(&sql, true)?, hidden);
         let previous = all_counts(&self.memory);
         let current = row_counts(split.visible.rows.iter());
         let rows = changes(&previous, &current, commit_seq);
@@ -723,12 +742,7 @@ impl Subscription {
                 }
                 // Which filtered rows make up each group, and the group
                 // column's type (for the literals that address groups).
-                let membership = execute_server_sql_with_options(
-                    server,
-                    state,
-                    &keyed.membership_sql(None),
-                    false,
-                )?;
+                let membership = eval(&keyed.membership_sql(None), false)?;
                 if membership.rows.len() > MAX_MEMBERSHIP_ROWS {
                     too_many_members = true;
                     Memory::Full {
@@ -779,31 +793,24 @@ impl Subscription {
     /// Re-evaluates for the rows written since `previous_generations`.
     fn change_round(
         &mut self,
-        server: &Arc<PgWireServer>,
-        state: &mut ConnectionState,
+        db_changes: &dyn Fn(&str, u64) -> Option<Vec<bicdb_core::ChangedRecord>>,
+        eval: Evaluator<'_>,
         previous_generations: &[u64],
         commit_seq: u64,
     ) -> Result<Round> {
         let keyed = match &self.plan {
-            Plan::Full => return self.whole_round(server, state, commit_seq),
+            Plan::Full => return self.whole_round(eval, commit_seq),
             Plan::Filter(keyed) | Plan::Grouped(keyed) => keyed.clone(),
         };
-        let changed = {
-            let position = self
-                .watched
-                .as_ref()
-                .and_then(|watched| watched.iter().position(|name| *name == keyed.collection));
-            match position.and_then(|index| previous_generations.get(index)) {
-                Some(generation) => {
-                    let db = server.read_db()?;
-                    db.collection_changes_since(&keyed.collection, *generation)
-                }
-                None => None,
-            }
-        };
+        let changed = self
+            .watched
+            .as_ref()
+            .and_then(|watched| watched.iter().position(|name| *name == keyed.collection))
+            .and_then(|index| previous_generations.get(index))
+            .and_then(|generation| db_changes(&keyed.collection, *generation));
         let changed = match changed {
             Some(changed) if changed.len() <= MAX_KEYED_ROWS => changed,
-            _ => return self.whole_round(server, state, commit_seq),
+            _ => return self.whole_round(eval, commit_seq),
         };
         let mut touched = BTreeSet::new();
         let mut deleted = BTreeSet::new();
@@ -827,8 +834,7 @@ impl Subscription {
                 }
                 for id in &to_read {
                     let one = BTreeSet::from([id.clone()]);
-                    let split =
-                        split_hidden(execute_server_sql(server, state, &keyed.rows_sql(&one))?, 1);
+                    let split = split_hidden(eval(&keyed.rows_sql(&one), true)?, 1);
                     for (hidden, row) in split.hidden.into_iter().zip(split.visible.rows) {
                         let id = hidden.into_iter().next().unwrap_or_default();
                         if !to_read.contains(&id) {
@@ -836,7 +842,7 @@ impl Subscription {
                             // (masked or transformed): rows cannot be
                             // addressed by key.
                             self.demote("the key column is not readable as itself");
-                            return self.whole_round(server, state, commit_seq);
+                            return self.whole_round(eval, commit_seq);
                         }
                         count_row(&mut after, &row);
                         rows.insert(id, row);
@@ -856,17 +862,15 @@ impl Subscription {
                 }
                 for id in &to_read {
                     let one = BTreeSet::from([id.clone()]);
-                    let membership = split_hidden(
-                        execute_server_sql(server, state, &keyed.membership_sql(Some(&one)))?,
-                        2,
-                    );
+                    let membership =
+                        split_hidden(eval(&keyed.membership_sql(Some(&one)), true)?, 2);
                     for hidden in membership.hidden {
                         let [id, group] = hidden.as_slice() else {
                             continue;
                         };
                         if !to_read.contains(id) {
                             self.demote("the key column is not readable as itself");
-                            return self.whole_round(server, state, commit_seq);
+                            return self.whole_round(eval, commit_seq);
                         }
                         affected.insert(group.clone());
                         group_of.insert(id.clone(), group.clone());
@@ -886,10 +890,7 @@ impl Subscription {
                         }
                     }
                 }
-                let split = split_hidden(
-                    execute_server_sql(server, state, &keyed.groups_sql(&affected))?,
-                    1,
-                );
+                let split = split_hidden(eval(&keyed.groups_sql(&affected), true)?, 1);
                 let mut after = RowCounts::new();
                 for (hidden, row) in split.hidden.into_iter().zip(split.visible.rows) {
                     let group = hidden.into_iter().next().unwrap_or_default();
@@ -901,17 +902,342 @@ impl Subscription {
                     full: false,
                 })
             }
-            Memory::Full { .. } => self.whole_round(server, state, commit_seq),
+            Memory::Full { .. } => self.whole_round(eval, commit_seq),
         }
     }
+
+    /// Whether any watched table changed; updates the remembered counters
+    /// and returns the previous ones when so.
+    fn take_changed_generations(&mut self, db: &BicDb) -> Option<Vec<u64>> {
+        let now = self.generations(db);
+        if self.watched.is_some() && now == self.generations {
+            return None;
+        }
+        Some(std::mem::replace(&mut self.generations, now))
+    }
+}
+
+/// An evaluator running statements as the connection itself.
+fn connection_evaluator<'a>(
+    server: &'a Arc<PgWireServer>,
+    state: &'a mut ConnectionState,
+) -> impl FnMut(&str, bool) -> Result<SqlResult> + 'a {
+    move |sql: &str, enforce_limit: bool| {
+        execute_server_sql_with_options(server, state, sql, enforce_limit)
+    }
+}
+
+// ------------------------------------------------------------------ registry
+
+/// `SUBSCRIBE <name> AS <query>`: a subscription that lives on the
+/// connection and delivers its changes as notifications on channel `name`,
+/// so one connection carries many subscriptions and none holds a thread.
+struct Registered {
+    connection_id: u64,
+    name: String,
+    session_state: SqlSessionGucState,
+    security_context: Option<SecurityContext>,
+    subscription: Subscription,
+}
+
+/// The registered subscriptions of a server, evaluated by one dispatcher.
+#[derive(Default)]
+pub(crate) struct LiveRegistry {
+    entries: Mutex<Vec<Registered>>,
+}
+
+impl std::fmt::Debug for LiveRegistry {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("LiveRegistry")
+            .field("subscriptions", &self.len())
+            .finish()
+    }
+}
+
+impl LiveRegistry {
+    pub(crate) fn len(&self) -> usize {
+        self.entries.lock().unwrap().len()
+    }
+
+    /// Drops every subscription of a connection that closed.
+    pub(crate) fn remove_connection(&self, connection_id: u64) {
+        self.entries
+            .lock()
+            .unwrap()
+            .retain(|entry| entry.connection_id != connection_id);
+    }
+
+    fn remove(&self, connection_id: u64, name: Option<&str>) -> usize {
+        let mut entries = self.entries.lock().unwrap();
+        let before = entries.len();
+        entries.retain(|entry| {
+            entry.connection_id != connection_id || name.is_some_and(|name| entry.name != name)
+        });
+        before - entries.len()
+    }
+}
+
+/// A `SUBSCRIBE` statement: streaming (`SUBSCRIBE <query>`) or registered
+/// (`SUBSCRIBE <name> AS <query>`).
+pub(crate) struct SubscribeStatement<'a> {
+    pub(crate) name: Option<String>,
+    pub(crate) query: &'a str,
+}
+
+/// Parses a `SUBSCRIBE` statement, if `sql` is one.
+pub(crate) fn parse_subscribe(sql: &str) -> Option<SubscribeStatement<'_>> {
+    let rest = subscribed_query(sql)?;
+    // `SUBSCRIBE name AS SELECT ...`: an identifier, then AS.
+    let mut words = rest.splitn(3, char::is_whitespace);
+    let first = words.next()?;
+    let valid_name = !first.is_empty()
+        && first.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && !first.chars().next().is_some_and(|c| c.is_ascii_digit());
+    if valid_name && !first.eq_ignore_ascii_case("select") && !first.eq_ignore_ascii_case("with") {
+        if let Some(keyword) = words.next() {
+            if keyword.eq_ignore_ascii_case("as") {
+                let query = rest[first.len()..].trim_start()[keyword.len()..].trim_start();
+                return Some(SubscribeStatement {
+                    name: Some(first.to_ascii_lowercase()),
+                    query,
+                });
+            }
+        }
+        return None;
+    }
+    Some(SubscribeStatement {
+        name: None,
+        query: rest,
+    })
+}
+
+/// Parses `UNSUBSCRIBE <name>` / `UNSUBSCRIBE ALL`: `Some(None)` for ALL.
+pub(crate) fn parse_unsubscribe(sql: &str) -> Option<Option<String>> {
+    let trimmed = sql.trim().trim_end_matches(';').trim();
+    let keyword = trimmed.get(..11)?;
+    if !keyword.eq_ignore_ascii_case("unsubscribe") {
+        return None;
+    }
+    let rest = trimmed[11..].trim();
+    if rest.is_empty() || !trimmed[11..].starts_with(char::is_whitespace) {
+        return None;
+    }
+    if rest.eq_ignore_ascii_case("all") {
+        return Some(None);
+    }
+    Some(Some(rest.to_ascii_lowercase()))
+}
+
+/// Registers `SUBSCRIBE name AS query` on the connection: returns the initial
+/// result (as the streaming form would) and from then on delivers changes as
+/// notifications on channel `name`, until `UNSUBSCRIBE` or disconnect. The
+/// connection listens on the channel.
+pub(crate) fn register_subscription(
+    server: &Arc<PgWireServer>,
+    state: &mut ConnectionState,
+    name: &str,
+    query: &str,
+) -> Result<SqlResult> {
+    if state.in_transaction {
+        return Err(PgWireError::Server(
+            "SUBSCRIBE cannot run inside a transaction block".to_string(),
+        ));
+    }
+    let normalized = normalize_executable_sql(query);
+    if !(normalized.starts_with("select ") || normalized.starts_with("with ")) {
+        return Err(PgWireError::Server(
+            "SUBSCRIBE takes a SELECT query".to_string(),
+        ));
+    }
+    let limit = server.config.max_live_subscriptions_per_connection;
+    let existing = server
+        .live_registry
+        .entries
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry.connection_id == state.connection_id)
+        .count();
+    if limit > 0 && existing >= limit {
+        return Err(PgWireError::Server(format!(
+            "this connection already has {existing} subscriptions (the limit); UNSUBSCRIBE one first"
+        )));
+    }
+    // A name already in use on this connection is replaced.
+    server.live_registry.remove(state.connection_id, Some(name));
+    let mut subscription = {
+        let db = server.read_db()?;
+        Subscription::new(&db, query)
+    };
+    let commit_seq = server.replication_feed.durable_seq();
+    let initial = {
+        let mut eval = connection_evaluator(server, state);
+        subscription.whole_round(&mut eval, commit_seq)?
+    };
+    let result = batch(&subscription.template, initial.rows);
+    if let Ok(mut bus) = server.notifications.lock() {
+        bus.listen(state.connection_id, name);
+    }
+    server
+        .live_registry
+        .entries
+        .lock()
+        .unwrap()
+        .push(Registered {
+            connection_id: state.connection_id,
+            name: name.to_string(),
+            session_state: state.session_state.clone(),
+            security_context: state.security_context.clone(),
+            subscription,
+        });
+    let mut result = result;
+    result.command_tag = Some(format!("SUBSCRIBE {}", result.rows.len()));
+    Ok(result)
+}
+
+/// `UNSUBSCRIBE name` / `UNSUBSCRIBE ALL` on the connection.
+pub(crate) fn unsubscribe(
+    server: &Arc<PgWireServer>,
+    state: &ConnectionState,
+    name: Option<&str>,
+) -> Result<SqlResult> {
+    let removed = server.live_registry.remove(state.connection_id, name);
+    if let Ok(mut bus) = server.notifications.lock() {
+        match name {
+            Some(name) => bus.unlisten(state.connection_id, Some(name)),
+            None => {}
+        }
+    }
+    if removed == 0 {
+        if let Some(name) = name {
+            return Err(PgWireError::Server(format!(
+                "no subscription named {name} on this connection"
+            )));
+        }
+    }
+    Ok(SqlResult::command(&format!("UNSUBSCRIBE {removed}")))
+}
+
+/// The notification payload of one change row.
+fn change_payload(name: &str, template: &SqlResult, row: &[SqlValue]) -> String {
+    let mut object = serde_json::Map::new();
+    object.insert(
+        "subscription".into(),
+        serde_json::Value::String(name.to_string()),
+    );
+    if let Some(SqlValue::Int(seq)) = row.first() {
+        object.insert("commit_seq".into(), serde_json::Value::from(*seq));
+    }
+    if let Some(change) = row.get(1) {
+        object.insert("change".into(), serde_json::Value::String(change.to_cell()));
+    }
+    let mut columns = serde_json::Map::new();
+    for (column, value) in template.columns.iter().zip(row.iter().skip(2)) {
+        let json = if matches!(value, SqlValue::Null) {
+            serde_json::Value::Null
+        } else {
+            serde_json::Value::String(value.to_cell())
+        };
+        columns.insert(column.clone(), json);
+    }
+    object.insert("row".into(), serde_json::Value::Object(columns));
+    serde_json::Value::Object(object).to_string()
+}
+
+/// Starts the dispatcher that evaluates registered subscriptions after each
+/// commit and queues their changes as notifications.
+pub(crate) fn start_dispatcher(server: Arc<PgWireServer>) -> Result<()> {
+    std::thread::Builder::new()
+        .name("bicdb-live-dispatcher".to_string())
+        .spawn(move || {
+            let mut last_seq = server.replication_feed.durable_seq();
+            while !server.is_shutdown_requested() {
+                let durable = server.replication_feed.wait_beyond(last_seq, POLL);
+                if durable <= last_seq {
+                    continue;
+                }
+                last_seq = durable;
+                if server.live_registry.len() == 0 {
+                    continue;
+                }
+                let Ok(db) = server.read_db() else {
+                    continue;
+                };
+                let db_changes = |collection: &str, generation: u64| {
+                    db.collection_changes_since(collection, generation)
+                };
+                let mut entries = server.live_registry.entries.lock().unwrap();
+                let mut failed = Vec::new();
+                for (index, entry) in entries.iter_mut().enumerate() {
+                    let Some(previous) = entry.subscription.take_changed_generations(&db) else {
+                        continue;
+                    };
+                    let mut eval = |sql: &str, _enforce: bool| {
+                        execute_server_sql_for_describe_with_session(
+                            &server,
+                            sql,
+                            &entry.session_state,
+                            entry.security_context.as_ref(),
+                        )
+                    };
+                    let round =
+                        entry
+                            .subscription
+                            .change_round(&db_changes, &mut eval, &previous, durable);
+                    match round {
+                        Ok(round) => {
+                            if round.full {
+                                server.live_full_runs.fetch_add(1, Ordering::Relaxed);
+                            } else {
+                                server.live_incremental_runs.fetch_add(1, Ordering::Relaxed);
+                            }
+                            if round.rows.is_empty() {
+                                continue;
+                            }
+                            if let Ok(mut bus) = server.notifications.lock() {
+                                for row in &round.rows {
+                                    bus.notify(
+                                        &entry.name,
+                                        &change_payload(
+                                            &entry.name,
+                                            &entry.subscription.template,
+                                            row,
+                                        ),
+                                        0,
+                                    );
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            // The subscriber learns why, once; the
+                            // subscription is dropped.
+                            if let Ok(mut bus) = server.notifications.lock() {
+                                let payload = serde_json::json!({
+                                    "subscription": entry.name,
+                                    "error": error.to_string(),
+                                })
+                                .to_string();
+                                bus.notify(&entry.name, &payload, 0);
+                            }
+                            failed.push(index);
+                        }
+                    }
+                }
+                for index in failed.into_iter().rev() {
+                    entries.remove(index);
+                }
+            }
+        })?;
+    Ok(())
 }
 
 // ------------------------------------------------------------------ driver
 
-/// Runs a subscription until the client cancels or disconnects. With `copy`,
-/// rows stream as COPY data in that format. In the extended protocol the row
-/// description was sent by Describe (`describe_rows` false) and `formats`
-/// are the portal's result formats.
+/// Runs a streaming subscription until the client cancels or disconnects.
+/// With `copy`, rows stream as COPY data in that format. In the extended
+/// protocol the row description was sent by Describe (`describe_rows`
+/// false) and `formats` are the portal's result formats.
 pub(crate) fn run_subscription(
     stream: &mut ClientStream,
     server: &Arc<PgWireServer>,
@@ -932,30 +1258,15 @@ pub(crate) fn run_subscription(
             "SUBSCRIBE takes a SELECT query".to_string(),
         ));
     }
-    let statements = Parser::parse_sql(&PostgreSqlDialect {}, query).ok();
-    let (watched, plan) = {
+    let mut subscription = {
         let db = server.read_db()?;
-        match &statements {
-            Some(statements) => (watched_collections(&db, statements), plan(&db, statements)),
-            None => (None, Plan::Full),
-        }
-    };
-    let mut subscription = Subscription {
-        query: query.to_string(),
-        plan,
-        memory: Memory::Full {
-            counts: RowCounts::new(),
-        },
-        template: SqlResult::new(Vec::new(), Vec::new()),
-        watched,
-        generations: Vec::new(),
-    };
-    subscription.generations = {
-        let db = server.read_db()?;
-        subscription.generations(&db)
+        Subscription::new(&db, query)
     };
     let mut last_seq = server.replication_feed.durable_seq();
-    let initial = subscription.whole_round(server, state, last_seq)?;
+    let initial = {
+        let mut eval = connection_evaluator(server, state);
+        subscription.whole_round(&mut eval, last_seq)?
+    };
     let first = batch(&subscription.template, initial.rows);
     let column_types = {
         let db = server.read_db()?;
@@ -1012,18 +1323,23 @@ pub(crate) fn run_subscription(
             continue;
         }
         last_seq = durable;
-        let previous_generations = subscription.generations.clone();
-        if subscription.watched.is_some() {
-            let now = {
-                let db = server.read_db()?;
-                subscription.generations(&db)
+        let previous = {
+            let db = server.read_db()?;
+            subscription.take_changed_generations(&db)
+        };
+        let Some(previous) = previous else {
+            continue;
+        };
+        let round = {
+            let db_changes = |collection: &str, generation: u64| {
+                server
+                    .read_db()
+                    .ok()
+                    .and_then(|db| db.collection_changes_since(collection, generation))
             };
-            if now == previous_generations {
-                continue;
-            }
-            subscription.generations = now;
-        }
-        let round = subscription.change_round(server, state, &previous_generations, last_seq)?;
+            let mut eval = connection_evaluator(server, state);
+            subscription.change_round(&db_changes, &mut eval, &previous, last_seq)?
+        };
         if round.full {
             server.live_full_runs.fetch_add(1, Ordering::Relaxed);
         } else {
@@ -1154,6 +1470,25 @@ mod tests {
             "SELECT posts.id AS __bicdb_rid, posts.author AS __bicdb_group FROM posts \
              WHERE (body <> '') AND posts.id = 7"
         );
+    }
+
+    #[test]
+    fn registered_and_streaming_forms_are_told_apart() {
+        let streaming = parse_subscribe("SUBSCRIBE SELECT 1").unwrap();
+        assert_eq!((streaming.name, streaming.query), (None, "SELECT 1"));
+        let registered = parse_subscribe("SUBSCRIBE Feed_42 AS\n SELECT * FROM posts").unwrap();
+        assert_eq!(
+            (registered.name.as_deref(), registered.query),
+            (Some("feed_42"), "SELECT * FROM posts")
+        );
+        assert!(parse_subscribe("SUBSCRIBE feed SELECT 1").is_none());
+        assert_eq!(
+            parse_unsubscribe("UNSUBSCRIBE feed_42;"),
+            Some(Some("feed_42".into()))
+        );
+        assert_eq!(parse_unsubscribe("unsubscribe all"), Some(None));
+        assert_eq!(parse_unsubscribe("UNSUBSCRIBE"), None);
+        assert_eq!(parse_unsubscribe("UNSUBSCRIBED x"), None);
     }
 
     #[test]

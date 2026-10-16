@@ -338,6 +338,8 @@ pub struct PgWireConfig {
     pub log_archive: Option<LogArchiveConfig>,
     /// Serve Prometheus metrics on this address (`GET /metrics`).
     pub metrics_listen: Option<SocketAddr>,
+    /// Registered live subscriptions a connection may hold (0 = no limit).
+    pub max_live_subscriptions_per_connection: usize,
     /// Connectors to external messaging systems (`--connectors FILE`).
     pub connectors: Option<ConnectorsConfig>,
 }
@@ -411,6 +413,7 @@ impl Default for PgWireConfig {
             high_availability: None,
             log_archive: None,
             metrics_listen: None,
+            max_live_subscriptions_per_connection: 1_000,
             connectors: None,
         }
     }
@@ -952,6 +955,8 @@ pub struct PgWireServer {
     /// changed rows or groups.
     live_full_runs: AtomicU64,
     live_incremental_runs: AtomicU64,
+    /// Subscriptions registered with `SUBSCRIBE name AS ...`.
+    live_registry: live_queries::LiveRegistry,
     last_cancel: Mutex<Option<CancelMetadata>>,
     shutdown: AtomicBool,
     database_background_started: AtomicBool,
@@ -1886,6 +1891,7 @@ fn cleanup_client(
     secret_key: i32,
 ) {
     server.advisory_locks.disconnect(connection_id);
+    server.live_registry.remove_connection(connection_id);
     if let Ok(mut bus) = server.notifications.lock() {
         bus.disconnect(connection_id);
     }
@@ -2498,7 +2504,9 @@ fn handle_frontend_message(
             // The portal's SQL has the bound parameters substituted.
             let subscription = portal_sql_and_formats_from_execute_payload(&payload, state)
                 .and_then(|(sql, formats)| {
-                    live_queries::subscribed_query(&sql).map(|query| (query.to_string(), formats))
+                    live_queries::parse_subscribe(&sql)
+                        .filter(|subscribe| subscribe.name.is_none())
+                        .map(|subscribe| (subscribe.query.to_string(), formats))
                 });
             if let Some((query, formats)) = subscription {
                 let outcome = delegation::validate_delegation(server, state).and_then(|()| {
@@ -3004,9 +3012,29 @@ fn execute_server_query(
             }
         }
     }
-    if let Some(query) = live_queries::subscribed_query(sql) {
+    if let Some(name) = live_queries::parse_unsubscribe(sql) {
+        let result = live_queries::unsubscribe(server, state, name.as_deref())?;
+        write_query_result(stream, server, &result, &[], None, true, true)?;
+        return Ok(QueryFlow::Complete);
+    }
+    if let Some(subscribe) = live_queries::parse_subscribe(sql) {
         delegation::validate_delegation(server, state)?;
-        live_queries::run_subscription(stream, server, state, query, None, true, &[])?;
+        match subscribe.name {
+            Some(name) => {
+                let result =
+                    live_queries::register_subscription(server, state, &name, subscribe.query)?;
+                write_query_result(stream, server, &result, &[], None, true, true)?;
+            }
+            None => live_queries::run_subscription(
+                stream,
+                server,
+                state,
+                subscribe.query,
+                None,
+                true,
+                &[],
+            )?,
+        }
         return Ok(QueryFlow::Complete);
     }
     if let Some(copy) = parse_copy_statement(sql)? {

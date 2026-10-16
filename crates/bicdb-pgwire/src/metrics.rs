@@ -125,7 +125,7 @@ fn render(server: &Arc<PgWireServer>) -> Result<String> {
     out.gauge(
         "bicdb_live_subscriptions",
         "Open SUBSCRIBE statements.",
-        server.live_subscriptions.load(Ordering::SeqCst),
+        server.live_subscriptions.load(Ordering::SeqCst) + server.live_registry.len() as u64,
     );
     out.counter(
         "bicdb_live_full_runs_total",

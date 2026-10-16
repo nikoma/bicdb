@@ -134,6 +134,7 @@ pub(crate) fn start_background_tasks_for_scope(
         }
         log_archive::start(server.clone())?;
         connectors::start(server.clone())?;
+        live_queries::start_dispatcher(server.clone())?;
     }
 
     if start_database_tasks {

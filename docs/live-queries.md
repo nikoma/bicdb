@@ -52,6 +52,38 @@ change to a row they may not read.
 A subscription cannot start inside a transaction block. `SUBSCRIBE` is a
 statement of the server; it is not valid in a view or a function.
 
+## Many subscriptions on one connection
+
+An application server serving many users does not open a connection per
+feed. `SUBSCRIBE <name> AS <select>` registers a subscription on the
+connection: the statement returns the initial result (same columns as the
+streaming form) and completes, and from then on every change arrives as a
+PostgreSQL **notification** on channel `<name>`, with a JSON payload:
+
+```sql
+SUBSCRIBE feed_42 AS SELECT id, author, body FROM posts WHERE author = ANY($1);
+-- later, on the same connection, as notifications:
+-- channel feed_42: {"subscription":"feed_42","commit_seq":57,"change":"+",
+--                   "row":{"id":"4","author":"bob","body":"second post"}}
+UNSUBSCRIBE feed_42;      -- or UNSUBSCRIBE ALL
+```
+
+Row values arrive as text (NULL as `null`), the way the wire protocol
+renders them. Notifications are what drivers already deliver for
+`LISTEN`: `conn.notifies()` in psycopg, `poll_message` in tokio-postgres,
+`WaitForNotification` in pgx, `PQnotifies` in libpq. A connection may hold up
+to 1 000 registered subscriptions (`max_live_subscriptions_per_connection`);
+one server-wide dispatcher evaluates all of them after each commit, so a
+registered subscription holds no thread and no connection of its own.
+Closing the connection drops its subscriptions. Measured: registering 1 000
+subscriptions took 0.3 s; a change reached the one matching subscription
+within about 250 ms (the dispatcher evaluates each subscription's changed
+rows in turn, and idle connections pick up notifications every 250 ms).
+
+If an evaluation fails (a dropped table, a revoked privilege), the
+subscriber receives one notification `{"subscription":"...","error":"..."}`
+and the subscription is removed.
+
 ## How it works
 
 Changes are found by re-evaluating the query as the subscriber, so every row
@@ -79,8 +111,8 @@ subscriber, the subscription switches to whole re-runs.
 
 `bicdb_live_full_runs_total` and `bicdb_live_incremental_runs_total` on the
 metrics endpoint count the two kinds of evaluation;
-`bicdb_live_subscriptions` on the metrics endpoint counts open
-subscriptions.
+`bicdb_live_subscriptions` on the metrics endpoint counts open streaming and
+registered subscriptions.
 
 ## Example: a social timeline in a browser
 

@@ -880,6 +880,7 @@ impl PgWireServer {
             live_subscriptions: AtomicU64::new(0),
             live_full_runs: AtomicU64::new(0),
             live_incremental_runs: AtomicU64::new(0),
+            live_registry: Default::default(),
             timed_out_queries: AtomicU64::new(0),
             writes_executed: AtomicU64::new(0),
             proc_neword: AtomicU64::new(0),
@@ -1079,7 +1080,7 @@ impl PgWireServer {
     /// rounds).
     pub fn live_query_stats(&self) -> (u64, u64, u64) {
         (
-            self.live_subscriptions.load(Ordering::SeqCst),
+            self.live_subscriptions.load(Ordering::SeqCst) + self.live_registry.len() as u64,
             self.live_full_runs.load(Ordering::Relaxed),
             self.live_incremental_runs.load(Ordering::Relaxed),
         )

@@ -21,6 +21,7 @@ struct Group {
     worker: Option<Child>,
     client: reqwest::blocking::Client,
     network: Option<state_network::Network>,
+    reservations: Vec<Option<TcpListener>>,
 }
 impl Drop for Group {
     fn drop(&mut self) {
@@ -86,8 +87,9 @@ impl Group {
             }}}).to_string());
         }
         secret(&root.path().join("fleet.json"), &json!({"format":1,"workers":{"worker":{"endpoint":format!("http://127.0.0.1:{}",ports[6]),"token_file":"worker.token","region":"test","capacity":1,"isolation":"process"}}}).to_string());
-        drop(listeners);
-        let network = live_partition.then(|| state_network::Network::open(&ports));
+        let mut reservations = listeners.into_iter().map(Some).collect::<Vec<_>>();
+        let network =
+            live_partition.then(|| state_network::Network::open(&ports, &mut reservations));
         let mut group = Self {
             root,
             ports,
@@ -99,6 +101,7 @@ impl Group {
                 .build()
                 .unwrap(),
             network,
+            reservations,
         };
         if existing {
             let mut command = Command::new(env!("CARGO_BIN_EXE_bic"));
@@ -112,6 +115,7 @@ impl Group {
                     "--listen",
                     &format!("127.0.0.1:{}", group.ports[0]),
                 ]);
+            group.reservations[0].take();
             group.children[0] = Some(group.spawn(command, "n0"));
             group.wait(|| group.status(0).is_some());
             let release = Release::read(
@@ -143,6 +147,7 @@ impl Group {
             for index in 1..3 {
                 command.args(["--state-peer", &group.base(index)]);
             }
+            group.reservations[6].take();
             group.worker = Some(group.spawn(command, "worker"));
             group.wait(|| {
                 group
@@ -177,6 +182,8 @@ impl Group {
             .unwrap()
     }
     fn start_node(&mut self, index: usize, remote: bool) {
+        self.reservations[index].take();
+        self.reservations[index + 3].take();
         let mut command = Command::new(env!("CARGO_BIN_EXE_bic"));
         command
             .arg("--data")
@@ -568,6 +575,7 @@ fn edge_failover(live_partition: bool) {
             "--listen",
             &format!("127.0.0.1:{}", group.ports[6]),
         ]);
+    group.reservations[6].take();
     group.worker = Some(group.spawn(command, "worker"));
     group.wait(|| {
         group

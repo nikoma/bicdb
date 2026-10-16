@@ -21,7 +21,7 @@ pub struct Network {
     links: Vec<Link>,
 }
 impl Network {
-    pub fn open(ports: &[u16]) -> Self {
+    pub fn open(ports: &[u16], reserved: &mut [Option<TcpListener>]) -> Self {
         let running = Arc::new(AtomicBool::new(true));
         let isolated = Arc::new(AtomicBool::new(false));
         let mut links = Vec::new();
@@ -30,8 +30,9 @@ impl Network {
                 if source == target {
                     continue;
                 }
-                let listener =
-                    TcpListener::bind(("127.0.0.1", ports[7 + source * 3 + target])).unwrap();
+                // Keep the original reservation: dropping and rebinding it
+                // lets another parallel group claim this port in between.
+                let listener = reserved[7 + source * 3 + target].take().unwrap();
                 listener.set_nonblocking(true).unwrap();
                 let sockets = Arc::new(Mutex::new(Vec::new()));
                 let affected = source == 0 || target == 0;

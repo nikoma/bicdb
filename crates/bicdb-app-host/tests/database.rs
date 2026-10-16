@@ -286,11 +286,15 @@ fn job_identity_attempts_and_completion_travel_with_the_application_database() {
         .unwrap();
     // The worker vanished after committing its effect. Expire its delivery
     // lease, then copy only data, without the historical broker directory.
-    SqlSession::new(&mut database.db)
+    SqlSession::new(&mut database.db.write())
         .execute("UPDATE __bic_platform_jobs SET lease_until = 0 WHERE status = 'running'")
         .unwrap();
     std::fs::create_dir(&target).unwrap();
-    database.db.create_branch(&target.join("data")).unwrap();
+    database
+        .db
+        .read()
+        .create_branch(&target.join("data"))
+        .unwrap();
     drop(database);
     let mut recovered = Database::open(&target).unwrap();
     recovered.prepare(&package).unwrap();
@@ -434,11 +438,11 @@ fn interrupted_job_migration_resumes_from_the_last_committed_batch() {
     let root = tempfile::tempdir().unwrap();
     // Construct a valid pre-migration catalog with one malformed key entry
     // that will fail the second import batch. The first batch must survive.
-    let mut database = Database::open(root.path()).unwrap();
-    SqlSession::new(&mut database.db)
+    let database = Database::open(root.path()).unwrap();
+    SqlSession::new(&mut database.db.write())
         .execute("UPDATE __bic_platform_job_migration SET cursor = 0, complete = FALSE")
         .unwrap();
-    SqlSession::new(&mut database.db)
+    SqlSession::new(&mut database.db.write())
         .execute(
             "INSERT INTO __bic_platform_job_keys VALUES ('legacy:key-139','conflict','conflict')",
         )
@@ -510,7 +514,7 @@ fn failed_job_deliveries_keep_their_identity_and_reach_the_attempt_ceiling() {
         receipt["id"]
     );
     for attempt in 1..=bicdb_core::DEFAULT_MAX_ATTEMPTS {
-        SqlSession::new(&mut database.db)
+        SqlSession::new(&mut database.db.write())
             .execute("UPDATE __bic_platform_jobs SET available_at = 0 WHERE status = 'ready'")
             .unwrap();
         let message = database.consume("worker", 1000).unwrap().unwrap();

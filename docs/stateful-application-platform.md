@@ -170,6 +170,35 @@ authority; manual restore and a local process restart do not establish those
 guarantees. Compute workers can fail over while retaining this one state service,
 as described in the worker fleet guide.
 
+### Replicated application state API
+
+Embedding hosts can open `database::Database::open_replicated(path, ha)` using
+the public native `HaServerConfig`. This starts state streaming and election
+services without a PostgreSQL listener. Call `prepare(release)` on the replica
+with an active writer lease before running application code. Migrations,
+transaction effects and receipts, the job outbox, job IDs and delivery state
+share the native commit stream. Successful application operations wait for the
+configured synchronous acknowledgements after releasing the engine lock.
+Use idempotency keys when retrying operations after an acknowledgement timeout.
+
+The application directory records its cluster and node binding independently
+of the database snapshot. Ordinary standalone startup refuses that directory;
+reopening it with a different identity is also refused. Existing historical
+local-broker jobs must first migrate using the current standalone host. Stop
+and fence that host before enabling native state replication. Preflight refuses
+an incomplete historical migration before starting replication services.
+First-time primary enrollment checkpoints existing state so new replicas receive
+a complete snapshot, including empty tables and historical standalone updates,
+before continuing with the native commit stream.
+
+This is an embedding API. `bic serve` still uses a local deployment catalog;
+its routing and lifecycle are not yet driven by a replicated state lease.
+The embedding host must stop execution on authority loss and reopen state when
+`restart_required()` is set. Releases with selective edge synchronization are
+currently refused by `prepare` in this mode: native row replication does not
+carry the original signed edge journals. Use the standalone deployment workflow
+above for edge synchronization until that integration is implemented.
+
 ## Edge synchronization
 
 Synchronization is opt-in for explicitly named public tables. Deploy the same

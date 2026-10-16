@@ -41,11 +41,41 @@ range quorum with the legacy whole-database streaming/HA commands below.
 
 ## Synchronous streaming replication (`bicdb serve`)
 
+The native HA handshake uses protocol version **2**. All peers in a native HA
+group must support this version; version 1 connections are refused. Plan a
+coordinated upgrade with the application writers stopped rather than mixing
+protocol versions. The core commit-frame format and the standalone manual
+replication transport remain version 1.
+
+The handshake distinguishes the highest authority epoch a node has observed
+(`Hello`) from the epoch of the commits it actually stores (`Resume`). A
+returning former primary cannot claim the new primary's data history merely
+because it learned about that primary. Snapshot bootstrap preserves the local
+node's voting state while adopting the source snapshot's data epoch and history,
+so subsequent commits can stream continuously after recovery.
+
 `bicdb serve` can run as a replication primary or standby itself. A primary
 streams every commit to its standbys over long-lived authenticated connections.
 With `--synchronous-standbys K`, a client's commit is acknowledged only after
 K standbys have made it durable (RPO = 0). Standbys keep serving read-only
 queries while they apply the stream.
+
+Embedding hosts can use `bicdb_pgwire::EmbeddedHaDatabase` with the same
+`HaServerConfig`. It runs replication, election and lease services without
+opening a PostgreSQL listener. `with_write` releases the engine guard before
+waiting for durable acknowledgements. Hosts that use the trusted `database()`
+handle directly must release their guards before calling
+`acknowledge_current()`. An acknowledgement timeout is indeterminate; the
+transaction can already be durable locally, so retry through an idempotent
+application operation.
+
+`writer_lease().active()` is a weak, engine-lock-free authority probe for
+compute supervisors. Stop publishing routes and renewing compute leases when
+it returns false. Promotion, demotion and snapshot installation set
+`restart_required()`; stop execution, drop the old database handles, and reopen
+with the original configuration to resolve the persisted role. Shutdown tracks
+replication workers and cancels their network connections, including incomplete
+peer handshakes, before releasing the listener.
 
 ```bash
 # primary: accepts writes, waits for 1 standby on every commit

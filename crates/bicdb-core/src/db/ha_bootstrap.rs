@@ -88,7 +88,8 @@ impl BicDb {
 
 /// Restores a primary's snapshot archive into the staging directory of the
 /// standby at `path` and marks it ready; the next open installs it. The
-/// standby keeps its own replication identity (epoch, known primary address).
+/// standby keeps its own voting identity and highest observed epoch, while
+/// adopting the snapshot's data epoch and accepted history.
 pub fn stage_standby_bootstrap(path: &Path, archive: &Path, key: &str, fsync: bool) -> Result<()> {
     let staging = standby_bootstrap_staging(path);
     if staging.exists() {
@@ -102,7 +103,15 @@ pub fn stage_standby_bootstrap(path: &Path, archive: &Path, key: &str, fsync: bo
             force: true,
         },
     )?;
-    // The primary's own replication files describe the primary, not this node.
+    let source = match fs::read(staging.join(ha_node::HA_NODE_FILE)) {
+        Ok(bytes) => serde_json::from_slice::<ha_node::HaNodeFile>(&bytes)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            ha_node::HaNodeFile::default()
+        }
+        Err(error) => return Err(error.into()),
+    };
+    // The primary's own role, votes and replication slots do not belong to
+    // this node. Its data epoch does describe the snapshot's exact history.
     for file in [ha_node::HA_NODE_FILE, DEFAULT_REPLICATION_STATE] {
         match fs::remove_file(staging.join(file)) {
             Ok(()) => {}
@@ -110,16 +119,25 @@ pub fn stage_standby_bootstrap(path: &Path, archive: &Path, key: &str, fsync: bo
             Err(error) => return Err(error.into()),
         }
     }
-    if let Ok(bytes) = fs::read(path.join(ha_node::HA_NODE_FILE)) {
-        let mut node = serde_json::from_slice::<ha_node::HaNodeFile>(&bytes)?;
-        node.role = None;
-        node.slots.clear();
-        storage::write_atomic(
-            &staging.join(ha_node::HA_NODE_FILE),
-            &serde_json::to_vec_pretty(&node)?,
-            fsync,
-        )?;
-    }
+    let mut node = match fs::read(path.join(ha_node::HA_NODE_FILE)) {
+        Ok(bytes) => serde_json::from_slice::<ha_node::HaNodeFile>(&bytes)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            ha_node::HaNodeFile::default()
+        }
+        Err(error) => return Err(error.into()),
+    };
+    node.role = Some(ha_node::NodeRole::Standby);
+    node.slots.clear();
+    node.epoch = node.epoch.max(source.epoch);
+    node.data_epoch = source.data_epoch;
+    node.epoch_starts = source.epoch_starts;
+    node.primary_id = source.primary_id.or(node.primary_id);
+    node.primary_sql_address = source.primary_sql_address.or(node.primary_sql_address);
+    storage::write_atomic(
+        &staging.join(ha_node::HA_NODE_FILE),
+        &serde_json::to_vec_pretty(&node)?,
+        fsync,
+    )?;
     storage::write_atomic(&staging.join(BOOTSTRAP_READY), b"ready\n", fsync)?;
     Ok(())
 }

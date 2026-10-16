@@ -49,11 +49,19 @@ fn query(database: &mut Database, sql: &str) -> anyhow::Result<Vec<bicdb_sql::Sq
 }
 fn connect(left: &mut Database, right: &mut Database) {
     left.db
-        .pin_node_key(&right.db.node_id(), &right.db.mesh_verifying_key().unwrap())
+        .write()
+        .pin_node_key(
+            &right.db.read().node_id(),
+            &right.db.read().mesh_verifying_key().unwrap(),
+        )
         .unwrap();
     right
         .db
-        .pin_node_key(&left.db.node_id(), &left.db.mesh_verifying_key().unwrap())
+        .write()
+        .pin_node_key(
+            &left.db.read().node_id(),
+            &left.db.read().mesh_verifying_key().unwrap(),
+        )
         .unwrap();
 }
 
@@ -87,7 +95,7 @@ fn offline_changes_converge_with_signatures_without_exporting_jobs_or_platform_m
     assert!(sync::import(&mut right, &release, forged).is_err());
     sync::import(&mut right, &release, outgoing.clone()).unwrap();
     sync::import(&mut right, &release, outgoing).unwrap();
-    let vector = left.db.sync_vector().unwrap();
+    let vector = left.db.read().sync_vector().unwrap();
     let incoming = sync::export(&mut right, &release, &digest, &vector).unwrap();
     sync::import(&mut left, &release, incoming).unwrap();
     assert_eq!(
@@ -95,8 +103,8 @@ fn offline_changes_converge_with_signatures_without_exporting_jobs_or_platform_m
         query(&mut right, "SELECT * FROM notes ORDER BY id").unwrap()
     );
     assert_eq!(
-        left.db.sync_vector().unwrap(),
-        right.db.sync_vector().unwrap()
+        left.db.read().sync_vector().unwrap(),
+        right.db.read().sync_vector().unwrap()
     );
     assert!(
         right.consume("worker", 1000).unwrap().is_none(),
@@ -108,7 +116,7 @@ fn offline_changes_converge_with_signatures_without_exporting_jobs_or_platform_m
     let mut right = Database::open(&directory.path().join("right")).unwrap();
     left.prepare(&release).unwrap();
     right.prepare(&release).unwrap();
-    let vector = right.db.sync_vector().unwrap();
+    let vector = right.db.read().sync_vector().unwrap();
     assert_eq!(
         sync::export(&mut left, &release, &digest, &vector)
             .unwrap()
@@ -138,7 +146,7 @@ fn append_only_and_single_writer_policies_refuse_unauthorized_mutations() {
     release.manifest.sync.insert(
         "notes".into(),
         TableSync::SingleWriter {
-            node: left.db.node_id(),
+            node: left.db.read().node_id(),
         },
     );
     left.prepare(&release).unwrap();
@@ -184,7 +192,7 @@ fn concurrent_append_key_collisions_are_visible_on_both_replicas() {
         &mut right,
         &release,
         &digest,
-        &left.db.sync_vector().unwrap(),
+        &left.db.read().sync_vector().unwrap(),
     )
     .unwrap();
     sync::import(&mut left, &release, incoming).unwrap();

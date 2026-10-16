@@ -891,6 +891,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bicdb-core",
+ "bicdb-pgwire",
  "bicdb-sql",
  "clap",
  "libc",

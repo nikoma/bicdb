@@ -116,10 +116,12 @@ pub fn save_peers(path: &Path, peers: &BTreeMap<String, Peer>) -> Result<()> {
 }
 
 pub fn identity(database: &Database, release: &str) -> Result<Identity> {
+    identity_from(&database.db.read(), release)
+}
+fn identity_from(db: &bicdb_core::BicDb, release: &str) -> Result<Identity> {
     Ok(Identity {
-        node_id: database.db.node_id(),
-        public_key: database
-            .db
+        node_id: db.node_id(),
+        public_key: db
             .mesh_verifying_key()
             .context("database signing key unavailable")?,
         release: release.to_owned(),
@@ -180,18 +182,17 @@ pub fn export(
     digest: &str,
     peer: &SyncVector,
 ) -> Result<Exchange> {
-    let vector = database.db.sync_vector()?;
+    let mut db = database.db.write();
+    let vector = db.sync_vector()?;
     vector.ensure_matching_equal_prefixes(peer)?;
-    let bundle = database
-        .db
-        .export_sync_bundle_delta_bounded(peer, 10_000, 15 * 1024 * 1024)?;
+    let bundle = db.export_sync_bundle_delta_bounded(peer, 10_000, 15 * 1024 * 1024)?;
     check_bundle(&bundle, release)?;
     ensure!(
         serde_json::to_vec(&bundle)?.len() <= 16 * 1024 * 1024,
         "synchronization delta exceeds 16 MiB"
     );
     Ok(Exchange {
-        identity: identity(database, digest)?,
+        identity: identity_from(&db, digest)?,
         vector,
         bundle,
     })
@@ -205,8 +206,12 @@ pub fn import(database: &mut Database, release: &Release, exchange: Exchange) ->
     check_bundle(&exchange.bundle, release)?;
     database
         .db
+        .read()
         .sync_vector()?
         .ensure_matching_equal_prefixes(&exchange.vector)?;
-    database.db.import_sync_bundle_strict(exchange.bundle)?;
+    database
+        .db
+        .write()
+        .import_sync_bundle_strict(exchange.bundle)?;
     Ok(())
 }

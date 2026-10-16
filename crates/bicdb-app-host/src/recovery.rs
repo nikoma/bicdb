@@ -40,7 +40,7 @@ pub fn snapshot(
         deployment.release == release.digest()?,
         "deployment and release differ"
     );
-    let directory = database.db.data_path().to_owned();
+    let directory = database.db.read().data_path().to_owned();
     let jobs = directory.join(JOBS);
     let metadata = directory.join(METADATA);
     // These are temporary backup payloads inside the data archive, not database
@@ -62,7 +62,7 @@ pub fn snapshot(
             })?,
         )?;
         create_backup_from_open_database(
-            &database.db,
+            &database.db.read(),
             output,
             BackupCreateOptions {
                 passphrase: passphrase.into(),

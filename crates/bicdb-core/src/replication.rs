@@ -362,6 +362,14 @@ pub enum ReplicationFrame {
         snapshot_hash: [u8; 32],
     },
     Commit(CommitFrame),
+    /// Establish the exact data history a standby holds before streaming.
+    /// Hello's epoch fences authority; this epoch describes stored commits.
+    Resume {
+        cluster_id: String,
+        node_id: String,
+        commit_seq: u64,
+        data_epoch: u64,
+    },
     Ack {
         cluster_id: String,
         node_id: String,

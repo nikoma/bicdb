@@ -507,6 +507,11 @@ impl SyncQuorum {
         self.changed.notify_all();
     }
 
+    /// Whether this tracker has permanently stopped acknowledging commits.
+    pub fn is_closed(&self) -> bool {
+        self.state.lock().closed.is_some()
+    }
+
     /// Records a (re)connecting standby's actual position, replacing what was
     /// known before: it may be lower after the standby lost data.
     pub fn set_ack(&self, standby: &str, seq: u64) {

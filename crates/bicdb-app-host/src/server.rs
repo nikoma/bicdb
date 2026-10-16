@@ -982,12 +982,15 @@ async fn add_peer(
         let app = app.clone();
         let platform = platform.clone();
         move || {
-            let mut database = app.database.lock();
+            let database = app.database.lock();
             ensure!(
-                database.db.node_id() != peer.node_id,
+                database.db.read().node_id() != peer.node_id,
                 "cannot add this database as its own peer"
             );
-            database.db.pin_node_key(&peer.node_id, &peer.public_key)?;
+            database
+                .db
+                .write()
+                .pin_node_key(&peer.node_id, &peer.public_key)?;
             let mut peers = app.peers.lock().clone();
             peers.insert(peer.node_id.to_string(), peer.clone());
             crate::sync::save_peers(&platform.store.app_dir(&name)?.join("peers.json"), &peers)?;
@@ -1038,9 +1041,10 @@ async fn sync_vector(
         let app = app.clone();
         move || {
             let database = app.database.lock();
+            let vector = database.db.read().sync_vector()?;
             Ok(crate::sync::VectorResponse {
                 identity: crate::sync::identity(&database, &app.deployment.lock().release)?,
-                vector: database.db.sync_vector()?,
+                vector,
             })
         }
     })
@@ -1049,7 +1053,7 @@ async fn sync_vector(
 }
 
 fn validate_origins(app: &Application, exchange: &crate::sync::Exchange) -> Result<()> {
-    let own = app.database.lock().db.node_id();
+    let own = app.database.lock().db.read().node_id();
     let peers = app.peers.lock();
     for event in &exchange.bundle.events {
         ensure!(

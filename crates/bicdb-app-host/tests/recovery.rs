@@ -36,7 +36,7 @@ fn format_one_recovery_images_migrate_pending_local_broker_jobs() {
         "__bic_platform_job_keys",
         "__bic_platform_job_migration",
     ] {
-        SqlSession::new(&mut database.db)
+        SqlSession::new(&mut database.db.write())
             .execute(&format!("DROP TABLE {table}"))
             .unwrap();
     }
@@ -56,7 +56,7 @@ fn format_one_recovery_images_migrate_pending_local_broker_jobs() {
     .unwrap();
     let archive = root.path().join("legacy.bicbak");
     create_backup_from_open_database(
-        &database.db,
+        &database.db.read(),
         &archive,
         BackupCreateOptions {
             passphrase: passphrase.into(),

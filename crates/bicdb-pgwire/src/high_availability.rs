@@ -34,13 +34,17 @@
 //! allow-list and, when pinned, match the presented certificate. Plaintext is
 //! accepted only for loopback development configurations.
 use super::*;
-use bicdb_core::replication::{ReplicationFrame, REPLICATION_PROTOCOL_VERSION};
+use bicdb_core::replication::ReplicationFrame;
 use bicdb_core::{NodeRole, ReplicationCursor, StandbyResume, SyncTimeoutPolicy};
 use sha2::{Digest, Sha256};
 use std::io::{Read as _, Write as _};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
+
+/// Native HA handshake version. Version 2 separates observed authority from
+/// the epoch of stored data; version 1 peers must upgrade before joining.
+pub const HA_REPLICATION_PROTOCOL_VERSION: u32 = 2;
 
 /// Frames per round sent to one standby.
 const BATCH_COMMITS: usize = 512;
@@ -134,7 +138,7 @@ impl HaServerConfig {
     /// The database-level replication configuration for this role: a primary
     /// logs full row images so frames can be built, a standby refuses
     /// ordinary writes.
-    pub(crate) fn database_replication(&self) -> ReplicationConfig {
+    pub fn database_replication(&self) -> ReplicationConfig {
         let mut replication = self.replication.clone();
         replication.enabled = true;
         replication.mode = match self.role {
@@ -218,9 +222,31 @@ impl HaServerConfig {
 struct HaRuntime {
     /// When this node last heard from a live primary (a standby).
     last_heard: Mutex<Instant>,
+    connections: Mutex<std::collections::BTreeMap<uuid::Uuid, TcpStream>>,
+    stopping: AtomicBool,
 }
 
 impl HaRuntime {
+    fn track(self: &Arc<Self>, socket: &TcpStream, limit: usize) -> Result<Connection> {
+        let mut connections = self.connections.lock().unwrap();
+        if self.stopping.load(Ordering::Acquire) || connections.len() >= limit {
+            return Err(PgWireError::Server(
+                "replication connection capacity reached".into(),
+            ));
+        }
+        let id = uuid::Uuid::new_v4();
+        connections.insert(id, socket.try_clone()?);
+        Ok(Connection {
+            runtime: self.clone(),
+            id,
+        })
+    }
+    fn close_connections(&self) {
+        self.stopping.store(true, Ordering::Release);
+        for socket in self.connections.lock().unwrap().values() {
+            let _ = socket.shutdown(std::net::Shutdown::Both);
+        }
+    }
     fn heard_now(&self) {
         *self.last_heard.lock().unwrap() = Instant::now();
     }
@@ -228,6 +254,36 @@ impl HaRuntime {
     fn silent_for(&self) -> Duration {
         self.last_heard.lock().unwrap().elapsed()
     }
+}
+
+struct Connection {
+    runtime: Arc<HaRuntime>,
+    id: uuid::Uuid,
+}
+impl Drop for Connection {
+    fn drop(&mut self) {
+        self.runtime.connections.lock().unwrap().remove(&self.id);
+    }
+}
+
+fn spawn_worker(
+    server: &Arc<PgWireServer>,
+    name: &str,
+    work: impl FnOnce() + Send + 'static,
+) -> Result<()> {
+    // Register before spawning so shutdown cannot miss a thread that has not
+    // started executing yet. The registration also covers accepted peers.
+    let worker = BackgroundWorker::register(server.clone());
+    std::thread::Builder::new()
+        .name(name.into())
+        .spawn(move || {
+            let _worker = worker;
+            work();
+        })?;
+    Ok(())
+}
+fn peer_capacity(config: &HaServerConfig) -> usize {
+    (config.allowed().len() * 4 + 8).min(256)
 }
 
 /// Starts the replication service for `server`'s HA role.
@@ -243,7 +299,32 @@ pub(crate) fn start(server: Arc<PgWireServer>, config: HaServerConfig) -> Result
         .map_err(PgWireError::from)?;
     let runtime = Arc::new(HaRuntime {
         last_heard: Mutex::new(Instant::now()),
+        connections: Mutex::new(std::collections::BTreeMap::new()),
+        stopping: AtomicBool::new(false),
     });
+    struct StartupGuard {
+        server: Arc<PgWireServer>,
+        armed: bool,
+    }
+    impl Drop for StartupGuard {
+        fn drop(&mut self) {
+            if self.armed {
+                self.server.request_shutdown();
+            }
+        }
+    }
+    let mut startup = StartupGuard {
+        server: server.clone(),
+        armed: true,
+    };
+    let cancel_server = server.clone();
+    let cancel_runtime = runtime.clone();
+    spawn_worker(&server, "bicdb-replication-shutdown", move || {
+        while !cancel_server.is_shutdown_requested() {
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        cancel_runtime.close_connections();
+    })?;
     if config.failover.is_some() && server.read_db()?.replication_role() == NodeRole::Fenced {
         // A fenced former primary rejoins its group as a standby.
         server
@@ -295,12 +376,13 @@ pub(crate) fn start(server: Arc<PgWireServer>, config: HaServerConfig) -> Result
                 .map_err(PgWireError::from)?;
         }
         let announcer = server.clone();
-        std::thread::Builder::new()
-            .name("bicdb-replication-catalog".to_string())
-            .spawn(move || announce_index_catalog(announcer))?;
+        spawn_worker(&server, "bicdb-replication-catalog", move || {
+            announce_index_catalog(announcer)
+        })?;
     }
     if let Some(HaServerRole::Primary { listen, .. }) = config.primary_settings() {
         let listener = std::net::TcpListener::bind(listen)?;
+        listener.set_nonblocking(true)?;
         let tls = if config.plaintext() {
             None
         } else {
@@ -314,24 +396,28 @@ pub(crate) fn start(server: Arc<PgWireServer>, config: HaServerConfig) -> Result
             )
         };
         let (server, config, runtime) = (server.clone(), config.clone(), runtime.clone());
-        std::thread::Builder::new()
-            .name("bicdb-replication-listener".to_string())
-            .spawn(move || accept_peers(server, config, runtime, listener, tls))?;
+        let owner = server.clone();
+        spawn_worker(&owner, "bicdb-replication-listener", move || {
+            accept_peers(server, config, runtime, listener, tls)
+        })?;
     }
     match &config.role {
         HaServerRole::Primary { .. } => {
             if config.failover.is_some() {
-                std::thread::Builder::new()
-                    .name("bicdb-replication-lease".to_string())
-                    .spawn(move || watch_primary_lease(server, config))?;
+                let owner = server.clone();
+                spawn_worker(&owner, "bicdb-replication-lease", move || {
+                    watch_primary_lease(server, config, runtime)
+                })?;
             }
         }
         HaServerRole::Standby { .. } => {
-            std::thread::Builder::new()
-                .name("bicdb-replication-follower".to_string())
-                .spawn(move || follow_primary(server, config, runtime))?;
+            let owner = server.clone();
+            spawn_worker(&owner, "bicdb-replication-follower", move || {
+                follow_primary(server, config, runtime)
+            })?;
         }
     }
+    startup.armed = false;
     Ok(())
 }
 
@@ -342,36 +428,65 @@ fn accept_peers(
     listener: std::net::TcpListener,
     tls: Option<Arc<rustls::ServerConfig>>,
 ) {
-    for connection in listener.incoming() {
-        if server.is_shutdown_requested() {
-            return;
-        }
-        let Ok(socket) = connection else {
+    while !server.is_shutdown_requested() {
+        let socket = match listener.accept() {
+            Ok((socket, _)) => socket,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(25));
+                continue;
+            }
+            Err(error) => {
+                eprintln!("bicdb replication accept failed: {error}");
+                std::thread::sleep(Duration::from_millis(25));
+                continue;
+            }
+        };
+        let Ok(connection) = runtime.track(&socket, peer_capacity(&config)) else {
             continue;
         };
         let _ = socket.set_nodelay(true);
-        let server = Arc::clone(&server);
+        let _ = socket.set_read_timeout(Some(Duration::from_secs(3)));
+        let _ = socket.set_write_timeout(Some(Duration::from_secs(3)));
+        let owner = server.clone();
+        let server = server.clone();
         let config = config.clone();
-        let runtime = Arc::clone(&runtime);
+        let runtime = runtime.clone();
         let tls = tls.clone();
-        let _ = std::thread::Builder::new()
-            .name("bicdb-replication-peer".to_string())
-            .spawn(move || {
-                let peer = socket.peer_addr().ok();
-                match serve_peer(&server, &config, &runtime, socket, tls) {
-                    // Standbys looking for the primary ask every peer.
-                    Err(error) if error.to_string().contains(NOT_PRIMARY) => {}
-                    Err(error) => {
-                        eprintln!("bicdb replication: peer {peer:?} disconnected: {error}")
-                    }
-                    Ok(()) => {}
-                }
-            });
+        let _ = spawn_worker(&owner, "bicdb-replication-peer", move || {
+            let _connection = connection;
+            let peer = socket.peer_addr().ok();
+            match serve_peer(&server, &config, &runtime, socket, tls) {
+                Err(error)
+                    if error.to_string().contains(NOT_PRIMARY)
+                        || server.is_shutdown_requested() => {}
+                Err(error) => eprintln!("bicdb replication: peer {peer:?} disconnected: {error}"),
+                Ok(()) => {}
+            }
+        });
     }
+    runtime.close_connections();
 }
 
 trait ReplicationStream: std::io::Read + std::io::Write + Send {}
 impl<T: std::io::Read + std::io::Write + Send> ReplicationStream for T {}
+
+struct TrackedStream {
+    inner: Box<dyn ReplicationStream>,
+    _connection: Connection,
+}
+impl Read for TrackedStream {
+    fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+        self.inner.read(bytes)
+    }
+}
+impl Write for TrackedStream {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.inner.write(bytes)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
 
 fn send(mut stream: &mut dyn ReplicationStream, frame: &ReplicationFrame) -> Result<()> {
     replication_transport::send_frame(&mut stream, frame, MAX_FRAME_BYTES)
@@ -380,6 +495,10 @@ fn send(mut stream: &mut dyn ReplicationStream, frame: &ReplicationFrame) -> Res
 
 fn receive(mut stream: &mut dyn ReplicationStream) -> Result<ReplicationFrame> {
     replication_transport::recv_frame(&mut stream, MAX_FRAME_BYTES).map_err(PgWireError::from)
+}
+
+fn receive_control(mut stream: &mut dyn ReplicationStream) -> Result<ReplicationFrame> {
+    replication_transport::recv_frame(&mut stream, 64 * 1024).map_err(PgWireError::from)
 }
 
 fn refuse(stream: &mut dyn ReplicationStream, message: &str) -> PgWireError {
@@ -423,14 +542,14 @@ fn serve_peer(
     };
     let stream = stream.as_mut();
 
-    let (peer, peer_epoch) = match receive(stream)? {
+    let peer = match receive_control(stream)? {
         ReplicationFrame::Hello {
             protocol_version,
             cluster_id,
             node_id,
             epoch,
         } => {
-            if protocol_version != REPLICATION_PROTOCOL_VERSION {
+            if protocol_version != HA_REPLICATION_PROTOCOL_VERSION {
                 return Err(refuse(stream, "unsupported replication protocol version"));
             }
             if cluster_id != config.replication.cluster_id {
@@ -458,13 +577,24 @@ fn serve_peer(
                 }
             }
             superseded_check(server, stream, epoch)?;
-            (node_id, epoch)
+            node_id
         }
         _ => return Err(refuse(stream, "expected Hello")),
     };
     match receive(stream)? {
-        ReplicationFrame::Ack { commit_seq, .. } => {
-            stream_to_standby(server, config, stream, &peer, peer_epoch, commit_seq)
+        ReplicationFrame::Resume {
+            cluster_id,
+            node_id,
+            commit_seq,
+            data_epoch,
+        } => {
+            if cluster_id != config.replication.cluster_id || node_id != peer {
+                return Err(refuse(
+                    stream,
+                    "resume identity does not match the authenticated peer",
+                ));
+            }
+            stream_to_standby(server, config, stream, &peer, data_epoch, commit_seq)
         }
         ReplicationFrame::VoteRequest {
             candidate,
@@ -524,7 +654,7 @@ fn serve_peer(
                 },
             )
         }
-        _ => Err(refuse(stream, "expected Ack, VoteRequest or Ping")),
+        _ => Err(refuse(stream, "expected Resume, VoteRequest or Ping")),
     }
 }
 
@@ -797,7 +927,13 @@ fn connect_peer(
     address: &str,
     server_name: &str,
     timeout: Option<Duration>,
+    runtime: &Arc<HaRuntime>,
 ) -> Result<Box<dyn ReplicationStream>> {
+    let timeout = Some(
+        timeout
+            .unwrap_or(Duration::from_secs(3))
+            .min(Duration::from_secs(3)),
+    );
     let socket = match timeout {
         Some(timeout) => {
             let target = address.to_socket_addrs()?.next().ok_or_else(|| {
@@ -811,23 +947,30 @@ fn connect_peer(
         None => TcpStream::connect(address)?,
     };
     let _ = socket.set_nodelay(true);
+    let connection = runtime.track(&socket, peer_capacity(config))?;
     if config.plaintext() {
-        return Ok(Box::new(socket));
+        return Ok(Box::new(TrackedStream {
+            inner: Box::new(socket),
+            _connection: connection,
+        }));
     }
     let tls =
         config.replication.tls.as_ref().ok_or_else(|| {
             PgWireError::Server("replication TLS configuration missing".to_string())
         })?;
     let client = replication_transport::build_client_tls(tls).map_err(PgWireError::from)?;
-    Ok(Box::new(
-        replication_transport::client_tls_stream(client.config, server_name, socket)
-            .map_err(PgWireError::from)?,
-    ))
+    Ok(Box::new(TrackedStream {
+        inner: Box::new(
+            replication_transport::client_tls_stream(client.config, server_name, socket)
+                .map_err(PgWireError::from)?,
+        ),
+        _connection: connection,
+    }))
 }
 
 fn hello(config: &HaServerConfig, epoch: u64) -> ReplicationFrame {
     ReplicationFrame::Hello {
-        protocol_version: REPLICATION_PROTOCOL_VERSION,
+        protocol_version: HA_REPLICATION_PROTOCOL_VERSION,
         cluster_id: config.replication.cluster_id.clone(),
         node_id: config.replication.node_id.clone(),
         epoch,
@@ -870,7 +1013,7 @@ fn follow_primary(server: Arc<PgWireServer>, config: HaServerConfig, runtime: Ar
         }
         if let (Some(failover), Some(after)) = (&config.failover, election_after) {
             if runtime.silent_for() >= after && !server.is_shutdown_requested() {
-                if let Err(error) = run_election(&server, &config, failover) {
+                if let Err(error) = run_election(&server, &config, failover, &runtime) {
                     eprintln!("bicdb replication: election failed: {error}");
                 }
                 election_after = Some(failover.timeout + jitter(failover.timeout));
@@ -911,7 +1054,7 @@ fn follow_targets(server: &Arc<PgWireServer>, config: &HaServerConfig) -> Vec<(S
 fn follow_once(
     server: &Arc<PgWireServer>,
     config: &HaServerConfig,
-    runtime: &HaRuntime,
+    runtime: &Arc<HaRuntime>,
     primary: &str,
     server_name: &str,
 ) -> Result<()> {
@@ -919,20 +1062,24 @@ fn follow_once(
         .failover
         .as_ref()
         .map(|failover| failover.timeout / 2);
-    let mut stream = connect_peer(config, primary, server_name, connect_timeout)?;
+    let mut stream = connect_peer(config, primary, server_name, connect_timeout, runtime)?;
     let stream = stream.as_mut();
-    let (applied, epoch) = {
+    let (applied, epoch, data_epoch) = {
         let db = server.read_db()?;
-        (db.last_applied_commit_seq(), db.replication_epoch())
+        (
+            db.last_applied_commit_seq(),
+            db.replication_epoch(),
+            db.ha_node_status().data_epoch,
+        )
     };
     send(stream, &hello(config, epoch))?;
     send(
         stream,
-        &ReplicationFrame::Ack {
+        &ReplicationFrame::Resume {
             cluster_id: config.replication.cluster_id.clone(),
             node_id: config.replication.node_id.clone(),
             commit_seq: applied,
-            epoch,
+            data_epoch,
         },
     )?;
     let mut batch = Vec::new();
@@ -1021,6 +1168,7 @@ fn run_election(
     server: &Arc<PgWireServer>,
     config: &HaServerConfig,
     failover: &FailoverConfig,
+    runtime: &Arc<HaRuntime>,
 ) -> Result<()> {
     let node_id = &config.replication.node_id;
     let (term, epoch, data_epoch, last_commit_seq) = {
@@ -1040,12 +1188,16 @@ fn run_election(
     );
     let mut votes = 1;
     for peer in &failover.peers {
+        if server.is_shutdown_requested() {
+            return Ok(());
+        }
         let response = (|| -> Result<ReplicationFrame> {
             let mut stream = connect_peer(
                 config,
                 &peer.address,
                 &failover.peer_server_name,
                 Some(failover.timeout / 2),
+                runtime,
             )?;
             let stream = stream.as_mut();
             send(stream, &hello(config, epoch))?;
@@ -1101,7 +1253,7 @@ fn run_election(
 /// Primary side with automatic failover: notices that this node was fenced
 /// (a newer primary exists) and rejoins as a standby. While the write lease
 /// is lost, asks the group who its primary is.
-fn watch_primary_lease(server: Arc<PgWireServer>, config: HaServerConfig) {
+fn watch_primary_lease(server: Arc<PgWireServer>, config: HaServerConfig, runtime: Arc<HaRuntime>) {
     let Some(failover) = config.failover.clone() else {
         return;
     };
@@ -1132,12 +1284,16 @@ fn watch_primary_lease(server: Arc<PgWireServer>, config: HaServerConfig) {
         }
         last_probe = Instant::now();
         for peer in &failover.peers {
+            if server.is_shutdown_requested() {
+                return;
+            }
             let pong = (|| -> Result<ReplicationFrame> {
                 let mut stream = connect_peer(
                     &config,
                     &peer.address,
                     &failover.peer_server_name,
                     Some(failover.timeout / 2),
+                    &runtime,
                 )?;
                 let stream = stream.as_mut();
                 send(stream, &hello(&config, epoch))?;

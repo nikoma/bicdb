@@ -1,6 +1,9 @@
+use bicdb_pgwire::{EmbeddedHaDatabase, HaServerConfig, HaWriterLease, PgWireConfig};
+use parking_lot::RwLock;
 use std::collections::BTreeMap;
 use std::ops::ControlFlow;
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::{bail, ensure, Context, Result};
 use bicdb_core::{BicDb, DbConfig};
@@ -40,10 +43,20 @@ pub struct QueryBatch {
 }
 
 pub struct Database {
-    pub db: BicDb,
+    pub db: Arc<RwLock<BicDb>>,
+    native: Option<Arc<EmbeddedHaDatabase>>,
     legacy_jobs_path: std::path::PathBuf,
     sync: BTreeMap<String, TableSync>,
 }
+
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct ReplicaBinding {
+    format: u32,
+    cluster_id: String,
+    node_id: String,
+}
+const REPLICA_BINDING: &str = "state-replica.json";
 
 fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
@@ -51,33 +64,161 @@ fn quote(value: &str) -> String {
 
 impl Database {
     pub fn open(path: &Path) -> Result<Self> {
-        let mut db = BicDb::open_with_config(
+        ensure!(
+            !path.join(REPLICA_BINDING).exists(),
+            "this application is bound to state replication; reopen with its replica configuration"
+        );
+        let db = BicDb::open_with_config(
             path.join("data"),
             DbConfig::default().with_fsync(true).with_audit_events(true),
         )?;
-        let mut session = SqlSession::new(&mut db);
-        session.execute(&format!("CREATE TABLE IF NOT EXISTS {MIGRATIONS} (position BIGINT PRIMARY KEY, name TEXT NOT NULL, digest TEXT NOT NULL)"))?;
-        session.execute(&format!("CREATE TABLE IF NOT EXISTS {RECEIPTS} (key TEXT PRIMARY KEY, digest TEXT NOT NULL, result TEXT NOT NULL)"))?;
-        session.execute(&format!("CREATE TABLE IF NOT EXISTS {OUTBOX} (id TEXT PRIMARY KEY, position BIGINT NOT NULL, payload TEXT NOT NULL)"))?;
-        drop(session);
         let mut database = Self {
-            db,
+            db: Arc::new(RwLock::new(db)),
+            native: None,
             legacy_jobs_path: path.join("jobs"),
             sync: BTreeMap::new(),
         };
-        database.initialize_job_ledger()?;
+        database.initialize()?;
         Ok(database)
     }
 
+    /// Open a native state replica without exposing a SQL listener. Call
+    /// prepare() once this replica holds a live primary lease. Streaming,
+    /// promotion and restart follow the ordinary native HA lifecycle.
+    pub fn open_replicated(path: &Path, ha: HaServerConfig) -> Result<Self> {
+        let binding = ReplicaBinding {
+            format: 1,
+            cluster_id: ha.replication.cluster_id.clone(),
+            node_id: ha.replication.node_id.clone(),
+        };
+        let binding_path = path.join(REPLICA_BINDING);
+        let already_bound = binding_path.exists();
+        if already_bound {
+            let previous: ReplicaBinding =
+                serde_json::from_slice(&crate::store::read_bounded(&binding_path, 16 * 1024)?)?;
+            ensure!(
+                previous == binding,
+                "state replica identity differs from its persisted binding"
+            );
+        }
+        let legacy = path.join("jobs");
+        let native = Arc::new(EmbeddedHaDatabase::open_with_initializer(
+            path.join("data"),
+            PgWireConfig {
+                fsync: true,
+                high_availability: Some(ha),
+                ..Default::default()
+            },
+            DbConfig::default().with_fsync(true).with_audit_events(true),
+            move |db| {
+                if legacy.exists() {
+                    let migrated = SqlSession::new_shared(db)
+                        .execute("SELECT complete FROM __bic_platform_job_migration WHERE id = 'legacy-v1'")
+                        .is_ok_and(|result| result.rows.first().is_some_and(|row| row[0] == SqlValue::Bool(true)));
+                    if !migrated {
+                        return Err(bicdb_pgwire::PgWireError::Server("migrate the historical local job broker with the current standalone host before enabling state replication".into()));
+                    }
+                }
+                // Historical standalone WAL can contain compact update patches
+                // and omit empty collections. Checkpoint it before admitting
+                // any peer, forcing new replicas to bootstrap the complete
+                // durable image instead of replaying an incomplete old suffix.
+                if !already_bound
+                    && db.replication_role() == bicdb_core::NodeRole::Primary
+                    && db.current_commit_seq() > 0
+                {
+                    db.compact()?;
+                }
+                crate::store::atomic_write(
+                    &binding_path,
+                    &serde_json::to_vec(&binding)
+                        .map_err(|error| bicdb_pgwire::PgWireError::Server(error.to_string()))?,
+                )
+                .map_err(|error| bicdb_pgwire::PgWireError::Server(error.to_string()))?;
+                Ok(())
+            },
+        )?);
+        let database = Self {
+            db: native.database(),
+            native: Some(native),
+            legacy_jobs_path: path.join("jobs"),
+            sync: BTreeMap::new(),
+        };
+        Ok(database)
+    }
+
+    pub fn writer_lease(&self) -> Option<HaWriterLease> {
+        self.native.as_ref().map(|host| host.writer_lease())
+    }
+    pub fn restart_required(&self) -> bool {
+        self.native
+            .as_ref()
+            .is_some_and(|host| host.restart_required())
+    }
+    pub fn writable(&self) -> bool {
+        self.writer_lease().is_none_or(|lease| lease.active())
+            && !self.db.read().is_read_only_standby()
+    }
+    pub fn request_shutdown(&self) {
+        if let Some(host) = &self.native {
+            host.request_shutdown();
+        }
+    }
+
+    fn ensure_authority(&self) -> Result<()> {
+        ensure!(
+            self.writer_lease().is_none_or(|lease| lease.active()),
+            "state replica has no active writer authority"
+        );
+        Ok(())
+    }
+
+    fn acknowledge<T>(&self, result: Result<T>) -> Result<T> {
+        let value = result?;
+        if let Some(native) = &self.native {
+            native.acknowledge_current()?;
+        }
+        Ok(value)
+    }
+
+    fn initialize(&mut self) -> Result<()> {
+        {
+            let mut db = self.db.write();
+            let mut session = SqlSession::new(&mut db);
+            session.execute(&format!("CREATE TABLE IF NOT EXISTS {MIGRATIONS} (position BIGINT PRIMARY KEY, name TEXT NOT NULL, digest TEXT NOT NULL)"))?;
+            session.execute(&format!("CREATE TABLE IF NOT EXISTS {RECEIPTS} (key TEXT PRIMARY KEY, digest TEXT NOT NULL, result TEXT NOT NULL)"))?;
+            session.execute(&format!("CREATE TABLE IF NOT EXISTS {OUTBOX} (id TEXT PRIMARY KEY, position BIGINT NOT NULL, payload TEXT NOT NULL)"))?;
+        }
+        self.initialize_job_ledger()
+    }
+
     pub fn prepare(&mut self, release: &Release) -> Result<()> {
+        if self.native.is_some() {
+            ensure!(
+                release.manifest.sync.is_empty(),
+                "native state replication does not yet carry signed edge record journals"
+            );
+            ensure!(
+                self.writable(),
+                "state replica has no active writer authority"
+            );
+            self.initialize()?;
+        }
         self.sync = release.manifest.sync.clone();
         self.migrate(release)?;
         self.configure_sync(&release.manifest.sync)
     }
 
     pub fn migrate(&mut self, release: &Release) -> Result<()> {
-        let node = self.db.node_id();
-        let mut session = SqlSession::new(&mut self.db);
+        self.validate_replication_sync(&release.manifest.sync)?;
+        self.ensure_authority()?;
+        let result = self.migrate_local(release);
+        self.acknowledge(result)
+    }
+    fn migrate_local(&mut self, release: &Release) -> Result<()> {
+        let mut db = self.db.write();
+        let node = db.node_id();
+        let mut session = SqlSession::new(&mut db);
         let applied = session
             .execute(&format!(
                 "SELECT position, name, digest FROM {MIGRATIONS} ORDER BY position"
@@ -147,6 +288,16 @@ impl Database {
         batch: &QueryBatch,
         deadline: std::time::Instant,
     ) -> Result<Vec<SqlResult>> {
+        self.ensure_authority()?;
+        let result = self.query_with_deadline_local(batch, deadline);
+        self.acknowledge(result)
+    }
+    fn query_with_deadline_local(
+        &mut self,
+        batch: &QueryBatch,
+        deadline: std::time::Instant,
+    ) -> Result<Vec<SqlResult>> {
+        let mut db = self.db.write();
         let cancellation = bicdb_core::CancellationToken::new(
             std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             Some(deadline),
@@ -179,7 +330,7 @@ impl Database {
                 "query too large"
             );
             let statements = Parser::parse_sql(&PostgreSqlDialect {}, &query.sql)?;
-            Self::authorize_statements(&self.sync, &self.db.node_id(), &statements)?;
+            Self::authorize_statements(&self.sync, &db.node_id(), &statements)?;
             ensure!(
                 statements.len() == 1,
                 "each query must contain exactly one statement"
@@ -195,7 +346,7 @@ impl Database {
                 !key.is_empty() && key.len() <= 256,
                 "invalid idempotency key"
             );
-            let mut session = SqlSession::new(&mut self.db).with_cancellation(cancellation.clone());
+            let mut session = SqlSession::new(&mut db).with_cancellation(cancellation.clone());
             let rows = session
                 .execute(&format!(
                     "SELECT digest, result FROM {RECEIPTS} WHERE key = {}",
@@ -214,7 +365,7 @@ impl Database {
             }
         }
         // One database mutex covers receipt lookup, transaction and commit.
-        let mut session = SqlSession::new(&mut self.db).with_cancellation(cancellation.clone());
+        let mut session = SqlSession::new(&mut db).with_cancellation(cancellation.clone());
         session.execute("BEGIN")?;
         let mut results = Vec::new();
         for query in &batch.statements {
@@ -293,16 +444,31 @@ impl Database {
     }
 
     pub fn configure_sync(&mut self, policy: &BTreeMap<String, TableSync>) -> Result<()> {
-        for collection in self.db.collections() {
+        self.validate_replication_sync(policy)?;
+        self.ensure_authority()?;
+        let result = self.configure_sync_local(policy);
+        self.acknowledge(result)
+    }
+
+    fn validate_replication_sync(&self, policy: &BTreeMap<String, TableSync>) -> Result<()> {
+        ensure!(
+            self.native.is_none() || policy.is_empty(),
+            "native state replication does not yet carry signed edge record journals"
+        );
+        Ok(())
+    }
+
+    fn configure_sync_local(&mut self, policy: &BTreeMap<String, TableSync>) -> Result<()> {
+        let mut db = self.db.write();
+        for collection in db.collections() {
             let enabled = policy.contains_key(&collection.name);
             if collection.mesh_sync_enabled != enabled {
-                self.db
-                    .set_collection_mesh_sync_enabled(&collection.name, enabled)?;
+                db.set_collection_mesh_sync_enabled(&collection.name, enabled)?;
             }
         }
         for table in policy.keys() {
             ensure!(
-                self.db.collections().iter().any(|c| &c.name == table),
+                db.collections().iter().any(|c| &c.name == table),
                 "sync table {table} does not exist"
             );
         }
@@ -359,7 +525,9 @@ impl Database {
             self.sync.contains_key(table),
             "table is not enabled for synchronization"
         );
-        Ok(serde_json::to_value(self.db.list_record_conflicts(table)?)?)
+        Ok(serde_json::to_value(
+            self.db.read().list_record_conflicts(table)?,
+        )?)
     }
 
     pub fn snapshot_jobs(&self, output: &Path, passphrase: &str) -> Result<()> {

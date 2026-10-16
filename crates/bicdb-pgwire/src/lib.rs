@@ -15,7 +15,9 @@ mod protocol_wire;
 pub(crate) use protocol_wire::*;
 mod checkpoint_driver;
 pub mod connectors;
+mod embedded_ha;
 mod high_availability;
+pub use embedded_ha::{EmbeddedHaDatabase, HaWriterLease};
 mod live_queries;
 mod log_archive;
 mod metrics;
@@ -23,7 +25,7 @@ pub(crate) use checkpoint_driver::*;
 pub use connectors::{ConnectorStatus, ConnectorsConfig};
 pub use high_availability::{
     restart_requested, AllowedStandby, FailoverConfig, HaPeer, HaServerConfig, HaServerRole,
-    MIN_FAILOVER_TIMEOUT,
+    HA_REPLICATION_PROTOCOL_VERSION, MIN_FAILOVER_TIMEOUT,
 };
 pub use log_archive::LogArchiveConfig;
 mod tls_binding;

@@ -99,7 +99,8 @@ fn insert(session: &mut SqlSession<'_>, id: &str, payload: &Value, timestamp: i6
 
 impl Database {
     pub(super) fn initialize_job_ledger(&mut self) -> Result<()> {
-        let mut session = SqlSession::new(&mut self.db);
+        let mut db = self.db.write();
+        let mut session = SqlSession::new(&mut db);
         session.execute(&format!("CREATE TABLE IF NOT EXISTS {JOBS} (id TEXT PRIMARY KEY, position BIGINT NOT NULL, created_at BIGINT NOT NULL, available_at BIGINT NOT NULL, attempts BIGINT NOT NULL, max_attempts BIGINT NOT NULL, status TEXT NOT NULL, consumer TEXT NOT NULL, lease_until BIGINT NOT NULL, delivered_at BIGINT NOT NULL)"))?;
         session.execute(&format!(
             "CREATE TABLE IF NOT EXISTS {PAYLOADS} (id TEXT PRIMARY KEY, payload TEXT NOT NULL)"
@@ -212,6 +213,11 @@ impl Database {
     }
 
     pub fn enqueue(&mut self, payload: Value, key: Option<String>) -> Result<Value> {
+        self.ensure_authority()?;
+        let result = self.enqueue_local(payload, key);
+        self.acknowledge(result)
+    }
+    fn enqueue_local(&mut self, payload: Value, key: Option<String>) -> Result<Value> {
         ensure!(
             serde_json::to_vec(&payload)?.len() <= 8 * 1024 * 1024,
             "job payload exceeds 8 MiB"
@@ -222,7 +228,8 @@ impl Database {
                 "invalid job idempotency key"
             );
         }
-        let mut session = SqlSession::new(&mut self.db);
+        let mut db = self.db.write();
+        let mut session = SqlSession::new(&mut db);
         transaction(&mut session, |session| {
             if let Some(key) = &key {
                 if let Some(id) = lookup(session, &format!("send:{key}"), &payload)?.or(lookup(
@@ -245,8 +252,14 @@ impl Database {
     /// Move each SQL outbox entry into the canonical job ledger in one database
     /// transaction. No local broker acknowledgement is needed to preserve it.
     pub fn drain_outbox(&mut self, limit: usize) -> Result<usize> {
+        self.ensure_authority()?;
+        let result = self.drain_outbox_local(limit);
+        self.acknowledge(result)
+    }
+    fn drain_outbox_local(&mut self, limit: usize) -> Result<usize> {
         ensure!((1..=128).contains(&limit), "invalid outbox batch size");
-        let mut session = SqlSession::new(&mut self.db);
+        let mut db = self.db.write();
+        let mut session = SqlSession::new(&mut db);
         let rows = session
             .execute(&format!(
                 "SELECT id FROM {OUTBOX} ORDER BY position LIMIT {limit}"
@@ -285,7 +298,8 @@ impl Database {
 
     pub fn job_status(&mut self) -> Result<Value> {
         let timestamp = now();
-        let mut session = SqlSession::new(&mut self.db);
+        let mut db = self.db.write();
+        let mut session = SqlSession::new(&mut db);
         let mut count = |predicate: &str| -> Result<i64> {
             integer(
                 &session
@@ -309,6 +323,11 @@ impl Database {
     }
 
     pub fn consume(&mut self, consumer: &str, timeout_ms: u64) -> Result<Option<BrokerMessage>> {
+        self.ensure_authority()?;
+        let result = self.consume_local(consumer, timeout_ms);
+        self.acknowledge(result)
+    }
+    fn consume_local(&mut self, consumer: &str, timeout_ms: u64) -> Result<Option<BrokerMessage>> {
         ensure!(
             !consumer.is_empty() && consumer.len() <= 256,
             "invalid job consumer"
@@ -319,7 +338,8 @@ impl Database {
         );
         let timestamp = now();
         let deadline = timestamp.saturating_add(timeout_ms as i64 + 10_000);
-        let mut session = SqlSession::new(&mut self.db);
+        let mut db = self.db.write();
+        let mut session = SqlSession::new(&mut db);
         let rows = session.execute(&format!("SELECT id, position, created_at, attempts, max_attempts FROM {JOBS} WHERE (status = 'ready' OR (status = 'running' AND lease_until <= {timestamp})) AND available_at <= {timestamp} ORDER BY position LIMIT 128"))?.rows;
         if rows.is_empty() {
             return Ok(None);
@@ -361,13 +381,24 @@ impl Database {
     }
 
     pub fn settle(&mut self, consumer: &str, message: &BrokerMessage, success: bool) -> Result<()> {
+        self.ensure_authority()?;
+        let result = self.settle_local(consumer, message, success);
+        self.acknowledge(result)
+    }
+    fn settle_local(
+        &mut self,
+        consumer: &str,
+        message: &BrokerMessage,
+        success: bool,
+    ) -> Result<()> {
         ensure!(
             message.queue == JOB_QUEUE && message.group == JOB_GROUP,
             "invalid application job scope"
         );
         let timestamp = now();
         let id = quote(&message.message_id.to_string());
-        let mut session = SqlSession::new(&mut self.db);
+        let mut db = self.db.write();
+        let mut session = SqlSession::new(&mut db);
         transaction(&mut session, |session| {
             let rows = session
                 .execute(&format!(

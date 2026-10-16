@@ -30296,6 +30296,12 @@ mod index_maintenance_tests {
 
         let live_rows = threads * rows_per_thread;
         let total_commits = threads * per_thread;
+        // Reclamation is lazy for rows a writer never touches again. A
+        // committer can finish while another snapshot still pins its final
+        // chain; releasing that snapshot does not synchronously scan every
+        // shard. Exercise the same bounded maintenance API used by the host
+        // before measuring reclaimable history after all writers have joined.
+        db.sweep_dead_versions(total_commits + live_rows);
         let (total_versions, max_chain) = version_totals(&db, "ledger");
         let stats = db.mvcc_debug_stats();
         let tx_states = stats.tx_states;
@@ -30309,11 +30315,11 @@ mod index_maintenance_tests {
             stats.total_records,
         );
 
-        // With GC advancing, each row keeps O(1) versions: total tracks the working
-        // set, not the commit count. Generous bound = a few versions per live row.
-        assert!(
-            total_versions <= live_rows * 8,
-            "version chains grew with commit count (leak): {total_versions} versions for \
+        // With all snapshots released, maintenance must retain exactly one
+        // current version per live row, regardless of commit scheduling.
+        assert_eq!(
+            total_versions, live_rows,
+            "reclaimable history remained after maintenance: {total_versions} versions for \
              {live_rows} rows after {total_commits} commits (max_chain={max_chain})"
         );
         assert!(

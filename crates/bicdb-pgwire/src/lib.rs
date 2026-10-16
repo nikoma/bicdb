@@ -948,6 +948,10 @@ pub struct PgWireServer {
     cancel_tokens: Mutex<HashMap<(i32, i32), Arc<AtomicBool>>>,
     /// Open `SUBSCRIBE` statements.
     live_subscriptions: AtomicU64,
+    /// Subscription evaluations that re-read the whole query / only the
+    /// changed rows or groups.
+    live_full_runs: AtomicU64,
+    live_incremental_runs: AtomicU64,
     last_cancel: Mutex<Option<CancelMetadata>>,
     shutdown: AtomicBool,
     database_background_started: AtomicBool,
@@ -1016,6 +1020,12 @@ impl PgWireHostContext {
 
     pub fn request_shutdown(&self) {
         self.server.request_shutdown();
+    }
+
+    /// Live-query counters: (open subscriptions, whole re-runs, incremental
+    /// rounds).
+    pub fn live_query_stats(&self) -> (u64, u64, u64) {
+        self.server.live_query_stats()
     }
 
     pub fn is_shutdown_requested(&self) -> bool {

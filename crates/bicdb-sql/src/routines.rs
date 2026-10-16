@@ -1119,7 +1119,10 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
         return parse_routine_while_loop(statement);
     }
     if keyword_matches_at(statement, "EXIT", 0) {
-        let rest = statement["EXIT".len()..].trim().trim_end_matches(';').trim();
+        let rest = statement["EXIT".len()..]
+            .trim()
+            .trim_end_matches(';')
+            .trim();
         if rest.is_empty() {
             return Ok(RoutineStmt::ExitLoop);
         }

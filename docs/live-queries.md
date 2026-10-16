@@ -54,19 +54,31 @@ statement of the server; it is not valid in a view or a function.
 
 ## How it works
 
-The server re-runs the query, as the subscriber, whenever a commit changed a
-table the query reads, and streams the difference to the previous result
-(rows are compared by value, so duplicates are counted). Commits that land
-during a re-run are picked up by the next one: a burst of writes costs one
-re-run, not one per commit. Queries over views or relations the server
-cannot map to tables re-run on every commit.
+Changes are found by re-evaluating the query as the subscriber, so every row
+a subscriber receives is one they may read. How much is re-evaluated depends
+on the query:
 
-This makes any query correct, at the cost of re-running it; a large query
-subscribed by many clients is re-run once per client per change. Keep
-subscribed queries selective (an indexed `WHERE`, a `LIMIT`) and the server
-will keep up with thousands of subscribers. Incremental maintenance of
-simple filters and aggregates, which avoids the re-run, is the next step.
+| Query shape | Per change |
+| --- | --- |
+| One table, filtered: `SELECT ... FROM t WHERE ...` (no join, group, `LIMIT`, `DISTINCT`, subquery) | The changed rows only: the table remembers the ids of recently written rows, and the query runs for each with `AND <key> = <id>`, a key lookup |
+| One table, grouped by one column: `... GROUP BY g` (aggregates, `HAVING` allowed) | The affected groups only: the groups the changed rows belonged to and belong to now are re-aggregated |
+| Anything else: joins, `LIMIT`, `DISTINCT`, subqueries, views, several `GROUP BY` columns, global aggregates | The whole query, then a diff against the previous result |
 
+Measured on a 200 000-row table with the writer's commit included: a change
+to an unindexed filter arrived in 20 ms incrementally versus 600 ms for the
+whole re-run; a count over 5 000 groups the same. The incremental paths need
+a single-column primary key of an integer or text-like type; other tables use
+the whole re-run. A table whose window of remembered writes (64 k rows) was
+exceeded, or a round with more than 200 changed rows, re-reads the whole
+query once.
+
+Commits that land during an evaluation are picked up by the next one: a
+burst of writes costs one evaluation. Row-level security and field masking
+apply to every evaluation; if the key column itself is masked for the
+subscriber, the subscription switches to whole re-runs.
+
+`bicdb_live_full_runs_total` and `bicdb_live_incremental_runs_total` on the
+metrics endpoint count the two kinds of evaluation;
 `bicdb_live_subscriptions` on the metrics endpoint counts open
 subscriptions.
 

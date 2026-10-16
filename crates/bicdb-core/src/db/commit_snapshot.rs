@@ -1176,7 +1176,7 @@ impl BicDb {
                 if outcome.rebuild_vector_store {
                     state.rebuild_vector_store_shared();
                 }
-                state.bump_generation();
+                state.bump_generation_with_changes(writes);
                 outcome
             } else {
                 let state = self.collection_state(collection)?;
@@ -1192,7 +1192,7 @@ impl BicDb {
                 if outcome.rebuild_vector_store {
                     state.rebuild_vector_store_shared();
                 }
-                state.bump_generation();
+                state.bump_generation_with_changes(writes);
                 outcome
             };
             timer.lap(&commit_trace::APPLY_RECORDS);
@@ -2372,7 +2372,8 @@ impl BicDb {
             let _quiesced = self.serializable_commit_admission.write();
             self.truncate_checkpointed_wal(plan.keep_from())
         })();
-        self.auto_checkpoint_running.store(false, AtomicOrdering::Release);
+        self.auto_checkpoint_running
+            .store(false, AtomicOrdering::Release);
         match result {
             Ok((before, after)) => eprintln!(
                 "bicdb auto-checkpoint: transaction log {before} -> {after} bytes in {} ms",

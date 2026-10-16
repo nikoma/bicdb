@@ -3554,7 +3554,10 @@ fn extended_query_data_modifying_cte_runs_inside_the_open_transaction() {
     assert_eq!(rows, vec![vec!["2".to_string(), "a@x".to_string()]]);
     send_query(&mut client, "COMMIT");
     read_query_rows(&mut client);
-    send_query(&mut client, "SELECT id FROM invites WHERE revoked_at IS NULL ORDER BY id");
+    send_query(
+        &mut client,
+        "SELECT id FROM invites WHERE revoked_at IS NULL ORDER BY id",
+    );
     assert_eq!(read_query_rows(&mut client), vec![vec!["2".to_string()]]);
 
     client.write_all(b"X\0\0\0\x04").unwrap();

@@ -3350,7 +3350,10 @@ pub(crate) fn expr_contains_subquery(expr: &Expr) -> bool {
         | Expr::AnyOp { .. }
         | Expr::AllOp { .. } => ControlFlow::Break(()),
         Expr::Function(function)
-            if matches!(function.args, sqlparser::ast::FunctionArguments::Subquery(_)) =>
+            if matches!(
+                function.args,
+                sqlparser::ast::FunctionArguments::Subquery(_)
+            ) =>
         {
             ControlFlow::Break(())
         }

@@ -2043,7 +2043,11 @@ pub(crate) fn eval_session_function_value(
             // PostgreSQL: n characters from that end; a negative n means all but |n| from the other end.
             let chars = args[0].to_cell().chars().collect::<Vec<_>>();
             let len = chars.len() as i64;
-            let keep = if count >= 0 { count.min(len) } else { (len + count).max(0) } as usize;
+            let keep = if count >= 0 {
+                count.min(len)
+            } else {
+                (len + count).max(0)
+            } as usize;
             let text = if from_left {
                 chars[..keep].iter().collect::<String>()
             } else {
@@ -2064,10 +2068,12 @@ pub(crate) fn eval_session_function_value(
             let translated = args[0]
                 .to_cell()
                 .chars()
-                .filter_map(|ch| match from.iter().position(|candidate| *candidate == ch) {
-                    Some(index) => to.get(index).copied(),
-                    None => Some(ch),
-                })
+                .filter_map(
+                    |ch| match from.iter().position(|candidate| *candidate == ch) {
+                        Some(index) => to.get(index).copied(),
+                        None => Some(ch),
+                    },
+                )
                 .collect::<String>();
             Ok(Some(SqlValue::String(translated)))
         }
@@ -3055,9 +3061,13 @@ pub(crate) fn eval_compatibility_function_value(
             if matches!(args[0], SqlValue::Null) {
                 return Ok(Some(SqlValue::Null));
             }
-            let count = args[0].to_cell().trim().parse::<i64>().ok().filter(|n| (1..=1024).contains(n)).ok_or_else(|| {
-                SqlError::invalid_parameter_value("Length not in range")
-            })?;
+            let count = args[0]
+                .to_cell()
+                .trim()
+                .parse::<i64>()
+                .ok()
+                .filter(|n| (1..=1024).contains(n))
+                .ok_or_else(|| SqlError::invalid_parameter_value("Length not in range"))?;
             let mut bytes = vec![0u8; count as usize];
             getrandom::fill(&mut bytes)
                 .map_err(|error| SqlError::Unsupported(format!("gen_random_bytes: {error}")))?;
@@ -3791,83 +3801,100 @@ pub(crate) fn format_timestamp_to_char(value: &str, format: &str) -> Result<Stri
             }
         };
         let hour12 = if hour % 12 == 0 { 12 } else { hour % 12 };
-        let (rendered, len, ordinal): (String, usize, Option<i64>) = if upper_rest.starts_with("HH24") {
-            (number(hour.into(), 2), 4, Some(hour.into()))
-        } else if upper_rest.starts_with("HH12") {
-            (number(hour12.into(), 2), 4, Some(hour12.into()))
-        } else if upper_rest.starts_with("HH") {
-            (number(hour12.into(), 2), 2, Some(hour12.into()))
-        } else if upper_rest.starts_with("MI") {
-            (number(minute.into(), 2), 2, Some(minute.into()))
-        } else if upper_rest.starts_with("SSSSS") || upper_rest.starts_with("SSSS") {
-            let seconds = i64::from(hour) * 3_600 + i64::from(minute) * 60 + i64::from(second);
-            let len = if upper_rest.starts_with("SSSSS") { 5 } else { 4 };
-            (seconds.to_string(), len, Some(seconds))
-        } else if upper_rest.starts_with("SS") {
-            (number(second.into(), 2), 2, Some(second.into()))
-        } else if upper_rest.starts_with("MS") {
-            (number(micros / 1_000, 3), 2, None)
-        } else if upper_rest.starts_with("US") {
-            (number(micros, 6), 2, None)
-        } else if upper_rest.starts_with("A.M.") || upper_rest.starts_with("P.M.") {
-            let marker = if hour < 12 { "a.m." } else { "p.m." };
-            (cased(marker, &rest[..4], 0), 4, None)
-        } else if upper_rest.starts_with("AM") || upper_rest.starts_with("PM") {
-            let marker = if hour < 12 { "am" } else { "pm" };
-            (cased(marker, &rest[..2], 0), 2, None)
-        } else if upper_rest.starts_with("Y,YYY") {
-            (format!("{},{:03}", year / 1_000, year.rem_euclid(1_000)), 5, None)
-        } else if upper_rest.starts_with("YYYY") {
-            (number(year.into(), 4), 4, Some(year.into()))
-        } else if upper_rest.starts_with("YYY") {
-            (number(year.rem_euclid(1_000).into(), 3), 3, None)
-        } else if upper_rest.starts_with("YY") {
-            (number(year.rem_euclid(100).into(), 2), 2, None)
-        } else if upper_rest.starts_with('Y') {
-            (year.rem_euclid(10).to_string(), 1, None)
-        } else if upper_rest.starts_with("MONTH") {
-            (cased(TO_CHAR_MONTHS[month as usize - 1], &rest[..5], 9), 5, None)
-        } else if upper_rest.starts_with("MON") {
-            (cased(&TO_CHAR_MONTHS[month as usize - 1][..3], &rest[..3], 0), 3, None)
-        } else if upper_rest.starts_with("MM") {
-            (number(month.into(), 2), 2, Some(month.into()))
-        } else if upper_rest.starts_with("DAY") {
-            (cased(TO_CHAR_DAYS[weekday], &rest[..3], 9), 3, None)
-        } else if upper_rest.starts_with("DY") {
-            (cased(&TO_CHAR_DAYS[weekday][..3], &rest[..2], 0), 2, None)
-        } else if upper_rest.starts_with("DDD") {
-            (number(day_of_year.into(), 3), 3, Some(day_of_year.into()))
-        } else if upper_rest.starts_with("DD") {
-            (number(day.into(), 2), 2, Some(day.into()))
-        } else if upper_rest.starts_with('D') {
-            let value = weekday as i64 + 1;
-            (value.to_string(), 1, Some(value))
-        } else if upper_rest.starts_with('Q') {
-            let value = i64::from((month - 1) / 3 + 1);
-            (value.to_string(), 1, Some(value))
-        } else if upper_rest.starts_with("WW") {
-            let value = i64::from((day_of_year - 1) / 7 + 1);
-            (number(value, 2), 2, Some(value))
-        } else if upper_rest.starts_with('W') {
-            let value = i64::from((day - 1) / 7 + 1);
-            (value.to_string(), 1, Some(value))
-        } else if upper_rest.starts_with('J') {
-            let value = days + 2_440_588;
-            (value.to_string(), 1, Some(value))
-        } else if let Some(pattern) = TO_CHAR_UNSUPPORTED_PATTERNS
-            .iter()
-            .find(|pattern| upper_rest.starts_with(**pattern))
-        {
-            return Err(SqlError::Unsupported(format!(
-                "to_char timestamp format token {pattern} is not supported"
-            )));
-        } else {
-            // Anything that is not a pattern is copied as is.
-            let ch = rest.chars().next().unwrap();
-            output.push(ch);
-            idx += ch.len_utf8();
-            continue;
-        };
+        let (rendered, len, ordinal): (String, usize, Option<i64>) =
+            if upper_rest.starts_with("HH24") {
+                (number(hour.into(), 2), 4, Some(hour.into()))
+            } else if upper_rest.starts_with("HH12") {
+                (number(hour12.into(), 2), 4, Some(hour12.into()))
+            } else if upper_rest.starts_with("HH") {
+                (number(hour12.into(), 2), 2, Some(hour12.into()))
+            } else if upper_rest.starts_with("MI") {
+                (number(minute.into(), 2), 2, Some(minute.into()))
+            } else if upper_rest.starts_with("SSSSS") || upper_rest.starts_with("SSSS") {
+                let seconds = i64::from(hour) * 3_600 + i64::from(minute) * 60 + i64::from(second);
+                let len = if upper_rest.starts_with("SSSSS") {
+                    5
+                } else {
+                    4
+                };
+                (seconds.to_string(), len, Some(seconds))
+            } else if upper_rest.starts_with("SS") {
+                (number(second.into(), 2), 2, Some(second.into()))
+            } else if upper_rest.starts_with("MS") {
+                (number(micros / 1_000, 3), 2, None)
+            } else if upper_rest.starts_with("US") {
+                (number(micros, 6), 2, None)
+            } else if upper_rest.starts_with("A.M.") || upper_rest.starts_with("P.M.") {
+                let marker = if hour < 12 { "a.m." } else { "p.m." };
+                (cased(marker, &rest[..4], 0), 4, None)
+            } else if upper_rest.starts_with("AM") || upper_rest.starts_with("PM") {
+                let marker = if hour < 12 { "am" } else { "pm" };
+                (cased(marker, &rest[..2], 0), 2, None)
+            } else if upper_rest.starts_with("Y,YYY") {
+                (
+                    format!("{},{:03}", year / 1_000, year.rem_euclid(1_000)),
+                    5,
+                    None,
+                )
+            } else if upper_rest.starts_with("YYYY") {
+                (number(year.into(), 4), 4, Some(year.into()))
+            } else if upper_rest.starts_with("YYY") {
+                (number(year.rem_euclid(1_000).into(), 3), 3, None)
+            } else if upper_rest.starts_with("YY") {
+                (number(year.rem_euclid(100).into(), 2), 2, None)
+            } else if upper_rest.starts_with('Y') {
+                (year.rem_euclid(10).to_string(), 1, None)
+            } else if upper_rest.starts_with("MONTH") {
+                (
+                    cased(TO_CHAR_MONTHS[month as usize - 1], &rest[..5], 9),
+                    5,
+                    None,
+                )
+            } else if upper_rest.starts_with("MON") {
+                (
+                    cased(&TO_CHAR_MONTHS[month as usize - 1][..3], &rest[..3], 0),
+                    3,
+                    None,
+                )
+            } else if upper_rest.starts_with("MM") {
+                (number(month.into(), 2), 2, Some(month.into()))
+            } else if upper_rest.starts_with("DAY") {
+                (cased(TO_CHAR_DAYS[weekday], &rest[..3], 9), 3, None)
+            } else if upper_rest.starts_with("DY") {
+                (cased(&TO_CHAR_DAYS[weekday][..3], &rest[..2], 0), 2, None)
+            } else if upper_rest.starts_with("DDD") {
+                (number(day_of_year.into(), 3), 3, Some(day_of_year.into()))
+            } else if upper_rest.starts_with("DD") {
+                (number(day.into(), 2), 2, Some(day.into()))
+            } else if upper_rest.starts_with('D') {
+                let value = weekday as i64 + 1;
+                (value.to_string(), 1, Some(value))
+            } else if upper_rest.starts_with('Q') {
+                let value = i64::from((month - 1) / 3 + 1);
+                (value.to_string(), 1, Some(value))
+            } else if upper_rest.starts_with("WW") {
+                let value = i64::from((day_of_year - 1) / 7 + 1);
+                (number(value, 2), 2, Some(value))
+            } else if upper_rest.starts_with('W') {
+                let value = i64::from((day - 1) / 7 + 1);
+                (value.to_string(), 1, Some(value))
+            } else if upper_rest.starts_with('J') {
+                let value = days + 2_440_588;
+                (value.to_string(), 1, Some(value))
+            } else if let Some(pattern) = TO_CHAR_UNSUPPORTED_PATTERNS
+                .iter()
+                .find(|pattern| upper_rest.starts_with(**pattern))
+            {
+                return Err(SqlError::Unsupported(format!(
+                    "to_char timestamp format token {pattern} is not supported"
+                )));
+            } else {
+                // Anything that is not a pattern is copied as is.
+                let ch = rest.chars().next().unwrap();
+                output.push(ch);
+                idx += ch.len_utf8();
+                continue;
+            };
         output.push_str(&rendered);
         idx += len;
         fill_mode = false;
@@ -3894,12 +3921,28 @@ pub(crate) fn format_timestamp_to_char(value: &str, format: &str) -> Result<Stri
 }
 
 const TO_CHAR_MONTHS: [&str; 12] = [
-    "January", "February", "March", "April", "May", "June", "July", "August", "September",
-    "October", "November", "December",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 ];
 
 const TO_CHAR_DAYS: [&str; 7] = [
-    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
 ];
 
 /// PostgreSQL template patterns this formatter does not render; they are refused rather than

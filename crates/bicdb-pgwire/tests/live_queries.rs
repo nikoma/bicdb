@@ -175,6 +175,12 @@ async fn a_feed_subscription_streams_changes_and_stops_on_cancel() {
         text_rows(&subscriber, "SELECT count(*) FROM posts").await,
         vec![vec![Some("4".to_string())]]
     );
+    // A join is re-run whole on every change to its tables.
+    let (_, full, incremental) = running.server.live_query_stats();
+    assert!(
+        full >= 5 && incremental == 0,
+        "full={full} incremental={incremental}"
+    );
     running.stop();
 }
 
@@ -283,6 +289,12 @@ async fn copy_subscribe_streams_text_rows_until_the_client_leaves() {
         text_rows(&writer, "SELECT n FROM counters").await,
         vec![vec![Some("5".to_string())]]
     );
+    // A grouped aggregate re-aggregates the affected groups only.
+    let (_, full, incremental) = running.server.live_query_stats();
+    assert!(
+        full == 0 && incremental >= 1,
+        "full={full} incremental={incremental}"
+    );
     running.stop();
 }
 
@@ -344,6 +356,29 @@ async fn subscriptions_run_with_the_subscribers_permissions() {
         .unwrap_or_else(|error| panic!("reader first row: {}", describe(error)));
     assert_eq!(first.get::<_, String>(1), "+");
     assert_eq!(first.get::<_, i32>(2), 1);
+    // Changes to other rows are evaluated for those rows only; a row that
+    // leaves the filter is a removal.
+    admin
+        .batch_execute(
+            "INSERT INTO secrets VALUES (2, 'y'); UPDATE secrets SET body = 'z' WHERE id = 1",
+        )
+        .await
+        .unwrap();
+    let mut seen = Vec::new();
+    while seen.len() < 1 {
+        let row = tokio::time::timeout(Duration::from_secs(10), stream.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        seen.push((row.get::<_, String>(1), row.get::<_, i32>(2)));
+    }
+    assert_eq!(seen, vec![("+".to_string(), 2)]);
+    let (_, full, incremental) = running.server.live_query_stats();
+    assert!(
+        full == 0 && incremental >= 1,
+        "full={full} incremental={incremental}"
+    );
     cancel.cancel_query(NoTls).await.unwrap();
     while let Some(Ok(_)) = stream.next().await {}
     running.stop();

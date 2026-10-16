@@ -7758,7 +7758,10 @@ fn pg_dump_nested_joins_plan_like_flat_joins() {
     let (nested_rows, nested_pairs) = measure(&mut session, nested);
     assert_eq!(flat_rows.len(), 300 * 6);
     assert_eq!(nested_rows, flat_rows);
-    assert!(nested_pairs <= flat_pairs, "nested {nested_pairs} vs flat {flat_pairs} candidate pairs");
+    assert!(
+        nested_pairs <= flat_pairs,
+        "nested {nested_pairs} vs flat {flat_pairs} candidate pairs"
+    );
     // The same inside a UNION ALL branch and a view, as in a restored schema.
     session.execute(&format!("CREATE VIEW staff AS SELECT c.id, 'owner' AS subject FROM courses c WHERE c.id < 0 UNION ALL {}", nested.trim_end_matches(" ORDER BY 1, 2"))).unwrap();
     let (view_rows, _) = measure(&mut session, "SELECT * FROM staff ORDER BY 1, 2");

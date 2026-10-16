@@ -23,7 +23,9 @@ fn int_arg(name: &str, value: &SqlValue) -> Result<i64> {
 fn float_arg(name: &str, value: &SqlValue) -> Result<f64> {
     sql_value_f64(value)
         .or_else(|| value.to_cell().trim().parse::<f64>().ok())
-        .ok_or_else(|| SqlError::invalid_parameter_value(format!("{name}: numeric argument expected")))
+        .ok_or_else(|| {
+            SqlError::invalid_parameter_value(format!("{name}: numeric argument expected"))
+        })
 }
 
 fn arity(name: &str, args: &[SqlValue], allowed: std::ops::RangeInclusive<usize>) -> Result<()> {
@@ -43,7 +45,11 @@ fn pad(text: &str, length: i64, fill: &str, left: bool) -> String {
     if length <= chars.len() || fill.is_empty() {
         return chars[..length.min(chars.len())].iter().collect();
     }
-    let padding = fill.chars().cycle().take(length - chars.len()).collect::<String>();
+    let padding = fill
+        .chars()
+        .cycle()
+        .take(length - chars.len())
+        .collect::<String>();
     if left {
         format!("{padding}{text}")
     } else {
@@ -95,9 +101,9 @@ fn pg_regex(pattern: &str, flags: &str) -> Result<regex::Regex> {
             }
         }
     }
-    builder
-        .build()
-        .map_err(|error| SqlError::invalid_parameter_value(format!("invalid regular expression: {error}")))
+    builder.build().map_err(|error| {
+        SqlError::invalid_parameter_value(format!("invalid regular expression: {error}"))
+    })
 }
 
 /// Microseconds since 2000-01-01 UTC of a timestamp/timestamptz text value.
@@ -113,9 +119,12 @@ fn timestamp_micros(value: &SqlValue) -> Result<i64> {
 fn has_offset(text: &str) -> bool {
     let text = text.trim();
     text.ends_with('Z')
-        || text
-            .rfind(['+', '-'])
-            .is_some_and(|at| at > 10 && text[at + 1..].chars().all(|ch| ch.is_ascii_digit() || ch == ':'))
+        || text.rfind(['+', '-']).is_some_and(|at| {
+            at > 10
+                && text[at + 1..]
+                    .chars()
+                    .all(|ch| ch.is_ascii_digit() || ch == ':')
+        })
 }
 
 const MICROS_PER_DAY: i64 = 86_400_000_000;
@@ -124,13 +133,20 @@ fn local_parts(micros: i64) -> Result<chrono::NaiveDateTime> {
     let zone = current_timezone_name();
     let offset = timezone_offset_at_timestamp(&zone, PgTimestamp::Finite(micros)).unwrap_or(0);
     let unix = micros + 946_684_800_000_000 + i64::from(offset) * 1_000_000;
-    chrono::DateTime::<chrono::Utc>::from_timestamp(unix.div_euclid(1_000_000), (unix.rem_euclid(1_000_000) * 1000) as u32)
-        .map(|value| value.naive_utc())
-        .ok_or_else(|| SqlError::invalid_parameter_value("timestamp out of range"))
+    chrono::DateTime::<chrono::Utc>::from_timestamp(
+        unix.div_euclid(1_000_000),
+        (unix.rem_euclid(1_000_000) * 1000) as u32,
+    )
+    .map(|value| value.naive_utc())
+    .ok_or_else(|| SqlError::invalid_parameter_value("timestamp out of range"))
 }
 
 fn days_in_month(year: i32, month: u32) -> i64 {
-    let (next_year, next_month) = if month == 12 { (year + 1, 1) } else { (year, month + 1) };
+    let (next_year, next_month) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
     chrono::NaiveDate::from_ymd_opt(next_year, next_month, 1)
         .and_then(|next| next.pred_opt())
         .map(|last| i64::from(chrono::Datelike::day(&last)))
@@ -142,7 +158,11 @@ fn age(a: i64, b: i64) -> Result<PgInterval> {
     use chrono::{Datelike, Timelike};
     if a < b {
         let positive = age(b, a)?;
-        return Ok(PgInterval { months: -positive.months, days: -positive.days, micros: -positive.micros });
+        return Ok(PgInterval {
+            months: -positive.months,
+            days: -positive.days,
+            micros: -positive.micros,
+        });
     }
     let (x, y) = (local_parts(a)?, local_parts(b)?);
     let mut micros = i64::from(x.nanosecond() / 1000) - i64::from(y.nanosecond() / 1000);
@@ -152,12 +172,30 @@ fn age(a: i64, b: i64) -> Result<PgInterval> {
     let mut days = i64::from(x.day()) - i64::from(y.day());
     let mut months = i64::from(x.month()) - i64::from(y.month());
     let mut years = i64::from(x.year()) - i64::from(y.year());
-    if micros < 0 { micros += 1_000_000; seconds -= 1; }
-    if seconds < 0 { seconds += 60; minutes -= 1; }
-    if minutes < 0 { minutes += 60; hours -= 1; }
-    if hours < 0 { hours += 24; days -= 1; }
-    if days < 0 { days += days_in_month(y.year(), y.month()); months -= 1; }
-    if months < 0 { months += 12; years -= 1; }
+    if micros < 0 {
+        micros += 1_000_000;
+        seconds -= 1;
+    }
+    if seconds < 0 {
+        seconds += 60;
+        minutes -= 1;
+    }
+    if minutes < 0 {
+        minutes += 60;
+        hours -= 1;
+    }
+    if hours < 0 {
+        hours += 24;
+        days -= 1;
+    }
+    if days < 0 {
+        days += days_in_month(y.year(), y.month());
+        months -= 1;
+    }
+    if months < 0 {
+        months += 12;
+        years -= 1;
+    }
     Ok(PgInterval {
         months: (years * 12 + months) as i32,
         days: days as i32,
@@ -169,7 +207,9 @@ fn render_like_source(micros: i64, with_zone: bool) -> String {
     if with_zone {
         render_timestamptz(PgTimestamp::Finite(micros))
     } else {
-        PgTimestamp::Finite(micros).to_iso_text(false).replace('T', " ")
+        PgTimestamp::Finite(micros)
+            .to_iso_text(false)
+            .replace('T', " ")
     }
 }
 
@@ -177,7 +217,11 @@ fn render_like_source(micros: i64, with_zone: bool) -> String {
 /// after, cut into every three-character window.
 fn trigram_set(text: &str) -> Result<std::collections::BTreeSet<String>> {
     let mut set = std::collections::BTreeSet::new();
-    for word in text.to_lowercase().split(|ch: char| !ch.is_alphanumeric()).filter(|word| !word.is_empty()) {
+    for word in text
+        .to_lowercase()
+        .split(|ch: char| !ch.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+    {
         let padded = format!("  {word} ").chars().collect::<Vec<_>>();
         for window in padded.windows(3) {
             set.insert(window.iter().collect::<String>());
@@ -190,10 +234,33 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
     let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
     let known = matches!(
         name,
-        "strpos" | "lpad" | "rpad" | "ltrim" | "rtrim" | "btrim" | "repeat" | "reverse" | "starts_with"
-            | "power" | "pow" | "sqrt" | "cbrt" | "exp" | "ln" | "log" | "ceil" | "ceiling" | "floor"
-            | "regexp_match" | "regexp_split_to_array" | "age" | "make_interval" | "date_bin" | "to_date"
-            | "timezone" | "similarity"
+        "strpos"
+            | "lpad"
+            | "rpad"
+            | "ltrim"
+            | "rtrim"
+            | "btrim"
+            | "repeat"
+            | "reverse"
+            | "starts_with"
+            | "power"
+            | "pow"
+            | "sqrt"
+            | "cbrt"
+            | "exp"
+            | "ln"
+            | "log"
+            | "ceil"
+            | "ceiling"
+            | "floor"
+            | "regexp_match"
+            | "regexp_split_to_array"
+            | "age"
+            | "make_interval"
+            | "date_bin"
+            | "to_date"
+            | "timezone"
+            | "similarity"
     );
     if !known {
         return Ok(None);
@@ -214,12 +281,25 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         }
         "lpad" | "rpad" => {
             arity(name, args, 2..=3)?;
-            let fill = if args.len() == 3 { text(2) } else { " ".to_string() };
-            SqlValue::String(pad(&text(0), int_arg(name, &args[1])?, &fill, name == "lpad"))
+            let fill = if args.len() == 3 {
+                text(2)
+            } else {
+                " ".to_string()
+            };
+            SqlValue::String(pad(
+                &text(0),
+                int_arg(name, &args[1])?,
+                &fill,
+                name == "lpad",
+            ))
         }
         "ltrim" | "rtrim" | "btrim" => {
             arity(name, args, 1..=2)?;
-            let set = if args.len() == 2 { text(1) } else { " ".to_string() };
+            let set = if args.len() == 2 {
+                text(1)
+            } else {
+                " ".to_string()
+            };
             SqlValue::String(trim_chars(&text(0), &set, name != "rtrim", name != "ltrim"))
         }
         "repeat" => {
@@ -239,10 +319,18 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             arity(name, args, 2..=2)?;
             let (base, exponent) = (float_arg(name, &args[0])?, float_arg(name, &args[1])?);
             if base == 0.0 && exponent < 0.0 {
-                return Err(SqlError::data_exception("2201F", "zero raised to a negative power is undefined", None));
+                return Err(SqlError::data_exception(
+                    "2201F",
+                    "zero raised to a negative power is undefined",
+                    None,
+                ));
             }
             if base < 0.0 && exponent.fract() != 0.0 {
-                return Err(SqlError::data_exception("2201F", "a negative number raised to a non-integer power yields a complex result", None));
+                return Err(SqlError::data_exception(
+                    "2201F",
+                    "a negative number raised to a non-integer power yields a complex result",
+                    None,
+                ));
             }
             SqlValue::Float(base.powf(exponent))
         }
@@ -250,7 +338,11 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             arity(name, args, 1..=1)?;
             let value = float_arg(name, &args[0])?;
             if value < 0.0 {
-                return Err(SqlError::data_exception("2201F", "cannot take square root of a negative number", None));
+                return Err(SqlError::data_exception(
+                    "2201F",
+                    "cannot take square root of a negative number",
+                    None,
+                ));
             }
             SqlValue::Float(value.sqrt())
         }
@@ -267,10 +359,21 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             let (base, value) = if args.len() == 2 {
                 (float_arg(name, &args[0])?, float_arg(name, &args[1])?)
             } else {
-                (if name == "ln" { std::f64::consts::E } else { 10.0 }, float_arg(name, &args[0])?)
+                (
+                    if name == "ln" {
+                        std::f64::consts::E
+                    } else {
+                        10.0
+                    },
+                    float_arg(name, &args[0])?,
+                )
             };
             if value <= 0.0 || base <= 0.0 || base == 1.0 {
-                return Err(SqlError::data_exception("2201E", "cannot take logarithm of zero or a negative number", None));
+                return Err(SqlError::data_exception(
+                    "2201E",
+                    "cannot take logarithm of zero or a negative number",
+                    None,
+                ));
             }
             SqlValue::Float(value.ln() / base.ln())
         }
@@ -279,7 +382,9 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             let up = name != "floor";
             match &args[0] {
                 SqlValue::Int(number) => SqlValue::Int(*number),
-                SqlValue::Float(number) => SqlValue::Float(if up { number.ceil() } else { number.floor() }),
+                SqlValue::Float(number) => {
+                    SqlValue::Float(if up { number.ceil() } else { number.floor() })
+                }
                 other => {
                     // Exact numeric text: round up in decimal so large values keep their digits.
                     let digits = other.to_cell();
@@ -287,7 +392,9 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
                     match trimmed.split_once('.') {
                         None => SqlValue::String(trimmed.to_string()),
                         Some((whole, fraction)) => {
-                            let whole_value = whole.parse::<i128>().map_err(|_| SqlError::invalid_parameter_value("ceil: numeric argument expected"))?;
+                            let whole_value = whole.parse::<i128>().map_err(|_| {
+                                SqlError::invalid_parameter_value("ceil: numeric argument expected")
+                            })?;
                             // Truncation moves toward zero; ceil adds one for positives, floor
                             // subtracts one for negatives, when a fraction is present.
                             let fractional = fraction.chars().any(|ch| ch != '0');
@@ -298,7 +405,11 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
                                 _ => 0,
                             };
                             let result = whole_value + adjust;
-                            SqlValue::String(if result == 0 && negative && up { "0".to_string() } else { result.to_string() })
+                            SqlValue::String(if result == 0 && negative && up {
+                                "0".to_string()
+                            } else {
+                                result.to_string()
+                            })
                         }
                     }
                 }
@@ -306,7 +417,11 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         }
         "regexp_match" => {
             arity(name, args, 2..=3)?;
-            let flags = if args.len() == 3 { text(2) } else { String::new() };
+            let flags = if args.len() == 3 {
+                text(2)
+            } else {
+                String::new()
+            };
             let regex = pg_regex(&text(1), &flags)?;
             let source = text(0);
             match regex.captures(&source) {
@@ -318,7 +433,11 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
                     captures
                         .iter()
                         .skip(1)
-                        .map(|group| group.map_or(SqlValue::Null, |m| SqlValue::String(m.as_str().to_string())))
+                        .map(|group| {
+                            group.map_or(SqlValue::Null, |m| {
+                                SqlValue::String(m.as_str().to_string())
+                            })
+                        })
                         .collect(),
                 ),
             }
@@ -349,12 +468,18 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             if any_null(args) {
                 return Ok(Some(SqlValue::Null));
             }
-            let (years, months, weeks, days) = (field(0)? as i64, field(1)? as i64, field(2)? as i64, field(3)? as i64);
+            let (years, months, weeks, days) = (
+                field(0)? as i64,
+                field(1)? as i64,
+                field(2)? as i64,
+                field(3)? as i64,
+            );
             let (hours, minutes, seconds) = (field(4)? as i64, field(5)? as i64, field(6)?);
             SqlValue::String(render_interval(PgInterval {
                 months: (years * 12 + months) as i32,
                 days: (weeks * 7 + days) as i32,
-                micros: (hours * 3600 + minutes * 60) * 1_000_000 + (seconds * 1_000_000.0).round() as i64,
+                micros: (hours * 3600 + minutes * 60) * 1_000_000
+                    + (seconds * 1_000_000.0).round() as i64,
             }))
         }
         "date_bin" => {
@@ -362,11 +487,16 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             let stride = PgInterval::from_postgres_text(&text(0))
                 .map_err(|_| SqlError::invalid_parameter_value("date_bin: invalid stride"))?;
             if stride.months != 0 {
-                return Err(SqlError::Unsupported("timestamps cannot be binned into intervals containing months or years".to_string()));
+                return Err(SqlError::Unsupported(
+                    "timestamps cannot be binned into intervals containing months or years"
+                        .to_string(),
+                ));
             }
             let stride = i64::from(stride.days) * MICROS_PER_DAY + stride.micros;
             if stride <= 0 {
-                return Err(SqlError::invalid_parameter_value("stride must be greater than zero"));
+                return Err(SqlError::invalid_parameter_value(
+                    "stride must be greater than zero",
+                ));
             }
             let (source, origin) = (timestamp_micros(&args[1])?, timestamp_micros(&args[2])?);
             let binned = origin + (source - origin).div_euclid(stride) * stride;
@@ -375,21 +505,37 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         "to_date" => {
             arity(name, args, 2..=2)?;
             let parts = parse_timestamp_template(&text(0), &text(1))?;
-            let year = parts.year.ok_or_else(|| SqlError::invalid_parameter_value("to_date: format must include a year"))?;
-            let date = chrono::NaiveDate::from_ymd_opt(year, parts.month.unwrap_or(1), parts.day.unwrap_or(1))
-                .ok_or_else(|| SqlError::data_exception("22008", "date/time field value out of range", None))?;
+            let year = parts.year.ok_or_else(|| {
+                SqlError::invalid_parameter_value("to_date: format must include a year")
+            })?;
+            let date = chrono::NaiveDate::from_ymd_opt(
+                year,
+                parts.month.unwrap_or(1),
+                parts.day.unwrap_or(1),
+            )
+            .ok_or_else(|| {
+                SqlError::data_exception("22008", "date/time field value out of range", None)
+            })?;
             SqlValue::String(date.format("%Y-%m-%d").to_string())
         }
         "timezone" => {
             arity(name, args, 2..=2)?;
-            let source_type = if has_offset(&text(1)) { "timestamptz" } else { "timestamp" };
+            let source_type = if has_offset(&text(1)) {
+                "timestamptz"
+            } else {
+                "timestamp"
+            };
             eval_at_time_zone_value(args[1].clone(), args[0].clone(), Some(source_type))?
         }
         "similarity" => {
             arity(name, args, 2..=2)?;
             let (left, right) = (trigram_set(&text(0))?, trigram_set(&text(1))?);
             let union = left.union(&right).count();
-            SqlValue::Float(if union == 0 { 0.0 } else { left.intersection(&right).count() as f64 / union as f64 })
+            SqlValue::Float(if union == 0 {
+                0.0
+            } else {
+                left.intersection(&right).count() as f64 / union as f64
+            })
         }
         _ => return Ok(None),
     };

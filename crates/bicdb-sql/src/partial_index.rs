@@ -44,11 +44,21 @@ fn literal(value: JsonValue) -> IndexPredicate {
 }
 
 fn and(left: IndexPredicate, right: IndexPredicate) -> IndexPredicate {
-    binary(IndexPredicateBinaryOperator::And, left, right, IndexPredicateValueType::Bool)
+    binary(
+        IndexPredicateBinaryOperator::And,
+        left,
+        right,
+        IndexPredicateValueType::Bool,
+    )
 }
 
 fn or(left: IndexPredicate, right: IndexPredicate) -> IndexPredicate {
-    binary(IndexPredicateBinaryOperator::Or, left, right, IndexPredicateValueType::Bool)
+    binary(
+        IndexPredicateBinaryOperator::Or,
+        left,
+        right,
+        IndexPredicateValueType::Bool,
+    )
 }
 
 /// A column reference of this table, with its type.
@@ -145,10 +155,17 @@ fn compare(
     constant: JsonValue,
     value_type: IndexPredicateValueType,
 ) -> IndexPredicate {
-    let comparison = binary(operator, column.field.clone(), literal(constant), value_type);
+    let comparison = binary(
+        operator,
+        column.field.clone(),
+        literal(constant),
+        value_type,
+    );
     match operator {
         // JSON inequality would be true for a NULL column; SQL's `<>` is not.
-        IndexPredicateBinaryOperator::NotEqual => and(is_not_null(column.field.clone()), comparison),
+        IndexPredicateBinaryOperator::NotEqual => {
+            and(is_not_null(column.field.clone()), comparison)
+        }
         _ => comparison,
     }
 }
@@ -178,7 +195,13 @@ fn comparison_operator(operator: &BinaryOperator) -> Option<IndexPredicateBinary
 }
 
 /// `column IN (a, b)` / `column = ANY (ARRAY[a, b])`: one equality per constant.
-fn membership(schema: &TableSchema, column_expr: &Expr, values: &[Expr], negated: bool, whole: &Expr) -> Result<IndexPredicate> {
+fn membership(
+    schema: &TableSchema,
+    column_expr: &Expr,
+    values: &[Expr],
+    negated: bool,
+    whole: &Expr,
+) -> Result<IndexPredicate> {
     let column = column_ref(schema, column_expr).ok_or_else(|| unsupported(whole))?;
     let value_type = comparable_type(column.column).ok_or_else(|| unsupported(whole))?;
     let mut constants = Vec::with_capacity(values.len());
@@ -197,7 +220,11 @@ fn membership(schema: &TableSchema, column_expr: &Expr, values: &[Expr], negated
     let mut result = compare(&column, operator, first, value_type);
     for constant in constants.into_iter().skip(1) {
         let next = compare(&column, operator, constant, value_type);
-        result = if negated { and(result, next) } else { or(result, next) };
+        result = if negated {
+            and(result, next)
+        } else {
+            or(result, next)
+        };
     }
     Ok(result)
 }
@@ -221,7 +248,10 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
             let column = column_ref(schema, inner).ok_or_else(|| unsupported(predicate))?;
             Ok(is_not_null(column.field))
         }
-        Expr::IsTrue(inner) | Expr::IsNotFalse(inner) | Expr::IsFalse(inner) | Expr::IsNotTrue(inner) => {
+        Expr::IsTrue(inner)
+        | Expr::IsNotFalse(inner)
+        | Expr::IsFalse(inner)
+        | Expr::IsNotTrue(inner) => {
             let column = column_ref(schema, inner).ok_or_else(|| unsupported(predicate))?;
             if comparable_type(column.column) != Some(IndexPredicateValueType::Bool) {
                 return Err(unsupported(predicate));
@@ -247,9 +277,17 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
             if comparable_type(column.column) != Some(IndexPredicateValueType::Bool) {
                 return Err(unsupported(predicate));
             }
-            Ok(compare(&column, IndexPredicateBinaryOperator::Equal, JsonValue::Bool(true), IndexPredicateValueType::Bool))
+            Ok(compare(
+                &column,
+                IndexPredicateBinaryOperator::Equal,
+                JsonValue::Bool(true),
+                IndexPredicateValueType::Bool,
+            ))
         }
-        Expr::UnaryOp { op: UnaryOperator::Not, expr: inner } => match strip(inner) {
+        Expr::UnaryOp {
+            op: UnaryOperator::Not,
+            expr: inner,
+        } => match strip(inner) {
             // NOT of these is again a two-valued test, so it stays exact.
             Expr::IsNull(column) => translate(schema, &Expr::IsNotNull(column.clone())),
             Expr::IsNotNull(column) => translate(schema, &Expr::IsNull(column.clone())),
@@ -258,11 +296,18 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
                 if comparable_type(column.column) != Some(IndexPredicateValueType::Bool) {
                     return Err(unsupported(predicate));
                 }
-                Ok(compare(&column, IndexPredicateBinaryOperator::Equal, JsonValue::Bool(false), IndexPredicateValueType::Bool))
+                Ok(compare(
+                    &column,
+                    IndexPredicateBinaryOperator::Equal,
+                    JsonValue::Bool(false),
+                    IndexPredicateValueType::Bool,
+                ))
             }
-            Expr::InList { expr: column, list, negated } => {
-                membership(schema, column, list, !negated, predicate)
-            }
+            Expr::InList {
+                expr: column,
+                list,
+                negated,
+            } => membership(schema, column, list, !negated, predicate),
             Expr::BinaryOp { left, op, right } if comparison_operator(op).is_some() => {
                 // NOT (a op b) is (a negated-op b) for non-NULL a, and not true for NULL a.
                 let negated = match op {
@@ -273,16 +318,27 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
                     BinaryOperator::Gt => BinaryOperator::LtEq,
                     _ => BinaryOperator::Lt,
                 };
-                translate(schema, &Expr::BinaryOp { left: left.clone(), op: negated, right: right.clone() })
+                translate(
+                    schema,
+                    &Expr::BinaryOp {
+                        left: left.clone(),
+                        op: negated,
+                        right: right.clone(),
+                    },
+                )
             }
             _ => Err(unsupported(predicate)),
         },
-        Expr::BinaryOp { left, op: BinaryOperator::And, right } => {
-            Ok(and(translate(schema, left)?, translate(schema, right)?))
-        }
-        Expr::BinaryOp { left, op: BinaryOperator::Or, right } => {
-            Ok(or(translate(schema, left)?, translate(schema, right)?))
-        }
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            right,
+        } => Ok(and(translate(schema, left)?, translate(schema, right)?)),
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Or,
+            right,
+        } => Ok(or(translate(schema, left)?, translate(schema, right)?)),
         Expr::BinaryOp { left, op, right } => {
             let (column, constant, operator) = if let Some(column) = column_ref(schema, left) {
                 (column, right, comparison_operator(op))
@@ -292,22 +348,41 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
                 return Err(unsupported(predicate));
             };
             let operator = operator.ok_or_else(|| unsupported(predicate))?;
-            let value_type = comparable_type(column.column).ok_or_else(|| unsupported(predicate))?;
-            if matches!(value_type, IndexPredicateValueType::Bool | IndexPredicateValueType::String)
-                && !matches!(operator, IndexPredicateBinaryOperator::Equal | IndexPredicateBinaryOperator::NotEqual)
-            {
+            let value_type =
+                comparable_type(column.column).ok_or_else(|| unsupported(predicate))?;
+            if matches!(
+                value_type,
+                IndexPredicateValueType::Bool | IndexPredicateValueType::String
+            ) && !matches!(
+                operator,
+                IndexPredicateBinaryOperator::Equal | IndexPredicateBinaryOperator::NotEqual
+            ) {
                 // Text ordering depends on the collation; the engine compares bytes.
                 return Err(unsupported(predicate));
             }
-            let constant = constant_json(constant, value_type).ok_or_else(|| unsupported(predicate))?;
+            let constant =
+                constant_json(constant, value_type).ok_or_else(|| unsupported(predicate))?;
             Ok(compare(&column, operator, constant, value_type))
         }
-        Expr::InList { expr: column, list, negated } => membership(schema, column, list, *negated, predicate),
-        Expr::AnyOp { left, compare_op: BinaryOperator::Eq, right, .. } => {
+        Expr::InList {
+            expr: column,
+            list,
+            negated,
+        } => membership(schema, column, list, *negated, predicate),
+        Expr::AnyOp {
+            left,
+            compare_op: BinaryOperator::Eq,
+            right,
+            ..
+        } => {
             let values = array_elements(right).ok_or_else(|| unsupported(predicate))?;
             membership(schema, left, &values, false, predicate)
         }
-        Expr::AllOp { left, compare_op: BinaryOperator::NotEq, right } => {
+        Expr::AllOp {
+            left,
+            compare_op: BinaryOperator::NotEq,
+            right,
+        } => {
             let values = array_elements(right).ok_or_else(|| unsupported(predicate))?;
             membership(schema, left, &values, true, predicate)
         }

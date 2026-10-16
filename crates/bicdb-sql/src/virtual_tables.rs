@@ -1646,7 +1646,8 @@ pub(crate) fn execute_builtin_function(
             }
             // Scalar functions shared with the row evaluator (bytea overloads first, then
             // strpos/lpad/floor/...); CEIL/FLOOR syntax is normalized into these calls.
-            if let Some(value) = eval_compatibility_function_value(other, &args, Some(&arg_types))? {
+            if let Some(value) = eval_compatibility_function_value(other, &args, Some(&arg_types))?
+            {
                 return Ok(SqlResult::new(
                     vec![name.replace("pg_catalog.", "")],
                     vec![vec![value]],
@@ -3380,8 +3381,12 @@ pub(crate) fn estimate_generate_series_timestamp_rows(
     if values.iter().any(|value| matches!(value, SqlValue::Null)) {
         return Ok(0);
     }
-    let start = generate_series_timestamp(kind, &values[0])?.finite_micros().unwrap_or(0);
-    let stop = generate_series_timestamp(kind, &values[1])?.finite_micros().unwrap_or(0);
+    let start = generate_series_timestamp(kind, &values[0])?
+        .finite_micros()
+        .unwrap_or(0);
+    let stop = generate_series_timestamp(kind, &values[1])?
+        .finite_micros()
+        .unwrap_or(0);
     let (_, span) = generate_series_step(&values[2])?;
     let distance = i128::from(stop) - i128::from(start);
     if distance != 0 && (distance > 0) != (span > 0) {
@@ -3411,7 +3416,9 @@ pub(crate) fn generate_series_timestamp_values(
         return Ok(Vec::new());
     }
     let (_, span) = generate_series_step(step)?;
-    let stop = generate_series_timestamp(kind, stop)?.finite_micros().unwrap_or(0);
+    let stop = generate_series_timestamp(kind, stop)?
+        .finite_micros()
+        .unwrap_or(0);
     let render = |timestamp: PgTimestamp| {
         SqlValue::String(if kind == GenerateSeriesKind::Timestamptz {
             render_timestamptz(timestamp)
@@ -5830,16 +5837,17 @@ pub(crate) fn eval_predicate_truth(record: &Record, expr: &Expr) -> Result<Optio
         ))),
         Expr::IsUnknown(expr) => Ok(Some(eval_predicate_truth(record, expr)?.is_none())),
         Expr::IsNotUnknown(expr) => Ok(Some(eval_predicate_truth(record, expr)?.is_some())),
-        Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Case { .. } | Expr::Cast { .. } => {
-            match eval_value(record, expr)? {
-                SqlValue::Bool(value) => Ok(Some(value)),
-                SqlValue::Null => Ok(None),
-                other => Err(SqlError::Unsupported(format!(
-                    "WHERE expression {expr} returned non-boolean {}",
-                    other.to_cell()
-                ))),
-            }
-        }
+        Expr::Identifier(_)
+        | Expr::CompoundIdentifier(_)
+        | Expr::Case { .. }
+        | Expr::Cast { .. } => match eval_value(record, expr)? {
+            SqlValue::Bool(value) => Ok(Some(value)),
+            SqlValue::Null => Ok(None),
+            other => Err(SqlError::Unsupported(format!(
+                "WHERE expression {expr} returned non-boolean {}",
+                other.to_cell()
+            ))),
+        },
         Expr::Function(function) => match eval_value(record, expr)? {
             SqlValue::Bool(value) => Ok(Some(value)),
             SqlValue::Null => Ok(None),

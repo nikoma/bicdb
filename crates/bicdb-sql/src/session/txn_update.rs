@@ -714,16 +714,23 @@ impl<'db> SqlSession<'db> {
         schema: &TableSchema,
     ) -> Result<Option<SqlResult>> {
         let key = primary_key_columns_for_schema(schema);
-        let moves_key = update.assignments.iter().any(|assignment| match &assignment.target {
-            AssignmentTarget::ColumnName(name) => relation_name(name)
-                .map(|column| key.iter().any(|k| k.eq_ignore_ascii_case(&column)))
-                .unwrap_or(false),
-            _ => false,
-        });
+        let moves_key = update
+            .assignments
+            .iter()
+            .any(|assignment| match &assignment.target {
+                AssignmentTarget::ColumnName(name) => relation_name(name)
+                    .map(|column| key.iter().any(|k| k.eq_ignore_ascii_case(&column)))
+                    .unwrap_or(false),
+                _ => false,
+            });
         if !moves_key {
             return Ok(None);
         }
-        let refuse = |why: &str| Err(SqlError::Unsupported(format!("UPDATE of a primary key {why} is not supported")));
+        let refuse = |why: &str| {
+            Err(SqlError::Unsupported(format!(
+                "UPDATE of a primary key {why} is not supported"
+            )))
+        };
         if update.from.is_some() || update.returning.is_some() {
             return refuse("with FROM or RETURNING");
         }
@@ -746,9 +753,16 @@ impl<'db> SqlSession<'db> {
             let AssignmentTarget::ColumnName(name) = &assignment.target else {
                 return refuse("with tuple assignments");
             };
-            assigned.insert(relation_name(name)?.to_ascii_lowercase(), assignment.value.to_string());
+            assigned.insert(
+                relation_name(name)?.to_ascii_lowercase(),
+                assignment.value.to_string(),
+            );
         }
-        let columns: Vec<String> = schema.columns.iter().map(|column| column.name.clone()).collect();
+        let columns: Vec<String> = schema
+            .columns
+            .iter()
+            .map(|column| column.name.clone())
+            .collect();
         let projection = columns
             .iter()
             .map(|column| match assigned.get(&column.to_ascii_lowercase()) {
@@ -758,8 +772,16 @@ impl<'db> SqlSession<'db> {
             .collect::<Vec<_>>()
             .join(", ");
         let target = update.table.to_string();
-        let filter = update.selection.as_ref().map(|selection| format!(" WHERE {selection}")).unwrap_or_default();
-        let list = columns.iter().map(|column| quote(column)).collect::<Vec<_>>().join(", ");
+        let filter = update
+            .selection
+            .as_ref()
+            .map(|selection| format!(" WHERE {selection}"))
+            .unwrap_or_default();
+        let list = columns
+            .iter()
+            .map(|column| quote(column))
+            .collect::<Vec<_>>()
+            .join(", ");
         let own_transaction = !self.in_transaction();
         if own_transaction {
             self.execute("BEGIN")?;
@@ -767,7 +789,9 @@ impl<'db> SqlSession<'db> {
         // The new rows are computed first (from the rows as they are), then the old rows are deleted and the new
         // ones inserted; each value goes back in its PostgreSQL text form cast to its column type.
         let moved = (|| -> Result<i64> {
-            let rows = self.execute(&format!("SELECT {projection} FROM {target}{filter}"))?.rows;
+            let rows = self
+                .execute(&format!("SELECT {projection} FROM {target}{filter}"))?
+                .rows;
             if rows.is_empty() {
                 return Ok(0);
             }
@@ -781,7 +805,11 @@ impl<'db> SqlSession<'db> {
                             .zip(&schema.columns)
                             .map(|(value, column)| match value {
                                 SqlValue::Null => "NULL".to_string(),
-                                value => format!("'{}'::{}", value.to_cell().replace('\'', "''"), column.pg_type),
+                                value => format!(
+                                    "'{}'::{}",
+                                    value.to_cell().replace('\'', "''"),
+                                    column.pg_type
+                                ),
                             })
                             .collect::<Vec<_>>()
                             .join(", ");
@@ -789,7 +817,10 @@ impl<'db> SqlSession<'db> {
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                self.execute(&format!("INSERT INTO {} ({list}) VALUES {values}", quote(table)))?;
+                self.execute(&format!(
+                    "INSERT INTO {} ({list}) VALUES {values}",
+                    quote(table)
+                ))?;
             }
             Ok(rows.len() as i64)
         })();
@@ -5666,8 +5697,8 @@ impl RoutineCallHost for SessionRoutineHost {
         args: &[SqlValue],
     ) -> Result<SqlValue> {
         let mut session = SqlSession::for_row_routine_call(engine);
-        session.eval_stored_function_value(name, args)?.ok_or_else(|| {
-            SqlError::undefined_function(format!("function {name} does not exist"))
-        })
+        session
+            .eval_stored_function_value(name, args)?
+            .ok_or_else(|| SqlError::undefined_function(format!("function {name} does not exist")))
     }
 }

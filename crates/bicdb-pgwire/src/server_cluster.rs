@@ -878,6 +878,8 @@ impl PgWireServer {
             failed_queries: AtomicU64::new(0),
             canceled_queries: AtomicU64::new(0),
             live_subscriptions: AtomicU64::new(0),
+            live_full_runs: AtomicU64::new(0),
+            live_incremental_runs: AtomicU64::new(0),
             timed_out_queries: AtomicU64::new(0),
             writes_executed: AtomicU64::new(0),
             proc_neword: AtomicU64::new(0),
@@ -1071,6 +1073,16 @@ impl PgWireServer {
 
     pub fn is_shutdown_requested(&self) -> bool {
         self.shutdown.load(Ordering::SeqCst)
+    }
+
+    /// Live-query counters: (open subscriptions, whole re-runs, incremental
+    /// rounds).
+    pub fn live_query_stats(&self) -> (u64, u64, u64) {
+        (
+            self.live_subscriptions.load(Ordering::SeqCst),
+            self.live_full_runs.load(Ordering::Relaxed),
+            self.live_incremental_runs.load(Ordering::Relaxed),
+        )
     }
 
     #[cfg(debug_assertions)]

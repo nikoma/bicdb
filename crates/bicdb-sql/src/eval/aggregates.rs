@@ -1633,7 +1633,10 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
                     }
                 });
         }
-        if matches!(unqualified_name, "string_to_array" | "regexp_match" | "regexp_split_to_array") {
+        if matches!(
+            unqualified_name,
+            "string_to_array" | "regexp_match" | "regexp_split_to_array"
+        ) {
             return Some("text[]".to_string());
         }
         // Result types of the scalar functions in pg_scalar_extra.rs.
@@ -1840,7 +1843,10 @@ pub(crate) fn scalar_subquery_pg_type(
     match select.from.as_slice() {
         [] => projected_expr_pg_type_with_db(db, expr),
         [from] if from.joins.is_empty() => {
-            let TableFactor::Table { name, args: None, .. } = &from.relation else {
+            let TableFactor::Table {
+                name, args: None, ..
+            } = &from.relation
+            else {
                 return None;
             };
             let name = object_name(name).ok()?;

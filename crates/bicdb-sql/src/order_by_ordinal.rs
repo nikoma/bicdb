@@ -9,7 +9,10 @@
 //! keys — at every query level: subqueries, CTEs, UNION branches — into the expression or output column
 //! they name, before planning, so every execution path sees an ordinary sort expression.
 use crate::*;
-use sqlparser::ast::{CeilFloorKind, DateTimeField, FunctionArgumentList, OrderByExpr, Visit, VisitMut, Visitor, VisitorMut};
+use sqlparser::ast::{
+    CeilFloorKind, DateTimeField, FunctionArgumentList, OrderByExpr, Visit, VisitMut, Visitor,
+    VisitorMut,
+};
 use std::ops::ControlFlow;
 
 /// Output column names of a FROM relation, for `SELECT *` (None when unknown).
@@ -55,7 +58,8 @@ fn alias_target(body: &SetExpr, key: &Expr) -> Option<Expr> {
     let expr = matches.next()?;
     // An alias naming a plain column of the same name needs no rewrite; ambiguous aliases are left
     // for the engine to report.
-    if matches.next().is_some() || matches!(expr, Expr::Identifier(ident) if folded(ident) == name) {
+    if matches.next().is_some() || matches!(expr, Expr::Identifier(ident) if folded(ident) == name)
+    {
         return None;
     }
     Some(expr.clone())
@@ -68,8 +72,12 @@ fn rewritable(query: &Query, key: &Expr) -> bool {
 /// `GROUP BY 1`: positional grouping keys in this body (or the SELECTs of a set operation).
 fn body_has_group_ordinal(body: &SetExpr) -> bool {
     match body {
-        SetExpr::Select(select) => matches!(&select.group_by, GroupByExpr::Expressions(keys, _) if keys.iter().any(|key| ordinal(key).is_some())),
-        SetExpr::SetOperation { left, right, .. } => body_has_group_ordinal(left) || body_has_group_ordinal(right),
+        SetExpr::Select(select) => {
+            matches!(&select.group_by, GroupByExpr::Expressions(keys, _) if keys.iter().any(|key| ordinal(key).is_some()))
+        }
+        SetExpr::SetOperation { left, right, .. } => {
+            body_has_group_ordinal(left) || body_has_group_ordinal(right)
+        }
         _ => false,
     }
 }
@@ -89,12 +97,16 @@ fn rewrite_group_ordinals(body: &mut SetExpr, columns: &RelationColumns<'_>) -> 
             let targets = keys
                 .iter()
                 .map(|key| {
-                    ordinal(key).filter(|position| *position > 0).and_then(|position| {
-                        items.get(position - 1).map(|item| match item {
-                            Item::Expr(expr) => expr.clone(),
-                            Item::Column(name) => Expr::Identifier(Ident::with_quote('"', name.clone())),
+                    ordinal(key)
+                        .filter(|position| *position > 0)
+                        .and_then(|position| {
+                            items.get(position - 1).map(|item| match item {
+                                Item::Expr(expr) => expr.clone(),
+                                Item::Column(name) => {
+                                    Expr::Identifier(Ident::with_quote('"', name.clone()))
+                                }
+                            })
                         })
-                    })
                 })
                 .collect::<Vec<_>>();
             if let GroupByExpr::Expressions(keys, _) = &mut select.group_by {
@@ -133,10 +145,28 @@ fn body_has_left_nested_join(body: &SetExpr) -> bool {
 /// `((a JOIN b ON x) JOIN c ON y)` -> `a JOIN b ON x JOIN c ON y` (left-deep association is unchanged).
 fn flatten_table(table: &mut TableWithJoins) -> bool {
     let mut changed = false;
-    while let TableFactor::NestedJoin { table_with_joins, alias: None } = &mut table.relation {
+    while let TableFactor::NestedJoin {
+        table_with_joins,
+        alias: None,
+    } = &mut table.relation
+    {
         let inner = std::mem::replace(
             table_with_joins.as_mut(),
-            TableWithJoins { relation: TableFactor::Table { name: ObjectName(Vec::new()), alias: None, args: None, with_hints: Vec::new(), version: None, with_ordinality: false, partitions: Vec::new(), json_path: None, sample: None, index_hints: Vec::new() }, joins: Vec::new() },
+            TableWithJoins {
+                relation: TableFactor::Table {
+                    name: ObjectName(Vec::new()),
+                    alias: None,
+                    args: None,
+                    with_hints: Vec::new(),
+                    version: None,
+                    with_ordinality: false,
+                    partitions: Vec::new(),
+                    json_path: None,
+                    sample: None,
+                    index_hints: Vec::new(),
+                },
+                joins: Vec::new(),
+            },
         );
         let outer_joins = std::mem::take(&mut table.joins);
         table.relation = inner.relation;
@@ -165,7 +195,8 @@ fn flatten_body(body: &mut SetExpr) -> bool {
 }
 
 /// `make_interval(secs => 5)`: PostgreSQL's named arguments, in its parameter order.
-const MAKE_INTERVAL_PARAMS: [&str; 7] = ["years", "months", "weeks", "days", "hours", "mins", "secs"];
+const MAKE_INTERVAL_PARAMS: [&str; 7] =
+    ["years", "months", "weeks", "days", "hours", "mins", "secs"];
 
 /// A plain function call node `name(args...)`.
 fn function_call(name: &str, args: Vec<Expr>) -> Expr {
@@ -175,7 +206,10 @@ fn function_call(name: &str, args: Vec<Expr>) -> Expr {
         parameters: FunctionArguments::None,
         args: FunctionArguments::List(FunctionArgumentList {
             duplicate_treatment: None,
-            args: args.into_iter().map(|arg| FunctionArg::Unnamed(FunctionArgExpr::Expr(arg))).collect(),
+            args: args
+                .into_iter()
+                .map(|arg| FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)))
+                .collect(),
             clauses: Vec::new(),
         }),
         filter: None,
@@ -190,8 +224,13 @@ fn function_call(name: &str, args: Vec<Expr>) -> Expr {
 fn plain_ceil_floor(expr: &Expr) -> bool {
     matches!(
         expr,
-        Expr::Ceil { field: CeilFloorKind::DateTimeField(DateTimeField::NoDateTime), .. }
-            | Expr::Floor { field: CeilFloorKind::DateTimeField(DateTimeField::NoDateTime), .. }
+        Expr::Ceil {
+            field: CeilFloorKind::DateTimeField(DateTimeField::NoDateTime),
+            ..
+        } | Expr::Floor {
+            field: CeilFloorKind::DateTimeField(DateTimeField::NoDateTime),
+            ..
+        }
     )
 }
 
@@ -200,8 +239,14 @@ fn ceil_floor_as_call(expr: &mut Expr) -> bool {
         return false;
     }
     let (name, inner) = match expr {
-        Expr::Ceil { expr: inner, .. } => ("ceil", std::mem::replace(inner.as_mut(), Expr::value(Value::Null))),
-        Expr::Floor { expr: inner, .. } => ("floor", std::mem::replace(inner.as_mut(), Expr::value(Value::Null))),
+        Expr::Ceil { expr: inner, .. } => (
+            "ceil",
+            std::mem::replace(inner.as_mut(), Expr::value(Value::Null)),
+        ),
+        Expr::Floor { expr: inner, .. } => (
+            "floor",
+            std::mem::replace(inner.as_mut(), Expr::value(Value::Null)),
+        ),
         _ => return false,
     };
     *expr = function_call(name, vec![inner]);
@@ -209,7 +254,9 @@ fn ceil_floor_as_call(expr: &mut Expr) -> bool {
 }
 
 fn named_make_interval(expr: &Expr) -> bool {
-    let Expr::Function(function) = expr else { return false };
+    let Expr::Function(function) = expr else {
+        return false;
+    };
     let name = function.name.to_string().to_ascii_lowercase();
     if name != "make_interval" && name != "pg_catalog.make_interval" {
         return false;
@@ -221,20 +268,39 @@ fn positional_make_interval(expr: &mut Expr) -> bool {
     if !named_make_interval(expr) {
         return false;
     }
-    let Expr::Function(function) = expr else { return false };
-    let FunctionArguments::List(list) = &mut function.args else { return false };
-    let zero = || FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(Value::Number("0".to_string(), false))));
+    let Expr::Function(function) = expr else {
+        return false;
+    };
+    let FunctionArguments::List(list) = &mut function.args else {
+        return false;
+    };
+    let zero = || {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::value(Value::Number(
+            "0".to_string(),
+            false,
+        ))))
+    };
     let mut slots: Vec<FunctionArg> = (0..MAKE_INTERVAL_PARAMS.len()).map(|_| zero()).collect();
     let mut position = 0usize;
     for arg in list.args.drain(..) {
         match arg {
             FunctionArg::Named { name, arg, .. } => {
-                if let Some(index) = MAKE_INTERVAL_PARAMS.iter().position(|param| name.value.eq_ignore_ascii_case(param)) {
+                if let Some(index) = MAKE_INTERVAL_PARAMS
+                    .iter()
+                    .position(|param| name.value.eq_ignore_ascii_case(param))
+                {
                     slots[index] = FunctionArg::Unnamed(arg);
                 }
             }
-            FunctionArg::ExprNamed { name: Expr::Identifier(name), arg, .. } => {
-                if let Some(index) = MAKE_INTERVAL_PARAMS.iter().position(|param| name.value.eq_ignore_ascii_case(param)) {
+            FunctionArg::ExprNamed {
+                name: Expr::Identifier(name),
+                arg,
+                ..
+            } => {
+                if let Some(index) = MAKE_INTERVAL_PARAMS
+                    .iter()
+                    .position(|param| name.value.eq_ignore_ascii_case(param))
+                {
                     slots[index] = FunctionArg::Unnamed(arg);
                 }
             }
@@ -263,7 +329,8 @@ impl Visitor for Finder {
     fn pre_visit_query(&mut self, query: &Query) -> ControlFlow<()> {
         if body_has_left_nested_join(query.body.as_ref())
             || body_has_group_ordinal(query.body.as_ref())
-            || order_expressions(query).is_some_and(|keys| keys.iter().any(|key| rewritable(query, &key.expr)))
+            || order_expressions(query)
+                .is_some_and(|keys| keys.iter().any(|key| rewritable(query, &key.expr)))
         {
             self.0 = true;
             return ControlFlow::Break(());
@@ -280,12 +347,18 @@ pub(crate) fn query_has_ordinal_order_by(query: &Query) -> bool {
 }
 
 /// The query with every positional ORDER BY key replaced; None when nothing could be rewritten.
-pub(crate) fn rewrite_ordinal_order_by(query: &Query, columns: &RelationColumns<'_>) -> Option<Query> {
+pub(crate) fn rewrite_ordinal_order_by(
+    query: &Query,
+    columns: &RelationColumns<'_>,
+) -> Option<Query> {
     if !query_has_ordinal_order_by(query) {
         return None;
     }
     let mut rewritten = query.clone();
-    let mut rewriter = Rewriter { columns, changed: false };
+    let mut rewriter = Rewriter {
+        columns,
+        changed: false,
+    };
     let _ = VisitMut::visit(&mut rewritten, &mut rewriter);
     rewriter.changed.then_some(rewritten)
 }
@@ -407,7 +480,9 @@ fn select_items(select: &Select, columns: &RelationColumns<'_>) -> Vec<Item> {
 
 fn relation_names(relation: &TableFactor, columns: &RelationColumns<'_>) -> Option<Vec<String>> {
     match relation {
-        TableFactor::Derived { subquery, alias, .. } => {
+        TableFactor::Derived {
+            subquery, alias, ..
+        } => {
             let names = output_names(subquery.body.as_ref(), columns)?;
             Some(apply_alias_columns(names, alias.as_ref()))
         }
@@ -462,7 +537,11 @@ fn output_names(body: &SetExpr, columns: &RelationColumns<'_>) -> Option<Vec<Str
         SetExpr::SetOperation { left, .. } => output_names(left, columns),
         SetExpr::Query(query) => output_names(query.body.as_ref(), columns),
         SetExpr::Values(values) => Some(
-            (1..=values.rows.first().map(|row| row.content.len()).unwrap_or(0))
+            (1..=values
+                .rows
+                .first()
+                .map(|row| row.content.len())
+                .unwrap_or(0))
                 .map(|n| format!("column{n}"))
                 .collect(),
         ),

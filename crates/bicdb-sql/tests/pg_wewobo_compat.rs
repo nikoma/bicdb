@@ -1963,13 +1963,28 @@ fn quantified_comparison_over_a_subquery_compares_with_every_row() {
 fn date_column_plus_or_minus_an_integer_is_a_day_offset() {
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
-    s.execute("CREATE TABLE daily (subject text, day text)").unwrap();
+    s.execute("CREATE TABLE daily (subject text, day text)")
+        .unwrap();
     s.execute("INSERT INTO daily VALUES ('ann','2026-10-10'),('ann','2026-10-12'),('ann','2026-10-13'),('ann','2026-10-14'),('ann','2026-10-14')").unwrap();
     s.execute("CREATE TABLE dated (d date)").unwrap();
-    s.execute("INSERT INTO dated VALUES ('2026-10-13')").unwrap();
+    s.execute("INSERT INTO dated VALUES ('2026-10-13')")
+        .unwrap();
     let rows = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
-    assert_eq!(rows(&mut s, "SELECT d - 1, d + 2, 3 + d FROM dated"), vec![vec![text("2026-10-12"), text("2026-10-15"), text("2026-10-16")]]);
-    assert_eq!(rows(&mut s, "WITH days AS (SELECT '2026-10-13'::date AS day) SELECT day - 1 FROM days"), vec![vec![text("2026-10-12")]]);
+    assert_eq!(
+        rows(&mut s, "SELECT d - 1, d + 2, 3 + d FROM dated"),
+        vec![vec![
+            text("2026-10-12"),
+            text("2026-10-15"),
+            text("2026-10-16")
+        ]]
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "WITH days AS (SELECT '2026-10-13'::date AS day) SELECT day - 1 FROM days"
+        ),
+        vec![vec![text("2026-10-12")]]
+    );
     assert_eq!(rows(&mut s, "SELECT day - (ROW_NUMBER() OVER (ORDER BY day))::int FROM (VALUES (DATE '2026-10-13'),(DATE '2026-10-14')) v(day)"), vec![vec![text("2026-10-12")], vec![text("2026-10-12")]]);
     // The flashcard streak (flashcards.carrier): consecutive days share a group.
     let streak = "WITH mine AS (SELECT * FROM daily WHERE subject='ann'), days AS (SELECT DISTINCT day::date AS day FROM mine), \
@@ -1983,31 +1998,75 @@ fn date_column_plus_or_minus_an_integer_is_a_day_offset() {
 fn a_column_cast_to_text_compares_as_text_in_lookups_and_joins() {
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
-    s.execute("CREATE TABLE grants (kind text, scope text)").unwrap();
-    s.execute("CREATE TABLE orgs (id uuid PRIMARY KEY, handle text)").unwrap();
-    s.execute("CREATE TABLE plain (id uuid, handle text)").unwrap();
+    s.execute("CREATE TABLE grants (kind text, scope text)")
+        .unwrap();
+    s.execute("CREATE TABLE orgs (id uuid PRIMARY KEY, handle text)")
+        .unwrap();
+    s.execute("CREATE TABLE plain (id uuid, handle text)")
+        .unwrap();
     s.execute("CREATE INDEX plain_id ON plain (id)").unwrap();
-    s.execute("INSERT INTO grants VALUES ('user','bob'),('org','00000000-0000-0000-0000-00000000000a')").unwrap();
-    s.execute("INSERT INTO orgs VALUES ('00000000-0000-0000-0000-00000000000a','acme')").unwrap();
-    s.execute("INSERT INTO plain VALUES ('00000000-0000-0000-0000-00000000000a','acme')").unwrap();
+    s.execute(
+        "INSERT INTO grants VALUES ('user','bob'),('org','00000000-0000-0000-0000-00000000000a')",
+    )
+    .unwrap();
+    s.execute("INSERT INTO orgs VALUES ('00000000-0000-0000-0000-00000000000a','acme')")
+        .unwrap();
+    s.execute("INSERT INTO plain VALUES ('00000000-0000-0000-0000-00000000000a','acme')")
+        .unwrap();
     let rows = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
     let none: Vec<Vec<SqlValue>> = vec![];
-    assert_eq!(rows(&mut s, "SELECT handle FROM orgs WHERE id::text = 'bob'"), none);
-    assert_eq!(rows(&mut s, "SELECT handle FROM plain WHERE id::text = 'bob'"), none);
-    assert_eq!(rows(&mut s, "SELECT handle FROM orgs WHERE id::text = '00000000-0000-0000-0000-00000000000a'"), vec![vec![text("acme")]]);
+    assert_eq!(
+        rows(&mut s, "SELECT handle FROM orgs WHERE id::text = 'bob'"),
+        none
+    );
+    assert_eq!(
+        rows(&mut s, "SELECT handle FROM plain WHERE id::text = 'bob'"),
+        none
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT handle FROM orgs WHERE id::text = '00000000-0000-0000-0000-00000000000a'"
+        ),
+        vec![vec![text("acme")]]
+    );
     // A non-canonical spelling is a different text, though it is the same uuid.
-    assert_eq!(rows(&mut s, "SELECT handle FROM orgs WHERE id::text = '00000000-0000-0000-0000-00000000000A'"), none);
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT handle FROM orgs WHERE id::text = '00000000-0000-0000-0000-00000000000A'"
+        ),
+        none
+    );
     for table in ["orgs", "plain"] {
         let sql = format!("SELECT g.scope, o.handle FROM grants g LEFT JOIN {table} o ON g.kind='org' AND o.id::text=g.scope ORDER BY g.scope");
-        assert_eq!(rows(&mut s, &sql), vec![vec![text("00000000-0000-0000-0000-00000000000a"), text("acme")], vec![text("bob"), SqlValue::Null]], "{sql}");
+        assert_eq!(
+            rows(&mut s, &sql),
+            vec![
+                vec![text("00000000-0000-0000-0000-00000000000a"), text("acme")],
+                vec![text("bob"), SqlValue::Null]
+            ],
+            "{sql}"
+        );
         let sql = format!("SELECT g.scope FROM grants g WHERE EXISTS (SELECT 1 FROM {table} o WHERE o.id::text=g.scope)");
-        assert_eq!(rows(&mut s, &sql), vec![vec![text("00000000-0000-0000-0000-00000000000a")]], "{sql}");
+        assert_eq!(
+            rows(&mut s, &sql),
+            vec![vec![text("00000000-0000-0000-0000-00000000000a")]],
+            "{sql}"
+        );
     }
     // Casts that keep equality still find the row.
-    s.execute("CREATE TABLE n (id int PRIMARY KEY, v text)").unwrap();
+    s.execute("CREATE TABLE n (id int PRIMARY KEY, v text)")
+        .unwrap();
     s.execute("INSERT INTO n VALUES (7, 'seven')").unwrap();
-    assert_eq!(rows(&mut s, "SELECT v FROM n WHERE id::bigint = 7"), vec![vec![text("seven")]]);
-    assert_eq!(rows(&mut s, "SELECT id FROM n WHERE v::text = 'seven'"), vec![vec![SqlValue::Int(7)]]);
+    assert_eq!(
+        rows(&mut s, "SELECT v FROM n WHERE id::bigint = 7"),
+        vec![vec![text("seven")]]
+    );
+    assert_eq!(
+        rows(&mut s, "SELECT id FROM n WHERE v::text = 'seven'"),
+        vec![vec![SqlValue::Int(7)]]
+    );
 }
 
 #[test]
@@ -2017,13 +2076,17 @@ fn select_for_update_waits_for_the_row_and_then_sees_the_committed_change() {
     let (_dir, mut db) = db();
     {
         let mut s = SqlSession::new(&mut db);
-        s.execute("CREATE TABLE courses (id int PRIMARY KEY, version int)").unwrap();
-        s.execute("CREATE TABLE modules (course int, position int)").unwrap();
+        s.execute("CREATE TABLE courses (id int PRIMARY KEY, version int)")
+            .unwrap();
+        s.execute("CREATE TABLE modules (course int, position int)")
+            .unwrap();
         s.execute("INSERT INTO courses VALUES (1, 0)").unwrap();
     }
     let mut first = SqlSession::new_shared(&db);
     first.execute("BEGIN").unwrap();
-    first.execute("SELECT id FROM courses WHERE id=1 FOR UPDATE").unwrap();
+    first
+        .execute("SELECT id FROM courses WHERE id=1 FOR UPDATE")
+        .unwrap();
     std::thread::scope(|scope| {
         let (done, result) = std::sync::mpsc::channel();
         let db = &db;
@@ -2031,27 +2094,45 @@ fn select_for_update_waits_for_the_row_and_then_sees_the_committed_change() {
             let mut second = SqlSession::new_shared(db);
             second.execute("BEGIN").unwrap();
             let outcome = (|| {
-                let locked = second.execute("SELECT id, version FROM courses WHERE id=1 FOR UPDATE")?.rows;
-                let count = second.execute("SELECT count(*) FROM modules WHERE course=1")?.rows;
+                let locked = second
+                    .execute("SELECT id, version FROM courses WHERE id=1 FOR UPDATE")?
+                    .rows;
+                let count = second
+                    .execute("SELECT count(*) FROM modules WHERE course=1")?
+                    .rows;
                 second.execute("INSERT INTO modules VALUES (1, 2)")?;
                 second.execute("UPDATE courses SET version=version+1 WHERE id=1")?;
                 second.execute("COMMIT")?;
                 Ok::<_, bicdb_sql::SqlError>((locked, count))
             })();
-            done.send(outcome.map_err(|error| error.to_string())).unwrap();
+            done.send(outcome.map_err(|error| error.to_string()))
+                .unwrap();
         });
         let early = result.recv_timeout(std::time::Duration::from_millis(200));
         first.execute("INSERT INTO modules VALUES (1, 1)").unwrap();
-        first.execute("UPDATE courses SET version=version+1 WHERE id=1").unwrap();
+        first
+            .execute("UPDATE courses SET version=version+1 WHERE id=1")
+            .unwrap();
         first.execute("COMMIT").unwrap();
         assert!(early.is_err(), "the second locker must wait for the first");
-        let (locked, count) = result.recv_timeout(std::time::Duration::from_secs(20)).unwrap().unwrap();
+        let (locked, count) = result
+            .recv_timeout(std::time::Duration::from_secs(20))
+            .unwrap()
+            .unwrap();
         assert_eq!(locked, vec![vec![SqlValue::Int(1), SqlValue::Int(1)]]);
         assert_eq!(count, vec![vec![SqlValue::Int(1)]]);
     });
     let mut s = SqlSession::new_shared(&db);
-    assert_eq!(s.execute("SELECT version FROM courses").unwrap().rows, vec![vec![SqlValue::Int(2)]]);
-    assert_eq!(s.execute("SELECT string_agg(position::text, ',' ORDER BY position) FROM modules").unwrap().rows, vec![vec![text("1,2")]]);
+    assert_eq!(
+        s.execute("SELECT version FROM courses").unwrap().rows,
+        vec![vec![SqlValue::Int(2)]]
+    );
+    assert_eq!(
+        s.execute("SELECT string_agg(position::text, ',' ORDER BY position) FROM modules")
+            .unwrap()
+            .rows,
+        vec![vec![text("1,2")]]
+    );
 }
 
 #[test]
@@ -2059,22 +2140,49 @@ fn a_primary_key_added_after_the_rows_finds_and_guards_those_rows() {
     // pg_dump order: CREATE TABLE, COPY the rows, then ADD CONSTRAINT ... PRIMARY KEY.
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
-    s.execute("CREATE TABLE credential_categories (key text NOT NULL, label text NOT NULL)").unwrap();
+    s.execute("CREATE TABLE credential_categories (key text NOT NULL, label text NOT NULL)")
+        .unwrap();
     s.execute("INSERT INTO credential_categories VALUES ('course_completion','Certificate of completion'),('training_certificate','Training certificate')").unwrap();
     s.execute("ALTER TABLE ONLY credential_categories ADD CONSTRAINT credential_categories_pkey PRIMARY KEY (key)").unwrap();
-    s.execute("CREATE TABLE pairs (a int NOT NULL, b int NOT NULL, v text)").unwrap();
-    s.execute("INSERT INTO pairs VALUES (1,1,'x'),(1,2,'y')").unwrap();
-    s.execute("ALTER TABLE pairs ADD PRIMARY KEY (a, b)").unwrap();
-    s.execute("CREATE TABLE certs (code text, category text)").unwrap();
-    s.execute("INSERT INTO certs VALUES ('C1','training_certificate'),('C2',NULL)").unwrap();
+    s.execute("CREATE TABLE pairs (a int NOT NULL, b int NOT NULL, v text)")
+        .unwrap();
+    s.execute("INSERT INTO pairs VALUES (1,1,'x'),(1,2,'y')")
+        .unwrap();
+    s.execute("ALTER TABLE pairs ADD PRIMARY KEY (a, b)")
+        .unwrap();
+    s.execute("CREATE TABLE certs (code text, category text)")
+        .unwrap();
+    s.execute("INSERT INTO certs VALUES ('C1','training_certificate'),('C2',NULL)")
+        .unwrap();
     let rows = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
-    assert_eq!(rows(&mut s, "SELECT label FROM credential_categories WHERE key='training_certificate'"), vec![vec![text("Training certificate")]]);
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT label FROM credential_categories WHERE key='training_certificate'"
+        ),
+        vec![vec![text("Training certificate")]]
+    );
     assert_eq!(rows(&mut s, "SELECT c.code, cc.label FROM certs c LEFT JOIN credential_categories cc ON cc.key=c.category ORDER BY c.code"), vec![vec![text("C1"), text("Training certificate")], vec![text("C2"), SqlValue::Null]]);
-    assert_eq!(rows(&mut s, "SELECT v FROM pairs WHERE a=1 AND b=2"), vec![vec![text("y")]]);
-    assert!(s.execute("INSERT INTO credential_categories VALUES ('course_completion','again')").is_err());
+    assert_eq!(
+        rows(&mut s, "SELECT v FROM pairs WHERE a=1 AND b=2"),
+        vec![vec![text("y")]]
+    );
+    assert!(s
+        .execute("INSERT INTO credential_categories VALUES ('course_completion','again')")
+        .is_err());
     assert!(s.execute("INSERT INTO pairs VALUES (1,1,'again')").is_err());
-    s.execute("UPDATE credential_categories SET label='Completion' WHERE key='course_completion'").unwrap();
-    assert_eq!(rows(&mut s, "SELECT key, label FROM credential_categories ORDER BY key"), vec![vec![text("course_completion"), text("Completion")], vec![text("training_certificate"), text("Training certificate")]]);
+    s.execute("UPDATE credential_categories SET label='Completion' WHERE key='course_completion'")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT key, label FROM credential_categories ORDER BY key"
+        ),
+        vec![
+            vec![text("course_completion"), text("Completion")],
+            vec![text("training_certificate"), text("Training certificate")]
+        ]
+    );
     // Rows that break the new key refuse it.
     s.execute("CREATE TABLE dupes (k text NOT NULL)").unwrap();
     s.execute("INSERT INTO dupes VALUES ('a'),('a')").unwrap();
@@ -2087,16 +2195,28 @@ fn make_interval_with_named_arguments_works_in_insert_update_and_delete() {
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
     s.execute("CREATE TABLE jobs (id int PRIMARY KEY, attempts int, run_after timestamptz, wait interval)").unwrap();
-    s.execute("INSERT INTO jobs VALUES (1, 2, now(), make_interval(secs => 30))").unwrap();
+    s.execute("INSERT INTO jobs VALUES (1, 2, now(), make_interval(secs => 30))")
+        .unwrap();
     s.execute("UPDATE jobs SET run_after = NOW() + make_interval(mins => (attempts*attempts)::int) WHERE id = 1").unwrap();
     let rows = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
     assert_eq!(rows(&mut s, "SELECT run_after > NOW() + interval '3 minutes', run_after < NOW() + interval '5 minutes', wait::text FROM jobs"), vec![vec![SqlValue::Bool(true), SqlValue::Bool(true), text("00:00:30")]]);
     s.execute("UPDATE jobs SET wait = make_interval(hours => 1, mins => attempts), attempts = ceil(attempts / 4.0) WHERE id = 1").unwrap();
-    assert_eq!(rows(&mut s, "SELECT wait::text, attempts FROM jobs"), vec![vec![text("01:02:00"), SqlValue::Int(1)]]);
-    s.execute("DELETE FROM jobs WHERE run_after > NOW() + make_interval(mins => 10)").unwrap();
-    assert_eq!(rows(&mut s, "SELECT count(*) FROM jobs"), vec![vec![SqlValue::Int(1)]]);
-    s.execute("DELETE FROM jobs WHERE run_after > NOW() + make_interval(mins => 1)").unwrap();
-    assert_eq!(rows(&mut s, "SELECT count(*) FROM jobs"), vec![vec![SqlValue::Int(0)]]);
+    assert_eq!(
+        rows(&mut s, "SELECT wait::text, attempts FROM jobs"),
+        vec![vec![text("01:02:00"), SqlValue::Int(1)]]
+    );
+    s.execute("DELETE FROM jobs WHERE run_after > NOW() + make_interval(mins => 10)")
+        .unwrap();
+    assert_eq!(
+        rows(&mut s, "SELECT count(*) FROM jobs"),
+        vec![vec![SqlValue::Int(1)]]
+    );
+    s.execute("DELETE FROM jobs WHERE run_after > NOW() + make_interval(mins => 1)")
+        .unwrap();
+    assert_eq!(
+        rows(&mut s, "SELECT count(*) FROM jobs"),
+        vec![vec![SqlValue::Int(0)]]
+    );
 }
 
 #[test]
@@ -2105,7 +2225,13 @@ fn now_and_clock_timestamp_carry_microseconds() {
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
     let micros = |s: &mut SqlSession, sql: &str| -> Vec<String> {
-        s.execute(sql).unwrap().rows.remove(0).into_iter().map(|value| value.to_cell()).collect()
+        s.execute(sql)
+            .unwrap()
+            .rows
+            .remove(0)
+            .into_iter()
+            .map(|value| value.to_cell())
+            .collect()
     };
     let mut fractional = 0;
     for _ in 0..5 {
@@ -2113,18 +2239,33 @@ fn now_and_clock_timestamp_carry_microseconds() {
         fractional += values.iter().filter(|value| value.contains('.')).count();
         std::thread::sleep(std::time::Duration::from_millis(3));
     }
-    assert!(fractional >= 13, "timestamps keep their fraction of a second ({fractional}/15)");
-    s.execute("CREATE TABLE beats (id int PRIMARY KEY, at timestamptz)").unwrap();
+    assert!(
+        fractional >= 13,
+        "timestamps keep their fraction of a second ({fractional}/15)"
+    );
+    s.execute("CREATE TABLE beats (id int PRIMARY KEY, at timestamptz)")
+        .unwrap();
     s.execute("INSERT INTO beats VALUES (1, now())").unwrap();
     std::thread::sleep(std::time::Duration::from_millis(20));
-    let elapsed = s.execute("SELECT EXTRACT(EPOCH FROM now() - at)::float8 FROM beats").unwrap().rows.remove(0).remove(0);
-    let elapsed = match elapsed { SqlValue::Float(f) => f, other => other.to_cell().parse::<f64>().unwrap() };
+    let elapsed = s
+        .execute("SELECT EXTRACT(EPOCH FROM now() - at)::float8 FROM beats")
+        .unwrap()
+        .rows
+        .remove(0)
+        .remove(0);
+    let elapsed = match elapsed {
+        SqlValue::Float(f) => f,
+        other => other.to_cell().parse::<f64>().unwrap(),
+    };
     assert!(elapsed > 0.0 && elapsed < 0.9, "elapsed {elapsed}");
     // now() is the transaction's start; clock_timestamp() moves on.
     s.execute("BEGIN").unwrap();
     let first = micros(&mut s, "SELECT now()::text");
     std::thread::sleep(std::time::Duration::from_millis(5));
-    let again = micros(&mut s, "SELECT now()::text, (now() < clock_timestamp())::text");
+    let again = micros(
+        &mut s,
+        "SELECT now()::text, (now() < clock_timestamp())::text",
+    );
     s.execute("COMMIT").unwrap();
     assert_eq!(first[0], again[0]);
     assert_eq!(again[1], "true");
@@ -2140,8 +2281,15 @@ fn pg_input_is_valid_checks_text_against_a_type() {
     assert_eq!(rows(&mut s, "SELECT pg_input_is_valid('2024-02-28','date'), pg_input_is_valid('2024-02-30','date'), pg_input_is_valid('2024-13-01','date'), pg_input_is_valid('42','integer'), pg_input_is_valid('4x','int4'), pg_input_is_valid(NULL,'date')"),
         vec![vec![b(true), b(false), b(false), b(true), b(false), SqlValue::Null]]);
     s.execute("CREATE TABLE creds (issued_on text)").unwrap();
-    s.execute("INSERT INTO creds VALUES ('2024-01-02'),('2024-02-30')").unwrap();
-    assert_eq!(rows(&mut s, "SELECT issued_on FROM creds WHERE NOT pg_input_is_valid(issued_on,'date')"), vec![vec![text("2024-02-30")]]);
+    s.execute("INSERT INTO creds VALUES ('2024-01-02'),('2024-02-30')")
+        .unwrap();
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT issued_on FROM creds WHERE NOT pg_input_is_valid(issued_on,'date')"
+        ),
+        vec![vec![text("2024-02-30")]]
+    );
     assert_eq!(rows(&mut s, "SELECT CASE WHEN ('2024-02-30'::text IS NOT NULL AND ('2024-02-30' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' OR NOT pg_input_is_valid('2024-02-30','date'))) THEN 'invalid' ELSE '' END"), vec![vec![text("invalid")]]);
 }
 
@@ -2150,22 +2298,46 @@ fn an_inner_join_chain_starts_from_the_table_its_where_clause_pins_by_index() {
     // Explore's cover image: medias JOIN posts ON .. WHERE posts.space_id = <stream>, per Stream.
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
-    s.execute("CREATE TABLE posts (id int PRIMARY KEY, space_id int, visibility text)").unwrap();
-    s.execute("CREATE INDEX posts_space ON posts (space_id)").unwrap();
-    s.execute("CREATE TABLE medias (id int PRIMARY KEY, post_id int, kind text)").unwrap();
-    s.execute("CREATE INDEX medias_post ON medias (post_id)").unwrap();
-    s.execute("CREATE TABLE notes (id int PRIMARY KEY, media_id int)").unwrap();
+    s.execute("CREATE TABLE posts (id int PRIMARY KEY, space_id int, visibility text)")
+        .unwrap();
+    s.execute("CREATE INDEX posts_space ON posts (space_id)")
+        .unwrap();
+    s.execute("CREATE TABLE medias (id int PRIMARY KEY, post_id int, kind text)")
+        .unwrap();
+    s.execute("CREATE INDEX medias_post ON medias (post_id)")
+        .unwrap();
+    s.execute("CREATE TABLE notes (id int PRIMARY KEY, media_id int)")
+        .unwrap();
     s.execute("INSERT INTO posts SELECT i, i % 50, CASE WHEN i % 3 = 0 THEN 'public' ELSE 'members' END FROM generate_series(1, 3000) i").unwrap();
-    s.execute("INSERT INTO medias SELECT i, i, 'image' FROM generate_series(1, 2000) i").unwrap();
-    s.execute("INSERT INTO notes SELECT i, i FROM generate_series(1, 10) i").unwrap();
+    s.execute("INSERT INTO medias SELECT i, i, 'image' FROM generate_series(1, 2000) i")
+        .unwrap();
+    s.execute("INSERT INTO notes SELECT i, i FROM generate_series(1, 10) i")
+        .unwrap();
     let plan = |s: &mut SqlSession, sql: &str| -> String {
-        s.execute(&format!("EXPLAIN {sql}")).unwrap().rows.into_iter().map(|row| row[0].to_cell()).collect::<Vec<_>>().join("\n")
+        s.execute(&format!("EXPLAIN {sql}"))
+            .unwrap()
+            .rows
+            .into_iter()
+            .map(|row| row[0].to_cell())
+            .collect::<Vec<_>>()
+            .join("\n")
     };
     let one = "SELECT m.id FROM medias m JOIN posts p ON p.id = m.post_id WHERE p.space_id = 7 AND p.visibility = 'public' ORDER BY m.id DESC LIMIT 1";
-    assert!(plan(&mut s, one).contains("JoinOrder posts -> medias"), "{}", plan(&mut s, one));
-    assert_eq!(s.execute(one).unwrap().rows, vec![vec![SqlValue::Int(1857)]]);
+    assert!(
+        plan(&mut s, one).contains("JoinOrder posts -> medias"),
+        "{}",
+        plan(&mut s, one)
+    );
+    assert_eq!(
+        s.execute(one).unwrap().rows,
+        vec![vec![SqlValue::Int(1857)]]
+    );
     let two = "SELECT count(*) FROM medias m JOIN posts p ON p.id = m.post_id AND p.visibility = 'public' JOIN notes n ON n.media_id = m.id WHERE p.space_id = 3";
-    assert!(plan(&mut s, two).starts_with("NestedLoopJoin") || plan(&mut s, two).contains("posts -> "), "{}", plan(&mut s, two));
+    assert!(
+        plan(&mut s, two).starts_with("NestedLoopJoin") || plan(&mut s, two).contains("posts -> "),
+        "{}",
+        plan(&mut s, two)
+    );
     assert_eq!(s.execute(two).unwrap().rows, vec![vec![SqlValue::Int(1)]]);
     // Same answers as the written order for every Stream.
     for space in [0, 3, 7, 49] {
@@ -2180,16 +2352,25 @@ fn or_of_indexed_branches_and_in_subquery_finds_the_same_rows() {
     // Explore's course cover: courses of a Stream or of its cohorts, per Stream (correlated).
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
-    s.execute("CREATE TABLE spaces (id int PRIMARY KEY)").unwrap();
-    s.execute("CREATE TABLE courses (id int PRIMARY KEY, space_id int, status text, cover int)").unwrap();
-    s.execute("CREATE INDEX courses_space ON courses (space_id)").unwrap();
-    s.execute("CREATE TABLE cohorts (id int PRIMARY KEY, course_id int, space_id int)").unwrap();
-    s.execute("CREATE INDEX cohorts_space ON cohorts (space_id)").unwrap();
-    s.execute("CREATE TABLE medias (id int PRIMARY KEY, ready bool)").unwrap();
-    s.execute("INSERT INTO spaces SELECT i FROM generate_series(1, 20) i").unwrap();
+    s.execute("CREATE TABLE spaces (id int PRIMARY KEY)")
+        .unwrap();
+    s.execute("CREATE TABLE courses (id int PRIMARY KEY, space_id int, status text, cover int)")
+        .unwrap();
+    s.execute("CREATE INDEX courses_space ON courses (space_id)")
+        .unwrap();
+    s.execute("CREATE TABLE cohorts (id int PRIMARY KEY, course_id int, space_id int)")
+        .unwrap();
+    s.execute("CREATE INDEX cohorts_space ON cohorts (space_id)")
+        .unwrap();
+    s.execute("CREATE TABLE medias (id int PRIMARY KEY, ready bool)")
+        .unwrap();
+    s.execute("INSERT INTO spaces SELECT i FROM generate_series(1, 20) i")
+        .unwrap();
     s.execute("INSERT INTO courses SELECT i, i % 20 + 1, CASE WHEN i % 2 = 0 THEN 'published' ELSE 'draft' END, i FROM generate_series(1, 400) i").unwrap();
-    s.execute("INSERT INTO cohorts SELECT i, i * 7, 21 - (i % 20) FROM generate_series(1, 30) i").unwrap();
-    s.execute("INSERT INTO medias SELECT i, i % 3 <> 0 FROM generate_series(1, 400) i").unwrap();
+    s.execute("INSERT INTO cohorts SELECT i, i * 7, 21 - (i % 20) FROM generate_series(1, 30) i")
+        .unwrap();
+    s.execute("INSERT INTO medias SELECT i, i % 3 <> 0 FROM generate_series(1, 400) i")
+        .unwrap();
     let fast = "SELECT s.id, (SELECT c.cover FROM courses c JOIN medias m ON m.id = c.cover AND m.ready WHERE (c.space_id = s.id OR c.id IN (SELECT course_id FROM cohorts WHERE space_id = s.id)) AND c.status = 'published' ORDER BY c.id DESC LIMIT 1), \
         (SELECT count(*) FROM courses c WHERE c.space_id = s.id OR c.id IN (SELECT course_id FROM cohorts WHERE space_id = s.id)) FROM spaces s ORDER BY s.id";
     // The same predicate the planner cannot split (NOT NOT keeps it opaque).
@@ -2201,7 +2382,10 @@ fn or_of_indexed_branches_and_in_subquery_finds_the_same_rows() {
     // A branch that depends on the scanned table itself is never run on its own.
     let own = "SELECT count(*) FROM courses c WHERE c.space_id = 3 OR c.id IN (SELECT course_id FROM cohorts WHERE cohorts.space_id = c.space_id)";
     let own_slow = "SELECT count(*) FROM courses c WHERE NOT NOT (c.space_id = 3 OR c.id IN (SELECT course_id FROM cohorts WHERE cohorts.space_id = c.space_id))";
-    assert_eq!(s.execute(own).unwrap().rows, s.execute(own_slow).unwrap().rows);
+    assert_eq!(
+        s.execute(own).unwrap().rows,
+        s.execute(own_slow).unwrap().rows
+    );
 }
 
 #[test]
@@ -2209,20 +2393,29 @@ fn a_correlated_join_chain_is_driven_by_the_outer_rows_index_key() {
     // Explore's public tile image per Stream: medias JOIN posts WHERE posts.space_id = ids.id.
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
-    s.execute("CREATE TABLE posts (id int PRIMARY KEY, space_id int, visibility text)").unwrap();
-    s.execute("CREATE INDEX posts_space ON posts (space_id)").unwrap();
-    s.execute("CREATE TABLE medias (id int PRIMARY KEY, post_id int, state text)").unwrap();
-    s.execute("CREATE INDEX medias_post ON medias (post_id)").unwrap();
+    s.execute("CREATE TABLE posts (id int PRIMARY KEY, space_id int, visibility text)")
+        .unwrap();
+    s.execute("CREATE INDEX posts_space ON posts (space_id)")
+        .unwrap();
+    s.execute("CREATE TABLE medias (id int PRIMARY KEY, post_id int, state text)")
+        .unwrap();
+    s.execute("CREATE INDEX medias_post ON medias (post_id)")
+        .unwrap();
     s.execute("INSERT INTO posts SELECT i, i % 200, CASE WHEN i % 3 = 0 THEN 'public' ELSE 'members' END FROM generate_series(1, 6000) i").unwrap();
     s.execute("INSERT INTO medias SELECT i, i, CASE WHEN i % 5 = 0 THEN 'pending' ELSE 'ready' END FROM generate_series(1, 4000) i").unwrap();
-    let sql = |pin: &str| format!("WITH ids AS (SELECT g AS id FROM generate_series(0, 199) g) SELECT ids.id, (SELECT m.id FROM medias m JOIN posts p ON p.id = m.post_id WHERE {pin} AND p.visibility = 'public' AND m.state = 'ready' ORDER BY m.id DESC LIMIT 1) FROM ids ORDER BY ids.id");
+    let sql = |pin: &str| {
+        format!("WITH ids AS (SELECT g AS id FROM generate_series(0, 199) g) SELECT ids.id, (SELECT m.id FROM medias m JOIN posts p ON p.id = m.post_id WHERE {pin} AND p.visibility = 'public' AND m.state = 'ready' ORDER BY m.id DESC LIMIT 1) FROM ids ORDER BY ids.id")
+    };
     let started = std::time::Instant::now();
     let fast = s.execute(&sql("p.space_id = ids.id")).unwrap().rows;
     let fast_time = started.elapsed();
     let slow = s.execute(&sql("p.space_id + 0 = ids.id")).unwrap().rows;
     assert_eq!(fast, slow);
     assert_eq!(fast[3], vec![SqlValue::Int(3), SqlValue::Int(3603)]);
-    assert!(fast_time < std::time::Duration::from_secs(2), "{fast_time:?}");
+    assert!(
+        fast_time < std::time::Duration::from_secs(2),
+        "{fast_time:?}"
+    );
 }
 
 #[test]
@@ -2230,20 +2423,32 @@ fn a_left_join_on_an_equality_keeps_unmatched_rows_and_is_hashed() {
     // The feed: network_posts LEFT JOIN permitted (a jsonb CTE of Streams) ON s.id = p.space_id.
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
-    s.execute("CREATE TABLE posts (id int PRIMARY KEY, space_id int, kind text)").unwrap();
+    s.execute("CREATE TABLE posts (id int PRIMARY KEY, space_id int, kind text)")
+        .unwrap();
     s.execute("INSERT INTO posts SELECT i, CASE WHEN i % 7 = 0 THEN NULL ELSE i % 900 END, CASE WHEN i % 2 = 0 THEN 'a' ELSE 'b' END FROM generate_series(1, 9000) i").unwrap();
-    let sql = |on: &str| format!("WITH permitted AS (SELECT g AS id, CASE WHEN g % 3 = 0 THEN 'member' ELSE '' END AS role FROM generate_series(1, 600) g) \
-        SELECT count(*), count(s.id), count(*) FILTER (WHERE s.role = 'member'), sum(p.id) FILTER (WHERE s.id IS NULL) FROM posts p LEFT JOIN permitted s ON {on}");
+    let sql = |on: &str| {
+        format!("WITH permitted AS (SELECT g AS id, CASE WHEN g % 3 = 0 THEN 'member' ELSE '' END AS role FROM generate_series(1, 600) g) \
+        SELECT count(*), count(s.id), count(*) FILTER (WHERE s.role = 'member'), sum(p.id) FILTER (WHERE s.id IS NULL) FROM posts p LEFT JOIN permitted s ON {on}")
+    };
     let started = std::time::Instant::now();
     let hashed = s.execute(&sql("s.id = p.space_id")).unwrap().rows;
     let hashed_time = started.elapsed();
     let nested = s.execute(&sql("s.id + 0 = p.space_id")).unwrap().rows;
     assert_eq!(hashed, nested);
     assert_eq!(hashed[0][0], SqlValue::Int(9000));
-    assert!(hashed_time < std::time::Duration::from_secs(2), "{hashed_time:?}");
+    assert!(
+        hashed_time < std::time::Duration::from_secs(2),
+        "{hashed_time:?}"
+    );
     // A residual condition on the left row only drops the match, never the row.
-    let residual = s.execute(&sql("s.id = p.space_id AND p.kind = 'a'")).unwrap().rows;
-    let residual_nested = s.execute(&sql("s.id + 0 = p.space_id AND p.kind = 'a'")).unwrap().rows;
+    let residual = s
+        .execute(&sql("s.id = p.space_id AND p.kind = 'a'"))
+        .unwrap()
+        .rows;
+    let residual_nested = s
+        .execute(&sql("s.id + 0 = p.space_id AND p.kind = 'a'"))
+        .unwrap()
+        .rows;
     assert_eq!(residual, residual_nested);
 }
 
@@ -2254,8 +2459,15 @@ fn an_array_subquery_over_a_parameter_is_described_as_an_array() {
     let (_dir, mut db) = db();
     let sql = "SELECT $1::boolean AS platform, ARRAY(SELECT jsonb_array_elements_text($2::jsonb)) AS streams";
     let described = bicdb_sql::infer_query_result_types(&db, sql).unwrap();
-    assert_eq!(described, Some(vec![Some("bool".to_string()), Some("text[]".to_string())]));
-    let keys = bicdb_sql::infer_query_result_types(&db, "SELECT ARRAY(SELECT jsonb_object_keys($1::jsonb))").unwrap();
+    assert_eq!(
+        described,
+        Some(vec![Some("bool".to_string()), Some("text[]".to_string())])
+    );
+    let keys = bicdb_sql::infer_query_result_types(
+        &db,
+        "SELECT ARRAY(SELECT jsonb_object_keys($1::jsonb))",
+    )
+    .unwrap();
     assert_eq!(keys, Some(vec![Some("text[]".to_string())]));
 }
 
@@ -2265,27 +2477,66 @@ fn parameter_switches_in_filters_fold_before_rows_are_read() {
     let (_dir, mut db) = db();
     {
         let mut s = SqlSession::new(&mut db);
-        s.execute("CREATE TABLE enrollments (id int PRIMARY KEY, subject text, status text, at int)").unwrap();
-        s.execute("CREATE TABLE subs (subject text, status text)").unwrap();
+        s.execute(
+            "CREATE TABLE enrollments (id int PRIMARY KEY, subject text, status text, at int)",
+        )
+        .unwrap();
+        s.execute("CREATE TABLE subs (subject text, status text)")
+            .unwrap();
         s.execute("INSERT INTO enrollments SELECT i, 'l-'||i, CASE WHEN i % 10 = 0 THEN 'requested' WHEN i % 33 = 0 THEN 'removed' ELSE 'active' END, i FROM generate_series(1, 20000) i").unwrap();
-        s.execute("INSERT INTO subs SELECT 'l-'||i, 'submitted' FROM generate_series(1, 40) i").unwrap();
+        s.execute("INSERT INTO subs SELECT 'l-'||i, 'submitted' FROM generate_series(1, 40) i")
+            .unwrap();
     }
     let sql = "SELECT subject FROM enrollments e WHERE (CASE WHEN $1='all' THEN e.status<>'removed' ELSE e.status=$1 END) \
         AND ($2='' OR strpos(e.subject, $2)>0) AND ($3<>'needs_review' OR EXISTS (SELECT 1 FROM subs u WHERE u.subject=e.subject AND u.status='submitted')) \
         ORDER BY CASE WHEN $4='name' THEN e.subject END, e.at DESC, e.subject LIMIT 3";
     let run = |db: &mut BicDb, params: [&str; 4]| -> Vec<Vec<SqlValue>> {
-        let mut s = SqlSession::new(db).with_positional_parameters(params.iter().map(|value| text(value)).collect());
+        let mut s = SqlSession::new(db)
+            .with_positional_parameters(params.iter().map(|value| text(value)).collect());
         s.execute(sql).unwrap().rows
     };
     let started = std::time::Instant::now();
-    assert_eq!(run(&mut db, ["active", "", "", "recent"]), vec![vec![text("l-19999")], vec![text("l-19997")], vec![text("l-19996")]]);
-    assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
-    assert_eq!(run(&mut db, ["all", "", "", "recent"]), vec![vec![text("l-20000")], vec![text("l-19999")], vec![text("l-19997")]]);
-    assert_eq!(run(&mut db, ["requested", "l-19", "", "name"]), vec![vec![text("l-190")], vec![text("l-1900")], vec![text("l-19000")]]);
-    assert_eq!(run(&mut db, ["active", "", "needs_review", "name"]), vec![vec![text("l-1")], vec![text("l-11")], vec![text("l-12")]]);
+    assert_eq!(
+        run(&mut db, ["active", "", "", "recent"]),
+        vec![
+            vec![text("l-19999")],
+            vec![text("l-19997")],
+            vec![text("l-19996")]
+        ]
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(2),
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(
+        run(&mut db, ["all", "", "", "recent"]),
+        vec![
+            vec![text("l-20000")],
+            vec![text("l-19999")],
+            vec![text("l-19997")]
+        ]
+    );
+    assert_eq!(
+        run(&mut db, ["requested", "l-19", "", "name"]),
+        vec![
+            vec![text("l-190")],
+            vec![text("l-1900")],
+            vec![text("l-19000")]
+        ]
+    );
+    assert_eq!(
+        run(&mut db, ["active", "", "needs_review", "name"]),
+        vec![vec![text("l-1")], vec![text("l-11")], vec![text("l-12")]]
+    );
     // NULL never folds: a NULL parameter keeps the comparison unknown.
     let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![SqlValue::Null]);
-    assert_eq!(s.execute("SELECT count(*) FROM enrollments WHERE ($1 = '' OR id < 3)").unwrap().rows, vec![vec![SqlValue::Int(2)]]);
+    assert_eq!(
+        s.execute("SELECT count(*) FROM enrollments WHERE ($1 = '' OR id < 3)")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(2)]]
+    );
 }
 
 #[test]
@@ -2293,14 +2544,30 @@ fn a_union_of_three_branches_with_typed_nulls_matches_types() {
     // learning_list: playlists, collections (NULL::uuid owner_org_id) and courses (owner_org_id uuid).
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
-    s.execute("CREATE TABLE playlists (id int, status text)").unwrap();
-    s.execute("CREATE TABLE collections (id int, status text)").unwrap();
-    s.execute("CREATE TABLE courses (id int, status text, owner_org_id uuid)").unwrap();
-    s.execute("INSERT INTO playlists VALUES (1,'active')").unwrap();
-    s.execute("INSERT INTO collections VALUES (2,'active')").unwrap();
-    s.execute("INSERT INTO courses VALUES (3,'active','00000000-0000-0000-0000-00000000000a')").unwrap();
+    s.execute("CREATE TABLE playlists (id int, status text)")
+        .unwrap();
+    s.execute("CREATE TABLE collections (id int, status text)")
+        .unwrap();
+    s.execute("CREATE TABLE courses (id int, status text, owner_org_id uuid)")
+        .unwrap();
+    s.execute("INSERT INTO playlists VALUES (1,'active')")
+        .unwrap();
+    s.execute("INSERT INTO collections VALUES (2,'active')")
+        .unwrap();
+    s.execute("INSERT INTO courses VALUES (3,'active','00000000-0000-0000-0000-00000000000a')")
+        .unwrap();
     let rows = s.execute("SELECT o.id, o.owner_org_id FROM (SELECT id,status,NULL::uuid AS owner_org_id FROM playlists UNION ALL SELECT id,status,NULL::uuid FROM collections UNION ALL SELECT id,status,owner_org_id FROM courses) o WHERE o.status<>'archived' ORDER BY o.id").unwrap().rows;
-    assert_eq!(rows, vec![vec![SqlValue::Int(1), SqlValue::Null], vec![SqlValue::Int(2), SqlValue::Null], vec![SqlValue::Int(3), text("00000000-0000-0000-0000-00000000000a")]]);
+    assert_eq!(
+        rows,
+        vec![
+            vec![SqlValue::Int(1), SqlValue::Null],
+            vec![SqlValue::Int(2), SqlValue::Null],
+            vec![
+                SqlValue::Int(3),
+                text("00000000-0000-0000-0000-00000000000a")
+            ]
+        ]
+    );
 }
 
 #[test]
@@ -2315,14 +2582,31 @@ fn a_filter_switched_off_by_a_parameter_reads_no_rows() {
     let sql = "SELECT COALESCE((SELECT cohort_id FROM enrollments WHERE $1='course' AND course_id=lower($2) AND subject=$3),'') AS cohort";
     let started = std::time::Instant::now();
     for _ in 0..20 {
-        let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![text("feed"), text("C3"), text("l-3")]);
+        let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![
+            text("feed"),
+            text("C3"),
+            text("l-3"),
+        ]);
         assert_eq!(s.execute(sql).unwrap().rows, vec![vec![text("")]]);
     }
-    assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
-    let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![text("course"), text("C3"), text("l-3")]);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(2),
+        "{:?}",
+        started.elapsed()
+    );
+    let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![
+        text("course"),
+        text("C3"),
+        text("l-3"),
+    ]);
     assert_eq!(s.execute(sql).unwrap().rows, vec![vec![text("h3")]]);
     let mut s = SqlSession::new(&mut db).with_positional_parameters(vec![text("feed")]);
-    assert_eq!(s.execute("SELECT count(*) FROM enrollments WHERE $1 = 'course'").unwrap().rows, vec![vec![SqlValue::Int(0)]]);
+    assert_eq!(
+        s.execute("SELECT count(*) FROM enrollments WHERE $1 = 'course'")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(0)]]
+    );
     assert_eq!(s.execute("SELECT count(*) FROM enrollments e JOIN enrollments f ON f.id = e.id WHERE $1 = 'course'").unwrap().rows, vec![vec![SqlValue::Int(0)]]);
 }
 
@@ -2331,15 +2615,28 @@ fn primary_key_equals_any_array_reads_only_those_rows() {
     // SELECT * FROM network_posts WHERE id = ANY(ARRAY[...]::uuid[]) loads a page of posts.
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
-    s.execute("CREATE TABLE posts (id uuid PRIMARY KEY, n int, body text)").unwrap();
+    s.execute("CREATE TABLE posts (id uuid PRIMARY KEY, n int, body text)")
+        .unwrap();
     s.execute("INSERT INTO posts SELECT ('00000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid, i, repeat('x', 200) FROM generate_series(1, 40000) i").unwrap();
     let sql = "SELECT n FROM posts WHERE id = ANY(ARRAY['00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000039999','00000000-0000-0000-0000-999999999999']::uuid[]) ORDER BY n";
     let started = std::time::Instant::now();
     for _ in 0..20 {
-        assert_eq!(s.execute(sql).unwrap().rows, vec![vec![SqlValue::Int(7)], vec![SqlValue::Int(39999)]]);
+        assert_eq!(
+            s.execute(sql).unwrap().rows,
+            vec![vec![SqlValue::Int(7)], vec![SqlValue::Int(39999)]]
+        );
     }
-    assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
-    assert_eq!(s.execute("SELECT count(*) FROM posts WHERE id = ANY(ARRAY[]::uuid[])").unwrap().rows, vec![vec![SqlValue::Int(0)]]);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(2),
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(
+        s.execute("SELECT count(*) FROM posts WHERE id = ANY(ARRAY[]::uuid[])")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(0)]]
+    );
     assert_eq!(s.execute("SELECT count(*) FROM posts WHERE id = ANY(ARRAY['00000000-0000-0000-0000-000000000003', NULL]::uuid[]) AND n > 2").unwrap().rows, vec![vec![SqlValue::Int(1)]]);
 }
 
@@ -2348,19 +2645,62 @@ fn a_range_on_a_primary_key_not_named_id_finds_its_rows() {
     // Live delivery reads WHERE seq > $1 ORDER BY seq from network_live_events (seq bigint PRIMARY KEY).
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
-    s.execute("CREATE TABLE live_events (seq bigint PRIMARY KEY, kind text)").unwrap();
-    s.execute("INSERT INTO live_events SELECT i, 'message' FROM generate_series(1, 50) i").unwrap();
+    s.execute("CREATE TABLE live_events (seq bigint PRIMARY KEY, kind text)")
+        .unwrap();
+    s.execute("INSERT INTO live_events SELECT i, 'message' FROM generate_series(1, 50) i")
+        .unwrap();
     s.execute("CREATE TABLE chunks (media_id int, position int, body text, PRIMARY KEY (media_id, position))").unwrap();
-    s.execute("INSERT INTO chunks SELECT i % 3, i, 'x' FROM generate_series(1, 30) i").unwrap();
+    s.execute("INSERT INTO chunks SELECT i % 3, i, 'x' FROM generate_series(1, 30) i")
+        .unwrap();
     let rows = |s: &mut SqlSession, sql: &str| s.execute(sql).unwrap().rows;
-    assert_eq!(rows(&mut s, "SELECT count(*) FROM live_events WHERE seq > 45"), vec![vec![SqlValue::Int(5)]]);
-    assert_eq!(rows(&mut s, "SELECT seq FROM live_events WHERE seq > 47 ORDER BY seq LIMIT 1000"), vec![vec![SqlValue::Int(48)], vec![SqlValue::Int(49)], vec![SqlValue::Int(50)]]);
-    assert_eq!(rows(&mut s, "SELECT count(*) FROM live_events WHERE seq BETWEEN 10 AND 19"), vec![vec![SqlValue::Int(10)]]);
-    assert_eq!(rows(&mut s, "SELECT count(*) FROM live_events WHERE seq = 7"), vec![vec![SqlValue::Int(1)]]);
-    assert_eq!(rows(&mut s, "SELECT count(*) FROM chunks WHERE media_id = 1 AND position > 20"), vec![vec![SqlValue::Int(3)]]);
-    assert_eq!(rows(&mut s, "SELECT seq FROM live_events ORDER BY seq DESC LIMIT 2"), vec![vec![SqlValue::Int(50)], vec![SqlValue::Int(49)]]);
-    assert_eq!(rows(&mut s, "SELECT COALESCE(MAX(seq),0) FROM live_events"), vec![vec![SqlValue::Int(50)]]);
-    assert_eq!(rows(&mut s, "SELECT MIN(seq) FROM live_events"), vec![vec![SqlValue::Int(1)]]);
+    assert_eq!(
+        rows(&mut s, "SELECT count(*) FROM live_events WHERE seq > 45"),
+        vec![vec![SqlValue::Int(5)]]
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT seq FROM live_events WHERE seq > 47 ORDER BY seq LIMIT 1000"
+        ),
+        vec![
+            vec![SqlValue::Int(48)],
+            vec![SqlValue::Int(49)],
+            vec![SqlValue::Int(50)]
+        ]
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT count(*) FROM live_events WHERE seq BETWEEN 10 AND 19"
+        ),
+        vec![vec![SqlValue::Int(10)]]
+    );
+    assert_eq!(
+        rows(&mut s, "SELECT count(*) FROM live_events WHERE seq = 7"),
+        vec![vec![SqlValue::Int(1)]]
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT count(*) FROM chunks WHERE media_id = 1 AND position > 20"
+        ),
+        vec![vec![SqlValue::Int(3)]]
+    );
+    assert_eq!(
+        rows(
+            &mut s,
+            "SELECT seq FROM live_events ORDER BY seq DESC LIMIT 2"
+        ),
+        vec![vec![SqlValue::Int(50)], vec![SqlValue::Int(49)]]
+    );
+    assert_eq!(
+        rows(&mut s, "SELECT COALESCE(MAX(seq),0) FROM live_events"),
+        vec![vec![SqlValue::Int(50)]]
+    );
+    assert_eq!(
+        rows(&mut s, "SELECT MIN(seq) FROM live_events"),
+        vec![vec![SqlValue::Int(1)]]
+    );
 }
 
 #[test]
@@ -2368,16 +2708,20 @@ fn lateral_regexp_split_to_table_runs_per_row() {
     // Migration 0043's credentials backfill (re-run by the profile test).
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
-    s.execute("CREATE TABLE profiles (subject text, credentials text)").unwrap();
+    s.execute("CREATE TABLE profiles (subject text, credentials text)")
+        .unwrap();
     s.execute("INSERT INTO profiles VALUES ('ann', E'RN\\n\\nBSc Nursing\\r\\nCPR'), ('ben', ''), ('cat', 'MD')").unwrap();
     let rows = s.execute("SELECT l.subject, l.line, l.n FROM (SELECT p.subject, btrim(x.line) AS line, row_number() OVER (PARTITION BY p.subject ORDER BY x.o) AS n \
         FROM profiles p CROSS JOIN LATERAL regexp_split_to_table(p.credentials, E'\\r?\\n') WITH ORDINALITY AS x(line, o) WHERE btrim(x.line) <> '') l WHERE l.n <= 30 ORDER BY l.subject, l.n").unwrap().rows;
-    assert_eq!(rows, vec![
-        vec![text("ann"), text("RN"), SqlValue::Int(1)],
-        vec![text("ann"), text("BSc Nursing"), SqlValue::Int(2)],
-        vec![text("ann"), text("CPR"), SqlValue::Int(3)],
-        vec![text("cat"), text("MD"), SqlValue::Int(1)],
-    ]);
+    assert_eq!(
+        rows,
+        vec![
+            vec![text("ann"), text("RN"), SqlValue::Int(1)],
+            vec![text("ann"), text("BSc Nursing"), SqlValue::Int(2)],
+            vec![text("ann"), text("CPR"), SqlValue::Int(3)],
+            vec![text("cat"), text("MD"), SqlValue::Int(1)],
+        ]
+    );
     let ordinals = s.execute("SELECT x.o, x.line FROM profiles p, LATERAL regexp_split_to_table(p.credentials, ',') WITH ORDINALITY AS x(line, o) WHERE p.subject = 'cat'").unwrap().rows;
     assert_eq!(ordinals, vec![vec![SqlValue::Int(1), text("MD")]]);
 }
@@ -2388,9 +2732,20 @@ fn numeric_values_are_json_numbers_in_built_objects() {
     let (_dir, mut db) = db();
     let mut s = SqlSession::new(&mut db);
     s.execute("CREATE TABLE reports (weight float8)").unwrap();
-    s.execute("INSERT INTO reports VALUES (0.25), (NULL)").unwrap();
+    s.execute("INSERT INTO reports VALUES (0.25), (NULL)")
+        .unwrap();
     let rows = s.execute("SELECT jsonb_agg(jsonb_build_object('weight', round(COALESCE(weight,1)::numeric,2)) ORDER BY weight NULLS LAST)::text FROM reports").unwrap().rows;
-    assert_eq!(rows, vec![vec![text(r#"[{"weight": 0.25}, {"weight": 1}]"#)]]);
+    assert_eq!(
+        rows,
+        vec![vec![text(r#"[{"weight": 0.25}, {"weight": 1}]"#)]]
+    );
     let rows = s.execute("SELECT jsonb_build_object('a', 1.5, 'b', 2::numeric, 'c', 'text', 'd', '7')::text, jsonb_build_array(0.5::numeric, 'x')::text, to_jsonb(3.25::numeric)::text").unwrap().rows;
-    assert_eq!(rows, vec![vec![text(r#"{"a": 1.5, "b": 2, "c": "text", "d": "7"}"#), text(r#"[0.5, "x"]"#), text("3.25")]]);
+    assert_eq!(
+        rows,
+        vec![vec![
+            text(r#"{"a": 1.5, "b": 2, "c": "text", "d": "7"}"#),
+            text(r#"[0.5, "x"]"#),
+            text("3.25")
+        ]]
+    );
 }

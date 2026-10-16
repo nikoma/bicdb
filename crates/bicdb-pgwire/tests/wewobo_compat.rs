@@ -21,7 +21,10 @@ fn read_committed_statements_see_commits_made_during_the_transaction() {
     let port = listener.local_addr().unwrap().port();
     let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
     std::thread::spawn(move || bicdb_pgwire::serve_existing_listener(server, listener));
-    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
     runtime.block_on(async move {
         let connect = || async {
             let (client, connection) = tokio_postgres::connect(
@@ -65,7 +68,10 @@ fn trigger_pg_notify_reaches_listeners_at_commit() {
     let port = listener.local_addr().unwrap().port();
     let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
     std::thread::spawn(move || bicdb_pgwire::serve_existing_listener(server, listener));
-    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
     runtime.block_on(async move {
         let url = format!("host=127.0.0.1 port={port} user=bicdb dbname=bicdb");
         let (writer, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls).await.unwrap();

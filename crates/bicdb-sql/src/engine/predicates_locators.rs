@@ -103,7 +103,13 @@ impl<'db> SqlEngine<'db> {
         for relation in relations {
             if let TableFactor::Table { name, alias, .. } = relation {
                 let table = relation_name(name)?;
-                local.push(table.rsplit('.').next().unwrap_or(&table).to_ascii_lowercase());
+                local.push(
+                    table
+                        .rsplit('.')
+                        .next()
+                        .unwrap_or(&table)
+                        .to_ascii_lowercase(),
+                );
                 if let Some(alias) = alias {
                     local.push(alias.name.value.to_ascii_lowercase());
                 }
@@ -115,7 +121,8 @@ impl<'db> SqlEngine<'db> {
             fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
                 if let Expr::CompoundIdentifier(parts) = expr {
                     if parts.len() == 2 {
-                        self.0.push(parts.iter().map(|part| part.value.clone()).collect());
+                        self.0
+                            .push(parts.iter().map(|part| part.value.clone()).collect());
                     }
                 }
                 ControlFlow::Continue(())
@@ -1340,7 +1347,9 @@ impl<'db> SqlEngine<'db> {
             ) = (key.as_slice(), unwrap_nested_expr(term))
             {
                 if self.expr_matches_table_column(left, table, alias, Some(schema), column)? {
-                    if let Ok(SqlValue::Json(JsonValue::Array(elements))) = eval_constant_expr(right) {
+                    if let Ok(SqlValue::Json(JsonValue::Array(elements))) =
+                        eval_constant_expr(right)
+                    {
                         let mut rowids = Vec::with_capacity(elements.len());
                         let mut usable = true;
                         for element in elements {
@@ -5087,8 +5096,8 @@ impl<'db> SqlEngine<'db> {
         kind: RowJoinKind,
     ) -> Result<RowSet> {
         // LEFT JOIN: a left row without a match keeps one NULL-extended row.
-        let null_right = matches!(kind, RowJoinKind::Left)
-            .then(|| null_slot_row_for_columns(&right.columns));
+        let null_right =
+            matches!(kind, RowJoinKind::Left).then(|| null_slot_row_for_columns(&right.columns));
         let mut right_by_key = BTreeMap::<String, Vec<usize>>::new();
         let (right_scope, right_context) = self.bound_row_context(&right.columns);
         let right_key_bound = right_scope.bind(right_key);
@@ -6533,11 +6542,9 @@ fn subquery_is_independent_of(
     }
     let mut names = Names::default();
     let _ = subquery.visit(&mut names);
-    if names
-        .qualifiers
-        .iter()
-        .any(|qualifier| qualifier.eq_ignore_ascii_case(alias) || qualifier.eq_ignore_ascii_case(table))
-    {
+    if names.qualifiers.iter().any(|qualifier| {
+        qualifier.eq_ignore_ascii_case(alias) || qualifier.eq_ignore_ascii_case(table)
+    }) {
         return false;
     }
     let mut inner = Vec::new();

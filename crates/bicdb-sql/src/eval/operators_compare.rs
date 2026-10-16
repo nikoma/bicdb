@@ -3210,9 +3210,11 @@ fn eval_untyped_date_day_arithmetic(
             && PgDate::from_postgres_text(text).is_ok()
     };
     match (left, op, right) {
-        (SqlValue::String(date), BinaryOperator::Plus | BinaryOperator::Minus, SqlValue::Int(_))
-            if is_date(date) =>
-        {
+        (
+            SqlValue::String(date),
+            BinaryOperator::Plus | BinaryOperator::Minus,
+            SqlValue::Int(_),
+        ) if is_date(date) => {
             eval_typed_date_arithmetic(left, op, right, Some("date"), Some("int4"))
         }
         (SqlValue::Int(_), BinaryOperator::Plus, SqlValue::String(date)) if is_date(date) => {

@@ -3203,12 +3203,26 @@ pub(crate) fn eval_date_interval_arithmetic(
             } else {
                 "timestamp"
             };
-            let (left_value, right_value) =
-                (SqlValue::String(left.clone()), SqlValue::String(right.clone()));
+            let (left_value, right_value) = (
+                SqlValue::String(left.clone()),
+                SqlValue::String(right.clone()),
+            );
             let exact = if pg_type == "timestamptz" {
-                eval_typed_timestamptz_arithmetic(&left_value, op, &right_value, Some(pg_type), Some(pg_type))
+                eval_typed_timestamptz_arithmetic(
+                    &left_value,
+                    op,
+                    &right_value,
+                    Some(pg_type),
+                    Some(pg_type),
+                )
             } else {
-                eval_typed_timestamp_arithmetic(&left_value, op, &right_value, Some(pg_type), Some(pg_type))
+                eval_typed_timestamp_arithmetic(
+                    &left_value,
+                    op,
+                    &right_value,
+                    Some(pg_type),
+                    Some(pg_type),
+                )
             };
             if let Ok(Some(value)) = exact {
                 return Ok(Some(value));

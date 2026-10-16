@@ -2668,12 +2668,19 @@ impl<'db> SqlEngine<'db> {
                 [(_, pg_type)] => pg_type.clone(),
                 _ => None,
             })?;
-            return Some(if element.ends_with("[]") { element } else { format!("{element}[]") });
+            return Some(if element.ends_with("[]") {
+                element
+            } else {
+                format!("{element}[]")
+            });
         }
         let args = function_args(function);
         if matches!(
             bare_name,
-            "jsonb_array_elements_text" | "json_array_elements_text" | "jsonb_object_keys" | "json_object_keys"
+            "jsonb_array_elements_text"
+                | "json_array_elements_text"
+                | "jsonb_object_keys"
+                | "json_object_keys"
         ) {
             return Some("text".to_string());
         }

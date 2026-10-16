@@ -877,7 +877,9 @@ impl<'db> SqlSession<'db> {
             loop {
                 match self.execute_query_inner(query) {
                     Err(error)
-                        if crate::engine::is_read_committed_lock_refresh(&error) && attempts < 1000 => {
+                        if crate::engine::is_read_committed_lock_refresh(&error)
+                            && attempts < 1000 =>
+                    {
                         attempts += 1;
                         if let Some(tx) = self.tx.as_mut() {
                             tx.refresh_read_committed_snapshot()?;

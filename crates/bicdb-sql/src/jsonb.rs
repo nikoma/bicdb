@@ -473,7 +473,12 @@ fn numeric_arguments_as_json_numbers(
     };
     if !matches!(
         name,
-        "json_build_object" | "jsonb_build_object" | "json_build_array" | "jsonb_build_array" | "to_json" | "to_jsonb"
+        "json_build_object"
+            | "jsonb_build_object"
+            | "json_build_array"
+            | "jsonb_build_array"
+            | "to_json"
+            | "to_jsonb"
     ) {
         return None;
     }

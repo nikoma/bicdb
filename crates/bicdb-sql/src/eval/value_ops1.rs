@@ -3021,7 +3021,9 @@ pub(crate) fn eval_compatibility_function_value(
         let data_type = sqlparser::parser::Parser::new(&sqlparser::dialect::PostgreSqlDialect {})
             .try_with_sql(&type_name)
             .and_then(|mut parser| parser.parse_data_type())
-            .map_err(|_| SqlError::undefined_object(format!("type \"{type_name}\" does not exist")))?;
+            .map_err(|_| {
+                SqlError::undefined_object(format!("type \"{type_name}\" does not exist"))
+            })?;
         let valid = cast_value(SqlValue::String(args[0].to_cell()), &data_type).is_ok();
         return Ok(Some(SqlValue::Bool(valid)));
     }

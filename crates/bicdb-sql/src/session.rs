@@ -2498,8 +2498,9 @@ impl<'db> SqlSession<'db> {
         if started_guc_transaction {
             self.begin_guc_transaction();
         }
-        let transaction_timestamp_micros =
-            self.transaction_timestamp_micros.unwrap_or_else(unix_now_micros);
+        let transaction_timestamp_micros = self
+            .transaction_timestamp_micros
+            .unwrap_or_else(unix_now_micros);
         let timezone = self
             .session_gucs
             .get("timezone")

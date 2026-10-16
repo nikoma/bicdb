@@ -9419,7 +9419,11 @@ fn pgwire_read_committed_statements_see_only_committed_concurrent_writes() {
     send_query(&mut reader, "SELECT COUNT(*) FROM rc_patients;");
     let (rows, status) = read_query_rows_with_status(&mut reader);
     assert_eq!(status, b'T');
-    assert_eq!(rows, vec![vec!["1".to_string()]], "each READ COMMITTED statement sees rows committed before it starts");
+    assert_eq!(
+        rows,
+        vec![vec!["1".to_string()]],
+        "each READ COMMITTED statement sees rows committed before it starts"
+    );
 
     send_query(&mut reader, "ROLLBACK;");
     assert_eq!(read_query_rows_with_status(&mut reader).1, b'I');

@@ -1148,12 +1148,23 @@ fn change_payload(name: &str, template: &SqlResult, row: &[SqlValue]) -> String 
 /// Starts the dispatcher that evaluates registered subscriptions after each
 /// commit and queues their changes as notifications.
 pub(crate) fn start_dispatcher(server: Arc<PgWireServer>) -> Result<()> {
+    // The thread must not keep the server (and the database) alive after
+    // shutdown: it waits on its own feed handle and borrows the server only
+    // while it works.
+    let feed = server.replication_feed.clone();
+    let server = Arc::downgrade(&server);
     std::thread::Builder::new()
         .name("bicdb-live-dispatcher".to_string())
         .spawn(move || {
-            let mut last_seq = server.replication_feed.durable_seq();
-            while !server.is_shutdown_requested() {
-                let durable = server.replication_feed.wait_beyond(last_seq, POLL);
+            let mut last_seq = feed.durable_seq();
+            loop {
+                let durable = feed.wait_beyond(last_seq, POLL);
+                let Some(server) = server.upgrade() else {
+                    return;
+                };
+                if server.is_shutdown_requested() {
+                    return;
+                }
                 if durable <= last_seq {
                     continue;
                 }

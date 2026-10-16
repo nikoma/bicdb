@@ -28,6 +28,21 @@ pub struct Manifest {
     pub resources: Resources,
     #[serde(default)]
     pub sync: BTreeMap<String, TableSync>,
+    #[serde(default, skip_serializing_if = "Bindings::is_empty")]
+    pub bindings: Bindings,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Bindings {
+    #[serde(default)]
+    pub events: bool,
+}
+
+impl Bindings {
+    fn is_empty(&self) -> bool {
+        !self.events
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

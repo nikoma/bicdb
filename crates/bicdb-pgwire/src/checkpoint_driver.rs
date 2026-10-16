@@ -1242,6 +1242,37 @@ pub(crate) fn start_distribution_supervisor(
             .read()
             .install_commit_admission(range_write_coordinator.clone());
 
+        // Physical copy, repair and leader recovery can wait on remote I/O.
+        // Keep metadata heartbeat scheduling independent of those operations;
+        // its transport has a separate, election-sized timeout envelope.
+        let heartbeat_transport = {
+            let mut config = distribution.transport.clone();
+            let budget_ms = (distribution.metadata_election_timeout_ms / 4).max(1);
+            config.connect_timeout_ms = config.connect_timeout_ms.min(budget_ms);
+            config.io_timeout_ms = config.io_timeout_ms.min(budget_ms);
+            match TcpClusterRelocationTransport::new(
+                distribution.cluster_id.clone(),
+                distribution.node_id.clone(),
+                Arc::clone(&shared_topology),
+                config,
+            ) {
+                Ok(transport) => transport,
+                Err(error) => {
+                    server.db.read().clear_commit_admission();
+                    server.request_shutdown();
+                    eprintln!("bicdb metadata heartbeat transport error: {error}");
+                    return;
+                }
+            }
+        };
+        start_metadata_heartbeat_worker(
+            Arc::clone(&server),
+            Arc::clone(&metadata_consensus),
+            heartbeat_transport,
+            distribution.metadata_heartbeat_interval_ms,
+            distribution.metadata_election_timeout_ms,
+        );
+
         while !server.is_shutdown_requested() {
             let now_ms = cluster_now_ms();
             let (status, contact_ms) = {
@@ -1627,6 +1658,54 @@ pub(crate) fn metadata_election_delay_ms(
     base_timeout_ms.saturating_add(jitter)
 }
 
+fn start_metadata_heartbeat_worker(
+    server: Arc<PgWireServer>,
+    consensus: Arc<ParkingMutex<MetadataConsensusStore>>,
+    transport: TcpClusterRelocationTransport,
+    interval_ms: u64,
+    election_timeout_ms: u64,
+) {
+    let worker = BackgroundWorker::register(Arc::clone(&server));
+    thread::spawn(move || {
+        let mut last_quorum = cluster_now_ms();
+        while !server.is_shutdown_requested() {
+            let started = Instant::now();
+            let status = consensus.lock().status();
+            if status.role == MetadataConsensusRole::Leader {
+                let acknowledgements = replicate_metadata_round(&consensus, &transport);
+                let current = consensus.lock().status();
+                if current.role == MetadataConsensusRole::Leader
+                    && current.current_term == status.current_term
+                {
+                    if acknowledgements
+                        .as_ref()
+                        .is_ok_and(|acks| metadata_voter_quorum(&status.voters, acks))
+                    {
+                        last_quorum = cluster_now_ms();
+                    } else if cluster_now_ms().saturating_sub(last_quorum) >= election_timeout_ms {
+                        // Recheck under the same lock as step-down so an old
+                        // round cannot retire a newly elected term.
+                        let mut store = consensus.lock();
+                        let current = store.status();
+                        if current.role == MetadataConsensusRole::Leader
+                            && current.current_term == status.current_term
+                        {
+                            let _ = store.relinquish_leadership();
+                        }
+                    }
+                }
+            } else {
+                last_quorum = cluster_now_ms();
+            }
+            if !worker.sleep_until_shutdown(
+                Duration::from_millis(interval_ms).saturating_sub(started.elapsed()),
+            ) {
+                break;
+            }
+        }
+    });
+}
+
 pub(crate) fn metadata_voter_quorum(
     voters: &[ClusterNodeId],
     acknowledgements: &BTreeSet<ClusterNodeId>,
@@ -1694,43 +1773,65 @@ pub(crate) fn replicate_metadata_round(
         .filter(|node_id| **node_id != status.node_id)
         .cloned()
         .collect::<BTreeSet<_>>();
-    for follower in &followers {
-        // Starting at one deliberately offers a snapshot to an ordinary
-        // lagging follower. A failover survivor can instead have compacted a
-        // commit that the newly elected leader has in its log but did not yet
-        // know was committed. Such a follower returns its retained boundary
-        // as `conflict_index`; retry there rather than offering the same stale
-        // snapshot forever. Bound retries so a faulty peer cannot monopolize
-        // the supervisor.
-        let mut next_index = 1_u64;
-        for _ in 0..4 {
-            let request = consensus.lock().append_request_from(next_index, 16)?;
-            match transport.append_metadata(follower, request) {
-                Ok(response) => {
-                    let success = response.success && response.term == status.current_term;
-                    consensus
-                        .lock()
-                        .record_append_response(follower, &response)?;
-                    if success {
-                        acknowledgements.insert(follower.clone());
-                        break;
+    let followers = followers.into_iter().collect::<Vec<_>>();
+    // A slow or unavailable peer cannot serially delay healthy peer contact.
+    // Bound thread fan-out independently of the topology's member count.
+    for batch in followers.chunks(16) {
+        let accepted = thread::scope(|scope| {
+            let mut requests = Vec::new();
+            for follower in batch {
+                let status = &status;
+                requests.push(scope.spawn(move || -> Result<Option<ClusterNodeId>> {
+                    // Starting at one deliberately offers a snapshot to an ordinary
+                    // lagging follower. A failover survivor can instead have compacted a
+                    // commit that the newly elected leader has in its log but did not yet
+                    // know was committed. Such a follower returns its retained boundary
+                    // as `conflict_index`; retry there rather than offering the same stale
+                    // snapshot forever. Bound retries so a faulty peer cannot monopolize
+                    // the supervisor.
+                    let mut next_index = 1_u64;
+                    for _ in 0..4 {
+                        let request = consensus.lock().append_request_from(next_index, 16)?;
+                        match transport.append_metadata(follower, request) {
+                            Ok(response) => {
+                                let success =
+                                    response.success && response.term == status.current_term;
+                                consensus
+                                    .lock()
+                                    .record_append_response(follower, &response)?;
+                                if success {
+                                    return Ok(Some(follower.clone()));
+                                }
+                                if response.term != status.current_term {
+                                    break;
+                                }
+                                let leader_next =
+                                    consensus.lock().status().last_log_index.saturating_add(1);
+                                let retry_index = response.conflict_index.clamp(1, leader_next);
+                                if retry_index == next_index {
+                                    break;
+                                }
+                                next_index = retry_index;
+                            }
+                            Err(error) => {
+                                eprintln!("bicdb metadata append to {follower} failed: {error}");
+                                break;
+                            }
+                        }
                     }
-                    if response.term != status.current_term {
-                        break;
-                    }
-                    let leader_next = consensus.lock().status().last_log_index.saturating_add(1);
-                    let retry_index = response.conflict_index.clamp(1, leader_next);
-                    if retry_index == next_index {
-                        break;
-                    }
-                    next_index = retry_index;
-                }
-                Err(error) => {
-                    eprintln!("bicdb metadata append to {follower} failed: {error}");
-                    break;
-                }
+                    Ok(None)
+                }));
             }
-        }
+            requests
+                .into_iter()
+                .map(|request| {
+                    request.join().map_err(|_| {
+                        PgWireError::Server("metadata append worker panicked".into())
+                    })?
+                })
+                .collect::<Result<Vec<_>>>()
+        })?;
+        acknowledgements.extend(accepted.into_iter().flatten());
     }
     Ok(acknowledgements)
 }

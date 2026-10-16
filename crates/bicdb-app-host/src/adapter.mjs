@@ -76,6 +76,11 @@ const env = Object.freeze({
   JOBS: Object.freeze({
     async send(payload, options = {}) { return call('/jobs', { payload, idempotency_key: options.idempotencyKey ?? null }); },
   }),
+  EVENTS: Object.freeze({
+    async append(key, value) { return call('/events', { operation: 'append', key, value }); },
+    async get(key) { return (await call('/events', { operation: 'get', key })).value; },
+    async list(options = {}) { return call('/events', { operation: 'list', cursor: options.cursor ?? null, limit: options.limit ?? 128 }); },
+  }),
 });
 const maximum = 8 * 1024 * 1024;
 const server = http.createServer(async (incoming, outgoing) => {

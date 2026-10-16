@@ -73,6 +73,7 @@ struct ClusterDataRequestEnvelope {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ClusterDataRequest {
     Ping,
+    ApplicationEvent(crate::ClusterEventRequest),
     ExportSchemaBundle {
         range_id: RangeId,
         range_epoch: u64,
@@ -111,6 +112,8 @@ enum ClusterDataRequest {
         relocation: RangeRelocation,
     },
     ExportCatchUp {
+        #[serde(default)]
+        relocation: Option<RangeRelocation>,
         range: RangeDescriptor,
         durable_commit_sequence: u64,
         max_commit_frames: usize,
@@ -237,6 +240,7 @@ enum ClusterDataRequest {
 impl ClusterDataRequest {
     fn range_id_for_schema_fence(&self) -> Option<RangeId> {
         match self {
+            Self::ApplicationEvent(request) => Some(request.range_id),
             Self::ExportSchemaBundle { range_id, .. } => Some(*range_id),
             Self::InstallSchemaBundle { .. }
             | Self::StageSignedSchemaBundle { .. }
@@ -290,6 +294,7 @@ struct ClusterDataResponseEnvelope {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ClusterDataResponse {
     Pong,
+    ApplicationEvent(crate::ClusterEventResponse),
     Ack,
     SchemaBundle(ClusterSchemaBundle),
     SchemaStage(ClusterSchemaStageReceipt),
@@ -429,6 +434,13 @@ pub fn start_cluster_data_server(
     let shutdown = Arc::new(AtomicBool::new(false));
     let thread_shutdown = Arc::clone(&shutdown);
     let active = Arc::new(AtomicUsize::new(0));
+    // These identities are immutable for the listener's lifetime. Metadata
+    // heartbeats must not wait behind data-service row/snapshot I/O merely to
+    // validate the request envelope.
+    let local_identity = {
+        let service = service.lock();
+        (service.cluster_id().clone(), service.node_id().clone())
+    };
     let thread = thread::spawn(move || {
         while !thread_shutdown.load(Ordering::SeqCst) {
             match listener.accept() {
@@ -454,6 +466,7 @@ pub fn start_cluster_data_server(
                         metadata_distribution_store.as_ref().map(Arc::clone);
                     let tls = server_tls.as_ref().map(|tls| Arc::clone(&tls.config));
                     let config = config.clone();
+                    let local_identity = local_identity.clone();
                     thread::spawn(move || {
                         let _active = ActiveConnection(active);
                         let _ = configure_stream(&stream, &config);
@@ -477,6 +490,7 @@ pub fn start_cluster_data_server(
                                     &config,
                                     &topology,
                                     &service,
+                                    &local_identity,
                                     control_store.as_ref(),
                                     metadata_consensus.as_ref(),
                                     metadata_distribution_store.as_ref(),
@@ -490,6 +504,7 @@ pub fn start_cluster_data_server(
                                 &config,
                                 &topology,
                                 &service,
+                                &local_identity,
                                 control_store.as_ref(),
                                 metadata_consensus.as_ref(),
                                 metadata_distribution_store.as_ref(),
@@ -569,6 +584,7 @@ fn handle_cluster_data_connection(
     config: &ClusterNetworkTransportConfig,
     topology: &RwLock<ClusterTopology>,
     service: &Mutex<ClusterDataNodeService>,
+    local_identity: &(ClusterId, ClusterNodeId),
     control_store: Option<&Arc<Mutex<DistributionStore>>>,
     metadata_consensus: Option<&Arc<Mutex<MetadataConsensusStore>>>,
     metadata_distribution_store: Option<&Arc<Mutex<DistributionStore>>>,
@@ -577,10 +593,7 @@ fn handle_cluster_data_connection(
     let request = recv_json_frame::<ClusterDataRequestEnvelope>(stream, config.max_frame_bytes)?;
     let request_id = request.request_id;
     let caller_node_id = request.caller_node_id.clone();
-    let (local_cluster_id, local_node_id) = {
-        let service = service.lock();
-        (service.cluster_id().clone(), service.node_id().clone())
-    };
+    let (local_cluster_id, local_node_id) = local_identity.clone();
     let response = (|| {
         if request.protocol_version != CLUSTER_DATA_PROTOCOL_VERSION {
             return Err(transport_error(format!(
@@ -648,6 +661,16 @@ fn authorize_cluster_data_caller(
     let bootstrap_fetch = matches!(request, ClusterDataRequest::FetchBootstrapSnapshot);
     if caller.is_none() && !self_registration && !bootstrap_fetch {
         return Err(transport_error("cluster data caller is not a member"));
+    }
+    if matches!(request, ClusterDataRequest::ApplicationEvent(_))
+        && !caller.is_some_and(|node| {
+            node.lifecycle == ClusterNodeLifecycle::Active
+                && node.metadata_role == MetadataMemberRole::Voter
+        })
+    {
+        return Err(transport_error(
+            "application event callers must be active voting members",
+        ));
     }
     if caller.is_some_and(|caller| caller.lifecycle == ClusterNodeLifecycle::Decommissioned) {
         return Err(transport_error(
@@ -1003,6 +1026,31 @@ fn dispatch_cluster_data_request(
     }
     match request {
         ClusterDataRequest::Ping => Ok(ClusterDataResponse::Pong),
+        ClusterDataRequest::ApplicationEvent(request) => {
+            request.operation.validate()?;
+            let (local_node, db) = {
+                let service = service.lock();
+                (service.node_id().clone(), service.database())
+            };
+            let range = {
+                let topology = published_topology.read();
+                topology
+                    .range_by_id(request.range_id)
+                    .filter(|range| {
+                        range.epoch == request.range_epoch && range.leader == local_node
+                    })
+                    .cloned()
+                    .ok_or_else(|| {
+                        transport_error("event route is stale or this node is not its leader")
+                    })?
+            };
+            let result = crate::distribution_events::execute_cluster_event(
+                &db.read(),
+                &range,
+                request.operation,
+            )?;
+            Ok(ClusterDataResponse::ApplicationEvent(result))
+        }
         ClusterDataRequest::ExportSchemaBundle {
             range_id,
             range_epoch,
@@ -1271,15 +1319,28 @@ fn dispatch_cluster_data_request(
             ))
         }
         ClusterDataRequest::ExportCatchUp {
+            relocation,
             range,
             durable_commit_sequence,
             max_commit_frames,
         } => Ok(ClusterDataResponse::CatchUpBatch({
-            // This arm carries no relocation, so it cannot take the
-            // participant fence; it exports this range's commit frames, and
-            // the caller must at least be a replica of the range it is asking
-            // for rather than any authenticated member.
-            if !range
+            if published_topology.read().range_by_id(range.id) != Some(&range) {
+                return Err(transport_error(
+                    "catch-up export descriptor is stale or forged",
+                ));
+            }
+            // Metadata leadership and data ownership can live on different
+            // nodes. A non-replica controller must carry the exact committed
+            // relocation proof, just like snapshot/apply/cleanup requests.
+            if let Some(relocation) = relocation {
+                validate_relocation_controller_caller(
+                    caller_node_id,
+                    &relocation,
+                    Some(&range),
+                    metadata_consensus,
+                    published_topology,
+                )?;
+            } else if !range
                 .replicas
                 .iter()
                 .any(|replica| replica.node_id == *caller_node_id)
@@ -2373,6 +2434,21 @@ impl TcpClusterRelocationTransport {
         }
     }
 
+    /// Internal application events RPC. Callers must be authenticated members;
+    /// application hosts must scope namespaces before entering this boundary.
+    /// Reads return applied local state, without a linearizable read barrier.
+    pub fn application_event(
+        &self,
+        destination: &ClusterNodeId,
+        request: crate::ClusterEventRequest,
+    ) -> Result<crate::ClusterEventResponse> {
+        request.operation.validate()?;
+        match self.call(destination, ClusterDataRequest::ApplicationEvent(request))? {
+            ClusterDataResponse::ApplicationEvent(result) => Ok(result),
+            response => Err(unexpected_response("application event", response)),
+        }
+    }
+
     /// Transfer one signed schema stage over the member-bound cluster RPC.
     /// Only the current metadata leader is accepted by the destination, and
     /// the destination verifies the signature using its own host trust store.
@@ -3196,6 +3272,7 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
         let batch = match self.call(
             &range.leader,
             ClusterDataRequest::ExportCatchUp {
+                relocation: Some(relocation.clone()),
                 range: range.clone(),
                 durable_commit_sequence: durable,
                 max_commit_frames,
@@ -3265,6 +3342,99 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn member_heartbeat_envelopes_do_not_wait_for_the_data_service_mutex() {
+        let root = tempfile::tempdir().unwrap();
+        let config = crate::DistributionConfig {
+            enabled: true,
+            replication_factor: 1,
+            initial_ranges: 1,
+            transport: ClusterNetworkTransportConfig {
+                io_timeout_ms: 300,
+                connect_timeout_ms: 100,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let store =
+            DistributionStore::initialize_at(root.path(), config.clone(), false, 1000).unwrap();
+        let topology = Arc::new(RwLock::new(store.topology().clone()));
+        let db = Arc::new(RwLock::new(
+            crate::BicDb::open_with_config(
+                root.path().join("data"),
+                crate::DbConfig::default().with_fsync(false),
+            )
+            .unwrap(),
+        ));
+        let service = Arc::new(Mutex::new(
+            ClusterDataNodeService::open(
+                config.cluster_id.clone(),
+                config.node_id.clone(),
+                root.path().join("service"),
+                db,
+                false,
+            )
+            .unwrap(),
+        ));
+        let listener = start_cluster_data_server(
+            "127.0.0.1:0",
+            config.transport.clone(),
+            Arc::clone(&topology),
+            Arc::clone(&service),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        topology
+            .write()
+            .nodes
+            .get_mut(&config.node_id)
+            .unwrap()
+            .address = listener.local_addr().to_string();
+        let transport = TcpClusterRelocationTransport::new(
+            config.cluster_id.clone(),
+            config.node_id.clone(),
+            Arc::clone(&topology),
+            config.transport.clone(),
+        )
+        .unwrap();
+        // Simulate a long data copy/apply operation. A separate metadata
+        // scheduler must still get through authentication and dispatch.
+        let _data_busy = service.lock();
+        transport.ping(&config.node_id).unwrap();
+    }
+
+    #[test]
+    fn application_events_reject_registered_learners() {
+        let root = tempfile::tempdir().unwrap();
+        let config = crate::DistributionConfig {
+            enabled: true,
+            replication_factor: 1,
+            initial_ranges: 1,
+            ..Default::default()
+        };
+        let store =
+            DistributionStore::initialize_at(root.path(), config.clone(), false, 1000).unwrap();
+        let node = store.topology().nodes[&config.node_id].clone();
+        let request = ClusterDataRequest::ApplicationEvent(crate::ClusterEventRequest {
+            range_id: store.topology().ranges.values().next().unwrap().id,
+            range_epoch: 1,
+            operation: crate::ClusterEventOperation::Get {
+                namespace: "app".into(),
+                key: "event".into(),
+            },
+        });
+        authorize_cluster_data_caller(&node.id, Some(&node), &request, None, true).unwrap();
+        let learner = node.as_metadata_learner();
+        assert!(
+            authorize_cluster_data_caller(&learner.id, Some(&learner), &request, None, true)
+                .unwrap_err()
+                .to_string()
+                .contains("active voting members")
+        );
+    }
 
     /// D-1: the relocation data plane was dispatched without the authenticated
     /// caller, so any member holding a valid certificate — not just the

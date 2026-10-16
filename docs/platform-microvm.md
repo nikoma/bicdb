@@ -26,6 +26,10 @@ therefore remain host-operator credentials; they are not delegated application
 developer credentials.
 
 Install a matching Firecracker/jailer release and a compatible guest kernel.
+The supervisor attaches a rate-limited entropy device so Node cryptography can
+initialize at boot. Compile `CONFIG_HW_RANDOM_VIRTIO` into the guest kernel
+(with its `CONFIG_HW_RANDOM` and `CONFIG_VIRTIO` dependencies), as described in
+the [Firecracker entropy-device documentation](https://github.com/firecracker-microvm/firecracker/blob/v1.17.0/docs/entropy.md).
 Follow the upstream [getting-started guide](https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md)
 and [jailer documentation](https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md).
 Verify release checksums before installing executable assets. Keep the assets

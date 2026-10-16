@@ -280,6 +280,7 @@ impl Host {
         );
         let cgroup_parent = format!("bic-platform-{tap}");
         let config = json!({
+            "entropy":{"rate_limiter":{"bandwidth":{"size":65536,"refill_time":1000}}},
             "boot-source":{"kernel_image_path":"/kernel","boot_args":boot},
             "drives":[
                 {"drive_id":"rootfs","path_on_host":"/rootfs.ext4","is_root_device":true,"is_read_only":true},

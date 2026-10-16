@@ -5,6 +5,14 @@ uses durable membership, virtual ranges, epoch-fenced routes, bounded
 relocation state machines, and an automatic supervisor. Single-node databases
 remain the default.
 
+`bicdb serve` installs the public balanced controller when this directory has
+distribution configuration. `--cluster-controller manual` opts into explicit
+placement. Library hosts select their service through `PgWireHostService`.
+Automatic placement does not make arbitrary SQL distributed: ordinary SQL
+forwarding and durable cross-range SQL transactions are separate executor work.
+The [immutable application-event binding](application-cluster-events.md)
+provides a complete routed data path with an explicit range-local contract.
+
 The cluster topology and local node configuration are stored alongside the
 database as `cluster-topology.json` and `bicdb-distribution.json`.
 Topology writes are checksummed and atomically replaced. Copying these files by

@@ -33,6 +33,7 @@ use crate::{
 };
 
 const MAX_BODY: usize = MAX_RELEASE_BYTES * 4 / 3 + 2 * 1024 * 1024;
+mod events;
 mod live;
 mod previews;
 mod state_lifecycle;
@@ -67,6 +68,7 @@ pub struct Platform {
     client: reqwest::Client,
     recovering: AtomicBool,
     replicas: BTreeMap<String, Arc<Replica>>,
+    event_cluster: Mutex<Option<Arc<crate::events::Host>>>,
 }
 
 #[derive(Debug)]
@@ -166,6 +168,7 @@ impl Platform {
             client,
             recovering: AtomicBool::new(true),
             replicas,
+            event_cluster: Mutex::new(None),
         }))
     }
 
@@ -194,6 +197,7 @@ impl Platform {
     }
 
     fn create_app(&self, deployment: Deployment, release: Release) -> Result<Arc<Application>> {
+        self.validate_event_binding(&release)?;
         let replica = self.replicas.get(&deployment.application).cloned();
         let database = match &replica {
             Some(replica) => replica.database.clone(),
@@ -405,6 +409,7 @@ impl Platform {
 
     fn deploy(&self, release: Release) -> Result<Deployment> {
         release.validate()?;
+        self.validate_event_binding(&release)?;
         self.validate_isolation(&release)?;
         ensure!(
             self.replicas.is_empty() || self.replicas.contains_key(&release.manifest.name),
@@ -551,8 +556,10 @@ pub fn router(platform: Arc<Platform>) -> Router {
         .route("/internal/:name/query", post(query))
         .route("/internal/:name/subscribe", post(live::subscribe))
         .route("/internal/:name/jobs", post(enqueue))
+        .route("/internal/:name/events", post(events::request))
         .route("/internal/:name/conflicts", post(conflicts))
         .route("/apps/:name", axum::routing::any(proxy))
+        .route("/apps/:name/", axum::routing::any(proxy))
         .route("/apps/:name/*path", axum::routing::any(proxy_path))
         .layer(DefaultBodyLimit::max(MAX_BODY))
         .layer(axum::middleware::from_fn_with_state(
@@ -886,7 +893,7 @@ async fn forward(
             .unwrap_or_default()
     );
     let mut upstream = client
-        .request(parts.method, url)
+        .request(parts.method.clone(), url)
         .timeout(Duration::from_millis(timeout));
     for (name, value) in &parts.headers {
         if !hop_header(name.as_str()) {
@@ -910,6 +917,38 @@ async fn forward(
     app.require_authority()?;
     let status = response.status();
     let headers = response.headers().clone();
+    // HTML applications commonly use relative assets and service workers.
+    // Give their root a directory URL while retaining the external prefix.
+    if parts.uri.path() == prefix
+        && matches!(
+            parts.method,
+            axum::http::Method::GET | axum::http::Method::HEAD
+        )
+        && headers.get("content-type").is_some_and(|value| {
+            value
+                .to_str()
+                .is_ok_and(|value| value.split(';').next() == Some("text/html"))
+        })
+    {
+        let location = format!(
+            "{prefix}/{}",
+            parts
+                .uri
+                .query()
+                .map(|q| format!("?{q}"))
+                .unwrap_or_default()
+        );
+        return Response::builder()
+            .status(StatusCode::TEMPORARY_REDIRECT)
+            .header("location", location)
+            .body(Body::empty())
+            .map_err(|_| {
+                ApiError(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "application redirect failed".into(),
+                )
+            });
+    }
     if crate::http_stream::is_events(&headers) {
         let mut result = Response::builder().status(status);
         for (name, value) in &headers {
@@ -1098,6 +1137,30 @@ pub async fn serve(
     fleet_config: Option<PathBuf>,
     state_config: Option<PathBuf>,
 ) -> Result<()> {
+    serve_with_events(
+        root,
+        listen,
+        token,
+        node,
+        microvm_config,
+        fleet_config,
+        state_config,
+        None,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn serve_with_events(
+    root: PathBuf,
+    listen: SocketAddr,
+    token: String,
+    node: Option<PathBuf>,
+    microvm_config: Option<PathBuf>,
+    fleet_config: Option<PathBuf>,
+    state_config: Option<PathBuf>,
+    events_config: Option<PathBuf>,
+) -> Result<()> {
     let listener = tokio::net::TcpListener::bind(listen).await?;
     let address = listener.local_addr()?;
     let local = SocketAddr::new(
@@ -1117,6 +1180,9 @@ pub async fn serve(
         fleet_config.as_deref(),
         state_config.as_deref(),
     )?;
+    if let Some(path) = events_config {
+        *platform.event_cluster.lock() = Some(Arc::new(crate::events::Host::read(&path)?));
+    }
     let mut private_listeners = Vec::new();
     if let Some(host) = &platform.microvm {
         for allocation in host.allocations().values() {
@@ -1687,6 +1753,7 @@ fn internal_router(platform: Arc<Platform>) -> Router {
         .route("/internal/:name/query", post(query))
         .route("/internal/:name/subscribe", post(live::subscribe))
         .route("/internal/:name/jobs", post(enqueue))
+        .route("/internal/:name/events", post(events::request))
         .route("/internal/:name/conflicts", post(conflicts))
         .layer(DefaultBodyLimit::max(8 * 1024 * 1024))
         .layer(axum::middleware::from_fn_with_state(

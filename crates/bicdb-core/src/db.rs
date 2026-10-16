@@ -11112,6 +11112,24 @@ impl BicDb {
         collection_meta: &CollectionMeta,
         batch: &RangeSnapshotBatch,
     ) -> Result<usize> {
+        Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
+        if !self.collections.contains_key(&batch.collection) {
+            validate_collection_name(&batch.collection)?;
+            let mut state = CollectionState::new(collection_meta.clone());
+            state.paged_lazy = self.paged_records.is_some();
+            self.collections
+                .insert(batch.collection.clone(), RwLock::new(state));
+            self.persist_catalog()?;
+            self.schema_compatibility.invalidate();
+        }
+        self.apply_range_snapshot_batch_preinstalled(range, collection_meta, batch)
+    }
+
+    fn validate_range_snapshot_fields(
+        range: &RangeDescriptor,
+        collection_meta: &CollectionMeta,
+        batch: &RangeSnapshotBatch,
+    ) -> Result<()> {
         if batch.range_id != range.id || batch.range_epoch != range.epoch {
             return Err(BicDbError::Cluster(format!(
                 "snapshot batch range/epoch {}/{} does not match {}/{}",
@@ -11132,21 +11150,24 @@ impl BicDb {
                 )));
             }
         }
-        if let Some(state) = self.collections.get(&batch.collection) {
-            if state.read().meta != *collection_meta {
-                return Err(BicDbError::Cluster(format!(
-                    "snapshot collection metadata for `{}` conflicts with the destination catalog",
-                    batch.collection
-                )));
-            }
-        } else {
-            validate_collection_name(&batch.collection)?;
-            self.collections.insert(
-                batch.collection.clone(),
-                RwLock::new(CollectionState::new(collection_meta.clone())),
-            );
-            self.persist_catalog()?;
-            self.schema_compatibility.invalidate();
+        Ok(())
+    }
+
+    /// The live data plane installs schema before copying rows. Shared access
+    /// avoids taking a database write lock under its service mutex while a
+    /// foreground transaction holds a read lock and enters quorum admission.
+    pub(crate) fn apply_range_snapshot_batch_preinstalled(
+        &self,
+        range: &RangeDescriptor,
+        collection_meta: &CollectionMeta,
+        batch: &RangeSnapshotBatch,
+    ) -> Result<usize> {
+        Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
+        if self.collection_state(&batch.collection)?.meta != *collection_meta {
+            return Err(BicDbError::Cluster(format!(
+                "snapshot collection metadata for `{}` conflicts with the destination catalog",
+                batch.collection
+            )));
         }
         if batch.records.is_empty() {
             return Ok(0);
@@ -11174,6 +11195,27 @@ impl BicDb {
     ) -> Result<usize> {
         let filtered = filter_commit_frame_for_range(frame, range)?;
         self.ensure_replication_frame_collections(&filtered)?;
+        self.apply_range_commit_frame_as_local_preinstalled(range, frame)
+    }
+
+    pub(crate) fn apply_range_commit_frame_as_local_preinstalled(
+        &self,
+        range: &RangeDescriptor,
+        frame: &CommitFrame,
+    ) -> Result<usize> {
+        let filtered = filter_commit_frame_for_range(frame, range)?;
+        for write in &filtered.writes {
+            validate_replication_collection_meta(write)?;
+            let state = self.collection_state(&write.collection)?;
+            if let Some(meta) = &write.collection_meta {
+                if state.meta != *meta {
+                    return Err(BicDbError::Cluster(format!(
+                        "catch-up collection `{}` differs from its installed schema",
+                        write.collection
+                    )));
+                }
+            }
+        }
         let writes = replication_writes_to_tx_writes(&filtered)?;
         if writes.is_empty() {
             return Ok(0);
@@ -11206,7 +11248,7 @@ impl BicDb {
     /// user-facing collection policy checks. This is restricted to records
     /// whose stable keys belong to the relocated range.
     pub fn delete_range_records_as_local(
-        &mut self,
+        &self,
         range: &RangeDescriptor,
         collection: &str,
         record_ids: &[String],

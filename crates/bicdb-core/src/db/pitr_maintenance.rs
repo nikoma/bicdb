@@ -1600,10 +1600,14 @@ impl BicDb {
                     catalog_changed = true;
                 }
             } else {
-                self.collections.insert(
-                    meta.name.clone(),
-                    RwLock::new(CollectionState::new(meta.clone())),
-                );
+                // A schema recipient starts with no rows. In a paged database
+                // that empty page set is already authoritative. Leaving the
+                // new collection resident prevents it from exporting a bounded
+                // snapshot when the next member joins before the first write.
+                let mut state = CollectionState::new(meta.clone());
+                state.paged_lazy = self.paged_records.is_some();
+                self.collections
+                    .insert(meta.name.clone(), RwLock::new(state));
                 catalog_changed = true;
             }
         }

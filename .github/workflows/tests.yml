@@ -146,3 +146,8 @@ jobs:
       - name: cargo test bicdb-sql with bounded linked artifacts
         if: matrix.suite.name == 'bicdb-sql'
         run: ./scripts/run-cargo-test-targets-bounded.sh bicdb-sql
+      - name: Cluster harness and offline queue contracts
+        if: matrix.suite.name == 'rest of workspace'
+        run: |
+          python3 -m unittest discover -s scripts/platform -p 'test_*.py'
+          node --test examples/platform/notebook/*.test.mjs

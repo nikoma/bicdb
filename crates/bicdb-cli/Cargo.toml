@@ -18,6 +18,7 @@ bench = ["dep:bicdb-bench"]
 bench-comparison-engines = ["bench", "bicdb-bench/comparison-engines"]
 
 [dependencies]
+uuid.workspace = true
 anyhow.workspace = true
 bicdb-analytics = { path = "../bicdb-analytics", version = "1.0.438-beta" }
 base64.workspace = true

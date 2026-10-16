@@ -461,6 +461,7 @@ pub async fn serve(
         .route("/run/:id/", axum::routing::any(forward))
         .route("/run/:id/*path", axum::routing::any(forward))
         .route("/internal/:name/query", post(forward))
+        .route("/internal/:name/events", post(forward))
         .route("/internal/:name/jobs", post(forward))
         .route("/internal/:name/conflicts", post(forward))
         .layer(DefaultBodyLimit::max(
@@ -482,6 +483,7 @@ pub async fn serve(
             // Only scoped database routes are exposed on guest-facing listeners.
             let router = Router::new()
                 .route("/internal/:name/query", post(forward))
+                .route("/internal/:name/events", post(forward))
                 .route("/internal/:name/subscribe", post(forward))
                 .route("/internal/:name/jobs", post(forward))
                 .route("/internal/:name/conflicts", post(forward))

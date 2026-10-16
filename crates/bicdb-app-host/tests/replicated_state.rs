@@ -99,6 +99,7 @@ fn wait(mut ready: impl FnMut() -> bool) {
 fn package() -> Release {
     Release {
         manifest: Manifest {
+            bindings: Default::default(),
             format: 1,
             name: "counter".into(),
             version: "1".into(),

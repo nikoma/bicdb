@@ -22,6 +22,7 @@ mod distribution_backup_run;
 mod distribution_certification;
 mod distribution_consensus;
 mod distribution_data;
+mod distribution_events;
 mod distribution_gateway;
 mod distribution_query;
 mod distribution_range_consensus;
@@ -33,6 +34,13 @@ mod distribution_supervisor;
 #[cfg(feature = "tls-replication")]
 mod distribution_transport;
 mod encryption;
+#[cfg(feature = "tls-replication")]
+pub use distribution_events::ClusterEventClient;
+pub use distribution_events::{
+    cluster_event_record_id, ClusterEvent, ClusterEventCursor, ClusterEventOperation,
+    ClusterEventPage, ClusterEventRequest, ClusterEventResponse, CLUSTER_EVENTS_COLLECTION,
+    MAX_CLUSTER_EVENT_BYTES, MAX_CLUSTER_EVENT_PAGE_ROWS,
+};
 mod encryption_rotation;
 mod error;
 mod event;

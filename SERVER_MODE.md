@@ -5,11 +5,16 @@ server. Server mode keeps the same local append-only storage engine and exposes
 it over the pgwire protocol for local tools, LAN clients, smoke tests, and
 simple application development.
 
-Server mode does not automatically run a cluster supervisor. BicDB has a
-separate Raft-style consensus core, but `serve` remains a pgwire server process
-unless explicitly paired with replication/consensus orchestration.
-Run `bicdb consensus run` beside `bicdb serve` when a node should participate
-in leader election and quorum commit coordination.
+For a directory initialized with `bicdb cluster init` or `cluster join`,
+`serve` also starts metadata consensus, the member-authenticated data plane,
+and the public balanced placement controller. Joining members become eligible
+for bounded replica movement and leader balancing after metadata promotion.
+Use `--cluster-controller manual` to advance only operator-created movements.
+Standalone directories do not start these services. The separate
+`bicdb consensus run` command is not required for distributed cluster serving.
+See [cluster operations](docs/distributed-cluster-operations.md) and the
+[application event binding](docs/application-cluster-events.md) for the
+supported data path and transaction boundaries.
 
 ## Start A Local Server
 

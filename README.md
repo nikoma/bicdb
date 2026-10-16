@@ -362,14 +362,22 @@ boundary; it does not claim complete PostgreSQL implementation parity.
   causal-first resolution, and SQL-surfaced conflict review
   ([mesh](docs/bicdb-mesh.md)).
 - Automatic cluster membership, virtual ranges, replica placement, online
-  relocation with epoch fencing, request routing, failure repair, distributed
-  SQL/FTS top-k, schema rollout, anti-entropy, and resource governance.
+  relocation with epoch fencing, failure repair, distributed query planning
+  and SQL/FTS top-k merging, schema rollout, anti-entropy, and resource governance.
+- Public balanced placement with a manual opt-out, plus a complete routed
+  [immutable application-event binding](docs/application-cluster-events.md).
+  Existing application SQL keeps its local/native-HA transaction boundary;
+  arbitrary SQL forwarding and cross-range SQL commit are separate work.
 - Raft-style quorum metadata and consensus coordination with mTLS-bound node
   identities.
 
 The distributed implementation has extensive deterministic tests, but its 1,
 5, and 20 TB production-hardware certification matrix remains open. See the
 [automatic sharding roadmap](docs/automatic-distributed-sharding-todo.md).
+The [3/5/9-node harness](scripts/platform/README.md) and
+[offline Field Notebook](examples/platform/notebook/README.md) provide
+reproducible functional workloads. Shared-host runs do not establish
+independent-machine throughput scaling or independent-user adoption.
 
 ### Application runtime and extensions
 

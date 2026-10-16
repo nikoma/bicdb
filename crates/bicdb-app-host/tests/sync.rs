@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 fn release() -> Release {
     Release {
         manifest: Manifest {
+            bindings: Default::default(),
             format: 1,
             name: "notes".into(),
             version: "1".into(),

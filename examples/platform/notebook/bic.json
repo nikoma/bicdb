@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "name": "notebook",
+  "version": "1.0.0",
+  "runtime": "node",
+  "entrypoint": "app.mjs",
+  "bindings": { "events": true },
+  "files": ["app.mjs", "index.html", "app.css", "browser.mjs", "client.mjs", "sw.js"],
+  "resources": { "memory_mb": 128, "request_timeout_ms": 30000, "max_concurrent_requests": 64 }
+}

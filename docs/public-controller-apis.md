@@ -51,9 +51,11 @@ cargo test --workspace --locked
 cargo run --release -p bicdb-cli -- serve ./database --host 127.0.0.1 --port 5433
 ```
 
-The community CLI installs `ManualDistributionHostService` for a distributed
-server. It runs the data plane and advances operator-created relocation state,
-but it does not invent placement or silently retry failed moves. Backup,
+The community CLI installs `BalancedDistributionHostService` for a distributed
+server. This reference adapter uses the public `build_failure_repair_plan` to
+propose bounded placement, leader balancing, failure repair and relocation
+retries. `--cluster-controller manual` selects `ManualDistributionHostService`
+to advance only operator-created movement. Backup,
 restore, PITR, integrity checks, replication, failover primitives, Cell
 startup, local sync, import/export, and signed-format verification remain
 available without another repository.
@@ -138,9 +140,10 @@ use `spawn_background_task`, check `is_shutdown_requested`, and use
 `sleep_until_shutdown` so shutdown cannot falsely report a closed database
 while controller work still holds it open.
 
-The public `ManualDistributionHostService` is both a usable default and a small
-reference implementation. Third-party controllers may replace it through the
-same interface used by any commercial controller.
+The public `BalancedDistributionHostService` is the CLI default. Its
+`with_config` constructor exposes validated movement and retry limits.
+`ManualDistributionHostService` remains available for explicit convergence.
+Third-party controllers can replace either through the same interface.
 
 ## Schema rollout
 

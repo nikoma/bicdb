@@ -5,6 +5,7 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 mod app_command;
+mod cluster_events_command;
 mod sync_server;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -79,9 +80,9 @@ use bicdb_core::{
 use bicdb_page::{DirectoryLock, PageStore, PageStoreOptions, PagedPaths, TxStatus};
 use bicdb_pgwire::{
     create_user_with_identity, serve_cluster_with_host_services, serve_with_host_services,
-    set_user_security_identity, AllowedStandby, AuthMethod, FailoverConfig, HaPeer, HaServerConfig,
-    HaServerRole, ManualDistributionHostService, PgWireConfig, PgWireHostService,
-    PgWireUserIdentity,
+    set_user_security_identity, AllowedStandby, AuthMethod, BalancedDistributionHostService,
+    FailoverConfig, HaPeer, HaServerConfig, HaServerRole, ManualDistributionHostService,
+    PgWireConfig, PgWireHostService, PgWireUserIdentity,
 };
 use bicdb_sql::{
     integrity_check, plan_migration_sql, split_migration_sql, MigrationStatementSafety, SqlResult,
@@ -1551,6 +1552,11 @@ impl From<CliClusterCertificationPayloadFormat> for ClusterCertificationRawArtif
 
 #[derive(Debug, Subcommand)]
 enum ClusterCommand {
+    /// Use the member-authenticated immutable application-event data plane.
+    Events {
+        #[command(subcommand)]
+        command: cluster_events_command::Command,
+    },
     Init {
         path: PathBuf,
         #[arg(long, default_value = "default")]
@@ -1565,6 +1571,9 @@ enum ClusterCommand {
         replication_factor: u8,
         #[arg(long, default_value_t = 256)]
         initial_ranges: u32,
+        /// Create the immutable application-event collection before admission starts.
+        #[arg(long)]
+        application_events: bool,
         #[arg(long, value_enum, value_delimiter = ',')]
         failure_domains: Vec<CliFailureDomain>,
         #[arg(long = "label", value_name = "KEY=VALUE")]
@@ -7157,6 +7166,7 @@ fn wait_for_cluster_certificate_mutation(
 
 fn run_cluster_command(command: ClusterCommand) -> Result<()> {
     match command {
+        ClusterCommand::Events { command } => cluster_events_command::run(command)?,
         ClusterCommand::Init {
             path,
             cluster_id,
@@ -7165,6 +7175,7 @@ fn run_cluster_command(command: ClusterCommand) -> Result<()> {
             capacity_bytes,
             replication_factor,
             initial_ranges,
+            application_events,
             failure_domains,
             labels,
             cluster_tls_cert,
@@ -7229,6 +7240,26 @@ fn run_cluster_command(command: ClusterCommand) -> Result<()> {
                 ..DistributionConfig::default()
             };
             let now_ms = unix_now_millis();
+            config.validate()?;
+            if application_events {
+                anyhow::ensure!(
+                    !path
+                        .join(bicdb_core::distribution::DEFAULT_DISTRIBUTION_CONFIG)
+                        .exists(),
+                    "initialize application events before starting a distributed cluster"
+                );
+                let mut db = BicDb::open_with_config(
+                    &path,
+                    DbConfig::default()
+                        .with_fsync(!no_fsync)
+                        .with_storage_mode(StorageMode::ServerPaged),
+                )?;
+                match db.create_collection(bicdb_core::CLUSTER_EVENTS_COLLECTION) {
+                    Ok(()) | Err(bicdb_core::BicDbError::CollectionAlreadyExists(_)) => {}
+                    Err(error) => return Err(error.into()),
+                }
+                db.close()?;
+            }
             let mut store = DistributionStore::initialize_at(&path, config, !no_fsync, now_ms)?;
             store.heartbeat(
                 &node_id,
@@ -8806,6 +8837,9 @@ impl ServeReplicationArgs {
 
 #[derive(Debug, clap::Args)]
 struct OperatorArgs {
+    /// Balance distributed replicas and leaders automatically, or retain manual placement.
+    #[arg(long, value_enum, default_value_t = ClusterController::Balanced)]
+    cluster_controller: ClusterController,
     /// Optional authenticated login-management HTTP address. Non-loopback requires server TLS.
     #[arg(long, requires_all = ["operator_token_file", "operator_actor"])]
     operator_listen: Option<SocketAddr>,
@@ -8827,8 +8861,11 @@ struct OperatorArgs {
 }
 
 fn cli_host_services(operator: &OperatorArgs) -> Result<Vec<Arc<dyn PgWireHostService>>> {
-    let mut services: Vec<Arc<dyn PgWireHostService>> =
-        vec![Arc::new(ManualDistributionHostService)];
+    let placement: Arc<dyn PgWireHostService> = match operator.cluster_controller {
+        ClusterController::Balanced => Arc::new(BalancedDistributionHostService::default()),
+        ClusterController::Manual => Arc::new(ManualDistributionHostService),
+    };
+    let mut services: Vec<Arc<dyn PgWireHostService>> = vec![placement];
     if let Some(address) = operator.operator_listen {
         services.push(Arc::new(
             bicdb_pgwire::operator::OperatorService::from_token_file(
@@ -8845,6 +8882,12 @@ fn cli_host_services(operator: &OperatorArgs) -> Result<Vec<Arc<dyn PgWireHostSe
         ));
     }
     Ok(services)
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum ClusterController {
+    Balanced,
+    Manual,
 }
 
 #[allow(clippy::too_many_arguments)]

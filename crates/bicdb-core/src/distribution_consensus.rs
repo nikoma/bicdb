@@ -646,7 +646,10 @@ impl MetadataConsensusStore {
             self.persist()?;
             return Ok(false);
         }
-        if self.state.role != MetadataConsensusRole::Leader || !response.success {
+        if response.term != self.state.current_term
+            || self.state.role != MetadataConsensusRole::Leader
+            || !response.success
+        {
             return Ok(false);
         }
         let old_voters = topology_voters(&self.state.committed_topology);
@@ -669,7 +672,9 @@ impl MetadataConsensusStore {
             )));
         }
         self.match_index
-            .insert(expected_node_id.clone(), response.match_index);
+            .entry(expected_node_id.clone())
+            .and_modify(|known| *known = (*known).max(response.match_index))
+            .or_insert(response.match_index);
         let committed = self.maybe_commit_leader_proposal()?;
         self.persist()?;
         Ok(committed)
@@ -1212,6 +1217,39 @@ mod tests {
             .unwrap());
         assert_eq!(leader.committed_topology(), &expanded);
         assert_eq!(leader.status().last_log_index, entry.index);
+    }
+
+    #[test]
+    fn a_delayed_old_term_append_ack_cannot_commit_a_new_proposal() {
+        let topology = topology_with_nodes(3);
+        let root = tempfile::tempdir().unwrap();
+        let mut leader = open(root.path(), "n1", &topology);
+        let votes = BTreeSet::from([
+            ClusterNodeId::new("n1").unwrap(),
+            ClusterNodeId::new("n2").unwrap(),
+        ]);
+        let old_term = leader.start_election().unwrap().term;
+        leader.become_leader(&votes).unwrap();
+        leader.observe_remote_term(old_term + 1).unwrap();
+        leader.start_election().unwrap();
+        leader.become_leader(&votes).unwrap();
+        let mut changed = topology.clone();
+        changed.generation += 1;
+        let entry = leader.propose_topology(changed).unwrap();
+        let before = leader.status().commit_index;
+        let response = MetadataAppendResponse {
+            cluster_id: topology.cluster_id.clone(),
+            term: old_term,
+            node_id: ClusterNodeId::new("n2").unwrap(),
+            success: true,
+            match_index: entry.index,
+            conflict_index: entry.index + 1,
+        };
+        assert!(!leader
+            .record_append_response(&response.node_id, &response)
+            .unwrap());
+        assert_eq!(leader.status().commit_index, before);
+        assert_eq!(leader.committed_topology().generation, topology.generation);
     }
 
     #[test]

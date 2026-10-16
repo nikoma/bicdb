@@ -1,6 +1,7 @@
 //! Durable application deployment, state and supervised execution.
 pub mod cli;
 pub mod database;
+mod events;
 pub mod fleet;
 mod http_stream;
 pub mod manifest;

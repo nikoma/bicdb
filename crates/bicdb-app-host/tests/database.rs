@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 fn release(sql: &str) -> Release {
     Release {
         manifest: Manifest {
+            bindings: Default::default(),
             format: 1,
             name: "example".into(),
             version: "1".into(),

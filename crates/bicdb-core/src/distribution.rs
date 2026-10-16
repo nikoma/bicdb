@@ -1205,12 +1205,16 @@ fn choose_target(
     projected_replicas: &BTreeMap<ClusterNodeId, usize>,
     per_node_moves: &BTreeMap<ClusterNodeId, usize>,
     incoming_bytes: u64,
+    replica_count_ceiling: Option<usize>,
 ) -> Option<ClusterNodeId> {
     topology
         .nodes
         .values()
         .filter(|node| {
             !occupied.contains(&node.id)
+                && replica_count_ceiling.is_none_or(|ceiling| {
+                    projected_replicas.get(&node.id).copied().unwrap_or(0) < ceiling
+                })
                 && per_node_moves.get(&node.id).copied().unwrap_or(0) < options.max_moves_per_node
                 && node_can_receive(
                     &topology.nodes,
@@ -1289,8 +1293,42 @@ pub fn build_rebalance_plan(
                 .or_default() += 1;
         }
     }
+    // A learner temporarily coexists with the source being removed. Plan
+    // against each move's final membership; counting both makes successive
+    // ticks over-drain sources and then move the same ranges back again.
+    // Incoming byte reservations remain conservative until cleanup completes.
+    let mut reserved_bytes = 0_u64;
+    for relocation in topology.relocations.values().filter(|r| r.is_active()) {
+        let Some(range) = topology.range_by_id(relocation.range_id) else {
+            continue;
+        };
+        if !range
+            .replicas
+            .iter()
+            .any(|replica| replica.id == relocation.target_replica_id)
+        {
+            continue;
+        }
+        let bytes = range_estimated_bytes(range, options);
+        reserved_bytes = reserved_bytes.saturating_add(bytes);
+        *projected_used.entry(relocation.target.clone()).or_default() = projected_used
+            .get(&relocation.target)
+            .copied()
+            .unwrap_or(0)
+            .saturating_add(bytes);
+        if let Some(source) = relocation.source.as_ref().filter(|source| {
+            **source != relocation.target
+                && range
+                    .replicas
+                    .iter()
+                    .any(|replica| &replica.node_id == *source)
+        }) {
+            let count = projected_replicas.entry(source.clone()).or_default();
+            *count = count.saturating_sub(1);
+        }
+    }
     let mut per_node_moves = BTreeMap::<ClusterNodeId, usize>::new();
-    let mut bytes_in_flight = 0_u64;
+    let mut bytes_in_flight = reserved_bytes;
 
     for range in topology.ranges.values() {
         if replica_moves.len() >= options.max_replica_moves {
@@ -1346,6 +1384,7 @@ pub fn build_rebalance_plan(
                 &projected_replicas,
                 &per_node_moves,
                 bytes,
+                None,
             ) else {
                 continue;
             };
@@ -1415,9 +1454,17 @@ pub fn build_rebalance_plan(
                 if replica_moves.len() >= options.max_replica_moves {
                     break;
                 }
+                let minimum = eligible_nodes
+                    .iter()
+                    .map(|node| projected_replicas.get(node).copied().unwrap_or(0))
+                    .min()
+                    .unwrap_or(0);
                 let Some(source) = eligible_nodes
                     .iter()
-                    .filter(|node| projected_replicas.get(*node).copied().unwrap_or(0) > ceiling)
+                    .filter(|node| {
+                        projected_replicas.get(*node).copied().unwrap_or(0)
+                            > minimum.saturating_add(1)
+                    })
                     .max_by_key(|node| {
                         (
                             projected_replicas.get(*node).copied().unwrap_or(0),
@@ -1472,6 +1519,15 @@ pub fn build_rebalance_plan(
                         &projected_replicas,
                         &per_node_moves,
                         bytes,
+                        Some(
+                            ceiling.min(
+                                projected_replicas
+                                    .get(&source)
+                                    .copied()
+                                    .unwrap_or(0)
+                                    .saturating_sub(1),
+                            ),
+                        ),
                     ) else {
                         continue;
                     };
@@ -1577,7 +1633,9 @@ pub fn build_rebalance_plan(
         let source_is_moving = replica_moves.iter().any(|movement| {
             movement.range_id == range.id && movement.source.as_ref() == Some(&range.leader)
         });
-        if !forced && !overloaded && !source_is_moving {
+        let source_count = projected_leaders.get(&range.leader).copied().unwrap_or(0);
+        let leader_floor = topology.ranges.len() / active_node_count;
+        if !forced && !overloaded && !source_is_moving && source_count <= leader_floor {
             continue;
         }
         let existing_voters = range
@@ -1610,6 +1668,17 @@ pub fn build_rebalance_plan(
         else {
             continue;
         };
+        if !forced
+            && !source_is_moving
+            && source_count
+                <= projected_leaders
+                    .get(&target)
+                    .copied()
+                    .unwrap_or(0)
+                    .saturating_add(1)
+        {
+            continue;
+        }
         *projected_leaders.entry(range.leader.clone()).or_default() = projected_leaders
             .get(&range.leader)
             .copied()
@@ -1631,7 +1700,7 @@ pub fn build_rebalance_plan(
         replica_moves,
         leader_transfers,
         unplaced_ranges,
-        estimated_bytes_in_flight: bytes_in_flight,
+        estimated_bytes_in_flight: bytes_in_flight.saturating_sub(reserved_bytes),
     };
     let digest = Sha256::digest(serde_json::to_vec(&plan)?);
     plan.id = hex::encode(&digest[..16]);
@@ -5668,7 +5737,7 @@ mod tests {
             .iter()
             .filter(|movement| movement.reason == ReplicaMoveReason::LoadBalance)
             .collect::<Vec<_>>();
-        assert_eq!(balance_moves.len(), 3);
+        assert_eq!(balance_moves.len(), 4);
         assert!(balance_moves.iter().all(|movement| movement.target == n5
             || movement.target == ClusterNodeId::new("n4").unwrap()));
         let target_counts = balance_moves
@@ -5677,9 +5746,123 @@ mod tests {
                 *counts.entry(movement.target.clone()).or_insert(0_usize) += 1;
                 counts
             });
-        assert_eq!(target_counts.values().sum::<usize>(), 3);
+        assert_eq!(target_counts.values().sum::<usize>(), 4);
         assert!(target_counts.values().all(|count| *count <= 2));
         assert!(!plan.leader_transfers.is_empty());
+        store.apply_rebalance_plan(&plan, &n1, 61).unwrap();
+        let next = store
+            .plan_rebalance(&generous_rebalance_options(), 62)
+            .unwrap();
+        assert!(
+            next.replica_moves.is_empty(),
+            "pending moves must count as their final membership, not trigger reverse movement"
+        );
+    }
+
+    #[test]
+    fn pending_relocations_reserve_the_next_plans_byte_budget() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store =
+            DistributionStore::initialize_at(root.path(), config("n1", "10.0.0.1:9444"), false, 10)
+                .unwrap();
+        join_four_more(&mut store);
+        let options = RebalanceOptions {
+            max_replica_moves: 1,
+            max_bytes_in_flight: 100,
+            ..generous_rebalance_options()
+        };
+        let first = store.plan_rebalance(&options, 60).unwrap();
+        assert_eq!(first.replica_moves.len(), 1);
+        store
+            .apply_rebalance_plan(&first, &ClusterNodeId::new("n1").unwrap(), 61)
+            .unwrap();
+        let next = store.plan_rebalance(&options, 62).unwrap();
+        assert!(next.replica_moves.is_empty());
+        assert_eq!(next.estimated_bytes_in_flight, 0);
+    }
+
+    #[test]
+    fn a_returning_empty_node_receives_capacity_even_when_the_ceiling_is_unchanged() {
+        let root = tempfile::tempdir().unwrap();
+        let mut configuration = config("n1", "10.0.0.1:9444");
+        configuration.replication_factor = 1;
+        configuration.initial_ranges = 16;
+        let mut store =
+            DistributionStore::initialize_at(root.path(), configuration, false, 10).unwrap();
+        let actor = ClusterNodeId::new("n1").unwrap();
+        for index in 2..=9 {
+            store
+                .join_node(
+                    node(&format!("n{index}"), &format!("10.0.0.{index}:9444"), 20),
+                    &actor,
+                    20,
+                )
+                .unwrap();
+        }
+        for (index, range) in store.topology.ranges.values_mut().enumerate() {
+            let owner = ClusterNodeId::new(format!("n{}", index % 8 + 1)).unwrap();
+            range.replicas = vec![RangeReplica {
+                id: ReplicaId(1000 + index as u64),
+                node_id: owner.clone(),
+                role: RangeReplicaRole::Voter,
+            }];
+            range.leader = owner;
+            range.approximate_bytes = 100;
+        }
+        store.topology.next_replica_id = 2000;
+        let options = generous_rebalance_options();
+        let plan = store.plan_rebalance(&options, 60).unwrap();
+        assert_eq!(plan.replica_moves.len(), 1);
+        assert_eq!(
+            plan.replica_moves[0].target,
+            ClusterNodeId::new("n9").unwrap()
+        );
+        store.apply_rebalance_plan(&plan, &actor, 61).unwrap();
+        assert!(store
+            .plan_rebalance(&options, 62)
+            .unwrap()
+            .replica_moves
+            .is_empty());
+    }
+
+    #[test]
+    fn a_voter_with_no_leaders_receives_one_even_when_other_nodes_are_at_the_ceiling() {
+        let root = tempfile::tempdir().unwrap();
+        let mut configuration = config("n1", "10.0.0.1:9444");
+        configuration.initial_ranges = 16;
+        let mut store =
+            DistributionStore::initialize_at(root.path(), configuration, false, 10).unwrap();
+        let actor = ClusterNodeId::new("n1").unwrap();
+        for index in 2..=9 {
+            store
+                .join_node(
+                    node(&format!("n{index}"), &format!("10.0.0.{index}:9444"), 20),
+                    &actor,
+                    20,
+                )
+                .unwrap();
+        }
+        for (index, range) in store.topology.ranges.values_mut().enumerate() {
+            range.replicas = (0..3)
+                .map(|offset| RangeReplica {
+                    id: ReplicaId(1000 + (index * 3 + offset) as u64),
+                    node_id: ClusterNodeId::new(format!("n{}", (index + offset) % 8 + 1)).unwrap(),
+                    role: RangeReplicaRole::Voter,
+                })
+                .collect();
+            range.leader = range.replicas[0].node_id.clone();
+            range.approximate_bytes = 100;
+        }
+        store.topology.ranges.values_mut().next().unwrap().replicas[1].node_id =
+            ClusterNodeId::new("n9").unwrap();
+        store.topology.next_replica_id = 2000;
+        let plan = store
+            .plan_rebalance(&generous_rebalance_options(), 60)
+            .unwrap();
+        assert!(plan
+            .leader_transfers
+            .iter()
+            .any(|transfer| transfer.target == ClusterNodeId::new("n9").unwrap()));
     }
 
     #[test]

@@ -50,13 +50,14 @@ An unrelated implementation can use the same contracts as BicDB Platform.
 
 ## CLI ownership
 
-The community CLI owns local database operations and explicit/manual cluster
-administration. Automatic fleet commands belong in a platform-owned binary or
-service that depends on BicDB's public APIs. The public `bicdb` executable does
-not load proprietary plugins and does not require a private repository.
+The community CLI owns local database operations and cluster administration.
+It installs `BalancedDistributionHostService`, a public reference adapter over
+the existing `build_failure_repair_plan` mechanism. The adapter enables bounded
+placement and relocation retries through `ClusterPlacementPlanner`; the core
+supervisor still requires an injected policy for automatic operation. This
+implementation is maintained in this repository and has no private dependency.
 
-The community CLI installs `ManualDistributionHostService`. It runs the public
-distribution data plane and advances operator-created relocation state, but it
-does not choose placements or retry failed work automatically. BicDB Platform's
-private fleet-controller crate installs an automatic policy through exactly the
-same public host-service contract available to third parties.
+`--cluster-controller manual` installs `ManualDistributionHostService` instead.
+Embedders can choose either service or provide their own planner. Commercial
+fleet policy, scheduling, regional placement and centralized operations can use
+the same interfaces without changing engine authority or importing private code.

@@ -447,32 +447,10 @@ mod tests {
         remove_user(path, "reader").unwrap();
     }
 
-    #[derive(Debug)]
-    struct TestPlacementPlanner;
-
-    impl bicdb_core::ClusterPlacementPlanner for TestPlacementPlanner {
-        fn plan_failure_repair(
-            &self,
-            topology: &bicdb_core::ClusterTopology,
-            config: &bicdb_core::DistributionConfig,
-            options: &bicdb_core::RebalanceOptions,
-            now_ms: u64,
-        ) -> bicdb_core::Result<bicdb_core::FailureRepairPlan> {
-            bicdb_core::build_failure_repair_plan(topology, config, options, now_ms)
-        }
-    }
-
     fn automatic_test_supervisor() -> ClusterSupervisor {
-        ClusterSupervisor::with_planner(
-            ClusterSupervisorConfig {
-                refresh_topology_each_tick: false,
-                automatically_rebalance: true,
-                retry_failed_relocations: true,
-                ..ClusterSupervisorConfig::default()
-            },
-            Box::new(TestPlacementPlanner),
-        )
-        .unwrap()
+        BalancedDistributionHostService::default()
+            .supervisor()
+            .unwrap()
     }
 
     #[derive(Debug)]
@@ -1785,7 +1763,7 @@ mod tests {
             cluster_id: cluster_id.clone(),
             node_id: leader_id.clone(),
             node_address: leader_address,
-            node_capacity_bytes: 10_000_000,
+            node_capacity_bytes: 1_073_741_824,
             replication_factor: 1,
             initial_ranges: 2,
             metadata_election_timeout_ms: 300,
@@ -1800,6 +1778,9 @@ mod tests {
         let initial =
             DistributionStore::initialize_at(leader_root.path(), distribution, false, now_ms)
                 .unwrap();
+        let event_client =
+            bicdb_core::ClusterEventClient::new(initial.config(), initial.topology().clone())
+                .unwrap();
         let rpc = TcpClusterRelocationTransport::from_topology(
             cluster_id,
             leader_id.clone(),
@@ -1813,6 +1794,26 @@ mod tests {
             fsync: false,
             ..PgWireConfig::default()
         };
+        {
+            let mut db = BicDb::open_with_config(
+                leader_root.path(),
+                database_config_for_server(leader_root.path(), &pgwire)
+                    .unwrap()
+                    .with_required_commit_admission(false),
+            )
+            .unwrap();
+            db.create_collection(bicdb_core::CLUSTER_EVENTS_COLLECTION)
+                .unwrap();
+            db.batch_insert(
+                bicdb_core::CLUSTER_EVENTS_COLLECTION,
+                (0..80).map(|number| {
+                    bicdb_core::Record::new(format!("join/document-{number:04}"))
+                        .with_metadata(json!({"number": number}))
+                }),
+            )
+            .unwrap();
+            db.close().unwrap();
+        }
         let leader_server = PgWireServer::open(leader_root.path(), pgwire.clone()).unwrap();
         start_distribution_supervisor(Arc::clone(&leader_server), automatic_test_supervisor());
         let election_deadline = Instant::now() + Duration::from_secs(10);
@@ -1838,7 +1839,7 @@ mod tests {
             learner_id.clone(),
             learner_address,
             1,
-            10_000_000,
+            1_073_741_824,
             cluster_now_ms(),
         )
         .unwrap()
@@ -1917,6 +1918,114 @@ mod tests {
             );
             thread::sleep(Duration::from_millis(25));
         }
+
+        // Joining a running cluster must add usable capacity without an
+        // operator-created rebalance plan. Check actual records at their new
+        // owner after the source cleanup, not only placement metadata.
+        let balance_deadline = Instant::now() + Duration::from_secs(30);
+        let balanced = loop {
+            let topology = open_distribution_store_for_test(leader_root.path())
+                .topology()
+                .clone();
+            if topology
+                .ranges
+                .values()
+                .any(|range| range.leader == learner_id)
+                && topology.relocations.values().any(|relocation| {
+                    relocation.target == learner_id
+                        && relocation.phase == bicdb_core::RelocationPhase::Completed
+                })
+                && !topology
+                    .relocations
+                    .values()
+                    .any(|relocation| relocation.phase != bicdb_core::RelocationPhase::Completed)
+            {
+                break topology;
+            }
+            assert!(
+                Instant::now() < balance_deadline,
+                "promoted member did not receive range data automatically: {topology:?}"
+            );
+            thread::sleep(Duration::from_millis(50));
+        };
+        let mut moved = 0;
+        for number in 0..80 {
+            let id = format!("join/document-{number:04}");
+            let range = balanced
+                .range_for_key(bicdb_core::CLUSTER_EVENTS_COLLECTION, &id)
+                .unwrap();
+            let (owner, other) = if range.leader == learner_id {
+                moved += 1;
+                (&learner_server, &leader_server)
+            } else {
+                (&leader_server, &learner_server)
+            };
+            assert_eq!(
+                owner
+                    .db
+                    .read()
+                    .get(bicdb_core::CLUSTER_EVENTS_COLLECTION, &id)
+                    .unwrap()
+                    .unwrap()
+                    .metadata,
+                json!({"number": number})
+            );
+            assert!(other
+                .db
+                .read()
+                .get(bicdb_core::CLUSTER_EVENTS_COLLECTION, &id)
+                .unwrap()
+                .is_none());
+        }
+        assert!(moved > 0 && moved < 80);
+
+        // This client still has the pre-join topology. The first request to a
+        // moved range must refresh its route, then use real quorum admission.
+        let new_key = (0..1000)
+            .map(|n| format!("new-{n}"))
+            .find(|key| {
+                balanced
+                    .range_for_key(
+                        bicdb_core::CLUSTER_EVENTS_COLLECTION,
+                        &format!("join/{key}"),
+                    )
+                    .unwrap()
+                    .leader
+                    == learner_id
+            })
+            .unwrap();
+        assert!(event_client
+            .append("join", &new_key, json!({"saved": true}))
+            .unwrap());
+        assert!(!event_client
+            .append("join", &new_key, json!({"saved": true}))
+            .unwrap());
+        assert!(event_client
+            .append("join", &new_key, json!({"saved": false}))
+            .is_err());
+        assert_eq!(
+            event_client.get("join", &new_key).unwrap(),
+            Some(json!({"saved": true}))
+        );
+        event_client
+            .append("other", "private-event", json!({"other": true}))
+            .unwrap();
+        let mut cursor = None;
+        let mut keys = std::collections::BTreeSet::new();
+        for page_number in 0..100 {
+            let page = event_client.scan("join", cursor, 7).unwrap();
+            assert!(page.events.len() <= 7);
+            for event in page.events {
+                assert_ne!(event.key, "private-event");
+                assert!(keys.insert(event.key), "duplicate event across ranges");
+            }
+            cursor = page.next;
+            if cursor.is_none() {
+                break;
+            }
+            assert!(page_number < 99, "event cursor failed to terminate");
+        }
+        assert_eq!(keys.len(), 81);
 
         leader_server.request_shutdown();
         learner_server.request_shutdown();

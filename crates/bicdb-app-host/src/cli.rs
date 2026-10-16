@@ -47,6 +47,9 @@ pub enum Command {
         /// Operator-pinned native state groups and HTTP routing origins.
         #[arg(long)]
         state_config: Option<PathBuf>,
+        /// Operator-owned application namespaces and local cluster member identity.
+        #[arg(long)]
+        events_config: Option<PathBuf>,
     },
     /// Run a leased compute worker attached to an authoritative state service.
     Worker {
@@ -193,6 +196,7 @@ pub fn run(cli: Cli) -> Result<()> {
             microvm_config,
             fleet_config,
             state_config,
+            events_config,
         } => {
             std::fs::create_dir_all(&cli.data)?;
             if !token_path.exists() {
@@ -208,7 +212,7 @@ pub fn run(cli: Cli) -> Result<()> {
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()?
-                .block_on(crate::server::serve(
+                .block_on(crate::server::serve_with_events(
                     cli.data,
                     listen,
                     token,
@@ -216,6 +220,7 @@ pub fn run(cli: Cli) -> Result<()> {
                     microvm_config,
                     fleet_config,
                     state_config,
+                    events_config,
                 ))
         }
         Command::Worker {

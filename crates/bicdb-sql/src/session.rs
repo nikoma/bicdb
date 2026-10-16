@@ -57,9 +57,26 @@ pub const PROTECTED_SECURITY_SETTINGS: [&str; 20] = [
 pub(crate) fn is_trusted_postgres_extension(name: &str) -> bool {
     matches!(
         name.trim_matches('"').to_ascii_lowercase().as_str(),
-        "btree_gin" | "btree_gist" | "citext" | "cube" | "dict_int" | "fuzzystrmatch" | "hstore"
-            | "intarray" | "isn" | "lo" | "ltree" | "pgcrypto" | "pg_trgm" | "plpgsql" | "seg"
-            | "tablefunc" | "tcn" | "tsm_system_rows" | "tsm_system_time" | "unaccent"
+        "btree_gin"
+            | "btree_gist"
+            | "citext"
+            | "cube"
+            | "dict_int"
+            | "fuzzystrmatch"
+            | "hstore"
+            | "intarray"
+            | "isn"
+            | "lo"
+            | "ltree"
+            | "pgcrypto"
+            | "pg_trgm"
+            | "plpgsql"
+            | "seg"
+            | "tablefunc"
+            | "tcn"
+            | "tsm_system_rows"
+            | "tsm_system_time"
+            | "unaccent"
             | "uuid-ossp"
     )
 }
@@ -5402,9 +5419,10 @@ pub(crate) fn statement_is_plain_query(statement: &Statement) -> bool {
         return false;
     };
     fn plain(query: &Query) -> bool {
-        let ctes_plain = query.with.as_ref().is_none_or(|with| {
-            with.cte_tables.iter().all(|cte| plain(&cte.query))
-        });
+        let ctes_plain = query
+            .with
+            .as_ref()
+            .is_none_or(|with| with.cte_tables.iter().all(|cte| plain(&cte.query)));
         ctes_plain && body_plain(query.body.as_ref())
     }
     fn body_plain(body: &SetExpr) -> bool {

@@ -478,14 +478,20 @@ mod tests {
             execute_server_sql(&server, &mut state, "BEGIN").unwrap();
             let claims = envelope(&server, &mut state, "solo", "");
             let delegated = execute_delegation(&server, &mut state, &signed_call(&claims, KEY));
-            assert_eq!(delegated.is_ok(), allow, "tenants {tenants:?}, allow_no_tenant {allow}");
+            assert_eq!(
+                delegated.is_ok(),
+                allow,
+                "tenants {tenants:?}, allow_no_tenant {allow}"
+            );
             if allow {
                 assert_eq!(state.security_context.as_ref().unwrap().user_id, "solo");
                 // A whitespace tenant is still malformed, and named tenants are not implied.
                 execute_server_sql(&server, &mut state, "ROLLBACK").unwrap();
                 execute_server_sql(&server, &mut state, "BEGIN").unwrap();
                 let named = envelope(&server, &mut state, "solo", "tenant-a");
-                assert!(execute_delegation(&server, &mut state, &signed_call(&named, KEY)).is_err());
+                assert!(
+                    execute_delegation(&server, &mut state, &signed_call(&named, KEY)).is_err()
+                );
             }
             execute_server_sql(&server, &mut state, "ROLLBACK").unwrap();
         }

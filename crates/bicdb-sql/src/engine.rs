@@ -756,8 +756,8 @@ impl ParameterTypeResolver<'_, '_> {
                 }
             }
             "lower" | "upper" | "trim" | "ltrim" | "rtrim" | "substr" | "substring" | "replace"
-            | "translate" | "initcap" | "md5" | "left" | "right" | "repeat" | "reverse" | "length"
-            | "char_length" | "character_length" | "position" | "strpos" => Some("text"),
+            | "translate" | "initcap" | "md5" | "left" | "right" | "repeat" | "reverse"
+            | "length" | "char_length" | "character_length" | "position" | "strpos" => Some("text"),
             "set_config" => Some("text"),
             "coalesce" | "nullif" | "greatest" | "least" | "ifnull" => common.as_deref(),
             "abs" | "ceil" | "ceiling" | "floor" | "round" | "mod" | "power" | "sqrt" => {
@@ -2309,9 +2309,9 @@ pub(crate) fn array_projection_set_returning_calls(
                         arguments.len()
                     )));
                 }
-                ArrayProjectionSetReturningFunction::GenerateSeries(
-                    generate_series_declared_kind(&arguments),
-                )
+                ArrayProjectionSetReturningFunction::GenerateSeries(generate_series_declared_kind(
+                    &arguments,
+                ))
             }
             other => other,
         };
@@ -2385,9 +2385,11 @@ pub(crate) fn generate_series_output_pg_type(argument_types: &[Option<String>]) 
         return Some(pg_type.to_string());
     }
     let declared = |names: &[&str]| {
-        argument_types
-            .iter()
-            .any(|pg_type| pg_type.as_deref().is_some_and(|pg_type| names.contains(&pg_type)))
+        argument_types.iter().any(|pg_type| {
+            pg_type
+                .as_deref()
+                .is_some_and(|pg_type| names.contains(&pg_type))
+        })
     };
     Some(
         if declared(&["numeric", "decimal"]) {
@@ -2402,7 +2404,10 @@ pub(crate) fn generate_series_output_pg_type(argument_types: &[Option<String>]) 
 }
 
 fn generate_series_integer_values(arguments: &[SqlValue]) -> Result<Vec<SqlValue>> {
-    if arguments.iter().any(|value| matches!(value, SqlValue::Null)) {
+    if arguments
+        .iter()
+        .any(|value| matches!(value, SqlValue::Null))
+    {
         return Ok(Vec::new());
     }
     let integer = |value: &SqlValue| {
@@ -3272,8 +3277,12 @@ pub(crate) trait RoutineCallHost: std::fmt::Debug {
     /// Call the stored function `name` with already-evaluated arguments for
     /// one row of `engine`'s statement, under `engine`'s transaction, role and
     /// settings.
-    fn call_function(&self, engine: &SqlEngine<'_>, name: &str, args: &[SqlValue])
-        -> Result<SqlValue>;
+    fn call_function(
+        &self,
+        engine: &SqlEngine<'_>,
+        name: &str,
+        args: &[SqlValue],
+    ) -> Result<SqlValue>;
 }
 
 // Nested maps so a cache probe is two zero-allocation hash lookups

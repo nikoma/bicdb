@@ -180,9 +180,7 @@ impl<'db> SqlSession<'db> {
                 RoutineControl::NextIteration => {
                     Err(SqlError::InvalidSql("CONTINUE escaped a loop".into()))
                 }
-                RoutineControl::ExitLoop => {
-                    Err(SqlError::InvalidSql("EXIT escaped a loop".into()))
-                }
+                RoutineControl::ExitLoop => Err(SqlError::InvalidSql("EXIT escaped a loop".into())),
                 RoutineControl::Return(value) => Ok(value),
                 RoutineControl::Continue => Ok(None),
             }

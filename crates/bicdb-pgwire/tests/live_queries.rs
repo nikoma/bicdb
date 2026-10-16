@@ -175,6 +175,12 @@ async fn a_feed_subscription_streams_changes_and_stops_on_cancel() {
         text_rows(&subscriber, "SELECT count(*) FROM posts").await,
         vec![vec![Some("4".to_string())]]
     );
+    // A join is re-run whole on every change to its tables.
+    let (_, full, incremental) = running.server.live_query_stats();
+    assert!(
+        full >= 5 && incremental == 0,
+        "full={full} incremental={incremental}"
+    );
     running.stop();
 }
 
@@ -283,6 +289,12 @@ async fn copy_subscribe_streams_text_rows_until_the_client_leaves() {
         text_rows(&writer, "SELECT n FROM counters").await,
         vec![vec![Some("5".to_string())]]
     );
+    // A grouped aggregate re-aggregates the affected groups only.
+    let (_, full, incremental) = running.server.live_query_stats();
+    assert!(
+        full == 0 && incremental >= 1,
+        "full={full} incremental={incremental}"
+    );
     running.stop();
 }
 
@@ -344,7 +356,166 @@ async fn subscriptions_run_with_the_subscribers_permissions() {
         .unwrap_or_else(|error| panic!("reader first row: {}", describe(error)));
     assert_eq!(first.get::<_, String>(1), "+");
     assert_eq!(first.get::<_, i32>(2), 1);
+    // Changes to other rows are evaluated for those rows only; a row that
+    // leaves the filter is a removal.
+    admin
+        .batch_execute(
+            "INSERT INTO secrets VALUES (2, 'y'); UPDATE secrets SET body = 'z' WHERE id = 1",
+        )
+        .await
+        .unwrap();
+    let mut seen = Vec::new();
+    while seen.len() < 1 {
+        let row = tokio::time::timeout(Duration::from_secs(10), stream.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        seen.push((row.get::<_, String>(1), row.get::<_, i32>(2)));
+    }
+    assert_eq!(seen, vec![("+".to_string(), 2)]);
+    let (_, full, incremental) = running.server.live_query_stats();
+    assert!(
+        full == 0 && incremental >= 1,
+        "full={full} incremental={incremental}"
+    );
     cancel.cancel_query(NoTls).await.unwrap();
     while let Some(Ok(_)) = stream.next().await {}
+    running.stop();
+}
+
+/// Drives a tokio-postgres connection and collects its notifications.
+fn notifying_client(
+    config: String,
+) -> impl std::future::Future<
+    Output = (
+        Client,
+        tokio::sync::mpsc::UnboundedReceiver<tokio_postgres::Notification>,
+    ),
+> {
+    async move {
+        let (client, mut connection) = tokio_postgres::connect(&config, NoTls).await.unwrap();
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            let mut messages =
+                futures_util::stream::poll_fn(move |context| connection.poll_message(context));
+            while let Some(message) = messages.next().await {
+                match message {
+                    Ok(tokio_postgres::AsyncMessage::Notification(notification)) => {
+                        let _ = sender.send(notification);
+                    }
+                    Ok(_) => {}
+                    Err(_) => break,
+                }
+            }
+        });
+        (client, receiver)
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn registered_subscriptions_share_a_connection_and_notify() {
+    let dir = tempfile::tempdir().unwrap();
+    let running = Running::start(dir.path());
+    let writer = running.client("bicdb").await;
+    seed_feed(&writer).await;
+    let config = format!(
+        "host=127.0.0.1 port={} user=bicdb dbname=bicdb",
+        running.address.port()
+    );
+    let (api, mut notifications) = notifying_client(config).await;
+
+    // One connection, one subscription per user; each returns its initial
+    // result like the streaming form.
+    let bob = api
+        .query(
+            "SUBSCRIBE feed_bob AS SELECT id, body FROM posts WHERE author = $1",
+            &[&"bob"],
+        )
+        .await
+        .unwrap();
+    assert_eq!(bob.len(), 1);
+    assert_eq!(bob[0].get::<_, String>(1), "+");
+    assert_eq!(bob[0].get::<_, i32>(2), 1);
+    let carol = api
+        .query(
+            "SUBSCRIBE feed_carol AS SELECT id, body FROM posts WHERE author = 'carol'",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(carol.len(), 1);
+    let (open, _, _) = running.server.live_query_stats();
+    assert_eq!(open, 2);
+
+    // A post by bob notifies feed_bob only; dave notifies nobody.
+    writer
+        .batch_execute("INSERT INTO posts VALUES (4, 'bob', 'second'); INSERT INTO posts VALUES (5, 'dave', 'nobody')")
+        .await
+        .unwrap();
+    let notification = tokio::time::timeout(Duration::from_secs(10), notifications.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(notification.channel(), "feed_bob");
+    let payload: serde_json::Value = serde_json::from_str(notification.payload()).unwrap();
+    assert_eq!(payload["change"], "+");
+    assert_eq!(payload["row"]["id"], "4");
+    assert_eq!(payload["row"]["body"], "second");
+    assert!(payload["commit_seq"].is_number());
+    // An edit on carol's post: a removal and an addition on feed_carol.
+    writer
+        .batch_execute("UPDATE posts SET body = 'edited' WHERE id = 3")
+        .await
+        .unwrap();
+    let mut changes = Vec::new();
+    for _ in 0..2 {
+        let notification = tokio::time::timeout(Duration::from_secs(10), notifications.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(notification.channel(), "feed_carol");
+        let payload: serde_json::Value = serde_json::from_str(notification.payload()).unwrap();
+        changes.push((
+            payload["change"].as_str().unwrap().to_string(),
+            payload["row"]["body"].as_str().unwrap().to_string(),
+        ));
+    }
+    assert_eq!(
+        changes,
+        vec![
+            ("-".to_string(), "hi".to_string()),
+            ("+".to_string(), "edited".to_string())
+        ]
+    );
+    // Nothing arrived for dave's post.
+    assert!(
+        tokio::time::timeout(Duration::from_millis(800), notifications.recv())
+            .await
+            .is_err()
+    );
+
+    // UNSUBSCRIBE stops one; dropping the connection drops the rest.
+    api.batch_execute("UNSUBSCRIBE feed_bob").await.unwrap();
+    assert_eq!(running.server.live_query_stats().0, 1);
+    let refused = api.batch_execute("UNSUBSCRIBE feed_bob").await.unwrap_err();
+    assert!(
+        refused
+            .as_db_error()
+            .map(|db| db.message().contains("no subscription named feed_bob"))
+            .unwrap_or(false),
+        "{refused}"
+    );
+    drop(api);
+    let cleared = tokio::time::timeout(Duration::from_secs(10), async {
+        while running.server.live_query_stats().0 != 0 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await;
+    assert!(
+        cleared.is_ok(),
+        "subscriptions of a closed connection linger"
+    );
     running.stop();
 }

@@ -1197,8 +1197,8 @@ impl<'db> SqlEngine<'db> {
                 let mut keys = Vec::with_capacity(on_exprs.len());
                 for on_expr in on_exprs {
                     let rendered = on_expr.to_string();
-                    let output = distinct_on_output_position(on_expr, &select.projection)
-                        .or_else(|| {
+                    let output =
+                        distinct_on_output_position(on_expr, &select.projection).or_else(|| {
                             select.projection.iter().position(|item| match item {
                                 SelectItem::UnnamedExpr(expr) => expr.to_string() == rendered,
                                 SelectItem::ExprWithAlias { expr, alias } => {
@@ -1219,7 +1219,8 @@ impl<'db> SqlEngine<'db> {
                         }
                     });
                 }
-                let source = source.map(|(rows, columns)| (rows, self.bound_row_context(columns).1));
+                let source =
+                    source.map(|(rows, columns)| (rows, self.bound_row_context(columns).1));
                 let mut seen = std::collections::BTreeSet::new();
                 let mut keep = Vec::with_capacity(result.rows.len());
                 for (index, row) in result.rows.iter().enumerate() {
@@ -3600,7 +3601,9 @@ fn distinct_on_output_position(expr: &Expr, projection: &[SelectItem]) -> Option
         return None;
     };
     let position = number.parse::<usize>().ok()?;
-    (1..=projection.len()).contains(&position).then(|| position - 1)
+    (1..=projection.len())
+        .contains(&position)
+        .then(|| position - 1)
 }
 
 /// PostgreSQL: "SELECT DISTINCT ON expressions must match initial ORDER BY
@@ -3619,8 +3622,9 @@ fn validate_distinct_on_order(
     };
     let canonical = |expr: &Expr| -> String {
         if let Some(position) = distinct_on_output_position(expr, projection) {
-            if let Some(SelectItem::UnnamedExpr(item) | SelectItem::ExprWithAlias { expr: item, .. }) =
-                projection.get(position)
+            if let Some(
+                SelectItem::UnnamedExpr(item) | SelectItem::ExprWithAlias { expr: item, .. },
+            ) = projection.get(position)
             {
                 return item.to_string();
             }
@@ -3645,7 +3649,8 @@ fn validate_distinct_on_order(
         if !pending.remove(&key) && !on_exprs.iter().any(|on| canonical(on) == key) {
             return Err(SqlError::data_exception_public(
                 "42P10",
-                "SELECT DISTINCT ON expressions must match initial ORDER BY expressions".to_string(),
+                "SELECT DISTINCT ON expressions must match initial ORDER BY expressions"
+                    .to_string(),
                 None,
             ));
         }

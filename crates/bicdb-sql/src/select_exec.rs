@@ -2733,7 +2733,10 @@ pub(crate) fn row_ordered_set_value(
             engine.check_cancellation()?;
         }
         if let Some(filter) = &aggregate.filter {
-            if !matches!(engine.eval_slot_row_truth(row, &context, filter)?, Some(true)) {
+            if !matches!(
+                engine.eval_slot_row_truth(row, &context, filter)?,
+                Some(true)
+            ) {
                 continue;
             }
         }
@@ -7014,7 +7017,11 @@ impl OrderedSetAggregate {
             OrderedSetKind::PercentileCont => Some("float8".to_string()),
             OrderedSetKind::PercentileDisc | OrderedSetKind::Mode => input_type,
         }?;
-        Some(if array { format!("{element}[]") } else { element })
+        Some(if array {
+            format!("{element}[]")
+        } else {
+            element
+        })
     }
 
     /// `values` are the non-filtered sort-key values of the group; `fraction`
@@ -7030,7 +7037,10 @@ impl OrderedSetAggregate {
         }
         let order = std::slice::from_ref(&self.order);
         entries.sort_by(|left, right| json_agg_entry_ordering(left, right, order));
-        let sorted = entries.into_iter().map(|(value, _)| value).collect::<Vec<_>>();
+        let sorted = entries
+            .into_iter()
+            .map(|(value, _)| value)
+            .collect::<Vec<_>>();
         if self.kind == OrderedSetKind::Mode {
             // The most frequent value; among equally frequent values the first
             // in sort order wins, as in PostgreSQL's mode_final.
@@ -7078,7 +7088,9 @@ impl OrderedSetAggregate {
                 return Ok(SqlValue::Float(low));
             }
             let high = as_float(&sorted[upper])?;
-            Ok(SqlValue::Float(low + (position - lower as f64) * (high - low)))
+            Ok(SqlValue::Float(
+                low + (position - lower as f64) * (high - low),
+            ))
         };
         let fractions = match &fraction {
             SqlValue::Json(_) => array_json_parts(&fraction, self.column_name().as_str())?,

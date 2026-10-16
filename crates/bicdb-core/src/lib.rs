@@ -135,6 +135,7 @@ pub use consensus::{
 pub use db::effective_fts_partitions;
 pub use db::index_predicate_matches;
 pub use db::AuthenticationStrength;
+pub use db::ChangedRecord;
 pub use db::FullTextBuildStep;
 pub use db::FullTextStoredTextPage;
 pub use db::{

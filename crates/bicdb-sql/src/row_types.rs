@@ -52,10 +52,18 @@ fn untyped_populate_call(factor: &TableFactor) -> Option<String> {
     };
     let name = object_name(name).ok()?;
     populate_record_kind(&name)?;
-    if alias.as_ref().is_some_and(|alias| !alias.columns.is_empty()) {
+    if alias
+        .as_ref()
+        .is_some_and(|alias| !alias.columns.is_empty())
+    {
         return None;
     }
-    Some(name.rsplit('.').next().unwrap_or(&name).to_ascii_lowercase())
+    Some(
+        name.rsplit('.')
+            .next()
+            .unwrap_or(&name)
+            .to_ascii_lowercase(),
+    )
 }
 
 fn table_factor_args(factor: &TableFactor) -> &[FunctionArg] {
@@ -282,12 +290,15 @@ impl Rewriter<'_> {
     /// Relation alias (or bare table name) -> base table, for whole-row references.
     fn from_bindings(&self, from: &[TableWithJoins]) -> BTreeMap<String, String> {
         let mut bindings = BTreeMap::new();
-        let factors = from
-            .iter()
-            .flat_map(|table| std::iter::once(&table.relation).chain(table.joins.iter().map(|join| &join.relation)));
+        let factors = from.iter().flat_map(|table| {
+            std::iter::once(&table.relation).chain(table.joins.iter().map(|join| &join.relation))
+        });
         for factor in factors {
             let TableFactor::Table {
-                name, alias, args: None, ..
+                name,
+                alias,
+                args: None,
+                ..
             } = factor
             else {
                 continue;
@@ -433,7 +444,11 @@ pub(crate) fn populate_record_call(function: &Function) -> Result<Option<(String
     if populate_record_kind(&name) != Some(false) {
         return Ok(None);
     }
-    let short = name.rsplit('.').next().unwrap_or(&name).to_ascii_lowercase();
+    let short = name
+        .rsplit('.')
+        .next()
+        .unwrap_or(&name)
+        .to_ascii_lowercase();
     let Ok(args) = <[Expr; 2]>::try_from(function_args(function)) else {
         return Err(SqlError::undefined_function(format!(
             "function {short} expects two arguments"
@@ -484,9 +499,8 @@ pub(crate) fn populate_record_value(
         SqlValue::Null => return Ok(base),
         SqlValue::Json(json) => json,
         SqlValue::JsonText(json) => json.parsed().clone(),
-        SqlValue::String(text) => serde_json::from_str(&text).map_err(|error| {
-            SqlError::invalid_text_representation("json", error.to_string())
-        })?,
+        SqlValue::String(text) => serde_json::from_str(&text)
+            .map_err(|error| SqlError::invalid_text_representation("json", error.to_string()))?,
         other => {
             return Err(SqlError::undefined_function(format!(
                 "function {short} does not accept {}",
@@ -499,7 +513,11 @@ pub(crate) fn populate_record_value(
             "22023",
             format!(
                 "cannot call {short} on {}",
-                if json.is_array() { "an array" } else { "a scalar" }
+                if json.is_array() {
+                    "an array"
+                } else {
+                    "a scalar"
+                }
             ),
             None,
         ));

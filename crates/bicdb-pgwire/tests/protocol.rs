@@ -9369,8 +9369,10 @@ fn pgwire_accepts_discard_all_for_client_pool_resets() {
     server_thread.join().unwrap().unwrap();
 }
 
+/// PostgreSQL READ COMMITTED: an uncommitted concurrent write is invisible,
+/// and once committed the next statement of the open transaction sees it.
 #[test]
-fn pgwire_read_committed_uses_transaction_snapshot_for_concurrent_commits() {
+fn pgwire_read_committed_statements_see_only_committed_concurrent_writes() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
@@ -9417,7 +9419,7 @@ fn pgwire_read_committed_uses_transaction_snapshot_for_concurrent_commits() {
     send_query(&mut reader, "SELECT COUNT(*) FROM rc_patients;");
     let (rows, status) = read_query_rows_with_status(&mut reader);
     assert_eq!(status, b'T');
-    assert_eq!(rows, vec![vec!["0".to_string()]]);
+    assert_eq!(rows, vec![vec!["1".to_string()]], "each READ COMMITTED statement sees rows committed before it starts");
 
     send_query(&mut reader, "ROLLBACK;");
     assert_eq!(read_query_rows_with_status(&mut reader).1, b'I');

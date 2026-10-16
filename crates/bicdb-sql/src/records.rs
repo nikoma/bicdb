@@ -1376,15 +1376,15 @@ pub(crate) fn is_unusable_typed_primary_key_index(
     })
 }
 
-/// The `<table>_pkey` index cannot answer lookups when the key lives in the
-/// record id rather than in an indexed field: a typed identity, or any key
-/// other than an `id` column (`seq bigint PRIMARY KEY`). Ranges over it found
-/// no rows, so `WHERE seq > $1` returned nothing; key lookups use the record
-/// id instead.
+/// The `<table>_pkey` index cannot answer lookups when the key lives only in
+/// the record id: a typed identity, or a single key column not named `id`
+/// (`seq bigint PRIMARY KEY`). Ranges over that index found no rows, so
+/// `WHERE seq > $1` returned nothing; such keys are found by the record id.
+/// Composite keys keep their columns in the row and their index works.
 pub(crate) fn primary_key_index_is_unreadable(schema: &TableSchema) -> bool {
     primary_key_requires_typed_identity(schema) || {
         let columns = primary_key_columns_for_schema(schema);
-        !matches!(columns.as_slice(), [column] if column.eq_ignore_ascii_case("id"))
+        matches!(columns.as_slice(), [column] if !column.eq_ignore_ascii_case("id"))
     }
 }
 

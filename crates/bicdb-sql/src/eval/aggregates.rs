@@ -1347,23 +1347,6 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if unqualified_name == "abs" {
             return projected_expr_pg_type(function_args(function).first()?, schema);
         }
-        // round/trunc/ceil/floor keep numeric (with or without a scale) and
-        // double precision; other arguments resolve to one of the two.
-        if matches!(
-            unqualified_name,
-            "round" | "trunc" | "ceil" | "ceiling" | "floor"
-        ) {
-            let args = function_args(function);
-            return match projected_expr_pg_type(args.first()?, schema).as_deref() {
-                Some("float4" | "float8" | "real" | "double precision") if args.len() == 1 => {
-                    Some("float8".to_string())
-                }
-                Some("numeric" | "decimal" | "int2" | "int4" | "int8" | "integer" | "bigint") => {
-                    Some("numeric".to_string())
-                }
-                _ => None,
-            };
-        }
         if matches!(
             unqualified_name,
             "array_append" | "array_remove" | "array_replace"

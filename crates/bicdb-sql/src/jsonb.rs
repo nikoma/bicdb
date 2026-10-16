@@ -489,10 +489,7 @@ fn numeric_arguments_as_json_numbers(
         let Some(expr) = expressions.get(index) else {
             continue;
         };
-        if !matches!(
-            crate::projected_expr_pg_type(expr, None).as_deref(),
-            Some("numeric" | "decimal")
-        ) {
+        if !numeric_json_expr(expr) {
             continue;
         }
         let Ok(number) = serde_json::from_str::<serde_json::Number>(text.trim()) else {
@@ -502,6 +499,26 @@ fn numeric_arguments_as_json_numbers(
             SqlValue::Json(JsonValue::Number(number));
     }
     normalized
+}
+
+/// A numeric-typed expression, including round(numeric, scale), whose text
+/// form the evaluator returns as a string.
+fn numeric_json_expr(expr: &Expr) -> bool {
+    if matches!(
+        crate::projected_expr_pg_type(expr, None).as_deref(),
+        Some("numeric" | "decimal")
+    ) {
+        return true;
+    }
+    let Expr::Function(function) = expr else {
+        return false;
+    };
+    let name = function.name.to_string().to_ascii_lowercase();
+    if name != "round" && name != "pg_catalog.round" {
+        return false;
+    }
+    let args = crate::function_args(function);
+    args.len() == 2 && numeric_json_expr(&args[0])
 }
 
 fn normalize_jsonb_literal_arguments(

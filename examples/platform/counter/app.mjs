@@ -1,6 +1,9 @@
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
+    if (request.method === 'GET' && path === '/live') {
+      return env.DB.stream('SELECT id, value FROM counters ORDER BY id', [], { signal: request.signal });
+    }
     if (request.method === 'POST' && path === '/increment') {
       const key = request.headers.get('idempotency-key');
       if (!key) return Response.json({ error: 'idempotency-key header required' }, { status: 400 });

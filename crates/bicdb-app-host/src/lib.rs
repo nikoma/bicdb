@@ -2,6 +2,7 @@
 pub mod cli;
 pub mod database;
 pub mod fleet;
+mod http_stream;
 pub mod manifest;
 pub mod microvm;
 pub mod recovery;

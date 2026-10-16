@@ -72,8 +72,9 @@ Runtime stdout and stderr go to the application log. Management log reads are
 bounded to the final 64 KiB. An operator must rotate the underlying log file.
 In the process tier the memory setting selects Node's old-space heap ceiling.
 The VM tier applies a total guest-memory ceiling. Request timeouts, request/response body limits and application concurrency
-admission apply at the gateway. Streaming responses and WebSocket forwarding
-are not implemented by this gateway.
+admission apply at the gateway. `text/event-stream` responses stream with bounded
+bytes and admission held until disconnect. Other responses retain the buffered
+16 MiB limit. WebSocket forwarding is not implemented.
 
 ## Database and jobs
 
@@ -90,6 +91,11 @@ const results = await env.DB.transaction([
 ], { idempotencyKey: 'operation-123', jobs: [{ action: 'refresh' }] });
 
 const conflicts = await env.DB.conflicts('notes');
+
+// A handler can return this live response after authenticating its user.
+const live = env.DB.stream('SELECT id, body FROM notes', [], {
+  signal: request.signal
+});
 
 await env.JOBS.send({ action: 'refresh' }, { idempotencyKey: 'refresh-123' });
 ```
@@ -130,6 +136,46 @@ Jobs do not enter selective edge record synchronization. Application recovery
 and native state replication remain separate from that synchronization protocol.
 Completed jobs and dead letters are retained; operators must account for their
 storage until retention and redrive management are exposed by the platform.
+
+## Reactive application queries
+
+The fetch adapter exposes `env.DB.subscribe(sql, params, { signal })` as an async
+iterator and `env.DB.stream(sql, params, { signal })` as a server-sent-events
+`Response`. A `node_http` application can POST `{ "sql": "SELECT ...", "params": [] }`
+to `BICDB_DATABASE_URL + "/subscribe"` with its scoped database token. Never send
+that token to browser clients. Expose a stream through an application handler
+that applies your application's user authorization.
+
+Each event has `initial`, `columns` and `changes`. Initial rows have `change: "+"`;
+a changed row emits its old value with `"-"` and its new value with `"+"`. Each
+change contains a `row` object and a decimal-string `commit_seq`. An empty initial
+result still emits an event, allowing a reconnecting client to clear old state.
+
+These APIs reuse the native incremental SELECT engine. Simple filters re-read
+changed keys; grouped aggregates update affected groups; other queries diff a
+fresh result when relevant tables change. Bursts coalesce: this is a live query,
+not a delivery log for every intermediate transaction. Reconnect for a fresh
+initial result after a release, failover or connection deadline; the API does
+not replay changes from a supplied sequence.
+
+Subscriptions accept one read-only SELECT over public application tables, bound
+parameters and supported pure built-in functions. Mutating CTEs, SELECT INTO,
+row locks, sequence functions, provider functions, extensions and private
+metadata are refused. Each evaluation has a five-second SQL deadline and accepts
+at most 10,000 rows or 1 MiB of results; a change batch is bounded to 2 MiB. There
+are at most 16 active subscriptions per application. Polling occurs at 250 ms
+intervals, with no unbounded notification queue or snapshot held between polls.
+A slow consumer applies backpressure to its own stream. Cancellation releases
+its admission after any in-flight evaluation finishes.
+
+A stream lasts at most the release's `request_timeout_ms` and transfers at most
+16 MiB. The process, remote-worker and microVM routes preserve event streaming.
+Stopping or replacing execution, losing native writer authority, or expiry of a
+worker lease ends the stream. Native query evaluations wait for synchronous
+acknowledgement before results can leave the state service.
+
+The counter example exposes `/apps/counter/live`. Open it with `curl -N` and
+increment the counter in another terminal to observe its changes.
 
 ## Upgrades and recovery
 

@@ -593,6 +593,9 @@ fn edge_failover(live_partition: bool) {
     );
     release.files.insert("app.mjs".into(), base64::engine::general_purpose::STANDARD.encode(r#"
 export default { async fetch(request, env) {
+  if (request.method === 'GET' && new URL(request.url).pathname === '/live') {
+    return env.DB.stream('SELECT * FROM notes ORDER BY id', [], {signal: request.signal});
+  }
   if (request.method === 'POST') {
     const { id } = await request.json();
     return Response.json(await env.DB.query('INSERT INTO notes VALUES ($1, $2) RETURNING id', [id, id]));
@@ -678,7 +681,26 @@ export default { async fetch(request, env) {
         read(&edge).is_some_and(|rows| rows.as_array().unwrap().len() == 2)
             && read(&group.base(2)).is_some_and(|rows| rows.as_array().unwrap().len() == 2)
     });
+    let mut live = if live_partition {
+        use std::io::BufRead;
+        let response = group
+            .client
+            .get(format!("{}/apps/counter/live", group.base(0)))
+            .send()
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+        let mut reader = std::io::BufReader::new(response);
+        let mut initial = String::new();
+        assert!(reader.read_line(&mut initial).unwrap() > 0 && initial.starts_with("data: "));
+        let mut delimiter = String::new();
+        reader.read_line(&mut delimiter).unwrap();
+        Some(reader)
+    } else {
+        None
+    };
     if let Some(network) = &group.network {
+        let isolated_at = Instant::now();
         network.isolate();
         // The previous writer is still reachable. An indeterminate local
         // commit must never be advertised to an independent edge.
@@ -696,6 +718,16 @@ export default { async fetch(request, env) {
             .send()
             .unwrap();
         assert!(!response.status().is_success());
+        if let Some(reader) = &mut live {
+            use std::io::BufRead;
+            let mut tail = String::new();
+            let ended = reader.read_line(&mut tail);
+            assert!(
+                isolated_at.elapsed() < Duration::from_secs(8),
+                "authority loss did not close the live stream before its request deadline"
+            );
+            assert!(ended.is_err() || ended.unwrap() == 0);
+        }
     } else {
         // Only the failed writer has the original standalone grant caches.
         group.kill(0);

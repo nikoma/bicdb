@@ -17,6 +17,8 @@ use crate::manifest::{Release, TableSync};
 
 mod deployment;
 mod jobs;
+mod live;
+pub use live::LiveQuery;
 mod peer_grants;
 
 const MIGRATIONS: &str = "__bic_platform_migrations";

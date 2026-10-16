@@ -374,6 +374,20 @@ async fn forward(
             result = result.header(name, value);
         }
     }
+    if crate::http_stream::is_events(response.headers()) {
+        let instance = _instance;
+        let body = crate::http_stream::body(response, (), move || {
+            instance.as_ref().is_some_and(|instance| {
+                instance.starting.load(Ordering::Acquire)
+                    || instance
+                        .running
+                        .lock()
+                        .as_ref()
+                        .is_some_and(|running| running.expires > Instant::now())
+            })
+        });
+        return result.body(body).map_err(|_| unavailable());
+    }
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|_| unavailable())? {
         if bytes.len().saturating_add(chunk.len()) > 16 * 1024 * 1024 {
@@ -468,6 +482,7 @@ pub async fn serve(
             // Only scoped database routes are exposed on guest-facing listeners.
             let router = Router::new()
                 .route("/internal/:name/query", post(forward))
+                .route("/internal/:name/subscribe", post(forward))
                 .route("/internal/:name/jobs", post(forward))
                 .route("/internal/:name/conflicts", post(forward))
                 .layer(DefaultBodyLimit::max(8 * 1024 * 1024))

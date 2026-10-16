@@ -33,6 +33,7 @@ use crate::{
 };
 
 const MAX_BODY: usize = MAX_RELEASE_BYTES * 4 / 3 + 2 * 1024 * 1024;
+mod live;
 mod state_lifecycle;
 
 pub struct Application {
@@ -46,6 +47,7 @@ pub struct Application {
     admission: Mutex<Arc<Semaphore>>,
     error: Mutex<Option<String>>,
     api_admission: Mutex<Arc<Semaphore>>,
+    live_admission: Arc<Semaphore>,
     peers: Mutex<BTreeMap<String, crate::sync::Peer>>,
     peer_cipher: Option<crate::sync::PeerCipher>,
     sync_status: Mutex<BTreeMap<String, crate::sync::SyncStatus>>,
@@ -229,6 +231,7 @@ impl Platform {
             api_admission: Mutex::new(Arc::new(Semaphore::new(
                 release.manifest.resources.max_concurrent_requests.min(8),
             ))),
+            live_admission: Arc::new(Semaphore::new(16)),
             deployment: Mutex::new(deployment.clone()),
             database,
             replica,
@@ -542,6 +545,7 @@ pub fn router(platform: Arc<Platform>) -> Router {
         .route("/sync/:name/vector", post(sync_vector))
         .route("/sync/:name/exchange", post(sync_exchange))
         .route("/internal/:name/query", post(query))
+        .route("/internal/:name/subscribe", post(live::subscribe))
         .route("/internal/:name/jobs", post(enqueue))
         .route("/internal/:name/conflicts", post(conflicts))
         .route("/apps/:name", axum::routing::any(proxy))
@@ -896,6 +900,26 @@ async fn forward(
     app.require_authority()?;
     let status = response.status();
     let headers = response.headers().clone();
+    if crate::http_stream::is_events(&headers) {
+        let mut result = Response::builder().status(status);
+        for (name, value) in &headers {
+            if !hop_header(name.as_str()) {
+                result = result.header(name, value);
+            }
+        }
+        let app = app.clone();
+        let body = crate::http_stream::body(response, _permit, move || {
+            app.authoritative()
+                && app
+                    .process
+                    .lock()
+                    .as_ref()
+                    .is_some_and(|execution| execution.token() == execution_token)
+        });
+        return result
+            .body(body)
+            .map_err(|_| ApiError(StatusCode::BAD_GATEWAY, "invalid application stream".into()));
+    }
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|error| {
         if error.is_timeout() {
@@ -1102,6 +1126,9 @@ pub async fn serve(
             axum::serve(listener, internal_router(platform)).await
         }));
     }
+    // Lease fencing must be independently scheduled even while another
+    // supervisor loop is waiting for storage or a peer exchange.
+    let fencing = tokio::spawn(state_lifecycle::fence(platform.clone()));
     let recovery = tokio::task::spawn_blocking({
         let platform = platform.clone();
         move || platform.recover()
@@ -1120,8 +1147,7 @@ pub async fn serve(
                 supervise(platform.clone()),
                 jobs(platform.clone()),
                 synchronize(platform.clone()),
-                state_lifecycle::run(platform.clone()),
-                state_lifecycle::fence(platform)
+                state_lifecycle::run(platform)
             );
         }
     });
@@ -1130,6 +1156,7 @@ pub async fn serve(
         .with_graceful_shutdown(shutdown_signal())
         .await;
     supervision.abort();
+    fencing.abort();
     for task in private_tasks {
         task.abort();
     }
@@ -1290,10 +1317,10 @@ async fn sync_exchange(
     let app = platform.app(&name)?;
     let _gate = app.gate.read().await;
     peer_auth(&app, &headers, &exchange.identity)?;
-    validate_origins(&app, &exchange)?;
     let response = blocking({
         let app = app.clone();
         move || {
+            validate_origins(&app, &exchange)?;
             let release = app.release.lock().clone();
             let digest = app.deployment.lock().release.clone();
             let vector = exchange.vector.clone();
@@ -1311,7 +1338,12 @@ async fn sync_peer(
     app: Arc<Application>,
     peer: crate::sync::Peer,
 ) -> Result<()> {
-    let local = { crate::sync::identity(&*app.database.lock()?, &app.deployment.lock().release)? };
+    let local = blocking({
+        let app = app.clone();
+        move || crate::sync::identity(&*app.database.lock()?, &app.deployment.lock().release)
+    })
+    .await
+    .map_err(|error| anyhow::anyhow!(error.1))?;
     let name = app.deployment.lock().application.clone();
     let base = peer.endpoint.trim_end_matches('/');
     let response = platform
@@ -1362,8 +1394,8 @@ async fn sync_peer(
     }
     let exchange: crate::sync::Exchange = serde_json::from_slice(&bytes)?;
     crate::sync::verify_identity(&peer, &exchange.identity, &expected_release)?;
-    validate_origins(&app, &exchange)?;
     blocking(move || {
+        validate_origins(&app, &exchange)?;
         let release = app.release.lock().clone();
         let mut database = app.database.lock()?;
         crate::sync::import(&mut database, &release, exchange)
@@ -1643,6 +1675,7 @@ async fn backup(
 fn internal_router(platform: Arc<Platform>) -> Router {
     Router::new()
         .route("/internal/:name/query", post(query))
+        .route("/internal/:name/subscribe", post(live::subscribe))
         .route("/internal/:name/jobs", post(enqueue))
         .route("/internal/:name/conflicts", post(conflicts))
         .layer(DefaultBodyLimit::max(8 * 1024 * 1024))

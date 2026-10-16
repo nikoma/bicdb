@@ -14,11 +14,59 @@ async function call(path, body) {
   if (!response.ok) throw new Error(value.error || 'database request failed');
   return value;
 }
+async function* subscribe(sql, params = [], options = {}) {
+  const response = await fetch(endpoint + '/subscribe', {
+    method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ sql, params }), signal: options.signal,
+  });
+  if (!response.ok) {
+    const value = await response.json();
+    throw new Error(value.error || 'live query failed');
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      if (buffer.length > 4 * 1024 * 1024) throw new Error('live query frame too large');
+      for (;;) {
+        const end = buffer.indexOf('\n\n');
+        if (end < 0) break;
+        const frame = buffer.slice(0, end); buffer = buffer.slice(end + 2);
+        if (frame.startsWith('data: ')) yield JSON.parse(frame.slice(6));
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+function liveResponse(sql, params = [], options = {}) {
+  const controller = new AbortController();
+  const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+  const iterator = subscribe(sql, params, { signal });
+  const encoder = new TextEncoder();
+  return new Response(new ReadableStream({
+    async pull(stream) {
+      try {
+        const { value, done } = await iterator.next();
+        if (done) stream.close();
+        else stream.enqueue(encoder.encode(`data: ${JSON.stringify(value)}\n\n`));
+      } catch (error) { stream.error(error); }
+    },
+    async cancel() { controller.abort(); await iterator.return().catch(() => {}); },
+  }), { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' } });
+}
 function rows(result) {
   return result.rows.map(row => Object.fromEntries(result.columns.map((column, i) => [column, row[i]])));
 }
 const env = Object.freeze({
   DB: Object.freeze({
+    subscribe,
+    stream: liveResponse,
     async conflicts(table) { return call('/conflicts', { table }); },
     async query(sql, params = []) { return rows((await call('/query', { statements: [{ sql, params }] }))[0]); },
     async transaction(statements, options = {}) {
@@ -31,6 +79,8 @@ const env = Object.freeze({
 });
 const maximum = 8 * 1024 * 1024;
 const server = http.createServer(async (incoming, outgoing) => {
+  const lifetime = new AbortController();
+  outgoing.once('close', () => lifetime.abort());
   try {
     const url = new URL(incoming.url, 'http://application.local');
     if (url.pathname.startsWith('/__bic/')) {
@@ -50,7 +100,7 @@ const server = http.createServer(async (incoming, outgoing) => {
     for (let i = 0; i < incoming.rawHeaders.length; i += 2) {
       if (!incoming.rawHeaders[i].toLowerCase().startsWith('x-bic-')) headers.append(incoming.rawHeaders[i], incoming.rawHeaders[i + 1]);
     }
-    const request = new Request(url, { method, headers, ...(['GET', 'HEAD'].includes(method) ? {} : { body: Buffer.concat(chunks) }) });
+    const request = new Request(url, { method, headers, signal: lifetime.signal, ...(['GET', 'HEAD'].includes(method) ? {} : { body: Buffer.concat(chunks) }) });
     const response = await application.fetch(request, env);
     if (!(response instanceof Response)) throw new Error('fetch handler must return a Response');
     outgoing.statusCode = response.status;
@@ -59,7 +109,11 @@ const server = http.createServer(async (incoming, outgoing) => {
     if (cookies.length) outgoing.setHeader('set-cookie', cookies);
     if (response.body && method !== 'HEAD') {
       for await (const chunk of response.body) {
-        if (!outgoing.write(chunk)) await new Promise(resolve => outgoing.once('drain', resolve));
+        if (outgoing.destroyed) break;
+        if (!outgoing.write(chunk)) await new Promise(resolve => {
+          const finish = () => { outgoing.off('drain', finish); outgoing.off('close', finish); resolve(); };
+          outgoing.once('drain', finish); outgoing.once('close', finish);
+        });
       }
     }
     outgoing.end();

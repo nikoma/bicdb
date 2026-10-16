@@ -130,6 +130,21 @@ fn remote_microvm_reconnects_to_authoritative_state_after_worker_crash() {
         response.text().unwrap()
     );
     let app = format!("{state_base}/apps/counter");
+    let started = Instant::now();
+    let mut live = std::io::BufReader::new(
+        client
+            .get(format!("{app}/live"))
+            .send()
+            .unwrap()
+            .error_for_status()
+            .unwrap(),
+    );
+    let initial = live_event(&mut live);
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "microVM event response was buffered"
+    );
+    assert_eq!(initial["initial"], true);
     let result = client
         .post(format!("{app}/increment-and-enqueue"))
         .header("idempotency-key", "vm-job")
@@ -140,6 +155,17 @@ fn remote_microvm_reconnects_to_authoritative_state_after_worker_crash() {
         .json::<Value>()
         .unwrap();
     assert_eq!(result, json!({"value":1}));
+    loop {
+        let changes = live_event(&mut live);
+        if changes["changes"].as_array().unwrap().iter().any(|change| {
+            change["change"] == "+"
+                && change["row"]["id"] == "requests"
+                && change["row"]["value"] == 1
+        }) {
+            break;
+        }
+    }
+    drop(live);
     let record = worker_root.join("apps/counter/microvm-process.json");
     let previous: Value = serde_json::from_slice(&std::fs::read(&record).unwrap()).unwrap();
     worker.kill();
@@ -201,6 +227,24 @@ fn remote_microvm_reconnects_to_authoritative_state_after_worker_crash() {
     });
     drop(state);
     drop(worker);
+}
+fn live_event(reader: &mut impl std::io::BufRead) -> Value {
+    let mut value = None;
+    loop {
+        let mut line = String::new();
+        assert!(
+            reader.read_line(&mut line).unwrap() > 0,
+            "remote live stream ended"
+        );
+        if let Some(data) = line.strip_prefix("data: ") {
+            value = Some(serde_json::from_str(data.trim()).unwrap());
+        }
+        if line.trim().is_empty() {
+            if let Some(value) = value.take() {
+                return value;
+            }
+        }
+    }
 }
 fn port() -> u16 {
     TcpListener::bind("127.0.0.1:0")

@@ -30,6 +30,9 @@
 //! mode); `COPY (SUBSCRIBE ...) TO STDOUT` streams them as COPY data, which
 //! `psql` prints as they arrive. A subscription ends when the client cancels
 //! the statement (`SQLSTATE 57014`) or disconnects.
+mod embedded;
+pub use embedded::EmbeddedSubscription;
+
 use super::*;
 use sqlparser::ast::{
     visit_expressions, visit_relations, BinaryOperator, Expr, GroupByExpr, Ident, ObjectName,

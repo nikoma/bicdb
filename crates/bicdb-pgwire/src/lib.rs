@@ -19,6 +19,7 @@ mod embedded_ha;
 mod high_availability;
 pub use embedded_ha::{EmbeddedHaDatabase, HaWriterLease};
 mod live_queries;
+pub use live_queries::EmbeddedSubscription;
 mod log_archive;
 mod metrics;
 pub(crate) use checkpoint_driver::*;

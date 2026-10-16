@@ -724,3 +724,116 @@ fn stopped_and_replaced_execution_credentials_cannot_query_the_application() {
     );
     assert_eq!(service.state()[1]["value"], 0);
 }
+
+#[test]
+fn live_sql_streams_updates_and_releases_admission_when_consumers_disconnect() {
+    use std::io::{BufRead, BufReader};
+    let service = Service::start();
+    let release = fixture();
+    let response = service.deploy(&release);
+    assert!(
+        response.status().is_success(),
+        "{}",
+        response.text().unwrap()
+    );
+    let open = || {
+        let started = Instant::now();
+        loop {
+            let response = service
+                .client
+                .get(format!("{}/apps/counter/live", service.base()))
+                .send()
+                .unwrap();
+            if response.status() != 429 {
+                break response.error_for_status().unwrap();
+            }
+            assert!(
+                started.elapsed() < Duration::from_secs(5),
+                "cancelled live query leaked admission"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    fn event(reader: &mut impl BufRead) -> Value {
+        let mut value = None;
+        loop {
+            let mut line = String::new();
+            assert!(
+                reader.read_line(&mut line).unwrap() > 0,
+                "live response ended before an event"
+            );
+            if let Some(data) = line.strip_prefix("data: ") {
+                value = Some(serde_json::from_str(data.trim()).unwrap());
+            }
+            if line.trim().is_empty() {
+                if let Some(value) = value.take() {
+                    return value;
+                }
+            }
+        }
+    }
+    let response = open();
+    assert!(response.headers()["content-type"]
+        .to_str()
+        .unwrap()
+        .starts_with("text/event-stream"));
+    let mut reader = BufReader::new(response);
+    let initial = event(&mut reader);
+    assert_eq!(initial["initial"], true);
+    assert_eq!(initial["changes"].as_array().unwrap().len(), 2);
+    let response = service
+        .client
+        .post(format!("{}/apps/counter/increment", service.base()))
+        .header("idempotency-key", "live-update")
+        .send()
+        .unwrap();
+    assert!(
+        response.status().is_success(),
+        "{}",
+        response.text().unwrap()
+    );
+    let changed = event(&mut reader);
+    assert_eq!(changed["initial"], false);
+    assert!(changed["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|change| change["change"] == "+"
+            && change["row"]["id"] == "requests"
+            && change["row"]["value"] == 1));
+    assert!(changed["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|change| change["commit_seq"].is_string()));
+    drop(reader);
+    // More than the live admission ceiling, sequentially: cancellation must
+    // release each permit rather than leaking it until the connection deadline.
+    for _ in 0..20 {
+        let mut reader = BufReader::new(open());
+        assert_eq!(event(&mut reader)["initial"], true);
+        drop(reader);
+    }
+    let mut reader = BufReader::new(open());
+    event(&mut reader);
+    // An active subscription cannot hold the application deployment gate open.
+    let response = service
+        .client
+        .post(format!("{}/v1/apps/counter/stop", service.base()))
+        .bearer_auth(service.token())
+        .send()
+        .unwrap();
+    assert!(
+        response.status().is_success(),
+        "{}",
+        response.text().unwrap()
+    );
+    let mut tail = String::new();
+    let started = Instant::now();
+    let stopped = reader.read_line(&mut tail);
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "revoked stream did not terminate promptly"
+    );
+    assert!(stopped.is_err() || stopped.unwrap() == 0);
+}

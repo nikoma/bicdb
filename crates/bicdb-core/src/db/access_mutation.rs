@@ -23,7 +23,7 @@ impl BicDb {
     pub fn get_stored(&self, collection: &str, id: &str) -> Result<Option<VisibleRow>> {
         self.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         if let Some(paged) = &self.paged_records {
-            let _ = self.collection_state(collection)?;
+            drop(self.collection_state(collection)?);
             let snapshot = paged.latest_snapshot();
             return Ok(paged
                 .get(&snapshot, collection, id)?
@@ -42,7 +42,7 @@ impl BicDb {
             // so a read of an unknown collection errors identically in both
             // modes rather than silently returning None. The guard is dropped
             // immediately — only the existence check is wanted.
-            let _ = self.collection_state(collection)?;
+            drop(self.collection_state(collection)?);
             let snapshot = paged.latest_snapshot();
             return Ok(paged.get(&snapshot, collection, id)?.map(Arc::new));
         }
@@ -396,7 +396,7 @@ impl BicDb {
             ));
         }
         if let Some(paged) = &self.paged_records {
-            let _ = self.collection_state(collection)?;
+            drop(self.collection_state(collection)?);
             let snapshot = paged.latest_snapshot();
             return paged.scan_batch_after(&snapshot, collection, after_id, max_rows, max_bytes);
         }
@@ -444,7 +444,7 @@ impl BicDb {
             ));
         }
         if let Some(paged) = &self.paged_records {
-            let _ = self.collection_state(collection)?;
+            drop(self.collection_state(collection)?);
             let snapshot = paged.latest_snapshot();
             return paged
                 .scan_locality_batch_after(&snapshot, collection, after_id, max_rows, max_bytes);
@@ -471,7 +471,7 @@ impl BicDb {
         if let Some(paged) = &self.paged_records {
             // Shards are a touched-rows cache in paged mode; the page store is
             // the complete view.
-            let _ = self.collection_state(collection)?;
+            drop(self.collection_state(collection)?);
             let snapshot = paged.latest_snapshot();
             let mut ids = paged
                 .scan(&snapshot, collection)?
@@ -512,7 +512,7 @@ impl BicDb {
         let mut sampler = AnalyzeSampler::new(limit, collection);
         let mut records = Vec::<Record>::new();
         if let Some(paged) = &self.paged_records {
-            let _ = self.collection_state(collection)?;
+            drop(self.collection_state(collection)?);
             let snapshot = paged.latest_snapshot();
             for record in paged.scan(&snapshot, collection)? {
                 let record = record?;
@@ -545,7 +545,7 @@ impl BicDb {
 
     pub fn scan_collection_unchecked(&self, collection: &str) -> Result<Vec<Record>> {
         if let Some(paged) = &self.paged_records {
-            let _ = self.collection_state(collection)?;
+            drop(self.collection_state(collection)?);
             let snapshot = paged.latest_snapshot();
             let mut records = paged
                 .scan(&snapshot, collection)?

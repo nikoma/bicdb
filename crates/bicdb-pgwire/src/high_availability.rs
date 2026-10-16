@@ -512,8 +512,6 @@ fn refuse(stream: &mut dyn ReplicationStream, message: &str) -> PgWireError {
     PgWireError::Server(format!("replication refused: {message}"))
 }
 
-/// Authenticates one standby and streams to it until the connection ends.
-
 /// Authenticates one peer and serves what it asks for: a standby's stream, a
 /// vote, or a primary's ping.
 fn serve_peer(

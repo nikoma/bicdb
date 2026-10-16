@@ -134,6 +134,22 @@ impl Database {
     }
 
     pub fn query(&mut self, batch: &QueryBatch) -> Result<Vec<SqlResult>> {
+        self.query_with_deadline(
+            batch,
+            std::time::Instant::now() + std::time::Duration::from_secs(30),
+        )
+    }
+
+    pub fn query_with_deadline(
+        &mut self,
+        batch: &QueryBatch,
+        deadline: std::time::Instant,
+    ) -> Result<Vec<SqlResult>> {
+        let cancellation = bicdb_core::CancellationToken::new(
+            std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            Some(deadline),
+        );
+        cancellation.check()?;
         ensure!(
             (!batch.statements.is_empty() || !batch.jobs.is_empty())
                 && batch.statements.len() <= 128
@@ -171,7 +187,7 @@ impl Database {
                 !key.is_empty() && key.len() <= 256,
                 "invalid idempotency key"
             );
-            let mut session = SqlSession::new(&mut self.db);
+            let mut session = SqlSession::new(&mut self.db).with_cancellation(cancellation.clone());
             let rows = session
                 .execute(&format!(
                     "SELECT digest, result FROM {RECEIPTS} WHERE key = {}",
@@ -190,7 +206,7 @@ impl Database {
             }
         }
         // One database mutex covers receipt lookup, transaction and commit.
-        let mut session = SqlSession::new(&mut self.db);
+        let mut session = SqlSession::new(&mut self.db).with_cancellation(cancellation.clone());
         session.execute("BEGIN")?;
         let mut results = Vec::new();
         for query in &batch.statements {

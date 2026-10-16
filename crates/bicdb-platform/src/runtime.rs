@@ -12,6 +12,9 @@ use crate::store::atomic_write;
 pub struct Process {
     child: Child,
     pub address: SocketAddr,
+    pub client: reqwest::Client,
+    microvm: Option<crate::microvm::Resources>,
+    stopped: bool,
 }
 
 impl Process {
@@ -62,34 +65,56 @@ impl Process {
             .stdin(Stdio::null())
             .stdout(Stdio::from(log.try_clone()?))
             .stderr(Stdio::from(log));
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            let parent_pid = std::process::id();
-            unsafe {
-                command.pre_exec(move || {
-                    if libc::setpgid(0, 0) != 0 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                    #[cfg(target_os = "linux")]
-                    {
-                        if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
-                            return Err(std::io::Error::last_os_error());
-                        }
-                        if libc::getppid() != parent_pid as i32 {
-                            return Err(std::io::Error::other("supervisor exited before launch"));
-                        }
-                    }
-                    Ok(())
-                });
-            }
+        let client = upstream_client()?;
+        let child = spawn_supervised(&mut command)?;
+        Ok(Self {
+            child,
+            address,
+            client,
+            microvm: None,
+            stopped: false,
+        })
+    }
+
+    pub(crate) fn from_microvm(
+        child: Child,
+        address: SocketAddr,
+        resources: crate::microvm::Resources,
+        client: reqwest::Client,
+    ) -> Self {
+        Self {
+            child,
+            address,
+            client,
+            microvm: Some(resources),
+            stopped: false,
         }
-        let child = command.spawn().context("start application runtime")?;
-        Ok(Self { child, address })
     }
 
     pub fn exited(&mut self) -> Result<bool> {
-        Ok(self.child.try_wait()?.is_some())
+        if self.stopped {
+            return Ok(true);
+        }
+        #[cfg(target_os = "linux")]
+        unsafe {
+            // Retain an exited group leader until stop() kills its remaining
+            // children. Reaping it early would permit numeric PID reuse.
+            let mut status: libc::siginfo_t = std::mem::zeroed();
+            if libc::waitid(
+                libc::P_PID,
+                self.child.id(),
+                &mut status,
+                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+            ) != 0
+            {
+                return Err(std::io::Error::last_os_error().into());
+            }
+            Ok(status.si_pid() != 0)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            Ok(self.child.try_wait()?.is_some())
+        }
     }
 
     pub fn wait_ready(&mut self, release: &Release, token: &str) -> Result<()> {
@@ -123,12 +148,31 @@ impl Process {
     }
 
     pub fn stop(&mut self) {
-        #[cfg(unix)]
-        unsafe {
-            libc::kill(-(self.child.id() as i32), libc::SIGKILL);
+        if self.stopped {
+            return;
         }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        self.stopped = true;
+        #[cfg(target_os = "linux")]
+        {
+            // exited() does not reap on Linux, so the process-group identity
+            // remains reserved until all children have received termination.
+            unsafe {
+                libc::kill(-(self.child.id() as i32), libc::SIGKILL);
+            }
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            if !self.child.try_wait().is_ok_and(|status| status.is_some()) {
+                unsafe {
+                    libc::kill(-(self.child.id() as i32), libc::SIGKILL);
+                }
+                let _ = self.child.kill();
+                let _ = self.child.wait();
+            }
+        }
+        self.microvm.take();
     }
 }
 
@@ -136,6 +180,40 @@ impl Drop for Process {
     fn drop(&mut self) {
         self.stop();
     }
+}
+
+pub(crate) fn upstream_client() -> Result<reqwest::Client> {
+    Ok(reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(Duration::from_secs(2))
+        .build()?)
+}
+
+pub(crate) fn spawn_supervised(command: &mut Command) -> Result<Child> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let parent_pid = std::process::id();
+        unsafe {
+            command.pre_exec(move || {
+                if libc::setpgid(0, 0) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    if libc::getppid() != parent_pid as i32 {
+                        return Err(std::io::Error::other("supervisor exited before launch"));
+                    }
+                }
+                Ok(())
+            });
+        }
+    }
+    command.spawn().context("start application runtime")
 }
 
 pub fn find_node(requested: Option<&Path>) -> Result<std::path::PathBuf> {

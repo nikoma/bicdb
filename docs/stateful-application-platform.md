@@ -4,10 +4,11 @@ The `bic` binary provides an application supervisor, HTTP routing, a persistent
 BicDB database for each application, and durable background delivery. It is built
 from this repository and uses the public database APIs.
 
-This is an initial implementation for trusted applications on a Unix host. The
-Node processes share the host's operating-system authority. They are not a
-security boundary between mutually untrusted tenants. Existing signed WASM
-application hosting remains available through `bicdb app`.
+The default process tier runs trusted applications on a Unix host with the
+host user's operating-system authority. Optional [microVM execution](platform-microvm.md)
+provides a jailed Linux guest for application code and private, scoped database
+access. Existing signed WASM application hosting remains available through
+`bicdb app`.
 
 ## Run an application
 
@@ -64,8 +65,8 @@ return success from `/health`. It receives `BICDB_DATABASE_URL` and the scoped
 
 Runtime stdout and stderr go to the application log. Management log reads are
 bounded to the final 64 KiB. An operator must rotate the underlying log file.
-The memory setting selects Node's old-space heap ceiling; it is not an OS memory
-limit. Request timeouts, request/response body limits and application concurrency
+In the process tier the memory setting selects Node's old-space heap ceiling.
+The VM tier applies a total guest-memory ceiling. Request timeouts, request/response body limits and application concurrency
 admission apply at the gateway. Streaming responses and WebSocket forwarding
 are not implemented by this gateway.
 
@@ -112,8 +113,8 @@ to each application instance and does not enter record synchronization.
 Only one supervisor may own a platform directory. Requests and active job
 handlers drain before a deployment changes its application process. Unexpected
 process exits trigger a restart. Execution deadlines terminate a blocked
-runtime, which the supervisor replaces while retaining its database. On Linux, a child is killed if its supervisor
-dies. Restarting the supervisor loads the committed deployment catalog and
+runtime, which the supervisor replaces while retaining its database. Linux process-tier children are terminated on supervisor death. The VM tier
+records and fences surviving VMM identities during recovery. Restarting the supervisor loads the committed deployment catalog and
 reopens the database with fsync enabled.
 
 Each migration and its content hash commit together. Applied migrations must

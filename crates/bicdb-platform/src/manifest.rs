@@ -16,6 +16,8 @@ pub struct Manifest {
     pub name: String,
     pub version: String,
     pub runtime: Runtime,
+    #[serde(default, skip_serializing_if = "Isolation::is_process")]
+    pub isolation: Isolation,
     pub entrypoint: String,
     pub files: Vec<String>,
     #[serde(default)]
@@ -24,6 +26,20 @@ pub struct Manifest {
     pub resources: Resources,
     #[serde(default)]
     pub sync: BTreeMap<String, TableSync>,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Isolation {
+    #[default]
+    Process,
+    Microvm,
+}
+
+impl Isolation {
+    fn is_process(&self) -> bool {
+        *self == Self::Process
+    }
 }
 
 /// Public-table synchronization policy. Cross-table constraints remain local.
@@ -208,6 +224,12 @@ impl Release {
             (1..=4096).contains(&m.resources.max_concurrent_requests),
             "concurrency outside supported range"
         );
+        if m.isolation == Isolation::Microvm {
+            ensure!(
+                m.resources.memory_mb >= 128,
+                "microVM memory_mb must be at least 128"
+            );
+        }
         for table in m.sync.keys() {
             ensure!(
                 table.len() <= 63

@@ -37,10 +37,11 @@ pub struct Application {
     database: Mutex<Database>,
     process: Mutex<Option<Process>>,
     release: Mutex<Release>,
-    token: String,
+    token: Mutex<String>,
     gate: RwLock<()>,
     admission: Mutex<Arc<Semaphore>>,
     error: Mutex<Option<String>>,
+    api_admission: Arc<Semaphore>,
     peers: Mutex<BTreeMap<String, crate::sync::Peer>>,
     sync_status: Mutex<BTreeMap<String, crate::sync::SyncStatus>>,
 }
@@ -51,6 +52,7 @@ pub struct Platform {
     admin: tokio::sync::Mutex<()>,
     token: String,
     node: PathBuf,
+    microvm: Option<crate::microvm::Host>,
     endpoint: String,
     client: reqwest::Client,
     recovering: AtomicBool,
@@ -84,23 +86,31 @@ impl Platform {
         token: String,
         node: Option<&Path>,
         endpoint: String,
+        microvm_config: Option<&Path>,
     ) -> Result<Arc<Self>> {
         ensure!(
             token.len() >= 32 && !token.chars().any(char::is_whitespace),
             "management token must contain at least 32 non-whitespace characters"
         );
+        let node = find_node(node)?;
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(Duration::from_secs(2))
+            .build()?;
+        let store = Store::open(root)?;
+        let microvm = microvm_config
+            .map(|path| crate::microvm::Host::open(path, &store.root))
+            .transpose()?;
         Ok(Arc::new(Self {
-            store: Store::open(root)?,
+            store,
+            microvm,
             applications: Mutex::new(BTreeMap::new()),
             admin: tokio::sync::Mutex::new(()),
             token,
-            node: find_node(node)?,
+            node,
             endpoint,
-            client: reqwest::Client::builder()
-                .no_proxy()
-                .redirect(reqwest::redirect::Policy::none())
-                .connect_timeout(Duration::from_secs(2))
-                .build()?,
+            client,
             recovering: AtomicBool::new(true),
         }))
     }
@@ -140,11 +150,14 @@ impl Platform {
             admission: Mutex::new(Arc::new(Semaphore::new(
                 release.manifest.resources.max_concurrent_requests,
             ))),
+            api_admission: Arc::new(Semaphore::new(
+                release.manifest.resources.max_concurrent_requests.min(8),
+            )),
             deployment: Mutex::new(deployment.clone()),
             database: Mutex::new(database),
             process: Mutex::new(None),
             release: Mutex::new(release),
-            token: format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple()),
+            token: Mutex::new(fresh_token()),
             gate: RwLock::new(()),
             error: Mutex::new(None),
             peers: Mutex::new(crate::sync::load_peers(
@@ -163,11 +176,42 @@ impl Platform {
         self.store.load_release(name, digest)?;
         let directory = app_dir.join("releases").join(digest);
         let endpoint = format!("{}/internal/{name}", self.endpoint);
-        let mut process = Process::start(
-            release, &directory, &app_dir, &endpoint, &app.token, &self.node,
-        )?;
-        process.wait_ready(release, &app.token)?;
+        self.validate_isolation(release)?;
+        let token = fresh_token();
+        *app.token.lock() = token.clone();
+        let mut process = match release.manifest.isolation {
+            crate::manifest::Isolation::Process => {
+                Process::start(release, &directory, &app_dir, &endpoint, &token, &self.node)?
+            }
+            crate::manifest::Isolation::Microvm => self
+                .microvm
+                .as_ref()
+                .context("microVM host is not configured")?
+                .launch(release, &app_dir, &token)?,
+        };
+        process.wait_ready(release, &token)?;
         Ok(process)
+    }
+
+    fn validate_isolation(&self, release: &Release) -> Result<()> {
+        let name = &release.manifest.name;
+        if self
+            .microvm
+            .as_ref()
+            .is_some_and(|host| host.allocations().contains_key(name))
+        {
+            ensure!(
+                release.manifest.isolation == crate::manifest::Isolation::Microvm,
+                "operator allocation requires microvm isolation for {name}"
+            );
+        }
+        if release.manifest.isolation == crate::manifest::Isolation::Microvm {
+            self.microvm
+                .as_ref()
+                .context("microVM host is not configured")?
+                .require_application(name)?;
+        }
+        Ok(())
     }
 
     fn recover(&self) -> Result<()> {
@@ -195,6 +239,7 @@ impl Platform {
 
     fn deploy(&self, release: Release) -> Result<Deployment> {
         release.validate()?;
+        self.validate_isolation(&release)?;
         let digest = self.store.save_release(&release)?;
         let name = &release.manifest.name;
         let existing = self.applications.lock().get(name).cloned();
@@ -216,7 +261,9 @@ impl Platform {
         let app = match existing {
             Some(app) => app,
             None => {
-                let app = self.create_app(deployment.clone(), release.clone())?;
+                let mut initial = deployment.clone();
+                initial.enabled = false;
+                let app = self.create_app(initial, release.clone())?;
                 self.applications.lock().insert(name.clone(), app.clone());
                 app
             }
@@ -232,6 +279,7 @@ impl Platform {
         self.store.save_deployment(&pending)?;
         *app.deployment.lock() = pending;
         // Callers hold the async write gate, so all routed requests and jobs drained.
+        *app.token.lock() = fresh_token();
         app.process.lock().take();
         let result = (|| -> Result<Process> {
             app.database.lock().prepare(&release)?;
@@ -242,13 +290,13 @@ impl Platform {
                 // Persist desired state before exposing the new route. A supervisor
                 // crash here restarts the exact content-addressed release.
                 self.store.save_deployment(&deployment)?;
-                *app.deployment.lock() = deployment.clone();
                 *app.admission.lock() = Arc::new(Semaphore::new(
                     release.manifest.resources.max_concurrent_requests,
                 ));
                 *app.release.lock() = release;
                 *app.error.lock() = None;
                 *app.process.lock() = Some(process);
+                *app.deployment.lock() = deployment.clone();
                 Ok(deployment)
             }
             Err(error) => {
@@ -378,7 +426,9 @@ async fn operation(
                     deployment.enabled = false;
                     platform.store.save_deployment(&deployment)?;
                     *app.deployment.lock() = deployment.clone();
+                    *app.token.lock() = fresh_token();
                     app.process.lock().take();
+                    drop(app.database.lock());
                 }
                 "start" => {
                     if app.process.lock().is_none() {
@@ -424,13 +474,24 @@ async fn query(
     Json(batch): Json<QueryBatch>,
 ) -> ApiResult<Json<Value>> {
     let app = platform.app(&name)?;
-    if !authorized(&headers, &app.token) {
+    let token = app.token.lock().clone();
+    if !authorized(&headers, &token) {
         return Err(ApiError(
             StatusCode::UNAUTHORIZED,
             "application authorization required".into(),
         ));
     }
-    let result = blocking(move || app.database.lock().query(&batch)).await?;
+    let deadline = std::time::Instant::now()
+        + Duration::from_millis(app.release.lock().manifest.resources.request_timeout_ms);
+    let result = blocking(move || {
+        let mut database = app.database.lock();
+        ensure!(
+            *app.token.lock() == token,
+            "application execution was replaced"
+        );
+        database.query_with_deadline(&batch, deadline)
+    })
+    .await?;
     Ok(Json(json!(result)))
 }
 
@@ -449,7 +510,8 @@ async fn enqueue(
     Json(job): Json<Enqueue>,
 ) -> ApiResult<Json<Value>> {
     let app = platform.app(&name)?;
-    if !authorized(&headers, &app.token) {
+    let token = app.token.lock().clone();
+    if !authorized(&headers, &token) {
         return Err(ApiError(
             StatusCode::UNAUTHORIZED,
             "application authorization required".into(),
@@ -465,9 +527,12 @@ async fn enqueue(
     }
     Ok(Json(
         blocking(move || {
-            app.database
-                .lock()
-                .enqueue(job.payload, job.idempotency_key)
+            let mut database = app.database.lock();
+            ensure!(
+                *app.token.lock() == token,
+                "application execution was replaced"
+            );
+            database.enqueue(job.payload, job.idempotency_key)
         })
         .await?,
     ))
@@ -526,17 +591,16 @@ async fn forward(
                 "application concurrency limit reached".into(),
             )
         })?;
-    let address = app
-        .process
-        .lock()
-        .as_ref()
-        .map(|p| p.address)
-        .ok_or_else(|| {
+    let (address, client) = {
+        let slot = app.process.lock();
+        let process = slot.as_ref().ok_or_else(|| {
             ApiError(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "application is unavailable".into(),
             )
         })?;
+        (process.address, process.client.clone())
+    };
     let timeout = app.release.lock().manifest.resources.request_timeout_ms;
     let (parts, body) = request.into_parts();
     let bytes = tokio::time::timeout(Duration::from_secs(30), to_bytes(body, 8 * 1024 * 1024))
@@ -561,8 +625,7 @@ async fn forward(
             .map(|q| format!("?{q}"))
             .unwrap_or_default()
     );
-    let mut upstream = platform
-        .client
+    let mut upstream = client
         .request(parts.method, url)
         .timeout(Duration::from_millis(timeout));
     for (name, value) in &parts.headers {
@@ -674,10 +737,18 @@ async fn jobs(platform: Arc<Platform>) {
         tokio::time::sleep(Duration::from_millis(250)).await;
         let apps: Vec<_> = platform.applications.lock().values().cloned().collect();
         for app in apps {
+            if !app.deployment.lock().enabled {
+                continue;
+            }
             let Ok(_gate) = app.gate.try_read() else {
                 continue;
             };
-            let Some(address) = app.process.lock().as_ref().map(|p| p.address) else {
+            let Some((address, client)) = app
+                .process
+                .lock()
+                .as_ref()
+                .map(|p| (p.address, p.client.clone()))
+            else {
                 continue;
             };
             let timeout = app.release.lock().manifest.resources.request_timeout_ms;
@@ -694,8 +765,9 @@ async fn jobs(platform: Arc<Platform>) {
             let Ok(Some(message)) = message else {
                 continue;
             };
-            let response = platform.client.post(format!("http://{address}/__bic/job"))
-                .header("x-bic-internal-token", &app.token).timeout(Duration::from_millis(timeout))
+            let token = app.token.lock().clone();
+            let response = client.post(format!("http://{address}/__bic/job"))
+                .header("x-bic-internal-token", token).timeout(Duration::from_millis(timeout))
                 .json(&json!({"id":message.message_id,"attempt":message.attempts,"payload":message.payload})).send().await;
             if response.as_ref().is_err_and(|error| error.is_timeout()) {
                 app.process.lock().take();
@@ -714,6 +786,7 @@ pub async fn serve(
     listen: SocketAddr,
     token: String,
     node: Option<PathBuf>,
+    microvm_config: Option<PathBuf>,
 ) -> Result<()> {
     let listener = tokio::net::TcpListener::bind(listen).await?;
     let address = listener.local_addr()?;
@@ -725,7 +798,32 @@ pub async fn serve(
         },
         address.port(),
     );
-    let platform = Platform::open(&root, token, node.as_deref(), format!("http://{local}"))?;
+    let platform = Platform::open(
+        &root,
+        token,
+        node.as_deref(),
+        format!("http://{local}"),
+        microvm_config.as_deref(),
+    )?;
+    let mut private_listeners = Vec::new();
+    if let Some(host) = &platform.microvm {
+        for allocation in host.allocations().values() {
+            private_listeners.push(
+                tokio::net::TcpListener::bind(SocketAddr::from((
+                    allocation.host_ip,
+                    allocation.api_port,
+                )))
+                .await?,
+            );
+        }
+    }
+    let mut private_tasks = Vec::new();
+    for listener in private_listeners {
+        let platform = platform.clone();
+        private_tasks.push(tokio::spawn(async move {
+            axum::serve(listener, internal_router(platform)).await
+        }));
+    }
     let recovery = tokio::task::spawn_blocking({
         let platform = platform.clone();
         move || platform.recover()
@@ -752,6 +850,9 @@ pub async fn serve(
         .with_graceful_shutdown(shutdown_signal())
         .await;
     supervision.abort();
+    for task in private_tasks {
+        task.abort();
+    }
     // Drop children before releasing the exclusive platform lock.
     for app in platform.applications.lock().values() {
         app.process.lock().take();
@@ -1037,6 +1138,7 @@ async fn authenticate(
     next: axum::middleware::Next,
 ) -> Response {
     let path = request.uri().path();
+    let mut _permit = None;
     if path.starts_with("/v1/") {
         if let Err(error) = platform.admin_auth(request.headers()) {
             return error.into_response();
@@ -1050,13 +1152,25 @@ async fn authenticate(
             Err(error) => return error.into_response(),
         };
         let allowed = if path.starts_with("/internal/") {
-            authorized(request.headers(), &app.token)
+            authorized(request.headers(), &app.token.lock())
         } else {
             app.peers
                 .lock()
                 .values()
                 .any(|peer| authorized(request.headers(), &peer.token))
         };
+        if allowed && path.starts_with("/internal/") {
+            _permit = match app.api_admission.clone().try_acquire_owned() {
+                Ok(permit) => Some(permit),
+                Err(_) => {
+                    return ApiError(
+                        StatusCode::TOO_MANY_REQUESTS,
+                        "database admission limit reached".into(),
+                    )
+                    .into_response()
+                }
+            };
+        }
         if !allowed {
             return ApiError(
                 StatusCode::UNAUTHORIZED,
@@ -1102,14 +1216,23 @@ async fn conflicts(
     Json(query): Json<ConflictQuery>,
 ) -> ApiResult<Json<Value>> {
     let app = platform.app(&name)?;
-    if !authorized(&headers, &app.token) {
+    let token = app.token.lock().clone();
+    if !authorized(&headers, &token) {
         return Err(ApiError(
             StatusCode::UNAUTHORIZED,
             "application authorization required".into(),
         ));
     }
     Ok(Json(
-        blocking(move || app.database.lock().conflicts(&query.table)).await?,
+        blocking(move || {
+            let database = app.database.lock();
+            ensure!(
+                *app.token.lock() == token,
+                "application execution was replaced"
+            );
+            database.conflicts(&query.table)
+        })
+        .await?,
     ))
 }
 
@@ -1202,4 +1325,31 @@ async fn backup(
                 "backup response failed".into(),
             )
         })
+}
+
+fn internal_router(platform: Arc<Platform>) -> Router {
+    Router::new()
+        .route("/internal/:name/query", post(query))
+        .route("/internal/:name/jobs", post(enqueue))
+        .route("/internal/:name/conflicts", post(conflicts))
+        .layer(DefaultBodyLimit::max(8 * 1024 * 1024))
+        .layer(axum::middleware::from_fn_with_state(
+            platform.clone(),
+            authenticate,
+        ))
+        .with_state(platform)
+}
+
+impl Drop for Platform {
+    fn drop(&mut self) {
+        for app in self.applications.lock().values() {
+            app.process.lock().take();
+        }
+        // Network resources leave before Store releases its ownership lock.
+        self.microvm.take();
+    }
+}
+
+fn fresh_token() -> String {
+    format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }

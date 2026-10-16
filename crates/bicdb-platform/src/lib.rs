@@ -2,6 +2,7 @@
 pub mod cli;
 pub mod database;
 pub mod manifest;
+pub mod microvm;
 pub mod recovery;
 pub mod runtime;
 pub mod server;

@@ -70,5 +70,5 @@ const server = http.createServer(async (incoming, outgoing) => {
 });
 server.requestTimeout = 30000;
 server.headersTimeout = 10000;
-server.listen(Number(process.env.PORT), '127.0.0.1');
+server.listen(Number(process.env.PORT), process.env.HOST || '127.0.0.1');
 process.on('SIGTERM', () => { server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 5000).unref(); });

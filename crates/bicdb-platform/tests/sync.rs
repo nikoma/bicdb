@@ -15,6 +15,7 @@ fn release() -> Release {
             name: "notes".into(),
             version: "1".into(),
             runtime: Runtime::Node,
+            isolation: Default::default(),
             entrypoint: "app.mjs".into(),
             files: vec!["app.mjs".into(), "001.sql".into()],
             migrations: vec!["001.sql".into()],

@@ -14,6 +14,7 @@ fn release(sql: &str) -> Release {
             name: "example".into(),
             version: "1".into(),
             runtime: Runtime::Node,
+            isolation: Default::default(),
             entrypoint: "app.mjs".into(),
             files: vec!["app.mjs".into(), "001.sql".into()],
             migrations: vec!["001.sql".into()],
@@ -213,5 +214,45 @@ fn transactional_job_outbox_commits_with_data_and_recovers_without_duplicate_pub
         )
         .unwrap(),
         json!([[1]])
+    );
+}
+
+#[test]
+fn default_isolation_preserves_the_digest_of_existing_releases() {
+    use sha2::{Digest, Sha256};
+    let legacy = br#"{"manifest":{"format":1,"name":"legacy","version":"1","runtime":"node","entrypoint":"app.mjs","files":["app.mjs"],"migrations":[],"resources":{"memory_mb":128,"request_timeout_ms":30000,"max_concurrent_requests":64},"sync":{}},"files":{"app.mjs":"ZXhwb3J0IGRlZmF1bHQge2ZldGNoKCl7cmV0dXJuIG5ldyBSZXNwb25zZSgnb2snKX19"}}"#;
+    let release: Release = serde_json::from_slice(legacy).unwrap();
+    release.validate().unwrap();
+    assert_eq!(
+        release.digest().unwrap(),
+        format!("{:x}", Sha256::digest(legacy))
+    );
+}
+
+#[test]
+fn an_expired_database_deadline_refuses_mutations_before_execution() {
+    let root = tempfile::tempdir().unwrap();
+    let mut database = Database::open(root.path()).unwrap();
+    database
+        .prepare(&release(
+            "CREATE TABLE counts (id INT PRIMARY KEY, value INT); INSERT INTO counts VALUES (1, 0)",
+        ))
+        .unwrap();
+    assert!(database
+        .query_with_deadline(
+            &batch("UPDATE counts SET value = 1", None),
+            std::time::Instant::now() - std::time::Duration::from_millis(1)
+        )
+        .is_err());
+    assert_eq!(
+        serde_json::to_value(
+            database
+                .query(&batch("SELECT value FROM counts", None))
+                .unwrap()[0]
+                .rows
+                .clone()
+        )
+        .unwrap(),
+        json!([[0]])
     );
 }

@@ -38,7 +38,12 @@ pub enum Command {
         listen: SocketAddr,
         #[arg(long)]
         node: Option<PathBuf>,
+        /// Operator-owned Linux microVM images and private network allocations.
+        #[arg(long)]
+        microvm_config: Option<PathBuf>,
     },
+    #[command(hide = true)]
+    VmExecute { specification: PathBuf },
     /// Upload a release, apply pending migrations and activate its endpoints.
     Deploy {
         #[arg(default_value = "bic.json")]
@@ -132,6 +137,7 @@ pub fn run(cli: Cli) -> Result<()> {
         .token_file
         .unwrap_or_else(|| cli.data.join("management.token"));
     match cli.command {
+        Command::VmExecute { specification } => crate::microvm::execute(&specification),
         Command::Init { directory, name } => init(&directory, &name),
         Command::PeerToken { output } => {
             write_synced(
@@ -151,7 +157,11 @@ pub fn run(cli: Cli) -> Result<()> {
             println!("{}", serde_json::to_string(&deployment)?);
             Ok(())
         }
-        Command::Serve { listen, node } => {
+        Command::Serve {
+            listen,
+            node,
+            microvm_config,
+        } => {
             std::fs::create_dir_all(&cli.data)?;
             if !token_path.exists() {
                 if let Some(parent) = token_path.parent() {
@@ -166,7 +176,13 @@ pub fn run(cli: Cli) -> Result<()> {
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()?
-                .block_on(crate::server::serve(cli.data, listen, token, node))
+                .block_on(crate::server::serve(
+                    cli.data,
+                    listen,
+                    token,
+                    node,
+                    microvm_config,
+                ))
         }
         command => {
             let url = reqwest::Url::parse(&cli.endpoint)?;

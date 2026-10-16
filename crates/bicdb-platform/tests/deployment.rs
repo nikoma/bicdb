@@ -657,3 +657,70 @@ fn encrypted_recovery_image_moves_data_jobs_and_release_to_an_inactive_catalog()
         "restore cannot replace a live catalog"
     );
 }
+
+#[test]
+fn stopped_and_replaced_execution_credentials_cannot_query_the_application() {
+    let service = Service::start();
+    let mut release = fixture();
+    let source = String::from_utf8(release.decode("app.mjs").unwrap()).unwrap();
+    let source = source.replace("const path = new URL(request.url).pathname;", "const path = new URL(request.url).pathname; if (path === '/execution-token') return Response.json({ token: process.env.BICDB_DATABASE_TOKEN });");
+    release.files.insert(
+        "app.mjs".into(),
+        base64::engine::general_purpose::STANDARD.encode(source),
+    );
+    assert!(service.deploy(&release).status().is_success());
+    let read_token = || -> Value {
+        service
+            .client
+            .get(format!("{}/apps/counter/execution-token", service.base()))
+            .send()
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .unwrap()
+    };
+    let old = read_token()["token"].as_str().unwrap().to_owned();
+    service
+        .client
+        .post(format!("{}/v1/apps/counter/stop", service.base()))
+        .bearer_auth(service.token())
+        .send()
+        .unwrap()
+        .error_for_status()
+        .unwrap();
+    let request =
+        json!({"statements":[{"sql":"UPDATE counters SET value = 99 WHERE id = 'requests'"}]});
+    assert_eq!(
+        service
+            .client
+            .post(format!("{}/internal/counter/query", service.base()))
+            .bearer_auth(&old)
+            .json(&request)
+            .send()
+            .unwrap()
+            .status(),
+        401
+    );
+    service
+        .client
+        .post(format!("{}/v1/apps/counter/start", service.base()))
+        .bearer_auth(service.token())
+        .send()
+        .unwrap()
+        .error_for_status()
+        .unwrap();
+    assert_ne!(read_token()["token"], old);
+    assert_eq!(
+        service
+            .client
+            .post(format!("{}/internal/counter/query", service.base()))
+            .bearer_auth(&old)
+            .json(&request)
+            .send()
+            .unwrap()
+            .status(),
+        401
+    );
+    assert_eq!(service.state()[1]["value"], 0);
+}

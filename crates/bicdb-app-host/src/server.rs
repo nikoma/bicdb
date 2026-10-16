@@ -34,6 +34,7 @@ use crate::{
 
 const MAX_BODY: usize = MAX_RELEASE_BYTES * 4 / 3 + 2 * 1024 * 1024;
 mod live;
+mod previews;
 mod state_lifecycle;
 
 pub struct Application {
@@ -43,11 +44,12 @@ pub struct Application {
     process: Mutex<Option<Execution>>,
     release: Mutex<Release>,
     token: Mutex<String>,
-    gate: RwLock<()>,
+    gate: Arc<RwLock<()>>,
     admission: Mutex<Arc<Semaphore>>,
     error: Mutex<Option<String>>,
     api_admission: Mutex<Arc<Semaphore>>,
     live_admission: Arc<Semaphore>,
+    snapshotting: AtomicBool,
     peers: Mutex<BTreeMap<String, crate::sync::Peer>>,
     peer_cipher: Option<crate::sync::PeerCipher>,
     sync_status: Mutex<BTreeMap<String, crate::sync::SyncStatus>>,
@@ -56,7 +58,7 @@ pub struct Application {
 pub struct Platform {
     store: Store,
     applications: Mutex<BTreeMap<String, Arc<Application>>>,
-    admin: tokio::sync::Mutex<()>,
+    admin: Arc<tokio::sync::Mutex<()>>,
     token: String,
     node: PathBuf,
     microvm: Option<crate::microvm::Host>,
@@ -157,7 +159,7 @@ impl Platform {
             microvm,
             fleet,
             applications: Mutex::new(BTreeMap::new()),
-            admin: tokio::sync::Mutex::new(()),
+            admin: Arc::new(tokio::sync::Mutex::new(())),
             token,
             node,
             endpoint,
@@ -232,13 +234,14 @@ impl Platform {
                 release.manifest.resources.max_concurrent_requests.min(8),
             ))),
             live_admission: Arc::new(Semaphore::new(16)),
+            snapshotting: AtomicBool::new(false),
             deployment: Mutex::new(deployment.clone()),
             database,
             replica,
             process: Mutex::new(None),
             release: Mutex::new(release),
             token: Mutex::new(fresh_token()),
-            gate: RwLock::new(()),
+            gate: Arc::new(RwLock::new(())),
             error: Mutex::new(None),
             peers: Mutex::new(peers),
             peer_cipher,
@@ -536,6 +539,7 @@ pub fn router(platform: Arc<Platform>) -> Router {
         .route("/v1/apps/:name/logs", get(logs))
         .route("/v1/apps/:name/jobs", get(job_status))
         .route("/v1/apps/:name/backup", post(backup))
+        .route("/v1/apps/:name/previews", post(previews::create))
         .route("/v1/apps/:name/identity", get(identity))
         .route("/v1/apps/:name/peers", get(peers).post(add_peer))
         .route(
@@ -829,6 +833,12 @@ async fn forward(
     }
     let app = platform.app(&name)?;
     app.require_authority()?;
+    if app.snapshotting.load(Ordering::Acquire) {
+        return Err(ApiError(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "application snapshot in progress".into(),
+        ));
+    }
     let _gate = app.gate.read().await;
     let _permit = app
         .admission

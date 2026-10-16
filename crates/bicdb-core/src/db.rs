@@ -8,6 +8,7 @@ pub use ha_bootstrap::{
     finish_standby_bootstrap, stage_standby_bootstrap, standby_bootstrap_staging, StandbyResume,
 };
 mod log_archiving;
+mod logical_copy;
 mod replication_journal;
 use replication_journal::freeze_audit_origin;
 mod replication_live;

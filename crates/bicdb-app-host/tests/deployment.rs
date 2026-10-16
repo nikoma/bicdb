@@ -837,3 +837,127 @@ fn live_sql_streams_updates_and_releases_admission_when_consumers_disconnect() {
     );
     assert!(stopped.is_err() || stopped.unwrap() == 0);
 }
+
+#[test]
+fn cli_creates_inactive_isolated_previews_and_can_explicitly_activate_them() {
+    let service = Service::start();
+    assert!(service.deploy(&fixture()).status().is_success());
+    let response = service
+        .client
+        .post(format!("{}/apps/counter/increment", service.base()))
+        .header("idempotency-key", "shared-preview-effect")
+        .send()
+        .unwrap();
+    assert_eq!(
+        response
+            .error_for_status()
+            .unwrap()
+            .json::<Value>()
+            .unwrap(),
+        json!({"value":1})
+    );
+    assert_eq!(
+        service
+            .client
+            .post(format!("{}/v1/apps/counter/previews", service.base()))
+            .json(&json!({"application":"unauthorized-preview"}))
+            .send()
+            .unwrap()
+            .status(),
+        401
+    );
+    let run = |arguments: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_bic"))
+            .arg("--data")
+            .arg(service.root.path())
+            .arg("--endpoint")
+            .arg(service.base())
+            .args(arguments)
+            .output()
+            .unwrap()
+    };
+    let output = run(&["preview", "counter", "counter-preview"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let deployment: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(deployment["enabled"], false);
+    assert_eq!(
+        service
+            .client
+            .get(format!("{}/apps/counter-preview", service.base()))
+            .send()
+            .unwrap()
+            .status(),
+        503
+    );
+    let identity = |application: &str| -> Value {
+        service
+            .client
+            .get(format!("{}/v1/apps/{application}/identity", service.base()))
+            .bearer_auth(service.token())
+            .send()
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .unwrap()
+    };
+    assert_ne!(
+        identity("counter")["node_id"],
+        identity("counter-preview")["node_id"]
+    );
+    assert_ne!(
+        identity("counter")["public_key"],
+        identity("counter-preview")["public_key"]
+    );
+    let output = run(&["start", "counter-preview"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let response = service
+        .client
+        .post(format!("{}/apps/counter-preview/increment", service.base()))
+        .header("idempotency-key", "shared-preview-effect")
+        .send()
+        .unwrap();
+    assert_eq!(
+        response
+            .error_for_status()
+            .unwrap()
+            .json::<Value>()
+            .unwrap(),
+        json!({"value":2})
+    );
+    assert_eq!(service.state()[1]["value"], 1);
+    let output = run(&["preview", "counter", "active-preview", "--start"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        serde_json::from_slice::<Value>(&output.stdout).unwrap()["enabled"],
+        true
+    );
+    assert!(service
+        .client
+        .get(format!("{}/apps/active-preview", service.base()))
+        .send()
+        .unwrap()
+        .status()
+        .is_success());
+    assert!(!run(&["preview", "counter", "counter-preview"])
+        .status
+        .success());
+    assert!(!run(&["preview", "counter", "../outside"]).status.success());
+    assert_eq!(
+        service.state()[1]["value"],
+        1,
+        "failed preview creation must leave the parent serving"
+    );
+}

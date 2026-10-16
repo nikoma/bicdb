@@ -177,6 +177,14 @@ acknowledgement before results can leave the state service.
 The counter example exposes `/apps/counter/live`. Open it with `curl -N` and
 increment the counter in another terminal to observe its changes.
 
+## Preview environments
+
+`bic preview counter counter-preview` creates an inactive application with copied
+public SQL data and code, a fresh database identity, empty managed jobs and no
+peer grants. `--start` explicitly activates it. Applied migration receipts prevent
+replaying seed statements. See the [preview guide](platform-previews.md) for
+capture, isolation, schema support and publication guarantees.
+
 ## Upgrades and recovery
 
 Only one supervisor may own a platform directory. Requests and active job

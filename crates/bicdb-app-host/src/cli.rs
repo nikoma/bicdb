@@ -71,6 +71,14 @@ pub enum Command {
         #[arg(default_value = "bic.json")]
         manifest: PathBuf,
     },
+    /// Copy public SQL data and code into an isolated application preview.
+    Preview {
+        application: String,
+        name: String,
+        /// Explicitly run the copied application after creating its inactive state.
+        #[arg(long)]
+        start: bool,
+    },
     /// Download an encrypted application recovery image, including local jobs.
     Backup {
         application: String,
@@ -290,6 +298,21 @@ pub fn run(cli: Cli) -> Result<()> {
                         .post(format!("{base}/v1/apps/{application}/backup"))
                         .timeout(std::time::Duration::from_secs(3600))
                         .json(&serde_json::json!({"passphrase":passphrase}))
+                }
+                Command::Preview {
+                    application,
+                    name,
+                    start,
+                } => {
+                    ensure!(
+                        crate::manifest::valid_name(&application)
+                            && crate::manifest::valid_name(&name),
+                        "invalid application name"
+                    );
+                    client
+                        .post(format!("{base}/v1/apps/{application}/previews"))
+                        .timeout(std::time::Duration::from_secs(3600))
+                        .json(&serde_json::json!({"application":name,"start":start}))
                 }
                 Command::List => client.get(format!("{base}/v1/apps")),
                 Command::Jobs { application } => {

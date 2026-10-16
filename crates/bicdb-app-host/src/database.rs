@@ -20,6 +20,7 @@ mod jobs;
 mod live;
 pub use live::LiveQuery;
 mod peer_grants;
+mod preview;
 
 const MIGRATIONS: &str = "__bic_platform_migrations";
 const RECEIPTS: &str = "__bic_platform_receipts";
@@ -501,6 +502,19 @@ impl Database {
         node: &bicdb_core::NodeId,
         statements: &[Statement],
     ) -> Result<()> {
+        let public = sqlparser::ast::visit_relations(&statements.to_vec(), |name| {
+            if name.0.iter().any(|part| match part {
+                sqlparser::ast::ObjectNamePart::Identifier(id) => {
+                    id.value.to_ascii_lowercase().starts_with("__bic")
+                }
+                _ => true,
+            }) {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        ensure!(public.is_continue(), "platform metadata is reserved");
         let result = sqlparser::ast::visit_statements(&statements.to_vec(), |statement| {
             let mut targets = Vec::new();
             let append = match statement {

@@ -5,6 +5,7 @@ pub mod fleet;
 mod http_stream;
 pub mod manifest;
 pub mod microvm;
+pub mod preview;
 pub mod recovery;
 pub mod runtime;
 pub mod server;

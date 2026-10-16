@@ -131,3 +131,7 @@ traffic during growth, process failure and recovery, then rechecks every
 acknowledged event. This workload measures the event binding, not arbitrary SQL
 or full database compatibility. Local functional runs are not independent
 machine measurements or production scale certification.
+
+See the [published functional evidence](cluster-events-functional-evidence.md)
+for a completed local 3→5→9 growth and crash/recovery run, including failed
+operation counts, latency limitations and final acknowledged-write checks.

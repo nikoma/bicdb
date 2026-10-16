@@ -1,0 +1,791 @@
+{
+  "format": 1,
+  "classification": "shared_host_functional_simulation",
+  "binary_sha256": "c33355e1c790b14a16a30a7dda3305092d2c0fd53a9f8e2e285ed75fb7c442b4",
+  "build_label": "debug",
+  "source_commit": "69866e48c02f28affe2e763da8bec5f756384dea",
+  "workload": "immutable_events_append_read",
+  "replication_factor": 3,
+  "fsync": true,
+  "ranges": 16,
+  "results": [
+    {
+      "phase": "steady-3",
+      "format": 1,
+      "workload": "immutable_events_append_read",
+      "concurrency": 4,
+      "payload_bytes": 1024,
+      "encoded_value_bytes": 1079,
+      "rpc_timeout_ms": 5000,
+      "traffic_seconds": 15.806215049,
+      "successful_operations": 101,
+      "failed_operations": 0,
+      "successful_operations_per_second": 6.389891551323028,
+      "write_latency": {
+        "samples": 53,
+        "p50_us": 1130750,
+        "p95_us": 1482203,
+        "p99_us": 1740095,
+        "max_us": 1740095
+      },
+      "read_latency": {
+        "samples": 48,
+        "p50_us": 38388,
+        "p95_us": 89189,
+        "p99_us": 100723,
+        "max_us": 100723
+      },
+      "acknowledged_writes": 53,
+      "unverified_writes": [],
+      "error_samples": [],
+      "verification_passed": true,
+      "resources": {
+        "0": {
+          "max_rss_bytes": 367943680,
+          "peak_cpu_percent": 23.540489642184557,
+          "sampled_read_bytes": 16384,
+          "sampled_write_bytes": 36003840
+        },
+        "1": {
+          "max_rss_bytes": 280682496,
+          "peak_cpu_percent": 17.890772128060263,
+          "sampled_read_bytes": 8192,
+          "sampled_write_bytes": 27398144
+        },
+        "2": {
+          "max_rss_bytes": 273330176,
+          "peak_cpu_percent": 18.832391713747647,
+          "sampled_read_bytes": 16384,
+          "sampled_write_bytes": 27406336
+        }
+      }
+    },
+    {
+      "phase": "growth-3-to-5",
+      "format": 1,
+      "workload": "immutable_events_append_read",
+      "concurrency": 4,
+      "payload_bytes": 1024,
+      "encoded_value_bytes": 1079,
+      "rpc_timeout_ms": 5000,
+      "traffic_seconds": 16.220580488,
+      "successful_operations": 79,
+      "failed_operations": 0,
+      "successful_operations_per_second": 4.870355907326761,
+      "write_latency": {
+        "samples": 42,
+        "p50_us": 1256792,
+        "p95_us": 2259232,
+        "p99_us": 4104056,
+        "max_us": 4104056
+      },
+      "read_latency": {
+        "samples": 37,
+        "p50_us": 44258,
+        "p95_us": 190294,
+        "p99_us": 313929,
+        "max_us": 313929
+      },
+      "acknowledged_writes": 42,
+      "unverified_writes": [],
+      "error_samples": [],
+      "verification_passed": true,
+      "resources": {
+        "0": {
+          "max_rss_bytes": 362582016,
+          "peak_cpu_percent": 40.43126684636118,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 57937920
+        },
+        "1": {
+          "max_rss_bytes": 274182144,
+          "peak_cpu_percent": 22.624434389140273,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 40431616
+        },
+        "2": {
+          "max_rss_bytes": 271048704,
+          "peak_cpu_percent": 25.31645569620253,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 40759296
+        },
+        "3": {
+          "max_rss_bytes": 332296192,
+          "peak_cpu_percent": 25.901942645698426,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 7626752
+        },
+        "4": {
+          "max_rss_bytes": 268967936,
+          "peak_cpu_percent": 7.259528130671505,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 7004160
+        }
+      }
+    },
+    {
+      "phase": "steady-5",
+      "format": 1,
+      "workload": "immutable_events_append_read",
+      "concurrency": 4,
+      "payload_bytes": 1024,
+      "encoded_value_bytes": 1079,
+      "rpc_timeout_ms": 5000,
+      "traffic_seconds": 17.163313233,
+      "successful_operations": 41,
+      "failed_operations": 0,
+      "successful_operations_per_second": 2.388816159409657,
+      "write_latency": {
+        "samples": 23,
+        "p50_us": 2474382,
+        "p95_us": 5768950,
+        "p99_us": 6001501,
+        "max_us": 6001501
+      },
+      "read_latency": {
+        "samples": 18,
+        "p50_us": 8698,
+        "p95_us": 75855,
+        "p99_us": 75855,
+        "max_us": 75855
+      },
+      "acknowledged_writes": 23,
+      "unverified_writes": [],
+      "error_samples": [],
+      "verification_passed": true,
+      "resources": {
+        "0": {
+          "max_rss_bytes": 358391808,
+          "peak_cpu_percent": 33.54487760652765,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 37273600
+        },
+        "1": {
+          "max_rss_bytes": 269770752,
+          "peak_cpu_percent": 18.148820326678766,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 19828736
+        },
+        "2": {
+          "max_rss_bytes": 267112448,
+          "peak_cpu_percent": 19.02173913043478,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 22265856
+        },
+        "3": {
+          "max_rss_bytes": 337506304,
+          "peak_cpu_percent": 18.953068592057758,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 25096192
+        },
+        "4": {
+          "max_rss_bytes": 278749184,
+          "peak_cpu_percent": 20.795660036166364,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 28356608
+        }
+      }
+    },
+    {
+      "phase": "growth-5-to-9",
+      "format": 1,
+      "workload": "immutable_events_append_read",
+      "concurrency": 4,
+      "payload_bytes": 1024,
+      "encoded_value_bytes": 1079,
+      "rpc_timeout_ms": 5000,
+      "traffic_seconds": 15.874312855,
+      "successful_operations": 81,
+      "failed_operations": 0,
+      "successful_operations_per_second": 5.102583068626312,
+      "write_latency": {
+        "samples": 43,
+        "p50_us": 1192025,
+        "p95_us": 3017196,
+        "p99_us": 3535714,
+        "max_us": 3535714
+      },
+      "read_latency": {
+        "samples": 38,
+        "p50_us": 7911,
+        "p95_us": 383163,
+        "p99_us": 612659,
+        "max_us": 612659
+      },
+      "acknowledged_writes": 43,
+      "unverified_writes": [],
+      "error_samples": [],
+      "verification_passed": true,
+      "resources": {
+        "0": {
+          "max_rss_bytes": 397537280,
+          "peak_cpu_percent": 60.55508830950378,
+          "sampled_read_bytes": 28672,
+          "sampled_write_bytes": 71319552
+        },
+        "1": {
+          "max_rss_bytes": 273903616,
+          "peak_cpu_percent": 22.746419545071607,
+          "sampled_read_bytes": 20480,
+          "sampled_write_bytes": 38146048
+        },
+        "2": {
+          "max_rss_bytes": 269094912,
+          "peak_cpu_percent": 26.019080659150042,
+          "sampled_read_bytes": 73728,
+          "sampled_write_bytes": 41496576
+        },
+        "3": {
+          "max_rss_bytes": 338505728,
+          "peak_cpu_percent": 17.825311942959,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 24973312
+        },
+        "4": {
+          "max_rss_bytes": 281141248,
+          "peak_cpu_percent": 21.422450728363323,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 30998528
+        },
+        "5": {
+          "max_rss_bytes": 261500928,
+          "peak_cpu_percent": 9.80392156862745,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 6262784
+        },
+        "6": {
+          "max_rss_bytes": 267321344,
+          "peak_cpu_percent": 6.938421509106678,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 4567040
+        },
+        "7": {
+          "max_rss_bytes": 395673600,
+          "peak_cpu_percent": 8.583690987124463,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 4206592
+        },
+        "8": {
+          "max_rss_bytes": 316571648,
+          "peak_cpu_percent": 5.887300252312868,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 2633728
+        }
+      }
+    },
+    {
+      "phase": "steady-9",
+      "format": 1,
+      "workload": "immutable_events_append_read",
+      "concurrency": 4,
+      "payload_bytes": 1024,
+      "encoded_value_bytes": 1079,
+      "rpc_timeout_ms": 5000,
+      "traffic_seconds": 15.691416594,
+      "successful_operations": 53,
+      "failed_operations": 0,
+      "successful_operations_per_second": 3.377642782122416,
+      "write_latency": {
+        "samples": 29,
+        "p50_us": 1196478,
+        "p95_us": 6557477,
+        "p99_us": 6870828,
+        "max_us": 6870828
+      },
+      "read_latency": {
+        "samples": 24,
+        "p50_us": 6137,
+        "p95_us": 62169,
+        "p99_us": 98635,
+        "max_us": 98635
+      },
+      "acknowledged_writes": 29,
+      "unverified_writes": [],
+      "error_samples": [],
+      "verification_passed": true,
+      "resources": {
+        "0": {
+          "max_rss_bytes": 374546432,
+          "peak_cpu_percent": 52.896725440806044,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 60317696
+        },
+        "1": {
+          "max_rss_bytes": 270553088,
+          "peak_cpu_percent": 21.812080536912752,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 22769664
+        },
+        "2": {
+          "max_rss_bytes": 266985472,
+          "peak_cpu_percent": 21.097046413502106,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 18042880
+        },
+        "3": {
+          "max_rss_bytes": 337133568,
+          "peak_cpu_percent": 13.43408900083963,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 13930496
+        },
+        "4": {
+          "max_rss_bytes": 277528576,
+          "peak_cpu_percent": 17.632241813602015,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 18948096
+        },
+        "5": {
+          "max_rss_bytes": 275165184,
+          "peak_cpu_percent": 16.82085786375105,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 15433728
+        },
+        "6": {
+          "max_rss_bytes": 276865024,
+          "peak_cpu_percent": 18.47187237615449,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 16461824
+        },
+        "7": {
+          "max_rss_bytes": 421650432,
+          "peak_cpu_percent": 22.746419545071607,
+          "sampled_read_bytes": 8192,
+          "sampled_write_bytes": 25837568
+        },
+        "8": {
+          "max_rss_bytes": 330285056,
+          "peak_cpu_percent": 14.297729184188393,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 15114240
+        }
+      }
+    },
+    {
+      "phase": "failure-9",
+      "format": 1,
+      "workload": "immutable_events_append_read",
+      "concurrency": 4,
+      "payload_bytes": 1024,
+      "encoded_value_bytes": 1079,
+      "rpc_timeout_ms": 5000,
+      "traffic_seconds": 64.04440984,
+      "successful_operations": 300,
+      "failed_operations": 3,
+      "successful_operations_per_second": 4.6842495816493575,
+      "write_latency": {
+        "samples": 151,
+        "p50_us": 1045952,
+        "p95_us": 4477204,
+        "p99_us": 7717486,
+        "max_us": 11563549
+      },
+      "read_latency": {
+        "samples": 149,
+        "p50_us": 8786,
+        "p95_us": 69208,
+        "p99_us": 177021,
+        "max_us": 340185
+      },
+      "acknowledged_writes": 151,
+      "unverified_writes": [],
+      "error_samples": [
+        "io error: Connection refused (os error 111)",
+        "io error: Connection refused (os error 111)",
+        "io error: Connection refused (os error 111)"
+      ],
+      "verification_passed": true,
+      "resources": {
+        "0": {
+          "max_rss_bytes": 380669952,
+          "peak_cpu_percent": 64.4891122278057,
+          "sampled_read_bytes": 65536,
+          "sampled_write_bytes": 299061248
+        },
+        "1": {
+          "max_rss_bytes": 277061632,
+          "peak_cpu_percent": 28.547439126784212,
+          "sampled_read_bytes": 49152,
+          "sampled_write_bytes": 122097664
+        },
+        "2": {
+          "max_rss_bytes": 270090240,
+          "peak_cpu_percent": 33.58522250209908,
+          "sampled_read_bytes": 40960,
+          "sampled_write_bytes": 112123904
+        },
+        "3": {
+          "max_rss_bytes": 344780800,
+          "peak_cpu_percent": 25.359256128486894,
+          "sampled_read_bytes": 53248,
+          "sampled_write_bytes": 90537984
+        },
+        "4": {
+          "max_rss_bytes": 282685440,
+          "peak_cpu_percent": 28.619528619528623,
+          "sampled_read_bytes": 53248,
+          "sampled_write_bytes": 94494720
+        },
+        "5": {
+          "max_rss_bytes": 282198016,
+          "peak_cpu_percent": 31.22362869198312,
+          "sampled_read_bytes": 24576,
+          "sampled_write_bytes": 102785024
+        },
+        "6": {
+          "max_rss_bytes": 290107392,
+          "peak_cpu_percent": 40.06677796327212,
+          "sampled_read_bytes": 40960,
+          "sampled_write_bytes": 108195840
+        },
+        "7": {
+          "max_rss_bytes": 407986176,
+          "peak_cpu_percent": 15.993265993265995,
+          "sampled_read_bytes": 16384,
+          "sampled_write_bytes": 65957888
+        },
+        "8": {
+          "max_rss_bytes": 335343616,
+          "peak_cpu_percent": 25.210084033613445,
+          "sampled_read_bytes": 20480,
+          "sampled_write_bytes": 67190784
+        }
+      }
+    },
+    {
+      "phase": "recovered-9",
+      "format": 1,
+      "workload": "immutable_events_append_read",
+      "concurrency": 4,
+      "payload_bytes": 1024,
+      "encoded_value_bytes": 1079,
+      "rpc_timeout_ms": 5000,
+      "traffic_seconds": 22.360513403,
+      "successful_operations": 19,
+      "failed_operations": 0,
+      "successful_operations_per_second": 0.8497121536328797,
+      "write_latency": {
+        "samples": 12,
+        "p50_us": 7497833,
+        "p95_us": 14703767,
+        "p99_us": 14703767,
+        "max_us": 14703767
+      },
+      "read_latency": {
+        "samples": 7,
+        "p50_us": 9320,
+        "p95_us": 10197,
+        "p99_us": 10197,
+        "max_us": 10197
+      },
+      "acknowledged_writes": 12,
+      "unverified_writes": [],
+      "error_samples": [],
+      "verification_passed": true,
+      "resources": {
+        "0": {
+          "max_rss_bytes": 376000512,
+          "peak_cpu_percent": 51.969823973176865,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 65122304
+        },
+        "1": {
+          "max_rss_bytes": 270979072,
+          "peak_cpu_percent": 42.016806722689076,
+          "sampled_read_bytes": 32768,
+          "sampled_write_bytes": 37502976
+        },
+        "2": {
+          "max_rss_bytes": 267796480,
+          "peak_cpu_percent": 19.36026936026936,
+          "sampled_read_bytes": 16384,
+          "sampled_write_bytes": 16945152
+        },
+        "3": {
+          "max_rss_bytes": 339984384,
+          "peak_cpu_percent": 17.691659646166805,
+          "sampled_read_bytes": 12288,
+          "sampled_write_bytes": 16338944
+        },
+        "4": {
+          "max_rss_bytes": 277479424,
+          "peak_cpu_percent": 15.151515151515152,
+          "sampled_read_bytes": 4096,
+          "sampled_write_bytes": 13893632
+        },
+        "5": {
+          "max_rss_bytes": 269545472,
+          "peak_cpu_percent": 16.849199663016005,
+          "sampled_read_bytes": 12288,
+          "sampled_write_bytes": 17268736
+        },
+        "6": {
+          "max_rss_bytes": 275738624,
+          "peak_cpu_percent": 15.151515151515152,
+          "sampled_read_bytes": 8192,
+          "sampled_write_bytes": 11894784
+        },
+        "7": {
+          "max_rss_bytes": 406986752,
+          "peak_cpu_percent": 13.479359730412805,
+          "sampled_read_bytes": 0,
+          "sampled_write_bytes": 12562432
+        },
+        "8": {
+          "max_rss_bytes": 353132544,
+          "peak_cpu_percent": 43.881856540084385,
+          "sampled_read_bytes": 86016,
+          "sampled_write_bytes": 117403648
+        }
+      }
+    }
+  ],
+  "complete": true,
+  "independent_user_adoption": "not_measured",
+  "large_scale_certification": false,
+  "post_recovery_verification": [
+    {
+      "phase": "steady-3",
+      "checked": 53,
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    },
+    {
+      "phase": "growth-3-to-5",
+      "checked": 42,
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    },
+    {
+      "phase": "steady-5",
+      "checked": 23,
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    },
+    {
+      "phase": "growth-5-to-9",
+      "checked": 43,
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    },
+    {
+      "phase": "steady-9",
+      "checked": 29,
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    },
+    {
+      "phase": "failure-9",
+      "checked": 151,
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    },
+    {
+      "phase": "recovered-9",
+      "checked": 12,
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    }
+  ],
+  "measurement_date_utc": "2026-10-16",
+  "original_report_sha256": "ff8ea6f523889d4bd0fe276a07060ad8d5adedb9cbf3631ddec1a0d91beeac1b",
+  "sanitization": "Removed machine identifiers and random workload namespaces. Measurements and error samples are unchanged.",
+  "environment": {
+    "independent_hosts": 1,
+    "logical_server_processes": 9,
+    "cpu": "AMD Ryzen 9 7900X",
+    "physical_cores": 12,
+    "logical_cpus": 24,
+    "mem_total_kib": 65424196,
+    "kernel": "6.8.0-139-generic",
+    "filesystem": "ext4",
+    "storage": "Two Samsung SSD 980 PRO 2TB NVMe devices, Linux RAID1; shared with the workspace",
+    "isolated_resources": false
+  },
+  "runner_parameters": {
+    "sizes": [
+      3,
+      5,
+      9
+    ],
+    "ranges": 16,
+    "seconds": 15,
+    "failure_seconds": 60,
+    "concurrency": 4,
+    "rpc_timeout_ms": 5000,
+    "max_operations": 5000,
+    "timeout_seconds": 300
+  },
+  "topology_checkpoints": [
+    {
+      "nodes": 3,
+      "generation": 436,
+      "leaders": {
+        "n0": 5,
+        "n1": 6,
+        "n2": 5
+      },
+      "replicas": {
+        "n0": 16,
+        "n1": 16,
+        "n2": 16
+      },
+      "metrics": {
+        "generated_at_ms": 1792172382322,
+        "topology_generation": 436,
+        "nodes_total": 3,
+        "nodes_live": 3,
+        "nodes_suspect": 0,
+        "nodes_dead": 0,
+        "nodes_draining": 0,
+        "nodes_decommissioned": 0,
+        "ranges_total": 16,
+        "replicas_total": 48,
+        "leaders_total": 16,
+        "active_relocations": 0,
+        "failed_relocations": 0,
+        "under_replicated_ranges": 0,
+        "unavailable_ranges": 0,
+        "replica_skew": 0,
+        "leader_skew": 1,
+        "replica_byte_skew": 0
+      }
+    },
+    {
+      "nodes": 5,
+      "generation": 971,
+      "leaders": {
+        "n0": 3,
+        "n1": 3,
+        "n2": 4,
+        "n3": 3,
+        "n4": 3
+      },
+      "replicas": {
+        "n0": 10,
+        "n1": 10,
+        "n2": 10,
+        "n3": 9,
+        "n4": 9
+      },
+      "metrics": {
+        "generated_at_ms": 1792172458013,
+        "topology_generation": 971,
+        "nodes_total": 5,
+        "nodes_live": 5,
+        "nodes_suspect": 0,
+        "nodes_dead": 0,
+        "nodes_draining": 0,
+        "nodes_decommissioned": 0,
+        "ranges_total": 16,
+        "replicas_total": 48,
+        "leaders_total": 16,
+        "active_relocations": 0,
+        "failed_relocations": 0,
+        "under_replicated_ranges": 0,
+        "unavailable_ranges": 0,
+        "replica_skew": 1,
+        "leader_skew": 1,
+        "replica_byte_skew": 0
+      }
+    },
+    {
+      "nodes": 9,
+      "generation": 1719,
+      "leaders": {
+        "n0": 2,
+        "n1": 2,
+        "n2": 2,
+        "n3": 2,
+        "n4": 1,
+        "n5": 2,
+        "n6": 2,
+        "n7": 1,
+        "n8": 2
+      },
+      "replicas": {
+        "n0": 5,
+        "n1": 5,
+        "n2": 6,
+        "n3": 6,
+        "n4": 6,
+        "n5": 5,
+        "n6": 5,
+        "n7": 5,
+        "n8": 5
+      },
+      "metrics": {
+        "generated_at_ms": 1792172587327,
+        "topology_generation": 1719,
+        "nodes_total": 9,
+        "nodes_live": 9,
+        "nodes_suspect": 0,
+        "nodes_dead": 0,
+        "nodes_draining": 0,
+        "nodes_decommissioned": 0,
+        "ranges_total": 16,
+        "replicas_total": 48,
+        "leaders_total": 16,
+        "active_relocations": 0,
+        "failed_relocations": 0,
+        "under_replicated_ranges": 0,
+        "unavailable_ranges": 0,
+        "replica_skew": 1,
+        "leader_skew": 1,
+        "replica_byte_skew": 0
+      }
+    },
+    {
+      "nodes": 9,
+      "generation": 2280,
+      "leaders": {
+        "n0": 2,
+        "n1": 2,
+        "n2": 2,
+        "n3": 2,
+        "n4": 2,
+        "n5": 1,
+        "n6": 2,
+        "n7": 2,
+        "n8": 1
+      },
+      "replicas": {
+        "n0": 5,
+        "n1": 5,
+        "n2": 6,
+        "n3": 6,
+        "n4": 6,
+        "n5": 5,
+        "n6": 5,
+        "n7": 5,
+        "n8": 5
+      },
+      "metrics": {
+        "generated_at_ms": 1792172707683,
+        "topology_generation": 2280,
+        "nodes_total": 9,
+        "nodes_live": 9,
+        "nodes_suspect": 0,
+        "nodes_dead": 0,
+        "nodes_draining": 0,
+        "nodes_decommissioned": 0,
+        "ranges_total": 16,
+        "replicas_total": 48,
+        "leaders_total": 16,
+        "active_relocations": 0,
+        "failed_relocations": 0,
+        "under_replicated_ranges": 0,
+        "unavailable_ranges": 0,
+        "replica_skew": 1,
+        "leader_skew": 1,
+        "replica_byte_skew": 0
+      }
+    }
+  ]
+}

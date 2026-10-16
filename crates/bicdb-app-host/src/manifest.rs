@@ -18,6 +18,8 @@ pub struct Manifest {
     pub runtime: Runtime,
     #[serde(default, skip_serializing_if = "Isolation::is_process")]
     pub isolation: Isolation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placement: Option<Placement>,
     pub entrypoint: String,
     pub files: Vec<String>,
     #[serde(default)]
@@ -40,6 +42,13 @@ impl Isolation {
     fn is_process(&self) -> bool {
         *self == Self::Process
     }
+}
+
+/// Remote compute placement. Durable application state stays at its state service.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Placement {
+    pub region: String,
 }
 
 /// Public-table synchronization policy. Cross-table constraints remain local.
@@ -229,6 +238,9 @@ impl Release {
                 m.resources.memory_mb >= 128,
                 "microVM memory_mb must be at least 128"
             );
+        }
+        if let Some(placement) = &m.placement {
+            ensure!(valid_name(&placement.region), "invalid placement region");
         }
         for table in m.sync.keys() {
             ensure!(

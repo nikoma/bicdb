@@ -25,6 +25,7 @@ use uuid::Uuid;
 
 use crate::{
     database::{Database, QueryBatch},
+    fleet::{Execution, Fleet},
     manifest::{Release, MAX_RELEASE_BYTES},
     runtime::{find_node, read_log, Process},
     store::{Deployment, Store},
@@ -35,7 +36,7 @@ const MAX_BODY: usize = MAX_RELEASE_BYTES * 4 / 3 + 2 * 1024 * 1024;
 pub struct Application {
     deployment: Mutex<Deployment>,
     database: Mutex<Database>,
-    process: Mutex<Option<Process>>,
+    process: Mutex<Option<Execution>>,
     release: Mutex<Release>,
     token: Mutex<String>,
     gate: RwLock<()>,
@@ -53,6 +54,7 @@ pub struct Platform {
     token: String,
     node: PathBuf,
     microvm: Option<crate::microvm::Host>,
+    fleet: Option<Arc<Fleet>>,
     endpoint: String,
     client: reqwest::Client,
     recovering: AtomicBool,
@@ -72,7 +74,7 @@ impl IntoResponse for ApiError {
     }
 }
 
-fn authorized(headers: &HeaderMap, token: &str) -> bool {
+pub(crate) fn authorized(headers: &HeaderMap, token: &str) -> bool {
     let expected = format!("Bearer {token}");
     headers
         .get("authorization")
@@ -87,6 +89,7 @@ impl Platform {
         node: Option<&Path>,
         endpoint: String,
         microvm_config: Option<&Path>,
+        fleet_config: Option<&Path>,
     ) -> Result<Arc<Self>> {
         ensure!(
             token.len() >= 32 && !token.chars().any(char::is_whitespace),
@@ -98,13 +101,18 @@ impl Platform {
             .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(Duration::from_secs(2))
             .build()?;
+        let fleet = fleet_config.map(Fleet::read).transpose()?;
         let store = Store::open(root)?;
         let microvm = microvm_config
             .map(|path| crate::microvm::Host::open(path, &store.root))
             .transpose()?;
+        if microvm.is_none() {
+            crate::microvm::fence_previous(&store.root)?;
+        }
         Ok(Arc::new(Self {
             store,
             microvm,
+            fleet,
             applications: Mutex::new(BTreeMap::new()),
             admin: tokio::sync::Mutex::new(()),
             token,
@@ -170,7 +178,7 @@ impl Platform {
         }))
     }
 
-    fn launch(&self, app: &Application, release: &Release, digest: &str) -> Result<Process> {
+    fn launch(&self, app: &Application, release: &Release, digest: &str) -> Result<Execution> {
         let name = &release.manifest.name;
         let app_dir = self.store.app_dir(name)?;
         self.store.load_release(name, digest)?;
@@ -179,18 +187,31 @@ impl Platform {
         self.validate_isolation(release)?;
         let token = fresh_token();
         *app.token.lock() = token.clone();
-        let mut process = match release.manifest.isolation {
-            crate::manifest::Isolation::Process => {
-                Process::start(release, &directory, &app_dir, &endpoint, &token, &self.node)?
+        let result = (|| -> Result<Execution> {
+            if release.manifest.placement.is_some() {
+                return self
+                    .fleet
+                    .as_ref()
+                    .context("worker fleet is not configured")?
+                    .launch(release, |token| *app.token.lock() = token);
             }
-            crate::manifest::Isolation::Microvm => self
-                .microvm
-                .as_ref()
-                .context("microVM host is not configured")?
-                .launch(release, &app_dir, &token)?,
-        };
-        process.wait_ready(release, &token)?;
-        Ok(process)
+            let mut process = match release.manifest.isolation {
+                crate::manifest::Isolation::Process => {
+                    Process::start(release, &directory, &app_dir, &endpoint, &token, &self.node)?
+                }
+                crate::manifest::Isolation::Microvm => self
+                    .microvm
+                    .as_ref()
+                    .context("microVM host is not configured")?
+                    .launch(release, &app_dir, &token)?,
+            };
+            process.wait_ready(release, &token)?;
+            Ok(Execution::Local(process, token.clone()))
+        })();
+        if result.is_err() {
+            *app.token.lock() = fresh_token();
+        }
+        result
     }
 
     fn validate_isolation(&self, release: &Release) -> Result<()> {
@@ -204,6 +225,13 @@ impl Platform {
                 release.manifest.isolation == crate::manifest::Isolation::Microvm,
                 "operator allocation requires microvm isolation for {name}"
             );
+        }
+        if release.manifest.placement.is_some() {
+            return self
+                .fleet
+                .as_ref()
+                .context("worker fleet is not configured")?
+                .validate(release);
         }
         if release.manifest.isolation == crate::manifest::Isolation::Microvm {
             self.microvm
@@ -281,7 +309,7 @@ impl Platform {
         // Callers hold the async write gate, so all routed requests and jobs drained.
         *app.token.lock() = fresh_token();
         app.process.lock().take();
-        let result = (|| -> Result<Process> {
+        let result = (|| -> Result<Execution> {
             app.database.lock().prepare(&release)?;
             self.launch(&app, &release, &digest)
         })();
@@ -300,6 +328,7 @@ impl Platform {
                 Ok(deployment)
             }
             Err(error) => {
+                *app.token.lock() = fresh_token();
                 // Schema changes can already be committed. Do not silently run an
                 // older application against a newer schema after failed activation.
                 let mut disabled = deployment;
@@ -374,9 +403,12 @@ async fn list(State(platform): State<Arc<Platform>>, headers: HeaderMap) -> ApiR
         .iter()
         .map(|app| {
             let deployment = app.deployment.lock().clone();
-            let running = app.process.lock().is_some();
+            let slot = app.process.lock();
+            let running = slot.is_some();
+            let worker = slot.as_ref().and_then(Execution::worker).map(str::to_owned);
+            drop(slot);
             let error = app.error.lock().clone();
-            json!({"deployment": deployment, "running": running, "error": error})
+            json!({"deployment": deployment, "running": running, "worker": worker, "error": error})
         })
         .collect();
     Ok(Json(json!(apps)))
@@ -463,7 +495,27 @@ async fn logs(
     headers: HeaderMap,
 ) -> ApiResult<String> {
     platform.admin_auth(&headers)?;
-    platform.app(&name)?;
+    let app = platform.app(&name)?;
+    let remote = app.process.lock().as_ref().and_then(Execution::log_request);
+    if let Some((endpoint, token)) = remote {
+        return blocking(move || {
+            use std::io::Read;
+            let response = reqwest::blocking::Client::builder()
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(Duration::from_secs(3))
+                .build()?
+                .get(endpoint)
+                .bearer_auth(token)
+                .send()?
+                .error_for_status()?;
+            let mut bytes = Vec::new();
+            response.take(64 * 1024 + 1).read_to_end(&mut bytes)?;
+            ensure!(bytes.len() <= 64 * 1024, "worker log response too large");
+            Ok(String::from_utf8_lossy(&bytes).into_owned())
+        })
+        .await;
+    }
     blocking(move || read_log(&platform.store.app_dir(&name)?.join("application.log"))).await
 }
 
@@ -553,7 +605,7 @@ async fn proxy_path(
     forward(platform, name, path, request).await
 }
 
-fn hop_header(name: &str) -> bool {
+pub(crate) fn hop_header(name: &str) -> bool {
     matches!(
         name,
         "connection"
@@ -591,7 +643,7 @@ async fn forward(
                 "application concurrency limit reached".into(),
             )
         })?;
-    let (address, client) = {
+    let (endpoint, client, worker_token, execution_token) = {
         let slot = app.process.lock();
         let process = slot.as_ref().ok_or_else(|| {
             ApiError(
@@ -599,7 +651,7 @@ async fn forward(
                 "application is unavailable".into(),
             )
         })?;
-        (process.address, process.client.clone())
+        process.route()
     };
     let timeout = app.release.lock().manifest.resources.request_timeout_ms;
     let (parts, body) = request.into_parts();
@@ -618,7 +670,7 @@ async fn forward(
     let suffix = parts.uri.path().strip_prefix(&prefix).unwrap_or("/");
     let suffix = if suffix.is_empty() { "/" } else { suffix };
     let url = format!(
-        "http://{address}{suffix}{}",
+        "{endpoint}{suffix}{}",
         parts
             .uri
             .query()
@@ -633,9 +685,12 @@ async fn forward(
             upstream = upstream.header(name, value);
         }
     }
+    if let Some(token) = worker_token {
+        upstream = upstream.header("x-bic-worker-token", token);
+    }
     let mut response = upstream.body(bytes).send().await.map_err(|error| {
         if error.is_timeout() {
-            app.process.lock().take();
+            retire_execution(&app, &execution_token);
             ApiError(
                 StatusCode::GATEWAY_TIMEOUT,
                 "application execution deadline exceeded".into(),
@@ -649,7 +704,7 @@ async fn forward(
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|error| {
         if error.is_timeout() {
-            app.process.lock().take();
+            retire_execution(&app, &execution_token);
             ApiError(
                 StatusCode::GATEWAY_TIMEOUT,
                 "application execution deadline exceeded".into(),
@@ -683,6 +738,17 @@ async fn forward(
     })
 }
 
+fn retire_execution(app: &Application, token: &str) {
+    let mut slot = app.process.lock();
+    if slot
+        .as_ref()
+        .is_some_and(|execution| execution.token() == token)
+    {
+        *app.token.lock() = fresh_token();
+        slot.take();
+    }
+}
+
 async fn supervise(platform: Arc<Platform>) {
     loop {
         tokio::time::sleep(Duration::from_millis(500)).await;
@@ -705,6 +771,7 @@ async fn supervise(platform: Arc<Platform>) {
                             None => true,
                         };
                         if dead {
+                            *app.token.lock() = fresh_token();
                             slot.take();
                         }
                         dead
@@ -719,6 +786,7 @@ async fn supervise(platform: Arc<Platform>) {
                                 *app.error.lock() = None;
                             }
                             Err(error) => {
+                                *app.token.lock() = fresh_token();
                                 *app.error.lock() = Some(format!("{error:#}"));
                             }
                         }
@@ -743,11 +811,8 @@ async fn jobs(platform: Arc<Platform>) {
             let Ok(_gate) = app.gate.try_read() else {
                 continue;
             };
-            let Some((address, client)) = app
-                .process
-                .lock()
-                .as_ref()
-                .map(|p| (p.address, p.client.clone()))
+            let Some((endpoint, client, worker_token, execution_token)) =
+                app.process.lock().as_ref().map(Execution::route)
             else {
                 continue;
             };
@@ -763,14 +828,21 @@ async fn jobs(platform: Arc<Platform>) {
             })
             .await;
             let Ok(Some(message)) = message else {
+                if let Err(error) = &message {
+                    eprintln!("background job admission failed: {}", error.1);
+                }
                 continue;
             };
-            let token = app.token.lock().clone();
-            let response = client.post(format!("http://{address}/__bic/job"))
+            let token = execution_token.clone();
+            let mut request = client.post(format!("{endpoint}/__bic/job"));
+            if let Some(token) = worker_token {
+                request = request.header("x-bic-worker-token", token);
+            }
+            let response = request
                 .header("x-bic-internal-token", token).timeout(Duration::from_millis(timeout))
                 .json(&json!({"id":message.message_id,"attempt":message.attempts,"payload":message.payload})).send().await;
             if response.as_ref().is_err_and(|error| error.is_timeout()) {
-                app.process.lock().take();
+                retire_execution(&app, &execution_token);
             }
             let success = response.is_ok_and(|r| r.status().is_success());
             let consumer = consumer.clone();
@@ -787,6 +859,7 @@ pub async fn serve(
     token: String,
     node: Option<PathBuf>,
     microvm_config: Option<PathBuf>,
+    fleet_config: Option<PathBuf>,
 ) -> Result<()> {
     let listener = tokio::net::TcpListener::bind(listen).await?;
     let address = listener.local_addr()?;
@@ -804,6 +877,7 @@ pub async fn serve(
         node.as_deref(),
         format!("http://{local}"),
         microvm_config.as_deref(),
+        fleet_config.as_deref(),
     )?;
     let mut private_listeners = Vec::new();
     if let Some(host) = &platform.microvm {
@@ -1248,7 +1322,7 @@ async fn job_status(
     ))
 }
 
-async fn shutdown_signal() {
+pub(crate) async fn shutdown_signal() {
     #[cfg(unix)]
     {
         if let Ok(mut terminate) =
@@ -1350,6 +1424,6 @@ impl Drop for Platform {
     }
 }
 
-fn fresh_token() -> String {
+pub(crate) fn fresh_token() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }

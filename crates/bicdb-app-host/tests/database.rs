@@ -1,5 +1,5 @@
 use base64::Engine;
-use bicdb_platform::{
+use bicdb_app_host::{
     database::{Database, Query, QueryBatch},
     manifest::{Manifest, Release, Resources, Runtime},
     store::Store,
@@ -15,6 +15,7 @@ fn release(sql: &str) -> Release {
             version: "1".into(),
             runtime: Runtime::Node,
             isolation: Default::default(),
+            placement: None,
             entrypoint: "app.mjs".into(),
             files: vec!["app.mjs".into(), "001.sql".into()],
             migrations: vec!["001.sql".into()],

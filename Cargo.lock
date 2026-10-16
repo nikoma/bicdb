@@ -884,6 +884,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "bicdb-app-host"
+version = "1.0.438-beta"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64 0.22.1",
+ "bicdb-core",
+ "bicdb-sql",
+ "clap",
+ "libc",
+ "parking_lot",
+ "reqwest",
+ "ring",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlparser",
+ "subtle",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "bicdb-app-runtime"
 version = "1.0.438-beta"
 dependencies = [
@@ -1272,31 +1297,6 @@ dependencies = [
  "tokio-postgres",
  "uuid",
  "x509-parser",
-]
-
-[[package]]
-name = "bicdb-platform"
-version = "1.0.438-beta"
-dependencies = [
- "anyhow",
- "axum",
- "base64 0.22.1",
- "bicdb-core",
- "bicdb-sql",
- "clap",
- "libc",
- "parking_lot",
- "reqwest",
- "ring",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "sqlparser",
- "subtle",
- "tempfile",
- "tokio",
- "tokio-util",
- "uuid",
 ]
 
 [[package]]

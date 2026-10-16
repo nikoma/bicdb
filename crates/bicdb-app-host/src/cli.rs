@@ -41,6 +41,22 @@ pub enum Command {
         /// Operator-owned Linux microVM images and private network allocations.
         #[arg(long)]
         microvm_config: Option<PathBuf>,
+        /// Operator-owned worker fleet and placement allocations.
+        #[arg(long)]
+        fleet_config: Option<PathBuf>,
+    },
+    /// Run a leased compute worker attached to an authoritative state service.
+    Worker {
+        #[arg(long, default_value = "127.0.0.1:8789")]
+        listen: SocketAddr,
+        #[arg(long)]
+        node: Option<PathBuf>,
+        #[arg(long)]
+        state_endpoint: String,
+        #[arg(long, default_value_t = 16)]
+        capacity: usize,
+        #[arg(long)]
+        microvm_config: Option<PathBuf>,
     },
     #[command(hide = true)]
     VmExecute { specification: PathBuf },
@@ -161,6 +177,7 @@ pub fn run(cli: Cli) -> Result<()> {
             listen,
             node,
             microvm_config,
+            fleet_config,
         } => {
             std::fs::create_dir_all(&cli.data)?;
             if !token_path.exists() {
@@ -181,6 +198,35 @@ pub fn run(cli: Cli) -> Result<()> {
                     listen,
                     token,
                     node,
+                    microvm_config,
+                    fleet_config,
+                ))
+        }
+        Command::Worker {
+            listen,
+            node,
+            state_endpoint,
+            capacity,
+            microvm_config,
+        } => {
+            std::fs::create_dir_all(&cli.data)?;
+            if !token_path.exists() {
+                write_synced(
+                    &token_path,
+                    format!("{}{}\n", Uuid::new_v4().simple(), Uuid::new_v4().simple()).as_bytes(),
+                )?;
+            }
+            let token = token(&token_path)?;
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?
+                .block_on(crate::worker::serve(
+                    cli.data,
+                    listen,
+                    token,
+                    node,
+                    state_endpoint,
+                    capacity,
                     microvm_config,
                 ))
         }

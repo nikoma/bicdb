@@ -3,7 +3,7 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use base64::Engine;
-use bicdb_platform::manifest::Release;
+use bicdb_app_host::manifest::Release;
 use serde_json::{json, Value};
 
 struct Service {
@@ -243,7 +243,7 @@ fn two_platforms_continue_offline_and_automatically_reconnect_with_pinned_peers(
     release.manifest.name = "notes".into();
     release.manifest.sync.insert(
         "notes".into(),
-        bicdb_platform::manifest::TableSync::AppendOnly,
+        bicdb_app_host::manifest::TableSync::AppendOnly,
     );
     release.files.insert(
         "001-counter.sql".into(),
@@ -558,7 +558,7 @@ fn encrypted_recovery_image_moves_data_jobs_and_release_to_an_inactive_catalog()
         .unwrap();
     let files = tempfile::tempdir().unwrap();
     let key = files.path().join("backup.key");
-    bicdb_platform::store::write_synced(&key, b"recovery-test-key-with-at-least-32-characters")
+    bicdb_app_host::store::write_synced(&key, b"recovery-test-key-with-at-least-32-characters")
         .unwrap();
     let archive = files.path().join("counter.bicbak");
     let output = Command::new(env!("CARGO_BIN_EXE_bic"))

@@ -129,6 +129,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ripgrep
+      - uses: actions/setup-node@v4
+        if: matrix.suite.name == 'rest of workspace'
+        with:
+          node-version: '22'
       - uses: Swatinem/rust-cache@v2
       # bicdb-core's projection chaos test deliberately refuses to run unless
       # its out-of-process crash helper exists. No other suite needs the full

@@ -31,7 +31,7 @@ covered_engine_packages = [
   "bicdb-core", "bicdb-page", "bicdb-sync", "bicdb-sql", "bicdb-pgwire", "bicdb-resp",
   "bicdb-wasm", "bicdb-analytics", "bicdb-bench", "bicdb-app-runtime",
   "bicdb-cell", "bicdb-cell-admission", "bicdb-cell-device", "bicdb-cell-grant",
-  "bicdb-cell-ha", "bicdb-fleet", "bicdb-cli", "bicdb-lua", "bicdb-script", "bicdb-workflow"
+  "bicdb-cell-ha", "bicdb-fleet", "bicdb-app-host", "bicdb-cli", "bicdb-lua", "bicdb-script", "bicdb-workflow"
 ]
 # Included first-party administration frontend scope.
 console_paths = ["crates/bicdb-cli/src/tui.rs"]

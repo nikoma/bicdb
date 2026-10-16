@@ -10,12 +10,15 @@ provides a jailed Linux guest for application code and private, scoped database
 access. Existing signed WASM application hosting remains available through
 `bicdb app`.
 
+Optional [worker fleets](platform-worker-fleet.md) place compute on other hosts
+with lease-based recovery while keeping SQL state and jobs at the state service.
+
 ## Run an application
 
 Install Node.js 22 or newer, then build and install the supervisor:
 
 ```sh
-cargo install --path crates/bicdb-platform --locked
+cargo install --path crates/bicdb-app-host --locked
 bic init ./counter --name counter
 bic serve
 ```
@@ -144,8 +147,10 @@ separately and re-provision peer grants where needed. Stop or otherwise fence
 the previous writer before explicitly running `bic start counter` on the target.
 Recovery retains the database node identity; activating two restored copies is
 not a supported multi-writer topology. Database conflicts do not fence a former
-writer. Automated placement and failover require separate writer/route authority;
-manual restore and a local process restart do not establish those guarantees.
+writer. Automatic state-writer failover requires separate writer and route
+authority; manual restore and a local process restart do not establish those
+guarantees. Compute workers can fail over while retaining this one state service,
+as described in the worker fleet guide.
 
 ## Edge synchronization
 
@@ -215,7 +220,7 @@ or cross-node foreign-key, inventory or uniqueness invariant.
 
 ## Validation
 
-`cargo test -p bicdb-platform` exercises migration atomicity, durable request
+`cargo test -p bicdb-app-host` exercises migration atomicity, durable request
 receipts, scoped authorization, immutable releases, supervisor restart, background
 jobs, compatible upgrades and record synchronization. The core mesh tests cover
 signature verification, conflicting histories and interrupted exchange.

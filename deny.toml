@@ -330,3 +330,12 @@ license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
 [[licenses.exceptions]]
 name = "bicdb-workflow"
 allow = ["LicenseRef-BicDB-1.0"]
+
+[[licenses.clarify]]
+name = "bicdb-app-host"
+expression = "LicenseRef-BicDB-1.0"
+license-files = [{ path = "LICENSE", hash = 0xf29e79cd }]
+
+[[licenses.exceptions]]
+name = "bicdb-app-host"
+allow = ["LicenseRef-BicDB-1.0"]

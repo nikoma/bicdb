@@ -1,5 +1,5 @@
 [package]
-name = "bicdb-platform"
+name = "bicdb-app-host"
 version = "1.0.438-beta"
 edition.workspace = true
 license-file.workspace = true

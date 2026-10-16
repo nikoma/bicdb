@@ -28,7 +28,7 @@ members = [
   "crates/bicdb-provider-embeddings",
   "crates/bicdb-provider-llm",
   "crates/bicdb-cli",
-  "crates/bicdb-platform",
+  "crates/bicdb-app-host",
   "examples/extensions/hello-extension",
   "examples/extensions/website-host",
   "examples/extensions/website-renderer",

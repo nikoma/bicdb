@@ -12,7 +12,7 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use base64::Engine;
-use bicdb_platform::manifest::{Isolation, Release};
+use bicdb_app_host::manifest::{Isolation, Release};
 use serde_json::{json, Value};
 
 struct Canary {
@@ -181,12 +181,12 @@ fn jailed_microvm_executes_scoped_database_jobs_and_recovers_after_supervisor_cr
     let config = PathBuf::from(
         std::env::var_os("BICDB_TEST_MICROVM_CONFIG").expect("set BICDB_TEST_MICROVM_CONFIG"),
     );
-    let expected_uid = bicdb_platform::microvm::Config::read(&config)
+    let expected_uid = bicdb_app_host::microvm::Config::read(&config)
         .unwrap()
         .allocations["counter"]
         .uid
         .to_string();
-    let host_config = bicdb_platform::microvm::Config::read(&config).unwrap();
+    let host_config = bicdb_app_host::microvm::Config::read(&config).unwrap();
     let forbidden_host = Canary::start();
     let forbidden_url = format!(
         "http://{}:{}/",

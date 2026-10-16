@@ -170,10 +170,7 @@ impl Host {
         );
         let config = Config::read(path)?;
         ensure!(unsafe { libc::geteuid() } == 0, "the microVM host currently requires a privileged supervisor for jailer and network setup");
-        for name in config.allocations.keys() {
-            let app = platform_root.join("apps").join(name);
-            cleanup_previous(&app.join("microvm-process.json"), &app.join("vm-jails"))?;
-        }
+        fence_previous(platform_root)?;
         let mut networks = Vec::new();
         for (name, allocation) in &config.allocations {
             networks.push(Network::prepare(platform_root, name, allocation)?);
@@ -497,6 +494,28 @@ fn cleanup_previous(state: &Path, base: &Path) -> Result<()> {
         fs::remove_dir_all(record.jail_parent)?;
     }
     fs::remove_file(state)?;
+    Ok(())
+}
+
+/// Fence every recorded VMM, including applications whose allocation has been
+/// removed from the new host configuration. Call only while owning Store's lock.
+pub(crate) fn fence_previous(root: &Path) -> Result<()> {
+    for entry in fs::read_dir(root.join("apps"))? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let name = entry.file_name();
+        ensure!(
+            name.to_str().is_some_and(valid_name),
+            "invalid application directory"
+        );
+        let directory = entry.path();
+        cleanup_previous(
+            &directory.join("microvm-process.json"),
+            &directory.join("vm-jails"),
+        )?;
+    }
     Ok(())
 }
 

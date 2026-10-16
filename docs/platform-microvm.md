@@ -117,7 +117,7 @@ The resource-dependent test is explicit:
 
 ```sh
 BICDB_TEST_MICROVM_CONFIG=/etc/bic-microvm-test.json \
-  cargo test -p bicdb-platform --test microvm -- --ignored --nocapture
+  cargo test -p bicdb-app-host --test microvm -- --ignored --nocapture
 ```
 
 Provide an allocation named `counter`. The test needs root, working KVM and the

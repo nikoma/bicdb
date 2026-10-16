@@ -47,6 +47,7 @@ pub struct Application {
     error: Mutex<Option<String>>,
     api_admission: Mutex<Arc<Semaphore>>,
     peers: Mutex<BTreeMap<String, crate::sync::Peer>>,
+    peer_cipher: Option<crate::sync::PeerCipher>,
     sync_status: Mutex<BTreeMap<String, crate::sync::SyncStatus>>,
 }
 
@@ -137,8 +138,11 @@ impl Platform {
                         .load_release(&deployment.application, &deployment.release)?
                         .manifest
                         .sync
-                        .is_empty(),
-                    "native state replication does not yet carry signed edge record journals"
+                        .is_empty()
+                        || config.applications[&deployment.application]
+                            .edge_sync_key_file
+                            .is_some(),
+                    "replicated edge synchronization requires edge_sync_key_file"
                 );
             }
             for (name, group) in config.applications {
@@ -196,6 +200,28 @@ impl Platform {
                     .join("database"),
             )?),
         };
+        let peer_cipher = replica
+            .as_ref()
+            .and_then(|replica| {
+                replica.group.edge_sync_key_file.as_ref().map(|path| {
+                    crate::sync::PeerCipher::read(
+                        path,
+                        &deployment.application,
+                        &replica.group.cluster_id,
+                    )
+                })
+            })
+            .transpose()?;
+        let peers = if replica.is_some() {
+            BTreeMap::new()
+        } else {
+            crate::sync::load_peers(
+                &self
+                    .store
+                    .app_dir(&deployment.application)?
+                    .join("peers.json"),
+            )?
+        };
         Ok(Arc::new(Application {
             admission: Mutex::new(Arc::new(Semaphore::new(
                 release.manifest.resources.max_concurrent_requests,
@@ -211,18 +237,67 @@ impl Platform {
             token: Mutex::new(fresh_token()),
             gate: RwLock::new(()),
             error: Mutex::new(None),
-            peers: Mutex::new(crate::sync::load_peers(
-                &self
-                    .store
-                    .app_dir(&deployment.application)?
-                    .join("peers.json"),
-            )?),
+            peers: Mutex::new(peers),
+            peer_cipher,
             sync_status: Mutex::new(BTreeMap::new()),
         }))
     }
 
+    fn refresh_peer_grants(&self, app: &Application) -> Result<()> {
+        let Some(cipher) = &app.peer_cipher else {
+            return Ok(());
+        };
+        app.require_authority()?;
+        let database = app.database.lock()?;
+        let peers = match database.peer_grants()? {
+            Some(ciphertext) => match cipher.open(&ciphertext) {
+                Ok(peers) => peers,
+                Err(error) => {
+                    app.peers.lock().clear();
+                    return Err(error);
+                }
+            },
+            None => {
+                // Enroll historical standalone grants exactly once. Even an
+                // empty catalog is persisted, so revocation cannot later be
+                // undone by an old local peers.json cache.
+                let name = app.deployment.lock().application.clone();
+                let peers =
+                    crate::sync::load_peers(&self.store.app_dir(&name)?.join("peers.json"))?;
+                database.save_peer_grants(&cipher.seal(&peers)?)?;
+                peers
+            }
+        };
+        for peer in peers.values() {
+            database
+                .db
+                .write()
+                .pin_node_key(&peer.node_id, &peer.public_key)?;
+        }
+        *app.peers.lock() = peers;
+        Ok(())
+    }
+
+    fn persist_peers(
+        &self,
+        app: &Application,
+        name: &str,
+        peers: &BTreeMap<String, crate::sync::Peer>,
+    ) -> Result<()> {
+        if let Some(cipher) = &app.peer_cipher {
+            app.database.lock()?.save_peer_grants(&cipher.seal(peers)?)
+        } else {
+            ensure!(
+                app.replica.is_none(),
+                "replicated peer grants require edge_sync_key_file"
+            );
+            crate::sync::save_peers(&self.store.app_dir(name)?.join("peers.json"), peers)
+        }
+    }
+
     fn launch(&self, app: &Application, release: &Release, digest: &str) -> Result<Execution> {
         app.require_authority()?;
+        self.refresh_peer_grants(app)?;
         let name = &release.manifest.name;
         let app_dir = self.store.app_dir(name)?;
         self.store.load_release(name, digest)?;
@@ -335,8 +410,8 @@ impl Platform {
                 "state writer authority is unavailable"
             );
             ensure!(
-                release.manifest.sync.is_empty(),
-                "native state replication does not yet carry signed edge record journals"
+                release.manifest.sync.is_empty() || replica.group.edge_sync_key_file.is_some(),
+                "replicated edge synchronization requires edge_sync_key_file"
             );
         }
         let digest = self.store.save_release(&release)?;
@@ -1118,6 +1193,8 @@ async fn add_peer(
         let app = app.clone();
         let platform = platform.clone();
         move || {
+            app.require_authority()?;
+            platform.refresh_peer_grants(&app)?;
             let database = app.database.lock()?;
             ensure!(
                 database.db.read().node_id() != peer.node_id,
@@ -1127,9 +1204,10 @@ async fn add_peer(
                 .db
                 .write()
                 .pin_node_key(&peer.node_id, &peer.public_key)?;
+            drop(database);
             let mut peers = app.peers.lock().clone();
             peers.insert(peer.node_id.to_string(), peer.clone());
-            crate::sync::save_peers(&platform.store.app_dir(&name)?.join("peers.json"), &peers)?;
+            platform.persist_peers(&app, &name, &peers)?;
             *app.peers.lock() = peers;
             Ok(json!({"node_id":peer.node_id,"configured":true}))
         }
@@ -1176,7 +1254,9 @@ async fn sync_vector(
     let response = blocking({
         let app = app.clone();
         move || {
+            app.require_authority()?;
             let database = app.database.lock()?;
+            database.edge_barrier()?;
             let vector = database.db.read().sync_vector()?;
             Ok(crate::sync::VectorResponse {
                 identity: crate::sync::identity(&database, &app.deployment.lock().release)?,
@@ -1300,7 +1380,7 @@ async fn synchronize(platform: Arc<Platform>) {
             let Ok(_gate) = app.gate.try_read() else {
                 continue;
             };
-            if !app.deployment.lock().enabled {
+            if !app.deployment.lock().enabled || !app.authoritative() {
                 continue;
             }
             let peers: Vec<_> = app.peers.lock().values().cloned().collect();
@@ -1334,9 +1414,13 @@ async fn remove_peer(
         let app = app.clone();
         let platform = platform.clone();
         move || {
+            app.require_authority()?;
+            platform.refresh_peer_grants(&app)?;
             let mut peers = app.peers.lock().clone();
             ensure!(peers.remove(&node).is_some(), "peer not found");
-            crate::sync::save_peers(&platform.store.app_dir(&name)?.join("peers.json"), &peers)?;
+            // Revoke locally even if the synchronous decision is indeterminate.
+            app.peers.lock().remove(&node);
+            platform.persist_peers(&app, &name, &peers)?;
             *app.peers.lock() = peers;
             app.sync_status.lock().remove(&node);
             Ok(json!({"node_id":node,"configured":false}))

@@ -2,6 +2,9 @@
 //!
 //! Database replication, job delivery and application release activation are
 //! separate protocols. Only named data collections enter this exchange.
+mod grants;
+pub use grants::PeerCipher;
+
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -23,7 +26,7 @@ pub struct Identity {
     pub release: String,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Peer {
     pub node_id: NodeId,
@@ -182,6 +185,7 @@ pub fn export(
     digest: &str,
     peer: &SyncVector,
 ) -> Result<Exchange> {
+    database.edge_barrier()?;
     let mut db = database.db.write();
     let vector = db.sync_vector()?;
     vector.ensure_matching_equal_prefixes(peer)?;
@@ -204,6 +208,7 @@ pub fn import(database: &mut Database, release: &Release, exchange: Exchange) ->
         "bundle source differs from authenticated peer"
     );
     check_bundle(&exchange.bundle, release)?;
+    database.edge_barrier()?;
     database
         .db
         .read()
@@ -213,5 +218,5 @@ pub fn import(database: &mut Database, release: &Release, exchange: Exchange) ->
         .db
         .write()
         .import_sync_bundle_strict(exchange.bundle)?;
-    Ok(())
+    database.edge_barrier()
 }

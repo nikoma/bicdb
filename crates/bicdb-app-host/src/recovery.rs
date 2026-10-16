@@ -134,6 +134,7 @@ pub fn restore(store: &Store, archive: &Path, passphrase: &str) -> Result<Deploy
         // Validate the recovered data before it can enter the deployment catalog.
         let mut database = Database::open(&staging.join("database"))?;
         database.prepare(&metadata.release)?;
+        database.clear_peer_grants()?;
         let mut deployment = metadata.deployment;
         deployment.enabled = false;
         if database.deployment()?.is_some() {

@@ -32,6 +32,8 @@ pub struct Group {
     pub initial_primary: String,
     pub nodes: BTreeMap<String, Node>,
     pub tls: Option<Tls>,
+    /// Same operator-held 32-byte hex key on each physical state host.
+    pub edge_sync_key_file: Option<PathBuf>,
     #[serde(default)]
     pub dev_localhost_plaintext: bool,
     #[serde(default = "timeout")]
@@ -93,6 +95,12 @@ impl Config {
                 listeners.insert(group.nodes[&group.node_id].replication),
                 "state groups must use distinct replication listeners"
             );
+            if let Some(file) = &mut group.edge_sync_key_file {
+                if file.is_relative() {
+                    *file = path.parent().unwrap_or(Path::new(".")).join(&file);
+                }
+                crate::sync::PeerCipher::read(file, application, &group.cluster_id)?;
+            }
             if let Some(tls) = &mut group.tls {
                 let base = path.parent().unwrap_or(Path::new("."));
                 for file in [&mut tls.certificate, &mut tls.key, &mut tls.ca] {
@@ -211,6 +219,7 @@ impl Group {
                 cluster_id: self.cluster_id.clone(),
                 node_id: self.node_id.clone(),
                 reconnect_backoff_ms: 100,
+                record_journal: self.edge_sync_key_file.is_some(),
                 tls: Some(match &self.tls {
                     Some(tls) => ReplicationTlsConfig {
                         cert_path: tls.certificate.clone(),

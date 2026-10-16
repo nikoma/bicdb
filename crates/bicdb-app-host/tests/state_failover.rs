@@ -49,6 +49,9 @@ fn secret(path: &Path, text: &str) {
 }
 impl Group {
     fn start(remote: bool, live_partition: bool, existing: bool) -> Self {
+        Self::start_options(remote, live_partition, existing, false)
+    }
+    fn start_options(remote: bool, live_partition: bool, existing: bool, edge: bool) -> Self {
         let root = tempfile::tempdir().unwrap();
         let listeners: Vec<_> = (0..16)
             .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
@@ -59,6 +62,9 @@ impl Group {
             .collect();
         let nodes: serde_json::Map<_, _> = (0..3).map(|index| (format!("n{index}"), json!({"replication":format!("127.0.0.1:{}", ports[index+3]), "endpoint":format!("http://127.0.0.1:{}", ports[index])}))).collect();
         secret(&root.path().join("management.token"), TOKEN);
+        if edge {
+            secret(&root.path().join("edge-sync.key"), &"ab".repeat(32));
+        }
         secret(
             &root.path().join("worker.token"),
             "separate-worker-management-token-0000000000000000",
@@ -75,7 +81,8 @@ impl Group {
             }
             secret(&root.path().join(format!("state-{index}.json")), &json!({"format":1,"applications":{"counter":{
                 "cluster_id":"application-test", "node_id":format!("n{index}"), "initial_primary":"n0", "nodes":nodes,
-                "dev_localhost_plaintext":true,"failover_timeout_ms":3000,"synchronous_timeout_ms":5000
+                "dev_localhost_plaintext":true,"failover_timeout_ms":5000,"synchronous_timeout_ms":10000,
+                "edge_sync_key_file":if edge {Some("edge-sync.key")} else {None}
             }}}).to_string());
         }
         secret(&root.path().join("fleet.json"), &json!({"format":1,"workers":{"worker":{"endpoint":format!("http://127.0.0.1:{}",ports[6]),"token_file":"worker.token","region":"test","capacity":1,"isolation":"process"}}}).to_string());
@@ -545,4 +552,282 @@ fn an_existing_standalone_catalog_enrolls_without_losing_data_or_receipts() {
         group.post(1, "increment", "after-upgrade"),
         json!({"value":2})
     );
+}
+
+fn edge_failover(live_partition: bool) {
+    let mut group = Group::start_options(false, live_partition, false, true);
+    let edge = format!("http://127.0.0.1:{}", group.ports[6]);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_bic"));
+    command
+        .arg("--data")
+        .arg(group.root.path().join("edge"))
+        .arg("--token-file")
+        .arg(group.root.path().join("management.token"))
+        .args([
+            "serve",
+            "--listen",
+            &format!("127.0.0.1:{}", group.ports[6]),
+        ]);
+    group.worker = Some(group.spawn(command, "worker"));
+    group.wait(|| {
+        group
+            .client
+            .get(format!("{edge}/health"))
+            .send()
+            .is_ok_and(|response| response.status().is_success())
+    });
+    let mut release = Release::read(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/platform/counter/bic.json"),
+    )
+    .unwrap();
+    release.manifest.sync.insert(
+        "notes".into(),
+        bicdb_app_host::manifest::TableSync::AppendOnly,
+    );
+    release.manifest.files.push("002-notes.sql".into());
+    release.manifest.migrations.push("002-notes.sql".into());
+    release.files.insert(
+        "002-notes.sql".into(),
+        base64::engine::general_purpose::STANDARD
+            .encode("CREATE TABLE notes (id TEXT PRIMARY KEY, body TEXT)"),
+    );
+    release.files.insert("app.mjs".into(), base64::engine::general_purpose::STANDARD.encode(r#"
+export default { async fetch(request, env) {
+  if (request.method === 'POST') {
+    const { id } = await request.json();
+    return Response.json(await env.DB.query('INSERT INTO notes VALUES ($1, $2) RETURNING id', [id, id]));
+  }
+  return Response.json(await env.DB.query('SELECT * FROM notes ORDER BY id'));
+}};
+"#));
+    group.deploy(1, &release);
+    let response = group
+        .client
+        .post(format!("{edge}/v1/apps"))
+        .bearer_auth(TOKEN)
+        .json(&release)
+        .send()
+        .unwrap();
+    assert!(
+        response.status().is_success(),
+        "{}",
+        response.text().unwrap()
+    );
+    let identity = |base: &str| -> Value {
+        group
+            .client
+            .get(format!("{base}/v1/apps/counter/identity"))
+            .bearer_auth(TOKEN)
+            .send()
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .unwrap()
+    };
+    let central = identity(&group.base(2));
+    let edge_id = identity(&edge);
+    let pair_token = "edge-state-pair-transport-token-0000000000000000000";
+    for (local, remote, pin) in [
+        (group.base(1), edge.clone(), edge_id.clone()),
+        (edge.clone(), group.base(2), central.clone()),
+    ] {
+        let response = group
+            .client
+            .post(format!("{local}/v1/apps/counter/peers"))
+            .bearer_auth(TOKEN)
+            .json(
+                &json!({"node_id":pin["node_id"],"public_key":pin["public_key"],
+                "endpoint":remote,"token":pair_token}),
+            )
+            .send()
+            .unwrap();
+        assert!(
+            response.status().is_success(),
+            "{}",
+            response.text().unwrap()
+        );
+    }
+    let write = |base: &str, id: &str| {
+        let response = group
+            .client
+            .post(format!("{base}/apps/counter"))
+            .json(&json!({"id":id}))
+            .send()
+            .unwrap();
+        assert!(
+            response.status().is_success(),
+            "{}",
+            response.text().unwrap()
+        );
+    };
+    let read = |base: &str| -> Option<Value> {
+        group
+            .client
+            .get(format!("{base}/apps/counter"))
+            .send()
+            .ok()?
+            .error_for_status()
+            .ok()?
+            .json()
+            .ok()
+    };
+    write(&group.base(1), "central-before");
+    write(&edge, "edge-before");
+    group.wait(|| {
+        read(&edge).is_some_and(|rows| rows.as_array().unwrap().len() == 2)
+            && read(&group.base(2)).is_some_and(|rows| rows.as_array().unwrap().len() == 2)
+    });
+    if let Some(network) = &group.network {
+        network.isolate();
+        // The previous writer is still reachable. An indeterminate local
+        // commit must never be advertised to an independent edge.
+        let result = group
+            .client
+            .post(format!("{}/apps/counter", group.base(0)))
+            .json(&json!({"id":"unacknowledged"}))
+            .send();
+        assert!(result.is_err() || !result.unwrap().status().is_success());
+        let response = group
+            .client
+            .post(format!("{}/sync/counter/vector", group.base(0)))
+            .bearer_auth(pair_token)
+            .json(&edge_id)
+            .send()
+            .unwrap();
+        assert!(!response.status().is_success());
+    } else {
+        // Only the failed writer has the original standalone grant caches.
+        group.kill(0);
+    }
+    let mut primary = None;
+    group.wait(|| {
+        primary = (1..3).find(|index| {
+            group.status(*index).is_some_and(|status| {
+                status[0]["state"]["writer"] == true && status[0]["running"] == true
+            })
+        });
+        primary.is_some()
+    });
+    let primary = primary.unwrap();
+    let other = if primary == 1 { 2 } else { 1 };
+    // Writer recovery and standby route discovery are separate events.
+    // Reads may receive a transition response until the follower hears the
+    // elected writer; retry the read before exercising the recovered route.
+    let mut identity = None;
+    group.wait(|| {
+        identity = group
+            .client
+            .get(format!("{}/v1/apps/counter/identity", group.base(other)))
+            .bearer_auth(TOKEN)
+            .send()
+            .ok()
+            .and_then(|response| response.error_for_status().ok())
+            .and_then(|response| response.json::<Value>().ok());
+        identity.is_some()
+    });
+    let identity = identity.unwrap();
+    assert_eq!(
+        identity, central,
+        "physical promotion retains the pinned logical author"
+    );
+    for (base, id) in [
+        (group.base(other), "central-after"),
+        (edge.clone(), "edge-after"),
+    ] {
+        let response = group
+            .client
+            .post(format!("{base}/apps/counter"))
+            .json(&json!({"id":id}))
+            .send()
+            .unwrap();
+        assert!(
+            response.status().is_success(),
+            "{}",
+            response.text().unwrap()
+        );
+    }
+    group.wait(|| {
+        [edge.clone(), group.base(other)].iter().all(|base| {
+            group
+                .client
+                .get(format!("{base}/apps/counter"))
+                .send()
+                .ok()
+                .and_then(|response| response.error_for_status().ok())
+                .and_then(|response| response.json::<Value>().ok())
+                .is_some_and(|rows| rows.as_array().unwrap().len() == 4)
+        })
+    });
+    let response = group
+        .client
+        .delete(format!(
+            "{}/v1/apps/counter/peers/{}",
+            group.base(other),
+            edge_id["node_id"].as_str().unwrap()
+        ))
+        .bearer_auth(TOKEN)
+        .send()
+        .unwrap();
+    assert!(
+        response.status().is_success(),
+        "{}",
+        response.text().unwrap()
+    );
+    // A second election must not resurrect the revoked grant from host files.
+    if let Some(network) = &group.network {
+        network.heal();
+    } else {
+        group.start_node(0, false);
+    }
+    group.wait(|| {
+        // A cached release already exists on the returning host. Wait until
+        // it has actually followed the new data epoch before removing the
+        // current writer and relying on the restored majority.
+        group.status(0).is_some_and(|status| {
+            status[0]["running"] == false
+                && status[0]["state"]["primary"] == format!("n{primary}")
+                && status[0]["deployment"]["release"] == release.digest().unwrap()
+        })
+    });
+    group.kill(primary);
+    let mut next = None;
+    group.wait(|| {
+        next = [0, other].into_iter().find(|index| {
+            group.status(*index).is_some_and(|status| {
+                status[0]["state"]["writer"] == true && status[0]["running"] == true
+            })
+        });
+        next.is_some()
+    });
+    let next = next.unwrap();
+    let response = group
+        .client
+        .post(format!("{}/sync/counter/vector", group.base(next)))
+        .bearer_auth(pair_token)
+        .json(&edge_id)
+        .send()
+        .unwrap();
+    assert_eq!(response.status(), 401);
+    let peers: Value = group
+        .client
+        .get(format!("{}/v1/apps/counter/peers", group.base(next)))
+        .bearer_auth(TOKEN)
+        .send()
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .unwrap();
+    assert_eq!(peers, json!([]));
+}
+
+#[test]
+fn signed_edge_sync_and_peer_revocation_survive_state_failover() {
+    edge_failover(false);
+}
+
+#[test]
+fn an_http_reachable_isolated_writer_cannot_export_unacknowledged_edge_history() {
+    edge_failover(true);
 }

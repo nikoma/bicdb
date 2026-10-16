@@ -162,8 +162,10 @@ bic --data ./recovered serve
 Restores publish a complete inactive application directory and refuse existing
 applications. The image contains the current and previous release, database,
 request receipts, pending transactional outbox and local broker state. It
-excludes management credentials and peer transport grants. Transfer the key
-separately and re-provision peer grants where needed. Stop or otherwise fence
+excludes management credentials and standalone peer transport grants. Native
+state images may contain encrypted grant records; the operator grant key stays
+outside the image, and restore clears the records before publishing the inactive
+application. Transfer the recovery key separately and re-provision peer grants. Stop or otherwise fence
 the previous writer before explicitly running `bic start counter` on the target.
 Recovery retains the database node identity; activating two restored copies is
 not a supported multi-writer topology. Database conflicts do not fence a former
@@ -195,10 +197,12 @@ before continuing with the native commit stream.
 The embedding host must stop execution on authority loss and reopen state when
 `restart_required()` is set. `bic serve --state-config FILE` implements that
 lifecycle, a database-owned deployment catalog and pinned primary routing; see
-the state-group guide. Releases with selective edge synchronization are
-currently refused by `prepare` in this mode: native row replication does not
-carry the original signed edge journals. Use the standalone deployment workflow
-above for edge synchronization until that integration is implemented.
+the state-group guide. Selective edge synchronization requires the group's
+`edge_sync_key_file` setting. This enables original signed journals in the native
+commit stream, a stable logical author identity across physical hosts and
+encrypted, replicated peer grants. Embedding hosts must enable
+`ReplicationConfig.record_journal` and provide their own durable peer-grant
+integration before exposing selective exchange.
 
 ## Edge synchronization
 

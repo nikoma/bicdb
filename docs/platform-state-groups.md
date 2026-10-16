@@ -136,12 +136,57 @@ also disables the database-owned deployment record so later native enrollment
 cannot reactivate the saved writer automatically. Fence the previous writer
 before activating a restored copy.
 
-Selective signed edge synchronization is currently refused for applications in
-native state groups. Native row replication does not yet carry those original
-signed journals. Use standalone edge applications for that workflow until the
-journal integration is implemented. State groups do not provide active/active
-SQL or migrate in-flight processes. They recover committed state and start new
-execution, preserving the documented transaction and job idempotency contracts.
+State groups recover committed state and start new execution, preserving the
+documented transaction and job idempotency contracts. They do not provide
+active/active SQL or migrate in-flight processes.
+
+## Signed edge synchronization
+
+To synchronize selected application tables with standalone edge nodes, add
+`"edge_sync_key_file": "edge-sync.key"` to that application's group on every
+state host. Generate one 32-byte hexadecimal key and provision it separately on
+all hosts with mode 0600:
+
+```sh
+umask 077
+openssl rand -hex 32 > edge-sync.key
+```
+
+Paths resolve relative to the state configuration. Keep this key outside the
+application database, releases and recovery images. The same key, application
+name and cluster identity must be used by every physical replica. Incorrect
+keys refuse grant recovery. The key is an operator secret, never application
+configuration. Back it up separately; changing it requires a separate grant
+re-enrollment workflow.
+
+This setting enables version 2 native commit frames with the original signed
+record journal. Initial enrollment snapshots the writer's logical node ID and
+signing key to trusted physical replicas. Voting identities and certificate pins
+remain distinct. Promotion retains the identity pinned by edge peers, with a
+fresh authorship suffix that cannot reuse an exported event position. Stop all
+application writers and upgrade every state host together when enabling this
+setting on an existing group; mixed journal modes are refused.
+
+Use the ordinary application sync manifest and `bic peer add` workflow in the
+[deployment guide](stateful-application-platform.md). Peer administration,
+identity and `/sync` requests addressed to a standby forward once to the active
+writer. Point an edge at a reachable state host or an operator-managed ingress;
+the platform does not supply a highly available public network address.
+
+Peer grants are encrypted in private replicated SQL state with the operator key.
+A successor hydrates both transport grants and author-key pins before starting
+execution. An empty grant catalog persists revocations across elections. First
+enrollment can import the original host's standalone `peers.json` once; later
+local files cannot override the database catalog. Selective exchange still
+excludes these grants, private tables, jobs and request receipts.
+
+Only the authoritative writer exchanges edge changes. Vector reads, imports and
+exports wait for synchronous acknowledgement, so an unacknowledged native suffix
+cannot escape to an independent edge and later disappear after an election.
+Original journal history and its row projection commit together, including
+imports whose winning projection changes no rows. Recovery images may contain
+encrypted grant records, but do not contain this operator key; inactive restore
+clears the records and requires peer re-provisioning.
 
 This general native HA path is separate from the hardened Cell HA capability
 boundary described in [the high-availability guide](high-availability.md).

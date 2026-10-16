@@ -141,6 +141,7 @@ fn reconcile(platform: &Platform, name: &str) -> Result<()> {
         retire(&app);
         return Ok(());
     }
+    platform.refresh_peer_grants(&app)?;
     let needs_execution = {
         let mut slot = app.process.lock();
         slot.as_mut()
@@ -204,19 +205,6 @@ pub(super) enum Routed {
 
 pub(super) async fn route(platform: &Platform, mut request: Request) -> ApiResult<Routed> {
     let path = request.uri().path().to_owned();
-    let peer_name = if path.starts_with("/sync/") {
-        path.split('/').nth(2)
-    } else if path.starts_with("/v1/apps/") && path.split('/').nth(4) == Some("peers") {
-        path.split('/').nth(3)
-    } else {
-        None
-    };
-    if peer_name.is_some_and(|name| platform.replicas.contains_key(name)) {
-        return Err(ApiError(
-            StatusCode::BAD_REQUEST,
-            "native state replication does not yet carry signed edge record journals".into(),
-        ));
-    }
     let name = if path == "/v1/apps" && request.method() == axum::http::Method::POST {
         let (parts, body) = request.into_parts();
         let bytes = tokio::time::timeout(Duration::from_secs(30), to_bytes(body, MAX_BODY))
@@ -236,7 +224,7 @@ pub(super) async fn route(platform: &Platform, mut request: Request) -> ApiResul
         Some(name)
     } else if path.starts_with("/v1/apps/") {
         path.split('/').nth(3).map(str::to_owned)
-    } else if path.starts_with("/apps/") {
+    } else if path.starts_with("/apps/") || path.starts_with("/sync/") {
         path.split('/').nth(2).map(str::to_owned)
     } else {
         None

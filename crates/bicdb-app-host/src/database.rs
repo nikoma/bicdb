@@ -17,6 +17,7 @@ use crate::manifest::{Release, TableSync};
 
 mod deployment;
 mod jobs;
+mod peer_grants;
 
 const MIGRATIONS: &str = "__bic_platform_migrations";
 const RECEIPTS: &str = "__bic_platform_receipts";
@@ -213,10 +214,6 @@ impl Database {
 
     pub fn prepare(&mut self, release: &Release) -> Result<()> {
         if self.native.is_some() {
-            ensure!(
-                release.manifest.sync.is_empty(),
-                "native state replication does not yet carry signed edge record journals"
-            );
             ensure!(
                 self.writable(),
                 "state replica has no active writer authority"
@@ -471,8 +468,10 @@ impl Database {
 
     fn validate_replication_sync(&self, policy: &BTreeMap<String, TableSync>) -> Result<()> {
         ensure!(
-            self.native.is_none() || policy.is_empty(),
-            "native state replication does not yet carry signed edge record journals"
+            self.native.is_none()
+                || policy.is_empty()
+                || self.db.read().replication_config().record_journal,
+            "native edge synchronization requires journal-enabled state replication"
         );
         Ok(())
     }

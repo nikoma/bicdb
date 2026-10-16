@@ -147,6 +147,20 @@ fn failed_migration_is_not_recorded_or_partially_applied() {
 }
 
 #[test]
+fn transaction_upserts_keep_sql_compatibility_on_the_shared_engine_path() {
+    let root = tempfile::tempdir().unwrap();
+    let mut database = Database::open(root.path()).unwrap();
+    database
+        .prepare(&release(
+            "CREATE TABLE items (id INT PRIMARY KEY, value INT)",
+        ))
+        .unwrap();
+    database.query(&batch("INSERT INTO items VALUES (1,1) ON CONFLICT (id) DO UPDATE SET value = items.value + 1 RETURNING value",None)).unwrap();
+    let result=database.query(&batch("INSERT INTO items VALUES (1,1) ON CONFLICT (id) DO UPDATE SET value = items.value + 1 RETURNING value",None)).unwrap();
+    assert_eq!(serde_json::to_value(&result[0].rows).unwrap(), json!([[2]]));
+}
+
+#[test]
 fn release_paths_integrity_and_supervisor_ownership_are_enforced() {
     let root = tempfile::tempdir().unwrap();
     let store = Store::open(root.path()).unwrap();

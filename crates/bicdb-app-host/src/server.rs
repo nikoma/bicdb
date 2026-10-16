@@ -28,21 +28,24 @@ use crate::{
     fleet::{Execution, Fleet},
     manifest::{Release, MAX_RELEASE_BYTES},
     runtime::{find_node, read_log, Process},
+    state::{DatabaseHandle, Replica},
     store::{Deployment, Store},
 };
 
 const MAX_BODY: usize = MAX_RELEASE_BYTES * 4 / 3 + 2 * 1024 * 1024;
+mod state_lifecycle;
 
 pub struct Application {
     deployment: Mutex<Deployment>,
-    database: Mutex<Database>,
+    database: DatabaseHandle,
+    replica: Option<Arc<Replica>>,
     process: Mutex<Option<Execution>>,
     release: Mutex<Release>,
     token: Mutex<String>,
     gate: RwLock<()>,
     admission: Mutex<Arc<Semaphore>>,
     error: Mutex<Option<String>>,
-    api_admission: Arc<Semaphore>,
+    api_admission: Mutex<Arc<Semaphore>>,
     peers: Mutex<BTreeMap<String, crate::sync::Peer>>,
     sync_status: Mutex<BTreeMap<String, crate::sync::SyncStatus>>,
 }
@@ -58,6 +61,7 @@ pub struct Platform {
     endpoint: String,
     client: reqwest::Client,
     recovering: AtomicBool,
+    replicas: BTreeMap<String, Arc<Replica>>,
 }
 
 #[derive(Debug)]
@@ -65,7 +69,16 @@ struct ApiError(StatusCode, String);
 type ApiResult<T> = std::result::Result<T, ApiError>;
 impl From<anyhow::Error> for ApiError {
     fn from(error: anyhow::Error) -> Self {
-        Self(StatusCode::BAD_REQUEST, format!("{error:#}"))
+        let message = format!("{error:#}");
+        let status = if message.contains("state writer authority")
+            || message.contains("state replica has no active writer authority")
+            || message.contains("application state is reopening")
+        {
+            StatusCode::SERVICE_UNAVAILABLE
+        } else {
+            StatusCode::BAD_REQUEST
+        };
+        Self(status, message)
     }
 }
 impl IntoResponse for ApiError {
@@ -90,6 +103,7 @@ impl Platform {
         endpoint: String,
         microvm_config: Option<&Path>,
         fleet_config: Option<&Path>,
+        state_config: Option<&Path>,
     ) -> Result<Arc<Self>> {
         ensure!(
             token.len() >= 32 && !token.chars().any(char::is_whitespace),
@@ -109,6 +123,29 @@ impl Platform {
         if microvm.is_none() {
             crate::microvm::fence_previous(&store.root)?;
         }
+        let config = state_config.map(crate::state::Config::read).transpose()?;
+        let mut replicas = BTreeMap::new();
+        if let Some(config) = config {
+            for deployment in store.deployments()? {
+                ensure!(
+                    config.applications.contains_key(&deployment.application),
+                    "existing application {} lacks a state allocation",
+                    deployment.application
+                );
+                ensure!(
+                    store
+                        .load_release(&deployment.application, &deployment.release)?
+                        .manifest
+                        .sync
+                        .is_empty(),
+                    "native state replication does not yet carry signed edge record journals"
+                );
+            }
+            for (name, group) in config.applications {
+                let path = store.app_dir(&name)?.join("database");
+                replicas.insert(name, Replica::open(group, path)?);
+            }
+        }
         Ok(Arc::new(Self {
             store,
             microvm,
@@ -120,6 +157,7 @@ impl Platform {
             endpoint,
             client,
             recovering: AtomicBool::new(true),
+            replicas,
         }))
     }
 
@@ -148,21 +186,26 @@ impl Platform {
     }
 
     fn create_app(&self, deployment: Deployment, release: Release) -> Result<Arc<Application>> {
-        let database = Database::open(
-            &self
-                .store
-                .app_dir(&deployment.application)?
-                .join("database"),
-        )?;
+        let replica = self.replicas.get(&deployment.application).cloned();
+        let database = match &replica {
+            Some(replica) => replica.database.clone(),
+            None => DatabaseHandle::new(Database::open(
+                &self
+                    .store
+                    .app_dir(&deployment.application)?
+                    .join("database"),
+            )?),
+        };
         Ok(Arc::new(Application {
             admission: Mutex::new(Arc::new(Semaphore::new(
                 release.manifest.resources.max_concurrent_requests,
             ))),
-            api_admission: Arc::new(Semaphore::new(
+            api_admission: Mutex::new(Arc::new(Semaphore::new(
                 release.manifest.resources.max_concurrent_requests.min(8),
-            )),
+            ))),
             deployment: Mutex::new(deployment.clone()),
-            database: Mutex::new(database),
+            database,
+            replica,
             process: Mutex::new(None),
             release: Mutex::new(release),
             token: Mutex::new(fresh_token()),
@@ -179,6 +222,7 @@ impl Platform {
     }
 
     fn launch(&self, app: &Application, release: &Release, digest: &str) -> Result<Execution> {
+        app.require_authority()?;
         let name = &release.manifest.name;
         let app_dir = self.store.app_dir(name)?;
         self.store.load_release(name, digest)?;
@@ -193,7 +237,16 @@ impl Platform {
                     .fleet
                     .as_ref()
                     .context("worker fleet is not configured")?
-                    .launch(release, |token| *app.token.lock() = token);
+                    .launch(
+                        release,
+                        |token| *app.token.lock() = token,
+                        app.replica
+                            .as_ref()
+                            .and_then(|replica| replica.lease.lock().clone()),
+                        app.replica.as_ref().map(|replica| {
+                            replica.group.nodes[&replica.group.node_id].endpoint.clone()
+                        }),
+                    );
             }
             let mut process = match release.manifest.isolation {
                 crate::manifest::Isolation::Process => {
@@ -206,6 +259,7 @@ impl Platform {
                     .launch(release, &app_dir, &token)?,
             };
             process.wait_ready(release, &token)?;
+            app.require_authority()?;
             Ok(Execution::Local(process, token.clone()))
         })();
         if result.is_err() {
@@ -244,6 +298,9 @@ impl Platform {
 
     fn recover(&self) -> Result<()> {
         for deployment in self.store.deployments()? {
+            if self.replicas.contains_key(&deployment.application) {
+                continue;
+            }
             let release = self
                 .store
                 .load_release(&deployment.application, &deployment.release)?;
@@ -252,7 +309,7 @@ impl Platform {
                 .lock()
                 .insert(deployment.application.clone(), app.clone());
             if deployment.enabled {
-                let prepared = app.database.lock().prepare(&release);
+                let prepared = app.database.lock()?.prepare(&release);
                 let result =
                     prepared.and_then(|_| self.launch(&app, &release, &deployment.release));
                 match result {
@@ -268,6 +325,20 @@ impl Platform {
     fn deploy(&self, release: Release) -> Result<Deployment> {
         release.validate()?;
         self.validate_isolation(&release)?;
+        ensure!(
+            self.replicas.is_empty() || self.replicas.contains_key(&release.manifest.name),
+            "application lacks an operator state allocation"
+        );
+        if let Some(replica) = self.replicas.get(&release.manifest.name) {
+            ensure!(
+                replica.authoritative(),
+                "state writer authority is unavailable"
+            );
+            ensure!(
+                release.manifest.sync.is_empty(),
+                "native state replication does not yet carry signed edge record journals"
+            );
+        }
         let digest = self.store.save_release(&release)?;
         let name = &release.manifest.name;
         let existing = self.applications.lock().get(name).cloned();
@@ -304,24 +375,22 @@ impl Platform {
         // a schema whose new migration history it does not cover.
         let mut pending = deployment.clone();
         pending.enabled = false;
-        self.store.save_deployment(&pending)?;
-        *app.deployment.lock() = pending;
         // Callers hold the async write gate, so all routed requests and jobs drained.
         *app.token.lock() = fresh_token();
         app.process.lock().take();
+        *app.deployment.lock() = pending.clone();
+        app.set_release(release.clone());
+        self.persist_deployment(&app, &pending, &[&release])?;
         let result = (|| -> Result<Execution> {
-            app.database.lock().prepare(&release)?;
+            app.database.lock()?.prepare(&release)?;
             self.launch(&app, &release, &digest)
         })();
         match result {
             Ok(process) => {
                 // Persist desired state before exposing the new route. A supervisor
                 // crash here restarts the exact content-addressed release.
-                self.store.save_deployment(&deployment)?;
-                *app.admission.lock() = Arc::new(Semaphore::new(
-                    release.manifest.resources.max_concurrent_requests,
-                ));
-                *app.release.lock() = release;
+                app.require_authority()?;
+                self.persist_deployment(&app, &deployment, &[&release])?;
                 *app.error.lock() = None;
                 *app.process.lock() = Some(process);
                 *app.deployment.lock() = deployment.clone();
@@ -333,12 +402,51 @@ impl Platform {
                 // older application against a newer schema after failed activation.
                 let mut disabled = deployment;
                 disabled.enabled = false;
-                self.store.save_deployment(&disabled)?;
+                self.persist_deployment(&app, &disabled, &[&release])?;
                 *app.deployment.lock() = disabled;
                 *app.error.lock() = Some(format!("{error:#}"));
                 Err(error)
             }
         }
+    }
+
+    fn persist_deployment(
+        &self,
+        app: &Application,
+        deployment: &Deployment,
+        releases: &[&Release],
+    ) -> Result<()> {
+        app.require_authority()?;
+        if app.replica.is_some() {
+            app.database
+                .lock()?
+                .publish_deployment(deployment, releases)?;
+        }
+        self.store.save_deployment(deployment)
+    }
+}
+
+impl Application {
+    fn set_release(&self, release: Release) {
+        *self.admission.lock() = Arc::new(Semaphore::new(
+            release.manifest.resources.max_concurrent_requests,
+        ));
+        *self.api_admission.lock() = Arc::new(Semaphore::new(
+            release.manifest.resources.max_concurrent_requests.min(8),
+        ));
+        *self.release.lock() = release;
+    }
+    fn authoritative(&self) -> bool {
+        self.replica
+            .as_ref()
+            .is_none_or(|replica| replica.authoritative())
+    }
+    fn require_authority(&self) -> Result<()> {
+        ensure!(
+            self.authoritative(),
+            "state writer authority is unavailable"
+        );
+        Ok(())
     }
 }
 
@@ -399,18 +507,26 @@ async fn health(State(platform): State<Arc<Platform>>) -> impl IntoResponse {
 async fn list(State(platform): State<Arc<Platform>>, headers: HeaderMap) -> ApiResult<Json<Value>> {
     platform.admin_auth(&headers)?;
     let applications: Vec<_> = platform.applications.lock().values().cloned().collect();
-    let apps: Vec<_> = applications
+    let mut apps: Vec<_> = applications
         .iter()
         .map(|app| {
             let deployment = app.deployment.lock().clone();
             let slot = app.process.lock();
-            let running = slot.is_some();
+            let running = slot.is_some() && app.authoritative();
             let worker = slot.as_ref().and_then(Execution::worker).map(str::to_owned);
             drop(slot);
             let error = app.error.lock().clone();
-            json!({"deployment": deployment, "running": running, "worker": worker, "error": error})
+            json!({"application":deployment.application, "deployment": deployment, "running": running, "worker": worker, "error": error, "state":app.replica.as_ref().map(|replica| state_lifecycle::status(replica))})
         })
         .collect();
+    for (name, replica) in &platform.replicas {
+        if !applications
+            .iter()
+            .any(|app| app.deployment.lock().application == *name)
+        {
+            apps.push(json!({"application":name,"deployment":null,"running":false,"worker":null,"error":null,"state":state_lifecycle::status(replica)}));
+        }
+    }
     Ok(Json(json!(apps)))
 }
 
@@ -456,19 +572,21 @@ async fn operation(
             match operation.as_str() {
                 "stop" => {
                     deployment.enabled = false;
-                    platform.store.save_deployment(&deployment)?;
+                    app.require_authority()?;
                     *app.deployment.lock() = deployment.clone();
                     *app.token.lock() = fresh_token();
                     app.process.lock().take();
-                    drop(app.database.lock());
+                    platform.persist_deployment(&app, &deployment, &[])?;
+                    drop(app.database.lock()?);
                 }
                 "start" => {
                     if app.process.lock().is_none() {
                         let release = platform.store.load_release(&name, &deployment.release)?;
-                        app.database.lock().prepare(&release)?;
+                        app.database.lock()?.prepare(&release)?;
+                        app.set_release(release.clone());
                         let process = platform.launch(&app, &release, &deployment.release)?;
                         deployment.enabled = true;
-                        platform.store.save_deployment(&deployment)?;
+                        platform.persist_deployment(&app, &deployment, &[])?;
                         *app.deployment.lock() = deployment.clone();
                         *app.process.lock() = Some(process);
                         *app.error.lock() = None;
@@ -536,7 +654,7 @@ async fn query(
     let deadline = std::time::Instant::now()
         + Duration::from_millis(app.release.lock().manifest.resources.request_timeout_ms);
     let result = blocking(move || {
-        let mut database = app.database.lock();
+        let mut database = app.database.lock()?;
         ensure!(
             *app.token.lock() == token,
             "application execution was replaced"
@@ -579,7 +697,7 @@ async fn enqueue(
     }
     Ok(Json(
         blocking(move || {
-            let mut database = app.database.lock();
+            let mut database = app.database.lock()?;
             ensure!(
                 *app.token.lock() == token,
                 "application execution was replaced"
@@ -631,6 +749,7 @@ async fn forward(
         return Err(ApiError(StatusCode::NOT_FOUND, "route not found".into()));
     }
     let app = platform.app(&name)?;
+    app.require_authority()?;
     let _gate = app.gate.read().await;
     let _permit = app
         .admission
@@ -699,6 +818,7 @@ async fn forward(
             ApiError(StatusCode::BAD_GATEWAY, "application request failed".into())
         }
     })?;
+    app.require_authority()?;
     let status = response.status();
     let headers = response.headers().clone();
     let mut bytes = Vec::new();
@@ -716,6 +836,7 @@ async fn forward(
             )
         }
     })? {
+        app.require_authority()?;
         if bytes.len().saturating_add(chunk.len()) > 16 * 1024 * 1024 {
             return Err(ApiError(
                 StatusCode::BAD_GATEWAY,
@@ -754,6 +875,9 @@ async fn supervise(platform: Arc<Platform>) {
         tokio::time::sleep(Duration::from_millis(500)).await;
         let apps: Vec<_> = platform.applications.lock().values().cloned().collect();
         for app in apps {
+            if app.replica.is_some() {
+                continue;
+            }
             let Ok(_gate) = app.gate.try_read() else {
                 continue;
             };
@@ -779,7 +903,7 @@ async fn supervise(platform: Arc<Platform>) {
                     if dead {
                         let release = app.release.lock().clone();
                         let digest = app.deployment.lock().release.clone();
-                        let prepared = app.database.lock().prepare(&release);
+                        let prepared = app.database.lock()?.prepare(&release);
                         match prepared.and_then(|_| platform.launch(&app, &release, &digest)) {
                             Ok(process) => {
                                 *app.process.lock() = Some(process);
@@ -805,7 +929,7 @@ async fn jobs(platform: Arc<Platform>) {
         tokio::time::sleep(Duration::from_millis(250)).await;
         let apps: Vec<_> = platform.applications.lock().values().cloned().collect();
         for app in apps {
-            if !app.deployment.lock().enabled {
+            if !app.authoritative() || !app.deployment.lock().enabled {
                 continue;
             }
             let Ok(_gate) = app.gate.try_read() else {
@@ -821,7 +945,7 @@ async fn jobs(platform: Arc<Platform>) {
                 let app = app.clone();
                 let consumer = consumer.clone();
                 move || {
-                    let mut database = app.database.lock();
+                    let mut database = app.database.lock()?;
                     database.drain_outbox(32)?;
                     database.consume(&consumer, timeout)
                 }
@@ -833,6 +957,9 @@ async fn jobs(platform: Arc<Platform>) {
                 }
                 continue;
             };
+            if !app.authoritative() {
+                continue;
+            }
             let token = execution_token.clone();
             let mut request = client.post(format!("{endpoint}/__bic/job"));
             if let Some(token) = worker_token {
@@ -848,7 +975,7 @@ async fn jobs(platform: Arc<Platform>) {
             let consumer = consumer.clone();
             let app = app.clone();
             let _ =
-                blocking(move || app.database.lock().settle(&consumer, &message, success)).await;
+                blocking(move || app.database.lock()?.settle(&consumer, &message, success)).await;
         }
     }
 }
@@ -860,6 +987,7 @@ pub async fn serve(
     node: Option<PathBuf>,
     microvm_config: Option<PathBuf>,
     fleet_config: Option<PathBuf>,
+    state_config: Option<PathBuf>,
 ) -> Result<()> {
     let listener = tokio::net::TcpListener::bind(listen).await?;
     let address = listener.local_addr()?;
@@ -878,6 +1006,7 @@ pub async fn serve(
         format!("http://{local}"),
         microvm_config.as_deref(),
         fleet_config.as_deref(),
+        state_config.as_deref(),
     )?;
     let mut private_listeners = Vec::new();
     if let Some(host) = &platform.microvm {
@@ -915,7 +1044,9 @@ pub async fn serve(
             tokio::join!(
                 supervise(platform.clone()),
                 jobs(platform.clone()),
-                synchronize(platform)
+                synchronize(platform.clone()),
+                state_lifecycle::run(platform.clone()),
+                state_lifecycle::fence(platform)
             );
         }
     });
@@ -931,6 +1062,11 @@ pub async fn serve(
     for app in platform.applications.lock().values() {
         app.process.lock().take();
     }
+    for replica in platform.replicas.values() {
+        if let Some(database) = replica.database.0.lock().as_ref() {
+            database.request_shutdown();
+        }
+    }
     result?;
     Ok(())
 }
@@ -943,7 +1079,7 @@ async fn identity(
     platform.admin_auth(&headers)?;
     let app = platform.app(&name)?;
     let identity = blocking(move || {
-        crate::sync::identity(&app.database.lock(), &app.deployment.lock().release)
+        crate::sync::identity(&*app.database.lock()?, &app.deployment.lock().release)
     })
     .await?;
     Ok(Json(json!(identity)))
@@ -982,7 +1118,7 @@ async fn add_peer(
         let app = app.clone();
         let platform = platform.clone();
         move || {
-            let database = app.database.lock();
+            let database = app.database.lock()?;
             ensure!(
                 database.db.read().node_id() != peer.node_id,
                 "cannot add this database as its own peer"
@@ -1040,7 +1176,7 @@ async fn sync_vector(
     let response = blocking({
         let app = app.clone();
         move || {
-            let database = app.database.lock();
+            let database = app.database.lock()?;
             let vector = database.db.read().sync_vector()?;
             Ok(crate::sync::VectorResponse {
                 identity: crate::sync::identity(&database, &app.deployment.lock().release)?,
@@ -1053,7 +1189,7 @@ async fn sync_vector(
 }
 
 fn validate_origins(app: &Application, exchange: &crate::sync::Exchange) -> Result<()> {
-    let own = app.database.lock().db.read().node_id();
+    let own = app.database.lock()?.db.read().node_id();
     let peers = app.peers.lock();
     for event in &exchange.bundle.events {
         ensure!(
@@ -1081,7 +1217,7 @@ async fn sync_exchange(
             let release = app.release.lock().clone();
             let digest = app.deployment.lock().release.clone();
             let vector = exchange.vector.clone();
-            let mut database = app.database.lock();
+            let mut database = app.database.lock()?;
             crate::sync::import(&mut database, &release, exchange)?;
             crate::sync::export(&mut database, &release, &digest, &vector)
         }
@@ -1095,7 +1231,7 @@ async fn sync_peer(
     app: Arc<Application>,
     peer: crate::sync::Peer,
 ) -> Result<()> {
-    let local = { crate::sync::identity(&app.database.lock(), &app.deployment.lock().release)? };
+    let local = { crate::sync::identity(&*app.database.lock()?, &app.deployment.lock().release)? };
     let name = app.deployment.lock().application.clone();
     let base = peer.endpoint.trim_end_matches('/');
     let response = platform
@@ -1113,7 +1249,7 @@ async fn sync_peer(
         let app = app.clone();
         move || {
             let release = app.release.lock().clone();
-            let mut database = app.database.lock();
+            let mut database = app.database.lock()?;
             crate::sync::export(&mut database, &release, &local.release, &remote.vector)
         }
     })
@@ -1149,7 +1285,7 @@ async fn sync_peer(
     validate_origins(&app, &exchange)?;
     blocking(move || {
         let release = app.release.lock().clone();
-        let mut database = app.database.lock();
+        let mut database = app.database.lock()?;
         crate::sync::import(&mut database, &release, exchange)
     })
     .await
@@ -1212,16 +1348,24 @@ async fn remove_peer(
 
 async fn authenticate(
     State(platform): State<Arc<Platform>>,
-    request: Request,
+    mut request: Request,
     next: axum::middleware::Next,
 ) -> Response {
-    let path = request.uri().path();
+    let path = request.uri().path().to_owned();
     let mut _permit = None;
     if path.starts_with("/v1/") {
         if let Err(error) = platform.admin_auth(request.headers()) {
             return error.into_response();
         }
-    } else if path.starts_with("/internal/") || path.starts_with("/sync/") {
+    }
+    if !platform.replicas.is_empty() {
+        match state_lifecycle::route(&platform, request).await {
+            Ok(state_lifecycle::Routed::Local(local)) => request = local,
+            Ok(state_lifecycle::Routed::Response(response)) => return response,
+            Err(error) => return error.into_response(),
+        }
+    }
+    if path.starts_with("/internal/") || path.starts_with("/sync/") {
         let Some(name) = path.split('/').nth(2) else {
             return StatusCode::NOT_FOUND.into_response();
         };
@@ -1238,7 +1382,7 @@ async fn authenticate(
                 .any(|peer| authorized(request.headers(), &peer.token))
         };
         if allowed && path.starts_with("/internal/") {
-            _permit = match app.api_admission.clone().try_acquire_owned() {
+            _permit = match app.api_admission.lock().clone().try_acquire_owned() {
                 Ok(permit) => Some(permit),
                 Err(_) => {
                     return ApiError(
@@ -1253,6 +1397,13 @@ async fn authenticate(
             return ApiError(
                 StatusCode::UNAUTHORIZED,
                 "scoped authorization required".into(),
+            )
+            .into_response();
+        }
+        if !app.authoritative() {
+            return ApiError(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "state writer authority is unavailable".into(),
             )
             .into_response();
         }
@@ -1303,7 +1454,7 @@ async fn conflicts(
     }
     Ok(Json(
         blocking(move || {
-            let database = app.database.lock();
+            let database = app.database.lock()?;
             ensure!(
                 *app.token.lock() == token,
                 "application execution was replaced"
@@ -1322,7 +1473,7 @@ async fn job_status(
     platform.admin_auth(&headers)?;
     let app = platform.app(&name)?;
     Ok(Json(
-        blocking(move || app.database.lock().job_status()).await?,
+        blocking(move || app.database.lock()?.job_status()).await?,
     ))
 }
 
@@ -1376,7 +1527,7 @@ async fn backup(
             std::fs::create_dir_all(&snapshots)?;
             let path = snapshots.join(format!("{}.bicbak", Uuid::new_v4()));
             crate::recovery::snapshot(
-                &mut app.database.lock(),
+                &mut *app.database.lock()?,
                 deployment,
                 release,
                 previous,
@@ -1422,6 +1573,11 @@ impl Drop for Platform {
     fn drop(&mut self) {
         for app in self.applications.lock().values() {
             app.process.lock().take();
+            app.database.0.lock().take();
+        }
+        for replica in self.replicas.values() {
+            *replica.lease.lock() = None;
+            replica.database.0.lock().take();
         }
         // Network resources leave before Store releases its ownership lock.
         self.microvm.take();

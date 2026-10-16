@@ -15,6 +15,7 @@ use sqlparser::{ast::Statement, dialect::PostgreSqlDialect, parser::Parser};
 
 use crate::manifest::{Release, TableSync};
 
+mod deployment;
 mod jobs;
 
 const MIGRATIONS: &str = "__bic_platform_migrations";
@@ -182,14 +183,32 @@ impl Database {
     }
 
     fn initialize(&mut self) -> Result<()> {
-        {
-            let mut db = self.db.write();
-            let mut session = SqlSession::new(&mut db);
-            session.execute(&format!("CREATE TABLE IF NOT EXISTS {MIGRATIONS} (position BIGINT PRIMARY KEY, name TEXT NOT NULL, digest TEXT NOT NULL)"))?;
-            session.execute(&format!("CREATE TABLE IF NOT EXISTS {RECEIPTS} (key TEXT PRIMARY KEY, digest TEXT NOT NULL, result TEXT NOT NULL)"))?;
-            session.execute(&format!("CREATE TABLE IF NOT EXISTS {OUTBOX} (id TEXT PRIMARY KEY, position BIGINT NOT NULL, payload TEXT NOT NULL)"))?;
-        }
+        self.initialize_table(
+            MIGRATIONS,
+            "position BIGINT PRIMARY KEY, name TEXT NOT NULL, digest TEXT NOT NULL",
+        )?;
+        self.initialize_table(
+            RECEIPTS,
+            "key TEXT PRIMARY KEY, digest TEXT NOT NULL, result TEXT NOT NULL",
+        )?;
+        self.initialize_table(
+            OUTBOX,
+            "id TEXT PRIMARY KEY, position BIGINT NOT NULL, payload TEXT NOT NULL",
+        )?;
         self.initialize_job_ledger()
+    }
+
+    fn initialize_table(&self, table: &str, columns: &str) -> Result<()> {
+        self.ensure_authority()?;
+        let result = (|| -> Result<()> {
+            let mut db = self.db.write();
+            SqlSession::new(&mut db)
+                .execute(&format!("CREATE TABLE IF NOT EXISTS {table} ({columns})"))?;
+            Ok(())
+        })();
+        // Replication advances between independent private DDL operations.
+        // Application migrations retain their own transactional boundaries.
+        self.acknowledge(result)
     }
 
     pub fn prepare(&mut self, release: &Release) -> Result<()> {
@@ -297,7 +316,7 @@ impl Database {
         batch: &QueryBatch,
         deadline: std::time::Instant,
     ) -> Result<Vec<SqlResult>> {
-        let mut db = self.db.write();
+        let db = self.db.read();
         let cancellation = bicdb_core::CancellationToken::new(
             std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             Some(deadline),
@@ -346,7 +365,7 @@ impl Database {
                 !key.is_empty() && key.len() <= 256,
                 "invalid idempotency key"
             );
-            let mut session = SqlSession::new(&mut db).with_cancellation(cancellation.clone());
+            let mut session = SqlSession::new_shared(&db).with_cancellation(cancellation.clone());
             let rows = session
                 .execute(&format!(
                     "SELECT digest, result FROM {RECEIPTS} WHERE key = {}",
@@ -365,7 +384,7 @@ impl Database {
             }
         }
         // One database mutex covers receipt lookup, transaction and commit.
-        let mut session = SqlSession::new(&mut db).with_cancellation(cancellation.clone());
+        let mut session = SqlSession::new_shared(&db).with_cancellation(cancellation.clone());
         session.execute("BEGIN")?;
         let mut results = Vec::new();
         for query in &batch.statements {

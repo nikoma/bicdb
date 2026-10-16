@@ -18,6 +18,7 @@ bicdb-core = { path = "../bicdb-core", version = "1.0.438-beta" }
 bicdb-pgwire = { path = "../bicdb-pgwire", version = "1.0.438-beta", default-features = false }
 bicdb-sql = { path = "../bicdb-sql", version = "1.0.438-beta", default-features = false }
 clap.workspace = true
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
 libc.workspace = true
 parking_lot.workspace = true
 reqwest.workspace = true

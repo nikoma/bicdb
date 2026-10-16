@@ -894,6 +894,7 @@ dependencies = [
  "bicdb-pgwire",
  "bicdb-sql",
  "clap",
+ "futures-util",
  "libc",
  "parking_lot",
  "reqwest",

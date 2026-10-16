@@ -148,6 +148,8 @@ impl Fleet {
         self: &Arc<Self>,
         release: &Release,
         install_token: impl Fn(String),
+        authority: Option<bicdb_pgwire::HaWriterLease>,
+        state_endpoint: Option<String>,
     ) -> Result<Execution> {
         self.validate(release)?;
         let region = &release.manifest.placement.as_ref().unwrap().region;
@@ -165,6 +167,10 @@ impl Fleet {
             .collect();
         candidates.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.cmp(&b.0)));
         for (name, _) in candidates {
+            ensure!(
+                authority.as_ref().is_none_or(|lease| lease.active()),
+                "state writer authority is unavailable"
+            );
             let (endpoint, management) = {
                 let mut entries = self.entries.lock();
                 let entry = entries.get_mut(&name).unwrap();
@@ -195,13 +201,18 @@ impl Fleet {
                         id: remote.id.clone(),
                         release: release.clone(),
                         token: token.clone(),
+                        state_endpoint: state_endpoint.clone(),
                     })
                     .send()?;
                 ensure!(response.status().is_success(), "worker refused activation");
                 Ok(())
             })();
             if result.is_ok() {
-                remote.heartbeat();
+                ensure!(
+                    authority.as_ref().is_none_or(|lease| lease.active()),
+                    "state writer authority was lost during activation"
+                );
+                remote.heartbeat(authority.clone());
                 return Ok(Execution::Remote(
                     remote,
                     crate::runtime::upstream_client()?,
@@ -222,6 +233,9 @@ pub struct Launch {
     pub id: String,
     pub release: Release,
     pub token: String,
+    /// Must match one of the worker's operator-pinned state origins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_endpoint: Option<String>,
 }
 
 pub enum Execution {
@@ -230,6 +244,11 @@ pub enum Execution {
 }
 
 impl Execution {
+    pub(crate) fn revoke(&self) {
+        if let Self::Remote(remote, _) = self {
+            remote.alive.store(false, Ordering::Release);
+        }
+    }
     pub fn route(&self) -> (String, reqwest::Client, Option<String>, String) {
         match self {
             Self::Local(process, token) => (
@@ -294,7 +313,7 @@ pub struct Remote {
     alive: Arc<AtomicBool>,
 }
 impl Remote {
-    fn heartbeat(&self) {
+    fn heartbeat(&self, authority: Option<bicdb_pgwire::HaWriterLease>) {
         let endpoint = format!("{}/v1/executions/{}/renew", self.endpoint, self.id);
         let token = self.management.clone();
         let alive = self.alive.clone();
@@ -305,7 +324,10 @@ impl Remote {
             };
             while alive.load(Ordering::Acquire) {
                 std::thread::sleep(Duration::from_millis(750));
-                if !alive.load(Ordering::Acquire) {
+                if !alive.load(Ordering::Acquire)
+                    || authority.as_ref().is_some_and(|lease| !lease.active())
+                {
+                    alive.store(false, Ordering::Release);
                     break;
                 }
                 let result = client.post(&endpoint).bearer_auth(&token).send();

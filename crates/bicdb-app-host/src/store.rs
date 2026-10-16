@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::manifest::{valid_name, Release};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Deployment {
     pub application: String,

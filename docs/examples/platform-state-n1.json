@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "applications": {
+    "counter": {
+      "cluster_id": "counter-state",
+      "node_id": "n1",
+      "initial_primary": "n1",
+      "dev_localhost_plaintext": true,
+      "failover_timeout_ms": 5000,
+      "synchronous_timeout_ms": 5000,
+      "nodes": {
+        "n1": {"replication": "127.0.0.1:5941", "endpoint": "http://127.0.0.1:8788"},
+        "n2": {"replication": "127.0.0.1:5942", "endpoint": "http://127.0.0.1:8789"},
+        "n3": {"replication": "127.0.0.1:5943", "endpoint": "http://127.0.0.1:8790"}
+      }
+    }
+  }
+}

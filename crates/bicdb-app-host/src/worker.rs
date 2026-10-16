@@ -36,6 +36,7 @@ struct Running {
 struct Instance {
     name: String,
     token: String,
+    state_endpoint: String,
     running: Mutex<Option<Running>>,
     starting: AtomicBool,
     created: Instant,
@@ -46,11 +47,17 @@ struct Worker {
     node: PathBuf,
     endpoint: String,
     state_endpoint: String,
+    state_peers: Vec<String>,
     capacity: usize,
     microvm: Option<crate::microvm::Host>,
     instances: Mutex<BTreeMap<String, Arc<Instance>>>,
     admin: tokio::sync::Mutex<()>,
     client: reqwest::Client,
+}
+
+pub struct StateOrigins {
+    pub primary: String,
+    pub peers: Vec<String>,
 }
 
 type Error = (StatusCode, &'static str);
@@ -94,6 +101,16 @@ impl Worker {
             "invalid execution capability"
         );
         launch.release.validate()?;
+        let state_endpoint = launch
+            .state_endpoint
+            .as_deref()
+            .unwrap_or(&self.state_endpoint)
+            .trim_end_matches('/')
+            .to_owned();
+        ensure!(
+            state_endpoint == self.state_endpoint || self.state_peers.contains(&state_endpoint),
+            "execution state origin is not operator-pinned"
+        );
         ensure!(
             launch.release.manifest.placement.is_some(),
             "remote placement is required"
@@ -120,6 +137,7 @@ impl Worker {
         let instance = Arc::new(Instance {
             name: name.clone(),
             token: launch.token.clone(),
+            state_endpoint,
             running: Mutex::new(None),
             starting: AtomicBool::new(true),
             created: Instant::now(),
@@ -303,7 +321,9 @@ async fn forward(
             .instances
             .lock()
             .values()
-            .find(|entry| entry.name == name)
+            .find(|entry| {
+                entry.name == name && crate::server::authorized(request.headers(), &entry.token)
+            })
             .cloned()
             .ok_or_else(unavailable)?;
         {
@@ -317,7 +337,7 @@ async fn forward(
         }
         // The destination is operator-pinned, never selected by a deployment.
         (
-            format!("{}{}", worker.state_endpoint, path),
+            format!("{}{}", instance.state_endpoint, path),
             worker.client.clone(),
             Some(instance),
         )
@@ -369,11 +389,19 @@ pub async fn serve(
     listen: SocketAddr,
     token: String,
     node: Option<PathBuf>,
-    state_endpoint: String,
+    state: StateOrigins,
     capacity: usize,
     microvm_config: Option<PathBuf>,
 ) -> Result<()> {
+    let StateOrigins {
+        primary: state_endpoint,
+        peers: state_peers,
+    } = state;
     crate::fleet::validate_origin(&state_endpoint)?;
+    ensure!(state_peers.len() <= 128, "too many state origins");
+    for endpoint in &state_peers {
+        crate::fleet::validate_origin(endpoint)?;
+    }
     ensure!((1..=4096).contains(&capacity), "invalid worker capacity");
     let node = crate::runtime::find_node(node.as_deref())?;
     let store = Store::open(&root)?;
@@ -400,6 +428,10 @@ pub async fn serve(
         node,
         endpoint: format!("http://{local}"),
         state_endpoint: state_endpoint.trim_end_matches('/').into(),
+        state_peers: state_peers
+            .iter()
+            .map(|endpoint| endpoint.trim_end_matches('/').into())
+            .collect(),
         capacity,
         microvm,
         instances: Mutex::new(BTreeMap::new()),

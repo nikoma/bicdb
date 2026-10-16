@@ -12,6 +12,8 @@ access. Existing signed WASM application hosting remains available through
 
 Optional [worker fleets](platform-worker-fleet.md) place compute on other hosts
 with lease-based recovery while keeping SQL state and jobs at the state service.
+Optional [native state groups](platform-state-groups.md) replicate application
+data and the deployment catalog, elect a successor and recover execution.
 
 ## Run an application
 
@@ -165,10 +167,9 @@ separately and re-provision peer grants where needed. Stop or otherwise fence
 the previous writer before explicitly running `bic start counter` on the target.
 Recovery retains the database node identity; activating two restored copies is
 not a supported multi-writer topology. Database conflicts do not fence a former
-writer. Automatic state-writer failover requires separate writer and route
-authority; manual restore and a local process restart do not establish those
-guarantees. Compute workers can fail over while retaining this one state service,
-as described in the worker fleet guide.
+writer. Manual restore and a local process restart do not establish automatic
+writer or route authority. Use native state groups for automatic state-service
+failover, or worker fleets alone to retain one authoritative state service.
 
 ### Replicated application state API
 
@@ -191,10 +192,10 @@ First-time primary enrollment checkpoints existing state so new replicas receive
 a complete snapshot, including empty tables and historical standalone updates,
 before continuing with the native commit stream.
 
-This is an embedding API. `bic serve` still uses a local deployment catalog;
-its routing and lifecycle are not yet driven by a replicated state lease.
 The embedding host must stop execution on authority loss and reopen state when
-`restart_required()` is set. Releases with selective edge synchronization are
+`restart_required()` is set. `bic serve --state-config FILE` implements that
+lifecycle, a database-owned deployment catalog and pinned primary routing; see
+the state-group guide. Releases with selective edge synchronization are
 currently refused by `prepare` in this mode: native row replication does not
 carry the original signed edge journals. Use the standalone deployment workflow
 above for edge synchronization until that integration is implemented.

@@ -99,14 +99,18 @@ fn insert(session: &mut SqlSession<'_>, id: &str, payload: &Value, timestamp: i6
 
 impl Database {
     pub(super) fn initialize_job_ledger(&mut self) -> Result<()> {
+        self.initialize_table(JOBS, "id TEXT PRIMARY KEY, position BIGINT NOT NULL, created_at BIGINT NOT NULL, available_at BIGINT NOT NULL, attempts BIGINT NOT NULL, max_attempts BIGINT NOT NULL, status TEXT NOT NULL, consumer TEXT NOT NULL, lease_until BIGINT NOT NULL, delivered_at BIGINT NOT NULL")?;
+        self.initialize_table(PAYLOADS, "id TEXT PRIMARY KEY, payload TEXT NOT NULL")?;
+        self.initialize_table(
+            KEYS,
+            "key TEXT PRIMARY KEY, id TEXT NOT NULL, digest TEXT NOT NULL",
+        )?;
+        self.initialize_table(
+            MIGRATION,
+            "id TEXT PRIMARY KEY, cursor BIGINT NOT NULL, complete BOOL NOT NULL",
+        )?;
         let mut db = self.db.write();
         let mut session = SqlSession::new(&mut db);
-        session.execute(&format!("CREATE TABLE IF NOT EXISTS {JOBS} (id TEXT PRIMARY KEY, position BIGINT NOT NULL, created_at BIGINT NOT NULL, available_at BIGINT NOT NULL, attempts BIGINT NOT NULL, max_attempts BIGINT NOT NULL, status TEXT NOT NULL, consumer TEXT NOT NULL, lease_until BIGINT NOT NULL, delivered_at BIGINT NOT NULL)"))?;
-        session.execute(&format!(
-            "CREATE TABLE IF NOT EXISTS {PAYLOADS} (id TEXT PRIMARY KEY, payload TEXT NOT NULL)"
-        ))?;
-        session.execute(&format!("CREATE TABLE IF NOT EXISTS {KEYS} (key TEXT PRIMARY KEY, id TEXT NOT NULL, digest TEXT NOT NULL)"))?;
-        session.execute(&format!("CREATE TABLE IF NOT EXISTS {MIGRATION} (id TEXT PRIMARY KEY, cursor BIGINT NOT NULL, complete BOOL NOT NULL)"))?;
         let migration = session
             .execute(&format!(
                 "SELECT cursor, complete FROM {MIGRATION} WHERE id = 'legacy-v1'"
@@ -228,8 +232,8 @@ impl Database {
                 "invalid job idempotency key"
             );
         }
-        let mut db = self.db.write();
-        let mut session = SqlSession::new(&mut db);
+        let db = self.db.read();
+        let mut session = SqlSession::new_shared(&db);
         transaction(&mut session, |session| {
             if let Some(key) = &key {
                 if let Some(id) = lookup(session, &format!("send:{key}"), &payload)?.or(lookup(
@@ -258,8 +262,8 @@ impl Database {
     }
     fn drain_outbox_local(&mut self, limit: usize) -> Result<usize> {
         ensure!((1..=128).contains(&limit), "invalid outbox batch size");
-        let mut db = self.db.write();
-        let mut session = SqlSession::new(&mut db);
+        let db = self.db.read();
+        let mut session = SqlSession::new_shared(&db);
         let rows = session
             .execute(&format!(
                 "SELECT id FROM {OUTBOX} ORDER BY position LIMIT {limit}"
@@ -298,8 +302,8 @@ impl Database {
 
     pub fn job_status(&mut self) -> Result<Value> {
         let timestamp = now();
-        let mut db = self.db.write();
-        let mut session = SqlSession::new(&mut db);
+        let db = self.db.read();
+        let mut session = SqlSession::new_shared(&db);
         let mut count = |predicate: &str| -> Result<i64> {
             integer(
                 &session
@@ -338,8 +342,8 @@ impl Database {
         );
         let timestamp = now();
         let deadline = timestamp.saturating_add(timeout_ms as i64 + 10_000);
-        let mut db = self.db.write();
-        let mut session = SqlSession::new(&mut db);
+        let db = self.db.read();
+        let mut session = SqlSession::new_shared(&db);
         let rows = session.execute(&format!("SELECT id, position, created_at, attempts, max_attempts FROM {JOBS} WHERE (status = 'ready' OR (status = 'running' AND lease_until <= {timestamp})) AND available_at <= {timestamp} ORDER BY position LIMIT 128"))?.rows;
         if rows.is_empty() {
             return Ok(None);
@@ -397,8 +401,8 @@ impl Database {
         );
         let timestamp = now();
         let id = quote(&message.message_id.to_string());
-        let mut db = self.db.write();
-        let mut session = SqlSession::new(&mut db);
+        let db = self.db.read();
+        let mut session = SqlSession::new_shared(&db);
         transaction(&mut session, |session| {
             let rows = session
                 .execute(&format!(

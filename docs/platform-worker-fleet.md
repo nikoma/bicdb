@@ -6,8 +6,9 @@ service. A worker failure replaces the computation without moving or restoring
 the database. Edge databases with selective synchronization are a separate
 deployment model; they do not become authoritative replicas of this service.
 
-The state service remains a single authority. This mode provides compute
-failover, not automatic database or control-plane failover. If the state service
+The state service remains a single authority. A fleet alone provides compute
+failover. Add [native state groups](platform-state-groups.md) for database and
+control-plane failover. With a standalone state service, if that service
 is unavailable, workers stop when their leases expire. Recover that service from
 its durable storage or an encrypted application recovery image. Do not start
 independent state services against copied application catalogs and treat them as
@@ -15,7 +16,7 @@ an HA pair.
 
 ## Configure workers
 
-Each worker belongs to one state service. Start it with a separate data directory
+Each worker belongs to one state service or native state group. Start it with a separate data directory
 and a dedicated management token. The command creates an owner-only token file
 if it is absent:
 
@@ -29,6 +30,9 @@ bic --data /var/lib/bic-worker worker \
 Expose remote listeners through operator-managed HTTPS termination. Worker and
 state endpoints require HTTPS except for loopback development. The worker's
 state destination is operator-pinned; application packages cannot change it.
+For a native state group, repeat `--state-peer HTTPS_ORIGIN` for permitted
+successor nodes. Each new execution selects one of those pinned origins, and
+state writer authority gates its lease renewals without taking the SQL lock.
 Both services must be reachable over the configured origins. Avoid caching or
 retrying execution-management requests at the reverse proxy.
 

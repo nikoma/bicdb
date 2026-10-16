@@ -134,9 +134,16 @@ pub fn restore(store: &Store, archive: &Path, passphrase: &str) -> Result<Deploy
         // Validate the recovered data before it can enter the deployment catalog.
         let mut database = Database::open(&staging.join("database"))?;
         database.prepare(&metadata.release)?;
-        drop(database);
         let mut deployment = metadata.deployment;
         deployment.enabled = false;
+        if database.deployment()?.is_some() {
+            let mut releases = vec![&metadata.release];
+            if let Some(previous) = &metadata.previous {
+                releases.push(previous);
+            }
+            database.publish_deployment(&deployment, &releases)?;
+        }
+        drop(database);
         // Assemble the complete inactive application under staging. Publishing
         // one directory rename prevents a crash leaving a half-restored catalog.
         let staged_store = Store::open(&staging.join("catalog"))?;

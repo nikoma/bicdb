@@ -44,6 +44,9 @@ pub enum Command {
         /// Operator-owned worker fleet and placement allocations.
         #[arg(long)]
         fleet_config: Option<PathBuf>,
+        /// Operator-pinned native state groups and HTTP routing origins.
+        #[arg(long)]
+        state_config: Option<PathBuf>,
     },
     /// Run a leased compute worker attached to an authoritative state service.
     Worker {
@@ -53,6 +56,9 @@ pub enum Command {
         node: Option<PathBuf>,
         #[arg(long)]
         state_endpoint: String,
+        /// Additional state origins allowed for execution placement after failover.
+        #[arg(long)]
+        state_peer: Vec<String>,
         #[arg(long, default_value_t = 16)]
         capacity: usize,
         #[arg(long)]
@@ -178,6 +184,7 @@ pub fn run(cli: Cli) -> Result<()> {
             node,
             microvm_config,
             fleet_config,
+            state_config,
         } => {
             std::fs::create_dir_all(&cli.data)?;
             if !token_path.exists() {
@@ -200,12 +207,14 @@ pub fn run(cli: Cli) -> Result<()> {
                     node,
                     microvm_config,
                     fleet_config,
+                    state_config,
                 ))
         }
         Command::Worker {
             listen,
             node,
             state_endpoint,
+            state_peer,
             capacity,
             microvm_config,
         } => {
@@ -225,7 +234,10 @@ pub fn run(cli: Cli) -> Result<()> {
                     listen,
                     token,
                     node,
-                    state_endpoint,
+                    crate::worker::StateOrigins {
+                        primary: state_endpoint,
+                        peers: state_peer,
+                    },
                     capacity,
                     microvm_config,
                 ))

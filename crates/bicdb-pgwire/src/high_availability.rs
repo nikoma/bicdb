@@ -1011,6 +1011,10 @@ fn follow_primary(server: Arc<PgWireServer>, config: HaServerConfig, runtime: Ar
         Duration::from_millis(random % (timeout.as_millis() as u64).max(1))
     };
     let mut last_errors = std::collections::HashMap::<String, String>::new();
+    // Starting an election is not evidence of primary contact. Keep its
+    // backoff separate, or candidates perpetually refuse each other's votes
+    // during a self-imposed fresh-primary timeout.
+    let mut last_election = Instant::now();
     let mut election_after = config
         .failover
         .as_ref()
@@ -1035,12 +1039,15 @@ fn follow_primary(server: Arc<PgWireServer>, config: HaServerConfig, runtime: Ar
             }
         }
         if let (Some(failover), Some(after)) = (&config.failover, election_after) {
-            if runtime.silent_for() >= after && !server.is_shutdown_requested() {
+            if runtime.silent_for() >= after
+                && last_election.elapsed() >= after
+                && !server.is_shutdown_requested()
+            {
                 if let Err(error) = run_election(&server, &config, failover, &runtime) {
                     eprintln!("bicdb replication: election failed: {error}");
                 }
                 election_after = Some(failover.timeout + jitter(failover.timeout));
-                runtime.heard_now();
+                last_election = Instant::now();
             }
         }
         std::thread::sleep(backoff);

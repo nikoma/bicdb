@@ -117,8 +117,8 @@ impl BicDb {
     }
 
     /// Encodes a committed transaction's WAL frames into a single byte buffer
-    /// (no write). An empty buffer is returned for a no-write commit (which still
-    /// occupies a sequence and is enqueued so the writer queue stays gap-free).
+    /// (no write). Replicated databases persist a marker even for an empty
+    /// commit: its acknowledged sequence must survive promotion or restart.
     pub(crate) fn encode_tx_commit_frames(
         &self,
         tx_id: TransactionId,
@@ -128,7 +128,11 @@ impl BicDb {
         record_audit_events: &[Event],
         prepared: PreparedWal,
     ) -> Result<Vec<u8>> {
-        if writes.is_empty() && broker_publishes.is_empty() && record_audit_events.is_empty() {
+        if !self.config.replication.enabled
+            && writes.is_empty()
+            && broker_publishes.is_empty()
+            && record_audit_events.is_empty()
+        {
             return Ok(Vec::new());
         }
         let prepared = match prepared {

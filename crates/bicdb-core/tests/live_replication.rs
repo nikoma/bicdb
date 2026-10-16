@@ -941,3 +941,54 @@ fn a_torn_standby_state_file_is_rebuilt_from_the_log() {
         assert_eq!(value(&standby, "after"), Some(9), "{mode}");
     }
 }
+
+#[test]
+fn empty_commit_suffix_survives_restart_and_promotion_without_a_state_sidecar() {
+    for (mode, storage) in storage_modes() {
+        let root = tempfile::tempdir().unwrap();
+        let primary_path = root.path().join("primary");
+        let standby_path = root.path().join("standby");
+        let primary = open(&primary_path, storage.clone(), ReplicationMode::Primary);
+        let mut standby = open(&standby_path, storage.clone(), ReplicationMode::Standby);
+        for _ in 0..3 {
+            read_only_commit(&primary);
+        }
+        let sequence = primary.current_commit_seq();
+        let frames = primary
+            .replication_frames_after(&mut ReplicationCursor::new(0), 100)
+            .unwrap();
+        assert_eq!(frames.len(), 3, "{mode}");
+        assert!(frames
+            .iter()
+            .all(|frame| frame.writes.is_empty() && frame.journal.is_empty()));
+        standby.apply_replication_batch(&frames).unwrap();
+        assert_eq!(standby.last_applied_commit_seq(), sequence);
+        drop(standby);
+        drop(primary);
+        let primary = open(&primary_path, storage.clone(), ReplicationMode::Primary);
+        assert_eq!(
+            primary.current_commit_seq(),
+            sequence,
+            "{mode}: primary lost an empty suffix"
+        );
+        // An acknowledgement must rely on synced WAL, not the descriptive
+        // sidecar which may be torn after a crash.
+        std::fs::write(standby_path.join("replication-state.json"), b"{").unwrap();
+        let standby = open(&standby_path, storage.clone(), ReplicationMode::Standby);
+        assert_eq!(
+            standby.last_applied_commit_seq(),
+            sequence,
+            "{mode}: standby lost an empty suffix"
+        );
+        standby.promote_by_election(1, "successor", None).unwrap();
+        drop(standby);
+        let successor = open(&standby_path, storage, ReplicationMode::Primary);
+        assert_eq!(
+            successor.current_commit_seq(),
+            sequence,
+            "{mode}: promotion lost an empty suffix"
+        );
+        read_only_commit(&successor);
+        assert!(successor.current_commit_seq() > sequence);
+    }
+}

@@ -42,17 +42,21 @@ range quorum with the legacy whole-database streaming/HA commands below.
 ## Synchronous streaming replication (`bicdb serve`)
 
 The native HA handshake uses protocol version **3**. All peers in a native HA
-group must support this version; version 1 connections are refused. Plan a
+group must support this version; earlier connections are refused. Plan a
 coordinated upgrade with the application writers stopped rather than mixing
-protocol versions. The core commit-frame format and the standalone manual
-replication transport remain version 1.
+protocol versions. Ordinary row-only commit frames and the standalone manual
+transport retain version 1 encoding; journal-enabled commit frames use version 2.
 
 The handshake distinguishes the highest authority epoch a node has observed
 (`Hello`) from the epoch of the commits it actually stores (`Resume`). A
 returning former primary cannot claim the new primary's data history merely
 because it learned about that primary. Snapshot bootstrap preserves the local
 node's voting state while adopting the source snapshot's data epoch and history,
-so subsequent commits can stream continuously after recovery.
+so subsequent commits can stream continuously after recovery. Replicated empty
+commits also retain a WAL marker: a restart or promotion preserves their
+acknowledged sequence even when the descriptive apply-state file is torn.
+Election backoff is tracked separately from the last primary contact; starting
+a candidacy does not make a live primary appear to have been heard.
 
 `bicdb serve` can run as a replication primary or standby itself. A primary
 streams every commit to its standbys over long-lived authenticated connections.

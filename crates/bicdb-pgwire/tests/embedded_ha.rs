@@ -277,14 +277,19 @@ fn embedded_quorum_survives_primary_loss_and_fences_a_returning_writer() {
         .ha_node_status()
         .epoch;
     eprintln!("new primary: n{primary}");
-    hosts[primary]
-        .as_ref()
-        .unwrap()
-        .with_write(|db| {
-            SqlSession::new(db).execute("UPDATE effects SET value = 8 WHERE id = 1")?;
-            Ok(())
-        })
-        .unwrap();
+    // A live lease is a point-in-time probe; a successor can still be
+    // bootstrapping its peer when the write starts. Retry this idempotent
+    // assignment across the documented transient authority response.
+    wait(|| {
+        hosts[primary]
+            .as_ref()
+            .unwrap()
+            .with_write(|db| {
+                SqlSession::new(db).execute("UPDATE effects SET value = 8 WHERE id = 1")?;
+                Ok(())
+            })
+            .is_ok()
+    });
     eprintln!(
         "new primary after write: {:?}",
         hosts[primary]

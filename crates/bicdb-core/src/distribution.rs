@@ -885,6 +885,11 @@ pub fn filter_commit_frame_for_range(
     range: &RangeDescriptor,
 ) -> Result<CommitFrame> {
     frame.verify_checksum()?;
+    if !frame.journal.is_empty() {
+        return Err(cluster_error(
+            "range filtering does not carry whole-database origin journals",
+        ));
+    }
     let mut filtered = frame.clone();
     filtered.writes.retain(|write| {
         range.contains_token(distribution_key_token(&write.collection, &write.record_id))

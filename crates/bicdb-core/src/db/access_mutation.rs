@@ -813,6 +813,7 @@ impl BicDb {
             tx_states: Arc::clone(&self.tx_states),
             pending_broker_publishes: Mutex::new(Vec::new()),
             pending_record_audit_events: Vec::new(),
+            imported_record_audit_events: Vec::new(),
             imported_projection: false,
             mutation_actor: None,
             deferred_hooks: Vec::new(),
@@ -1875,15 +1876,19 @@ impl BicDb {
             }
             evidenced_context.observe_envelope(&entry.envelope);
         }
-        let mut imported_events = 0;
+        let mut incoming = Vec::new();
         for entry in &bundle.events {
             let event = event_with_sync_metadata(entry.event.clone(), &entry.envelope)?;
-            if self.events.lock().append_imported(event)? {
-                imported_events += 1;
+            if self.events.lock().event_by_id(&event.id).is_none() {
+                incoming.push(event);
             }
         }
+        let imported_events = incoming.len();
+        if imported_events > 0 {
+            self.ensure_writable("import mesh journal")?;
+        }
         let duplicate_events = bundle.event_count.saturating_sub(imported_events);
-        let merge = self.reconcile_record_audit_events()?;
+        let merge = self.merge_record_audit_events(incoming)?;
         let now = sync_mesh::unix_timestamp();
         self.sync_state.last_import_at = Some(now);
         self.sync_state.last_sync_at = Some(now);

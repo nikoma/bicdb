@@ -26,7 +26,7 @@ pub const RECORD_AUDIT_STREAM: &str = "bicdb.records";
 pub const CLOCK_OBSERVATION_STREAM: &str = "bicdb.clock_observations";
 pub const SPATIAL_AUDIT_STREAM: &str = "bicdb.spatial";
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Event {
     pub id: Uuid,
     pub stream: String,

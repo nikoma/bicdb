@@ -40,6 +40,10 @@ pub(crate) enum CatalogOp {
     IndexCatalog {
         definitions: Vec<IndexDefinition>,
     },
+    MeshAuthorization {
+        name: String,
+        enabled: bool,
+    },
 }
 
 impl BicDb {
@@ -146,6 +150,17 @@ impl BicDb {
                 }
                 CatalogOp::IndexCatalog { definitions } => {
                     self.reconcile_local_indexes(&definitions);
+                }
+                CatalogOp::MeshAuthorization { name, enabled } => {
+                    let state = self.collection_state_mut(&name)?;
+                    if enabled && state.meta.policy.is_some() {
+                        return Err(replication_error(
+                            "replicated mesh authorization targets a protected collection",
+                        ));
+                    }
+                    state.meta.mesh_sync_enabled = enabled;
+                    self.persist_catalog()?;
+                    self.invalidate_sync_vector_cache();
                 }
             }
         }

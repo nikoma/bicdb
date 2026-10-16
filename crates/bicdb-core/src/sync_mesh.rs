@@ -495,7 +495,7 @@ impl SyncBundle {
         Ok(())
     }
 
-    fn calculate_checksum(&self) -> Result<String> {
+    pub(crate) fn calculate_checksum(&self) -> Result<String> {
         let mut hasher = Sha256::new();
         hash_u32(&mut hasher, self.version);
         hasher.update(self.bundle_id.as_bytes());

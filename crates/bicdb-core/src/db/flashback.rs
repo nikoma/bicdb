@@ -315,7 +315,7 @@ impl BicDb {
         }
         let committed = self.commit_transaction_tracked(tx);
         if let Ok(seq) = committed {
-            if !tx.writes.is_empty() {
+            if !tx.writes.is_empty() || !tx.imported_record_audit_events.is_empty() {
                 replication_live::note_thread_commit(seq);
             }
         }
@@ -389,7 +389,7 @@ impl BicDb {
     /// a local read-only transaction finishes without taking a number; one
     /// with writes is refused.
     fn commit_read_only_on_standby(&self, tx: &mut Transaction) -> Result<u64> {
-        if !tx.writes.is_empty() {
+        if !tx.writes.is_empty() || !tx.imported_record_audit_events.is_empty() {
             self.ensure_writable("commit write transaction")?;
         }
         self.tx_states.remove(&tx.id.0);

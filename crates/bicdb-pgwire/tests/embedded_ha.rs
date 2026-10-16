@@ -206,6 +206,7 @@ fn native_handshake_refuses_old_versions_and_mismatched_resume_identity() {
             node_id: "other-node".into(),
             commit_seq: 0,
             data_epoch: 0,
+            journal_identity: None,
         },
         65536,
     )
@@ -222,14 +223,7 @@ fn embedded_quorum_survives_primary_loss_and_fences_a_returning_writer() {
     let mut hosts: Vec<_> = (0..3)
         .map(|index| Some(open(root.path(), index, &ports, true)))
         .collect();
-    wait(|| {
-        !hosts[0]
-            .as_ref()
-            .unwrap()
-            .database()
-            .read()
-            .is_read_only_standby()
-    });
+    wait(|| hosts[0].as_ref().unwrap().writer_lease().active());
     hosts[0].as_ref().unwrap().with_write(|db| {
         SqlSession::new(db).execute("CREATE TABLE effects (id INT PRIMARY KEY, value INT); INSERT INTO effects VALUES (1,7)")?;
         Ok(())
@@ -348,6 +342,130 @@ fn embedded_quorum_survives_primary_loss_and_fences_a_returning_writer() {
             Ok(())
         })
         .is_err());
+    for host in hosts.iter().flatten() {
+        host.request_shutdown();
+    }
+}
+
+#[test]
+fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
+    let root = tempfile::tempdir().unwrap();
+    let ports = [port(), port(), port()];
+    let open_journal = |index| {
+        let mut configuration = config(index, &ports, true);
+        configuration
+            .high_availability
+            .as_mut()
+            .unwrap()
+            .replication
+            .record_journal = true;
+        EmbeddedHaDatabase::open(
+            root.path().join(format!("journal-n{index}")),
+            configuration,
+            DbConfig::default().with_audit_events(true),
+        )
+        .unwrap()
+    };
+    let mut hosts: Vec<_> = (0..3).map(|index| Some(open_journal(index))).collect();
+    let identity = {
+        let db = hosts[0].as_ref().unwrap().database();
+        let db = db.read();
+        (db.node_id(), db.mesh_verifying_key().unwrap())
+    };
+    wait(|| {
+        for (index, host) in hosts.iter_mut().enumerate() {
+            if host.as_ref().unwrap().restart_required() {
+                host.take();
+                *host = Some(open_journal(index));
+            }
+        }
+        hosts.iter().flatten().all(|host| {
+            let db = host.database();
+            let db = db.read();
+            (db.node_id(), db.mesh_verifying_key().unwrap()) == identity
+        }) && hosts[0].as_ref().unwrap().writer_lease().active()
+    });
+    hosts[0]
+        .as_ref()
+        .unwrap()
+        .with_write(|db| {
+            SqlSession::new(db).execute("CREATE TABLE entries (id TEXT PRIMARY KEY, value INT)")?;
+            db.set_collection_mesh_sync_enabled("entries", true)?;
+            SqlSession::new(db).execute("INSERT INTO entries VALUES ('before', 1)")?;
+            Ok(())
+        })
+        .unwrap();
+    let original = hosts[0]
+        .as_ref()
+        .unwrap()
+        .database()
+        .write()
+        .export_sync_bundle_delta(&Default::default())
+        .unwrap();
+    assert_eq!(original.event_count, 1);
+    let original_envelope = original.events[0].envelope.clone();
+    wait(|| {
+        hosts.iter().flatten().all(|host| {
+            host.database()
+                .write()
+                .export_sync_bundle_delta(&Default::default())
+                .is_ok_and(|bundle| {
+                    bundle
+                        .events
+                        .first()
+                        .is_some_and(|event| event.envelope == original_envelope)
+                })
+        })
+    });
+    hosts[0]
+        .take()
+        .unwrap()
+        .shutdown(Duration::from_secs(3))
+        .unwrap();
+    let mut primary = None;
+    wait(|| {
+        for (index, host) in hosts.iter_mut().enumerate().skip(1) {
+            if host.as_ref().unwrap().restart_required() {
+                host.take();
+                *host = Some(open_journal(index));
+            }
+        }
+        primary = (1..3).find(|index| hosts[*index].as_ref().unwrap().writer_lease().active());
+        primary.is_some()
+    });
+    let primary = hosts[primary.unwrap()].as_ref().unwrap();
+    primary
+        .with_write(|db| {
+            assert_eq!((db.node_id(), db.mesh_verifying_key().unwrap()), identity);
+            SqlSession::new(db).execute("INSERT INTO entries VALUES ('after', 2)")?;
+            Ok(())
+        })
+        .unwrap();
+    let bundle = primary
+        .database()
+        .write()
+        .export_sync_bundle_delta(&Default::default())
+        .unwrap();
+    assert_eq!(bundle.event_count, 2);
+    assert!(bundle
+        .events
+        .iter()
+        .any(|event| event.envelope == original_envelope));
+    let later = bundle
+        .events
+        .iter()
+        .find(|event| event.envelope.event_id != original_envelope.event_id)
+        .unwrap();
+    assert_eq!(later.envelope.node_id, original_envelope.node_id);
+    assert!(later.envelope.sequence > original_envelope.sequence);
+    // A peer pinned before the election accepts both the old and new writer.
+    let mut edge = bicdb_core::BicDb::open(root.path().join("edge")).unwrap();
+    edge.create_collection("entries").unwrap();
+    edge.set_collection_mesh_sync_enabled("entries", true)
+        .unwrap();
+    edge.pin_node_key(&identity.0, &identity.1).unwrap();
+    edge.import_sync_bundle_strict(bundle).unwrap();
+    assert_eq!(edge.scan_collection("entries").unwrap().len(), 2);
     for host in hosts.iter().flatten() {
         host.request_shutdown();
     }

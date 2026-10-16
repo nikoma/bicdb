@@ -3,12 +3,30 @@
 use super::*;
 
 impl BicDb {
-    pub(crate) fn persist_record_audit_publication(&self, tx_id: TransactionId) -> Result<()> {
-        let payload = serde_json::to_vec(&TxFrame::RecordAuditPublished { tx_id })?;
+    pub(crate) fn persist_record_audit_publication(
+        &self,
+        tx_id: TransactionId,
+        audit: &[Event],
+    ) -> Result<()> {
+        let journal = self
+            .replication_journal_events(audit)?
+            .ok_or_else(|| replication_error("cannot publish an incomplete record journal"))?;
+        let mut payloads = Vec::with_capacity(journal.len() + 1);
+        for event in &journal {
+            let envelope = envelope_from_metadata(event)?
+                .ok_or_else(|| replication_error("published journal lacks an origin envelope"))?;
+            payloads.push(serde_json::to_vec(&TxFrame::RecordAuditOrigin {
+                tx_id,
+                envelope,
+            })?);
+        }
+        payloads.push(serde_json::to_vec(&TxFrame::RecordAuditPublished {
+            tx_id,
+        })?);
         let framed = storage::encode_frames_to_bytes(
             &self.tx_log_path(),
             FrameKind::Transaction,
-            &[payload],
+            &payloads,
             &CompressionConfig::disabled(),
             &self.encryption,
         )?;
@@ -189,6 +207,7 @@ impl BicDb {
         tx_id: u64,
         commit_seq: u64,
         writes: &[TxWrite],
+        journal: &[Event],
     ) -> Result<()> {
         let _commit_guard = self.commit_lock.lock();
         let current = self.commit_seq.load(AtomicOrdering::SeqCst);
@@ -238,7 +257,7 @@ impl BicDb {
             commit_seq,
             writes,
             &[],
-            &[],
+            journal,
             PreparedWal::default(),
         )?;
         self.tx_log.enqueue(commit_seq, wal_bytes);
@@ -261,6 +280,15 @@ impl BicDb {
         }
         self.refresh_graph_projections()?;
         self.tx_log.write_durable(commit_seq)?;
+        if !journal.is_empty() {
+            {
+                let mut events = self.events.lock();
+                for event in journal {
+                    events.append_imported(event.clone())?;
+                }
+            }
+            self.persist_record_audit_publication(TransactionId(tx_id), journal)?;
+        }
         self.commit_seq.store(commit_seq, AtomicOrdering::SeqCst);
         self.mark_committed_seq(commit_seq);
         Ok(())
@@ -2941,7 +2969,10 @@ impl BicDb {
         Ok(old_end)
     }
 
-    pub(crate) fn reconcile_record_audit_events(&mut self) -> Result<AuditMergeReport> {
+    pub(crate) fn merge_record_audit_events(
+        &mut self,
+        incoming: Vec<Event>,
+    ) -> Result<AuditMergeReport> {
         // Pass 1: which records did events at or above the reconciliation
         // high-water mark touch? Only their histories need re-resolution;
         // everything below the mark is already folded into record state.
@@ -2954,7 +2985,9 @@ impl BicDb {
                 if stored.offset < self.sync_state.last_reconciled_offset {
                     continue;
                 }
-                if stored.event.stream != RECORD_AUDIT_STREAM {
+                if self.event_targets_mesh_ineligible_collection(stored)
+                    || stored.event.stream != RECORD_AUDIT_STREAM
+                {
                     continue;
                 }
                 if !matches!(
@@ -2980,7 +3013,19 @@ impl BicDb {
                 touched.insert((collection.to_string(), record_id.to_string()));
             }
         }
-        if touched.is_empty() {
+        for event in &incoming {
+            if let Some(mutation) = AuditMutation::from_event_based(
+                &self.sync_state.node_id,
+                self.sync_state.origin_position_base,
+                &StoredEvent {
+                    offset: 0,
+                    event: event.clone(),
+                },
+            )? {
+                touched.insert((mutation.collection, mutation.record_id));
+            }
+        }
+        if touched.is_empty() && incoming.is_empty() {
             self.sync_state.last_reconciled_offset = log_end;
             return Ok(AuditMergeReport::default());
         }
@@ -2992,7 +3037,9 @@ impl BicDb {
         {
             let events = self.events.lock();
             for stored in events.events_iter() {
-                if stored.event.stream != RECORD_AUDIT_STREAM {
+                if self.event_targets_mesh_ineligible_collection(stored)
+                    || stored.event.stream != RECORD_AUDIT_STREAM
+                {
                     continue;
                 }
                 let (Some(collection), Some(record_id)) = (
@@ -3024,133 +3071,104 @@ impl BicDb {
                 mutations_by_record.entry(key).or_default().push(mutation);
             }
         }
-        let mut records_merged = 0;
+        for event in &incoming {
+            if let Some(mutation) = AuditMutation::from_event_based(
+                &self.sync_state.node_id,
+                self.sync_state.origin_position_base,
+                &StoredEvent {
+                    offset: 0,
+                    event: event.clone(),
+                },
+            )? {
+                mutations_by_record
+                    .entry((mutation.collection.clone(), mutation.record_id.clone()))
+                    .or_default()
+                    .push(mutation);
+            }
+        }
+        let mut projections = Vec::new();
         let mut conflicts_resolved = 0;
         for mutations in mutations_by_record.values() {
             let frontier = audit_concurrent_frontier(mutations);
-            // Peer-controlled wall-clock observations are diagnostics only.
-            // A pinned but malicious peer controls its timing stamps, so they
-            // must never suppress a conflict or select its winner.
             if frontier.len() > 1 {
                 conflicts_resolved += 1;
             }
             let Some(mutation) = frontier.into_iter().max_by(|a, b| a.order.cmp(&b.order)) else {
                 continue;
             };
-            match &mutation.action {
-                AuditAction::Upsert(record) => {
-                    if self
-                        .get(&mutation.collection, &mutation.record_id)
-                        .ok()
-                        .flatten()
-                        == Some(record.clone().into())
-                    {
-                        continue;
-                    }
-                    if self.apply_replicated_upsert(
-                        &mutation.collection,
-                        mutation.collection_mode.clone(),
-                        record.clone(),
-                    )? {
-                        records_merged += 1;
-                    }
+            let existing = if self.collections.contains_key(&mutation.collection) {
+                self.get(&mutation.collection, &mutation.record_id)?
+            } else {
+                None
+            };
+            let unchanged = match &mutation.action {
+                AuditAction::Upsert(record) => existing == Some(record.clone().into()),
+                AuditAction::Delete => existing.is_none(),
+            };
+            if !unchanged {
+                projections.push(mutation.clone());
+            }
+        }
+        // Provision only the explicit legacy compatibility case before opening
+        // the row transaction. Normal network imports already require schema.
+        for projection in &projections {
+            if !self.collections.contains_key(&projection.collection) {
+                if !self.config.allow_unsafe_legacy_mesh_collections {
+                    return Err(BicDbError::Authorization(format!(
+                        "mesh collection `{}` must be provisioned and explicitly enabled",
+                        projection.collection
+                    )));
                 }
-                AuditAction::Delete => {
-                    if self
-                        .get(&mutation.collection, &mutation.record_id)
-                        .ok()
-                        .flatten()
-                        .is_none()
-                    {
-                        continue;
-                    }
-                    if self.apply_replicated_delete(&mutation.collection, &mutation.record_id)? {
-                        records_merged += 1;
+                self.create_collection_with_mode(
+                    &projection.collection,
+                    projection.collection_mode.clone(),
+                )?;
+            }
+            let state = self.collection_state(&projection.collection)?;
+            if state.meta.policy.is_some()
+                || (!self.config.allow_unsafe_legacy_mesh_collections
+                    && !state.meta.mesh_sync_enabled)
+            {
+                return Err(BicDbError::Authorization(format!(
+                    "mesh collection `{}` is protected or not enabled",
+                    projection.collection
+                )));
+            }
+            if state.meta.mode != projection.collection_mode {
+                return Err(BicDbError::SyncBundle(format!(
+                    "mesh collection `{}` mode does not match the provisioned schema",
+                    projection.collection
+                )));
+            }
+        }
+        let records_merged = projections.len();
+        if !projections.is_empty() || !incoming.is_empty() {
+            let mut tx = self.begin_transaction()?;
+            tx.imported_projection = true;
+            tx.enqueue_memory_jobs_on_commit = false;
+            tx.imported_record_audit_events = incoming;
+            for projection in projections {
+                match projection.action {
+                    AuditAction::Upsert(record) => tx.insert(&projection.collection, record)?,
+                    AuditAction::Delete => {
+                        tx.delete(&projection.collection, &projection.record_id)?
                     }
                 }
             }
+            // Projection and original signed history have one WAL decision.
+            // A rejected projection cannot leave an accepted journal prefix.
+            tx.commit()?;
         }
-
-        self.sync_state.last_reconciled_offset = log_end;
+        self.sync_state.last_reconciled_offset = self
+            .events
+            .lock()
+            .events_iter()
+            .last()
+            .map_or(log_end, |stored| stored.offset.saturating_add(1));
         Ok(AuditMergeReport {
             records_merged,
             conflicts_resolved,
         })
-    }
-
-    pub(crate) fn apply_replicated_upsert(
-        &mut self,
-        collection: &str,
-        mode: CollectionMode,
-        record: Record,
-    ) -> Result<bool> {
-        if !self.collections.contains_key(collection) {
-            if !self.config.allow_unsafe_legacy_mesh_collections {
-                return Err(BicDbError::Authorization(format!(
-                    "mesh collection `{collection}` must be provisioned and explicitly enabled"
-                )));
-            }
-            self.create_collection_with_mode(collection, mode.clone())?;
-        }
-        {
-            let state = self.collection_state(collection)?;
-            if state.meta.policy.is_some()
-                || (!self.config.allow_unsafe_legacy_mesh_collections
-                    && !state.meta.mesh_sync_enabled)
-            {
-                return Err(BicDbError::Authorization(format!(
-                    "mesh collection `{collection}` is protected or not enabled"
-                )));
-            }
-            if state.meta.mode != mode {
-                return Err(BicDbError::SyncBundle(format!(
-                    "mesh collection `{collection}` mode does not match the provisioned schema"
-                )));
-            }
-        }
-        let mut tx = self.begin_transaction()?;
-        tx.imported_projection = true;
-        tx.enqueue_memory_jobs_on_commit = false;
-        tx.insert(collection, record)?;
-        tx.commit()?;
-        Ok(true)
-    }
-
-    pub(crate) fn apply_replicated_delete(
-        &mut self,
-        collection: &str,
-        record_id: &str,
-    ) -> Result<bool> {
-        if !self.collections.contains_key(collection) {
-            return if self.config.allow_unsafe_legacy_mesh_collections {
-                Ok(false)
-            } else {
-                Err(BicDbError::Authorization(format!(
-                    "mesh collection `{collection}` must be provisioned and explicitly enabled"
-                )))
-            };
-        }
-        {
-            let state = self.collection_state(collection)?;
-            if state.meta.policy.is_some()
-                || (!self.config.allow_unsafe_legacy_mesh_collections
-                    && !state.meta.mesh_sync_enabled)
-            {
-                return Err(BicDbError::Authorization(format!(
-                    "mesh collection `{collection}` is protected or not enabled"
-                )));
-            }
-        }
-        let existed = self.get(collection, record_id)?.is_some();
-        if !existed {
-            return Ok(false);
-        }
-        let mut tx = self.begin_transaction()?;
-        tx.imported_projection = true;
-        tx.enqueue_memory_jobs_on_commit = false;
-        tx.delete(collection, record_id)?;
-        tx.commit()?;
-        Ok(true)
     }
 
     pub(crate) fn write_attachment_unchecked(

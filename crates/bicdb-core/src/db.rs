@@ -8,6 +8,8 @@ pub use ha_bootstrap::{
     finish_standby_bootstrap, stage_standby_bootstrap, standby_bootstrap_staging, StandbyResume,
 };
 mod log_archiving;
+mod replication_journal;
+use replication_journal::freeze_audit_origin;
 mod replication_live;
 pub use branching::{diff_databases, CollectionDiff, DatabaseDiff, RecordChange, RecordChangeKind};
 use ha_node::PRIMARY_MARKER;
@@ -116,9 +118,9 @@ use crate::spatial_packed::{self, PackedSpatialEntry, PackedSpatialMeta, Spatial
 use crate::storage::{self, CompressionConfig, FrameKind, SegmentReadMode};
 use crate::sync::{OpType, SyncLog, SyncOp};
 use crate::sync_mesh::{
-    self, bundle_event_for_stored, envelope_from_metadata, event_with_sync_metadata, NodeId,
-    PeerSyncStatus, SyncBundle, SyncCheckpoint, SyncExportReport, SyncImportReport, SyncMesh,
-    SyncMeshState, SyncPendingChanges, SyncStatus, SyncVector, DEFAULT_SYNC_STATE,
+    self, bundle_event_for_stored, envelope_from_metadata, event_with_sync_metadata, EventEnvelope,
+    NodeId, PeerSyncStatus, SyncBundle, SyncCheckpoint, SyncExportReport, SyncImportReport,
+    SyncMesh, SyncMeshState, SyncPendingChanges, SyncStatus, SyncVector, DEFAULT_SYNC_STATE,
 };
 use crate::vector::{
     self, JsonFilter, ProfiledVectorSearch, VectorMetric, VectorSearchProfile, VectorSearchResult,
@@ -7064,6 +7066,13 @@ pub(crate) enum TxFrame {
     /// uncommitted row nor disappear after a committed row is recovered.
     #[serde(rename = "tx_record_audit")]
     RecordAudit { tx_id: TransactionId, event: Event },
+    /// Original immutable envelope assigned when an audit outbox is published.
+    /// Retained WAL must remain self-contained after event-log retention.
+    #[serde(rename = "tx_record_audit_origin")]
+    RecordAuditOrigin {
+        tx_id: TransactionId,
+        envelope: EventEnvelope,
+    },
     /// Durable acknowledgement that every audit event carried by this
     /// transaction has reached the event segment. Recovery skips acknowledged
     /// outboxes, which also prevents a later retention rewrite from being
@@ -7102,6 +7111,7 @@ enum TxFrameKind {
     TxTruncate,
     TxBrokerPublish,
     TxRecordAudit,
+    TxRecordAuditOrigin,
     TxRecordAuditPublished,
     TxCommit,
     TxCommitMaterialized,
@@ -7123,6 +7133,8 @@ struct TxFrameWire {
     publish: Option<Box<RawValue>>,
     #[serde(default)]
     event: Option<Box<RawValue>>,
+    #[serde(default)]
+    envelope: Option<Box<RawValue>>,
     #[serde(default)]
     len: Option<usize>,
     #[serde(default)]
@@ -7163,6 +7175,12 @@ fn decode_tx_frame(payload: &[u8]) -> Result<TxFrame> {
         TxFrameKind::TxRecordAudit => TxFrame::RecordAudit {
             tx_id: wire.tx_id,
             event: serde_json::from_str(wire.event.ok_or_else(|| missing("event"))?.get())?,
+        },
+        TxFrameKind::TxRecordAuditOrigin => TxFrame::RecordAuditOrigin {
+            tx_id: wire.tx_id,
+            envelope: serde_json::from_str(
+                wire.envelope.ok_or_else(|| missing("envelope"))?.get(),
+            )?,
         },
         TxFrameKind::TxRecordAuditPublished => TxFrame::RecordAuditPublished { tx_id: wire.tx_id },
         TxFrameKind::TxCommit => TxFrame::Commit {
@@ -8186,6 +8204,7 @@ struct RetainedReplicationCommit {
     tx_id: u64,
     timestamp: i64,
     writes: Vec<ReplicationWrite>,
+    audit_events: Vec<Event>,
 }
 
 fn tx_write_to_replication_write(
@@ -8400,6 +8419,8 @@ pub struct Transaction {
     // transaction WAL; this in-memory copy is published to the event segment
     // only after `write_durable` succeeds.
     pending_record_audit_events: Vec<Event>,
+    // Verified incoming journal entries committed with their projection.
+    imported_record_audit_events: Vec<Event>,
     // Verified mesh projection: preserve the signed origin events rather than
     // publishing a second locally-authored mutation for the same change.
     imported_projection: bool,
@@ -9222,6 +9243,14 @@ impl BicDb {
         encryption_config: Option<EncryptionConfig>,
     ) -> Result<Self> {
         config.replication.validate()?;
+        if config.replication.enabled
+            && config.replication.record_journal
+            && (!config.audit_events || !config.mesh_signing)
+        {
+            return Err(replication_error(
+                "record journal replication requires audit events and mesh signing",
+            ));
+        }
         config.consensus.validate()?;
         let path = path.as_ref().to_path_buf();
         // A standby bootstrap staged by the previous run is installed first.
@@ -9961,13 +9990,18 @@ impl BicDb {
         // event already copied before the crash inert.
         let recovered_audit_outboxes = tx_recovery.committed_record_audit_outboxes();
         let mut recovered_audit_publications = Vec::with_capacity(recovered_audit_outboxes.len());
-        for (tx_id, audit_events) in recovered_audit_outboxes {
+        for (tx_id, audit_events) in &recovered_audit_outboxes {
             for event in audit_events {
-                events.append_imported(event)?;
+                events.append_imported(event.clone())?;
             }
-            recovered_audit_publications.push(serde_json::to_vec(
-                &TxFrame::RecordAuditPublished { tx_id },
-            )?);
+            // Journal-enabled recovery records the original envelopes after
+            // loading the database identity and signer below. Until then no
+            // publication marker may allow retirement of this WAL outbox.
+            if !config.replication.record_journal {
+                recovered_audit_publications.push(serde_json::to_vec(
+                    &TxFrame::RecordAuditPublished { tx_id: *tx_id },
+                )?);
+            }
         }
         if !recovered_audit_publications.is_empty() {
             storage::append_frames(
@@ -10102,6 +10136,12 @@ impl BicDb {
             active_snapshots: Arc::new(ActiveSnapshots::with_shards(orch_shard_count())),
             tx_log,
         };
+        if db.config.replication.record_journal {
+            for (tx_id, events) in &recovered_audit_outboxes {
+                db.persist_record_audit_publication(*tx_id, events)?;
+            }
+        }
+        db.prepare_replication_journal_origin()?;
         db.flashback_after_open()?;
         db.auto_checkpoint_if_due();
         Ok(db)
@@ -10803,7 +10843,7 @@ impl BicDb {
             .filter(|commit| commit.commit_seq > commit_seq)
             .take(limit)
             .map(|commit| {
-                CommitFrame::new(
+                let frame = CommitFrame::new(
                     self.config.replication.cluster_id.clone(),
                     self.config.replication.node_id.clone(),
                     DEFAULT_REPLICATION_STREAM_ID,
@@ -10811,9 +10851,19 @@ impl BicDb {
                     commit.tx_id,
                     commit.timestamp,
                     commit.writes,
-                )
+                );
+                Ok(if self.config.replication.record_journal {
+                    frame.with_journal(
+                        self.replication_journal_events(&commit.audit_events)?
+                            .ok_or_else(|| {
+                                replication_error("record journal publication is pending")
+                            })?,
+                    )
+                } else {
+                    frame
+                })
             })
-            .collect())
+            .collect::<Result<Vec<_>>>()?)
     }
 
     pub fn subscribe_replication_stream(&self, start_commit_seq: u64) -> Result<Vec<CommitFrame>> {
@@ -10836,7 +10886,9 @@ impl BicDb {
     /// Read-only transactions are unaffected: a follower is a perfectly good
     /// place to read from, and gating on `writes` keeps it one.
     pub(crate) fn ensure_writable_by_consensus(&self, tx: &Transaction) -> Result<()> {
-        if !self.config.consensus.enabled || tx.writes.is_empty() {
+        if !self.config.consensus.enabled
+            || (tx.writes.is_empty() && tx.imported_record_audit_events.is_empty())
+        {
             return Ok(());
         }
         let status = self.consensus_state.status();
@@ -10949,12 +11001,19 @@ impl BicDb {
             &self.encryption,
         )?;
         let mut writes: BTreeMap<u64, Vec<TxWrite>> = BTreeMap::new();
+        let mut audit: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
         let mut commits: Vec<(u64, u64, i64)> = Vec::new();
         for frame in recovered.frames {
             let tx_frame = decode_tx_frame(&frame.payload)?;
             match tx_frame {
                 TxFrame::Write { tx_id, write } => {
                     writes.entry(tx_id.0).or_default().push(*write);
+                }
+                TxFrame::RecordAudit { tx_id, event } => {
+                    audit.entry(tx_id.0).or_default().push(event);
+                }
+                TxFrame::RecordAuditOrigin { tx_id, envelope } => {
+                    freeze_audit_origin(audit.entry(tx_id.0).or_default(), &envelope)?;
                 }
                 TxFrame::Patch { .. } => {
                     return Err(replication_error(
@@ -10970,6 +11029,7 @@ impl BicDb {
                 }
                 TxFrame::Abort { tx_id, .. } => {
                     writes.remove(&tx_id.0);
+                    audit.remove(&tx_id.0);
                     commits.retain(|(_, committed_tx_id, _)| *committed_tx_id != tx_id.0);
                 }
                 TxFrame::Truncate { tx_id, len } => {
@@ -10980,7 +11040,6 @@ impl BicDb {
                 TxFrame::Begin { .. }
                 | TxFrame::CommitMaterialized { .. }
                 | TxFrame::BrokerPublish { .. }
-                | TxFrame::RecordAudit { .. }
                 | TxFrame::RecordAuditPublished { .. } => {}
             }
         }
@@ -11003,6 +11062,7 @@ impl BicDb {
                 tx_id,
                 timestamp,
                 writes,
+                audit_events: audit.remove(&tx_id).unwrap_or_default(),
             });
         }
         Ok(retained)
@@ -11208,12 +11268,15 @@ impl BicDb {
                 expected_cluster_id, frame.cluster_id
             )));
         }
-        if frame.protocol_version != crate::replication::REPLICATION_PROTOCOL_VERSION {
+        if frame.protocol_version != crate::replication::REPLICATION_PROTOCOL_VERSION
+            && frame.protocol_version != crate::replication::REPLICATION_JOURNAL_PROTOCOL_VERSION
+        {
             return Err(replication_error(format!(
                 "unsupported replication protocol version {}",
                 frame.protocol_version
             )));
         }
+        self.validate_replication_journal(&frame.journal)?;
         let current = self.last_applied_commit_seq();
         if frame.commit_seq <= current {
             return Ok(ReplicationApplyReport {
@@ -11232,7 +11295,12 @@ impl BicDb {
 
         self.ensure_replication_frame_collections(frame)?;
         let writes = replication_writes_to_tx_writes(frame)?;
-        self.apply_imported_replication_commit(frame.tx_id, frame.commit_seq, &writes)?;
+        self.apply_imported_replication_commit(
+            frame.tx_id,
+            frame.commit_seq,
+            &writes,
+            &frame.journal,
+        )?;
         self.apply_replicated_catalog_ops(frame)?;
         self.record_replication_apply_success(frame)?;
         Ok(ReplicationApplyReport {
@@ -11534,6 +11602,10 @@ impl BicDb {
         state.meta.mesh_sync_enabled = enabled;
         self.persist_catalog()?;
         self.invalidate_sync_vector_cache();
+        self.log_catalog_op(collection_rename::CatalogOp::MeshAuthorization {
+            name: collection.to_owned(),
+            enabled,
+        })?;
         self.schema_compatibility.invalidate();
         Ok(())
     }
@@ -16115,7 +16187,7 @@ impl Transaction {
             events.append(event.clone())?;
         }
         drop(events);
-        db.persist_record_audit_publication(self.id)?;
+        db.persist_record_audit_publication(self.id, &self.pending_record_audit_events)?;
         self.pending_record_audit_events.clear();
         Ok(())
     }
@@ -18129,6 +18201,10 @@ fn recover_transaction_log(
                 max_tx = max_tx.max(tx_id.0);
                 record_audit_events.entry(tx_id.0).or_default().push(event);
                 states.entry(tx_id.0).or_insert(TxState::Pending);
+            }
+            TxFrame::RecordAuditOrigin { tx_id, envelope } => {
+                max_tx = max_tx.max(tx_id.0);
+                freeze_audit_origin(record_audit_events.entry(tx_id.0).or_default(), &envelope)?;
             }
             TxFrame::RecordAuditPublished { tx_id } => {
                 max_tx = max_tx.max(tx_id.0);

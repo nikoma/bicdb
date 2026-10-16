@@ -41,7 +41,7 @@ range quorum with the legacy whole-database streaming/HA commands below.
 
 ## Synchronous streaming replication (`bicdb serve`)
 
-The native HA handshake uses protocol version **2**. All peers in a native HA
+The native HA handshake uses protocol version **3**. All peers in a native HA
 group must support this version; version 1 connections are refused. Plan a
 coordinated upgrade with the application writers stopped rather than mixing
 protocol versions. The core commit-frame format and the standalone manual
@@ -360,3 +360,30 @@ verify zero lag, promote the standby, and then move clients.
   transaction LSN compatible with PostgreSQL.
 - Shipping should run when no external process is writing directly to the
   standby path.
+
+### Original record journals
+
+Embedding hosts may enable `ReplicationConfig.record_journal` together with
+`DbConfig.audit_events` and `mesh_signing`. All physical replicas must use the
+same setting. Journal mode uses version 2 commit frames; ordinary row-only
+frames remain version 1 with their existing checksum encoding. The native
+version 3 handshake refuses older peers and mismatched journal modes.
+
+Journal-enabled enrollment installs a snapshot when the standby's logical mesh
+node ID or signing key differs from the writer. Physical voting identities and
+certificate pins remain distinct. A promoted writer retains the application's
+logical author identity. Restored event positions are frozen before reserving a
+new authorship suffix, so promotion does not reuse an exported origin position.
+
+Each native commit carries both row effects and the original record journal,
+including journal-only imports whose projection changes no rows. Signed origin
+envelopes are durably recorded in the transaction WAL after event publication.
+Native retransmission therefore survives event retention without reauthoring or
+resigning foreign events. A sender waits for unfinished outbox publication;
+recovery completes it before streaming. Selective range filtering refuses
+whole-database journal frames rather than disclosing another range's history.
+
+This is a trusted full-database replica channel. Mutual TLS and node pins govern
+physical membership; selective edge receivers still require their own author
+key pins, table policies and transport grants. Enabling journal transport alone
+does not replicate an application's peer authorization configuration.

@@ -48,7 +48,9 @@ fn first_frame_offset_after(path: &Path, seq: u64, encryption: &EncryptionRuntim
     for (start, frame_end, payload) in &frames {
         end = *frame_end;
         match decode_tx_frame(payload)? {
-            TxFrame::Write { tx_id, .. } | TxFrame::Truncate { tx_id, .. } => {
+            TxFrame::Write { tx_id, .. }
+            | TxFrame::Truncate { tx_id, .. }
+            | TxFrame::RecordAudit { tx_id, .. } => {
                 first_offset_of_tx.entry(tx_id.0).or_insert(*start);
             }
             TxFrame::Commit {
@@ -178,6 +180,7 @@ impl BicDb {
         )?;
 
         let mut writes: FxHashMap<u64, Vec<TxWrite>> = FxHashMap::default();
+        let mut audit: FxHashMap<u64, Vec<Event>> = FxHashMap::default();
         // commit_seq -> (tx_id, timestamp)
         let mut commits: BTreeMap<u64, (u64, i64)> = BTreeMap::new();
         let mut tx_of_seq: FxHashMap<u64, u64> = FxHashMap::default();
@@ -186,6 +189,12 @@ impl BicDb {
             match decode_tx_frame(payload)? {
                 TxFrame::Write { tx_id, write } => {
                     writes.entry(tx_id.0).or_default().push(*write);
+                }
+                TxFrame::RecordAudit { tx_id, event } => {
+                    audit.entry(tx_id.0).or_default().push(event);
+                }
+                TxFrame::RecordAuditOrigin { tx_id, envelope } => {
+                    freeze_audit_origin(audit.entry(tx_id.0).or_default(), &envelope)?;
                 }
                 TxFrame::Patch { .. } => {
                     return Err(replication_error(
@@ -214,18 +223,19 @@ impl BicDb {
                 }
                 TxFrame::Abort { tx_id, .. } => {
                     writes.remove(&tx_id.0);
+                    audit.remove(&tx_id.0);
                     commits.retain(|_, (committed, _)| *committed != tx_id.0);
                 }
                 TxFrame::Begin { .. }
                 | TxFrame::CommitMaterialized { .. }
                 | TxFrame::BrokerPublish { .. }
-                | TxFrame::RecordAudit { .. }
                 | TxFrame::RecordAuditPublished { .. } => {}
             }
         }
 
         let base = read_wal_base(&self.path)?;
         let mut out = Vec::with_capacity((target - cursor.sent_seq) as usize);
+        let mut sent = cursor.sent_seq;
         for seq in cursor.sent_seq + 1..=target {
             let (tx_id, timestamp, tx_writes) = match commits.get(&seq) {
                 Some((tx_id, timestamp)) => {
@@ -238,6 +248,11 @@ impl BicDb {
                 }
                 None => (0, unix_timestamp(), Vec::new()),
             };
+            let Some(journal) =
+                self.replication_journal_events(&audit.remove(&tx_id).unwrap_or_default())?
+            else {
+                break;
+            };
             let tx_writes = tx_writes
                 .iter()
                 .map(|write| {
@@ -248,7 +263,7 @@ impl BicDb {
                     tx_write_to_replication_write(collection_meta, write)
                 })
                 .collect::<Result<Vec<_>>>()?;
-            out.push(CommitFrame::new(
+            let frame = CommitFrame::new(
                 self.config.replication.cluster_id.clone(),
                 self.config.replication.node_id.clone(),
                 DEFAULT_REPLICATION_STREAM_ID,
@@ -256,10 +271,21 @@ impl BicDb {
                 tx_id,
                 timestamp,
                 tx_writes,
-            ));
+            );
+            out.push(if self.config.replication.record_journal {
+                frame.with_journal(journal)
+            } else {
+                frame
+            });
+            sent = seq;
         }
-        cursor.sent_seq = target;
-        if let Some((start, end)) = new_anchor {
+        cursor.sent_seq = sent;
+        if sent < target {
+            // Audit entries precede their commit marker. Rescan that prefix
+            // once the transaction finishes publishing its journal.
+            cursor.offset = 0;
+            cursor.anchor = None;
+        } else if let Some((start, end)) = new_anchor {
             cursor.offset = end;
             cursor.anchor = storage::read_bytes_at(&path, start, storage::HEADER_LEN)?
                 .map(|header| (start, header));

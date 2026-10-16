@@ -2191,11 +2191,12 @@ impl BicDb {
             // TODO: v0.2 should atomically group transaction commits and sync-log events.
             self.sync_log.lock().append_ops(&sync_ops)?;
         }
-        let record_audit_events = if tx.imported_projection {
+        let mut record_audit_events = if tx.imported_projection {
             Vec::new()
         } else {
             self.record_audit_events_for_commit(&index_mutations_by_collection)?
         };
+        record_audit_events.extend(tx.imported_record_audit_events.iter().cloned());
         test_commit_pause_after_validate();
         timer.lap(&commit_trace::VALIDATE);
         // Past every abort point: assign the sequence and enqueue the WAL bytes.

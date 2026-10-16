@@ -10,6 +10,9 @@ use crate::error::{BicDbError, Result};
 use crate::record::CollectionMeta;
 
 pub const REPLICATION_PROTOCOL_VERSION: u32 = 1;
+/// Commit frames carrying the original event journal. Legacy frame checksums
+/// remain unchanged; old readers reject this version rather than omit history.
+pub const REPLICATION_JOURNAL_PROTOCOL_VERSION: u32 = 2;
 pub const DEFAULT_REPLICATION_STREAM_ID: &str = "default";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -70,6 +73,9 @@ pub struct ReplicationConfig {
     pub reconnect_backoff_ms: u64,
     pub retention_bytes: u64,
     pub retention_commits: u64,
+    /// Include the original event journal in native commit frames.
+    #[serde(default)]
+    pub record_journal: bool,
 }
 
 impl Default for ReplicationConfig {
@@ -90,6 +96,7 @@ impl Default for ReplicationConfig {
             reconnect_backoff_ms: 1_000,
             retention_bytes: 1024 * 1024 * 1024,
             retention_commits: 1_000_000,
+            record_journal: false,
         }
     }
 }
@@ -180,6 +187,8 @@ pub struct CommitFrame {
     pub tx_id: u64,
     pub timestamp: i64,
     pub writes: Vec<ReplicationWrite>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub journal: Vec<crate::event::Event>,
     pub compressed: bool,
     pub encryption_metadata: Option<Vec<u8>>,
     pub checksum: [u8; 32],
@@ -205,6 +214,7 @@ impl CommitFrame {
             tx_id,
             timestamp,
             writes,
+            journal: Vec::new(),
             compressed: false,
             encryption_metadata: None,
             checksum: [0; 32],
@@ -220,11 +230,23 @@ impl CommitFrame {
     }
 
     pub fn verify_checksum(&self) -> Result<()> {
+        if self.protocol_version == REPLICATION_PROTOCOL_VERSION && !self.journal.is_empty() {
+            return Err(replication_error(
+                "legacy replication frame cannot carry an unchecked journal",
+            ));
+        }
         let actual = self.calculate_checksum();
         if actual != self.checksum {
             return Err(replication_error("replication frame checksum mismatch"));
         }
         Ok(())
+    }
+
+    pub fn with_journal(mut self, journal: Vec<crate::event::Event>) -> Self {
+        self.protocol_version = REPLICATION_JOURNAL_PROTOCOL_VERSION;
+        self.journal = journal;
+        self.checksum = self.calculate_checksum();
+        self
     }
 
     pub fn encode_deterministic(&self) -> Vec<u8> {
@@ -269,6 +291,15 @@ impl CommitFrame {
             }
         }
         out.push(u8::from(self.compressed));
+        if self.protocol_version >= REPLICATION_JOURNAL_PROTOCOL_VERSION {
+            put_u32(out, self.journal.len() as u32);
+            for event in &self.journal {
+                put_bytes(
+                    out,
+                    &serde_json::to_vec(event).expect("event JSON is serializable"),
+                );
+            }
+        }
         match &self.encryption_metadata {
             Some(bytes) => {
                 out.push(1);
@@ -369,6 +400,9 @@ pub enum ReplicationFrame {
         node_id: String,
         commit_seq: u64,
         data_epoch: u64,
+        /// Journal mode shares one logical mesh author across physical hosts.
+        /// A differing identity requires a snapshot, never row-only enrollment.
+        journal_identity: Option<(String, String)>,
     },
     Ack {
         cluster_id: String,

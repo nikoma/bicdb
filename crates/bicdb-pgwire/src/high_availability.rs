@@ -42,9 +42,9 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-/// Native HA handshake version. Version 2 separates observed authority from
-/// the epoch of stored data; version 1 peers must upgrade before joining.
-pub const HA_REPLICATION_PROTOCOL_VERSION: u32 = 2;
+/// Native HA handshake version. Version 3 understands journal-carrying commit
+/// frames. All group members must upgrade before joining.
+pub const HA_REPLICATION_PROTOCOL_VERSION: u32 = 3;
 
 /// Frames per round sent to one standby.
 const BATCH_COMMITS: usize = 512;
@@ -585,12 +585,35 @@ fn serve_peer(
             node_id,
             commit_seq,
             data_epoch,
+            journal_identity,
         } => {
             if cluster_id != config.replication.cluster_id || node_id != peer {
                 return Err(refuse(
                     stream,
                     "resume identity does not match the authenticated peer",
                 ));
+            }
+            if server.read_db()?.replication_role() != NodeRole::Primary {
+                return Err(refuse(stream, NOT_PRIMARY));
+            }
+            if config.replication.record_journal != journal_identity.is_some() {
+                return Err(refuse(
+                    stream,
+                    "record journal mode differs between replicas",
+                ));
+            }
+            if let Some(identity) = journal_identity {
+                let db = server.read_db()?;
+                let local = (
+                    db.node_id().to_string(),
+                    db.mesh_verifying_key().ok_or_else(|| {
+                        PgWireError::Server("record journal requires mesh signing".into())
+                    })?,
+                );
+                if identity != local {
+                    drop(db);
+                    return send_snapshot(server, config, stream, &peer);
+                }
             }
             stream_to_standby(server, config, stream, &peer, data_epoch, commit_seq)
         }
@@ -707,7 +730,9 @@ fn stream_to_standby(
                 .replication_feed
                 .wait_beyond(cursor.sent_seq(), KEEPALIVE);
             if durable > cursor.sent_seq() {
-                continue;
+                // A durable row commit may still be publishing its journal.
+                // Keep the connection live without spinning on that prefix.
+                std::thread::sleep(Duration::from_millis(50));
             }
         }
         for frame in frames {
@@ -1062,12 +1087,22 @@ fn follow_once(
         .map(|failover| failover.timeout / 2);
     let mut stream = connect_peer(config, primary, server_name, connect_timeout, runtime)?;
     let stream = stream.as_mut();
-    let (applied, epoch, data_epoch) = {
+    let (applied, epoch, data_epoch, journal_identity) = {
         let db = server.read_db()?;
         (
             db.last_applied_commit_seq(),
             db.replication_epoch(),
             db.ha_node_status().data_epoch,
+            if config.replication.record_journal {
+                Some((
+                    db.node_id().to_string(),
+                    db.mesh_verifying_key().ok_or_else(|| {
+                        PgWireError::Server("record journal requires mesh signing".into())
+                    })?,
+                ))
+            } else {
+                None
+            },
         )
     };
     send(stream, &hello(config, epoch))?;
@@ -1078,6 +1113,7 @@ fn follow_once(
             node_id: config.replication.node_id.clone(),
             commit_seq: applied,
             data_epoch,
+            journal_identity,
         },
     )?;
     let mut batch = Vec::new();

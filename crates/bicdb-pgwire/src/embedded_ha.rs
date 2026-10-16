@@ -5,6 +5,7 @@ use super::*;
 
 pub struct EmbeddedHaDatabase {
     server: Arc<PgWireServer>,
+    authority: bicdb_core::ReplicationWriterAuthority,
 }
 
 /// A lease probe that does not hold the database open or take a database lock.
@@ -12,18 +13,18 @@ pub struct EmbeddedHaDatabase {
 #[derive(Clone)]
 pub struct HaWriterLease {
     server: Weak<PgWireServer>,
+    authority: bicdb_core::ReplicationWriterAuthority,
 }
 impl HaWriterLease {
     pub fn active(&self) -> bool {
         self.server.upgrade().is_some_and(|server| {
             !server.is_shutdown_requested()
-                && !server.sync_quorum.is_closed()
+                && self.authority.active()
                 && server
                     .config
                     .high_availability
                     .as_ref()
                     .is_some_and(|ha| matches!(ha.role, HaServerRole::Primary { .. }))
-                && server.sync_quorum.lease_refusal().is_none()
         })
     }
 }
@@ -57,13 +58,14 @@ impl EmbeddedHaDatabase {
                 .with_replication(ha.database_replication()),
         )?;
         initialize(&mut database)?;
+        let authority = database.replication_writer_authority();
         let server = PgWireServer::open_with_shared(path, config, Arc::new(RwLock::new(database)))?;
         if let Err(error) = high_availability::start(server.clone(), ha) {
             server.request_shutdown();
             server.wait_for_background_quiesce(BACKGROUND_QUIESCE_TIMEOUT);
             return Err(error);
         }
-        Ok(Self { server })
+        Ok(Self { server, authority })
     }
 
     /// Trusted host access to the engine. Mutations through this handle must
@@ -114,6 +116,7 @@ impl EmbeddedHaDatabase {
     pub fn writer_lease(&self) -> HaWriterLease {
         HaWriterLease {
             server: Arc::downgrade(&self.server),
+            authority: self.authority.clone(),
         }
     }
 

@@ -12,7 +12,8 @@ mod replication_live;
 pub use branching::{diff_databases, CollectionDiff, DatabaseDiff, RecordChange, RecordChangeKind};
 use ha_node::PRIMARY_MARKER;
 pub use ha_node::{
-    read_only_standby_hint, read_persisted_ha_role, HaNodeStatus, NodeRole, HA_NODE_FILE,
+    read_only_standby_hint, read_persisted_ha_role, HaNodeStatus, NodeRole,
+    ReplicationWriterAuthority, HA_NODE_FILE,
 };
 pub use log_archiving::{
     restore_from_log_archive, restore_point_in_time, LogReplayReport, LOG_ARCHIVE_HOLDER,

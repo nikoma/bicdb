@@ -149,6 +149,22 @@ fn shutdown_cancels_incomplete_peers_and_releases_the_replication_listener() {
 }
 
 #[test]
+fn writer_probe_observes_direct_demotion_and_a_persisted_standby() {
+    let root = tempfile::tempdir().unwrap();
+    let ports = [port()];
+    let host = open(root.path(), 0, &ports, false);
+    let lease = host.writer_lease();
+    assert!(lease.active());
+    host.database().read().demote_to_standby().unwrap();
+    assert!(!lease.active());
+    drop(host);
+    // The initial configuration must not override the persisted engine role
+    // in an authority probe, even without automatic elections configured.
+    let host = open(root.path(), 0, &ports, false);
+    assert!(!host.writer_lease().active());
+}
+
+#[test]
 fn native_handshake_refuses_old_versions_and_mismatched_resume_identity() {
     use bicdb_core::{
         replication::ReplicationFrame,
@@ -234,10 +250,10 @@ fn embedded_quorum_survives_primary_loss_and_fences_a_returning_writer() {
         .unwrap();
     let mut primary = None;
     wait(|| {
-        for index in 1..3 {
-            if hosts[index].as_ref().unwrap().restart_required() {
-                hosts[index].take();
-                hosts[index] = Some(open(root.path(), index, &ports, true));
+        for (index, host) in hosts.iter_mut().enumerate().skip(1) {
+            if host.as_ref().unwrap().restart_required() {
+                host.take();
+                *host = Some(open(root.path(), index, &ports, true));
             }
         }
         primary = (1..3).find(|index| {

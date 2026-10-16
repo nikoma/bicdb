@@ -20,6 +20,40 @@ use super::*;
 /// File (in the database directory) holding [`HaNodeFile`].
 pub const HA_NODE_FILE: &str = "ha-node.json";
 
+/// A weak, engine-lock-free probe of native writer authority. This handle
+/// does not keep a database open, and observes explicit role changes as well
+/// as loss of the synchronous write lease.
+#[derive(Clone)]
+pub struct ReplicationWriterAuthority {
+    node: std::sync::Weak<HaNode>,
+    quorum: std::sync::Weak<SyncQuorum>,
+    enabled: bool,
+}
+
+impl ReplicationWriterAuthority {
+    pub fn active(&self) -> bool {
+        self.enabled
+            && self
+                .node
+                .upgrade()
+                .is_some_and(|node| node.role() == NodeRole::Primary)
+            && self
+                .quorum
+                .upgrade()
+                .is_some_and(|quorum| !quorum.is_closed() && quorum.lease_refusal().is_none())
+    }
+}
+
+impl BicDb {
+    pub fn replication_writer_authority(&self) -> ReplicationWriterAuthority {
+        ReplicationWriterAuthority {
+            node: Arc::downgrade(&self.ha_node),
+            quorum: Arc::downgrade(&self.sync_quorum),
+            enabled: self.config.replication.enabled,
+        }
+    }
+}
+
 /// Separates a read-only refusal from the current primary's client address.
 pub(crate) const PRIMARY_MARKER: &str = "; current primary: ";
 

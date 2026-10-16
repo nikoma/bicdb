@@ -138,6 +138,7 @@ pub use db::AuthenticationStrength;
 pub use db::ChangedRecord;
 pub use db::FullTextBuildStep;
 pub use db::FullTextStoredTextPage;
+pub use db::ReplicationWriterAuthority;
 pub use db::{
     analyze_sample_limit, estimate_distinct_from_sample, scale_sample_count, AnalyzeSampler,
 };

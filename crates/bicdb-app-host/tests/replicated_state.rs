@@ -149,10 +149,10 @@ fn native_failover_preserves_migrations_outbox_job_leases_and_effect_receipts() 
         .map(|index| Some(open(root.path(), index, &ports)))
         .collect();
     wait(|| {
-        for index in 0..3 {
-            if hosts[index].as_ref().unwrap().restart_required() {
-                hosts[index].take();
-                hosts[index] = Some(open(root.path(), index, &ports));
+        for (index, host) in hosts.iter_mut().enumerate() {
+            if host.as_ref().unwrap().restart_required() {
+                host.take();
+                *host = Some(open(root.path(), index, &ports));
             }
         }
         hosts[0].as_ref().unwrap().writable()
@@ -205,10 +205,10 @@ fn native_failover_preserves_migrations_outbox_job_leases_and_effect_receipts() 
     assert!(!old_lease.active());
     let mut elected = None;
     wait(|| {
-        for index in 1..3 {
-            if hosts[index].as_ref().unwrap().restart_required() {
-                hosts[index].take();
-                hosts[index] = Some(open(root.path(), index, &ports));
+        for (index, host) in hosts.iter_mut().enumerate().skip(1) {
+            if host.as_ref().unwrap().restart_required() {
+                host.take();
+                *host = Some(open(root.path(), index, &ports));
             }
         }
         elected = (1..3).find(|index| {

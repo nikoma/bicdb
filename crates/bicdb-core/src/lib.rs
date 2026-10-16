@@ -122,10 +122,10 @@ pub use bicdb_page::{
     PAGE_IO_LATENCY_BUCKET_COUNT, PAGE_IO_LATENCY_BUCKET_UPPER_BOUNDS_NANOS, VERSION_HEADER_BYTES,
 };
 pub use broker::{
-    Broker, BrokerAccess, BrokerCaller, BrokerMessage, BrokerStats, ConsumeOptions,
-    ConsumerGroupInfo, DrainOptions, DrainReport, GroupStats, NackOptions, PeekedMessage,
-    PublishOptions, PublishReceipt, QueueConfig, QueueStats, TrimReport, DEAD_LETTER_MESSAGE_EVENT,
-    DEFAULT_MAX_ATTEMPTS,
+    Broker, BrokerAccess, BrokerCaller, BrokerDeliverySnapshot, BrokerDeliveryState, BrokerMessage,
+    BrokerStats, ConsumeOptions, ConsumerGroupInfo, DrainOptions, DrainReport, GroupStats,
+    NackOptions, PeekedMessage, PublishOptions, PublishReceipt, QueueConfig, QueueStats,
+    TrimReport, DEAD_LETTER_MESSAGE_EVENT, DEFAULT_MAX_ATTEMPTS,
 };
 pub use cancellation::CancellationToken;
 pub use consensus::{

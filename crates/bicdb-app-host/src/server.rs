@@ -1318,7 +1318,7 @@ async fn job_status(
     platform.admin_auth(&headers)?;
     let app = platform.app(&name)?;
     Ok(Json(
-        blocking(move || Ok(app.database.lock().job_status())).await?,
+        blocking(move || app.database.lock().job_status()).await?,
     ))
 }
 

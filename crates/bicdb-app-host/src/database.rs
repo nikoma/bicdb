@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use std::path::Path;
 
 use anyhow::{bail, ensure, Context, Result};
-use bicdb_core::{BicDb, BrokerMessage, ConsumeOptions, DbConfig, NackOptions, PublishOptions};
+use bicdb_core::{BicDb, DbConfig};
 use bicdb_sql::{SqlResult, SqlSession, SqlValue};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -11,6 +11,8 @@ use sha2::{Digest, Sha256};
 use sqlparser::{ast::Statement, dialect::PostgreSqlDialect, parser::Parser};
 
 use crate::manifest::{Release, TableSync};
+
+mod jobs;
 
 const MIGRATIONS: &str = "__bic_platform_migrations";
 const RECEIPTS: &str = "__bic_platform_receipts";
@@ -39,7 +41,7 @@ pub struct QueryBatch {
 
 pub struct Database {
     pub db: BicDb,
-    jobs: BicDb,
+    legacy_jobs_path: std::path::PathBuf,
     sync: BTreeMap<String, TableSync>,
 }
 
@@ -58,13 +60,13 @@ impl Database {
         session.execute(&format!("CREATE TABLE IF NOT EXISTS {RECEIPTS} (key TEXT PRIMARY KEY, digest TEXT NOT NULL, result TEXT NOT NULL)"))?;
         session.execute(&format!("CREATE TABLE IF NOT EXISTS {OUTBOX} (id TEXT PRIMARY KEY, position BIGINT NOT NULL, payload TEXT NOT NULL)"))?;
         drop(session);
-        let jobs =
-            BicDb::open_with_config(path.join("jobs"), DbConfig::default().with_fsync(true))?;
-        Ok(Self {
+        let mut database = Self {
             db,
-            jobs,
+            legacy_jobs_path: path.join("jobs"),
             sync: BTreeMap::new(),
-        })
+        };
+        database.initialize_job_ledger()?;
+        Ok(database)
     }
 
     pub fn prepare(&mut self, release: &Release) -> Result<()> {
@@ -156,6 +158,12 @@ impl Database {
                 && batch.jobs.len() <= 128,
             "invalid statement count"
         );
+        for payload in &batch.jobs {
+            ensure!(
+                serde_json::to_vec(payload)?.len() <= 8 * 1024 * 1024,
+                "job payload exceeds 8 MiB"
+            );
+        }
         // Retain the receipt digest of SQL-only requests across upgrades.
         let content = if batch.jobs.is_empty() {
             serde_json::to_vec(&batch.statements)?
@@ -354,100 +362,17 @@ impl Database {
         Ok(serde_json::to_value(self.db.list_record_conflicts(table)?)?)
     }
 
-    pub fn enqueue(&mut self, payload: Value, key: Option<String>) -> Result<Value> {
-        let receipt = self.jobs.broker().publish_with(
-            JOB_QUEUE,
-            payload,
-            PublishOptions {
-                idempotency_key: key,
-                ..Default::default()
-            },
-        )?;
-        Ok(serde_json::json!({"id": receipt.message_id, "deduplicated": receipt.deduplicated}))
-    }
-
-    /// Bridge the transactional outbox into local durable delivery. A crash
-    /// after publish but before deletion reuses the same broker deduplication key.
-    pub fn drain_outbox(&mut self, limit: usize) -> Result<usize> {
-        ensure!((1..=128).contains(&limit), "invalid outbox batch size");
-        let mut session = SqlSession::new(&mut self.db);
-        let rows = session
-            .execute(&format!(
-                "SELECT id, payload FROM {OUTBOX} ORDER BY position LIMIT {limit}"
-            ))?
-            .rows;
-        let mut delivered = 0;
-        for row in rows {
-            let (SqlValue::String(id), SqlValue::String(payload)) = (&row[0], &row[1]) else {
-                bail!("invalid outbox entry");
-            };
-            self.jobs.broker().publish_with(
-                JOB_QUEUE,
-                serde_json::from_str(payload)?,
-                PublishOptions {
-                    idempotency_key: Some(format!("outbox:{id}")),
-                    ..Default::default()
-                },
-            )?;
-            session.execute(&format!("DELETE FROM {OUTBOX} WHERE id = {}", quote(id)))?;
-            delivered += 1;
-        }
-        Ok(delivered)
-    }
-
     pub fn snapshot_jobs(&self, output: &Path, passphrase: &str) -> Result<()> {
+        let jobs =
+            BicDb::open_with_config(&self.legacy_jobs_path, DbConfig::default().with_fsync(true))?;
         bicdb_core::create_backup_from_open_database(
-            &self.jobs,
+            &jobs,
             output,
             bicdb_core::BackupCreateOptions {
                 passphrase: passphrase.into(),
                 base_backup: None,
             },
         )?;
-        Ok(())
-    }
-
-    pub fn job_status(&mut self) -> Value {
-        let broker = self.jobs.broker();
-        let group = broker.group_info(JOB_QUEUE, JOB_GROUP);
-        serde_json::json!({
-            "in_flight": group.as_ref().map(|g| g.in_flight).unwrap_or(0),
-            "pending_redelivery": group.as_ref().map(|g| g.pending_redelivery).unwrap_or(0),
-            "last_delivered_sequence": group.as_ref().and_then(|g| g.last_delivered_sequence),
-            "dead_letters": broker.dead_letters(JOB_QUEUE, JOB_GROUP).len(),
-        })
-    }
-
-    pub fn consume(&mut self, consumer: &str, timeout_ms: u64) -> Result<Option<BrokerMessage>> {
-        Ok(self
-            .jobs
-            .broker()
-            .consume(
-                JOB_QUEUE,
-                JOB_GROUP,
-                consumer,
-                ConsumeOptions {
-                    max_messages: 1,
-                    visibility_timeout_ms: timeout_ms + 10_000,
-                },
-            )?
-            .pop())
-    }
-
-    pub fn settle(&mut self, consumer: &str, message: &BrokerMessage, success: bool) -> Result<()> {
-        if success {
-            self.jobs.broker().ack_delivery(consumer, message)?;
-        } else {
-            self.jobs.broker().nack_delivery(
-                consumer,
-                message,
-                NackOptions {
-                    requeue: true,
-                    delay_ms: Some(1000),
-                    error: Some("application handler failed".into()),
-                },
-            )?;
-        }
         Ok(())
     }
 }

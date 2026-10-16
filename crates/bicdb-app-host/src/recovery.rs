@@ -55,7 +55,7 @@ pub fn snapshot(
         atomic_write(
             &metadata,
             &serde_json::to_vec(&RecoveryMetadata {
-                format: 1,
+                format: 2,
                 deployment,
                 release,
                 previous,
@@ -94,7 +94,7 @@ pub fn restore(store: &Store, archive: &Path, passphrase: &str) -> Result<Deploy
         let metadata: RecoveryMetadata =
             serde_json::from_slice(&read_bounded(&data.join(METADATA), MAX_RELEASE_BYTES * 4)?)?;
         ensure!(
-            metadata.format == 1,
+            matches!(metadata.format, 1 | 2),
             "unsupported application recovery format"
         );
         metadata.release.validate()?;

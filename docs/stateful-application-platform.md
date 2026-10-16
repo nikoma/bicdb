@@ -102,14 +102,32 @@ JSON numbers use JavaScript's numeric range; cast large SQL integers to text
 when exact JavaScript representation is required.
 
 Job delivery is at least once, with bounded attempts, visibility leases and
-broker dead letters. A handler should use its stable message ID as a database
+dead letters. A handler should use its stable message ID as a database
 idempotency key, as the counter example does. External effects require the
 receiving service's idempotency mechanism. A standalone `JOBS.send` is a separate
 durable operation from a preceding SQL transaction. Use the transaction option
-`jobs` to commit queued work atomically with SQL effects. A durable outbox bridges
-committed jobs to delivery with a stable broker deduplication key, including a
-restart between publication and outbox removal. Job storage remains local
-to each application instance and does not enter record synchronization.
+`jobs` to commit queued work atomically with SQL effects. Outbox entries move
+into a database-owned job ledger in one transaction. Job IDs, idempotency keys,
+delivery attempts, active leases and completion state live alongside application
+data and receipts. Rebuilding execution on another host preserves those IDs;
+an old delivery attempt cannot settle its replacement. Sending a job with an
+existing idempotency key and a different payload is refused.
+Payloads are stored separately from mutable delivery metadata, so renewing or
+settling a delivery does not rewrite its payload. A job payload is limited to
+8 MiB; an outbox transfer handles at most 128 jobs and 16 MiB of payload data.
+
+Existing local-broker jobs migrate automatically in restartable batches of up to
+128 messages and 16 MiB of serialized events plus delivery metadata. Migration
+preserves IDs, outstanding leases, attempts and terminal state; it never consumes
+or acknowledges the old broker. The historical broker directory remains in
+recovery images for compatibility. New deliveries use the application database.
+Recovery images now use application format 2; this host also accepts format 1
+and migrates its local-broker jobs. Earlier hosts that understand only format 1
+refuse the new images rather than silently missing the job ledger.
+Jobs do not enter selective edge record synchronization. Application recovery
+and native state replication remain separate from that synchronization protocol.
+Completed jobs and dead letters are retained; operators must account for their
+storage until retention and redrive management are exposed by the platform.
 
 ## Upgrades and recovery
 

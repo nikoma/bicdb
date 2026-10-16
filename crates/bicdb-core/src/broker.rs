@@ -389,6 +389,31 @@ pub struct PeekedMessage {
     pub max_attempts: u32,
 }
 
+/// Delivery projection for one retained message. Reading this view does not
+/// create a group, consume a message, expire a lease or advance any cursor.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BrokerDeliverySnapshot {
+    pub message: PeekedMessage,
+    pub attempts: u32,
+    pub delivered_at: i64,
+    pub state: BrokerDeliveryState,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum BrokerDeliveryState {
+    Unseen,
+    InFlight {
+        consumer: String,
+        visibility_deadline: i64,
+    },
+    Available {
+        available_at: i64,
+    },
+    /// Acknowledged or dead-lettered. Dead-letter payloads remain available
+    /// through the ordinary dead-letter API.
+    Settled,
+}
+
 /// Point-in-time broker observability snapshot; see [`Broker::stats`].
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BrokerStats {
@@ -1244,6 +1269,37 @@ impl<'a> Broker<'a> {
         self.stream.read(&dlq_stream(queue, group))
     }
 
+    /// Retained dead-letter identities and their highest recorded attempt.
+    /// This metadata view never clones the potentially large message payloads.
+    pub fn dead_letter_attempts(
+        &self,
+        queue: &str,
+        group: &str,
+    ) -> std::collections::BTreeMap<Uuid, u32> {
+        let stream = dlq_stream(queue, group);
+        let mut attempts = std::collections::BTreeMap::<Uuid, u32>::new();
+        for stored in self.stream.stored_events() {
+            if stored.event.stream != stream || stored.event.event_type != DEAD_LETTER_MESSAGE_EVENT
+            {
+                continue;
+            }
+            let metadata = &stored.event.metadata["broker"];
+            let Some(id) = metadata["original_message_id"]
+                .as_str()
+                .and_then(|id| Uuid::parse_str(id).ok())
+            else {
+                continue;
+            };
+            let attempt = metadata["attempts"]
+                .as_u64()
+                .and_then(|value| u32::try_from(value).ok())
+                .unwrap_or(1);
+            let previous = attempts.entry(id).or_default();
+            *previous = (*previous).max(attempt);
+        }
+        attempts
+    }
+
     /// Durable state summary for one consumer group, if it exists.
     pub fn group_info(&self, queue: &str, group: &str) -> Option<ConsumerGroupInfo> {
         let state = self.stream.broker_state.group(queue, group)?;
@@ -1396,6 +1452,105 @@ impl<'a> Broker<'a> {
                 })
             })
             .collect()
+    }
+
+    /// Bounded read-only export of retained messages and their exact group
+    /// delivery state. Useful when moving a queue without resetting attempts
+    /// or acknowledging its in-flight deliveries.
+    pub fn delivery_snapshot(
+        &self,
+        queue: &str,
+        group: &str,
+        from_sequence: u64,
+        max: usize,
+        max_bytes: usize,
+    ) -> Result<Vec<BrokerDeliverySnapshot>> {
+        if max == 0 || max > 1024 || max_bytes == 0 || max_bytes > 64 * 1024 * 1024 {
+            return Err(BicDbError::Broker(
+                "invalid delivery snapshot bounds".into(),
+            ));
+        }
+        struct Count {
+            bytes: usize,
+            limit: usize,
+        }
+        impl std::io::Write for Count {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                if self.bytes.saturating_add(bytes.len()) > self.limit {
+                    return Err(std::io::Error::other("delivery snapshot byte limit"));
+                }
+                self.bytes += bytes.len();
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let Some(messages) = self.stream.broker_state.queues.get(queue) else {
+            return Ok(Vec::new());
+        };
+        let state = self.stream.broker_state.group(queue, group);
+        let start = messages
+            .entries
+            .partition_point(|(sequence, _)| *sequence < from_sequence);
+        let mut result = Vec::new();
+        let mut remaining = max_bytes;
+        for (sequence, message_id) in messages.entries[start..].iter().take(max) {
+            let Some(stored) = self.stream.event_by_id(message_id) else {
+                continue;
+            };
+            // Count before cloning a potentially large payload. Reserve room
+            // for group delivery metadata in addition to the serialized event.
+            let mut counter = Count {
+                bytes: 0,
+                limit: remaining.saturating_sub(1024),
+            };
+            if serde_json::to_writer(&mut counter, &stored.event).is_err() || remaining < 1024 {
+                if result.is_empty() {
+                    return Err(BicDbError::Broker(
+                        "one retained message exceeds the delivery snapshot byte limit".into(),
+                    ));
+                }
+                break;
+            }
+            remaining -= counter.bytes + 1024;
+            let fields = message_fields(&stored.event);
+            let message = PeekedMessage {
+                sequence: *sequence,
+                message_id: *message_id,
+                payload: stored.event.payload.clone(),
+                headers: fields.headers,
+                idempotency_key: fields.idempotency_key,
+                created_at: fields.created_at,
+                available_at: fields.available_at,
+                max_attempts: fields.max_attempts,
+            };
+            let delivery = state.and_then(|group| group.deliveries.get(message_id));
+            let status = match delivery {
+                Some(delivery) => match delivery.status {
+                    DeliveryStatus::InFlight {
+                        visibility_deadline,
+                    } => BrokerDeliveryState::InFlight {
+                        consumer: delivery.consumer_id.clone(),
+                        visibility_deadline,
+                    },
+                    DeliveryStatus::Available { available_at } => {
+                        BrokerDeliveryState::Available { available_at }
+                    }
+                },
+                None if state.is_some_and(|group| *sequence < group.next_sequence) => {
+                    BrokerDeliveryState::Settled
+                }
+                None => BrokerDeliveryState::Unseen,
+            };
+            result.push(BrokerDeliverySnapshot {
+                message,
+                attempts: delivery.map_or(0, |d| d.attempts),
+                delivered_at: delivery.map_or(0, |d| d.delivered_at),
+                state: status,
+            });
+        }
+        Ok(result)
     }
 
     /// Point-in-time snapshot of every queue and group the broker knows

@@ -5468,8 +5468,8 @@ pub fn run_postgres_compat_suite(
         &mut cases,
         "transactions.read_committed_visibility",
         "transactions",
-        "READ COMMITTED currently uses BicDB's transaction snapshot instead of PostgreSQL per-statement visibility",
-        PostgresCompatExpectation::ExpectedDifference,
+        "READ COMMITTED observes a concurrent commit on the next statement",
+        PostgresCompatExpectation::Works,
         || {
             let mut writer = bench_pg_connect(address)?;
             expect_rows(
@@ -5501,16 +5501,9 @@ pub fn run_postgres_compat_suite(
             )?;
             expect_rows(bench_pg_simple_query(&mut writer, "COMMIT;")?, &[])?;
             let _ = bench_pg_close(&mut writer);
-            let rows = bench_pg_simple_query(
-                &mut client,
-                "SELECT COUNT(*) FROM rc_visibility;",
-            )?;
+            let rows = bench_pg_simple_query(&mut client, "SELECT COUNT(*) FROM rc_visibility;")?;
             expect_rows(bench_pg_simple_query(&mut client, "ROLLBACK;")?, &[])?;
-            if rows == vec![vec!["0".to_string()]] {
-                Ok("BicDB transaction snapshot did not observe the concurrent commit; PostgreSQL READ COMMITTED would see it on the next statement".to_string())
-            } else {
-                anyhow::bail!("expected BicDB snapshot count 0 for documented READ COMMITTED gap, got {}", format_rows(&rows))
-            }
+            expect_rows(rows, &[&["1"]])
         },
     );
     record_pg_case(

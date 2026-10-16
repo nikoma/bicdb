@@ -249,6 +249,10 @@ fn postgres_compat_report_exports_scorecard_json_and_csv() {
     assert!(report.total_cases >= 20);
     assert_eq!(report.failed_cases, 0);
     assert!(report.score_percent >= 99.0);
+    assert!(report.cases.iter().any(|case| {
+        case.id == "transactions.read_committed_visibility"
+            && case.coverage_state == PostgresCompatCoverageState::Supported
+    }));
     assert!(!report.known_gaps.is_empty());
     assert!(report
         .cases

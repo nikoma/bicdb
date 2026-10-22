@@ -2046,9 +2046,9 @@ impl PagedStore {
             let free_adoption = self.prepare_free_adoption(transaction, &[])?;
             self.log_dirty_pages(transaction)?;
             self.wal.commit(transaction)?;
-            if let Some((head, count)) = free_adoption {
+            if !free_adoption.is_empty() {
                 self.pool.flush_all()?;
-                self.pool.store().adopt_free_pages(head, count)?;
+                self.adopt_free_segments(&free_adoption)?;
             }
             // Only after the commit record is durable: marking it committed first
             // would make its rows visible to readers before a crash could still
@@ -2796,9 +2796,7 @@ impl PagedStore {
             self.log_dirty_pages(0)?;
             self.wal.sync()?;
             self.pool.flush_all()?;
-            if let Some((head, count)) = free_adoption {
-                store.adopt_free_pages(head, count)?;
-            }
+            self.adopt_free_segments(&free_adoption)?;
             report.pages_reclaimed = orphans.len() as u64;
         }
 
@@ -2975,7 +2973,6 @@ impl PagedStore {
         // point — adopt the pages. A crash anywhere earlier leaks the pages
         // (consistent), never corrupts the list.
         if !fully_dead.is_empty() {
-            let store = self.pool.store().clone();
             for page_id in &fully_dead {
                 let (floor, free_bytes) = {
                     let guard = self.pool.get(*page_id)?;
@@ -2990,9 +2987,7 @@ impl PagedStore {
             self.log_dirty_pages(0)?;
             self.wal.sync()?;
             self.pool.flush_all()?;
-            if let Some((head, count)) = free_adoption {
-                store.adopt_free_pages(head, count)?;
-            }
+            self.adopt_free_segments(&free_adoption)?;
             report.pages_freed = fully_dead.len() as u64;
         }
 
@@ -3113,46 +3108,61 @@ impl PagedStore {
     }
 
     /// Finalize every free page staged by a transaction (plus an explicit
-    /// maintenance batch) into one linked segment whose tail binds to the
-    /// current free-list head. The caller must then log, make the WAL durable,
-    /// flush these images, and publish the returned head/count.
+    /// maintenance batch) into linked segments of at most
+    /// `MAX_FREE_LIST_ADOPTION_PAGES` pages each. The first segment's tail binds
+    /// to the current free-list head and every later segment's tail binds to the
+    /// previous segment's head, so adopting them in the returned order keeps each
+    /// adoption a valid, bounded segment. The caller must then log, make the WAL
+    /// durable, flush these images, and publish the segments in order. A crash
+    /// between two adoptions leaves the later segments' pages typed Free but
+    /// unlisted — leaked (consistent) and recoverable by free-page reclaim, never a
+    /// corrupt list. One durability boundary may therefore free any number of
+    /// pages (e.g. a large transaction replayed at open).
     fn prepare_free_adoption(
         &self,
         transaction: u64,
         extra: &[PageId],
-    ) -> Result<Option<(PageId, u64)>> {
+    ) -> Result<Vec<(PageId, u64)>> {
         let mut pages = self.pool.take_pending_frees(transaction);
         pages.extend_from_slice(extra);
         pages.sort_unstable();
         pages.dedup();
         if pages.is_empty() {
-            return Ok(None);
-        }
-        if pages.len() > 65_536 {
-            return Err(PageError::InvalidMaintenanceLimits {
-                reason: "one durability boundary cannot free more than 65536 pages".to_string(),
-            });
+            return Ok(Vec::new());
         }
         let store = self.pool.store();
-        let old_head = store.free_list_head();
-        for (index, page_id) in pages.iter().enumerate() {
-            let next = pages.get(index + 1).copied().unwrap_or(old_head);
-            let mut guard = self.pool.get_mut(*page_id)?;
-            let bytes = guard.bytes_mut();
-            let generation = crate::page::PageHeader::decode(bytes, store.path())?
-                .generation
-                .saturating_add(1);
-            bytes.fill(0);
-            let mut header = crate::page::PageHeader::new(
-                *page_id,
-                crate::page::PageType::Free,
-                store.page_size(),
-            );
-            header.generation = generation;
-            header.next_page = next;
-            header.encode(bytes);
+        let mut tail_target = store.free_list_head();
+        let mut segments = Vec::new();
+        for chunk in pages.chunks(crate::manager::MAX_FREE_LIST_ADOPTION_PAGES as usize) {
+            for (index, page_id) in chunk.iter().enumerate() {
+                let next = chunk.get(index + 1).copied().unwrap_or(tail_target);
+                let mut guard = self.pool.get_mut(*page_id)?;
+                let bytes = guard.bytes_mut();
+                let generation = crate::page::PageHeader::decode(bytes, store.path())?
+                    .generation
+                    .saturating_add(1);
+                bytes.fill(0);
+                let mut header = crate::page::PageHeader::new(
+                    *page_id,
+                    crate::page::PageType::Free,
+                    store.page_size(),
+                );
+                header.generation = generation;
+                header.next_page = next;
+                header.encode(bytes);
+            }
+            segments.push((chunk[0], chunk.len() as u64));
+            tail_target = chunk[0];
         }
-        Ok(Some((pages[0], pages.len() as u64)))
+        Ok(segments)
+    }
+
+    /// Publish segments from [`Self::prepare_free_adoption`] in order.
+    fn adopt_free_segments(&self, segments: &[(PageId, u64)]) -> Result<()> {
+        for (head, count) in segments {
+            self.pool.store().adopt_free_pages(*head, *count)?;
+        }
+        Ok(())
     }
 
     /// Make structural (transaction-zero) frees reusable immediately. This is
@@ -3162,11 +3172,11 @@ impl PagedStore {
     /// later checkpoint would leak space after a clean shutdown.
     fn finalize_structural_frees(&self) -> Result<()> {
         let adoption = self.prepare_free_adoption(0, &[])?;
-        if let Some((head, count)) = adoption {
+        if !adoption.is_empty() {
             self.log_dirty_pages(0)?;
             self.wal.sync()?;
             self.pool.flush_all()?;
-            self.pool.store().adopt_free_pages(head, count)?;
+            self.adopt_free_segments(&adoption)?;
             if !self.transactions.has_unfrozen_commits() && !self.backup_pinned() {
                 self.checkpointer.checkpoint_and_truncate(self.meta_page)?;
             }
@@ -8159,5 +8169,89 @@ mod tests {
         }
         reader.join().unwrap();
         store.commit(blocker).unwrap();
+    }
+
+    /// Walks the free list: exactly `free_page_count` pages, all typed Free,
+    /// none listed twice.
+    fn assert_free_list_consistent(store: &PagedStore) {
+        let pages = store.pool.store();
+        let expected = pages.free_page_count();
+        let mut seen = std::collections::HashSet::new();
+        let mut cursor = pages.free_list_head();
+        while cursor != 0 {
+            assert!(seen.insert(cursor), "page {cursor} listed twice");
+            let header = pages.read_header(cursor).unwrap();
+            assert_eq!(
+                header.page_type,
+                crate::page::PageType::Free,
+                "page {cursor}"
+            );
+            cursor = header.next_page;
+            assert!(
+                seen.len() as u64 <= expected,
+                "free list longer than its count"
+            );
+        }
+        assert_eq!(
+            seen.len() as u64,
+            expected,
+            "free list length differs from its count"
+        );
+    }
+
+    fn allocate_pages(store: &PagedStore, count: usize) -> Vec<PageId> {
+        (0..count)
+            .map(|_| {
+                store
+                    .pool
+                    .store()
+                    .allocate(crate::page::PageType::Heap)
+                    .unwrap()
+            })
+            .collect()
+    }
+
+    /// More than one adoption's worth of pages freed in a single durability
+    /// boundary used to fail with "one durability boundary cannot free more
+    /// than 65536 pages" (a production store could not reopen after replaying
+    /// such a transaction). They are now published as chained segments.
+    #[test]
+    fn one_boundary_frees_more_than_one_adoption_segment() {
+        let count = crate::manager::MAX_FREE_LIST_ADOPTION_PAGES as usize * 2 + 123;
+        let dir = TempDir::new().unwrap();
+        {
+            let store = open(&dir);
+            let structural = allocate_pages(&store, count);
+            let transactional = allocate_pages(&store, count);
+            for page_id in &structural {
+                store.pool.free_page_for_transaction(*page_id, 0).unwrap();
+            }
+            store.finalize_structural_frees().unwrap();
+            assert_eq!(store.pool.store().free_page_count(), count as u64);
+            assert_free_list_consistent(&store);
+
+            // A committing transaction that frees as many pages.
+            let xid = store.begin();
+            for page_id in &transactional {
+                store.pool.free_page_for_transaction(*page_id, xid).unwrap();
+            }
+            store.commit(xid).unwrap();
+            assert_eq!(store.pool.store().free_page_count(), 2 * count as u64);
+            assert_free_list_consistent(&store);
+            // No checkpoint or clean close: dropping simulates a crash.
+        }
+        let store = open(&dir);
+        assert_free_list_consistent(&store);
+        // Reopen may hand the trailing free run back to the filesystem; what
+        // remains listed must be consistent, and allocation must keep working.
+        assert!(store.pool.store().free_page_count() <= 2 * count as u64);
+        allocate_pages(&store, 1_000);
+        let xid = store.begin();
+        store.put(xid, b"after-reopen", b"ok").unwrap();
+        store.commit(xid).unwrap();
+        assert_eq!(
+            store.get(b"after-reopen").unwrap().as_deref(),
+            Some(&b"ok"[..])
+        );
     }
 }

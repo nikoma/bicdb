@@ -2,6 +2,32 @@ use bicdb_core::{BicDb, SecurityContext};
 use bicdb_sql::{SqlSession, SqlValue};
 
 #[test]
+fn locking_selects_resolve_schema_qualified_tables_like_ordinary_reads() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE SCHEMA application_private")
+        .unwrap();
+    for table in ["public.lock_probe", "application_private.lock_probe"] {
+        session
+            .execute(&format!("CREATE TABLE {table} (id INT PRIMARY KEY)"))
+            .unwrap();
+        session
+            .execute(&format!("INSERT INTO {table} VALUES (1)"))
+            .unwrap();
+        session.execute("BEGIN").unwrap();
+        let result = session
+            .execute(&format!(
+                "SELECT probe.id FROM {table} AS probe FOR UPDATE OF probe"
+            ))
+            .unwrap();
+        assert_eq!(result.rows, vec![vec![SqlValue::Int(1)]]);
+        session.execute("ROLLBACK").unwrap();
+    }
+}
+
+#[test]
 fn stored_identity_helpers_work_inside_table_function_arguments() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();

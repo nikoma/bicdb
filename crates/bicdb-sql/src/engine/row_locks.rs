@@ -73,6 +73,7 @@ impl SqlEngine<'_> {
                     }
                     continue;
                 };
+                let physical_name = relation_name(name)?;
                 let name = object_name(name)?;
                 let alias = alias
                     .as_ref()
@@ -84,7 +85,7 @@ impl SqlEngine<'_> {
                 {
                     continue;
                 }
-                let table = resolve_session_relation_name(self.db_ref(), &name)?;
+                let table = resolve_session_relation_name(self.db_ref(), &physical_name)?;
                 self.require_relation_privilege(&table, "SELECT")?;
                 self.require_relation_privilege(&table, "UPDATE")?;
                 let schema = load_schema(self.db_ref(), &table)?.ok_or_else(|| {

@@ -2049,7 +2049,9 @@ pub(crate) fn validate_foreign_key_constraint(
         return Ok(());
     };
     let key = record_column_values(record, schema, columns);
-    if key.iter().all(|value| matches!(value, SqlValue::Null)) {
+    // PostgreSQL's default MATCH SIMPLE exempts the entire reference when
+    // any component is NULL, including optional tenant-scoped relationships.
+    if key.iter().any(|value| matches!(value, SqlValue::Null)) {
         return Ok(());
     }
     let Some(foreign_schema) = load_schema(db, foreign_table)? else {

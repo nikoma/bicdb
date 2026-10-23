@@ -340,8 +340,15 @@ impl<'db> SqlEngine<'db> {
                 if let Some(value) = eval_spatial_function_value(&name, &args, &arg_types)? {
                     return Ok(value);
                 }
+                if let Some(value) = self.eval_stored_sql_function_value(&name, &args)? {
+                    return Ok(value);
+                }
                 eval_builtin_function_value(function)
             }
+            // A SELECT without FROM can still depend on session identity.
+            // The pure constant evaluator drops that context for expressions
+            // such as current_context() -> 'roles' in stored SQL helpers.
+            Expr::BinaryOp { .. } => self.eval_row_value(&SqlRow::default(), expr),
             Expr::Cast {
                 expr, data_type, ..
             } => {

@@ -87,3 +87,46 @@ fn partially_null_composite_foreign_keys_use_match_simple() {
         "23503"
     );
 }
+
+#[test]
+fn numeric_unique_indexes_compare_decoded_values_without_losing_precision() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE TABLE public.payment_probe (id INT PRIMARY KEY, account INT, amount NUMERIC)",
+        )
+        .unwrap();
+    session
+        .execute("CREATE UNIQUE INDEX payment_probe_key ON public.payment_probe(account, amount)")
+        .unwrap();
+    session
+        .execute("INSERT INTO payment_probe VALUES (1, 1, '1450.25')")
+        .unwrap();
+    session
+        .execute("INSERT INTO payment_probe VALUES (2, 1, '1450.250000000000000001')")
+        .unwrap();
+    assert_eq!(
+        session
+            .execute("INSERT INTO payment_probe VALUES (3, 1, '1450.2500')")
+            .unwrap_err()
+            .sqlstate(),
+        "23505"
+    );
+    session
+        .execute("UPDATE payment_probe SET amount = '1450.26' WHERE id = 1")
+        .unwrap();
+    session
+        .execute("INSERT INTO payment_probe VALUES (4, 1, '1450.25')")
+        .unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT amount::text FROM payment_probe WHERE id = 2")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String(
+            "1450.250000000000000001".to_string()
+        )]]
+    );
+}

@@ -1750,7 +1750,16 @@ pub(crate) fn unique_key_values(
         UniqueKey::Columns(columns) => record_column_values(record, schema, columns),
         UniqueKey::IndexFields(fields) => fields
             .iter()
-            .map(|field| record_index_field_sql_value(record, field))
+            .map(|field| {
+                // SQL column indexes must compare decoded SQL values, not the
+                // internal storage envelope used by NUMERIC and temporal cells.
+                match index_field_column_name(schema, field) {
+                    Some(column) if schema.column(&column).is_some() => {
+                        record_column_value(record, schema, &column)
+                    }
+                    _ => record_index_field_sql_value(record, field),
+                }
+            })
             .collect(),
     }
 }

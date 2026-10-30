@@ -95,6 +95,67 @@ impl Exposition {
 fn render(server: &Arc<PgWireServer>) -> Result<String> {
     let mut out = Exposition(String::new());
     let stats = server.stats_snapshot();
+    out.counter(
+        "bicdb_live_breaker_trips_total",
+        "Subscriptions stopped for evaluation, fan-out, or backlog budgets.",
+        server.live_breaker_trips.load(Ordering::Relaxed),
+    );
+    out.metric(
+        "bicdb_workload_active_queries",
+        "gauge",
+        "Queries admitted for an authenticated role or tenant.",
+    );
+    out.metric(
+        "bicdb_workload_reserved_memory_bytes",
+        "gauge",
+        "Reserved query working memory by identity.",
+    );
+    out.metric(
+        "bicdb_workload_rejected_total",
+        "counter",
+        "Cost or concurrency admission refusals by identity.",
+    );
+    for (identity, usage) in server.workload.usage.lock().unwrap().iter() {
+        let labels = [("identity", identity.as_str())];
+        out.sample("bicdb_workload_active_queries", &labels, usage.active);
+        out.sample(
+            "bicdb_workload_reserved_memory_bytes",
+            &labels,
+            usage.reserved_bytes.saturating_add(usage.cached_bytes),
+        );
+        out.sample("bicdb_workload_rejected_total", &labels, usage.rejected);
+    }
+
+    out.gauge(
+        "bicdb_verify_enabled",
+        "Scheduled verification is configured.",
+        u8::from(server.config.verification.is_some()),
+    );
+    {
+        let healthy = server.read_db()?.replication_verification_healthy();
+        let runs = server.verification_runs.lock().unwrap();
+        let mut latest = BTreeMap::new();
+        for run in runs.iter() {
+            latest.insert(run.check, run);
+        }
+        out.gauge(
+            "bicdb_verify_last_success",
+            "Last drill succeeded; zero before any drill.",
+            u8::from(!latest.is_empty() && healthy && latest.values().all(|run| run.success)),
+        );
+        out.gauge(
+            "bicdb_verify_last_completed_timestamp_seconds",
+            "Last completed verification; zero before any drill.",
+            runs.last().map_or(0, |run| run.completed_at),
+        );
+        out.gauge(
+            "bicdb_verify_last_restore_and_failover",
+            "Last drill restored, promoted, wrote and reopened scratch data.",
+            runs.last()
+                .map_or(0, |run| u8::from(run.restore_and_failover)),
+        );
+    }
+
     out.gauge("bicdb_up", "The server is serving.", 1);
     out.gauge(
         "bicdb_connections_active",

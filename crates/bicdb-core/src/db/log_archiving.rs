@@ -30,10 +30,17 @@ impl BicDb {
         cursor: &mut ReplicationCursor,
         limit: usize,
     ) -> Result<usize> {
+        // Retry a failed sync before allowing retention to advance.
+        archive.sync()?;
         // Hold before reading, so a checkpoint cannot cut what is unread.
         self.hold_log_for_archive(archive.last_commit_seq())?;
         let frames = self.replication_frames_after(cursor, limit)?;
-        archive.append(&self.config.replication.cluster_id, &frames)?;
+        if let Err(error) = archive.append(&self.config.replication.cluster_id, &frames) {
+            // append may have completed a prefix. Resume from its exact
+            // boundary, not the end of the batch the cursor already read.
+            *cursor = ReplicationCursor::new(archive.last_commit_seq());
+            return Err(error);
+        }
         if !frames.is_empty() {
             self.hold_log_for_archive(archive.last_commit_seq())?;
         }

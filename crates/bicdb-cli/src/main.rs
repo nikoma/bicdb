@@ -289,6 +289,15 @@ enum Command {
     },
     Verify {
         path: PathBuf,
+        /// Restore this commit archive into scratch and compare with the source.
+        #[arg(long)]
+        archive: Option<PathBuf>,
+        #[arg(long, requires = "archive")]
+        archive_key_env: Option<String>,
+        #[arg(long, requires = "archive")]
+        scratch: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
         #[arg(long)]
         key: Option<String>,
         #[arg(long)]
@@ -1861,6 +1870,33 @@ enum BranchCommand {
 
 #[derive(Debug, Subcommand)]
 enum HaCommand {
+    /// Stage an authenticated base backup for a stopped native standby, preserving its ballot.
+    Reseed {
+        standby: PathBuf,
+        #[arg(long)]
+        backup: PathBuf,
+        #[arg(long)]
+        key_env: Option<String>,
+    },
+    /// Drain the primary, hand off its exact durable prefix, and wait for the target.
+    Switchover {
+        #[arg(long)]
+        primary: String,
+        #[arg(long)]
+        target: String,
+        #[arg(long)]
+        target_node: String,
+        #[arg(long, default_value = "postgres")]
+        user: String,
+        #[arg(long)]
+        password_env: Option<String>,
+        #[arg(long, default_value = "bicdb")]
+        dbname: String,
+        #[arg(long, default_value_t = 120)]
+        timeout_secs: u64,
+        #[arg(long)]
+        json: bool,
+    },
     /// HA state of a database directory, or with --node, of a running
     /// replication group: each server's role, epoch, commit position, primary
     /// and write lease, and the standbys each primary sees.
@@ -3746,10 +3782,56 @@ fn main() -> Result<()> {
                 );
             }
         }
-        Command::Verify { path, key, key_env } => {
+        Command::Verify {
+            path,
+            key,
+            key_env,
+            archive,
+            archive_key_env,
+            scratch,
+            json,
+        } => {
             let db = open_db_with_key_args(&path, key, key_env)?;
             let report = db.verify_integrity()?;
-            print_integrity_report("Verified BicDB integrity", &report);
+            let indexes = db.verify_indexes_consistently()?;
+            if indexes.iter().any(|report| !report.valid) {
+                bail!("an index differs from its table");
+            }
+            let vector_indexes = db.verify_vector_indexes_consistently()?;
+            let manifest = db.verification_manifest()?;
+            let drill = if let Some(archive) = archive {
+                let key = backup_key(None, archive_key_env)?;
+                Some(bicdb_core::verify_restore_drill(
+                    &archive,
+                    &key,
+                    &scratch.unwrap_or_else(|| std::env::temp_dir().join("bicdb-verification")),
+                    Some(&manifest),
+                )?)
+            } else {
+                None
+            };
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(
+                        &serde_json::json!({"integrity": report, "indexes": indexes, "vector_indexes": vector_indexes, "manifest": manifest, "restore_drill": drill})
+                    )?
+                );
+            } else {
+                print_integrity_report("Verified BicDB integrity", &report);
+                println!(
+                    "Verified {} tables and {} indexes at commit {}",
+                    manifest.tables.len(),
+                    indexes.len(),
+                    manifest.commit_seq
+                );
+                if let Some(drill) = drill {
+                    println!(
+                        "Restore, promotion, write and restart passed at commit {}",
+                        drill.restored_commit_seq
+                    );
+                }
+            }
             db.close()?;
         }
         Command::Check {
@@ -5632,6 +5714,25 @@ fn main() -> Result<()> {
             )?;
             config.log_archive = replication.log_archive_config()?;
             config.metrics_listen = operator.metrics_listen;
+            config.region = operator.region.clone();
+            config.workload = operator
+                .workload_limits
+                .as_ref()
+                .map(|path| -> Result<bicdb_pgwire::WorkloadConfig> {
+                    Ok(serde_json::from_slice(
+                        &std::fs::read(path).with_context(|| format!("read {}", path.display()))?,
+                    )?)
+                })
+                .transpose()?
+                .unwrap_or_default();
+            config.verification =
+                (operator.verify_interval_secs > 0).then(|| bicdb_pgwire::VerificationConfig {
+                    interval: Duration::from_secs(operator.verify_interval_secs),
+                    scratch_root: operator
+                        .verify_scratch
+                        .clone()
+                        .unwrap_or_else(|| std::env::temp_dir().join("bicdb-verification")),
+                });
             config.connectors = operator
                 .connectors
                 .as_deref()
@@ -6255,6 +6356,47 @@ fn main() -> Result<()> {
             print_sql_result(&result, OutputMode::new(json, false)?)?;
         }
         Command::Ha { command } => match command {
+            HaCommand::Reseed {
+                standby,
+                backup,
+                key_env,
+            } => {
+                let _lock = if standby.exists() {
+                    Some(
+                        DirectoryLock::acquire(&standby)
+                            .context("stop the standby before reseeding")?,
+                    )
+                } else {
+                    None
+                };
+                let key = backup_key(None, key_env)?;
+                bicdb_core::stage_standby_bootstrap(&standby, &backup, &key, true)?;
+                println!("Staged standby snapshot at {}; restart with the existing node identity and replication flags", bicdb_core::standby_bootstrap_staging(&standby).display());
+            }
+            HaCommand::Switchover {
+                primary,
+                target,
+                target_node,
+                user,
+                password_env,
+                dbname,
+                timeout_secs,
+                json,
+            } => {
+                let password = password_env
+                    .map(|name| std::env::var(&name).with_context(|| format!("{name} is not set")))
+                    .transpose()?;
+                run_planned_switchover(
+                    &primary,
+                    &target,
+                    &target_node,
+                    &user,
+                    password.as_deref(),
+                    &dbname,
+                    Duration::from_secs(timeout_secs),
+                    json,
+                )?;
+            }
             HaCommand::Status {
                 path,
                 json,
@@ -8853,6 +8995,17 @@ struct OperatorArgs {
     /// bind it to a trusted interface).
     #[arg(long)]
     metrics_listen: Option<SocketAddr>,
+    /// Run table/index verification and archive restore/promotion drills at this cadence (0: off).
+    #[arg(long, default_value_t = 0)]
+    verify_interval_secs: u64,
+    #[arg(long)]
+    verify_scratch: Option<PathBuf>,
+    /// JSON role/tenant limits and live-query budgets.
+    #[arg(long)]
+    workload_limits: Option<PathBuf>,
+    /// Region label exposed by bicdb_region.
+    #[arg(long, default_value = "")]
+    region: String,
     /// JSON file of connectors to external messaging systems: sinks that drain
     /// broker queues to Redis or AMQP, sources that drain Redis streams or AMQP
     /// queues into tables (see docs/connectors.md).
@@ -12623,6 +12776,95 @@ fn print_ha_cluster_status(
         for warning in &warnings {
             println!("warning: {warning}");
         }
+    }
+    Ok(())
+}
+
+fn run_planned_switchover(
+    primary: &str,
+    target: &str,
+    target_node: &str,
+    user: &str,
+    password: Option<&str>,
+    dbname: &str,
+    timeout: Duration,
+    json: bool,
+) -> Result<()> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let mut target_status = query_ha_node(&runtime, target, user, password, dbname);
+    if target_status.role.as_deref() != Some("standby") {
+        bail!(
+            "target must be a reachable standby before draining: {:?}",
+            target_status
+        );
+    }
+    let offer: bicdb_core::SwitchoverOffer = runtime.block_on(async {
+        let (host, port) = primary
+            .rsplit_once(':')
+            .context("--primary needs HOST:PORT")?;
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host(host)
+            .port(port.parse()?)
+            .user(user)
+            .dbname(dbname)
+            .connect_timeout(Duration::from_secs(5));
+        if let Some(password) = password {
+            config.password(password);
+        }
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await?;
+        tokio::spawn(connection);
+        let statement = format!(
+            "SELECT bicdb_ha_switchover('{}')",
+            target_node.replace('\'', "''")
+        );
+        let messages = client.simple_query(&statement).await?;
+        let value = messages
+            .iter()
+            .find_map(|message| match message {
+                tokio_postgres::SimpleQueryMessage::Row(row) => row.get(0),
+                _ => None,
+            })
+            .context("primary did not return a durable handoff")?;
+        Ok::<_, anyhow::Error>(serde_json::from_str(value)?)
+    })?;
+    let started = std::time::Instant::now();
+    loop {
+        let promoted = target_status.role.as_deref() == Some("primary")
+            && target_status
+                .epoch
+                .as_ref()
+                .and_then(|value| value.parse::<u64>().ok())
+                .is_some_and(|epoch| epoch >= offer.target_epoch)
+            && target_status
+                .applied_commit_seq
+                .as_ref()
+                .and_then(|value| value.parse::<u64>().ok())
+                .is_some_and(|seq| seq >= offer.commit_seq)
+            && target_status.primary_id.as_deref() == Some(target_node);
+        if promoted {
+            break;
+        }
+        if started.elapsed() >= timeout {
+            bail!("switchover timed out after draining commit {}; the source remains durably read-only. Repair target connectivity and retry this same target; no automatic undrain is performed", offer.commit_seq);
+        }
+        std::thread::sleep(Duration::from_millis(250));
+        target_status = query_ha_node(&runtime, target, user, password, dbname);
+    }
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(
+                &serde_json::json!({"handoff": offer, "target": target_status, "zero_loss": true})
+            )?
+        );
+    } else {
+        println!(
+            "Switched primary to {target_node} at {target}; durable handoff commit {}, epoch {}",
+            offer.commit_seq, offer.target_epoch
+        );
     }
     Ok(())
 }

@@ -798,6 +798,7 @@ fn failover_frames_survive_the_wire_encoding() {
             cluster_id: "c".to_string(),
             node_id: "n1".to_string(),
             last_commit_seq: 9,
+            source_commit_seq: Some(9),
             epoch: 3,
             primary_sql_address: Some("db1:5432".to_string()),
             epoch_starts: vec![(2, 7), (3, 9)],
@@ -1054,5 +1055,297 @@ fn empty_commit_suffix_survives_restart_and_promotion_without_a_state_sidecar() 
         );
         read_only_commit(&successor);
         assert!(successor.current_commit_seq() > sequence);
+    }
+}
+
+#[test]
+fn a_staged_bootstrap_cannot_replace_a_live_database() {
+    for (_, storage) in storage_modes() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("source");
+        let target = root.path().join("target");
+        let backup = root.path().join("snapshot");
+        let mut primary = open(&source, storage.clone(), ReplicationMode::Primary);
+        primary.create_collection("items").unwrap();
+        put(&primary, "source", 1);
+        primary
+            .create_standby_snapshot(&backup, "bootstrap-test-key")
+            .unwrap();
+        let incumbent = open(&target, storage.clone(), ReplicationMode::Standby);
+        stage_standby_bootstrap(&target, &backup, "bootstrap-test-key", false).unwrap();
+        assert!(BicDb::open_with_config(
+            &target,
+            DbConfig::default()
+                .with_storage_mode(storage.clone())
+                .with_replication(replication(ReplicationMode::Standby))
+        )
+        .is_err());
+        assert!(standby_bootstrap_staging(&target)
+            .join("BOOTSTRAP_READY")
+            .exists());
+        assert!(incumbent.collections().is_empty());
+        drop(incumbent);
+        let restored = open(&target, storage, ReplicationMode::Standby);
+        assert_eq!(value(&restored, "source"), Some(1));
+    }
+}
+
+#[test]
+fn failed_ha_metadata_write_does_not_publish_a_ballot_in_memory() {
+    let root = tempfile::tempdir().unwrap();
+    let db = open(
+        root.path(),
+        StorageMode::EmbeddedMemory,
+        ReplicationMode::Standby,
+    );
+    let term = db.replication_election_term();
+    std::fs::create_dir(root.path().join(bicdb_core::HA_NODE_FILE)).unwrap();
+    assert!(db.begin_candidacy("candidate").is_err());
+    assert_eq!(db.replication_election_term(), term);
+    assert!(db.ha_node_status().voted.is_none());
+    std::fs::remove_dir(root.path().join(bicdb_core::HA_NODE_FILE)).unwrap();
+    assert_eq!(db.begin_candidacy("candidate").unwrap(), term + 1);
+}
+
+#[test]
+fn planned_switchover_drains_durably_and_requires_the_exact_target_prefix() {
+    for (_, storage) in storage_modes() {
+        let root = tempfile::tempdir().unwrap();
+        let mut primary_repl = replication(ReplicationMode::Primary);
+        primary_repl.node_id = "primary".into();
+        let primary_config = DbConfig::default()
+            .with_storage_mode(storage.clone())
+            .with_replication(primary_repl);
+        let mut standby_repl = replication(ReplicationMode::Standby);
+        standby_repl.node_id = "target".into();
+        let standby_config = DbConfig::default()
+            .with_storage_mode(storage)
+            .with_replication(standby_repl);
+        let mut primary =
+            BicDb::open_with_config(root.path().join("p"), primary_config.clone()).unwrap();
+        let mut target =
+            BicDb::open_with_config(root.path().join("s"), standby_config.clone()).unwrap();
+        primary.create_collection("items").unwrap();
+        put(&primary, "a", 1);
+        let mut pending = primary.begin_transaction().unwrap();
+        pending
+            .insert("items", Record::new("not-acknowledged"))
+            .unwrap();
+        let offer = primary.drain_for_switchover("target").unwrap();
+        assert_eq!(primary.drain_for_switchover("target").unwrap(), offer);
+        assert!(primary.drain_for_switchover("other").is_err());
+        assert!(pending.commit().is_err());
+        target
+            .record_primary("primary", offer.source_epoch, None, &Default::default())
+            .unwrap();
+        assert!(
+            target.accept_switchover(&offer, None).is_err(),
+            "lagging target must not promote"
+        );
+        let frames = primary
+            .replication_frames_after(&mut ReplicationCursor::new(0), 1000)
+            .unwrap();
+        for frame in &frames {
+            target.apply_replication_frame(frame).unwrap();
+            target.verify_replication_rows(frame).unwrap();
+        }
+        let mut wrong = offer.clone();
+        wrong.target_node_id = "other".into();
+        assert!(target.accept_switchover(&wrong, None).is_err());
+        target.accept_switchover(&offer, None).unwrap();
+        assert!(!target.is_replication_standby());
+        assert!(
+            target
+                .apply_replication_frame(frames.last().unwrap())
+                .is_err(),
+            "a promoted node must refuse imports even when configured initially as a standby"
+        );
+        target.close().unwrap();
+        let target = BicDb::open_with_config(root.path().join("s"), standby_config).unwrap();
+        assert_eq!(target.replication_role(), NodeRole::Primary);
+        put(&target, "after-handoff", 2);
+        assert!(target.last_applied_commit_seq() > offer.commit_seq);
+        primary.close().unwrap();
+        let primary = BicDb::open_with_config(root.path().join("p"), primary_config).unwrap();
+        assert_eq!(primary.planned_switchover(), Some(offer));
+        assert!(primary.is_read_only_standby());
+        assert_eq!(value(&target, "a"), Some(1));
+        assert_eq!(value(&target, "not-acknowledged"), None);
+    }
+}
+
+#[test]
+fn a_standby_refuses_direct_collection_drops() {
+    let root = tempfile::tempdir().unwrap();
+    let mut standby = open(
+        root.path(),
+        StorageMode::EmbeddedMemory,
+        ReplicationMode::Standby,
+    );
+    assert!(standby.drop_collection("items").is_err());
+}
+
+#[test]
+fn imported_commits_keep_their_original_timestamp_when_reexported() {
+    for (_, storage) in storage_modes() {
+        let root = tempfile::tempdir().unwrap();
+        let mut primary = open(
+            &root.path().join("p"),
+            storage.clone(),
+            ReplicationMode::Primary,
+        );
+        let mut standby = open(&root.path().join("s"), storage, ReplicationMode::Standby);
+        primary.create_collection("items").unwrap();
+        put(&primary, "a", 1);
+        let frames = primary
+            .replication_frames_after(&mut ReplicationCursor::new(0), 100)
+            .unwrap();
+        for original in frames {
+            let frame = bicdb_core::CommitFrame::new(
+                original.cluster_id,
+                original.source_node_id,
+                original.stream_id,
+                original.commit_seq,
+                original.tx_id,
+                12345,
+                original.writes,
+            );
+            standby.apply_replication_frame(&frame).unwrap();
+        }
+        let exported = standby
+            .replication_frames_after(&mut ReplicationCursor::new(0), 100)
+            .unwrap();
+        assert!(!exported.is_empty());
+        assert!(
+            exported.iter().all(|frame| frame.timestamp == 12345),
+            "cascaded replication and PITR must use source commit times"
+        );
+    }
+}
+
+#[test]
+fn closing_writer_authority_also_stops_async_confirmations() {
+    let quorum = SyncQuorum::default();
+    quorum.wait_for(1).unwrap();
+    quorum.close("fenced");
+    assert!(
+        quorum.wait_for(1).is_err(),
+        "the required=0 fast path must honor fencing"
+    );
+}
+
+#[test]
+fn a_failed_verification_cannot_be_cleared_by_restart_or_election() {
+    let root = tempfile::tempdir().unwrap();
+    let config = DbConfig::default()
+        .with_fsync(false)
+        .with_storage_mode(StorageMode::EmbeddedMemory)
+        .with_replication(replication(ReplicationMode::Standby));
+    let db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+    db.quarantine_replication_verification("detected divergence")
+        .unwrap();
+    assert!(db.begin_candidacy("candidate").is_err());
+    assert!(db.promote_by_election(1, "candidate", None).is_err());
+    drop(db);
+    let db = BicDb::open_with_config(root.path(), config).unwrap();
+    assert!(!db.replication_verification_healthy());
+    assert!(db.begin_candidacy("candidate").is_err());
+}
+
+#[test]
+fn external_attachments_require_a_snapshot_and_cannot_be_acknowledged_as_missing_blobs() {
+    use std::io::Read;
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("source");
+    let target = root.path().join("target");
+    let plain = DbConfig::default()
+        .with_fsync(false)
+        .with_storage_mode(StorageMode::EmbeddedMemory);
+    let mut db = BicDb::open_with_config(&source, plain.clone()).unwrap();
+    db.create_collection("items").unwrap();
+    put(&db, "a", 1);
+    db.write_attachment_from_reader("items", "a", "file", None, &b"retained blob"[..])
+        .unwrap();
+    let mut archive =
+        bicdb_core::log_archive::LogArchive::open(root.path().join("archive"), false).unwrap();
+    db.archive_commits(&mut archive, &mut ReplicationCursor::new(0), 100)
+        .unwrap();
+    assert!(db
+        .write_attachment_from_reader(
+            "items",
+            "a",
+            "file",
+            None,
+            &b"not in the commit archive"[..]
+        )
+        .is_err());
+    db.release_log_archive_hold().unwrap();
+    db.close().unwrap();
+    let mut primary = open(
+        &source,
+        StorageMode::EmbeddedMemory,
+        ReplicationMode::Primary,
+    );
+    let mut standby = open(
+        &target,
+        StorageMode::EmbeddedMemory,
+        ReplicationMode::Standby,
+    );
+    let before = primary.current_commit_seq();
+    assert!(primary
+        .write_attachment_from_reader("items", "a", "file", None, &b"unshippable"[..])
+        .is_err());
+    assert_eq!(primary.current_commit_seq(), before);
+    let frames = primary
+        .replication_frames_after(&mut ReplicationCursor::new(0), 100)
+        .unwrap();
+    assert!(standby.apply_replication_batch(&frames).is_err());
+    assert!(standby.last_applied_commit_seq() < primary.current_commit_seq());
+    standby.close().unwrap();
+    let backup = root.path().join("base");
+    primary
+        .create_standby_snapshot(&backup, "attachment-snapshot-key")
+        .unwrap();
+    stage_standby_bootstrap(&target, &backup, "attachment-snapshot-key", false).unwrap();
+    let standby = open(
+        &target,
+        StorageMode::EmbeddedMemory,
+        ReplicationMode::Standby,
+    );
+    let mut content = Vec::new();
+    standby
+        .open_attachment_reader("items", "a", "file")
+        .unwrap()
+        .unwrap()
+        .read_to_end(&mut content)
+        .unwrap();
+    assert_eq!(content, b"retained blob");
+    assert_eq!(
+        standby.verification_manifest().unwrap(),
+        primary.verification_manifest().unwrap()
+    );
+}
+
+#[test]
+fn a_failed_fence_write_still_revokes_live_writer_authority() {
+    for explicit in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let db = open(
+            root.path(),
+            StorageMode::EmbeddedMemory,
+            ReplicationMode::Primary,
+        );
+        let authority = db.replication_writer_authority();
+        assert!(authority.active());
+        std::fs::create_dir(root.path().join(bicdb_core::HA_NODE_FILE)).unwrap();
+        let result = if explicit {
+            db.fence_replication()
+        } else {
+            db.observe_replication_epoch(3).map(|_| ())
+        };
+        assert!(result.is_err());
+        assert!(db.is_read_only_standby());
+        assert!(!authority.active());
+        assert!(db.sync_quorum().wait_for(1).is_err());
     }
 }

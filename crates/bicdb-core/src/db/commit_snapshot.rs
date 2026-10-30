@@ -128,6 +128,27 @@ impl BicDb {
         record_audit_events: &[Event],
         prepared: PreparedWal,
     ) -> Result<Vec<u8>> {
+        self.encode_tx_commit_frames_at(
+            tx_id,
+            commit_seq,
+            writes,
+            broker_publishes,
+            record_audit_events,
+            prepared,
+            unix_timestamp(),
+        )
+    }
+
+    pub(crate) fn encode_tx_commit_frames_at(
+        &self,
+        tx_id: TransactionId,
+        commit_seq: u64,
+        writes: &[TxWrite],
+        broker_publishes: &[crate::broker::PendingBrokerPublish],
+        record_audit_events: &[Event],
+        prepared: PreparedWal,
+        timestamp: i64,
+    ) -> Result<Vec<u8>> {
         if !self.config.replication.enabled
             && writes.is_empty()
             && broker_publishes.is_empty()
@@ -158,7 +179,7 @@ impl BicDb {
                     FrameKind::Transaction,
                     &TxFrameRef::Commit {
                         tx_id,
-                        timestamp: unix_timestamp(),
+                        timestamp,
                         commit_seq,
                     },
                 )?;
@@ -194,7 +215,7 @@ impl BicDb {
         }
         payloads.push(serde_json::to_vec(&TxFrameRef::Commit {
             tx_id,
-            timestamp: unix_timestamp(),
+            timestamp,
             commit_seq,
         })?);
         storage::encode_frames_to_bytes(
@@ -210,6 +231,7 @@ impl BicDb {
         &mut self,
         tx_id: u64,
         commit_seq: u64,
+        timestamp: i64,
         writes: &[TxWrite],
         journal: &[Event],
     ) -> Result<()> {
@@ -256,13 +278,14 @@ impl BicDb {
         self.fill_all_index_mutation_rowids(&mut index_mutations_by_collection)?;
         self.validate_index_mutations(&index_mutations_by_collection)?;
 
-        let wal_bytes = self.encode_tx_commit_frames(
+        let wal_bytes = self.encode_tx_commit_frames_at(
             TransactionId(tx_id),
             commit_seq,
             writes,
             &[],
             journal,
             PreparedWal::default(),
+            timestamp,
         )?;
         self.tx_log.enqueue(commit_seq, wal_bytes);
 
@@ -3183,6 +3206,11 @@ impl BicDb {
         media_type: Option<&str>,
         reader: impl std::io::Read,
     ) -> Result<LargeValueRef> {
+        if self.config.replication.enabled
+            || self.sync_quorum.holds().contains_key(LOG_ARCHIVE_HOLDER)
+        {
+            return Err(BicDbError::LargeValue("attachment mutation is unavailable with commit-stream replication or log archiving: external blobs are not carried by that stream; seed existing attachments through a full snapshot".into()));
+        }
         if field.trim().is_empty() {
             return Err(BicDbError::LargeValue(
                 "attachment metadata field must not be empty".to_string(),

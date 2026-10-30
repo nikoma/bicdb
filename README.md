@@ -85,6 +85,7 @@ BicDB is **beta**, with a tested subset of PostgreSQL behavior. Read
 | Run offline in a browser | [Browser client](web/bicdb-client/README.md) |
 | Add vectors, spatial data, or durable queues | [Capabilities](#capabilities) and [owner's guide](docs/owners-guide.md) |
 | Operate replication or a cluster | [Owner's guide](docs/owners-guide.md) |
+| Verify recovery, switch regions, and protect workloads | [Verification and workload protection](docs/verification-and-workload-protection.md) |
 
 ## Documentation
 

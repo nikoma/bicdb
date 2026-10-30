@@ -584,6 +584,7 @@ mod tests {
         execute_server_sql(&server, &mut state, "BEGIN").unwrap();
         let claims = envelope(&server, &mut state, "alice", "tenant-a");
         let portal = || Portal {
+            replica_watermark: None,
             sql: "SELECT body FROM delegated_rows".into(),
             source_sql: "SELECT body FROM delegated_rows".into(),
             result_formats: Vec::new(),

@@ -132,6 +132,7 @@ pub(crate) fn start_background_tasks_for_scope(
         if let Some(ha) = server.config.high_availability.clone() {
             high_availability::start(server.clone(), ha)?;
         }
+        verification::start(server.clone())?;
         log_archive::start(server.clone())?;
         connectors::start(server.clone())?;
         live_queries::start_dispatcher(server.clone())?;
@@ -1928,6 +1929,34 @@ pub(crate) fn self_rss_mb() -> u64 {
 }
 
 pub(crate) fn validate_server_config(config: &PgWireConfig) -> Result<()> {
+    if let Some(verify) = &config.verification {
+        if verify.interval.is_zero() || verify.interval > Duration::from_secs(30 * 86400) {
+            return Err(PgWireError::Server(
+                "verification cadence must be positive and at most 30 days".into(),
+            ));
+        }
+        if config
+            .log_archive
+            .as_ref()
+            .is_some_and(|archive| archive.base_backup_key.is_none())
+        {
+            return Err(PgWireError::Server(
+                "archive verification requires the base backup key".into(),
+            ));
+        }
+    }
+    if config.workload.live_evaluation_timeout_ms > 86_400_000
+        || config
+            .workload
+            .roles
+            .values()
+            .chain(config.workload.tenants.values())
+            .any(|limit| limit.query_timeout_ms > 86_400_000)
+    {
+        return Err(PgWireError::Server(
+            "workload time budgets must be at most 24 hours".into(),
+        ));
+    }
     let derived_version_num = derive_postgres_server_version_num(&config.postgres_server_version)
         .map_err(PgWireError::Server)?;
     if config.postgres_server_version_num != derived_version_num {

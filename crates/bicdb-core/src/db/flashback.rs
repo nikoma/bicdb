@@ -567,6 +567,11 @@ impl BicDb {
     /// Drops a collection. Dropping a flashback-tracked collection also drops
     /// its history.
     pub fn drop_collection(&mut self, name: &str) -> Result<bool> {
+        self.ensure_writable("drop collection")?;
+        self.drop_collection_unchecked(name)
+    }
+
+    pub(super) fn drop_collection_unchecked(&mut self, name: &str) -> Result<bool> {
         let tracked = self
             .collections
             .get(name)

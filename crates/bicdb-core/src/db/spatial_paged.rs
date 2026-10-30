@@ -1777,8 +1777,12 @@ impl BicDb {
             || replication_role == Some(NodeRole::Standby)
         {
             "on a hot standby/read replica"
+        } else if replication_role.is_some() && self.ha_node.is_draining() {
+            "while drained for planned switchover"
         } else if replication_role == Some(NodeRole::Fenced) {
             "on a former primary that a newer primary superseded (fenced)"
+        } else if replication_role.is_some() && self.sync_quorum.is_closed() {
+            "after writer authority closed; restart before accepting writes"
         } else if let Some(refusal) =
             replication_role.and_then(|_| self.sync_quorum.lease_refusal())
         {

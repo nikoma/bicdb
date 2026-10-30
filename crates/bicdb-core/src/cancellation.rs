@@ -58,6 +58,7 @@ impl CancellationToken {
     }
 
     pub fn check(&self) -> Result<()> {
+        crate::query_budget::check()?;
         if self.is_cancel_requested() {
             return Err(BicDbError::QueryCanceled);
         }

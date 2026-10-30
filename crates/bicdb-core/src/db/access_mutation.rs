@@ -544,11 +544,17 @@ impl BicDb {
     }
 
     pub fn scan_collection_unchecked(&self, collection: &str) -> Result<Vec<Record>> {
+        let mut retained_bytes = 0usize;
         if let Some(paged) = &self.paged_records {
             drop(self.collection_state(collection)?);
             let snapshot = paged.latest_snapshot();
             let mut records = paged
                 .scan(&snapshot, collection)?
+                .map(|record| {
+                    let record = record?;
+                    crate::query_budget::retain_record(&mut retained_bytes, &record)?;
+                    Ok(record)
+                })
                 .collect::<Result<Vec<_>>>()?;
             records.sort_by(|left, right| left.id.cmp(&right.id));
             return Ok(records);
@@ -558,7 +564,11 @@ impl BicDb {
             .read_all()
             .iter()
             .flat_map(|shard| shard.records.values())
-            .map(|entry| entry.record.to_record())
+            .map(|entry| {
+                let record = entry.record.to_record()?;
+                crate::query_budget::retain_record(&mut retained_bytes, &record)?;
+                Ok(record)
+            })
             .collect::<Result<Vec<_>>>()?;
         records.sort_by(|left, right| left.id.cmp(&right.id));
         Ok(records)

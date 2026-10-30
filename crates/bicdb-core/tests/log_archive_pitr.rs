@@ -257,3 +257,112 @@ fn archived_base_backups_drive_restores_and_pruning() {
     );
     db.release_log_archive_hold().unwrap();
 }
+
+#[test]
+fn checksum_corruption_is_never_repaired_as_a_crash_tail() {
+    let root = tempfile::tempdir().unwrap();
+    let archive = root.path().join("archive");
+    let mut db = BicDb::open_with_config(
+        root.path().join("db"),
+        primary_config(StorageMode::EmbeddedMemory),
+    )
+    .unwrap();
+    db.create_collection("items").unwrap();
+    put(&db, "a", 1);
+    archive_all(&db, &archive);
+    let segment = std::fs::read_dir(&archive)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|e| e == "log"))
+        .unwrap();
+    let mut bytes = std::fs::read(&segment).unwrap();
+    *bytes.last_mut().unwrap() ^= 1;
+    std::fs::write(&segment, &bytes).unwrap();
+    assert!(read_log_archive(&archive, 0, ReplayTarget::default(), |_| Ok(true)).is_err());
+    assert!(LogArchive::open(&archive, false).is_err());
+    assert_eq!(
+        std::fs::read(&segment).unwrap(),
+        bytes,
+        "corrupt evidence must be preserved"
+    );
+}
+
+#[test]
+fn replay_refuses_a_missing_requested_suffix_and_invalid_append_is_atomic() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        root.path().join("db"),
+        primary_config(StorageMode::EmbeddedMemory),
+    )
+    .unwrap();
+    db.create_collection("items").unwrap();
+    put(&db, "a", 1);
+    let frames = db
+        .replication_frames_after(&mut ReplicationCursor::new(0), 100)
+        .unwrap();
+    let dir = root.path().join("archive");
+    let mut archive = LogArchive::open(&dir, false).unwrap();
+    let mut invalid = frames.clone();
+    invalid.last_mut().unwrap().cluster_id = "wrong".into();
+    assert!(archive.append("archive-test", &invalid).is_err());
+    assert_eq!(archive.last_commit_seq(), 0);
+    archive.append("archive-test", &frames).unwrap();
+    assert!(read_log_archive(
+        &dir,
+        0,
+        ReplayTarget {
+            commit_seq: Some(db.current_commit_seq() + 1),
+            timestamp: None
+        },
+        |_| Ok(true)
+    )
+    .is_err());
+}
+
+#[test]
+fn restore_drill_compares_source_and_proves_scratch_promotion_and_restart() {
+    for storage in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let archive = root.path().join("archive");
+        let scratch = root.path().join("scratch");
+        let mut db =
+            BicDb::open_with_config(root.path().join("db"), primary_config(storage)).unwrap();
+        db.create_collection("items").unwrap();
+        put(&db, "a", 1);
+        archive_all(&db, &archive);
+        db.archive_base_backup(&archive, KEY).unwrap();
+        put(&db, "b", 2);
+        archive_all(&db, &archive);
+        let manifest = db.verification_manifest().unwrap();
+        let report =
+            bicdb_core::verify_restore_drill(&archive, KEY, &scratch, Some(&manifest)).unwrap();
+        assert!(report.promotion_and_restart);
+        assert_eq!(report.restored_commit_seq, manifest.commit_seq);
+        assert_eq!(std::fs::read_dir(&scratch).unwrap().count(), 0);
+        let mut wrong = manifest.clone();
+        wrong.tables.get_mut("items").unwrap().rows += 1;
+        assert!(bicdb_core::verify_restore_drill(&archive, KEY, &scratch, Some(&wrong)).is_err());
+        assert_eq!(std::fs::read_dir(&scratch).unwrap().count(), 0);
+        assert_eq!(db.verification_manifest().unwrap(), manifest);
+    }
+}
+
+#[test]
+fn an_empty_database_also_has_a_verifiable_archive_identity() {
+    let root = tempfile::tempdir().unwrap();
+    let archive = root.path().join("archive");
+    let db = BicDb::open_with_config(
+        root.path().join("db"),
+        primary_config(StorageMode::EmbeddedMemory),
+    )
+    .unwrap();
+    archive_all(&db, &archive);
+    db.archive_base_backup(&archive, KEY).unwrap();
+    bicdb_core::verify_restore_drill(
+        &archive,
+        KEY,
+        &root.path().join("scratch"),
+        Some(&db.verification_manifest().unwrap()),
+    )
+    .unwrap();
+}

@@ -8,6 +8,12 @@ pub use ha_bootstrap::{
     finish_standby_bootstrap, stage_standby_bootstrap, standby_bootstrap_staging, StandbyResume,
 };
 mod log_archiving;
+mod switchover;
+pub use switchover::SwitchoverOffer;
+mod verification;
+pub use verification::{
+    verify_restore_drill, RestoreDrillReport, TableChecksum, VerificationManifest,
+};
 mod logical_copy;
 mod replication_journal;
 use replication_journal::freeze_audit_origin;
@@ -10142,6 +10148,7 @@ impl BicDb {
                 db.persist_record_audit_publication(*tx_id, events)?;
             }
         }
+        db.recover_pending_replication_catalog()?;
         db.prepare_replication_journal_origin()?;
         db.flashback_after_open()?;
         db.auto_checkpoint_if_due();
@@ -10163,7 +10170,7 @@ impl BicDb {
 
     /// Per-operator SQL work-memory limit for bounded execution paths.
     pub fn query_work_memory_bytes(&self) -> usize {
-        self.config.query_work_memory_bytes
+        crate::query_budget::limit(self.config.query_work_memory_bytes)
     }
 
     /// Per-operator temporary-disk quota for spillable SQL execution.
@@ -10991,7 +10998,7 @@ impl BicDb {
 
     pub fn is_replication_standby(&self) -> bool {
         self.ha_state.role == HaRole::Standby
-            || self.config.replication.mode == ReplicationMode::Standby
+            || (self.config.replication.enabled && self.ha_node.role() == NodeRole::Standby)
     }
 
     fn replication_commits_from_retained_wal(&self) -> Result<Vec<RetainedReplicationCommit>> {
@@ -11296,10 +11303,10 @@ impl BicDb {
         require_standby: bool,
         expected_cluster_id: &str,
     ) -> Result<ReplicationApplyReport> {
-        if require_standby
-            && self.ha_state.role != HaRole::Standby
-            && self.config.replication.mode != ReplicationMode::Standby
-        {
+        if !self.replication_verification_healthy() {
+            return Err(replication_error("replica verification failed; snapshot bootstrap required before importing more commits"));
+        }
+        if require_standby && !self.is_replication_standby() {
             return Err(replication_error(
                 "replication frames can only be imported by a standby",
             ));
@@ -11336,15 +11343,19 @@ impl BicDb {
             )));
         }
 
+        self.verify_replication_attachments(frame)?;
         self.ensure_replication_frame_collections(frame)?;
         let writes = replication_writes_to_tx_writes(frame)?;
+        self.stage_pending_replication_catalog(frame)?;
         self.apply_imported_replication_commit(
             frame.tx_id,
             frame.commit_seq,
+            frame.timestamp,
             &writes,
             &frame.journal,
         )?;
         self.apply_replicated_catalog_ops(frame)?;
+        self.finish_pending_replication_catalog()?;
         self.record_replication_apply_success(frame)?;
         Ok(ReplicationApplyReport {
             applied: 1,
@@ -15681,6 +15692,7 @@ impl Transaction {
         let db = self.db_ref();
         db.ensure_collection(collection)?;
         let mut records = BTreeMap::<String, Record>::new();
+        let mut retained_bytes = 0usize;
         let state = db.collection_state(collection)?;
         // Lazy paged collection: the shards hold only rows touched this
         // session, so the base set comes from the page store at this
@@ -15692,6 +15704,7 @@ impl Transaction {
             if let (Some(snapshot), Some(paged)) = (&self.paged_snapshot, &db.paged_records) {
                 for record in paged.scan(snapshot, collection)? {
                     let record = record?;
+                    crate::query_budget::retain_record(&mut retained_bytes, &record)?;
                     records.insert(record.id.clone(), record);
                 }
             }
@@ -15708,7 +15721,9 @@ impl Transaction {
                     };
                     match visible_version(versions, self.snapshot_tx) {
                         Some(version) => {
-                            records.insert(pk, version.record.to_record()?);
+                            let record = version.record.to_record()?;
+                            crate::query_budget::retain_record(&mut retained_bytes, &record)?;
+                            records.insert(pk, record);
                         }
                         None => {
                             records.remove(&pk);
@@ -15720,6 +15735,7 @@ impl Transaction {
             for versions in shard.versions.values() {
                 if let Some(version) = visible_version(versions, self.snapshot_tx) {
                     let record = version.record.to_record()?;
+                    crate::query_budget::retain_record(&mut retained_bytes, &record)?;
                     records.insert(record.id.clone(), record);
                 }
             }
@@ -15728,6 +15744,7 @@ impl Transaction {
             match write.op {
                 TxWriteOp::Upsert => {
                     if let Some(record) = write.record()?.cloned() {
+                        crate::query_budget::retain_record(&mut retained_bytes, &record)?;
                         records.insert(write.record_id.clone(), record.as_ref().clone());
                     }
                 }

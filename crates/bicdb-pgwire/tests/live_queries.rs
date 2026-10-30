@@ -521,3 +521,46 @@ async fn registered_subscriptions_share_a_connection_and_notify() {
     );
     running.stop();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn registered_changes_are_private_even_when_subscription_names_collide() {
+    let dir = tempfile::tempdir().unwrap();
+    let running = Running::start(dir.path());
+    let writer = running.client("bicdb").await;
+    seed_feed(&writer).await;
+    let config = format!(
+        "host=127.0.0.1 port={} user=bicdb dbname=bicdb",
+        running.address.port()
+    );
+    let (bob, mut bob_events) = notifying_client(config.clone()).await;
+    let (carol, mut carol_events) = notifying_client(config.clone()).await;
+    let (snooper, mut snooper_events) = notifying_client(config).await;
+    bob.simple_query("SUBSCRIBE same_name AS SELECT id, body FROM posts WHERE author = 'bob'")
+        .await
+        .unwrap();
+    carol
+        .simple_query("SUBSCRIBE same_name AS SELECT id, body FROM posts WHERE author = 'carol'")
+        .await
+        .unwrap();
+    snooper.batch_execute("LISTEN same_name").await.unwrap();
+    writer
+        .batch_execute("INSERT INTO posts VALUES (99, 'bob', 'private')")
+        .await
+        .unwrap();
+    let event = tokio::time::timeout(Duration::from_secs(10), bob_events.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(event.payload().contains("private"));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(700), carol_events.recv())
+            .await
+            .is_err()
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(700), snooper_events.recv())
+            .await
+            .is_err()
+    );
+    running.stop();
+}

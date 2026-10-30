@@ -1,5 +1,9 @@
 # BicDB Backup, PITR, And Restore Drills
 
+For scheduled restore and promotion drills, bounded region-local reads, planned
+switchover, and role/tenant budgets, see
+[verification and workload protection](verification-and-workload-protection.md).
+
 The desired engine contract for extent-level incremental online backups,
 including regular and FTS indexes, multi-store backup sets, direct repository
 uploads, retention, and acceptance criteria is documented in

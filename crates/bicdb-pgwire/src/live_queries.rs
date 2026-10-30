@@ -677,6 +677,38 @@ struct Round {
 }
 
 impl Subscription {
+    fn memory_estimate(&self) -> usize {
+        fn row_bytes(row: &[SqlValue]) -> usize {
+            row.iter()
+                .map(|value| value.to_cell().len() + std::mem::size_of::<SqlValue>())
+                .sum::<usize>()
+                + 64
+        }
+        fn counts_bytes(counts: &RowCounts) -> usize {
+            counts
+                .iter()
+                .map(|(key, (_, row))| key.len() + row_bytes(row) + 64)
+                .sum()
+        }
+        let bytes = match &self.memory {
+            Memory::Full { counts } => counts_bytes(counts),
+            Memory::Filter { rows } => rows
+                .iter()
+                .map(|(key, row)| key.len() + row_bytes(row) + 64)
+                .sum(),
+            Memory::Grouped { group_of, groups } => {
+                group_of
+                    .iter()
+                    .map(|(id, group)| id.len() + group.len() + 64)
+                    .sum::<usize>()
+                    + groups
+                        .iter()
+                        .map(|(key, counts)| key.len() + counts_bytes(counts) + 64)
+                        .sum::<usize>()
+            }
+        };
+        bytes + self.query.len() + self.template.memory_estimate()
+    }
     fn new(db: &BicDb, query: &str) -> Self {
         let statements = Parser::parse_sql(&PostgreSqlDialect {}, query).ok();
         let (watched, plan) = match &statements {
@@ -926,8 +958,22 @@ fn connection_evaluator<'a>(
     state: &'a mut ConnectionState,
 ) -> impl FnMut(&str, bool) -> Result<SqlResult> + 'a {
     move |sql: &str, enforce_limit: bool| {
+        let timeout =
+            Duration::from_millis(server.config.workload.live_evaluation_timeout_ms.max(1));
+        let _deadline =
+            bicdb_core::query_budget::QueryMemoryScope::with_deadline(0, Instant::now() + timeout);
         execute_server_sql_with_options(server, state, sql, enforce_limit)
     }
+}
+
+fn check_fanout(server: &PgWireServer, rows: usize) -> Result<()> {
+    let limit = server.config.workload.live_max_changes_per_round;
+    if limit > 0 && rows > limit {
+        return Err(PgWireError::QueryRejected(format!(
+            "live query produced {rows} changes; budget is {limit}"
+        )));
+    }
+    Ok(())
 }
 
 // ------------------------------------------------------------------ registry
@@ -936,6 +982,8 @@ fn connection_evaluator<'a>(
 /// connection and delivers its changes as notifications on channel `name`,
 /// so one connection carries many subscriptions and none holds a thread.
 struct Registered {
+    cache_reservation: workload::CacheReservation,
+    user: String,
     connection_id: u64,
     name: String,
     session_state: SqlSessionGucState,
@@ -1078,16 +1126,22 @@ pub(crate) fn register_subscription(
         let mut eval = connection_evaluator(server, state);
         subscription.whole_round(&mut eval, commit_seq)?
     };
+    check_fanout(server, initial.rows.len())?;
+    let cache_reservation = workload::CacheReservation::new(
+        server,
+        &state.user,
+        state.security_context.as_ref(),
+        subscription.memory_estimate(),
+    )?;
     let result = batch(&subscription.template, initial.rows);
-    if let Ok(mut bus) = server.notifications.lock() {
-        bus.listen(state.connection_id, name);
-    }
     server
         .live_registry
         .entries
         .lock()
         .unwrap()
         .push(Registered {
+            cache_reservation,
+            user: state.user.clone(),
             connection_id: state.connection_id,
             name: name.to_string(),
             session_state: state.session_state.clone(),
@@ -1106,12 +1160,6 @@ pub(crate) fn unsubscribe(
     name: Option<&str>,
 ) -> Result<SqlResult> {
     let removed = server.live_registry.remove(state.connection_id, name);
-    if let Ok(mut bus) = server.notifications.lock() {
-        match name {
-            Some(name) => bus.unlisten(state.connection_id, Some(name)),
-            None => {}
-        }
-    }
     if removed == 0 {
         if let Some(name) = name {
             return Err(PgWireError::Server(format!(
@@ -1175,71 +1223,79 @@ pub(crate) fn start_dispatcher(server: Arc<PgWireServer>) -> Result<()> {
                 if server.live_registry.len() == 0 {
                     continue;
                 }
-                let Ok(db) = server.read_db() else {
-                    continue;
-                };
                 let db_changes = |collection: &str, generation: u64| {
-                    db.collection_changes_since(collection, generation)
+                    server.read_db().ok().and_then(|db| db.collection_changes_since(collection, generation))
                 };
                 let mut entries = server.live_registry.entries.lock().unwrap();
-                let mut failed = Vec::new();
+                let mut retry_needed = false;
+                let mut failed = HashSet::new();
+                let mut failed_connections = HashSet::new();
                 for (index, entry) in entries.iter_mut().enumerate() {
-                    let Some(previous) = entry.subscription.take_changed_generations(&db) else {
-                        continue;
-                    };
-                    let mut eval = |sql: &str, _enforce: bool| {
-                        execute_server_sql_for_describe_with_session(
-                            &server,
-                            sql,
-                            &entry.session_state,
-                            entry.security_context.as_ref(),
-                        )
-                    };
-                    let round =
-                        entry
-                            .subscription
-                            .change_round(&db_changes, &mut eval, &previous, durable);
-                    match round {
-                        Ok(round) => {
-                            if round.full {
-                                server.live_full_runs.fetch_add(1, Ordering::Relaxed);
-                            } else {
-                                server.live_incremental_runs.fetch_add(1, Ordering::Relaxed);
-                            }
-                            if round.rows.is_empty() {
-                                continue;
-                            }
+                    if failed_connections.contains(&entry.connection_id) { continue; }
+                    let result: Result<Option<Round>> = (|| {
+                        let role_permit = workload::admit(&server, &entry.user, entry.security_context.as_ref(), &entry.subscription.query)?;
+                        // Background subscriptions never wait in the foreground
+                        // queue while holding the subscription registry.
+                        let Some(_permit) = server.try_acquire_query_now(QueryKind::Read, Instant::now())? else { retry_needed = true; return Ok(None); };
+                        let previous = {
+                            let db = server.read_db()?;
+                            entry.subscription.take_changed_generations(&db)
+                        };
+                        let Some(previous) = previous else { return Ok(None); };
+                        let configured = Duration::from_millis(server.config.workload.live_evaluation_timeout_ms.max(1));
+                        let timeout = if role_permit.timeout.is_zero() { configured } else { configured.min(role_permit.timeout) };
+                        let cancellation = CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(Instant::now() + timeout));
+                        let memory = bicdb_core::query_budget::QueryMemoryScope::new(role_permit.memory_bytes);
+                        let mut eval = |sql: &str, _enforce: bool| {
+                            cancellation.check()?;
+                            execute_server_db_sql(&server, sql, &cancellation, &entry.session_state, entry.security_context.as_ref())
+                        };
+                        let round = entry.subscription.change_round(&db_changes, &mut eval, &previous, durable)?;
+                        cancellation.check()?;
+                        role_permit.observe(memory.peak_bytes());
+                        check_fanout(&server, round.rows.len())?;
+                        drop(memory);
+                        drop(role_permit);
+                        entry.cache_reservation.resize(entry.subscription.memory_estimate())?;
+                        Ok(Some(round))
+                    })();
+                    match result {
+                        Ok(Some(round)) => {
+                            if round.full { server.live_full_runs.fetch_add(1, Ordering::Relaxed); }
+                            else { server.live_incremental_runs.fetch_add(1, Ordering::Relaxed); }
+                            let payloads = round.rows.iter().map(|row| change_payload(&entry.name, &entry.subscription.template, row)).collect();
                             if let Ok(mut bus) = server.notifications.lock() {
-                                for row in &round.rows {
-                                    bus.notify(
-                                        &entry.name,
-                                        &change_payload(
-                                            &entry.name,
-                                            &entry.subscription.template,
-                                            row,
-                                        ),
-                                        0,
-                                    );
+                                if !bus.notify_private_batch(entry.connection_id, &entry.name, payloads) {
+                                    server.live_breaker_trips.fetch_add(1, Ordering::Relaxed);
+                                    bus.fail_private_subscriptions(entry.connection_id, &entry.name, "live query backlog exceeded; resubscribe all");
+                                    failed_connections.insert(entry.connection_id);
                                 }
                             }
                         }
+                        Ok(None) => {}
                         Err(error) => {
-                            // The subscriber learns why, once; the
-                            // subscription is dropped.
+                            server.live_breaker_trips.fetch_add(1, Ordering::Relaxed);
                             if let Ok(mut bus) = server.notifications.lock() {
-                                let payload = serde_json::json!({
-                                    "subscription": entry.name,
-                                    "error": error.to_string(),
-                                })
-                                .to_string();
-                                bus.notify(&entry.name, &payload, 0);
+                                let payload = json!({"subscription": entry.name, "error": error.to_string(), "resubscribe": true}).to_string();
+                                if !bus.notify_private_batch(entry.connection_id, &entry.name, vec![payload]) {
+                                    bus.fail_private_subscriptions(entry.connection_id, &entry.name, "live query backlog exceeded; resubscribe all");
+                                    failed_connections.insert(entry.connection_id);
+                                }
                             }
-                            failed.push(index);
+                            failed.insert(index);
                         }
                     }
                 }
-                for index in failed.into_iter().rev() {
-                    entries.remove(index);
+                let mut index = 0;
+                entries.retain(|entry| {
+                    let keep = !failed.contains(&index) && !failed_connections.contains(&entry.connection_id);
+                    index += 1;
+                    keep
+                });
+                drop(entries);
+                if retry_needed {
+                    last_seq = last_seq.saturating_sub(1);
+                    std::thread::sleep(POLL);
                 }
             }
         })?;
@@ -1281,6 +1337,7 @@ pub(crate) fn run_subscription(
         let mut eval = connection_evaluator(server, state);
         subscription.whole_round(&mut eval, last_seq)?
     };
+    check_fanout(server, initial.rows.len())?;
     let first = batch(&subscription.template, initial.rows);
     let column_types = {
         let db = server.read_db()?;
@@ -1354,6 +1411,7 @@ pub(crate) fn run_subscription(
             let mut eval = connection_evaluator(server, state);
             subscription.change_round(&db_changes, &mut eval, &previous, last_seq)?
         };
+        check_fanout(server, round.rows.len())?;
         if round.full {
             server.live_full_runs.fetch_add(1, Ordering::Relaxed);
         } else {

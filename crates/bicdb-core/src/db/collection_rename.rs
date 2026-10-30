@@ -140,7 +140,7 @@ impl BicDb {
                 }
                 CatalogOp::Drop { name } => {
                     if self.collections.contains_key(&name) {
-                        self.drop_collection(&name)?;
+                        self.drop_collection_unchecked(&name)?;
                     }
                 }
                 CatalogOp::Rename { from, to } => {
@@ -149,7 +149,7 @@ impl BicDb {
                     }
                 }
                 CatalogOp::IndexCatalog { definitions } => {
-                    self.reconcile_local_indexes(&definitions);
+                    self.reconcile_local_indexes(&definitions)?;
                 }
                 CatalogOp::MeshAuthorization { name, enabled } => {
                     let state = self.collection_state_mut(&name)?;
@@ -207,38 +207,30 @@ impl BicDb {
     /// Standby: makes the local indexes match the primary's catalog, building
     /// each from this node's own rows. A failed build is reported and skipped:
     /// reads stay correct without the index.
-    fn reconcile_local_indexes(&mut self, wanted: &[IndexDefinition]) {
+    fn reconcile_local_indexes(&mut self, wanted: &[IndexDefinition]) -> Result<()> {
         self.local_index_maintenance = true;
-        let local = self.index_definitions();
-        for existing in &local {
-            let keep = wanted.iter().any(|definition| definition == existing);
-            if !keep {
-                if let Err(error) = self.drop_index(&existing.name) {
-                    eprintln!(
-                        "bicdb replication: could not drop local index {}: {error}",
-                        existing.name
-                    );
+        let result = (|| {
+            for existing in self.index_definitions() {
+                if !wanted.iter().any(|definition| definition == &existing) {
+                    self.drop_index(&existing.name)?;
                 }
             }
-        }
-        for definition in wanted {
-            if self.indexes.contains_key(&definition.name)
-                || !self.collections.contains_key(&definition.collection)
-            {
-                continue;
+            for definition in wanted {
+                if self.indexes.contains_key(&definition.name) {
+                    continue;
+                }
+                if !self.collections.contains_key(&definition.collection) {
+                    return Err(replication_error(format!(
+                        "index {} references a missing replicated table",
+                        definition.name
+                    )));
+                }
+                self.create_index_online(definition.clone())?;
             }
-            match self.create_index_online(definition.clone()) {
-                Ok(_) => eprintln!(
-                    "bicdb replication: built local index {} on {}",
-                    definition.name, definition.collection
-                ),
-                Err(error) => eprintln!(
-                    "bicdb replication: could not build local index {}: {error}",
-                    definition.name
-                ),
-            }
-        }
+            Ok(())
+        })();
         self.local_index_maintenance = false;
+        result
     }
 
     /// Renames a collection without moving its rows. Its indexes, vector index,
@@ -408,5 +400,138 @@ impl BicDb {
             self.persist_planner_stats()?;
         }
         Ok(())
+    }
+}
+
+const PENDING_CATALOG: &str = "replication-catalog-pending.json";
+impl BicDb {
+    /// Publish catalog redo before the row WAL can advance the recovered
+    /// watermark. A crash between those two durability boundaries must not
+    /// make the next sender skip a still-unapplied DROP/RENAME/index catalog.
+    pub(super) fn stage_pending_replication_catalog(&self, frame: &CommitFrame) -> Result<()> {
+        if self.path.join(PENDING_CATALOG).exists() {
+            return Err(replication_error(
+                "catalog apply is incomplete; reopen this replica to finish its durable redo",
+            ));
+        }
+        if !frame
+            .writes
+            .iter()
+            .any(|write| write.collection == CATALOG_LOG_COLLECTION)
+        {
+            return Ok(());
+        }
+        write_sidecar(
+            &self.path.join(PENDING_CATALOG),
+            FrameKind::Index,
+            &serde_json::to_vec(frame)?,
+            self.config.fsync,
+            &self.encryption,
+        )
+    }
+
+    pub(super) fn finish_pending_replication_catalog(&self) -> Result<()> {
+        match fs::remove_file(self.path.join(PENDING_CATALOG)) {
+            Ok(()) => {
+                if self.config.fsync {
+                    File::open(&self.path)?.sync_all()?;
+                }
+                Ok(())
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    pub(super) fn recover_pending_replication_catalog(&mut self) -> Result<()> {
+        let Some(bytes) = read_optional_sidecar(
+            &self.path.join(PENDING_CATALOG),
+            FrameKind::Index,
+            &self.encryption,
+        )?
+        else {
+            return Ok(());
+        };
+        let frame: CommitFrame = serde_json::from_slice(&bytes)?;
+        frame.verify_checksum()?;
+        if frame.cluster_id != self.config.replication.cluster_id && self.config.replication.enabled
+        {
+            return Err(replication_error(
+                "pending catalog redo belongs to another cluster",
+            ));
+        }
+        if frame.commit_seq <= self.current_commit_seq() {
+            self.apply_replicated_catalog_ops(&frame)?;
+        }
+        self.finish_pending_replication_catalog()
+    }
+}
+
+#[cfg(test)]
+mod redo_tests {
+    use super::*;
+    #[test]
+    fn replica_catalog_redo_finishes_a_rename_after_its_row_wal_committed() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let replication = |mode| ReplicationConfig {
+                enabled: true,
+                mode,
+                listen_addr: Some("127.0.0.1:0".into()),
+                tls: Some(crate::ReplicationTlsConfig {
+                    cert_path: PathBuf::new(),
+                    key_path: PathBuf::new(),
+                    ca_path: PathBuf::new(),
+                    require_client_cert: true,
+                    dev_localhost_plaintext: true,
+                }),
+                ..ReplicationConfig::default()
+            };
+            let primary_config = DbConfig::default()
+                .with_fsync(false)
+                .with_storage_mode(mode.clone())
+                .with_replication(replication(ReplicationMode::Primary));
+            let standby_config = DbConfig::default()
+                .with_fsync(false)
+                .with_storage_mode(mode)
+                .with_replication(replication(ReplicationMode::Standby));
+            let mut primary =
+                BicDb::open_with_config(root.path().join("p"), primary_config).unwrap();
+            let mut standby =
+                BicDb::open_with_config(root.path().join("s"), standby_config.clone()).unwrap();
+            primary.create_collection("before").unwrap();
+            primary.insert("before", Record::new("retained")).unwrap();
+            let mut cursor = ReplicationCursor::new(0);
+            standby
+                .apply_replication_batch(
+                    &primary.replication_frames_after(&mut cursor, 100).unwrap(),
+                )
+                .unwrap();
+            primary.rename_collection("before", "after").unwrap();
+            let frames = primary.replication_frames_after(&mut cursor, 100).unwrap();
+            let frame = frames.last().unwrap();
+            standby.ensure_replication_frame_collections(frame).unwrap();
+            standby.stage_pending_replication_catalog(frame).unwrap();
+            let writes = replication_writes_to_tx_writes(frame).unwrap();
+            standby
+                .apply_imported_replication_commit(
+                    frame.tx_id,
+                    frame.commit_seq,
+                    frame.timestamp,
+                    &writes,
+                    &frame.journal,
+                )
+                .unwrap();
+            // Simulate death at the boundary before the catalog operation.
+            assert!(standby.collections.contains_key("before"));
+            drop(standby);
+            let standby = BicDb::open_with_config(root.path().join("s"), standby_config).unwrap();
+            assert!(standby
+                .get_unchecked("after", "retained")
+                .unwrap()
+                .is_some());
+            assert!(!standby.collections.contains_key("before"));
+            assert!(!standby.path.join(PENDING_CATALOG).exists());
+        }
     }
 }

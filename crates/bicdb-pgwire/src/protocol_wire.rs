@@ -422,6 +422,7 @@ pub(crate) fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::TransactionNotPending => "25P01",
         BicDbError::ReadOnlyStandby(_) => "25006",
         BicDbError::Authorization(_) => "42501",
+        BicDbError::QueryMemoryLimit(_) => "53200",
         BicDbError::QueryCanceled | BicDbError::QueryTimedOut => "57014",
         BicDbError::Flashback(message) => bicdb_core::flashback_error_sqlstate(message),
         BicDbError::EmptyRecordId

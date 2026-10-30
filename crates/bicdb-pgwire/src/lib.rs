@@ -1,3 +1,8 @@
+mod region_reads;
+mod workload;
+pub use workload::{RoleLimits, WorkloadConfig};
+mod verification;
+pub use verification::VerificationConfig;
 mod delegation;
 pub mod operator;
 pub use delegation::{set_user_delegation_policy, DelegationPolicy};
@@ -341,6 +346,10 @@ pub struct PgWireConfig {
     pub high_availability: Option<HaServerConfig>,
     /// Commit log archive for whole-database point-in-time recovery.
     pub log_archive: Option<LogArchiveConfig>,
+    pub verification: Option<VerificationConfig>,
+    pub workload: WorkloadConfig,
+    /// Operator label for the region serving this node.
+    pub region: String,
     /// Serve Prometheus metrics on this address (`GET /metrics`).
     pub metrics_listen: Option<SocketAddr>,
     /// Registered live subscriptions a connection may hold (0 = no limit).
@@ -417,6 +426,9 @@ impl Default for PgWireConfig {
             fsync: true,
             high_availability: None,
             log_archive: None,
+            verification: None,
+            workload: WorkloadConfig::default(),
+            region: String::new(),
             metrics_listen: None,
             max_live_subscriptions_per_connection: 1_000,
             connectors: None,
@@ -962,6 +974,10 @@ pub struct PgWireServer {
     live_incremental_runs: AtomicU64,
     /// Subscriptions registered with `SUBSCRIBE name AS ...`.
     live_registry: live_queries::LiveRegistry,
+    verification_runs: Mutex<Vec<verification::VerificationRun>>,
+    workload: workload::WorkloadState,
+    live_breaker_trips: AtomicU64,
+    replica_read_watermark: Mutex<Option<Instant>>,
     last_cancel: Mutex<Option<CancelMetadata>>,
     shutdown: AtomicBool,
     database_background_started: AtomicBool,
@@ -2613,6 +2629,7 @@ struct PreparedStatement {
 
 #[derive(Clone, Debug)]
 struct Portal {
+    replica_watermark: Option<Instant>,
     sql: String,
     source_sql: String,
     result_formats: Vec<i16>,
@@ -2732,6 +2749,7 @@ enum CopyFormat {
 
 #[derive(Debug, Default)]
 struct ConnectionState {
+    replica_tx_watermark: Option<Instant>,
     delegation_challenge: Option<String>,
     delegated_identity: Option<delegation::DelegatedIdentity>,
     connection_id: u64,
@@ -2854,6 +2872,7 @@ impl ConnectionState {
             );
         }
         Self {
+            replica_tx_watermark: None,
             delegation_challenge: None,
             delegated_identity: None,
             connection_id,
@@ -3460,8 +3479,29 @@ fn execute_server_sql_for_describe_with_session(
     session_state: &SqlSessionGucState,
     security_context: Option<&SecurityContext>,
 ) -> Result<SqlResult> {
+    let user = session_state
+        .session_gucs()
+        .get("bicdb.initial_session_authorization")
+        .or_else(|| session_state.session_gucs().get("session_authorization"))
+        .map(String::as_str)
+        .or_else(|| security_context.map(|context| context.user_id.as_str()))
+        .unwrap_or("");
+    let role = workload::admit(server, user, security_context, sql)?;
+    let _memory = if role.timeout.is_zero() {
+        bicdb_core::query_budget::QueryMemoryScope::new(role.memory_bytes)
+    } else {
+        bicdb_core::query_budget::QueryMemoryScope::with_deadline(
+            role.memory_bytes,
+            Instant::now() + role.timeout,
+        )
+    };
+    region_reads::check(server, session_state, None)?;
     let _permit = server.acquire_query(query_kind_for_sql(sql))?;
-    execute_server_sql_for_describe_inner(server, sql, session_state, security_context)
+    let result =
+        execute_server_sql_for_describe_inner(server, sql, session_state, security_context)?;
+    bicdb_core::query_budget::observe(result.memory_estimate());
+    bicdb_core::query_budget::check()?;
+    Ok(result)
 }
 
 fn execute_server_sql_for_describe_inner(
@@ -4087,6 +4127,25 @@ fn execute_server_sql_with_options_normalized(
             return cluster.execute_branch_statement(server, state, statement);
         }
     }
+    if normalized.starts_with("select ")
+        || normalized.starts_with("with ")
+        || normalized.starts_with("explain ")
+    {
+        region_reads::check(
+            server,
+            &state.session_state,
+            if state.in_transaction && state.tx_fixed_snapshot {
+                Some(state.replica_tx_watermark)
+            } else {
+                None
+            },
+        )?;
+    }
+    if let Some(result) = high_availability::execute_switchover(server, state, sql)? {
+        return Ok(result);
+    }
+    let role_permit = workload::admit(server, &state.user, state.security_context.as_ref(), sql)?;
+    let memory_scope = bicdb_core::query_budget::QueryMemoryScope::new(role_permit.memory_bytes);
     let _permit = match server.acquire_query(query_kind_for_normalized_sql(normalized)) {
         Ok(permit) => permit,
         Err(PgWireError::QueryTimedOut) => {
@@ -4103,8 +4162,7 @@ fn execute_server_sql_with_options_normalized(
     state.last_query_at = Some(unix_timestamp());
 
     let started = Instant::now();
-    let deadline = (!server.config.query_timeout.is_zero())
-        .then(|| Instant::now() + server.config.query_timeout);
+    let deadline = (!role_permit.timeout.is_zero()).then(|| Instant::now() + role_permit.timeout);
     let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline);
     let transaction_control = if is_transaction_control_candidate(normalized) {
         Some(parse_transaction_control(sql).map_err(PgWireError::from)?)
@@ -4182,6 +4240,13 @@ fn execute_server_sql_with_options_normalized(
         ))
     });
 
+    role_permit.observe(memory_scope.peak_bytes());
+    let result = result.and_then(|result| {
+        bicdb_core::query_budget::observe(result.memory_estimate());
+        role_permit.observe(memory_scope.peak_bytes());
+        bicdb_core::query_budget::check()?;
+        Ok(result)
+    });
     let result = match result {
         Ok(result) => result,
         Err(error) => {
@@ -4190,7 +4255,7 @@ fn execute_server_sql_with_options_normalized(
         }
     };
 
-    if !server.config.query_timeout.is_zero() && started.elapsed() > server.config.query_timeout {
+    if !role_permit.timeout.is_zero() && started.elapsed() > role_permit.timeout {
         server.timed_out_queries.fetch_add(1, Ordering::SeqCst);
         state.take_cancel_request();
         server.record_cancel_metadata(state.connection_id, "timeout", "57014");

@@ -36,7 +36,7 @@ impl ReplicationWriterAuthority {
             && self
                 .node
                 .upgrade()
-                .is_some_and(|node| node.role() == NodeRole::Primary)
+                .is_some_and(|node| node.role() == NodeRole::Primary && !node.is_draining())
             && self
                 .quorum
                 .upgrade()
@@ -95,6 +95,10 @@ impl NodeRole {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub(crate) struct HaNodeFile {
     #[serde(default)]
+    pub(crate) verification_error: Option<String>,
+    #[serde(default)]
+    pub(crate) switchover: Option<SwitchoverOffer>,
+    #[serde(default)]
     pub(crate) epoch: u64,
     /// Persisted role; overrides the configured one when present.
     #[serde(default)]
@@ -143,6 +147,7 @@ pub fn read_persisted_ha_role(path: &Path) -> Result<(Option<NodeRole>, Option<S
 pub(crate) struct HaNode {
     file: Mutex<HaNodeFile>,
     role: AtomicU8,
+    draining: AtomicBool,
     epoch: AtomicU64,
     path: PathBuf,
     fsync: bool,
@@ -159,11 +164,16 @@ impl HaNode {
         let role = file.role.unwrap_or(configured);
         Ok(Self {
             role: AtomicU8::new(role.code()),
+            draining: AtomicBool::new(file.switchover.is_some()),
             epoch: AtomicU64::new(file.epoch),
             file: Mutex::new(file),
             path,
             fsync,
         })
+    }
+
+    pub(crate) fn is_draining(&self) -> bool {
+        self.draining.load(AtomicOrdering::Acquire)
     }
 
     pub(crate) fn role(&self) -> NodeRole {
@@ -176,8 +186,12 @@ impl HaNode {
 
     pub(crate) fn with_file<T>(&self, change: impl FnOnce(&mut HaNodeFile) -> T) -> Result<T> {
         let mut file = self.file.lock();
-        let value = change(&mut file);
-        storage::write_atomic(&self.path, &serde_json::to_vec_pretty(&*file)?, self.fsync)?;
+        let mut next = file.clone();
+        let value = change(&mut next);
+        storage::write_atomic(&self.path, &serde_json::to_vec_pretty(&next)?, self.fsync)?;
+        *file = next;
+        self.draining
+            .store(file.switchover.is_some(), AtomicOrdering::Release);
         self.role.store(
             file.role.unwrap_or_else(|| self.role()).code(),
             AtomicOrdering::Release,
@@ -231,10 +245,17 @@ impl BicDb {
     /// Records a newer epoch announced by a peer. A primary that learns of a
     /// newer epoch has been superseded and fences itself; returns true then.
     pub fn observe_replication_epoch(&self, epoch: u64) -> Result<bool> {
+        let _quiesced = self.serializable_commit_admission.write();
         if epoch <= self.ha_node.epoch() {
             return Ok(false);
         }
         let was_primary = self.ha_node.role() == NodeRole::Primary;
+        if was_primary {
+            // Observing a successor revokes authority even if the disk cannot
+            // persist its fence. A metadata I/O error must never keep writing.
+            self.sync_quorum
+                .close("a newer primary took over and this node is fenced");
+        }
         self.ha_node.with_file(|file| {
             file.epoch = file.epoch.max(epoch);
             if was_primary {
@@ -254,10 +275,10 @@ impl BicDb {
 
     /// Fences this node: it refuses writes until it is re-seeded.
     pub fn fence_replication(&self) -> Result<()> {
-        self.ha_node
-            .with_file(|file| file.role = Some(NodeRole::Fenced))?;
+        let _quiesced = self.serializable_commit_admission.write();
         self.sync_quorum.close("this node is fenced");
-        Ok(())
+        self.ha_node
+            .with_file(|file| file.role = Some(NodeRole::Fenced))
     }
 
     /// Remembers the client-facing address of the current primary.
@@ -306,6 +327,11 @@ impl BicDb {
     /// Starts an election: the next term after every epoch and vote this node
     /// knows, with this node's own vote. Returns the term.
     pub fn begin_candidacy(&self, node_id: &str) -> Result<u64> {
+        if !self.replication_verification_healthy() {
+            return Err(replication_error(
+                "replica verification failed; snapshot bootstrap required before candidacy",
+            ));
+        }
         self.ha_node.with_file(|file| {
             let term = file
                 .epoch
@@ -389,9 +415,11 @@ impl BicDb {
         node_id: &str,
         sql_address: Option<String>,
     ) -> Result<()> {
+        let _quiesced = self.serializable_commit_admission.write();
         let applied = self.last_applied_commit_seq();
         let promoted = self.ha_node.with_file(|file| {
-            if term <= file.epoch
+            if file.verification_error.is_some()
+                || term <= file.epoch
                 || term < file.election_term
                 || file.voted.as_ref().is_some_and(|(voted_term, candidate)| {
                     *voted_term > term || (*voted_term == term && candidate != node_id)
@@ -399,6 +427,7 @@ impl BicDb {
             {
                 return false;
             }
+            file.switchover = None;
             file.role = Some(NodeRole::Primary);
             file.epoch = file.epoch.max(term);
             file.election_term = term;
@@ -413,6 +442,8 @@ impl BicDb {
                 "election term was superseded before promotion".into(),
             ));
         }
+        self.sync_quorum
+            .close("promotion requires a restart before accepting writes");
         Ok(())
     }
 
@@ -420,6 +451,7 @@ impl BicDb {
     /// Takes effect when the server restarts.
     pub fn demote_to_standby(&self) -> Result<()> {
         self.ha_node.with_file(|file| {
+            file.switchover = None;
             file.role = Some(NodeRole::Standby);
             file.slots.clear();
         })

@@ -387,6 +387,7 @@ pub struct SyncQuorum {
     /// Mirror of `state.required` so asynchronous servers skip the lock on
     /// every commit.
     required_fast: AtomicUsize,
+    closed_fast: AtomicBool,
     /// Whether a write lease is configured (skips the lock otherwise).
     lease_fast: AtomicBool,
     stats: SyncWaitStats,
@@ -410,6 +411,7 @@ impl Default for SyncQuorum {
             }),
             changed: Condvar::new(),
             required_fast: AtomicUsize::new(0),
+            closed_fast: AtomicBool::new(false),
             lease_fast: AtomicBool::new(false),
             stats: SyncWaitStats::default(),
         }
@@ -530,12 +532,13 @@ impl SyncQuorum {
         if state.closed.is_none() {
             state.closed = Some(reason.to_string());
         }
+        self.closed_fast.store(true, AtomicOrdering::Release);
         self.changed.notify_all();
     }
 
     /// Whether this tracker has permanently stopped acknowledging commits.
     pub fn is_closed(&self) -> bool {
-        self.state.lock().closed.is_some()
+        self.closed_fast.load(AtomicOrdering::Acquire)
     }
 
     /// Records a (re)connecting standby's actual position, replacing what was
@@ -633,6 +636,7 @@ impl SyncQuorum {
     pub fn wait_for(&self, seq: u64) -> Result<()> {
         if self.required_fast.load(AtomicOrdering::Acquire) == 0
             && !self.lease_fast.load(AtomicOrdering::Acquire)
+            && !self.closed_fast.load(AtomicOrdering::Acquire)
         {
             return Ok(());
         }
@@ -650,6 +654,16 @@ impl SyncQuorum {
     }
 
     fn wait_for_confirmations(&self, seq: u64) -> Result<()> {
+        if self.is_closed() {
+            let state = self.state.lock();
+            if state.required > 0 && Self::quorum_seq_of(&state) >= seq {
+                return Ok(());
+            }
+            return Err(BicDbError::HighAvailability(format!(
+                "commit {seq} is not acknowledged: {}",
+                state.closed.as_deref().unwrap_or("writer authority closed")
+            )));
+        }
         if let Some(refusal) = self.lease_refusal() {
             return Err(BicDbError::HighAvailability(format!(
                 "commit {seq} is durable on this node but is not acknowledged: {refusal}"

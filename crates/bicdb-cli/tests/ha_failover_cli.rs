@@ -287,3 +287,62 @@ fn killing_the_primary_loses_no_acknowledged_write() {
         }
     }
 }
+
+#[test]
+fn planned_switchover_preserves_all_acknowledged_writes_and_fences_the_source() {
+    let root = tempfile::tempdir().unwrap();
+    let mut group = Group::new(root.path());
+    for index in 0..3 {
+        group.start(index);
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    eventually(Duration::from_secs(30), || {
+        group
+            .execute(0, "CREATE TABLE t (id INT PRIMARY KEY, v TEXT)")
+            .ok()
+    })
+    .unwrap_or_else(|| panic!("primary never became writable\n{}", group.logs()));
+    for id in 1..=5 {
+        group
+            .execute(0, &format!("INSERT INTO t VALUES ({id}, 'acknowledged')"))
+            .unwrap();
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_bicdb"))
+        .args([
+            "ha",
+            "switchover",
+            "--primary",
+            &format!("127.0.0.1:{}", group.nodes[0].sql_port),
+            "--target",
+            &format!("127.0.0.1:{}", group.nodes[1].sql_port),
+            "--target-node",
+            "n2",
+            "--timeout-secs",
+            "45",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+        group.logs()
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["zero_loss"], true);
+    assert_eq!(group.ids(1), (1..=5).collect());
+    eventually(Duration::from_secs(20), || {
+        group
+            .execute(1, "INSERT INTO t VALUES (6, 'after handoff')")
+            .ok()
+    })
+    .unwrap_or_else(|| panic!("target never became writable\n{}", group.logs()));
+    assert!(group
+        .execute(0, "INSERT INTO t VALUES (7, 'must refuse')")
+        .is_err());
+    eventually(Duration::from_secs(20), || {
+        (group.ids(1) == (1..=6).collect()).then_some(())
+    })
+    .unwrap();
+}

@@ -688,6 +688,40 @@ impl NotificationBus {
         }
     }
 
+    pub(crate) fn notify_private_batch(
+        &mut self,
+        connection_id: u64,
+        channel: &str,
+        payloads: Vec<String>,
+    ) -> bool {
+        let queue = self.pending.entry(connection_id).or_default();
+        if queue.len().saturating_add(payloads.len()) >= MAX_PENDING_NOTIFICATIONS {
+            return false;
+        }
+        for payload in payloads {
+            queue.push_back((channel.to_string(), payload, 0));
+        }
+        true
+    }
+
+    pub(crate) fn fail_private_subscriptions(
+        &mut self,
+        connection_id: u64,
+        channel: &str,
+        error: &str,
+    ) {
+        // Dropping a delta without invalidation would permanently corrupt the
+        // client's result. One terminal event invalidates every subscription
+        // whose buffered notifications were discarded.
+        let queue = self.pending.entry(connection_id).or_default();
+        queue.clear();
+        queue.push_back((
+            channel.to_string(),
+            json!({"error": error, "resubscribe_all": true}).to_string(),
+            0,
+        ));
+    }
+
     pub(crate) fn drain(&mut self, connection_id: u64) -> Vec<(String, String, i32)> {
         self.pending
             .get_mut(&connection_id)
@@ -881,6 +915,10 @@ impl PgWireServer {
             live_full_runs: AtomicU64::new(0),
             live_incremental_runs: AtomicU64::new(0),
             live_registry: Default::default(),
+            verification_runs: Mutex::new(Vec::new()),
+            workload: Default::default(),
+            live_breaker_trips: AtomicU64::new(0),
+            replica_read_watermark: Mutex::new(None),
             timed_out_queries: AtomicU64::new(0),
             writes_executed: AtomicU64::new(0),
             proc_neword: AtomicU64::new(0),
@@ -1069,7 +1107,11 @@ impl PgWireServer {
     pub(crate) fn begin_shutdown(&self) {
         self.shutdown.store(true, Ordering::SeqCst);
         // Commits waiting for standbys would hold shutdown forever.
-        self.sync_quorum.close("the server is shutting down");
+        // A standalone server drains its already-running queries normally.
+        // Native HA must wake confirmation waiters and revoke writer authority.
+        if self.config.high_availability.is_some() || self.sync_quorum.status().required > 0 {
+            self.sync_quorum.close("the server is shutting down");
+        }
     }
 
     pub fn is_shutdown_requested(&self) -> bool {

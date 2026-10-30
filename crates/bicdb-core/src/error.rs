@@ -137,6 +137,9 @@ pub enum BicDbError {
     #[error("canceling statement due to query timeout")]
     QueryTimedOut,
 
+    #[error("query memory limit exceeded: {0}")]
+    QueryMemoryLimit(String),
+
     #[error("query vector must not be empty")]
     EmptyVector,
 

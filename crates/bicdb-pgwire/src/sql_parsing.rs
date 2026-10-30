@@ -649,7 +649,7 @@ pub(crate) fn execute_server_virtual_query_for_normalized(
                 )]],
             )))
         }
-        "select * from bicdb_server_connections" => {
+        "select * from bicdb_server_connections" | "select * from bicdb_activity" => {
             // Other sessions' peer addresses and in-flight SQL are not
             // public. Query text routinely embeds literals — patient
             // identifiers, tokens, another tenant's keys — so an
@@ -698,6 +698,105 @@ pub(crate) fn execute_server_virtual_query_for_normalized(
                     "in_transaction".to_string(),
                     "active_query".to_string(),
                 ],
+                rows,
+            )))
+        }
+        "select * from bicdb_region" => {
+            let db = server.read_db()?;
+            let age = server
+                .replica_read_watermark
+                .lock()
+                .unwrap()
+                .map(|sample| sample.elapsed().as_millis().min(i64::MAX as u128) as i64);
+            Ok(Some(SqlResult::new(
+                ["region", "node_id", "role", "draining", "proven_lag_ms"]
+                    .map(str::to_string)
+                    .to_vec(),
+                vec![vec![
+                    SqlValue::String(server.config.region.clone()),
+                    SqlValue::String(db.replication_config().node_id.clone()),
+                    SqlValue::String(format!("{:?}", db.replication_role()).to_lowercase()),
+                    SqlValue::Bool(db.planned_switchover().is_some()),
+                    age.map_or(SqlValue::Null, SqlValue::Int),
+                ]],
+            )))
+        }
+        "select * from bicdb_workload" => {
+            let privileged = caller.is_some_and(|caller| server.user_is_admin(caller.user));
+            let own = caller.map(|caller| format!("role:{}", caller.user));
+            let rows = server
+                .workload
+                .usage
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(identity, _)| privileged || Some(identity.as_str()) == own.as_deref())
+                .map(|(identity, usage)| {
+                    vec![
+                        SqlValue::String(identity.clone()),
+                        SqlValue::Int(usage.active as i64),
+                        SqlValue::Int(
+                            usage.reserved_bytes.saturating_add(usage.cached_bytes) as i64
+                        ),
+                        SqlValue::Int(usage.queries as i64),
+                        SqlValue::Int(usage.rejected as i64),
+                        SqlValue::Int(usage.peak_query_bytes as i64),
+                    ]
+                })
+                .collect();
+            Ok(Some(SqlResult::new(
+                [
+                    "identity",
+                    "active_queries",
+                    "reserved_memory_bytes",
+                    "queries",
+                    "rejected",
+                    "peak_query_bytes",
+                ]
+                .map(str::to_string)
+                .to_vec(),
+                rows,
+            )))
+        }
+        "select * from bicdb_verify" => {
+            let privileged = caller.is_some_and(|caller| server.user_is_admin(caller.user));
+            let rows = server
+                .verification_runs
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|run| {
+                    vec![
+                        SqlValue::Int(run.completed_at),
+                        SqlValue::Int(run.duration_ms as i64),
+                        SqlValue::Int(run.commit_seq as i64),
+                        SqlValue::Bool(run.success),
+                        SqlValue::Bool(run.restore_and_failover),
+                        SqlValue::Int(run.tables as i64),
+                        SqlValue::Int(run.indexes as i64),
+                        if privileged {
+                            run.error.clone().map_or(SqlValue::Null, SqlValue::String)
+                        } else {
+                            SqlValue::Null
+                        },
+                        SqlValue::String(run.check.into()),
+                    ]
+                })
+                .collect();
+            Ok(Some(SqlResult::new(
+                [
+                    "completed_at",
+                    "duration_ms",
+                    "commit_seq",
+                    "success",
+                    "restore_and_failover",
+                    "tables",
+                    "indexes",
+                    "error",
+                    "check",
+                ]
+                .map(str::to_string)
+                .to_vec(),
                 rows,
             )))
         }
@@ -1033,10 +1132,16 @@ pub(crate) fn begin_buffered_transaction(
             "nested transactions are not supported".to_string(),
         ))
     } else {
-        let tx = server
-            .read_db()?
-            .begin_transaction_after(state.last_commit_seq)?;
+        let (tx, watermark) = {
+            let db = server.read_db()?;
+            let watermark = *server.replica_read_watermark.lock().unwrap();
+            (
+                db.begin_transaction_after(state.last_commit_seq)?,
+                watermark,
+            )
+        };
         state.session_state.begin_transaction();
+        state.replica_tx_watermark = watermark;
         state.in_transaction = true;
         state.failed_transaction = false;
         state.tx_statements.clear();
@@ -1243,6 +1348,10 @@ pub(crate) fn is_server_status_query_normalized(normalized: &str) -> bool {
             | "select * from bicdb_server_stats"
             | "select * from bicdb_ha_status"
             | "select * from bicdb_connectors"
+            | "select * from bicdb_region"
+            | "select * from bicdb_workload"
+            | "select * from bicdb_verify"
+            | "select * from bicdb_activity"
     )
 }
 
@@ -2110,6 +2219,7 @@ pub(crate) fn bind_message(
     Ok((
         portal_name,
         Portal {
+            replica_watermark: None,
             sql: substitute_parameters(&statement.sql, &params)?,
             source_sql: statement.sql.clone(),
             result_formats,
@@ -2222,6 +2332,7 @@ pub(crate) fn describe_message(
                     Some(&portal_source_sql),
                 )?;
             } else {
+                let materialization_watermark = region_reads::snapshot_watermark(server, state);
                 let result = execute_server_sql_with_options(server, state, &portal_sql, true)?;
                 describe_result(
                     stream,
@@ -2231,6 +2342,7 @@ pub(crate) fn describe_message(
                     Some(&portal_source_sql),
                 )?;
                 if let Some(portal) = state.portals.get_mut(&name) {
+                    portal.replica_watermark = materialization_watermark;
                     portal.predescribed = Some(result);
                 }
             }
@@ -2299,6 +2411,11 @@ pub(crate) fn execute_message(
     let max_rows = max_rows as usize;
     let streaming_fetch = max_rows > 0;
 
+    if let Some(portal) = state.portals.get(&portal_name) {
+        if portal.predescribed.is_some() || portal.stream.is_some() {
+            region_reads::check(server, &state.session_state, Some(portal.replica_watermark))?;
+        }
+    }
     if let Some(portal) = state.portals.get_mut(&portal_name) {
         if let Some(result) = portal.predescribed.take() {
             let result_formats = portal.result_formats.clone();
@@ -2350,6 +2467,7 @@ pub(crate) fn execute_message(
             .map(|name| live_queries::unsubscribe(server, state, name.as_deref()))
             .transpose()?,
     };
+    let materialization_watermark = region_reads::snapshot_watermark(server, state);
     let result = match registration {
         Some(result) => result,
         None => execute_server_sql_with_options(server, state, &sql, !streaming_fetch)?,
@@ -2377,6 +2495,7 @@ pub(crate) fn execute_message(
             let portal = state.portals.get_mut(&portal_name).ok_or_else(|| {
                 PgWireError::Protocol(format!("portal {portal_name:?} not found"))
             })?;
+            portal.replica_watermark = materialization_watermark;
             portal.stream = Some(stream);
             portal.registered_stream_memory = registered_memory;
         }

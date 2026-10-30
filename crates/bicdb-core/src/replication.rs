@@ -316,6 +316,8 @@ impl CommitFrame {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "frame", rename_all = "snake_case")]
 pub enum ReplicationFrame {
+    Switchover(crate::SwitchoverOffer),
+    VerifyTables(crate::VerificationManifest),
     Hello {
         protocol_version: u32,
         cluster_id: String,
@@ -333,6 +335,9 @@ pub enum ReplicationFrame {
         cluster_id: String,
         node_id: String,
         last_commit_seq: u64,
+        /// Source tip when this batch was read; older senders cannot attest freshness.
+        #[serde(default)]
+        source_commit_seq: Option<u64>,
         /// The sending primary's epoch.
         #[serde(default)]
         epoch: u64,

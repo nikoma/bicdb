@@ -128,6 +128,8 @@ pub fn stage_standby_bootstrap(path: &Path, archive: &Path, key: &str, fsync: bo
     };
     node.role = Some(ha_node::NodeRole::Standby);
     node.slots.clear();
+    node.switchover = None;
+    node.verification_error = None;
     node.epoch = node.epoch.max(source.epoch);
     node.data_epoch = source.data_epoch;
     node.epoch_starts = source.epoch_starts;
@@ -154,6 +156,20 @@ pub fn finish_standby_bootstrap(path: &Path) -> Result<bool> {
         fs::remove_dir_all(&staging)?;
         return Ok(false);
     }
+    // Claim both inodes before renaming either. Installing before the normal
+    // open lock used to replace a running server's directory underneath it.
+    let _old_lock = if path.exists() {
+        Some(bicdb_page::DirectoryLock::acquire(path).map_err(|error| {
+            BicDbError::Replication(format!(
+                "cannot install bootstrap over an open database: {error}"
+            ))
+        })?)
+    } else {
+        None
+    };
+    let _new_lock = bicdb_page::DirectoryLock::acquire(&staging).map_err(|error| {
+        BicDbError::Replication(format!("bootstrap is already being installed: {error}"))
+    })?;
     let replaced = sibling_path(path, "replaced");
     if replaced.exists() {
         fs::remove_dir_all(&replaced)?;

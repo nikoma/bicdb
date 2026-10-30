@@ -1624,6 +1624,7 @@ fn sql_routine_var_snapshots() -> usize {
 }
 
 fn sql_profile_rows_materialized(rows: usize, memory_bytes: usize) {
+    bicdb_core::query_budget::observe(memory_bytes);
     sql_profile_record(|stats| {
         stats.rows_materialized += rows;
         sql_profile_observe_memory(stats, memory_bytes);
@@ -1631,6 +1632,7 @@ fn sql_profile_rows_materialized(rows: usize, memory_bytes: usize) {
 }
 
 fn sql_profile_join_intermediate(rows: usize, candidate_pairs: usize, memory_bytes: usize) {
+    bicdb_core::query_budget::observe(memory_bytes);
     sql_profile_record(|stats| {
         stats.join_steps += 1;
         stats.join_intermediate_rows += rows;
@@ -1692,13 +1694,13 @@ fn sql_profile_write_elapsed(started: Instant) {
 }
 
 fn sql_profile_records_materialized<R: AsRef<Record>>(records: &[R]) {
-    if sql_profile_active() {
+    if sql_profile_active() || bicdb_core::query_budget::active() {
         sql_profile_rows_materialized(records.len(), records_memory_estimate(records));
     }
 }
 
 fn sql_profile_sql_rows_materialized<R: SqlRowMemoryEstimate>(rows: &[R]) {
-    if sql_profile_active() {
+    if sql_profile_active() || bicdb_core::query_budget::active() {
         sql_profile_rows_materialized(rows.len(), sql_rows_memory_estimate(rows));
     }
 }
@@ -1706,7 +1708,7 @@ fn sql_profile_sql_rows_materialized<R: SqlRowMemoryEstimate>(rows: &[R]) {
 fn sql_profile_sql_row_refs_materialized<'a, R: SqlRowMemoryEstimate + 'a>(
     rows: impl Iterator<Item = &'a R>,
 ) {
-    if sql_profile_active() {
+    if sql_profile_active() || bicdb_core::query_budget::active() {
         let (count, bytes) = rows.fold((0, 0), |(count, bytes), row| {
             (count + 1, bytes + row.memory_estimate())
         });
@@ -1715,7 +1717,7 @@ fn sql_profile_sql_row_refs_materialized<'a, R: SqlRowMemoryEstimate + 'a>(
 }
 
 fn sql_profile_join_rows<R: SqlRowMemoryEstimate>(rows: &[R], candidate_pairs: usize) {
-    if sql_profile_active() {
+    if sql_profile_active() || bicdb_core::query_budget::active() {
         sql_profile_join_intermediate(rows.len(), candidate_pairs, sql_rows_memory_estimate(rows));
     }
 }
@@ -2084,6 +2086,7 @@ pub enum SqlErrorField {
 fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
     match error {
         BicDbError::Authorization(_) => "42501",
+        BicDbError::QueryMemoryLimit(_) => "53200",
         BicDbError::CollectionNotFound(_) => "42P01",
         BicDbError::CollectionAlreadyExists(_) => "42P07",
         BicDbError::InvalidCollectionName(_) => "42602",
@@ -2170,6 +2173,9 @@ pub struct SqlIntegrityViolation {
 }
 
 impl SqlResult {
+    pub fn memory_estimate(&self) -> usize {
+        sql_result_memory_estimate(self)
+    }
     pub fn new(columns: Vec<String>, rows: Vec<Vec<SqlValue>>) -> Self {
         Self {
             columns,

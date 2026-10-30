@@ -90,6 +90,7 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
             let mut cursor = ReplicationCursor::new(archive.last_commit_seq());
             let mut last_error = None::<String>;
             let mut next_base = Instant::now();
+            let mut next_verify = Instant::now();
             while !server.is_shutdown_requested() {
                 if config.base_backup_key.is_some() && Instant::now() >= next_base {
                     next_base = Instant::now() + config.base_backup_interval;
@@ -108,6 +109,20 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
                         db.archive_commits(&mut archive, &mut cursor, BATCH_COMMITS)
                             .map_err(|error| error.to_string())
                     });
+                if archived.is_ok() && Instant::now() >= next_verify {
+                    if let Some(verify) = &server.config.verification {
+                        // Base selection and restore run on this worker so a
+                        // retention pass cannot delete files during the drill.
+                        let primary = server.read_db().is_ok_and(|db| !db.is_standby_role());
+                        let input = config
+                            .base_backup_key
+                            .as_deref()
+                            .filter(|_| primary)
+                            .map(|key| (dir.as_path(), key, &mut archive, &mut cursor));
+                        verification::run(&server, input);
+                        next_verify = Instant::now() + verify.interval;
+                    }
+                }
                 match archived {
                     Ok(0) => {
                         last_error = None;

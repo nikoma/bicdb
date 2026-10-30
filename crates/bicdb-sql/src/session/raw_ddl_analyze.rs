@@ -748,6 +748,16 @@ impl<'db> SqlSession<'db> {
             return Err(protected_security_setting_error(&setting));
         }
         match setting.as_str() {
+            "bicdb.max_lag" => {
+                let duration = value.to_cell();
+                if bicdb_core::query_budget::parse_duration(&duration).is_none() {
+                    return Err(SqlError::InvalidSql(
+                        "bicdb.max_lag must be a nonnegative duration, e.g. '2s'".into(),
+                    ));
+                }
+                Arc::make_mut(&mut self.session_gucs).insert(setting, duration);
+                Ok(())
+            }
             "bicdb.vector_search" => {
                 let SqlValue::String(mode) = value else {
                     return Err(SqlError::InvalidSql(

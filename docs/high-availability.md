@@ -1,5 +1,9 @@
 # BicDB High Availability
 
+For scheduled restore and promotion drills, bounded region-local reads, planned
+switchover, and role/tenant budgets, see
+[verification and workload protection](verification-and-workload-protection.md).
+
 > This document begins with the general/legacy server HA path. The hardened,
 > one-Cell Phase-5 path is a separate capability boundary documented in
 > [`cell-runtime-phase5.md`](cell-runtime-phase5.md). Do not use the commands

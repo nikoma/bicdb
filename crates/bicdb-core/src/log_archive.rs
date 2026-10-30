@@ -47,6 +47,7 @@ pub struct LogArchive {
     meta: Option<LogArchiveMeta>,
     last_commit_seq: u64,
     segment: Option<(File, u64)>,
+    poisoned: bool,
     fsync: bool,
 }
 
@@ -93,15 +94,20 @@ fn read_record(reader: &mut impl Read) -> std::result::Result<Option<CommitFrame
         return Err(format!("record length {len} is implausible"));
     }
     let mut body = vec![0u8; len];
-    reader
-        .read_exact(&mut body)
-        .map_err(|_| "torn record body".to_string())?;
+    reader.read_exact(&mut body).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::UnexpectedEof {
+            "torn record body".to_string()
+        } else {
+            error.to_string()
+        }
+    })?;
     if crc32fast::hash(&body) != crc {
         return Err("record checksum mismatch".to_string());
     }
-    serde_json::from_slice(&body)
-        .map(Some)
-        .map_err(|error| format!("undecodable record: {error}"))
+    let frame: CommitFrame =
+        serde_json::from_slice(&body).map_err(|error| format!("undecodable record: {error}"))?;
+    frame.verify_checksum().map_err(|error| error.to_string())?;
+    Ok(Some(frame))
 }
 
 impl LogArchive {
@@ -119,6 +125,7 @@ impl LogArchive {
             meta,
             last_commit_seq: 0,
             segment: None,
+            poisoned: false,
             fsync,
         };
         if let Some((first, path)) = segments(&archive.dir)?.pop() {
@@ -130,11 +137,24 @@ impl LogArchive {
             loop {
                 match read_record(&mut reader) {
                     Ok(Some(frame)) => {
+                        if frame.commit_seq != last + 1 || frame.previous_commit_seq != last {
+                            return Err(archive_error("non-consecutive frames in archive tail"));
+                        }
+                        if archive
+                            .meta
+                            .as_ref()
+                            .is_none_or(|meta| meta.cluster_id != frame.cluster_id)
+                        {
+                            return Err(archive_error("archive frame identity mismatch"));
+                        }
                         last = frame.commit_seq;
                         good = reader.stream_position()?;
                     }
                     Ok(None) => break,
-                    Err(_) => break,
+                    Err(error) if error.starts_with("torn record") => break,
+                    Err(error) => {
+                        return Err(archive_error(format!("{}: {error}", path.display())))
+                    }
                 }
             }
             drop(reader);
@@ -162,9 +182,48 @@ impl LogArchive {
 
     /// Appends consecutive commit frames durably.
     pub fn append(&mut self, cluster_id: &str, frames: &[CommitFrame]) -> Result<()> {
+        if self.poisoned {
+            return Err(archive_error(
+                "archive append rollback failed; reopen the archive before appending",
+            ));
+        }
         let Some(first) = frames.first() else {
-            return Ok(());
+            if let Some(meta) = &self.meta {
+                if meta.cluster_id != cluster_id {
+                    return Err(archive_error("archive cluster identity mismatch"));
+                }
+            } else {
+                let meta = LogArchiveMeta {
+                    cluster_id: cluster_id.into(),
+                    first_commit_seq: self.last_commit_seq + 1,
+                };
+                crate::storage::write_atomic(
+                    &self.dir.join(META_FILE),
+                    &serde_json::to_vec_pretty(&meta)?,
+                    self.fsync,
+                )?;
+                self.meta = Some(meta);
+            }
+            return self.sync();
         };
+        // Reject the entire input before changing metadata or writing a prefix.
+        let mut previous = first
+            .commit_seq
+            .checked_sub(1)
+            .ok_or_else(|| archive_error("commit sequence must be positive"))?;
+        for frame in frames {
+            frame.verify_checksum()?;
+            if frame.cluster_id != cluster_id
+                || frame.commit_seq != previous + 1
+                || frame.previous_commit_seq != previous
+            {
+                return Err(archive_error("invalid frame identity or sequence"));
+            }
+            if serde_json::to_vec(frame)?.len() > MAX_RECORD_BYTES {
+                return Err(archive_error("record exceeds archive size limit"));
+            }
+            previous = frame.commit_seq;
+        }
         match &self.meta {
             Some(meta) => {
                 if meta.cluster_id != cluster_id {
@@ -210,9 +269,7 @@ impl LogArchive {
                 let path = self.dir.join(segment_name(frame.commit_seq));
                 let file = OpenOptions::new().create(true).append(true).open(&path)?;
                 if self.fsync {
-                    if let Ok(dir) = File::open(&self.dir) {
-                        let _ = dir.sync_all();
-                    }
+                    File::open(&self.dir)?.sync_all()?;
                 }
                 self.segment = Some((file, 0));
             }
@@ -222,10 +279,24 @@ impl LogArchive {
             record.extend_from_slice(&crc32fast::hash(&body).to_be_bytes());
             record.extend_from_slice(&body);
             let (file, bytes) = self.segment.as_mut().unwrap();
-            file.write_all(&record)?;
+            if let Err(error) = file.write_all(&record) {
+                // A retry must append at a record boundary, never after a torn
+                // prefix which would hide all subsequently archived commits.
+                if let Err(rollback) = file.set_len(*bytes) {
+                    self.poisoned = true;
+                    return Err(archive_error(format!(
+                        "append failed: {error}; rollback failed: {rollback}; reopen required"
+                    )));
+                }
+                return Err(error.into());
+            }
             *bytes += record.len() as u64;
             self.last_commit_seq = frame.commit_seq;
         }
+        self.sync()
+    }
+
+    pub(crate) fn sync(&self) -> Result<()> {
         if self.fsync {
             if let Some((file, _)) = &self.segment {
                 file.sync_data()?;
@@ -235,11 +306,12 @@ impl LogArchive {
     }
 
     fn finish_segment(&mut self) -> Result<()> {
-        if let Some((file, _)) = self.segment.take() {
-            if self.fsync {
+        if self.fsync {
+            if let Some((file, _)) = &self.segment {
                 file.sync_all()?;
             }
         }
+        self.segment = None;
         Ok(())
     }
 }
@@ -312,18 +384,20 @@ pub fn read_log_archive(
                 Ok(Some(frame)) => frame,
                 Ok(None) => break,
                 // A torn tail is only acceptable at the very end.
-                Err(error) if index + 1 == segments.len() => {
-                    let _ = error;
+                Err(error) if index + 1 == segments.len() && error.starts_with("torn record") => {
                     break;
                 }
                 Err(error) => {
                     return Err(archive_error(format!("{}: {error}", path.display())));
                 }
             };
+            if frame.cluster_id != meta.cluster_id {
+                return Err(archive_error("archive frame identity mismatch"));
+            }
             if frame.commit_seq < expected {
                 continue;
             }
-            if frame.commit_seq > expected {
+            if frame.commit_seq > expected || frame.previous_commit_seq != expected - 1 {
                 return Err(archive_error(format!(
                     "commit {expected} is missing (found {})",
                     frame.commit_seq
@@ -337,6 +411,13 @@ pub fn read_log_archive(
                 return Ok(());
             }
         }
+    }
+    if target.timestamp.is_none() && target.commit_seq.is_some_and(|seq| expected <= seq) {
+        return Err(archive_error(format!(
+            "archive ends at commit {}, before requested target {}",
+            expected - 1,
+            target.commit_seq.unwrap()
+        )));
     }
     Ok(())
 }

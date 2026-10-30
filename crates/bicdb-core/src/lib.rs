@@ -81,6 +81,7 @@ mod resource_governor;
 pub mod aggregate_projection;
 pub mod aggregate_sketch;
 pub mod log_archive;
+pub mod query_budget;
 #[cfg(feature = "tls-replication")]
 pub mod replication_transport;
 mod snapshot;
@@ -201,7 +202,8 @@ pub use db::{
     diff_databases, finish_standby_bootstrap, read_only_standby_hint, read_persisted_ha_role,
     stage_standby_bootstrap, standby_bootstrap_staging, take_thread_commit_seq, CollectionDiff,
     DatabaseDiff, HaNodeStatus, NodeRole, RecordChange, RecordChangeKind, ReplicationCursor,
-    ReplicationFeed, StandbyResume, SyncQuorum, SyncQuorumStatus, SyncTimeoutPolicy, HA_NODE_FILE,
+    ReplicationFeed, StandbyResume, SwitchoverOffer, SyncQuorum, SyncQuorumStatus,
+    SyncTimeoutPolicy, HA_NODE_FILE,
 };
 pub use db::{
     flashback_error_sqlstate, flashback_history_collection, is_flashback_history_collection,
@@ -209,7 +211,8 @@ pub use db::{
     FlashbackVersion, FLASHBACK_HISTORY_PREFIX,
 };
 pub use db::{
-    restore_from_log_archive, restore_point_in_time, LogReplayReport, LOG_ARCHIVE_HOLDER,
+    restore_from_log_archive, restore_point_in_time, verify_restore_drill, LogReplayReport,
+    RestoreDrillReport, TableChecksum, VerificationManifest, LOG_ARCHIVE_HOLDER,
 };
 pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,

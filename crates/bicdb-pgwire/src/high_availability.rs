@@ -710,20 +710,56 @@ fn stream_to_standby(
     eprintln!("bicdb replication: standby {standby} connected at commit {applied}");
 
     let mut cursor = ReplicationCursor::new(applied);
+    let mut next_verify = Instant::now();
+    let mut verification_through = 0;
     loop {
         if server.is_shutdown_requested() {
             return Ok(());
         }
-        let (frames, status) = {
+        let (frames, status, source_tip, manifest) = {
             let db = server.read_db()?;
             if db.replication_role() != NodeRole::Primary {
                 return Err(refuse(stream, "this node is no longer the primary"));
             }
-            let frames = match db.replication_frames_after(&mut cursor, BATCH_COMMITS) {
+            let mut frames = match db.replication_frames_after(&mut cursor, BATCH_COMMITS) {
                 Ok(frames) => frames,
                 Err(error) => return Err(refuse(stream, &error.to_string())),
             };
-            (frames, db.ha_node_status())
+            let mut bytes = 0usize;
+            let mut keep = 0usize;
+            for frame in &frames {
+                let size = serde_json::to_vec(frame)
+                    .map_err(|error| PgWireError::Server(error.to_string()))?
+                    .len();
+                if keep > 0 && bytes.saturating_add(size) > MAX_FRAME_BYTES {
+                    break;
+                }
+                bytes = bytes.saturating_add(size);
+                keep += 1;
+            }
+            if keep < frames.len() {
+                frames.truncate(keep);
+                cursor =
+                    ReplicationCursor::new(frames.last().map_or(applied, |frame| frame.commit_seq));
+            }
+            let manifest = if let Some(verify) = &server.config.verification {
+                if Instant::now() >= next_verify && cursor.sent_seq() >= verification_through {
+                    next_verify = Instant::now() + verify.interval;
+                    let manifest = db.verification_manifest()?;
+                    verification_through = manifest.commit_seq;
+                    Some(manifest)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            (
+                frames,
+                db.ha_node_status(),
+                db.current_commit_seq(),
+                manifest,
+            )
         };
         if frames.is_empty() {
             let durable = server
@@ -735,6 +771,9 @@ fn stream_to_standby(
                 std::thread::sleep(Duration::from_millis(50));
             }
         }
+        if let Some(manifest) = manifest {
+            send(stream, &ReplicationFrame::VerifyTables(manifest))?;
+        }
         for frame in frames {
             send(stream, &ReplicationFrame::Commit(frame))?;
         }
@@ -744,6 +783,7 @@ fn stream_to_standby(
                 cluster_id: config.replication.cluster_id.clone(),
                 node_id: config.replication.node_id.clone(),
                 last_commit_seq: cursor.sent_seq(),
+                source_commit_seq: Some(source_tip),
                 epoch: status.epoch,
                 primary_sql_address: config.advertise_sql.clone(),
                 epoch_starts: status.epoch_starts.into_iter().collect(),
@@ -754,7 +794,19 @@ fn stream_to_standby(
                 commit_seq, epoch, ..
             } => {
                 superseded_check(server, stream, epoch)?;
+                if commit_seq != cursor.sent_seq() {
+                    return Err(refuse(
+                        stream,
+                        "standby acknowledged a position it was not sent",
+                    ));
+                }
                 server.sync_quorum.record_ack(standby, commit_seq);
+                if let Some(offer) = server.read_db()?.planned_switchover() {
+                    if offer.target_node_id == standby && offer.commit_seq == commit_seq {
+                        send(stream, &ReplicationFrame::Switchover(offer))?;
+                        return Ok(());
+                    }
+                }
             }
             ReplicationFrame::Error { message, .. } => {
                 return Err(PgWireError::Server(format!(
@@ -1088,6 +1140,11 @@ fn follow_once(
     primary: &str,
     server_name: &str,
 ) -> Result<()> {
+    if !server.read_db()?.replication_verification_healthy() {
+        return Err(PgWireError::Server(
+            "replica verification failed; install a fresh snapshot before resuming".into(),
+        ));
+    }
     let connect_timeout = config
         .failover
         .as_ref()
@@ -1112,6 +1169,7 @@ fn follow_once(
             },
         )
     };
+    let mut round_started = Instant::now();
     send(stream, &hello(config, epoch))?;
     send(
         stream,
@@ -1124,15 +1182,67 @@ fn follow_once(
         },
     )?;
     let mut batch = Vec::new();
+    let mut batch_bytes = 0usize;
+    let mut pending_manifest = None::<bicdb_core::VerificationManifest>;
     let mut announced = false;
     loop {
         match receive(stream)? {
-            ReplicationFrame::Commit(frame) => batch.push(frame),
+            ReplicationFrame::VerifyTables(manifest) => {
+                let db = server.read_db()?;
+                if manifest.commit_seq == db.last_applied_commit_seq() {
+                    compare_replica_manifest(server, &db, &manifest)?;
+                } else if manifest.commit_seq > db.last_applied_commit_seq() {
+                    pending_manifest = Some(manifest);
+                } else {
+                    return Err(refuse(
+                        stream,
+                        "verification manifest is behind the replica",
+                    ));
+                }
+            }
+            ReplicationFrame::Switchover(offer) => {
+                if config.primary_settings().is_none() {
+                    return Err(refuse(
+                        stream,
+                        "target is not configured to become a primary",
+                    ));
+                }
+                if !batch.is_empty() {
+                    return Err(refuse(
+                        stream,
+                        "switchover arrived before a durable heartbeat",
+                    ));
+                }
+                server
+                    .read_db()?
+                    .accept_switchover(&offer, config.advertise_sql.clone())?;
+                restart(server, "planned switchover promoted this standby at the drained primary's final commit");
+                return Ok(());
+            }
+            ReplicationFrame::Commit(frame) => {
+                if batch.len() >= BATCH_COMMITS {
+                    return Err(refuse(
+                        stream,
+                        "replication batch exceeds its bounded commit count",
+                    ));
+                }
+                batch_bytes = batch_bytes.saturating_add(
+                    serde_json::to_vec(&frame)
+                        .map_err(|error| PgWireError::Server(error.to_string()))?
+                        .len(),
+                );
+                if batch_bytes > MAX_FRAME_BYTES {
+                    return Err(refuse(stream, "replication batch exceeds its byte budget"));
+                }
+                batch.push(frame)
+            }
             ReplicationFrame::Heartbeat {
                 node_id,
                 epoch,
                 primary_sql_address,
                 epoch_starts,
+                last_commit_seq: sent_tip,
+                source_commit_seq,
                 ..
             } => {
                 {
@@ -1161,12 +1271,62 @@ fn follow_once(
                 } else {
                     let admission = server.try_admit_write()?;
                     let mut db = server.write_db_with_admission(&admission)?;
-                    let report = db
-                        .apply_replication_batch(&batch)
-                        .map_err(PgWireError::from)?;
+                    for frame in &batch {
+                        db.apply_replication_frame(frame)?;
+                        if server.config.verification.is_some() {
+                            if let Err(error) = db.verify_replication_rows(frame) {
+                                db.quarantine_replication_verification(&error.to_string())?;
+                                *server.replica_read_watermark.lock().unwrap() = None;
+                                verification::record(
+                                    server,
+                                    verification::VerificationRun {
+                                        check: "replica",
+                                        completed_at: 0,
+                                        duration_ms: 0,
+                                        commit_seq: frame.commit_seq,
+                                        success: false,
+                                        restore_and_failover: false,
+                                        tables: 0,
+                                        indexes: 0,
+                                        error: None,
+                                    },
+                                    Err(PgWireError::Server(error.to_string())),
+                                );
+                                return Err(error.into());
+                            }
+                        }
+                        if pending_manifest
+                            .as_ref()
+                            .is_some_and(|manifest| manifest.commit_seq == frame.commit_seq)
+                        {
+                            let manifest = pending_manifest.take().unwrap();
+                            drop(db);
+                            {
+                                // Let region-local read queries keep using the
+                                // verified prefix during the full checksum scan.
+                                let snapshot_db = server.read_db()?;
+                                compare_replica_manifest(server, &snapshot_db, &manifest)?;
+                            }
+                            db = server.write_db_with_admission(&admission)?;
+                        }
+                    }
                     batch.clear();
-                    report.last_applied_commit_seq
+                    batch_bytes = 0;
+                    db.last_applied_commit_seq()
                 };
+                if applied != sent_tip {
+                    return Err(refuse(
+                        stream,
+                        "heartbeat does not match the applied prefix",
+                    ));
+                }
+                *server.replica_read_watermark.lock().unwrap() =
+                    if source_commit_seq == Some(applied) {
+                        Some(round_started)
+                    } else {
+                        None
+                    };
+                round_started = Instant::now();
                 send(
                     stream,
                     &ReplicationFrame::Ack {
@@ -1397,4 +1557,134 @@ fn announce_index_catalog(server: Arc<PgWireServer>) {
             }
         }
     }
+}
+
+fn compare_replica_manifest(
+    server: &Arc<PgWireServer>,
+    db: &BicDb,
+    expected: &bicdb_core::VerificationManifest,
+) -> Result<()> {
+    let started = Instant::now();
+    let actual = db.verification_manifest()?;
+    let result = if &actual == expected {
+        Ok(())
+    } else {
+        Err(PgWireError::Server(
+            "primary and standby table checksums diverged at the same commit".into(),
+        ))
+    };
+    let error = result.as_ref().err().map(ToString::to_string);
+    verification::record(
+        server,
+        verification::VerificationRun {
+            check: "replica",
+            completed_at: 0,
+            duration_ms: started.elapsed().as_millis() as u64,
+            commit_seq: expected.commit_seq,
+            success: result.is_ok(),
+            restore_and_failover: false,
+            tables: expected.tables.len(),
+            indexes: 0,
+            error,
+        },
+        result,
+    );
+    if actual != *expected {
+        db.quarantine_replication_verification("primary and standby table checksums diverged")?;
+        *server.replica_read_watermark.lock().unwrap() = None;
+        return Err(PgWireError::Server(
+            "replica verification failed; refusing acknowledgement".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn execute_switchover(
+    server: &Arc<PgWireServer>,
+    state: &ConnectionState,
+    sql: &str,
+) -> Result<Option<SqlResult>> {
+    use sqlparser::{
+        ast::{
+            Expr, FunctionArg, FunctionArgExpr, FunctionArguments, SelectItem, SetExpr, Statement,
+            Value,
+        },
+        dialect::PostgreSqlDialect,
+        parser::Parser,
+    };
+    if !sql.to_ascii_lowercase().contains("bicdb_ha_switchover") {
+        return Ok(None);
+    }
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, sql)
+        .map_err(|error| PgWireError::Protocol(error.to_string()))?;
+    let [Statement::Query(query)] = statements.as_slice() else {
+        return Ok(None);
+    };
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return Ok(None);
+    };
+    let [SelectItem::UnnamedExpr(Expr::Function(function))] = select.projection.as_slice() else {
+        return Ok(None);
+    };
+    if !function
+        .name
+        .to_string()
+        .eq_ignore_ascii_case("bicdb_ha_switchover")
+    {
+        return Ok(None);
+    }
+    let FunctionArguments::List(arguments) = &function.args else {
+        return Err(PgWireError::Protocol(
+            "switchover needs one target node id".into(),
+        ));
+    };
+    let [FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(value)))] =
+        arguments.args.as_slice()
+    else {
+        return Err(PgWireError::Protocol(
+            "switchover needs one target node id".into(),
+        ));
+    };
+    let Value::SingleQuotedString(target) = &value.value else {
+        return Err(PgWireError::Protocol(
+            "switchover target must be a text literal".into(),
+        ));
+    };
+    if statements[0].to_string()
+        != format!(
+            "SELECT bicdb_ha_switchover('{}')",
+            target.replace('\'', "''")
+        )
+        || state.in_transaction
+        || state.delegated_identity.is_some()
+    {
+        return Err(PgWireError::QueryRejected(
+            "switchover requires a standalone SELECT outside a transaction".into(),
+        ));
+    }
+    if server.config.require_auth && !server.user_is_admin(&state.user) {
+        return Err(PgWireError::BicDb(BicDbError::Authorization(
+            "switchover requires a superuser".into(),
+        )));
+    }
+    let config =
+        server.config.high_availability.as_ref().ok_or_else(|| {
+            PgWireError::QueryRejected("native replication is not configured".into())
+        })?;
+    if config.failover.is_none() || !config.allowed().iter().any(|node| &node.node_id == target) {
+        return Err(PgWireError::QueryRejected(
+            "target must be an allowed standby in a configured failover group".into(),
+        ));
+    }
+    let offer = server.read_db()?.drain_for_switchover(target)?;
+    Ok(Some(
+        SqlResult::new(
+            vec!["bicdb_ha_switchover".into()],
+            vec![vec![SqlValue::String(
+                serde_json::to_string(&offer)
+                    .map_err(|error| PgWireError::Server(error.to_string()))?,
+            )]],
+        )
+        .with_column_types(vec![Some("text".into())]),
+    ))
 }

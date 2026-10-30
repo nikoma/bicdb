@@ -3409,6 +3409,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn create_session_collection(&mut self, name: &str) -> Result<()> {
+        require_user_relation_name(name)?;
         let existed = self
             .db_ref()
             .collections()
@@ -4253,6 +4254,7 @@ impl<'db> SqlSession<'db> {
     /// treated as bootstrap-owned, matching the documented convention on
     /// `TableSchema::owner` and the existing view/sequence/type checks.
     pub(crate) fn require_table_ownership(&self, table: &str, action: &str) -> Result<()> {
+        require_user_relation_name(table)?;
         // Evaluated against the EFFECTIVE role, like PostgreSQL: `SET ROLE`
         // must actually drop privilege, so checking `session_user` here would
         // leave every gate open for a superuser-launched session.

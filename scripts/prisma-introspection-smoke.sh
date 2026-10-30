@@ -43,3 +43,16 @@ if ! rg -q '^model[[:space:]]+[^[:space:]]+[[:space:]]*\{' "$work_dir/schema.pri
   exit 1
 fi
 rg '^model[[:space:]]' "$work_dir/schema.prisma"
+
+if [[ -n "${BICDB_PRISMA_EXPECT_MODELS:-}" ]]; then
+  BICDB_PRISMA_SCHEMA="$work_dir/schema.prisma" node <<'JS'
+const fs = require('fs');
+const schema = fs.readFileSync(process.env.BICDB_PRISMA_SCHEMA, 'utf8');
+const actual = Array.from(schema.matchAll(/^model\s+(\w+)\s*\{/gm), m => m[1]).sort();
+const expected = process.env.BICDB_PRISMA_EXPECT_MODELS.split(',').map(s => s.trim()).sort();
+if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+  console.error(`Prisma models: expected ${expected.join(',')}; got ${actual.join(',')}`);
+  process.exit(1);
+}
+JS
+fi

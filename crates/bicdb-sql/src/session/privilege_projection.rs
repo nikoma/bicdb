@@ -198,6 +198,7 @@ impl<'db> SqlSession<'db> {
         }
 
         let table = relation_name(&create_table.name)?;
+        require_user_relation_name(&table)?;
         let schema_name = relation_schema_name(&create_table.name);
         self.require_schema_create_privilege(&schema_name)?;
         if !matches!(

@@ -1166,6 +1166,7 @@ pub(crate) fn merge_inherited_constraints(
 }
 
 pub(crate) fn save_schema(db: &mut BicDb, schema: &TableSchema) -> Result<()> {
+    require_user_relation_name(&schema.name)?;
     ensure_schema_collection(db)?;
     let metadata = serde_json::to_value(schema)?;
     if sql_profile_active() {
@@ -3362,10 +3363,15 @@ fn role_has_table_privilege_uncached(
         let parts = sql_identifier_parts(table)?;
         relation_name_from_parts(&parts)?
     };
+    // Native metadata has no SQL owner. Never let the legacy owner fallback
+    // authorize a mutation of hidden or nonexistent collections.
+    if is_internal_sql_collection(&table) || !relation_exists(db, &table) {
+        return Ok(false);
+    }
     if role == BOOTSTRAP_ROLE_NAME
         || load_role_schema(db, &role)?.is_some_and(|role| role.superuser)
     {
-        return Ok(relation_exists(db, &table));
+        return Ok(true);
     }
     let owner = if let Some(schema) = load_schema_shared(db, &table)? {
         schema.owner.clone()
@@ -3939,6 +3945,7 @@ pub(crate) fn list_views(db: &BicDb) -> Result<Vec<ViewSchema>> {
 }
 
 pub(crate) fn save_view(db: &mut BicDb, view: &ViewSchema) -> Result<()> {
+    require_user_relation_name(&view.name)?;
     ensure_view_collection(db)?;
     db.insert(
         VIEW_COLLECTION,

@@ -216,6 +216,7 @@ impl<'db> SqlSession<'db> {
         }
 
         let view = relation_name(&create_view.name)?;
+        require_user_relation_name(&view)?;
         self.require_schema_create_privilege(&relation_schema_name(&create_view.name))?;
         if load_schema(self.db_ref(), &view)?.is_some()
             || load_sequence(self.db_ref(), &view)?.is_some()

@@ -186,15 +186,16 @@ functions or rewrite user rows.
 
 ## Follow-up execution evidence
 
-- The focused platform audit has **23 passing regressions**, including both
+- The focused platform audit has **24 passing regressions**, including both
   storage modes, constraint races, trigger effects, namespace isolation, catalog
   identity/reopen checks and injected legacy type aliases.
 - The main SQL compatibility target has **416 passing tests** after the catalog
   corrections. The PostgreSQL 18.4 oracle has **153/153 passing cases**, **1,397
   statements**, and **zero expected-difference fixtures**.
 - All seven declared client drivers passed against BicDB and PostgreSQL 18.4.
-  Prisma 6.10.1 produced both expected models on each target; its smoke now
-  requires generated models instead of trusting the process exit status.
+  Prisma 6.10.1 produced both expected application models on each target.
+  Its smoke requires generated models and can assert the exact expected model set,
+  catching internal metadata leaks as well as engine failures with status zero.
 - Offline verification rejects injected catalog aliases, and the scheduled
   verifier publishes the failure through pgwire. The scheduled full restore,
   promotion, write and restart test still passes. Five gated paged-recovery CLI
@@ -204,3 +205,15 @@ The workspace workflow runs every discovered Cargo test target and doctest,
 including each target's required feature flags, plus the platform Python and
 JavaScript contracts. KVM images, live S3 credentials and optional model/runtime
 fixtures remain environment-dependent checks, separate from tests that ran.
+
+### Internal metadata boundary
+
+Prisma exposed a native type-OID ledger as an application model. The SQL collection
+filter also omitted namespace, extension and user-type storage. All internal storage
+names now share one exact-name filter and cannot be created, read or mutated as SQL
+relations, even by the SQL bootstrap role. Mutation authorization rejects hidden and
+nonexistent relations before the legacy collection-owner fallback. Table/view/sequence
+DDL cannot publish a user schema over those native collections. A regression checks
+catalog visibility, SELECT, INSERT, UPDATE, DELETE, COPY, TRUNCATE, DROP, ALTER, GRANT
+and CREATE paths for both ordinary and bootstrap roles, verifies metadata is unchanged,
+and preserves user relations with the same logical name in a private schema.

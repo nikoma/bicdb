@@ -24,6 +24,14 @@ fn unique_oid(
 /// or changing data. Physical checksums alone cannot detect identical bad
 /// catalog identities on a primary and its restored/replicated copies.
 pub fn verify_catalog_identifiers(db: &BicDb) -> Result<()> {
+    // Historical SQL metadata must not publish a user relation over a native
+    // catalog collection, even when normal catalog enumeration hides it.
+    for schema in list_schemas(db)? {
+        require_user_relation_name(&schema.name)?;
+    }
+    for view in list_views(db)? {
+        require_user_relation_name(&view.name)?;
+    }
     let schemas = relation_schemas(db)?;
     let user_types = list_user_types(db)?;
     let mut types = BTreeMap::new();

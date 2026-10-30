@@ -13,31 +13,48 @@ pub(crate) fn index_field_is_expression(field: &IndexField) -> bool {
     matches!(field, IndexField::Lower(_) | IndexField::Trim(_))
 }
 
+/// Exact storage names only: encoded relations in private schemas remain user data.
+pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
+    [
+        SCHEMA_COLLECTION,
+        NAMESPACE_COLLECTION,
+        DATABASE_COLLECTION,
+        EXTENSION_COLLECTION,
+        SEQUENCE_COLLECTION,
+        VIEW_COLLECTION,
+        ROUTINE_COLLECTION,
+        TRIGGER_COLLECTION,
+        NOTIFICATION_COLLECTION,
+        ROLE_COLLECTION,
+        ROLE_MEMBERSHIP_COLLECTION,
+        PRIVILEGE_COLLECTION,
+        DEFAULT_PRIVILEGE_COLLECTION,
+        USER_TYPE_COLLECTION,
+        USER_TYPE_OID_COLLECTION,
+        MIGRATION_VERSION_COLLECTION,
+        MIGRATION_HISTORY_COLLECTION,
+        crate::session::RECYCLE_BIN_COLLECTION,
+    ]
+    .contains(&name)
+        || bicdb_core::is_flashback_history_collection(name)
+        || crate::session::is_recycle_bin_name(name)
+}
+
+pub(crate) fn require_user_relation_name(name: &str) -> Result<()> {
+    if is_internal_sql_collection(name) {
+        return Err(SqlError::BicDb(BicDbError::Authorization(format!(
+            "internal collection {name} is not a SQL relation"
+        ))));
+    }
+    Ok(())
+}
+
 pub(crate) fn user_collection_names(db: &BicDb) -> Vec<String> {
     let mut names = db
         .collections()
         .into_iter()
         .map(|collection| collection.name)
-        .filter(|name| {
-            name != SCHEMA_COLLECTION
-                && name != DATABASE_COLLECTION
-                && name != SEQUENCE_COLLECTION
-                && name != VIEW_COLLECTION
-                && name != ROUTINE_COLLECTION
-                && name != TRIGGER_COLLECTION
-                && name != NOTIFICATION_COLLECTION
-                && name != ROLE_COLLECTION
-                && name != ROLE_MEMBERSHIP_COLLECTION
-                && name != PRIVILEGE_COLLECTION
-                && name != DEFAULT_PRIVILEGE_COLLECTION
-                && name != MIGRATION_VERSION_COLLECTION
-                && name != MIGRATION_HISTORY_COLLECTION
-                && name != crate::session::RECYCLE_BIN_COLLECTION
-                // Flashback history and recycle-bin tables are reached only
-                // through AS OF / VERSIONS and FLASHBACK TABLE.
-                && !bicdb_core::is_flashback_history_collection(name)
-                && !crate::session::is_recycle_bin_name(name)
-        })
+        .filter(|name| !is_internal_sql_collection(name))
         .collect::<Vec<_>>();
     names.sort();
     names

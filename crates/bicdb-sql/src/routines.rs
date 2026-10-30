@@ -2070,6 +2070,7 @@ pub(crate) fn create_sequence_if_missing(
     sequence: SequenceSchema,
     if_not_exists: bool,
 ) -> Result<()> {
+    require_user_relation_name(&sequence.name)?;
     if load_sequence(db, &sequence.name)?.is_some() {
         if if_not_exists {
             return Ok(());

@@ -793,3 +793,103 @@ fn catalog_verification_rejects_a_persisted_legacy_row_type_alias() {
     let db = BicDb::open(dir.path()).unwrap();
     assert!(bicdb_sql::verify_catalog_identifiers(&db).is_err());
 }
+
+#[test]
+fn internal_metadata_is_hidden_and_cannot_be_mutated_through_sql() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let names = [
+        "__bicdb_pg_schema",
+        "__bicdb_pg_namespaces",
+        "__bicdb_pg_databases",
+        "__bicdb_pg_extensions",
+        "__bicdb_pg_sequences",
+        "__bicdb_pg_views",
+        "__bicdb_pg_routines",
+        "__bicdb_pg_triggers",
+        "__bicdb_pg_notifications",
+        "__bicdb_pg_roles",
+        "__bicdb_pg_role_memberships",
+        "__bicdb_pg_privileges",
+        "__bicdb_pg_default_privileges",
+        "__bicdb_pg_user_types",
+        "__bicdb_pg_user_type_oids",
+        "__bicdb_schema_version",
+        "__bicdb_migration_history",
+    ];
+    SqlSession::new(&mut db).execute("CREATE ROLE audit_reader LOGIN NOSUPERUSER; CREATE SCHEMA audit_private; CREATE TYPE audit_kind AS ENUM ('one','two'); CREATE TABLE audit_data(id INT PRIMARY KEY)").unwrap();
+    for name in names {
+        db.create_collection(name).unwrap();
+    }
+    let before: Vec<_> = names
+        .iter()
+        .map(|name| format!("{:?}", db.scan_collection(name).unwrap()))
+        .collect();
+    for unprivileged in [true, false] {
+        let mut s = if unprivileged {
+            SqlSession::new_unprivileged(&mut db, "audit_reader")
+        } else {
+            SqlSession::new(&mut db)
+        };
+        for name in names {
+            assert!(s
+                .copy_insert_rows(
+                    name,
+                    &["id".into()],
+                    vec![vec![Some("audit_injected".into())]]
+                )
+                .is_err());
+            for catalog in ["pg_class", "pg_tables", "information_schema.tables"] {
+                let column = match catalog {
+                    "pg_class" => "relname",
+                    "pg_tables" => "tablename",
+                    _ => "table_name",
+                };
+                assert!(
+                    s.execute(&format!(
+                        "SELECT {column} FROM {catalog} WHERE {column}='{name}'"
+                    ))
+                    .unwrap()
+                    .rows
+                    .is_empty(),
+                    "{name} leaked through {catalog}"
+                );
+            }
+            for query in [
+                format!("SELECT * FROM {name}"),
+                format!("INSERT INTO {name}(id) VALUES('audit_injected')"),
+                format!("UPDATE {name} SET superuser=true"),
+                format!("DELETE FROM {name}"),
+                format!("TRUNCATE {name}"),
+                format!("DROP TABLE {name}"),
+                format!("ALTER TABLE {name} ADD COLUMN audit_poison TEXT"),
+                format!("GRANT ALL ON {name} TO audit_reader"),
+                format!("CREATE TABLE {name}(id TEXT PRIMARY KEY)"),
+                format!("CREATE VIEW {name} AS SELECT 1 AS id"),
+                format!("CREATE SEQUENCE {name}"),
+            ] {
+                assert!(
+                    s.execute(&query).is_err(),
+                    "internal SQL access succeeded: {query}, unprivileged={unprivileged}"
+                );
+            }
+        }
+    }
+    let after: Vec<_> = names
+        .iter()
+        .map(|name| format!("{:?}", db.scan_collection(name).unwrap()))
+        .collect();
+    assert_eq!(before, after, "failed SQL must leave metadata unchanged");
+    assert!(SqlSession::new_unprivileged(&mut db, "audit_reader")
+        .execute("DROP ROLE audit_reader")
+        .is_err());
+    // Exact storage-name protection must not reserve the logical name in other schemas.
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE audit_private.__bicdb_pg_roles(id INT PRIMARY KEY); INSERT INTO audit_private.__bicdb_pg_roles VALUES(7)").unwrap();
+    assert_eq!(
+        s.execute("SELECT id FROM audit_private.__bicdb_pg_roles")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(7)]]
+    );
+}

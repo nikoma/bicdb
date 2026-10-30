@@ -679,6 +679,23 @@ fn qualified_sequence_counters_defaults_and_ownership_remain_isolated_after_reop
                 .rows,
             vec![vec![SqlValue::Int(9)]]
         );
+        let populated = s.execute("SELECT * FROM audit_seq_a.counter").unwrap();
+        let empty = s
+            .execute("SELECT * FROM audit_seq_a.counter WHERE FALSE")
+            .unwrap();
+        assert_eq!(
+            populated.columns,
+            vec!["last_value", "log_cnt", "is_called"]
+        );
+        assert_eq!(empty.columns, populated.columns);
+        assert_eq!(empty.column_types, populated.column_types);
+        assert!(empty.rows.is_empty());
+        assert_eq!(
+            s.execute("SELECT COUNT(*) FROM audit_seq_a.counter")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(1)]]
+        );
         assert!(s
             .execute("SELECT last_value FROM audit_seq_a.counter WHERE FALSE")
             .unwrap()

@@ -30,12 +30,19 @@ def main():
         for target in package["targets"]:
             if not target["test"] or "example" in target["kind"]:
                 continue
+            selection = None
             if "test" in target["kind"]:
-                invocations.append(["--test", target["name"]])
+                selection = ["--test", target["name"]]
             elif "bin" in target["kind"]:
-                invocations.append(["--bin", target["name"]])
+                selection = ["--bin", target["name"]]
             elif any(kind in target["kind"] for kind in ("lib", "rlib", "proc-macro")):
-                invocations.append(["--lib"])
+                selection = ["--lib"]
+            if selection is not None:
+                # Cargo skips gated targets in the default workspace run.
+                # Explicit target discovery must supply their declared features.
+                if target.get("required-features"):
+                    selection += ["--features", ",".join(target["required-features"])]
+                invocations.append(selection)
         if any(target.get("doctest") for target in package["targets"]):
             invocations.append(["--doc"])
         for selection in invocations:

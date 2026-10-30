@@ -2290,9 +2290,9 @@ impl<'db> SqlEngine<'db> {
         }
         if load_sequence(self.db_ref(), table).ok().flatten().is_some() {
             let columns = vec![
-                ("is_called".into(), Some("bool".into())),
                 ("last_value".into(), Some("int8".into())),
                 ("log_cnt".into(), Some("int8".into())),
+                ("is_called".into(), Some("bool".into())),
             ];
             return Some((rename_relation_columns(columns, alias_cols)?, false));
         }

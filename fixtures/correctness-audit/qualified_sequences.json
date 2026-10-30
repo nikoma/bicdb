@@ -1,0 +1,32 @@
+{
+  "id": "qualified_sequence_isolation",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS audit_seq_first.audit_namespace_rows",
+    "DROP TABLE IF EXISTS public.audit_namespace_rows",
+    "DROP SEQUENCE IF EXISTS audit_seq_first.audit_namespace_counter",
+    "DROP SEQUENCE IF EXISTS audit_seq_second.audit_namespace_counter",
+    "DROP SEQUENCE IF EXISTS public.audit_namespace_counter",
+    "DROP SEQUENCE IF EXISTS audit_seq_first.\"Mi.x\"",
+    "DROP SCHEMA IF EXISTS audit_seq_first",
+    "DROP SCHEMA IF EXISTS audit_seq_second"
+  ],
+  "sql": [
+    "CREATE SCHEMA audit_seq_first",
+    "CREATE SCHEMA audit_seq_second",
+    "CREATE SEQUENCE audit_seq_first.audit_namespace_counter START WITH 10",
+    "CREATE SEQUENCE audit_seq_second.audit_namespace_counter START WITH 100",
+    "CREATE SEQUENCE public.audit_namespace_counter START WITH 1000",
+    "SELECT nextval('audit_seq_first.audit_namespace_counter') AS first_value,nextval('audit_seq_second.audit_namespace_counter') AS second_value,nextval('public.audit_namespace_counter') AS public_value",
+    "CREATE TABLE audit_seq_first.audit_namespace_rows(id INT DEFAULT nextval('audit_seq_first.audit_namespace_counter'))",
+    "CREATE TABLE public.audit_namespace_rows(id INT)",
+    "INSERT INTO audit_seq_first.audit_namespace_rows DEFAULT VALUES RETURNING id",
+    "ALTER SEQUENCE audit_seq_first.audit_namespace_counter OWNED BY audit_seq_first.audit_namespace_rows.id",
+    "DROP TABLE public.audit_namespace_rows",
+    "SELECT nextval('audit_seq_first.audit_namespace_counter') AS retained_value",
+    "SELECT * FROM audit_seq_first.audit_namespace_counter WHERE FALSE",
+    "SELECT COUNT(*) FROM audit_seq_first.audit_namespace_counter",
+    "CREATE SEQUENCE audit_seq_first.\"Mi.x\" START WITH 7",
+    "ALTER SEQUENCE audit_seq_first.\"Mi.x\" RESTART WITH 9",
+    "SELECT nextval('audit_seq_first.\"Mi.x\"') AS quoted_value"
+  ]
+}

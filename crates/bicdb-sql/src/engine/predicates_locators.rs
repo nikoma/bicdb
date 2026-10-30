@@ -849,7 +849,11 @@ impl<'db> SqlEngine<'db> {
                 ("log_cnt", SqlValue::Int(0)),
                 ("is_called", SqlValue::Bool(sequence.is_called)),
             ]);
-            let source_columns = source.keys().cloned().collect::<Vec<_>>();
+            let source_columns = vec![
+                "last_value".to_string(),
+                "log_cnt".to_string(),
+                "is_called".to_string(),
+            ];
             let columns = source_columns
                 .iter()
                 .map(|column| format!("{alias_name}.{column}"))

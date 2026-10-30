@@ -260,3 +260,24 @@ builder computed explicit grants correctly. Declare the column as `aclitem[]`;
 retain default-NULL and explicit-grant values, empty-result typing, pg_dump
 inventory, reopen, and privilege rollback checks. A strict PostgreSQL fixture
 also compares implicit/explicit ACL visibility and grant/revoke decisions.
+
+### Event-client retry during metadata elections
+
+The post-merge HA test exposed an event request aborting its entire retry loop
+when the first topology refresh temporarily reached no member. A member's
+metadata election could therefore fail an otherwise recoverable request while
+retry attempts remained. Discovery availability now consumes a retry; invalid
+or conflicting topology errors still fail closed, and the existing attempt and
+deadline limits remain in force. A deterministic framed-TCP regression sends an
+operation error, a discovery error, then a valid topology and successful event
+response. It reproduced the original failure before the fix. The live learner
+promotion/relocation test retains all its existing data and idempotence checks.
+
+A client that knows only the former metadata leader also needs to discover
+routes after that node becomes a follower. Event discovery now uses the existing
+committed bootstrap-snapshot RPC from authenticated members, with a fallback for
+legacy non-consensus controllers. Leader-only control reads retain their original
+semantics. Snapshot validation, monotonic generation checks and conflicting
+same-generation topology rejection precede any use of the discovered route.
+Dedicated real-TCP cases cover follower discovery, a temporary outage of both
+discovery reads, and the legacy controller fallback.

@@ -195,21 +195,40 @@ mod client {
         }
 
         fn refresh_until(&self, deadline: std::time::Instant) -> Result<()> {
+            if self.refresh_members_until(deadline)? {
+                Ok(())
+            } else {
+                Err(invalid("no event cluster member is reachable"))
+            }
+        }
+
+        fn refresh_members_until(&self, deadline: std::time::Instant) -> Result<bool> {
             let members: Vec<ClusterNodeId> = self.topology.read().nodes.keys().cloned().collect();
             let mut observed = false;
             for member in members {
                 if std::time::Instant::now() >= deadline {
                     break;
                 }
-                if let Ok(topology) = self.transport.fetch_topology(&member) {
+                // Committed snapshots are available from followers too. A
+                // stale client may know only the former leader, so requiring
+                // leader authority here can prevent learning its replacement.
+                let topology = match self.transport.fetch_metadata_snapshot(&member) {
+                    Ok(snapshot) => {
+                        snapshot.validate()?;
+                        Some(snapshot.topology)
+                    }
+                    // Legacy non-consensus controllers expose only this read.
+                    Err(_) if std::time::Instant::now() < deadline => {
+                        self.transport.fetch_topology(&member).ok()
+                    }
+                    Err(_) => None,
+                };
+                if let Some(topology) = topology {
                     self.transport.install_topology(topology)?;
                     observed = true;
                 }
             }
-            if !observed {
-                return Err(invalid("no event cluster member is reachable"));
-            }
-            Ok(())
+            Ok(observed)
         }
 
         fn request(
@@ -229,7 +248,13 @@ mod client {
                         std::time::Duration::from_millis(100 << (attempt - 1))
                             .min(deadline.saturating_duration_since(std::time::Instant::now())),
                     );
-                    self.refresh_until(deadline)?;
+                    // A discovery outage during an election consumes a retry,
+                    // rather than aborting the remaining request budget. Invalid
+                    // or conflicting topologies still propagate through `?`.
+                    if !self.refresh_members_until(deadline)? {
+                        last_error = invalid("no event cluster member is reachable");
+                        continue;
+                    }
                 }
                 if std::time::Instant::now() >= deadline {
                     break;

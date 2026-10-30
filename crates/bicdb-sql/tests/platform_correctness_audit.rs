@@ -725,3 +725,71 @@ fn qualified_sequence_counters_defaults_and_ownership_remain_isolated_after_reop
         vec![vec![SqlValue::Int(101)]]
     );
 }
+
+#[test]
+fn quoted_catalog_identities_are_distinct_stable_and_resolve_exact_columns() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let query = "SELECT relname,oid,reltype FROM pg_class WHERE relname IN ('IdentityTable','identitytable','IdentityView','identityview','IdentityIndex','identityindex','IdentitySequence','identitysequence') ORDER BY relname";
+    let expected = {
+        let mut s = SqlSession::new(&mut db);
+        s.execute(r#"CREATE SCHEMA "IdentitySpace"; CREATE SCHEMA identityspace; CREATE TABLE "IdentityTable"("Field" INT PRIMARY KEY,field TEXT); CREATE TABLE identitytable(field TEXT PRIMARY KEY); CREATE VIEW "IdentityView" AS SELECT 1 AS n; CREATE VIEW identityview AS SELECT 2 AS n; CREATE INDEX "IdentityIndex" ON "IdentityTable"(field); CREATE INDEX identityindex ON identitytable(field); CREATE SEQUENCE "IdentitySequence"; CREATE SEQUENCE identitysequence"#).unwrap();
+        let result = s.execute(query).unwrap();
+        assert_eq!(result.rows.len(), 8);
+        let oids = result
+            .rows
+            .iter()
+            .map(|r| r[1].to_cell())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(oids.len(), 8);
+        assert_eq!(s.execute("SELECT COUNT(DISTINCT oid) FROM pg_namespace WHERE nspname IN ('IdentitySpace','identityspace')").unwrap().rows,vec![vec![SqlValue::Int(2)]]);
+        assert_eq!(s.execute(r#"SELECT '"IdentityTable"'::regclass::oid <> 'identitytable'::regclass::oid AS distinct_ids"#).unwrap().rows,vec![vec![SqlValue::Bool(true)]]);
+        assert_eq!(s.execute(r#"SELECT attname,atttypid FROM pg_attribute WHERE attrelid='"IdentityTable"'::regclass AND attnum>0 AND attname IN ('Field','field') ORDER BY attname"#).unwrap().rows,vec![vec![SqlValue::String("Field".into()),SqlValue::Int(23)],vec![SqlValue::String("field".into()),SqlValue::Int(25)]]);
+        assert_eq!(
+            s.execute(r#"SELECT '"IdentityTable"'::regclass::text"#)
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String("\"IdentityTable\"".into())]]
+        );
+        s.execute(r#"CREATE OR REPLACE VIEW "IdentityView" AS SELECT 3 AS n"#)
+            .unwrap();
+        assert_eq!(s.execute(query).unwrap().rows, result.rows);
+        result.rows
+    };
+    bicdb_sql::verify_catalog_identifiers(&db).unwrap();
+    drop(db);
+    let mut db = BicDb::open(dir.path()).unwrap();
+    assert_eq!(
+        SqlSession::new(&mut db).execute(query).unwrap().rows,
+        expected
+    );
+}
+
+#[test]
+fn catalog_verification_rejects_a_persisted_legacy_row_type_alias() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    SqlSession::new(&mut db).execute("CREATE TABLE first_identity(id INT PRIMARY KEY); CREATE TABLE second_identity(id INT PRIMARY KEY)").unwrap();
+    bicdb_sql::verify_catalog_identifiers(&db).unwrap();
+    let first = db
+        .get("__bicdb_pg_schema", "first_identity")
+        .unwrap()
+        .unwrap();
+    let mut second = db
+        .get("__bicdb_pg_schema", "second_identity")
+        .unwrap()
+        .unwrap()
+        .as_ref()
+        .clone();
+    second.metadata["row_type_oid"] = first.metadata["row_type_oid"].clone();
+    db.insert("__bicdb_pg_schema", second).unwrap();
+    let error = bicdb_sql::verify_catalog_identifiers(&db)
+        .expect_err("physical row hashes do not prove logical catalog uniqueness");
+    assert!(
+        error.to_string().contains("pg_type") && error.to_string().contains("aliases"),
+        "{error}"
+    );
+    drop(db);
+    let db = BicDb::open(dir.path()).unwrap();
+    assert!(bicdb_sql::verify_catalog_identifiers(&db).is_err());
+}

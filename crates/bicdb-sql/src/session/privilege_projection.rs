@@ -438,8 +438,8 @@ impl<'db> SqlSession<'db> {
             .transpose()?;
 
         self.create_session_collection(&table)?;
-        let row_type_oid = table_row_type_oid(namespace_oid(&schema_name), &table);
-        let row_array_type_oid = table_row_array_type_oid(namespace_oid(&schema_name), &table);
+        let (row_type_oid, row_array_type_oid) =
+            reserve_relation_type_oids(self.db_mut()?, &schema_name, &table)?;
         let schema = TableSchema {
             name: table,
             schema_name,

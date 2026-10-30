@@ -485,23 +485,18 @@ pub(crate) fn pg_class_rows_filtered(
     };
     let schema_by_name = schemas
         .iter()
-        .map(|schema| (schema.name.to_ascii_lowercase(), schema))
+        .map(|schema| (schema.name.clone(), schema))
         .collect::<BTreeMap<_, _>>();
     let views = list_views(db)?;
     let view_relkinds = views
         .iter()
-        .map(|view| {
-            (
-                view.name.to_ascii_lowercase(),
-                if view.materialized { "m" } else { "v" },
-            )
-        })
+        .map(|view| (view.name.clone(), if view.materialized { "m" } else { "v" }))
         .collect::<BTreeMap<_, _>>();
     let view_owners = views
         .iter()
         .map(|view| {
             (
-                view.name.to_ascii_lowercase(),
+                view.name.clone(),
                 view.owner.clone().unwrap_or_else(current_role_name),
             )
         })
@@ -513,7 +508,7 @@ pub(crate) fn pg_class_rows_filtered(
     let catalog_indexes = catalog_indexes(&schemas, db);
     let indexed_collections = catalog_indexes
         .iter()
-        .map(|index| index.collection.to_ascii_lowercase())
+        .map(|index| index.collection.clone())
         .collect::<BTreeSet<_>>();
     let triggers = list_triggers(db)?;
     let partition_parent_names = schemas
@@ -522,7 +517,7 @@ pub(crate) fn pg_class_rows_filtered(
             schema
                 .partition_of
                 .as_ref()
-                .map(|partition_of| partition_of.parent_table.to_ascii_lowercase())
+                .map(|partition_of| partition_of.parent_table.clone())
         })
         .collect::<BTreeSet<_>>();
     let mut rows = Vec::new();
@@ -539,7 +534,7 @@ pub(crate) fn pg_class_rows_filtered(
     };
 
     for table in catalog_names {
-        let table_key = table.to_ascii_lowercase();
+        let table_key = table.to_string();
         let table_schema = schema_by_name.get(&table_key).copied();
         let is_graph_view = graph_names.contains(table.as_str());
         let view_relkind = view_relkinds.get(&table_key).copied();
@@ -584,7 +579,7 @@ pub(crate) fn pg_class_rows_filtered(
         let relchecks = table_schema.map(check_constraint_count).unwrap_or(0);
         let has_triggers = triggers
             .iter()
-            .any(|trigger| trigger.table_name.eq_ignore_ascii_case(&table));
+            .any(|trigger| trigger.table_name.as_str() == &table);
         let mut row = pg_class_row(
             oid,
             &table,
@@ -599,7 +594,7 @@ pub(crate) fn pg_class_rows_filtered(
             reltuples_for_relation(db, &table, exact_counts),
             relchecks,
             has_triggers,
-            partition_parent_names.contains(&table.to_ascii_lowercase()),
+            partition_parent_names.contains(&table.to_string()),
             table_schema
                 .and_then(|schema| schema.partition_of.as_ref())
                 .is_some(),
@@ -662,7 +657,7 @@ pub(crate) fn pg_class_rows_filtered(
     }
 
     for table in user_collection_names(db) {
-        let Some(table_schema) = schema_by_name.get(&table.to_ascii_lowercase()).copied() else {
+        let Some(table_schema) = schema_by_name.get(&table.to_string()).copied() else {
             continue;
         };
         let primary_key_columns = primary_key_columns_for_schema(table_schema);
@@ -1177,7 +1172,7 @@ pub(crate) fn apply_catalog_view_column_types(
 pub(crate) fn set_view_column_pg_type(columns: &mut [ColumnSchema], name: &str, pg_type: &str) {
     if let Some(column) = columns
         .iter_mut()
-        .find(|column| column.name.eq_ignore_ascii_case(name))
+        .find(|column| column.name.as_str() == name)
     {
         column.pg_type = pg_type.to_string();
         column.type_modifier = None;
@@ -1559,7 +1554,7 @@ pub(crate) fn attnums_for_schema_columns(schema: &TableSchema, columns: &[String
             schema
                 .columns
                 .iter()
-                .position(|candidate| candidate.name.eq_ignore_ascii_case(column))
+                .position(|candidate| candidate.name.as_str() == column)
                 .map(|idx| idx as i64 + 1)
                 .unwrap_or(0)
         })
@@ -1567,10 +1562,11 @@ pub(crate) fn attnums_for_schema_columns(schema: &TableSchema, columns: &[String
 }
 
 pub(crate) fn regclass_text_for_schema(schema: &TableSchema) -> String {
-    if schema.schema_name.eq_ignore_ascii_case("public") {
-        schema.name.clone()
+    let name = pg_quote_ident(&catalog_display_name(&schema.name));
+    if schema.schema_name == "public" {
+        name
     } else {
-        format!("{}.{}", schema.schema_name, schema.name)
+        format!("{}.{}", pg_quote_ident(&schema.schema_name), name)
     }
 }
 
@@ -3725,7 +3721,7 @@ pub(crate) fn pg_attrdef_rows_for_adrelids(
             if let Some(expression) = column_attrdef_expression(column) {
                 if relations
                     .get(&table_oid)
-                    .is_some_and(|relation| schema.name.eq_ignore_ascii_case(relation))
+                    .is_some_and(|relation| schema.name.as_str() == relation)
                 {
                     rows.push(virtual_row([
                         ("oid", SqlValue::Int(oid)),
@@ -4391,16 +4387,14 @@ pub(crate) fn pg_tables_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue
     let mut rows = Vec::new();
 
     for table in user_collection_names(db) {
-        let table_schema = schemas
-            .iter()
-            .find(|schema| schema.name.eq_ignore_ascii_case(&table));
+        let table_schema = schemas.iter().find(|schema| schema.name.as_str() == &table);
         let hasindexes = primary_key_column(&schemas, &table).is_some()
             || catalog_indexes
                 .iter()
-                .any(|index| index.collection.eq_ignore_ascii_case(&table));
+                .any(|index| index.collection.as_str() == &table);
         let hastriggers = triggers
             .iter()
-            .any(|trigger| trigger.table_name.eq_ignore_ascii_case(&table));
+            .any(|trigger| trigger.table_name.as_str() == &table);
 
         rows.push(virtual_row([
             (
@@ -4757,13 +4751,10 @@ pub(crate) fn load_schemas_for_relation_oid_filter(
     if relation_names.len() <= 32 {
         return load_relation_schemas_by_name(db, &relation_names);
     }
-    let relation_names = relation_names
-        .into_iter()
-        .map(|name| name.to_ascii_lowercase())
-        .collect::<BTreeSet<_>>();
+    let relation_names = relation_names.into_iter().collect::<BTreeSet<_>>();
     let mut schemas = relation_schemas(db)?
         .into_iter()
-        .filter(|schema| relation_names.contains(&schema.name.to_ascii_lowercase()))
+        .filter(|schema| relation_names.contains(&schema.name))
         .collect::<Vec<_>>();
     schemas.sort_by(|left, right| {
         left.schema_name
@@ -5124,9 +5115,7 @@ pub(crate) fn constraint_collation_oids(
     table: &str,
     columns: &[String],
 ) -> Vec<i64> {
-    let schema = schemas
-        .iter()
-        .find(|schema| schema.name.eq_ignore_ascii_case(table));
+    let schema = schemas.iter().find(|schema| schema.name.as_str() == table);
     columns
         .iter()
         .map(|name| {
@@ -5583,7 +5572,7 @@ pub(crate) fn postgres_triggers_view_rows_filtered(
     };
     let schema_by_table = schemas
         .iter()
-        .map(|schema| (schema.name.to_ascii_lowercase(), schema.schema_name.clone()))
+        .map(|schema| (schema.name.clone(), schema.schema_name.clone()))
         .collect::<BTreeMap<_, _>>();
     let mut rows = Vec::new();
 
@@ -5594,10 +5583,7 @@ pub(crate) fn postgres_triggers_view_rows_filtered(
         {
             continue;
         }
-        let Some(schema_name) = schema_by_table
-            .get(&trigger.table_name.to_ascii_lowercase())
-            .cloned()
-        else {
+        let Some(schema_name) = schema_by_table.get(&trigger.table_name.clone()).cloned() else {
             continue;
         };
         let identifier = format!("{schema_name}.{}.{}", trigger.table_name, trigger.name);
@@ -5952,23 +5938,7 @@ pub(crate) fn load_relation_schemas_by_name(
         if let Some(schema) = load_schema(db, relation)? {
             schemas.push(schema);
         } else if let Some(view) = load_view(db, relation)? {
-            let columns = catalog_view_columns(&view);
-            schemas.push(TableSchema {
-                name: view.name,
-                schema_name: "public".to_string(),
-                row_type_oid: None,
-                row_array_type_oid: None,
-                columns,
-                primary_key_name: None,
-                indexes: view.indexes,
-                constraints: Vec::new(),
-                rls_enabled: false,
-                rls_forced: false,
-                policies: Vec::new(),
-                owner: None,
-                partitioning: None,
-                partition_of: None,
-            });
+            schemas.push(catalog_view_schema(db, view)?);
         } else {
             unresolved = true;
         }
@@ -6091,7 +6061,7 @@ pub(crate) fn postgres_partitions_view_rows_filtered(
     };
     let schema_by_name = schemas
         .iter()
-        .map(|schema| (schema.name.to_ascii_lowercase(), schema.schema_name.clone()))
+        .map(|schema| (schema.name.clone(), schema.schema_name.clone()))
         .collect::<BTreeMap<_, _>>();
     let mut rows = Vec::new();
 
@@ -6101,7 +6071,7 @@ pub(crate) fn postgres_partitions_view_rows_filtered(
         };
         let display_name = catalog_display_name(&schema.name);
         let parent_schema = schema_by_name
-            .get(&partition_of.parent_table.to_ascii_lowercase())
+            .get(&partition_of.parent_table.clone())
             .map(|schema_name| schema_name.as_str())
             .unwrap_or(partition_of.parent_schema.as_str());
         let identifier = format!("{}.{}", schema.schema_name, display_name);
@@ -6734,9 +6704,9 @@ pub(crate) fn columns_for_relation(schemas: &[TableSchema], relation: &str) -> V
     schemas
         .iter()
         .find(|schema| {
-            schema.name.eq_ignore_ascii_case(relation)
-                || (schema.name.eq_ignore_ascii_case(relation_name)
-                    && schema.schema_name.eq_ignore_ascii_case(schema_name))
+            schema.name.as_str() == relation
+                || (schema.name.as_str() == relation_name
+                    && schema.schema_name.as_str() == schema_name)
         })
         .map(|schema| {
             schema
@@ -6749,27 +6719,30 @@ pub(crate) fn columns_for_relation(schemas: &[TableSchema], relation: &str) -> V
         .unwrap_or_else(default_record_columns)
 }
 
+pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableSchema> {
+    let columns = catalog_view_columns(&view);
+    let schema_name = relation_catalog_namespace(db, &view.name)?;
+    Ok(TableSchema {
+        name: view.name,
+        schema_name,
+        row_type_oid: view.row_type_oid,
+        row_array_type_oid: view.row_array_type_oid,
+        columns,
+        primary_key_name: None,
+        indexes: view.indexes,
+        constraints: Vec::new(),
+        rls_enabled: false,
+        rls_forced: false,
+        policies: Vec::new(),
+        owner: view.owner,
+        partitioning: None,
+        partition_of: None,
+    })
+}
 pub(crate) fn relation_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {
     let mut schemas = list_schemas(db)?;
     for view in list_views(db)? {
-        let columns = catalog_view_columns(&view);
-        let schema_name = relation_catalog_namespace(db, &view.name)?;
-        schemas.push(TableSchema {
-            name: view.name,
-            schema_name,
-            row_type_oid: None,
-            row_array_type_oid: None,
-            columns,
-            primary_key_name: None,
-            indexes: view.indexes,
-            constraints: Vec::new(),
-            rls_enabled: false,
-            rls_forced: false,
-            policies: Vec::new(),
-            owner: view.owner,
-            partitioning: None,
-            partition_of: None,
-        });
+        schemas.push(catalog_view_schema(db, view)?);
     }
     Ok(schemas)
 }
@@ -6784,7 +6757,7 @@ pub(crate) fn primary_key_columns(schemas: &[TableSchema], relation: &str) -> Ve
     }
     schemas
         .iter()
-        .find(|schema| schema.name.eq_ignore_ascii_case(relation))
+        .find(|schema| schema.name.as_str() == relation)
         .map(primary_key_columns_for_schema)
         .unwrap_or_default()
 }
@@ -6792,7 +6765,7 @@ pub(crate) fn primary_key_columns(schemas: &[TableSchema], relation: &str) -> Ve
 pub(crate) fn primary_key_constraint_name(schemas: &[TableSchema], relation: &str) -> String {
     schemas
         .iter()
-        .find(|schema| schema.name.eq_ignore_ascii_case(relation))
+        .find(|schema| schema.name.as_str() == relation)
         .map(TableSchema::primary_key_constraint_name)
         .unwrap_or_else(|| default_primary_key_name(relation))
 }
@@ -6800,7 +6773,7 @@ pub(crate) fn primary_key_constraint_name(schemas: &[TableSchema], relation: &st
 pub(crate) fn schema_name_for_relation(schemas: &[TableSchema], relation: &str) -> String {
     schemas
         .iter()
-        .find(|schema| schema.name.eq_ignore_ascii_case(relation))
+        .find(|schema| schema.name.as_str() == relation)
         .map(|schema| schema.schema_name.clone())
         .unwrap_or_else(|| "public".to_string())
 }
@@ -6809,7 +6782,7 @@ pub(crate) fn primary_key_columns_for_schema(schema: &TableSchema) -> Vec<String
     let primary_key_name = schema.primary_key_constraint_name();
     if let Some(columns) = schema.constraints.iter().find_map(|constraint| {
         if let ConstraintSchema::Unique { name, columns, .. } = constraint {
-            if name.eq_ignore_ascii_case(&primary_key_name) {
+            if name == &primary_key_name {
                 return Some(columns.clone());
             }
         }
@@ -6945,11 +6918,8 @@ pub(crate) fn unique_constraint_is_primary_key(
     name: &str,
     columns: &[String],
 ) -> bool {
-    name.eq_ignore_ascii_case(&schema.primary_key_constraint_name())
-        && primary_key_columns_for_schema(schema)
-            .iter()
-            .map(|column| column.to_ascii_lowercase())
-            .eq(columns.iter().map(|column| column.to_ascii_lowercase()))
+    name == schema.primary_key_constraint_name()
+        && primary_key_columns_for_schema(schema) == columns
 }
 
 pub(crate) fn primary_key_indexes(
@@ -7009,10 +6979,7 @@ pub(crate) fn default_index_opclass_oids(
     columns: &[String],
     access_method: &str,
 ) -> Result<Vec<i64>> {
-    let Some(schema) = schemas
-        .iter()
-        .find(|schema| schema.name.eq_ignore_ascii_case(table))
-    else {
+    let Some(schema) = schemas.iter().find(|schema| schema.name.as_str() == table) else {
         return Ok(Vec::new());
     };
     columns
@@ -7036,7 +7003,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
     let executable = db
         .index_definitions()
         .into_iter()
-        .map(|definition| (definition.name.to_ascii_lowercase(), definition))
+        .map(|definition| (definition.name.clone(), definition))
         .collect::<BTreeMap<_, _>>();
     let mut indexes = Vec::new();
     for schema in schemas {
@@ -7045,7 +7012,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
                 if !index
                     .internal_index_names
                     .iter()
-                    .all(|name| executable.contains_key(&name.to_ascii_lowercase()))
+                    .all(|name| executable.contains_key(name))
                 {
                     continue;
                 }
@@ -7092,7 +7059,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
                 });
                 continue;
             }
-            let Some(definition) = executable.get(&index.name.to_ascii_lowercase()) else {
+            let Some(definition) = executable.get(&index.name) else {
                 continue;
             };
             let full_text = definition.kind == IndexKind::FullText;
@@ -7253,7 +7220,7 @@ pub(crate) fn attnum_for_column(
 ) -> Option<i64> {
     columns_for_relation(schemas, relation)
         .into_iter()
-        .position(|candidate| candidate.name.eq_ignore_ascii_case(column))
+        .position(|candidate| candidate.name.as_str() == column)
         .map(|idx| idx as i64 + 1)
 }
 
@@ -7476,7 +7443,7 @@ pub(crate) fn information_schema_schemata(db: &BicDb) -> Result<Vec<BTreeMap<Str
         .collect())
 }
 
-fn sequence_catalog_name(name: &str) -> String {
+pub(crate) fn sequence_catalog_name(name: &str) -> String {
     if let Some(logical) = logical_relation_name(name) {
         return logical;
     }
@@ -7495,7 +7462,7 @@ fn sequence_catalog_name(name: &str) -> String {
     }
     name.to_string()
 }
-fn sequence_catalog_namespace(db: &BicDb, name: &str) -> Result<String> {
+pub(crate) fn sequence_catalog_namespace(db: &BicDb, name: &str) -> Result<String> {
     let logical = sequence_catalog_name(name);
     if let Some((digest, _)) = name
         .strip_prefix("__bicdb_s_")

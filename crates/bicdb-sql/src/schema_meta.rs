@@ -1216,6 +1216,15 @@ pub(crate) fn save_namespace_if_missing(
             namespace.name
         ))),
         None => {
+            if list_namespaces(db)?.iter().any(|existing| {
+                existing.name != namespace.name
+                    && namespace_oid(&existing.name) == namespace_oid(&namespace.name)
+            }) {
+                return Err(SqlError::InvalidSql(
+                    "schema catalog OID collides with an existing namespace".into(),
+                ));
+            }
+
             db.insert(
                 NAMESPACE_COLLECTION,
                 Record::new(&namespace.name).with_metadata(serde_json::to_value(namespace)?),
@@ -1962,7 +1971,7 @@ fn occupied_user_type_oids(db: &BicDb) -> Result<BTreeSet<i64>> {
             _ => {}
         }
     }
-    for schema in list_schemas(db)? {
+    for schema in relation_schemas(db)? {
         occupied.insert(schema.row_type_oid());
         occupied.insert(schema.row_array_type_oid());
     }
@@ -5020,4 +5029,92 @@ mod leading_keyword_tests {
             assert!(!leading_keyword_bypasses_raw_probes(sql), "{sql}");
         }
     }
+}
+
+/// Reserve both row-type identities durably. Catalog hashes can collide,
+/// notably for quoted names differing only in case. Reservations survive DROP
+/// and rollback, so old type identities cannot be reassigned to a new object.
+pub(crate) fn reserve_relation_type_oids(
+    db: &mut BicDb,
+    namespace: &str,
+    name: &str,
+) -> Result<(i64, i64)> {
+    ensure_user_type_oid_collection(db)?;
+    let mut occupied = occupied_user_type_oids(db)?;
+    let relation_oids = catalog_relation_oid_set(db)?;
+    let namespace = legacy_namespace_oid(namespace);
+    let preferred = [
+        table_row_type_oid(namespace, name),
+        table_row_array_type_oid(namespace, name),
+    ];
+    let mut allocated = Vec::new();
+    for (index, base) in [1_100_000_000_i64, 1_300_000_000].into_iter().enumerate() {
+        let mut oid = preferred[index];
+        let mut attempts = 0;
+        loop {
+            let relation = i64::from((oid as u32) ^ 0x4000_0000);
+            let relation_conflict = index == 0
+                && (relation_oids.contains(&relation)
+                    || relation_oids.contains(&primary_index_oid(relation)));
+            if !occupied.contains(&oid) && !relation_conflict {
+                break;
+            }
+            attempts += 1;
+            if attempts >= 200_000_000 {
+                return Err(SqlError::InvalidSql("row type OID space exhausted".into()));
+            }
+            oid = base + (oid - base + 1) % 200_000_000;
+        }
+        occupied.insert(oid);
+        allocated.push(oid);
+    }
+    let records = allocated
+        .iter()
+        .map(|oid| {
+            Ok(
+                Record::new(format!("oid:{oid}")).with_metadata(serde_json::to_value(
+                    UserTypeOidReservation {
+                        version: USER_TYPE_OID_ALLOCATOR_VERSION,
+                        oid: *oid,
+                    },
+                )?),
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
+    db.batch_insert(USER_TYPE_OID_COLLECTION, records)?;
+    Ok((allocated[0], allocated[1]))
+}
+
+// Metadata only: allocating an identifier must not scan user table contents.
+pub(crate) fn catalog_relation_oid_set(db: &BicDb) -> Result<BTreeSet<i64>> {
+    let schemas = relation_schemas(db)?;
+    let table_oids = table_oids(db);
+    let mut occupied = table_oids.values().copied().collect::<BTreeSet<_>>();
+    for schema in &schemas {
+        if !primary_key_columns_for_schema(schema).is_empty() {
+            if let Some(oid) = table_oids.get(&schema.name) {
+                occupied.insert(primary_index_oid(*oid));
+            }
+        }
+    }
+    for index in catalog_indexes(&schemas, db) {
+        occupied.insert(secondary_index_oid(&index.schema_name, &index.name));
+    }
+    for sequence in list_sequences(db)? {
+        occupied.insert(sequence_oid(&sequence.name));
+    }
+    for user_type in list_user_types(db)? {
+        if let UserTypeKind::Composite { relation_oid, .. } = user_type.kind {
+            occupied.insert(relation_oid);
+        }
+    }
+    Ok(occupied)
+}
+pub(crate) fn require_unused_relation_oid(db: &BicDb, oid: i64) -> Result<()> {
+    if catalog_relation_oid_set(db)?.contains(&oid) {
+        return Err(SqlError::InvalidSql(format!(
+            "catalog relation OID {oid} collides with an existing object"
+        )));
+    }
+    Ok(())
 }

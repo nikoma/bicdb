@@ -3676,6 +3676,14 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
             for schema in list_schemas(db)? {
                 namespace_names.insert(schema.schema_name);
             }
+            let mut namespace_oids = BTreeSet::new();
+            for name in &namespace_names {
+                if !namespace_oids.insert(namespace_oid(name)) {
+                    return Err(SqlError::InvalidSql(
+                        "namespace catalog OID collision".into(),
+                    ));
+                }
+            }
             let mut rows = Vec::new();
             for namespace in namespace_names {
                 let owner = namespace_owner(db, &namespace)?;

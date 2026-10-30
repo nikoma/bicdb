@@ -282,7 +282,7 @@ pub(crate) fn secondary_index_oid(schema_name: &str, name: &str) -> i64 {
 }
 
 pub(crate) fn table_row_type_oid(namespace_oid: i64, name: &str) -> i64 {
-    stable_name_hash_wide(
+    legacy_stable_name_hash_wide(
         1_100_000_000,
         &format!("{namespace_oid}.{name}"),
         200_000_000,
@@ -290,7 +290,7 @@ pub(crate) fn table_row_type_oid(namespace_oid: i64, name: &str) -> i64 {
 }
 
 pub(crate) fn table_row_array_type_oid(namespace_oid: i64, name: &str) -> i64 {
-    stable_name_hash_wide(
+    legacy_stable_name_hash_wide(
         1_300_000_000,
         &format!("{namespace_oid}.{name}"),
         200_000_000,
@@ -343,7 +343,7 @@ pub(crate) fn stable_name_hash(base: i64, name: &str) -> i64 {
 }
 
 pub(crate) fn stable_name_hash_wide(base: i64, name: &str, modulo: i64) -> i64 {
-    let hash = name.to_ascii_lowercase().bytes().fold(0_i64, |hash, byte| {
+    let hash = name.bytes().fold(0_i64, |hash, byte| {
         hash.wrapping_mul(31).wrapping_add(byte as i64)
     });
     base + (hash.unsigned_abs() % modulo as u64) as i64
@@ -5869,5 +5869,19 @@ pub(crate) fn eval_predicate_truth(record: &Record, expr: &Expr) -> Result<Optio
         other => Err(SqlError::Unsupported(format!(
             "unsupported WHERE expression {other}"
         ))),
+    }
+}
+
+// Persisted table row types must retain the pre-audit hash when no explicit
+// identity was stored. New identities reserve a free OID before publication.
+pub(crate) fn legacy_stable_name_hash_wide(base: i64, name: &str, modulo: i64) -> i64 {
+    stable_name_hash_wide(base, &name.to_ascii_lowercase(), modulo)
+}
+pub(crate) fn legacy_namespace_oid(name: &str) -> i64 {
+    match name {
+        "public" => 2200,
+        "pg_catalog" => 11,
+        "information_schema" => 13207,
+        other => legacy_stable_name_hash_wide(80_000, other, 10_000),
     }
 }

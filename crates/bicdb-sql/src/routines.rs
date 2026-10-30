@@ -104,14 +104,12 @@ pub(crate) fn compile_cached_routine_ir(routine: &RoutineSchema) -> Result<Arc<R
 pub(crate) fn routine_ir_cache_key(routine: &RoutineSchema) -> RoutineIrCacheKey {
     RoutineIrCacheKey {
         kind: routine.kind,
-        name: routine.name.to_ascii_lowercase(),
-        args_hash: hash_routine_args(&routine.args),
-        args_len: routine.args.len(),
-        return_type: routine.return_type.to_ascii_lowercase(),
+        name: routine.name.clone(),
+        args: routine.args.clone(),
+        return_type: routine.return_type.clone(),
         returns_set: routine.returns_set,
         language: routine.language.to_ascii_lowercase(),
-        definition_hash: sql_profile_hash(&routine.definition),
-        definition_len: routine.definition.len(),
+        definition: routine.definition.clone(),
     }
 }
 
@@ -2081,6 +2079,13 @@ pub(crate) fn create_sequence_if_missing(
             sequence.name
         )));
     }
+    if relation_exists(db, &sequence.name) {
+        return Err(SqlError::InvalidSql(format!(
+            "relation {} already exists",
+            sequence.name
+        )));
+    }
+    require_unused_relation_oid(db, sequence_oid(&sequence.name))?;
     save_sequence(db, &sequence)
 }
 

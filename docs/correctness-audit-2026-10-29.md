@@ -121,7 +121,10 @@ row counts, column names and available wire type OIDs. No fixture in
 | Aliased base-table qualifier copies were mistaken for ambiguous columns | Deduplicate the same physical column within its base relation during type inference, retaining ambiguity across separate relations and derived outputs |
 | Catalog, plan and role caches keyed a database allocation address | Use the monotonic database instance ID; a deterministic address-reuse test checks table metadata and superuser isolation |
 | Native index replacement with unchanged name/count retained stale SQL lookup plans | Invalidate by index generation, and invalidate transaction lookup answers after a new commit |
+| Compiled routine identity used only definition/argument digests and lengths | Key the cache by complete definitions and arguments so a hash collision cannot select another program |
 | Routine type caches shared catalog generations across databases, with collision-prone XOR stamps | Allocate distinct scope tokens for the complete database/catalog generation tuple; regression executes shared compiled code over different integer types |
+| Case-folded hashes and catalog maps aliased quoted table/view/index/sequence/schema names | Preserve exact identities, durably reserve table/view row-type OIDs, keep view IDs on replacement, and verify them after reopen; new namespace/relation/index/sequence hash collisions are rejected explicitly |
+| Legacy duplicate catalog IDs were invisible to physical checksums | Offline and scheduled verification now check SQL type, relation, namespace and constraint OID uniqueness, with injected legacy-corruption regressions through SQL, CLI and pgwire |
 | Constraint OID arithmetic exceeded PostgreSQL's unsigned 32-bit range | Allocate bounded synthetic identifiers, detect collisions before exposing filtered catalogs, and test definition lookup and foreign-key joins |
 | Index catalog vectors used one-based subscripts and omitted per-column sort options | Preserve PostgreSQL zero-based intvector subscripts and expose direction/null-order flags; an actual Prisma introspection run found the mismatch |
 | COUNT output names differed from PostgreSQL, breaking unaliased derived-column references | Return `count` consistently for COUNT(*), COUNT(expr), and COUNT(DISTINCT expr); regression checks both storage modes and outer references |
@@ -167,3 +170,37 @@ existing SERIAL keys remain readable. Before changing an application that relied
 on the old alias, inspect its counter/default/ownership bindings and create the
 intended qualified sequence with the required current value. The fix preserves
 separate namespaces rather than guessing a migration or moving existing values.
+
+### Legacy catalog identities
+
+New table and view row-type identities are durably reserved and do not reuse
+an identifier after DROP or rollback. Existing persisted table type identities
+are retained. Synthetic identifiers for quoted names now preserve case. Refresh cached
+namespace, index and sequence catalog OIDs when upgrading.
+`bicdb verify` and the scheduled verifier reject pre-existing duplicate SQL
+catalog identifiers; they do not guess which historical composite value or
+application-held OID should be reassigned. Resolve a reported legacy collision
+from a verified backup and the named object definitions before depending on
+that catalog. This check evaluates metadata only and does not execute stored
+functions or rewrite user rows.
+
+## Follow-up execution evidence
+
+- The focused platform audit has **23 passing regressions**, including both
+  storage modes, constraint races, trigger effects, namespace isolation, catalog
+  identity/reopen checks and injected legacy type aliases.
+- The main SQL compatibility target has **416 passing tests** after the catalog
+  corrections. The PostgreSQL 18.4 oracle has **153/153 passing cases**, **1,397
+  statements**, and **zero expected-difference fixtures**.
+- All seven declared client drivers passed against BicDB and PostgreSQL 18.4.
+  Prisma 6.10.1 produced both expected models on each target; its smoke now
+  requires generated models instead of trusting the process exit status.
+- Offline verification rejects injected catalog aliases, and the scheduled
+  verifier publishes the failure through pgwire. The scheduled full restore,
+  promotion, write and restart test still passes. Five gated paged-recovery CLI
+  tests also passed.
+
+The workspace workflow runs every discovered Cargo test target and doctest,
+including each target's required feature flags, plus the platform Python and
+JavaScript contracts. KVM images, live S3 credentials and optional model/runtime
+fixtures remain environment-dependent checks, separate from tests that ran.

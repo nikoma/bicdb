@@ -236,6 +236,9 @@ impl<'db> SqlSession<'db> {
             )));
         }
 
+        if load_view(self.db_ref(), &view)?.is_none() {
+            require_unused_relation_oid(self.db_ref(), named_relation_oid(&view))?;
+        }
         let mut columns = match view_columns_from_query(&create_view.query) {
             Ok(columns) => columns,
             Err(metadata_error) => {
@@ -327,8 +330,18 @@ impl<'db> SqlSession<'db> {
             self.sql_engine()
                 .authorize_read_relations(&create_view.query)?;
         }
+        let namespace = relation_schema_name(&create_view.name);
+        let (row_type_oid, row_array_type_oid) =
+            if let Some(existing) = load_view(self.db_ref(), &view)? {
+                let existing = catalog_view_schema(self.db_ref(), existing)?;
+                (existing.row_type_oid(), existing.row_array_type_oid())
+            } else {
+                reserve_relation_type_oids(self.db_mut()?, &namespace, &view)?
+            };
         self.save_session_view(&ViewSchema {
             name: view,
+            row_type_oid: Some(row_type_oid),
+            row_array_type_oid: Some(row_array_type_oid),
             query_sql: create_view.query.to_string(),
             columns,
             materialized: create_view.materialized,
@@ -2208,6 +2221,22 @@ impl<'db> SqlSession<'db> {
                     .map(relation_name)
                     .transpose()?
                     .unwrap_or_else(|| format!("idx_{}_{}", table, view.indexes.len() + 1));
+
+                if !self
+                    .db_ref()
+                    .index_definitions()
+                    .iter()
+                    .any(|definition| definition.name == index_name)
+                    && !view.indexes.iter().any(|index| index.name == index_name)
+                {
+                    require_unused_relation_oid(
+                        self.db_ref(),
+                        secondary_index_oid(
+                            &relation_schema_name(&create_index.table_name),
+                            &index_name,
+                        ),
+                    )?;
+                }
                 if view.indexes.iter().any(|index| index.name == index_name) {
                     if create_index.if_not_exists {
                         return Ok(SqlResult::command("CREATE INDEX"));
@@ -2255,6 +2284,19 @@ impl<'db> SqlSession<'db> {
             .map(relation_name)
             .transpose()?
             .unwrap_or_else(|| format!("idx_{}_{}", table, schema.indexes.len() + 1));
+        if !self
+            .db_ref()
+            .index_definitions()
+            .iter()
+            .any(|definition| definition.name == index_name)
+            && !schema.indexes.iter().any(|index| index.name == index_name)
+        {
+            require_unused_relation_oid(
+                self.db_ref(),
+                secondary_index_oid(&schema.schema_name, &index_name),
+            )?;
+        }
+
         let expression = create_index
             .columns
             .iter()

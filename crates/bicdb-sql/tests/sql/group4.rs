@@ -1569,7 +1569,7 @@ fn postgres_constraints_are_enforced_and_visible() {
         constraint_usage.rows,
         vec![vec![
             SqlValue::String("employees_dept_fkey".to_string()),
-            SqlValue::String("dept_code".to_string()),
+            SqlValue::String("code".to_string()),
         ]]
     );
 

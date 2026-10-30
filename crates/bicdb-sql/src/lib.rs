@@ -228,6 +228,8 @@ mod pg_dump_compat;
 pub(crate) use pg_dump_compat::*;
 mod select_exec;
 pub(crate) use select_exec::*;
+mod catalog_identifiers;
+pub use catalog_identifiers::verify_catalog_identifiers;
 mod catalog_rows;
 pub(crate) use catalog_rows::*;
 mod virtual_tables;
@@ -3894,6 +3896,10 @@ fn default_sequence_data_type() -> String {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ViewSchema {
     name: String,
+    #[serde(default)]
+    row_type_oid: Option<i64>,
+    #[serde(default)]
+    row_array_type_oid: Option<i64>,
     query_sql: String,
     columns: Vec<ColumnSchema>,
     #[serde(default)]
@@ -4038,13 +4044,11 @@ enum RoutineKind {
 struct RoutineIrCacheKey {
     kind: RoutineKind,
     name: String,
-    args_hash: u64,
-    args_len: usize,
+    args: Vec<String>,
     return_type: String,
     returns_set: bool,
     language: String,
-    definition_hash: u64,
-    definition_len: usize,
+    definition: String,
 }
 
 thread_local! {
@@ -4557,13 +4561,14 @@ fn sequence_data_type_name(data_type: &str) -> &'static str {
 
 impl TableSchema {
     fn row_type_oid(&self) -> i64 {
-        self.row_type_oid
-            .unwrap_or_else(|| table_row_type_oid(namespace_oid(&self.schema_name), &self.name))
+        self.row_type_oid.unwrap_or_else(|| {
+            table_row_type_oid(legacy_namespace_oid(&self.schema_name), &self.name)
+        })
     }
 
     fn row_array_type_oid(&self) -> i64 {
         self.row_array_type_oid.unwrap_or_else(|| {
-            table_row_array_type_oid(namespace_oid(&self.schema_name), &self.name)
+            table_row_array_type_oid(legacy_namespace_oid(&self.schema_name), &self.name)
         })
     }
 

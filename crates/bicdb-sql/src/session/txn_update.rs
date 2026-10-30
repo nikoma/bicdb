@@ -162,13 +162,14 @@ impl StoredUpdateReadPlan {
 fn routine_memo_generation(db: &BicDb) -> u64 {
     static NEXT_SCOPE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     thread_local! {
-        static SCOPES: std::cell::RefCell<FxHashMap<(u64,u64,u64,u64,u64),u64>> =
+        static SCOPES: std::cell::RefCell<FxHashMap<(u64,u64,u64,u64,u64,u64),u64>> =
             std::cell::RefCell::new(FxHashMap::default());
     }
     let key = (
         db.instance_id(),
         db.collection_generation(ROUTINE_COLLECTION),
         db.collection_generation(SCHEMA_COLLECTION),
+        db.collection_generation(VIEW_COLLECTION),
         db.collection_generation(USER_TYPE_COLLECTION),
         db.index_generation(),
     );

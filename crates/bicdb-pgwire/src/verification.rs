@@ -41,6 +41,7 @@ pub(crate) fn record(server: &PgWireServer, mut run: VerificationRun, result: Re
 
 pub(crate) fn capture(server: &Arc<PgWireServer>) -> Result<(VerificationManifest, usize)> {
     let db = server.read_db()?;
+    bicdb_sql::verify_catalog_identifiers(&db)?;
     let indexes = db.verify_indexes_consistently()?;
     if indexes.iter().any(|report| !report.valid) {
         return Err(PgWireError::Server(

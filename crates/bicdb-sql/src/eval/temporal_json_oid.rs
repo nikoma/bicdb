@@ -287,98 +287,54 @@ pub(crate) fn regclass_text_value(db: &BicDb, value: SqlValue) -> Result<SqlValu
 }
 
 pub(crate) fn resolve_regclass_oid(db: &BicDb, name: &str) -> Option<i64> {
-    let (schema_name, relation) = alias_schema_and_name(name);
-    if alias_schema_is(schema_name.as_deref(), "pg_catalog") {
-        if let Some(oid) = virtual_catalog_table_oid(&relation) {
+    let parts = sql_identifier_parts(name).ok()?;
+    let physical = relation_name_from_parts(&parts).ok()?;
+    if parts.len() == 1 || parts.first().is_some_and(|schema| schema == "pg_catalog") {
+        if let Some(oid) = virtual_catalog_table_oid(parts.last()?) {
             return Some(oid);
         }
     }
-    let schemas = list_schemas(db).ok()?;
-    if let Some(schema) = schemas.iter().find(|schema| {
-        // A table outside `public` is stored under a schema-isolated physical
-        // name, so match the logical name it encodes as well as the raw one.
-        let logical = crate::eval::rewrite_helpers::logical_relation_name(&schema.name);
-        (schema.name.eq_ignore_ascii_case(&relation)
-            || logical
-                .as_deref()
-                .is_some_and(|name| name.eq_ignore_ascii_case(&relation)))
-            && schema_name.as_deref().map_or_else(
-                || schema.schema_name.eq_ignore_ascii_case("public"),
-                |requested| schema.schema_name.eq_ignore_ascii_case(requested),
-            )
-    }) {
-        return Some(table_relation_oid(schema));
+    if let Some(sequence) = load_sequence(db, &physical).ok().flatten() {
+        return Some(sequence_oid(&sequence.name));
     }
-    // Sequences are stored under their bare name (see
-    // `normalize_sequence_name`), so a schema-qualified `'<schema>.<seq>'`
-    // — exactly what pg_dump emits for SERIAL defaults and setval() — has
-    // to be matched on the relation part. Checked before the
-    // non-public-schema bail-out below, which would otherwise reject every
-    // qualified sequence reference outright.
-    if let Some(oid) = list_sequences(db)
-        .ok()
-        .into_iter()
-        .flatten()
-        .find(|sequence| sequence.name.eq_ignore_ascii_case(&relation))
-        .map(|sequence| sequence_oid(&sequence.name))
-    {
-        return Some(oid);
-    }
-    if schema_name
-        .as_deref()
-        .is_some_and(|schema| !schema.eq_ignore_ascii_case("public"))
-    {
-        return None;
-    }
-    (*table_oids(db))
-        .clone()
-        .into_iter()
-        .find(|(table, _)| {
-            table.eq_ignore_ascii_case(&relation)
-                && !schemas
-                    .iter()
-                    .any(|schema| schema.name.eq_ignore_ascii_case(table))
-        })
-        .map(|(_, oid)| oid)
-        .or_else(|| {
-            list_sequences(db)
-                .ok()?
-                .into_iter()
-                .find(|sequence| sequence.name.eq_ignore_ascii_case(&relation))
-                .map(|sequence| sequence_oid(&sequence.name))
-        })
+    table_oids(db).get(&physical).copied()
 }
 
 pub(crate) fn resolve_regclass_name(db: &BicDb, oid: i64) -> Result<Option<String>> {
     if let Some(name) = virtual_catalog_name_for_oid(oid) {
-        return Ok(Some(name.to_string()));
+        return Ok(Some(name.into()));
     }
-    if let Some(name) = list_schemas(db)?.into_iter().find_map(|schema| {
-        (table_relation_oid(&schema) == oid).then(|| {
-            // Outside `public` the stored name is the schema-isolated physical
-            // one; render the relation the way it was written.
-            let display = crate::eval::rewrite_helpers::logical_relation_name(&schema.name)
-                .unwrap_or_else(|| schema.name.clone());
-            if schema.schema_name.eq_ignore_ascii_case("public") {
-                display
-            } else {
-                format!("{}.{}", schema.schema_name, display)
-            }
-        })
-    }) {
-        return Ok(Some(name));
-    }
-    if let Some((relation, _)) = (*table_oids(db))
-        .clone()
+    if let Some(schema) = list_schemas(db)?
         .into_iter()
-        .find(|(_, candidate)| *candidate == oid)
+        .find(|schema| table_relation_oid(schema) == oid)
     {
-        return Ok(Some(relation));
+        return Ok(Some(regclass_text_for_schema(&schema)));
     }
-    Ok(list_sequences(db)?
+    if let Some((name, _)) = table_oids(db)
+        .iter()
+        .find(|(_, candidate)| **candidate == oid)
+    {
+        let namespace = relation_catalog_namespace(db, name)?;
+        let logical = pg_quote_ident(&catalog_display_name(name));
+        return Ok(Some(if namespace == "public" {
+            logical
+        } else {
+            format!("{}.{}", pg_quote_ident(&namespace), logical)
+        }));
+    }
+    if let Some(sequence) = list_sequences(db)?
         .into_iter()
         .find(|sequence| sequence_oid(&sequence.name) == oid)
-        .map(|sequence| sequence.name))
+    {
+        let namespace = sequence_catalog_namespace(db, &sequence.name)?;
+        let logical = pg_quote_ident(&sequence_catalog_name(&sequence.name));
+        return Ok(Some(if namespace == "public" {
+            logical
+        } else {
+            format!("{}.{}", pg_quote_ident(&namespace), logical)
+        }));
+    }
+    Ok(None)
 }
 
 pub(crate) fn virtual_catalog_name_for_oid(oid: i64) -> Option<&'static str> {

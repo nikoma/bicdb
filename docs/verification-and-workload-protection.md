@@ -239,3 +239,9 @@ per-identity active queries, reserved/retained memory, admissions, refusals and
 observed query memory. Non-administrators see their own role only. Prometheus
 adds per-identity admission/memory/refusal metrics and
 `bicdb_live_breaker_trips_total`.
+
+SQL catalog verification also checks type, relation, namespace and constraint
+identifier uniqueness. This catches legacy logical aliases even when the same
+metadata bytes exist on a standby or restore. New table/view type identities
+are durably reserved. A reported old collision requires explicit repair; the
+verifier never guesses a reassignment or executes user-defined SQL.

@@ -198,6 +198,7 @@ impl<'db> SqlSession<'db> {
         }
 
         let table = relation_name(&create_table.name)?;
+        require_user_relation_name(&table)?;
         let schema_name = relation_schema_name(&create_table.name);
         self.require_schema_create_privilege(&schema_name)?;
         if !matches!(
@@ -438,8 +439,8 @@ impl<'db> SqlSession<'db> {
             .transpose()?;
 
         self.create_session_collection(&table)?;
-        let row_type_oid = table_row_type_oid(namespace_oid(&schema_name), &table);
-        let row_array_type_oid = table_row_array_type_oid(namespace_oid(&schema_name), &table);
+        let (row_type_oid, row_array_type_oid) =
+            reserve_relation_type_oids(self.db_mut()?, &schema_name, &table)?;
         let schema = TableSchema {
             name: table,
             schema_name,

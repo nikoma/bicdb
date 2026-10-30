@@ -84,23 +84,21 @@ patterns and the `bicdb_server_stats` streaming metrics.
 
 ## Prisma Introspection
 
-Prisma introspection is documented as a reproducible manual script because
-`prisma db pull` currently reaches BicDB but fails on a parameterized
-introspection statement before it can produce a schema.
+The manual smoke script pins Prisma 6.10.1 and requires `prisma db pull` to
+write model definitions into its temporary schema. A successful process exit
+alone is insufficient: an engine panic previously returned CLI status zero.
 
 ```bash
 DATABASE_URL=postgres://bicdb@127.0.0.1:5433/bicdb ./scripts/prisma-introspection-smoke.sh
 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/compat ./scripts/prisma-introspection-smoke.sh
 ```
 
-The script installs `prisma@6.10.1` into a temporary npm project and runs
-`prisma db pull` with a generated schema file. As of the 2026-06-20 smoke run,
-PostgreSQL 18.4 is the expected passing comparison target; BicDB exposes the
-remaining Prisma catalog/prepared-statement gap with:
-
-```text
-Incorrect number of parameters given to a statement. Expected 0: got: 1.
-```
+The 2026-10-29 audit generated both expected models from a disposable BicDB
+schema with primary/unique keys, a foreign key and a column default. The audit
+fixed missing `pg_views`, constraint OID overflow, index-vector bounds/options,
+and empty sequence-catalog parameter typing exposed by the real introspector.
+This smoke checks introspection; it does not certify Prisma migrations or all
+Prisma Client operations.
 
 ## GUI Smoke Scripts
 

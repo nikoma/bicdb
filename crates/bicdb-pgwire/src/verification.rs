@@ -41,6 +41,7 @@ pub(crate) fn record(server: &PgWireServer, mut run: VerificationRun, result: Re
 
 pub(crate) fn capture(server: &Arc<PgWireServer>) -> Result<(VerificationManifest, usize)> {
     let db = server.read_db()?;
+    bicdb_sql::verify_catalog_identifiers(&db)?;
     let indexes = db.verify_indexes_consistently()?;
     if indexes.iter().any(|report| !report.valid) {
         return Err(PgWireError::Server(
@@ -49,6 +50,29 @@ pub(crate) fn capture(server: &Arc<PgWireServer>) -> Result<(VerificationManifes
     }
     let vector_indexes = db.verify_vector_indexes_consistently()?;
     Ok((db.verification_manifest()?, indexes.len() + vector_indexes))
+}
+
+/// Archive failures must invalidate the latest verification result instead of
+/// suppressing all drills and leaving an earlier success visible indefinitely.
+pub(crate) fn archive_failure(server: &Arc<PgWireServer>, error: &str) {
+    let run = VerificationRun {
+        check: "restore",
+        completed_at: 0,
+        duration_ms: 0,
+        commit_seq: 0,
+        success: false,
+        restore_and_failover: false,
+        tables: 0,
+        indexes: 0,
+        error: None,
+    };
+    record(
+        server,
+        run,
+        Err(PgWireError::Server(format!(
+            "archive cannot advance: {error}"
+        ))),
+    );
 }
 
 pub(crate) fn run(

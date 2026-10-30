@@ -1,0 +1,20 @@
+{
+  "id": "transactions",
+  "description": "Strict correctness oracle: transactions",
+  "cleanup_sql": [
+    "ROLLBACK",
+    "DROP TABLE IF EXISTS audit_tx"
+  ],
+  "sql": [
+    "CREATE TABLE audit_tx(id TEXT PRIMARY KEY,v INT)",
+    "INSERT INTO audit_tx VALUES('a',1),('b',2)",
+    "BEGIN",
+    "UPDATE audit_tx SET v=v+10 WHERE id='a'",
+    "SAVEPOINT s",
+    "DELETE FROM audit_tx WHERE id='b'",
+    "ROLLBACK TO SAVEPOINT s",
+    "SELECT id,v FROM audit_tx ORDER BY id",
+    "ROLLBACK",
+    "SELECT id,v FROM audit_tx ORDER BY id"
+  ]
+}

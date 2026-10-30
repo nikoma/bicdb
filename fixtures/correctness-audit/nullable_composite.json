@@ -1,0 +1,16 @@
+{
+  "id": "nullable_composite_parent_actions",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_nullable_c",
+    "DROP TABLE IF EXISTS edge_nullable_p"
+  ],
+  "sql": [
+    "CREATE TABLE edge_nullable_p(id INT PRIMARY KEY,a INT,b INT,UNIQUE(a,b))",
+    "CREATE TABLE edge_nullable_c(id INT PRIMARY KEY,a INT,b INT,FOREIGN KEY(a,b) REFERENCES edge_nullable_p(a,b) ON UPDATE CASCADE ON DELETE CASCADE)",
+    "INSERT INTO edge_nullable_p VALUES(1,1,NULL)",
+    "INSERT INTO edge_nullable_c VALUES(1,1,NULL),(2,NULL,2)",
+    "UPDATE edge_nullable_p SET a=3 WHERE id=1",
+    "DELETE FROM edge_nullable_p WHERE id=1",
+    "SELECT id,a,b FROM edge_nullable_c ORDER BY id"
+  ]
+}

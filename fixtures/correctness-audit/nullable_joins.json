@@ -1,0 +1,16 @@
+{
+  "id": "nullable_joins",
+  "description": "Strict edge oracle: nullable_joins",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_j"
+  ],
+  "sql": [
+    "CREATE TABLE edge_j(id INT PRIMARY KEY,k INT)",
+    "INSERT INTO edge_j VALUES(1,NULL),(2,1),(3,1),(4,2)",
+    "SELECT a.id,b.id AS bid FROM edge_j a LEFT JOIN edge_j b ON a.k=b.k AND b.id=2 WHERE b.id IS NULL ORDER BY a.id",
+    "SELECT a.id,b.id AS bid FROM edge_j a LEFT JOIN edge_j b ON a.k IS NOT DISTINCT FROM b.k ORDER BY a.id,b.id",
+    "SELECT a.id,(SELECT COUNT(*) FROM edge_j b WHERE b.k=a.k) AS n FROM edge_j a ORDER BY a.id",
+    "UPDATE edge_j a SET k=b.k+10 FROM edge_j b WHERE a.id=b.id AND a.k=1",
+    "SELECT id,k FROM edge_j ORDER BY id"
+  ]
+}

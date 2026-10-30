@@ -1,0 +1,18 @@
+{
+  "id": "timestamptz",
+  "description": "Strict edge oracle: timestamptz",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_timestamptz"
+  ],
+  "sql": [
+    "CREATE TABLE edge_timestamptz(id INT PRIMARY KEY,v TIMESTAMPTZ)",
+    "INSERT INTO edge_timestamptz VALUES(0,'2025-01-01 12:00:00+00')",
+    "INSERT INTO edge_timestamptz VALUES(1,'2025-01-01 13:00:00+01')",
+    "SELECT id,v FROM edge_timestamptz ORDER BY id",
+    "SELECT id FROM edge_timestamptz WHERE v='2025-01-01 12:00:00+00'::TIMESTAMPTZ ORDER BY id",
+    "SELECT id FROM edge_timestamptz WHERE v='2025-01-01 13:00:00+01'::TIMESTAMPTZ ORDER BY id",
+    "CREATE INDEX edge_timestamptz_idx ON edge_timestamptz(v)",
+    "SELECT id FROM edge_timestamptz WHERE v='2025-01-01 12:00:00+00'::TIMESTAMPTZ ORDER BY id",
+    "SELECT id FROM edge_timestamptz WHERE v='2025-01-01 13:00:00+01'::TIMESTAMPTZ ORDER BY id"
+  ]
+}

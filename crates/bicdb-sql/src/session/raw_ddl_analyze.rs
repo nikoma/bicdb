@@ -321,7 +321,7 @@ impl<'db> SqlSession<'db> {
         &mut self,
         change: RawAlterTableSetSchema,
     ) -> Result<()> {
-        let Some(mut schema) = load_schema(self.db_ref(), &change.table)? else {
+        let Some(schema) = load_schema(self.db_ref(), &change.table)? else {
             if change.if_exists {
                 return Ok(());
             }
@@ -340,15 +340,16 @@ impl<'db> SqlSession<'db> {
         }
         // Moving an object into a schema creates it there.
         self.require_schema_create_privilege(&change.schema_name)?;
-        if schema.schema_name.eq_ignore_ascii_case(&change.schema_name) {
+        if schema.schema_name == change.schema_name {
             return Ok(());
         }
-        schema.schema_name = change.schema_name;
-        self.save_session_schema(&schema)?;
-        if schema.partitioning.is_some() {
-            sync_partition_children_from_parent(self.db_mut()?, &schema)?;
-        }
-        Ok(())
+        // Updating only schema_name leaves the physical namespace encoding and
+        // dependent relation bindings at the old name. Do not publish a catalog
+        // move that ordinary qualified SELECT/INSERT cannot actually resolve.
+        Err(SqlError::Unsupported(
+            "ALTER TABLE SET SCHEMA requires an atomic physical relation and dependency move"
+                .into(),
+        ))
     }
 
     pub(crate) fn execute_raw_create_partition_table(
@@ -1007,7 +1008,7 @@ impl<'db> SqlSession<'db> {
         if matches!(
             statement,
             Statement::Insert(_) | Statement::Update(_) | Statement::Delete(_)
-        ) && (self.tx.is_some() || self.mutation_has_row_triggers(statement)?)
+        ) && (self.tx.is_some() || self.mutation_needs_atomic_effects(statement)?)
         {
             return self
                 .with_statement_transaction(|session| session.execute_statement_inner(statement));

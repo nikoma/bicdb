@@ -228,6 +228,8 @@ mod pg_dump_compat;
 pub(crate) use pg_dump_compat::*;
 mod select_exec;
 pub(crate) use select_exec::*;
+mod catalog_identifiers;
+pub use catalog_identifiers::verify_catalog_identifiers;
 mod catalog_rows;
 pub(crate) use catalog_rows::*;
 mod virtual_tables;
@@ -588,12 +590,12 @@ pub mod ir_update_plan {
 
 // Cached schemas are shared: a hit used to deep-clone the whole TableSchema
 // (every column String), and hot paths ask for the same schema per row.
-/// Per-db-instance table-schema cache: outer key is the `BicDb` address,
+/// Per-database table-schema cache: outer key is the monotonic instance ID,
 /// inner key the table name, so lookups borrow the name instead of allocating
-/// a `(usize, String)` key per call.
-type SqlSchemaCacheMap = FxHashMap<usize, FxHashMap<String, Option<Arc<TableSchema>>>>;
-type SqlSchemaListCacheMap = BTreeMap<usize, Arc<Vec<TableSchema>>>;
-type SqlIndexDefinitionsCacheMap = FxHashMap<usize, FxHashMap<String, Vec<IndexDefinition>>>;
+/// a `(u64, String)` key per call.
+type SqlSchemaCacheMap = FxHashMap<u64, FxHashMap<String, Option<Arc<TableSchema>>>>;
+type SqlSchemaListCacheMap = BTreeMap<u64, Arc<Vec<TableSchema>>>;
+type SqlIndexDefinitionsCacheMap = FxHashMap<u64, FxHashMap<String, Vec<IndexDefinition>>>;
 
 const SYNTHETIC_PRIMARY_KEY: &str = "__bicdb_rowid";
 const PG_PROC_CATALOG_OID: i64 = 1255;
@@ -1261,8 +1263,8 @@ fn sql_profile_schema_save(bytes: usize) {
     });
 }
 
-fn sql_db_cache_key(db: &BicDb) -> usize {
-    db as *const BicDb as usize
+fn sql_db_cache_key(db: &BicDb) -> u64 {
+    db.instance_id()
 }
 
 fn sql_schema_cache_get(db: &BicDb, table: &str) -> Option<Option<Arc<TableSchema>>> {
@@ -1353,6 +1355,7 @@ fn sql_index_definitions_for_collection(db: &BicDb, collection: &str) -> Vec<Ind
         .filter(|schema| primary_key_index_is_unreadable(schema))
         .map(|schema| schema.primary_key_constraint_name().to_ascii_lowercase());
     let locale_ordered_indexes = schema
+        .as_ref()
         .map(|schema| {
             schema
                 .indexes
@@ -1375,6 +1378,18 @@ fn sql_index_definitions_for_collection(db: &BicDb, collection: &str) -> Vec<Ind
         .filter(|index| {
             index.collection == collection
                 && index.predicate.is_none()
+                // Core metadata B-tree keys preserve JSON object order and
+                // scalar representation. SQL JSONB equality and ordering do
+                // not: using those keys can omit equivalent objects, confuse
+                // JSON null with SQL NULL, and misorder numeric values. Keep
+                // existing indexes durable, but scan until their key format
+                // carries SQL JSONB semantics. GIN containment is independent.
+                && !(index.kind == IndexKind::BTree
+                    && schema.as_ref().is_some_and(|schema| {
+                        index.fields.iter().any(|field| {
+                            index_field_pg_type(schema, field).as_deref() == Some("jsonb")
+                        })
+                    }))
                 && !locale_ordered_indexes.contains(&index.name.to_ascii_lowercase())
                 && unreadable_primary_key_index.as_deref() != Some(&index.name.to_ascii_lowercase())
         })
@@ -1391,8 +1406,8 @@ fn sql_index_definitions_for_collection(db: &BicDb, collection: &str) -> Vec<Ind
     indexes
 }
 
-fn sql_schema_list_cache_key(db: &BicDb) -> usize {
-    db as *const BicDb as usize
+fn sql_schema_list_cache_key(db: &BicDb) -> u64 {
+    db.instance_id()
 }
 
 fn sql_schema_list_cache_get(db: &BicDb) -> Option<Arc<Vec<TableSchema>>> {
@@ -3881,6 +3896,10 @@ fn default_sequence_data_type() -> String {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ViewSchema {
     name: String,
+    #[serde(default)]
+    row_type_oid: Option<i64>,
+    #[serde(default)]
+    row_array_type_oid: Option<i64>,
     query_sql: String,
     columns: Vec<ColumnSchema>,
     #[serde(default)]
@@ -4025,13 +4044,11 @@ enum RoutineKind {
 struct RoutineIrCacheKey {
     kind: RoutineKind,
     name: String,
-    args_hash: u64,
-    args_len: usize,
+    args: Vec<String>,
     return_type: String,
     returns_set: bool,
     language: String,
-    definition_hash: u64,
-    definition_len: usize,
+    definition: String,
 }
 
 thread_local! {
@@ -4544,13 +4561,14 @@ fn sequence_data_type_name(data_type: &str) -> &'static str {
 
 impl TableSchema {
     fn row_type_oid(&self) -> i64 {
-        self.row_type_oid
-            .unwrap_or_else(|| table_row_type_oid(namespace_oid(&self.schema_name), &self.name))
+        self.row_type_oid.unwrap_or_else(|| {
+            table_row_type_oid(legacy_namespace_oid(&self.schema_name), &self.name)
+        })
     }
 
     fn row_array_type_oid(&self) -> i64 {
         self.row_array_type_oid.unwrap_or_else(|| {
-            table_row_array_type_oid(namespace_oid(&self.schema_name), &self.name)
+            table_row_array_type_oid(legacy_namespace_oid(&self.schema_name), &self.name)
         })
     }
 

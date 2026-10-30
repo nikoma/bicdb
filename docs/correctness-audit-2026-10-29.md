@@ -91,3 +91,172 @@ native HA still closes writer authority and wakes quorum waiters; the full
 
 The original squashed feature tips are retained in the merge ancestry without
 reapplying their old file contents over subsequent fixes.
+
+## Whole-platform follow-up
+
+The follow-up expands execution to every workspace package, all core and SQL
+integration targets, protocol clients, and the platform Python/JavaScript
+contracts. Static review also follows application receipts/outboxes, native
+state acknowledgement, peer synchronization, constraint enforcement and query
+materialization. This is a finite audit, not proof that the platform has no bugs.
+
+Strict comparisons run against an isolated PostgreSQL 18.4 database, with seeded
+query/mutation cases and focused regressions. They check rows, errors, affected
+row counts, column names and available wire type OIDs. No fixture in
+`fixtures/correctness-audit` allows an expected difference.
+
+| Additional finding | Correction and retained regression |
+| --- | --- |
+| JSONB B-tree probes matched object serialization rather than SQL equality | Keep those indexes durable but exclude them from SQL query planning; scan/index/reopen and predicate-sensitive UPDATE/DELETE coverage in `platform_correctness_audit` |
+| Paged streaming ORDER BY used JSONB equality keys as ordered keys | Use the semantic materializing sorter; regression checks limited results after reopen |
+| Overlapping UNIQUE JSON writes could both commit equivalent objects | Reserve canonical constraint keys until transaction/savepoint completion, then check current committed rows plus pending writes |
+| Child insertion could race parent deletion/update and leave an orphan | Child checks and parent actions reserve the same referenced key, with current-state integrity reads |
+| Nullable composite references were incorrectly restricted or cascaded | Apply MATCH SIMPLE's any-NULL exemption to parent actions as well as insert checks |
+| PL/pgSQL `NEW.field := ...` silently assigned an unrelated local | Preserve and assign the record path; returned trigger rows now contain the change |
+| Generated columns preceded BEFORE-trigger changes | Generate from the final trigger postimage in INSERT, UPDATE, upsert and COPY |
+| COPY validated rows before BEFORE triggers | Validate postimages and roll back all copied rows and trigger effects on failure |
+| Referential actions stopped at immediate children and bypassed child triggers | Traverse descendants with cancellation/depth bounds and cycle tracking, execute row triggers and generated-column/constraint checks |
+| Autocommit referential effects could survive a later statement failure | Put the root mutation and all dependent effects in one statement transaction; late-error rollback regression retained |
+| Scalar subquery aggregate metadata fell back to observed int8 values | Resolve the subquery's own relation environment, including empty MIN/MAX results |
+| Aliased base-table qualifier copies were mistaken for ambiguous columns | Deduplicate the same physical column within its base relation during type inference, retaining ambiguity across separate relations and derived outputs |
+| Catalog, plan and role caches keyed a database allocation address | Use the monotonic database instance ID; a deterministic address-reuse test checks table metadata and superuser isolation |
+| Native index replacement with unchanged name/count retained stale SQL lookup plans | Invalidate by index generation, and invalidate transaction lookup answers after a new commit |
+| Compiled routine identity used only definition/argument digests and lengths | Key the cache by complete definitions and arguments so a hash collision cannot select another program |
+| Routine type caches shared catalog generations across databases, with collision-prone XOR stamps | Allocate distinct scope tokens for the complete database/catalog generation tuple; regression executes shared compiled code over different integer types |
+| Case-folded hashes and catalog maps aliased quoted table/view/index/sequence/schema names | Preserve exact identities, durably reserve table/view row-type OIDs, keep view IDs on replacement, and verify them after reopen; new namespace/relation/index/sequence hash collisions are rejected explicitly |
+| Legacy duplicate catalog IDs were invisible to physical checksums | Offline and scheduled verification now check SQL type, relation, namespace and constraint OID uniqueness, with injected legacy-corruption regressions through SQL, CLI and pgwire |
+| Constraint OID arithmetic exceeded PostgreSQL's unsigned 32-bit range | Allocate bounded synthetic identifiers, detect collisions before exposing filtered catalogs, and test definition lookup and foreign-key joins |
+| Index catalog vectors used one-based subscripts and omitted per-column sort options | Preserve PostgreSQL zero-based intvector subscripts and expose direction/null-order flags; an actual Prisma introspection run found the mismatch |
+| COUNT output names differed from PostgreSQL, breaking unaliased derived-column references | Return `count` consistently for COUNT(*), COUNT(expr), and COUNT(DISTINCT expr); regression checks both storage modes and outer references |
+| Legacy virtual-query predicates accepted unsupported expressions as true, including WHERE FALSE | Use the shared SQL row executor for virtual relations; sequence filters evaluate SQL truth and propagate errors |
+| Policy DDL stripped table schemas and could alter a same-named public table | Resolve CREATE/ALTER/DROP POLICY through the shared relation-name encoder before checking ownership |
+| Explicit sequence names discarded schema qualifiers, sharing counters and default/ownership bindings | Resolve the same namespace-aware key for CREATE, runtime calls, defaults and ALTER ownership; preserve quoted identities and test independent counters through reopen |
+| Virtual catalog SELECT * changed order and exposed system tableoid when rows existed | Project declared column order for both empty and populated relations, retaining explicit system-column access |
+| Empty information_schema relations lost column/parameter types; several catalogs hardcoded public and physical names | Declare supported columns independently of data, preserve object namespaces/logical names, and expose every composite key and the referenced side of foreign-key usage |
+| View catalogs omitted `pg_views` and assigned nonpublic views to public | Expose typed `pg_views` rows and preserve view namespace/owner in relation catalogs |
+| Dynamic native-role checks rejected externally managed Cell replicas | Initialize import eligibility from the configured role even when the native transport is disabled; persisted promotion still wins over startup configuration |
+| PostgreSQL oracle re-executed row-returning statements to collect metadata | Describe prepared statements without execution; `returning_once` detects repeated mutations |
+| Oracle treated differing wire type OIDs as advisory | Available OID mismatches now fail strict comparisons; unit regression retained |
+
+The constraint reservations deliberately return retryable transaction conflicts
+on contention. Foreign-key reservations currently serialize writers referring
+to the same parent key; they do not implement PostgreSQL's shared key locks.
+JSONB B-tree queries can be slower because their existing physical key format
+does not implement SQL JSONB equality/order; JSONB GIN containment remains
+independent. Referential cascades fail explicitly beyond 64 levels. A composite
+primary-key identity change remains an explicit unsupported operation, rather
+than silently applying an incomplete update.
+
+To reproduce strict oracle coverage with a disposable PostgreSQL 18.4 target:
+
+```sh
+python3 scripts/platform/generate_correctness_fixtures.py /tmp/bicdb-audit-fixtures --seeds 128
+cargo run -p bicdb-cli --features bench --locked -- compat nightmare \
+  /tmp/bicdb-audit-db --fixtures /tmp/bicdb-audit-fixtures \
+  --pg-host 127.0.0.1 --pg-port "$PG18_HOST_PORT" \
+  --pg-database compat --pg-user postgres --pg-password "$PG18_PASSWORD" \
+  --json-out /tmp/bicdb-audit-results.json
+```
+
+The runner recreates its BicDB scratch path and the fixtures create/drop their
+named tables in PostgreSQL: both targets must be disposable test databases.
+
+### Sequence-name compatibility
+
+Older explicit CREATE SEQUENCE statements discarded nonpublic schema qualifiers.
+Those existing records are public sequence records: their original intended
+namespace cannot be recovered reliably from the stored name. Public records and
+existing SERIAL keys remain readable. Before changing an application that relied
+on the old alias, inspect its counter/default/ownership bindings and create the
+intended qualified sequence with the required current value. The fix preserves
+separate namespaces rather than guessing a migration or moving existing values.
+
+### Legacy catalog identities
+
+New table and view row-type identities are durably reserved and do not reuse
+an identifier after DROP or rollback. Existing persisted table type identities
+are retained. Synthetic identifiers for quoted names now preserve case. Refresh cached
+namespace, index and sequence catalog OIDs when upgrading.
+`bicdb verify` and the scheduled verifier reject pre-existing duplicate SQL
+catalog identifiers; they do not guess which historical composite value or
+application-held OID should be reassigned. Resolve a reported legacy collision
+from a verified backup and the named object definitions before depending on
+that catalog. This check evaluates metadata only and does not execute stored
+functions or rewrite user rows.
+
+## Follow-up execution evidence
+
+- The focused platform audit has **25 passing regressions**, including both
+  storage modes, constraint races, trigger effects, namespace isolation, catalog
+  identity/reopen checks and injected legacy type aliases.
+- The main SQL compatibility target has **416 passing tests** after the catalog
+  corrections. The PostgreSQL 18.4 oracle has **153/153 passing cases**, **1,397
+  statements**, and **zero expected-difference fixtures**.
+- All seven declared client drivers passed against BicDB and PostgreSQL 18.4.
+  Prisma 6.10.1 produced both expected application models on each target.
+  Its smoke requires generated models and can assert the exact expected model set,
+  catching internal metadata leaks as well as engine failures with status zero.
+- Offline verification rejects injected catalog aliases, and the scheduled
+  verifier publishes the failure through pgwire. The scheduled full restore,
+  promotion, write and restart test still passes. Five gated paged-recovery CLI
+  tests also passed.
+
+The workspace workflow runs every discovered Cargo test target and doctest,
+including each target's required feature flags, plus the platform Python and
+JavaScript contracts. KVM images, live S3 credentials and optional model/runtime
+fixtures remain environment-dependent checks, separate from tests that ran.
+
+### Internal metadata boundary
+
+Prisma exposed a native type-OID ledger as an application model. The SQL collection
+filter also omitted namespace, extension and user-type storage. All internal storage
+names now share one exact-name filter and cannot be created, read or mutated as SQL
+relations, even by the SQL bootstrap role. Mutation authorization rejects hidden and
+nonexistent relations before the legacy collection-owner fallback. Table/view/sequence
+DDL cannot publish a user schema over those native collections. A regression checks
+catalog visibility, SELECT, INSERT, UPDATE, DELETE, COPY, TRUNCATE, DROP, ALTER, GRANT
+and CREATE paths for both ordinary and bootstrap roles, verifies metadata is unchanged,
+and preserves user relations with the same logical name in a private schema.
+
+Table rename and recycle-bin restore validate the target storage name before
+moving any records or deleting the original SQL schema. The retained regression
+checks autocommit and transactional rename refusal, failed restore followed by a
+successful restore, and data preservation after reopen in both storage modes.
+
+`ALTER TABLE SET SCHEMA` previously changed only catalog metadata, leaving the
+physical namespace and dependent relation bindings at the old name. A real move
+now fails explicitly with `0A000` before mutation; same-schema operations and
+`IF EXISTS` for a missing table remain no-ops. The regression verifies data and
+namespace preservation inside and outside transactions. Implementing an atomic
+physical move with dependency rebinding remains a separate capability.
+
+Qualified schema parsing retains quoted case, including a user schema named
+`"PUBLIC"`, so it cannot alias the actual `public` namespace. The namespace-move
+regression checks both independently populated tables before refusing a move.
+
+### Starting archival on an existing database
+
+An end-to-end smoke against the 171-collection oracle database exposed startup
+attempting to export commit 1 after publishing a base at commit 765. Pre-archive
+history was already retired, so the worker never reached its scheduled drill.
+A fresh archive now installs durable metadata anchored at its newly published
+consistent base. A retention hold precedes base creation and protects commits
+made before archive initialization, including across a checkpoint. Existing
+archive histories cannot be silently rebased over a missing suffix. Identity is
+checked before a foreign source can write a base into an existing archive.
+
+Archive export errors now publish a failed restore result and failure metrics
+instead of suppressing verification and leaving an old success visible. Tests
+cover initialization and replay in both storage modes, commits/checkpoint in the
+base-publication window, server startup on pre-existing non-replicated data,
+and visible failure for a mismatched archive identity without adding a foreign
+base backup.
+
+### User-type ACL catalog projection
+
+The full SQL suite caught the shared row executor discarding `pg_type.typacl`
+because its declared catalog schema omitted that column, even though the row
+builder computed explicit grants correctly. Declare the column as `aclitem[]`;
+retain default-NULL and explicit-grant values, empty-result typing, pg_dump
+inventory, reopen, and privilege rollback checks. A strict PostgreSQL fixture
+also compares implicit/explicit ACL visibility and grant/revoke decisions.

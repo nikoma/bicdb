@@ -846,7 +846,9 @@ impl<'db> SqlSession<'db> {
         }
         // Own the entire statement, including CTEs and its final DML. A
         // correlated function must never commit independently of that DML.
-        if query_may_write(query) && (self.tx.is_some() || self.mutation_has_row_triggers(query)?) {
+        if query_may_write(query)
+            && (self.tx.is_some() || self.mutation_needs_atomic_effects(query)?)
+        {
             return self.with_statement_transaction(|session| session.execute_query_inner(query));
         }
         if self.tx.is_none()

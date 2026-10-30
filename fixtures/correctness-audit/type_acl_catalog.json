@@ -1,0 +1,25 @@
+{
+  "id": "type_acl_catalog_visibility",
+  "description": "Type ACL metadata survives catalog materialization, revoke/grant and rollback",
+  "cleanup_sql": [
+    "DROP TYPE IF EXISTS audit_acl_state CASCADE",
+    "DROP ROLE IF EXISTS audit_acl_reader"
+  ],
+  "sql": [
+    "CREATE ROLE audit_acl_reader NOSUPERUSER",
+    "CREATE TYPE audit_acl_state AS ENUM ('open','closed')",
+    "SELECT typacl IS NULL AS implicit_acl FROM pg_type WHERE typname='audit_acl_state'",
+    "REVOKE USAGE ON TYPE audit_acl_state FROM PUBLIC",
+    "SELECT typacl IS NULL AS implicit_acl FROM pg_type WHERE typname='audit_acl_state'",
+    "SELECT has_type_privilege('audit_acl_reader','audit_acl_state','USAGE') AS allowed",
+    "GRANT USAGE ON TYPE audit_acl_state TO audit_acl_reader",
+    "SELECT has_type_privilege('audit_acl_reader','audit_acl_state','USAGE') AS allowed",
+    "SELECT typacl IS NOT NULL AS explicit_acl FROM pg_type WHERE typname='audit_acl_state'",
+    "SELECT typacl IS NOT NULL AS explicit_acl FROM pg_type WHERE FALSE",
+    "BEGIN",
+    "REVOKE USAGE ON TYPE audit_acl_state FROM audit_acl_reader",
+    "SELECT has_type_privilege('audit_acl_reader','audit_acl_state','USAGE') AS allowed",
+    "ROLLBACK",
+    "SELECT has_type_privilege('audit_acl_reader','audit_acl_state','USAGE') AS allowed"
+  ]
+}

@@ -849,7 +849,11 @@ impl<'db> SqlEngine<'db> {
                 ("log_cnt", SqlValue::Int(0)),
                 ("is_called", SqlValue::Bool(sequence.is_called)),
             ]);
-            let source_columns = source.keys().cloned().collect::<Vec<_>>();
+            let source_columns = vec![
+                "last_value".to_string(),
+                "log_cnt".to_string(),
+                "is_called".to_string(),
+            ];
             let columns = source_columns
                 .iter()
                 .map(|column| format!("{alias_name}.{column}"))
@@ -1475,9 +1479,10 @@ impl<'db> SqlEngine<'db> {
         selection: &Expr,
     ) -> Result<Rc<LocatorStrategy>> {
         let node_key = self.ir_plan_node_key(selection as *const Expr as usize);
-        let index_len = self.db_ref().index_catalog_len();
+        let index_generation = self.db_ref().index_generation();
         if let Some(key) = node_key {
-            if let Some(strategy) = crate::engine::locator_strategy_node_get(key, index_len) {
+            if let Some(strategy) = crate::engine::locator_strategy_node_get(key, index_generation)
+            {
                 return Ok(strategy);
             }
         }
@@ -1485,7 +1490,7 @@ impl<'db> SqlEngine<'db> {
             self.derive_locator_strategy(table, alias, schema, selection)
         })?;
         if let Some(key) = node_key {
-            crate::engine::locator_strategy_node_set(key, index_len, Rc::clone(&strategy));
+            crate::engine::locator_strategy_node_set(key, index_generation, Rc::clone(&strategy));
         }
         Ok(strategy)
     }
@@ -5564,7 +5569,7 @@ impl<'db> SqlEngine<'db> {
                             ^ db.collection_generation(SCHEMA_COLLECTION).rotate_left(32)
                     });
                 let key = (
-                    db as *const BicDb as usize,
+                    db.instance_id(),
                     generation,
                     ir,
                     query as *const Query as usize,
@@ -5633,7 +5638,7 @@ impl<'db> SqlEngine<'db> {
 
     /// The IR-node key for a routine-owned statement node (`None` when the
     /// statement is not IR-owned, a CTE is in scope, or no routine runs).
-    pub(crate) fn ir_plan_node_key(&self, node: usize) -> Option<(usize, u64, usize, usize)> {
+    pub(crate) fn ir_plan_node_key(&self, node: usize) -> Option<(u64, u64, usize, usize)> {
         if !(self.ir_owned_statement && self.ctes.is_empty()) {
             return None;
         }
@@ -5645,7 +5650,7 @@ impl<'db> SqlEngine<'db> {
                 db.collection_generation(ROUTINE_COLLECTION)
                     ^ db.collection_generation(SCHEMA_COLLECTION).rotate_left(32)
             });
-        Some((db as *const BicDb as usize, generation, ir, node))
+        Some((db.instance_id(), generation, ir, node))
     }
 
     /// The UPDATE analogue of `build_point_lookup_entry`: `Some` only when the
@@ -6336,7 +6341,7 @@ impl<'db> SqlEngine<'db> {
     }
 }
 
-type StatementNodeKey = (usize, u64, usize, usize);
+type StatementNodeKey = (u64, u64, usize, usize);
 
 const STATEMENT_NODE_MEMO_MAX: usize = 4096;
 

@@ -104,14 +104,12 @@ pub(crate) fn compile_cached_routine_ir(routine: &RoutineSchema) -> Result<Arc<R
 pub(crate) fn routine_ir_cache_key(routine: &RoutineSchema) -> RoutineIrCacheKey {
     RoutineIrCacheKey {
         kind: routine.kind,
-        name: routine.name.to_ascii_lowercase(),
-        args_hash: hash_routine_args(&routine.args),
-        args_len: routine.args.len(),
-        return_type: routine.return_type.to_ascii_lowercase(),
+        name: routine.name.clone(),
+        args: routine.args.clone(),
+        return_type: routine.return_type.clone(),
         returns_set: routine.returns_set,
         language: routine.language.to_ascii_lowercase(),
-        definition_hash: sql_profile_hash(&routine.definition),
-        definition_len: routine.definition.len(),
+        definition: routine.definition.clone(),
     }
 }
 
@@ -222,7 +220,9 @@ pub(crate) fn collect_routine_assignment_target_symbol(
     seen: &mut BTreeSet<String>,
 ) {
     match target {
-        RoutineAssignmentTarget::Variable(name) => add_routine_symbol(name, names, seen),
+        RoutineAssignmentTarget::Variable(name) => {
+            add_routine_symbol(name.split('.').next().unwrap_or(name), names, seen)
+        }
         RoutineAssignmentTarget::ArrayElement { array_name, .. } => {
             add_routine_symbol(array_name, names, seen);
         }
@@ -1498,6 +1498,15 @@ pub(crate) fn parse_routine_fetch(rest: &str) -> Result<RoutineStmt> {
 
 pub(crate) fn parse_routine_assignment_target(target: &str) -> Result<RoutineAssignmentTarget> {
     if !target.contains('[') {
+        if let Expr::CompoundIdentifier(parts) = parse_routine_expr(target)? {
+            return Ok(RoutineAssignmentTarget::Variable(
+                parts
+                    .iter()
+                    .map(|part| normalize_object_name(&part.value))
+                    .collect::<Vec<_>>()
+                    .join("."),
+            ));
+        }
         return Ok(RoutineAssignmentTarget::Variable(normalize_object_name(
             target,
         )));
@@ -2061,6 +2070,7 @@ pub(crate) fn create_sequence_if_missing(
     sequence: SequenceSchema,
     if_not_exists: bool,
 ) -> Result<()> {
+    require_user_relation_name(&sequence.name)?;
     if load_sequence(db, &sequence.name)?.is_some() {
         if if_not_exists {
             return Ok(());
@@ -2070,6 +2080,13 @@ pub(crate) fn create_sequence_if_missing(
             sequence.name
         )));
     }
+    if relation_exists(db, &sequence.name) {
+        return Err(SqlError::InvalidSql(format!(
+            "relation {} already exists",
+            sequence.name
+        )));
+    }
+    require_unused_relation_oid(db, sequence_oid(&sequence.name))?;
     save_sequence(db, &sequence)
 }
 
@@ -2250,6 +2267,7 @@ pub(crate) fn alter_table_rename_table(
     schema: &mut TableSchema,
     track_undo: bool,
 ) -> Result<Option<DdlUndo>> {
+    require_user_relation_name(new_table)?;
     if user_collection_names(db)
         .iter()
         .any(|name| name.eq_ignore_ascii_case(new_table))

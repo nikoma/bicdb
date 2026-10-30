@@ -30,6 +30,12 @@ your provider's routing and network partitions.
 
 The archive worker runs its own drill, excluding archive append and pruning
 while restore reads those files. Writes continue and the WAL remains retained.
+Enabling a fresh archive on an existing database creates a consistent base and
+anchors the archive at that durable prefix, retaining its new suffix before
+base creation. Previously retired pre-archive commits are not required. An
+existing archive is never rebased over a gap; use a new archive and verified
+base if its required suffix is gone. Archive identity/export failures publish
+failed restore results and unhealthy metrics instead of suppressing drills.
 The next interval starts after the previous run finishes. Without an archive,
 verification checks local tables and indexes and reports `restore_and_failover =
 false`. With an archive configured, scheduled verification requires its base
@@ -239,3 +245,9 @@ per-identity active queries, reserved/retained memory, admissions, refusals and
 observed query memory. Non-administrators see their own role only. Prometheus
 adds per-identity admission/memory/refusal metrics and
 `bicdb_live_breaker_trips_total`.
+
+SQL catalog verification also checks type, relation, namespace and constraint
+identifier uniqueness. This catches legacy logical aliases even when the same
+metadata bytes exist on a standby or restore. New table/view type identities
+are durably reserved. A reported old collision requires explicit repair; the
+verifier never guesses a reassignment or executes user-defined SQL.

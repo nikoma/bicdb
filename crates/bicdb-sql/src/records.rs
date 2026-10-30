@@ -891,6 +891,70 @@ fn committed_ids_still_present(
     ids.into_iter().filter(|id| !pending.contains(id)).collect()
 }
 
+/// JSON equality uses canonical keys, whereas the core metadata index keeps
+/// the stored representation. Reserve the SQL key before checking *current*
+/// committed rows so overlapping transactions cannot both pass a scan, even
+/// when their snapshots precede another inserter's commit.
+fn json_unique_existing_records(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+    schema: &TableSchema,
+    arbiter: &UniqueConflictArbiter,
+    records: &[Record],
+) -> Result<Vec<Record>> {
+    if let Some(tx) = tx {
+        let constraint = serde_json::to_string(&(table, &arbiter.name))?;
+        for record in records {
+            let values = unique_key_values(record, schema, &arbiter.key);
+            if !unique_key_has_null(&values) && arbiter.applies_to(record)? {
+                let key =
+                    serde_json::to_string(&typed_unique_key_label(schema, &arbiter.key, &values)?)?;
+                tx.reserve_integrity_key(&constraint, &key)?;
+            }
+        }
+    }
+    current_integrity_records(db, tx, table)
+}
+
+pub(crate) fn current_integrity_records(
+    db: &BicDb,
+    tx: Option<&Transaction>,
+    table: &str,
+) -> Result<Vec<Record>> {
+    let mut existing = db.scan_collection_unchecked(table)?;
+    if let Some(tx) = tx {
+        let pending: BTreeSet<String> = tx
+            .pending_record_ids_for_collection(table)
+            .into_iter()
+            .collect();
+        existing.retain(|record| !pending.contains(&record.id));
+        existing.extend(
+            tx.pending_records(table)
+                .into_iter()
+                .map(|record| record.as_ref().clone()),
+        );
+    }
+    Ok(existing)
+}
+
+pub(crate) fn reserve_foreign_key(
+    tx: Option<&Transaction>,
+    parent: &TableSchema,
+    columns: &[String],
+    values: &[SqlValue],
+) -> Result<()> {
+    if let Some(tx) = tx {
+        let scope = format!(
+            "foreign-key:{}",
+            serde_json::to_string(&(&parent.name, columns))?
+        );
+        let key = serde_json::to_string(&typed_column_key_label(parent, columns, values)?)?;
+        tx.reserve_integrity_key(&scope, &key)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_unique_arbiter_records(
     db: &BicDb,
     tx: Option<&Transaction>,
@@ -934,9 +998,13 @@ pub(crate) fn validate_unique_arbiter_records(
             .any(|value| matches!(value, SqlValue::Json(_)))
     });
     if arbiter.index_name.is_none() || contains_json {
-        let existing_records = match tx {
-            Some(tx) => tx.scan_collection_for_integrity_check(table)?,
-            None => db.scan_collection_unchecked(table)?,
+        let existing_records = if contains_json {
+            json_unique_existing_records(db, tx, table, schema, arbiter, records)?
+        } else {
+            match tx {
+                Some(tx) => tx.scan_collection_for_integrity_check(table)?,
+                None => db.scan_collection_unchecked(table)?,
+            }
         };
         sql_profile_full_scan();
         let existing_records = arbiter
@@ -1031,9 +1099,13 @@ pub(crate) fn non_conflicting_records(
             .any(|value| matches!(value, SqlValue::Json(_)))
     });
     if arbiter.index_name.is_none() || contains_json {
-        let existing_records = match tx {
-            Some(tx) => tx.scan_collection_for_integrity_check(table)?,
-            None => db.scan_collection_unchecked(table)?,
+        let existing_records = if contains_json {
+            json_unique_existing_records(db, tx, table, schema, arbiter, &records)?
+        } else {
+            match tx {
+                Some(tx) => tx.scan_collection_for_integrity_check(table)?,
+                None => db.scan_collection_unchecked(table)?,
+            }
         };
         sql_profile_full_scan();
         return non_conflicting_records_from_scan(schema, arbiter, records, &existing_records);
@@ -2066,11 +2138,9 @@ pub(crate) fn validate_foreign_key_constraint(
     let Some(foreign_schema) = load_schema(db, foreign_table)? else {
         return Err(foreign_key_violation(table, name));
     };
+    reserve_foreign_key(tx, &foreign_schema, referred_columns, &key)?;
     let mut found = false;
-    let foreign_records = match tx {
-        Some(tx) => tx.scan_collection_for_integrity_check(foreign_table)?,
-        None => db.scan_collection_unchecked(foreign_table)?,
-    };
+    let foreign_records = current_integrity_records(db, tx, foreign_table)?;
     for foreign_record in foreign_records {
         let foreign_key = record_column_values(&foreign_record, &foreign_schema, referred_columns);
         if typed_column_values_not_distinct(&foreign_schema, referred_columns, &foreign_key, &key)?

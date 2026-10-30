@@ -15,20 +15,26 @@ pub(crate) fn information_schema_check_constraints(
     Ok(list_schemas(db)?
         .into_iter()
         .flat_map(|schema| {
-            schema.constraints.into_iter().filter_map(|constraint| {
-                let ConstraintSchema::Check {
-                    name, expression, ..
-                } = constraint
-                else {
-                    return None;
-                };
-                Some(virtual_row([
-                    ("constraint_catalog", SqlValue::String("bicdb".to_string())),
-                    ("constraint_schema", SqlValue::String("public".to_string())),
-                    ("constraint_name", SqlValue::String(name)),
-                    ("check_clause", SqlValue::String(expression)),
-                ]))
-            })
+            schema
+                .constraints
+                .into_iter()
+                .filter_map(move |constraint| {
+                    let ConstraintSchema::Check {
+                        name, expression, ..
+                    } = constraint
+                    else {
+                        return None;
+                    };
+                    Some(virtual_row([
+                        ("constraint_catalog", SqlValue::String("bicdb".to_string())),
+                        (
+                            "constraint_schema",
+                            SqlValue::String(schema.schema_name.clone()),
+                        ),
+                        ("constraint_name", SqlValue::String(name)),
+                        ("check_clause", SqlValue::String(expression)),
+                    ]))
+                })
         })
         .collect())
 }
@@ -41,7 +47,10 @@ pub(crate) fn constraint_column_usage_row(
     virtual_row([
         ("table_catalog", SqlValue::String("bicdb".to_string())),
         ("table_schema", SqlValue::String(schema.schema_name.clone())),
-        ("table_name", SqlValue::String(schema.name.clone())),
+        (
+            "table_name",
+            SqlValue::String(catalog_display_name(&schema.name)),
+        ),
         ("column_name", SqlValue::String(column.to_string())),
         ("constraint_catalog", SqlValue::String("bicdb".to_string())),
         (
@@ -326,16 +335,23 @@ pub(crate) fn expression_mentions_identifier(expression: &str, identifier: &str)
 }
 
 pub(crate) fn table_constraint_row(
-    table: &str,
+    schema: &TableSchema,
     name: &str,
     constraint_type: &str,
 ) -> BTreeMap<String, SqlValue> {
     virtual_row([
         ("constraint_catalog", SqlValue::String("bicdb".to_string())),
-        ("constraint_schema", SqlValue::String("public".to_string())),
+        (
+            "constraint_schema",
+            SqlValue::String(schema.schema_name.clone()),
+        ),
         ("constraint_name", SqlValue::String(name.to_string())),
-        ("table_schema", SqlValue::String("public".to_string())),
-        ("table_name", SqlValue::String(table.to_string())),
+        ("table_catalog", SqlValue::String("bicdb".into())),
+        ("table_schema", SqlValue::String(schema.schema_name.clone())),
+        (
+            "table_name",
+            SqlValue::String(catalog_display_name(&schema.name)),
+        ),
         (
             "constraint_type",
             SqlValue::String(constraint_type.to_string()),
@@ -343,6 +359,14 @@ pub(crate) fn table_constraint_row(
         ("is_deferrable", SqlValue::String("NO".to_string())),
         ("initially_deferred", SqlValue::String("NO".to_string())),
         ("enforced", SqlValue::String("YES".to_string())),
+        (
+            "nulls_distinct",
+            if constraint_type == "UNIQUE" {
+                SqlValue::String("YES".into())
+            } else {
+                SqlValue::Null
+            },
+        ),
     ])
 }
 
@@ -351,18 +375,24 @@ pub(crate) fn not_null_constraint_name(table: &str, column: &str) -> String {
 }
 
 pub(crate) fn key_column_usage_row(
-    table: &str,
+    schema: &TableSchema,
     constraint: &str,
     column: &str,
     ordinal: i64,
 ) -> BTreeMap<String, SqlValue> {
     virtual_row([
         ("constraint_catalog", SqlValue::String("bicdb".to_string())),
-        ("constraint_schema", SqlValue::String("public".to_string())),
+        (
+            "constraint_schema",
+            SqlValue::String(schema.schema_name.clone()),
+        ),
         ("constraint_name", SqlValue::String(constraint.to_string())),
         ("table_catalog", SqlValue::String("bicdb".to_string())),
-        ("table_schema", SqlValue::String("public".to_string())),
-        ("table_name", SqlValue::String(table.to_string())),
+        ("table_schema", SqlValue::String(schema.schema_name.clone())),
+        (
+            "table_name",
+            SqlValue::String(catalog_display_name(&schema.name)),
+        ),
         ("column_name", SqlValue::String(column.to_string())),
         ("ordinal_position", SqlValue::Int(ordinal)),
         ("position_in_unique_constraint", SqlValue::Null),
@@ -384,8 +414,24 @@ pub(crate) fn information_schema_sequences(db: &BicDb) -> Result<Vec<BTreeMap<St
         }
         rows.push(virtual_row([
             ("sequence_catalog", SqlValue::String("bicdb".to_string())),
-            ("sequence_schema", SqlValue::String("public".to_string())),
-            ("sequence_name", SqlValue::String(sequence.name)),
+            (
+                "sequence_schema",
+                SqlValue::String(sequence_catalog_namespace(db, &sequence.name)?),
+            ),
+            (
+                "sequence_name",
+                SqlValue::String(sequence_catalog_name(&sequence.name)),
+            ),
+            (
+                "numeric_precision",
+                SqlValue::Int(match canonical_sequence_data_type(&sequence.data_type) {
+                    "int2" => 16,
+                    "int4" => 32,
+                    _ => 64,
+                }),
+            ),
+            ("numeric_precision_radix", SqlValue::Int(2)),
+            ("numeric_scale", SqlValue::Int(0)),
             (
                 "data_type",
                 SqlValue::String(sequence_data_type_name(&sequence.data_type).to_string()),
@@ -439,23 +485,18 @@ pub(crate) fn pg_class_rows_filtered(
     };
     let schema_by_name = schemas
         .iter()
-        .map(|schema| (schema.name.to_ascii_lowercase(), schema))
+        .map(|schema| (schema.name.clone(), schema))
         .collect::<BTreeMap<_, _>>();
     let views = list_views(db)?;
     let view_relkinds = views
         .iter()
-        .map(|view| {
-            (
-                view.name.to_ascii_lowercase(),
-                if view.materialized { "m" } else { "v" },
-            )
-        })
+        .map(|view| (view.name.clone(), if view.materialized { "m" } else { "v" }))
         .collect::<BTreeMap<_, _>>();
     let view_owners = views
         .iter()
         .map(|view| {
             (
-                view.name.to_ascii_lowercase(),
+                view.name.clone(),
                 view.owner.clone().unwrap_or_else(current_role_name),
             )
         })
@@ -467,7 +508,7 @@ pub(crate) fn pg_class_rows_filtered(
     let catalog_indexes = catalog_indexes(&schemas, db);
     let indexed_collections = catalog_indexes
         .iter()
-        .map(|index| index.collection.to_ascii_lowercase())
+        .map(|index| index.collection.clone())
         .collect::<BTreeSet<_>>();
     let triggers = list_triggers(db)?;
     let partition_parent_names = schemas
@@ -476,7 +517,7 @@ pub(crate) fn pg_class_rows_filtered(
             schema
                 .partition_of
                 .as_ref()
-                .map(|partition_of| partition_of.parent_table.to_ascii_lowercase())
+                .map(|partition_of| partition_of.parent_table.clone())
         })
         .collect::<BTreeSet<_>>();
     let mut rows = Vec::new();
@@ -493,7 +534,7 @@ pub(crate) fn pg_class_rows_filtered(
     };
 
     for table in catalog_names {
-        let table_key = table.to_ascii_lowercase();
+        let table_key = table.to_string();
         let table_schema = schema_by_name.get(&table_key).copied();
         let is_graph_view = graph_names.contains(table.as_str());
         let view_relkind = view_relkinds.get(&table_key).copied();
@@ -538,7 +579,7 @@ pub(crate) fn pg_class_rows_filtered(
         let relchecks = table_schema.map(check_constraint_count).unwrap_or(0);
         let has_triggers = triggers
             .iter()
-            .any(|trigger| trigger.table_name.eq_ignore_ascii_case(&table));
+            .any(|trigger| trigger.table_name.as_str() == &table);
         let mut row = pg_class_row(
             oid,
             &table,
@@ -553,7 +594,7 @@ pub(crate) fn pg_class_rows_filtered(
             reltuples_for_relation(db, &table, exact_counts),
             relchecks,
             has_triggers,
-            partition_parent_names.contains(&table.to_ascii_lowercase()),
+            partition_parent_names.contains(&table.to_string()),
             table_schema
                 .and_then(|schema| schema.partition_of.as_ref())
                 .is_some(),
@@ -579,7 +620,9 @@ pub(crate) fn pg_class_rows_filtered(
     }
 
     for sequence in list_sequences(db)? {
-        if !catalog_name_matches(names, &sequence.name) || !catalog_relkind_matches(kinds, "S") {
+        if !catalog_name_matches(names, &sequence_catalog_name(&sequence.name))
+            || !catalog_relkind_matches(kinds, "S")
+        {
             continue;
         }
         let oid = sequence_oid(&sequence.name);
@@ -588,8 +631,8 @@ pub(crate) fn pg_class_rows_filtered(
         }
         let mut row = pg_class_row(
             oid,
-            &sequence.name,
-            2200,
+            &sequence_catalog_name(&sequence.name),
+            namespace_oid(&sequence_catalog_namespace(db, &sequence.name)?),
             None,
             "S",
             0,
@@ -614,7 +657,7 @@ pub(crate) fn pg_class_rows_filtered(
     }
 
     for table in user_collection_names(db) {
-        let Some(table_schema) = schema_by_name.get(&table.to_ascii_lowercase()).copied() else {
+        let Some(table_schema) = schema_by_name.get(&table.to_string()).copied() else {
             continue;
         };
         let primary_key_columns = primary_key_columns_for_schema(table_schema);
@@ -1129,7 +1172,7 @@ pub(crate) fn apply_catalog_view_column_types(
 pub(crate) fn set_view_column_pg_type(columns: &mut [ColumnSchema], name: &str, pg_type: &str) {
     if let Some(column) = columns
         .iter_mut()
-        .find(|column| column.name.eq_ignore_ascii_case(name))
+        .find(|column| column.name.as_str() == name)
     {
         column.pg_type = pg_type.to_string();
         column.type_modifier = None;
@@ -1511,7 +1554,7 @@ pub(crate) fn attnums_for_schema_columns(schema: &TableSchema, columns: &[String
             schema
                 .columns
                 .iter()
-                .position(|candidate| candidate.name.eq_ignore_ascii_case(column))
+                .position(|candidate| candidate.name.as_str() == column)
                 .map(|idx| idx as i64 + 1)
                 .unwrap_or(0)
         })
@@ -1519,10 +1562,11 @@ pub(crate) fn attnums_for_schema_columns(schema: &TableSchema, columns: &[String
 }
 
 pub(crate) fn regclass_text_for_schema(schema: &TableSchema) -> String {
-    if schema.schema_name.eq_ignore_ascii_case("public") {
-        schema.name.clone()
+    let name = pg_quote_ident(&catalog_display_name(&schema.name));
+    if schema.schema_name == "public" {
+        name
     } else {
-        format!("{}.{}", schema.schema_name, schema.name)
+        format!("{}.{}", pg_quote_ident(&schema.schema_name), name)
     }
 }
 
@@ -2590,6 +2634,7 @@ pub(crate) fn pg_extension_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVa
 }
 
 pub(crate) fn pg_depend_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    validate_constraint_catalog_oids(db)?;
     let mut rows = [
         (PG_PROC_CATALOG_OID, PLPGSQL_CALL_HANDLER_OID),
         (PG_PROC_CATALOG_OID, PLPGSQL_INLINE_HANDLER_OID),
@@ -3676,7 +3721,7 @@ pub(crate) fn pg_attrdef_rows_for_adrelids(
             if let Some(expression) = column_attrdef_expression(column) {
                 if relations
                     .get(&table_oid)
-                    .is_some_and(|relation| schema.name.eq_ignore_ascii_case(relation))
+                    .is_some_and(|relation| schema.name.as_str() == relation)
                 {
                     rows.push(virtual_row([
                         ("oid", SqlValue::Int(oid)),
@@ -4060,12 +4105,18 @@ pub(crate) fn pg_collation_rows() -> Vec<BTreeMap<String, SqlValue>> {
 }
 
 pub(crate) fn pg_sequences_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
-    Ok(list_sequences(db)?
+    list_sequences(db)?
         .into_iter()
         .map(|sequence| {
-            virtual_row([
-                ("schemaname", SqlValue::String("public".to_string())),
-                ("sequencename", SqlValue::String(sequence.name)),
+            Ok(virtual_row([
+                (
+                    "schemaname",
+                    SqlValue::String(sequence_catalog_namespace(db, &sequence.name)?),
+                ),
+                (
+                    "sequencename",
+                    SqlValue::String(sequence_catalog_name(&sequence.name)),
+                ),
                 ("sequenceowner", SqlValue::String(sequence.owner)),
                 (
                     "data_type",
@@ -4078,9 +4129,9 @@ pub(crate) fn pg_sequences_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVa
                 ("cycle", SqlValue::Bool(sequence.cycle)),
                 ("cache_size", SqlValue::Int(sequence.cache_size)),
                 ("last_value", SqlValue::Int(sequence.last_value)),
-            ])
+            ]))
         })
-        .collect())
+        .collect()
 }
 
 pub(crate) fn pg_policy_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
@@ -4143,8 +4194,11 @@ pub(crate) fn pg_policies_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVal
         for policy in schema.policies {
             let roles = format!("{{{}}}", policy.roles.join(","));
             rows.push(virtual_row([
-                ("schemaname", SqlValue::String("public".to_string())),
-                ("tablename", SqlValue::String(schema.name.clone())),
+                ("schemaname", SqlValue::String(schema.schema_name.clone())),
+                (
+                    "tablename",
+                    SqlValue::String(catalog_display_name(&schema.name)),
+                ),
                 ("policyname", SqlValue::String(policy.name)),
                 (
                     "permissive",
@@ -4284,6 +4338,48 @@ pub(crate) fn pg_index_filter_matches(
     true
 }
 
+pub(crate) fn relation_catalog_namespace(db: &BicDb, name: &str) -> Result<String> {
+    if name.starts_with("__bicdb_s_") {
+        let logical = catalog_display_name(name);
+        for namespace in list_namespaces(db)? {
+            if relation_name_from_parts(&[namespace.name.clone(), logical.clone()])? == name {
+                return Ok(namespace.name);
+            }
+        }
+        return Err(SqlError::InvalidSql(format!(
+            "relation {name} has no matching namespace"
+        )));
+    }
+    Ok("public".into())
+}
+
+pub(crate) fn pg_views_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    list_views(db)?
+        .into_iter()
+        .filter(|view| !view.materialized)
+        .map(|view| {
+            Ok(virtual_row([
+                (
+                    "schemaname",
+                    SqlValue::String(relation_catalog_namespace(db, &view.name)?),
+                ),
+                (
+                    "viewname",
+                    SqlValue::String(catalog_display_name(&view.name)),
+                ),
+                (
+                    "viewowner",
+                    SqlValue::String(view.owner.unwrap_or_else(current_role_name)),
+                ),
+                (
+                    "definition",
+                    SqlValue::String(postgres_view_definition(&view.query_sql)),
+                ),
+            ]))
+        })
+        .collect()
+}
+
 pub(crate) fn pg_tables_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let schemas = relation_schemas(db)?;
     let catalog_indexes = catalog_indexes(&schemas, db);
@@ -4291,16 +4387,14 @@ pub(crate) fn pg_tables_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue
     let mut rows = Vec::new();
 
     for table in user_collection_names(db) {
-        let table_schema = schemas
-            .iter()
-            .find(|schema| schema.name.eq_ignore_ascii_case(&table));
+        let table_schema = schemas.iter().find(|schema| schema.name.as_str() == &table);
         let hasindexes = primary_key_column(&schemas, &table).is_some()
             || catalog_indexes
                 .iter()
-                .any(|index| index.collection.eq_ignore_ascii_case(&table));
+                .any(|index| index.collection.as_str() == &table);
         let hastriggers = triggers
             .iter()
-            .any(|trigger| trigger.table_name.eq_ignore_ascii_case(&table));
+            .any(|trigger| trigger.table_name.as_str() == &table);
 
         rows.push(virtual_row([
             (
@@ -4537,6 +4631,7 @@ pub(crate) fn pg_constraint_rows_filtered(
     types: Option<&BTreeSet<String>>,
     relation_oids: Option<&BTreeSet<i64>>,
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    validate_constraint_catalog_oids(db)?;
     let table_oids = table_oids(db);
     let schemas = load_schemas_for_relation_oid_filter(db, &table_oids, relation_oids)?;
     let mut rows =
@@ -4606,7 +4701,11 @@ fn pg_domain_constraint_row(
     virtual_row([
         (
             "oid",
-            SqlValue::Int(80_000_000 + user_type.oid.saturating_mul(100) + index as i64),
+            SqlValue::Int(stable_name_hash_wide(
+                3_000_000_000,
+                &format!("{}.{}", user_type.oid, index),
+                1_000_000_000,
+            )),
         ),
         ("conname", SqlValue::String(name)),
         (
@@ -4652,13 +4751,10 @@ pub(crate) fn load_schemas_for_relation_oid_filter(
     if relation_names.len() <= 32 {
         return load_relation_schemas_by_name(db, &relation_names);
     }
-    let relation_names = relation_names
-        .into_iter()
-        .map(|name| name.to_ascii_lowercase())
-        .collect::<BTreeSet<_>>();
+    let relation_names = relation_names.into_iter().collect::<BTreeSet<_>>();
     let mut schemas = relation_schemas(db)?
         .into_iter()
-        .filter(|schema| relation_names.contains(&schema.name.to_ascii_lowercase()))
+        .filter(|schema| relation_names.contains(&schema.name))
         .collect::<Vec<_>>();
     schemas.sort_by(|left, right| {
         left.schema_name
@@ -4874,7 +4970,51 @@ pub(crate) fn pg_constraint_rows_from_schemas(
 }
 
 pub(crate) fn pg_constraint_oid(table_oid: i64, local_slot: i64) -> i64 {
-    60_000_000 + table_oid.saturating_mul(10_000) + local_slot
+    // Catalog OIDs are unsigned 32-bit values. Multiplication by 10,000
+    // overflowed that contract as soon as relation OIDs became wider.
+    stable_name_hash_wide(
+        2_000_000_000,
+        &format!("{table_oid}.{local_slot}"),
+        1_000_000_000,
+    )
+}
+
+thread_local! {
+    static CONSTRAINT_OID_VALIDATION: RefCell<FxHashMap<u64, (u64, u64)>> = RefCell::new(FxHashMap::default());
+}
+
+/// Synthetic catalog identifiers must never silently alias another object.
+/// Validate the complete catalog before applying query filters, and cache only
+/// successful generations. A collision is an explicit metadata error.
+pub(crate) fn validate_constraint_catalog_oids(db: &BicDb) -> Result<()> {
+    let stamp = (
+        db.collection_generation(SCHEMA_COLLECTION),
+        db.collection_generation(USER_TYPE_COLLECTION),
+    );
+    if CONSTRAINT_OID_VALIDATION.with(|memo| memo.borrow().get(&db.instance_id()) == Some(&stamp)) {
+        return Ok(());
+    }
+    let schemas = list_schemas(db)?;
+    let mut rows = pg_constraint_rows_from_schemas(&schemas, &table_oids(db), None, None, None);
+    rows.extend(pg_domain_constraint_rows(db, None, None)?);
+    let mut seen = BTreeSet::new();
+    for row in rows {
+        let oid = sql_value_i64(&virtual_cell(&row, "oid"))
+            .ok_or_else(|| SqlError::InvalidSql("constraint has no catalog OID".into()))?;
+        if u32::try_from(oid).is_err() || oid == 0 || !seen.insert(oid) {
+            return Err(SqlError::InvalidSql(format!(
+                "constraint catalog OID {oid} is invalid or collides with another constraint"
+            )));
+        }
+    }
+    CONSTRAINT_OID_VALIDATION.with(|memo| {
+        let mut memo = memo.borrow_mut();
+        if memo.len() >= 1024 {
+            memo.clear();
+        }
+        memo.insert(db.instance_id(), stamp);
+    });
+    Ok(())
 }
 
 pub(crate) fn pg_constraint_filter_matches(
@@ -4975,9 +5115,7 @@ pub(crate) fn constraint_collation_oids(
     table: &str,
     columns: &[String],
 ) -> Vec<i64> {
-    let schema = schemas
-        .iter()
-        .find(|schema| schema.name.eq_ignore_ascii_case(table));
+    let schema = schemas.iter().find(|schema| schema.name.as_str() == table);
     columns
         .iter()
         .map(|name| {
@@ -5207,6 +5345,7 @@ pub(crate) fn postgres_constraints_view_rows_filtered(
     db: &BicDb,
     filters: &PostgresConstraintsViewFilters,
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    validate_constraint_catalog_oids(db)?;
     let table_oids = table_oids(db);
     let relation_oids =
         relation_oids_for_name_filters(&table_oids, filters.table_identifiers.as_ref(), None);
@@ -5288,6 +5427,7 @@ pub(crate) fn postgres_foreign_key_view_rows_filtered(
     db: &BicDb,
     filters: &PostgresForeignKeyViewFilters,
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    validate_constraint_catalog_oids(db)?;
     let schemas = list_schemas(db)?;
     let table_oids = table_oids(db);
     let constrained_oids = relation_oids_for_name_filters(
@@ -5432,7 +5572,7 @@ pub(crate) fn postgres_triggers_view_rows_filtered(
     };
     let schema_by_table = schemas
         .iter()
-        .map(|schema| (schema.name.to_ascii_lowercase(), schema.schema_name.clone()))
+        .map(|schema| (schema.name.clone(), schema.schema_name.clone()))
         .collect::<BTreeMap<_, _>>();
     let mut rows = Vec::new();
 
@@ -5443,10 +5583,7 @@ pub(crate) fn postgres_triggers_view_rows_filtered(
         {
             continue;
         }
-        let Some(schema_name) = schema_by_table
-            .get(&trigger.table_name.to_ascii_lowercase())
-            .cloned()
-        else {
+        let Some(schema_name) = schema_by_table.get(&trigger.table_name.clone()).cloned() else {
             continue;
         };
         let identifier = format!("{schema_name}.{}.{}", trigger.table_name, trigger.name);
@@ -5557,6 +5694,7 @@ pub(crate) fn pg_constraint_definition_for_oid(
     db: &BicDb,
     constraint_oid: i64,
 ) -> Result<Option<String>> {
+    validate_constraint_catalog_oids(db)?;
     if let Some(constraint) = pg_domain_constraint_rows(db, None, None)?
         .into_iter()
         .find(|constraint| sql_value_i64(&virtual_cell(constraint, "oid")) == Some(constraint_oid))
@@ -5800,23 +5938,7 @@ pub(crate) fn load_relation_schemas_by_name(
         if let Some(schema) = load_schema(db, relation)? {
             schemas.push(schema);
         } else if let Some(view) = load_view(db, relation)? {
-            let columns = catalog_view_columns(&view);
-            schemas.push(TableSchema {
-                name: view.name,
-                schema_name: "public".to_string(),
-                row_type_oid: None,
-                row_array_type_oid: None,
-                columns,
-                primary_key_name: None,
-                indexes: view.indexes,
-                constraints: Vec::new(),
-                rls_enabled: false,
-                rls_forced: false,
-                policies: Vec::new(),
-                owner: None,
-                partitioning: None,
-                partition_of: None,
-            });
+            schemas.push(catalog_view_schema(db, view)?);
         } else {
             unresolved = true;
         }
@@ -5939,7 +6061,7 @@ pub(crate) fn postgres_partitions_view_rows_filtered(
     };
     let schema_by_name = schemas
         .iter()
-        .map(|schema| (schema.name.to_ascii_lowercase(), schema.schema_name.clone()))
+        .map(|schema| (schema.name.clone(), schema.schema_name.clone()))
         .collect::<BTreeMap<_, _>>();
     let mut rows = Vec::new();
 
@@ -5949,7 +6071,7 @@ pub(crate) fn postgres_partitions_view_rows_filtered(
         };
         let display_name = catalog_display_name(&schema.name);
         let parent_schema = schema_by_name
-            .get(&partition_of.parent_table.to_ascii_lowercase())
+            .get(&partition_of.parent_table.clone())
             .map(|schema_name| schema_name.as_str())
             .unwrap_or(partition_of.parent_schema.as_str());
         let identifier = format!("{}.{}", schema.schema_name, display_name);
@@ -6450,6 +6572,29 @@ pub(crate) fn pg_index_row(
     indpred: Option<String>,
     indexdef: String,
 ) -> BTreeMap<String, SqlValue> {
+    let indoption = parse_statements(&indexdef)
+        .ok()
+        .and_then(|statements| statements.into_iter().next())
+        .and_then(|statement| match statement {
+            Statement::CreateIndex(index) => Some(
+                index
+                    .columns
+                    .into_iter()
+                    .map(|column| {
+                        let descending = column.column.options.asc == Some(false);
+                        let nulls_first = column.column.options.nulls_first.unwrap_or(descending);
+                        i64::from(descending) | (i64::from(nulls_first) << 1)
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+            _ => None,
+        })
+        .filter(|options| options.len() == indkey.len())
+        .unwrap_or_else(|| vec![0; indkey.len()])
+        .iter()
+        .map(i64::to_string)
+        .collect::<Vec<_>>()
+        .join(" ");
     let indkey = indkey
         .iter()
         .map(i64::to_string)
@@ -6490,7 +6635,7 @@ pub(crate) fn pg_index_row(
         ("indkey", SqlValue::String(indkey)),
         ("indcollation", SqlValue::String(indcollation)),
         ("indclass", SqlValue::String(indclass)),
-        ("indoption", SqlValue::String(String::new())),
+        ("indoption", SqlValue::String(indoption)),
         (
             "indexprs",
             indexprs.map(SqlValue::String).unwrap_or(SqlValue::Null),
@@ -6559,9 +6704,9 @@ pub(crate) fn columns_for_relation(schemas: &[TableSchema], relation: &str) -> V
     schemas
         .iter()
         .find(|schema| {
-            schema.name.eq_ignore_ascii_case(relation)
-                || (schema.name.eq_ignore_ascii_case(relation_name)
-                    && schema.schema_name.eq_ignore_ascii_case(schema_name))
+            schema.name.as_str() == relation
+                || (schema.name.as_str() == relation_name
+                    && schema.schema_name.as_str() == schema_name)
         })
         .map(|schema| {
             schema
@@ -6574,27 +6719,31 @@ pub(crate) fn columns_for_relation(schemas: &[TableSchema], relation: &str) -> V
         .unwrap_or_else(default_record_columns)
 }
 
+pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableSchema> {
+    let columns = catalog_view_columns(&view);
+    let schema_name = relation_catalog_namespace(db, &view.name)?;
+    Ok(TableSchema {
+        name: view.name,
+        schema_name,
+        row_type_oid: view.row_type_oid,
+        row_array_type_oid: view.row_array_type_oid,
+        columns,
+        primary_key_name: None,
+        indexes: view.indexes,
+        constraints: Vec::new(),
+        rls_enabled: false,
+        rls_forced: false,
+        policies: Vec::new(),
+        owner: view.owner,
+        partitioning: None,
+        partition_of: None,
+    })
+}
 pub(crate) fn relation_schemas(db: &BicDb) -> Result<Vec<TableSchema>> {
     let mut schemas = list_schemas(db)?;
-    schemas.extend(list_views(db)?.into_iter().map(|view| {
-        let columns = catalog_view_columns(&view);
-        TableSchema {
-            name: view.name,
-            schema_name: "public".to_string(),
-            row_type_oid: None,
-            row_array_type_oid: None,
-            columns,
-            primary_key_name: None,
-            indexes: view.indexes,
-            constraints: Vec::new(),
-            rls_enabled: false,
-            rls_forced: false,
-            policies: Vec::new(),
-            owner: None,
-            partitioning: None,
-            partition_of: None,
-        }
-    }));
+    for view in list_views(db)? {
+        schemas.push(catalog_view_schema(db, view)?);
+    }
     Ok(schemas)
 }
 
@@ -6608,7 +6757,7 @@ pub(crate) fn primary_key_columns(schemas: &[TableSchema], relation: &str) -> Ve
     }
     schemas
         .iter()
-        .find(|schema| schema.name.eq_ignore_ascii_case(relation))
+        .find(|schema| schema.name.as_str() == relation)
         .map(primary_key_columns_for_schema)
         .unwrap_or_default()
 }
@@ -6616,7 +6765,7 @@ pub(crate) fn primary_key_columns(schemas: &[TableSchema], relation: &str) -> Ve
 pub(crate) fn primary_key_constraint_name(schemas: &[TableSchema], relation: &str) -> String {
     schemas
         .iter()
-        .find(|schema| schema.name.eq_ignore_ascii_case(relation))
+        .find(|schema| schema.name.as_str() == relation)
         .map(TableSchema::primary_key_constraint_name)
         .unwrap_or_else(|| default_primary_key_name(relation))
 }
@@ -6624,7 +6773,7 @@ pub(crate) fn primary_key_constraint_name(schemas: &[TableSchema], relation: &st
 pub(crate) fn schema_name_for_relation(schemas: &[TableSchema], relation: &str) -> String {
     schemas
         .iter()
-        .find(|schema| schema.name.eq_ignore_ascii_case(relation))
+        .find(|schema| schema.name.as_str() == relation)
         .map(|schema| schema.schema_name.clone())
         .unwrap_or_else(|| "public".to_string())
 }
@@ -6633,7 +6782,7 @@ pub(crate) fn primary_key_columns_for_schema(schema: &TableSchema) -> Vec<String
     let primary_key_name = schema.primary_key_constraint_name();
     if let Some(columns) = schema.constraints.iter().find_map(|constraint| {
         if let ConstraintSchema::Unique { name, columns, .. } = constraint {
-            if name.eq_ignore_ascii_case(&primary_key_name) {
+            if name == &primary_key_name {
                 return Some(columns.clone());
             }
         }
@@ -6769,11 +6918,8 @@ pub(crate) fn unique_constraint_is_primary_key(
     name: &str,
     columns: &[String],
 ) -> bool {
-    name.eq_ignore_ascii_case(&schema.primary_key_constraint_name())
-        && primary_key_columns_for_schema(schema)
-            .iter()
-            .map(|column| column.to_ascii_lowercase())
-            .eq(columns.iter().map(|column| column.to_ascii_lowercase()))
+    name == schema.primary_key_constraint_name()
+        && primary_key_columns_for_schema(schema) == columns
 }
 
 pub(crate) fn primary_key_indexes(
@@ -6833,10 +6979,7 @@ pub(crate) fn default_index_opclass_oids(
     columns: &[String],
     access_method: &str,
 ) -> Result<Vec<i64>> {
-    let Some(schema) = schemas
-        .iter()
-        .find(|schema| schema.name.eq_ignore_ascii_case(table))
-    else {
+    let Some(schema) = schemas.iter().find(|schema| schema.name.as_str() == table) else {
         return Ok(Vec::new());
     };
     columns
@@ -6860,7 +7003,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
     let executable = db
         .index_definitions()
         .into_iter()
-        .map(|definition| (definition.name.to_ascii_lowercase(), definition))
+        .map(|definition| (definition.name.clone(), definition))
         .collect::<BTreeMap<_, _>>();
     let mut indexes = Vec::new();
     for schema in schemas {
@@ -6869,7 +7012,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
                 if !index
                     .internal_index_names
                     .iter()
-                    .all(|name| executable.contains_key(&name.to_ascii_lowercase()))
+                    .all(|name| executable.contains_key(name))
                 {
                     continue;
                 }
@@ -6916,7 +7059,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
                 });
                 continue;
             }
-            let Some(definition) = executable.get(&index.name.to_ascii_lowercase()) else {
+            let Some(definition) = executable.get(&index.name) else {
                 continue;
             };
             let full_text = definition.kind == IndexKind::FullText;
@@ -7026,12 +7169,12 @@ thread_local! {
     // db -> ((schema gen, view gen, collection count), table -> oid). Column
     // metadata for every SELECT / RETURNING result asked for this map, which
     // listed and cloned every schema and every view each time.
-    static TABLE_OIDS_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<usize, ((u64, u64, usize), std::sync::Arc<BTreeMap<String, i64>>)>> =
+    static TABLE_OIDS_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<u64, ((u64, u64, usize), std::sync::Arc<BTreeMap<String, i64>>)>> =
         std::cell::RefCell::new(rustc_hash::FxHashMap::default());
 }
 
 pub(crate) fn table_oids(db: &BicDb) -> std::sync::Arc<BTreeMap<String, i64>> {
-    let key = db as *const BicDb as usize;
+    let key = db.instance_id();
     let stamp = (
         db.collection_generation(SCHEMA_COLLECTION),
         db.collection_generation(VIEW_COLLECTION),
@@ -7077,7 +7220,7 @@ pub(crate) fn attnum_for_column(
 ) -> Option<i64> {
     columns_for_relation(schemas, relation)
         .into_iter()
-        .position(|candidate| candidate.name.eq_ignore_ascii_case(column))
+        .position(|candidate| candidate.name.as_str() == column)
         .map(|idx| idx as i64 + 1)
 }
 
@@ -7272,4 +7415,61 @@ pub(crate) fn bicdb_recyclebin_storage_rows(db: &BicDb) -> Result<Vec<BTreeMap<S
         ]));
     }
     Ok(rows)
+}
+
+pub(crate) fn information_schema_schemata(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    let mut namespaces = list_namespaces(db)?;
+    for name in ["public", "pg_catalog", "information_schema"] {
+        if !namespaces.iter().any(|n| n.name == name) {
+            namespaces.push(NamespaceSchema {
+                name: name.into(),
+                owner: BOOTSTRAP_ROLE_NAME.into(),
+            });
+        }
+    }
+    Ok(namespaces
+        .into_iter()
+        .map(|n| {
+            virtual_row([
+                ("catalog_name", SqlValue::String("bicdb".into())),
+                ("schema_name", SqlValue::String(n.name)),
+                ("schema_owner", SqlValue::String(n.owner)),
+                ("default_character_set_catalog", SqlValue::Null),
+                ("default_character_set_schema", SqlValue::Null),
+                ("default_character_set_name", SqlValue::Null),
+                ("sql_path", SqlValue::Null),
+            ])
+        })
+        .collect())
+}
+
+pub(crate) fn sequence_catalog_name(name: &str) -> String {
+    if let Some(logical) = logical_relation_name(name) {
+        return logical;
+    }
+    if let Some((_, payload)) = name
+        .strip_prefix("__bicdb_s_")
+        .and_then(|rest| rest.split_once('_'))
+    {
+        if let Some((table, suffix)) = payload.split_once('_') {
+            if let Some(table) = hex::decode(table)
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+            {
+                return format!("{table}_{suffix}");
+            }
+        }
+    }
+    name.to_string()
+}
+pub(crate) fn sequence_catalog_namespace(db: &BicDb, name: &str) -> Result<String> {
+    let logical = sequence_catalog_name(name);
+    if let Some((digest, _)) = name
+        .strip_prefix("__bicdb_s_")
+        .and_then(|rest| rest.split_once('_'))
+    {
+        let canonical = format!("__bicdb_s_{digest}_{}", hex::encode(logical.as_bytes()));
+        return relation_catalog_namespace(db, &canonical);
+    }
+    Ok("public".into())
 }

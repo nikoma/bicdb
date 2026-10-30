@@ -719,7 +719,7 @@ pub(crate) struct PointLookupTemplate {
 /// generation, routine IR, node address). A node's text never changes for
 /// the life of its IR, so no SQL rendering or variable-shape check is needed
 /// per execution; a recompiled routine or a DDL change moves the generation.
-type SqlPlanNodeCache = FxHashMap<(usize, u64, usize, usize), CachedPointLookup>;
+type SqlPlanNodeCache = FxHashMap<(u64, u64, usize, usize), CachedPointLookup>;
 const SQL_PLAN_NODE_CACHE_MAX: usize = 65_536;
 
 thread_local! {
@@ -749,8 +749,7 @@ pub(crate) struct UpdatePointTemplate {
     pub(crate) outer_columns: Vec<String>,
 }
 
-type SqlUpdatePlanNodeCache =
-    FxHashMap<(usize, u64, usize, usize), Option<Rc<UpdatePointTemplate>>>;
+type SqlUpdatePlanNodeCache = FxHashMap<(u64, u64, usize, usize), Option<Rc<UpdatePointTemplate>>>;
 
 thread_local! {
     /// `None` = the node is known not to be a full-primary-key UPDATE.
@@ -771,7 +770,7 @@ pub(crate) struct BoundAssignment {
     pub(crate) expr: BoundExpr,
 }
 
-type SqlBoundAssignmentCache = FxHashMap<(usize, u64, usize, usize), Option<Rc<BoundAssignment>>>;
+type SqlBoundAssignmentCache = FxHashMap<(u64, u64, usize, usize), Option<Rc<BoundAssignment>>>;
 
 thread_local! {
     static SQL_BOUND_ASSIGNMENT_CACHE: RefCell<SqlBoundAssignmentCache> = RefCell::new(FxHashMap::default());
@@ -783,7 +782,7 @@ thread_local! {
 }
 
 pub(crate) fn sql_bound_assignment_cache_get(
-    key: (usize, u64, usize, usize),
+    key: (u64, u64, usize, usize),
 ) -> Option<Option<Rc<BoundAssignment>>> {
     let hit = SQL_BOUND_ASSIGNMENT_CACHE.with(|cache| cache.borrow().get(&key).cloned());
     #[cfg(test)]
@@ -794,7 +793,7 @@ pub(crate) fn sql_bound_assignment_cache_get(
 }
 
 pub(crate) fn sql_bound_assignment_cache_set(
-    key: (usize, u64, usize, usize),
+    key: (u64, u64, usize, usize),
     entry: Option<Rc<BoundAssignment>>,
 ) {
     SQL_BOUND_ASSIGNMENT_CACHE.with(|cache| {
@@ -828,7 +827,7 @@ pub(crate) struct PointJoinTemplate {
     pub(crate) output_columns: Vec<String>,
 }
 
-type SqlJoinPlanNodeCache = FxHashMap<(usize, u64, usize, usize), Option<Rc<PointJoinTemplate>>>;
+type SqlJoinPlanNodeCache = FxHashMap<(u64, u64, usize, usize), Option<Rc<PointJoinTemplate>>>;
 
 thread_local! {
     static SQL_JOIN_PLAN_NODE_CACHE: RefCell<SqlJoinPlanNodeCache> = RefCell::new(FxHashMap::default());
@@ -840,7 +839,7 @@ thread_local! {
 }
 
 pub(crate) fn sql_join_plan_node_cache_get(
-    key: (usize, u64, usize, usize),
+    key: (u64, u64, usize, usize),
 ) -> Option<Option<Rc<PointJoinTemplate>>> {
     let hit = SQL_JOIN_PLAN_NODE_CACHE.with(|cache| cache.borrow().get(&key).cloned());
     #[cfg(test)]
@@ -851,7 +850,7 @@ pub(crate) fn sql_join_plan_node_cache_get(
 }
 
 pub(crate) fn sql_join_plan_node_cache_set(
-    key: (usize, u64, usize, usize),
+    key: (u64, u64, usize, usize),
     entry: Option<Rc<PointJoinTemplate>>,
 ) {
     SQL_JOIN_PLAN_NODE_CACHE.with(|cache| {
@@ -1277,8 +1276,7 @@ impl InsertValuesTemplate {
     }
 }
 
-type SqlInsertPlanNodeCache =
-    FxHashMap<(usize, u64, usize, usize), Option<Rc<InsertValuesTemplate>>>;
+type SqlInsertPlanNodeCache = FxHashMap<(u64, u64, usize, usize), Option<Rc<InsertValuesTemplate>>>;
 
 thread_local! {
     static SQL_INSERT_PLAN_NODE_CACHE: RefCell<SqlInsertPlanNodeCache> = RefCell::new(FxHashMap::default());
@@ -1290,7 +1288,7 @@ thread_local! {
 }
 
 pub(crate) fn sql_insert_plan_node_cache_get(
-    key: (usize, u64, usize, usize),
+    key: (u64, u64, usize, usize),
 ) -> Option<Option<Rc<InsertValuesTemplate>>> {
     let hit = SQL_INSERT_PLAN_NODE_CACHE.with(|cache| cache.borrow().get(&key).cloned());
     #[cfg(test)]
@@ -1301,7 +1299,7 @@ pub(crate) fn sql_insert_plan_node_cache_get(
 }
 
 pub(crate) fn sql_insert_plan_node_cache_set(
-    key: (usize, u64, usize, usize),
+    key: (u64, u64, usize, usize),
     entry: Option<Rc<InsertValuesTemplate>>,
 ) {
     SQL_INSERT_PLAN_NODE_CACHE.with(|cache| {
@@ -1314,7 +1312,7 @@ pub(crate) fn sql_insert_plan_node_cache_set(
 }
 
 pub(crate) fn sql_update_plan_node_cache_get(
-    key: (usize, u64, usize, usize),
+    key: (u64, u64, usize, usize),
 ) -> Option<Option<Rc<UpdatePointTemplate>>> {
     let hit = SQL_UPDATE_PLAN_NODE_CACHE.with(|cache| cache.borrow().get(&key).cloned());
     #[cfg(test)]
@@ -1325,7 +1323,7 @@ pub(crate) fn sql_update_plan_node_cache_get(
 }
 
 pub(crate) fn sql_update_plan_node_cache_set(
-    key: (usize, u64, usize, usize),
+    key: (u64, u64, usize, usize),
     entry: Option<Rc<UpdatePointTemplate>>,
 ) {
     SQL_UPDATE_PLAN_NODE_CACHE.with(|cache| {
@@ -1337,9 +1335,7 @@ pub(crate) fn sql_update_plan_node_cache_set(
     });
 }
 
-pub(crate) fn sql_plan_node_cache_get(
-    key: (usize, u64, usize, usize),
-) -> Option<CachedPointLookup> {
+pub(crate) fn sql_plan_node_cache_get(key: (u64, u64, usize, usize)) -> Option<CachedPointLookup> {
     let hit = SQL_PLAN_NODE_CACHE.with(|cache| cache.borrow().get(&key).cloned());
     #[cfg(test)]
     if hit.is_some() {
@@ -1348,7 +1344,7 @@ pub(crate) fn sql_plan_node_cache_get(
     hit
 }
 
-pub(crate) fn sql_plan_node_cache_set(key: (usize, u64, usize, usize), entry: CachedPointLookup) {
+pub(crate) fn sql_plan_node_cache_set(key: (u64, u64, usize, usize), entry: CachedPointLookup) {
     SQL_PLAN_NODE_CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
         if cache.len() >= SQL_PLAN_NODE_CACHE_MAX {
@@ -1363,12 +1359,11 @@ pub(crate) fn sql_plan_node_cache_set(key: (usize, u64, usize, usize), entry: Ca
 /// is correct and persists across `execute()` calls — and therefore across
 /// stored-procedure `CALL` invocations — on the connection's thread (the
 /// pgwire layer recreates the `SqlSession` per request, so a session field would
-/// not survive). It is dropped whenever the active database pointer or the
-/// `SCHEMA_COLLECTION` generation changes, the same invalidation signal the
-/// schema cache uses; a long-lived database keeps a stable pointer so a freed
-/// pointer can never alias a different live database here.
+/// not survive). It is dropped whenever the database instance identity or the
+/// `SCHEMA_COLLECTION` generation changes. Instance IDs remain distinct when
+/// a database is closed and its allocation address is reused.
 pub(crate) struct PlanCache {
-    pub(crate) db_id: usize,
+    pub(crate) db_id: u64,
     pub(crate) schema_generation: u64,
     pub(crate) entries: FxHashMap<String, CachedPointLookup>,
 }
@@ -1378,7 +1373,7 @@ thread_local! {
 }
 
 pub(crate) fn sql_plan_cache_get(db: &BicDb, sql: &str) -> Option<CachedPointLookup> {
-    let db_id = db as *const BicDb as usize;
+    let db_id = db.instance_id();
     let generation = db.collection_generation(SCHEMA_COLLECTION);
     SQL_PLAN_CACHE.with(|cell| {
         let mut slot = cell.borrow_mut();
@@ -1401,7 +1396,7 @@ pub(crate) fn sql_plan_cache_get(db: &BicDb, sql: &str) -> Option<CachedPointLoo
 }
 
 pub(crate) fn sql_plan_cache_set(db: &BicDb, sql: &str, entry: CachedPointLookup) {
-    let db_id = db as *const BicDb as usize;
+    let db_id = db.instance_id();
     let generation = db.collection_generation(SCHEMA_COLLECTION);
     SQL_PLAN_CACHE.with(|cell| {
         let mut slot = cell.borrow_mut();
@@ -3619,13 +3614,13 @@ pub(crate) fn collect_index_column_heads(fields: &[IndexField], out: &mut BTreeS
 pub(crate) struct RepairTableInfo {
     pub(crate) schema_generation: u64,
     pub(crate) trigger_generation: u64,
-    pub(crate) index_len: usize,
+    pub(crate) index_generation: u64,
     pub(crate) has_triggers: bool,
     pub(crate) indexed_columns: BTreeSet<String>,
 }
 
 thread_local! {
-    pub(crate) static REPAIR_TABLE_MEMO: RefCell<FxHashMap<(usize, String), RepairTableInfo>> =
+    pub(crate) static REPAIR_TABLE_MEMO: RefCell<FxHashMap<(u64, String), RepairTableInfo>> =
         RefCell::new(FxHashMap::default());
 }
 
@@ -3634,16 +3629,16 @@ pub(crate) fn repair_table_info(
     table: &str,
     build: impl FnOnce() -> Result<(bool, BTreeSet<String>)>,
 ) -> Result<(bool, BTreeSet<String>)> {
-    let db_key = db as *const BicDb as usize;
+    let db_key = db.instance_id();
     let schema_generation = db.collection_generation(SCHEMA_COLLECTION);
     let trigger_generation = db.collection_generation(TRIGGER_COLLECTION);
-    let index_len = db.index_catalog_len();
+    let index_generation = db.index_generation();
     let key = (db_key, table.to_string());
     let hit = REPAIR_TABLE_MEMO.with(|memo| {
         memo.borrow().get(&key).and_then(|entry| {
             (entry.schema_generation == schema_generation
                 && entry.trigger_generation == trigger_generation
-                && entry.index_len == index_len)
+                && entry.index_generation == index_generation)
                 .then(|| (entry.has_triggers, entry.indexed_columns.clone()))
         })
     });
@@ -3661,7 +3656,7 @@ pub(crate) fn repair_table_info(
             RepairTableInfo {
                 schema_generation,
                 trigger_generation,
-                index_len,
+                index_generation,
                 has_triggers,
                 indexed_columns: indexed_columns.clone(),
             },

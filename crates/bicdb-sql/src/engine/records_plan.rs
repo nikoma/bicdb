@@ -1895,15 +1895,14 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         }
         let collection = relation_name(name)?;
-        if self.cte(&collection).is_some() || is_virtual_table(&collection) {
-            return Ok(None);
-        }
-        let collection = resolve_session_relation_name(self.db_ref(), &collection)?;
-        if load_view(self.db_ref(), &collection)?.is_some()
+        if self.cte(&collection).is_some()
+            || is_virtual_table(&collection)
+            || load_view(self.db_ref(), &collection)?.is_some()
             || load_sequence(self.db_ref(), &collection)?.is_some()
         {
             return Ok(None);
         }
+        let collection = resolve_session_relation_name(self.db_ref(), &collection)?;
         let schema = load_schema(self.db_ref(), &collection)?;
         let indexes = sql_index_definitions_for_collection(self.db_ref(), &collection)
             .into_iter()

@@ -1166,6 +1166,7 @@ pub(crate) fn merge_inherited_constraints(
 }
 
 pub(crate) fn save_schema(db: &mut BicDb, schema: &TableSchema) -> Result<()> {
+    require_user_relation_name(&schema.name)?;
     ensure_schema_collection(db)?;
     let metadata = serde_json::to_value(schema)?;
     if sql_profile_active() {
@@ -1216,6 +1217,15 @@ pub(crate) fn save_namespace_if_missing(
             namespace.name
         ))),
         None => {
+            if list_namespaces(db)?.iter().any(|existing| {
+                existing.name != namespace.name
+                    && namespace_oid(&existing.name) == namespace_oid(&namespace.name)
+            }) {
+                return Err(SqlError::InvalidSql(
+                    "schema catalog OID collides with an existing namespace".into(),
+                ));
+            }
+
             db.insert(
                 NAMESPACE_COLLECTION,
                 Record::new(&namespace.name).with_metadata(serde_json::to_value(namespace)?),
@@ -1962,7 +1972,7 @@ fn occupied_user_type_oids(db: &BicDb) -> Result<BTreeSet<i64>> {
             _ => {}
         }
     }
-    for schema in list_schemas(db)? {
+    for schema in relation_schemas(db)? {
         occupied.insert(schema.row_type_oid());
         occupied.insert(schema.row_array_type_oid());
     }
@@ -2491,11 +2501,11 @@ pub(crate) fn initial_session_user_from_gucs(gucs: &HashMap<String, String>) -> 
 
 thread_local! {
     // role name -> parsed role, validated by the role catalog generation.
-    static ROLE_SCHEMA_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<(usize, String), (u64, Option<std::sync::Arc<RoleSchema>>)>> =
+    static ROLE_SCHEMA_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<(u64, String), (u64, Option<std::sync::Arc<RoleSchema>>)>> =
         std::cell::RefCell::new(rustc_hash::FxHashMap::default());
     // (role, routine) -> EXECUTE decision, validated by every catalog it
     // derives from: roles, routines (ownership), privileges, memberships.
-    static ROUTINE_EXECUTE_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<(usize, String, String), ([u64; 4], bool)>> =
+    static ROUTINE_EXECUTE_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<(u64, String, String), ([u64; 4], bool)>> =
         std::cell::RefCell::new(rustc_hash::FxHashMap::default());
 }
 
@@ -2514,7 +2524,7 @@ pub(crate) fn role_schema_shared(
         return Ok(Some(std::sync::Arc::new(current_role_schema())));
     }
     let generation = db.collection_generation(ROLE_COLLECTION);
-    let key = (db as *const BicDb as usize, name);
+    let key = (db.instance_id(), name);
     let hit = ROLE_SCHEMA_MEMO.with(|memo| {
         memo.borrow()
             .get(&key)
@@ -2808,19 +2818,16 @@ pub(crate) struct RelationNameMemoEntry {
 }
 
 thread_local! {
-    pub(crate) static RELATION_NAME_MEMO: RefCell<FxHashMap<(usize, String), RelationNameMemoEntry>> =
+    pub(crate) static RELATION_NAME_MEMO: RefCell<FxHashMap<(u64, String), RelationNameMemoEntry>> =
         RefCell::new(FxHashMap::default());
 }
 
 pub(crate) const RELATION_NAME_MEMO_CAP: usize = 1024;
 
 pub(crate) fn resolve_relation_name_memoized(db: &BicDb, name: &str) -> Option<String> {
-    // Keyed by the database instance address as well as the name: one thread
-    // can serve several BicDb instances (tests, embedded use), and generations
-    // alone do not distinguish them. A reused allocation address combined with
-    // identical catalog generations AND collection count is the only aliasing
-    // risk, and any DDL difference breaks it.
-    let db_key = db as *const BicDb as usize;
+    // Instance IDs distinguish databases even when an allocation address and
+    // every catalog generation are reused after closing another database.
+    let db_key = db.instance_id();
     let schema_generation = db.collection_generation(SCHEMA_COLLECTION);
     let view_generation = db.collection_generation(VIEW_COLLECTION);
     let collection_count = db.collection_count();
@@ -3025,22 +3032,28 @@ pub(crate) fn privilege_acl_code(privilege: &str) -> &str {
 pub(crate) fn information_schema_role_table_grants(
     db: &BicDb,
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
-    Ok(list_privileges(db)?
+    list_privileges(db)?
         .into_iter()
         .filter(|grant| grant.object_type == PrivilegeObjectType::Table && grant.column.is_none())
         .map(|grant| {
-            virtual_row([
+            Ok(virtual_row([
                 ("grantor", SqlValue::String(current_role_name())),
                 ("grantee", SqlValue::String(grant.grantee)),
                 ("table_catalog", SqlValue::String("bicdb".to_string())),
-                ("table_schema", SqlValue::String("public".to_string())),
-                ("table_name", SqlValue::String(grant.object_name)),
+                (
+                    "table_schema",
+                    SqlValue::String(relation_catalog_namespace(db, &grant.object_name)?),
+                ),
+                (
+                    "table_name",
+                    SqlValue::String(catalog_display_name(&grant.object_name)),
+                ),
                 ("privilege_type", SqlValue::String(grant.privilege)),
                 ("is_grantable", SqlValue::String("NO".to_string())),
                 ("with_hierarchy", SqlValue::String("NO".to_string())),
-            ])
+            ]))
         })
-        .collect())
+        .collect()
 }
 
 pub(crate) fn has_schema_privilege(db: &BicDb, args: &[SqlValue]) -> Result<bool> {
@@ -3350,10 +3363,15 @@ fn role_has_table_privilege_uncached(
         let parts = sql_identifier_parts(table)?;
         relation_name_from_parts(&parts)?
     };
+    // Native metadata has no SQL owner. Never let the legacy owner fallback
+    // authorize a mutation of hidden or nonexistent collections.
+    if is_internal_sql_collection(&table) || !relation_exists(db, &table) {
+        return Ok(false);
+    }
     if role == BOOTSTRAP_ROLE_NAME
         || load_role_schema(db, &role)?.is_some_and(|role| role.superuser)
     {
-        return Ok(relation_exists(db, &table));
+        return Ok(true);
     }
     let owner = if let Some(schema) = load_schema_shared(db, &table)? {
         schema.owner.clone()
@@ -3391,7 +3409,7 @@ pub(crate) fn role_can_execute_routine(db: &BicDb, role: &str, routine: &str) ->
         db.collection_generation(ROLE_MEMBERSHIP_COLLECTION),
     ];
     let key = (
-        db as *const BicDb as usize,
+        db.instance_id(),
         normalize_role_name(role),
         normalize_object_name(routine),
     );
@@ -3927,6 +3945,7 @@ pub(crate) fn list_views(db: &BicDb) -> Result<Vec<ViewSchema>> {
 }
 
 pub(crate) fn save_view(db: &mut BicDb, view: &ViewSchema) -> Result<()> {
+    require_user_relation_name(&view.name)?;
     ensure_view_collection(db)?;
     db.insert(
         VIEW_COLLECTION,
@@ -4134,6 +4153,38 @@ impl RoutineFrame {
     /// User-visible assignment checks the declared type before changing a slot.
     /// Internal values such as FOUND continue to use the raw frame setters.
     pub(crate) fn assign(&mut self, name: &str, value: SqlValue) -> Result<()> {
+        if let Some((root, path)) = name.split_once('.') {
+            let mut row = self.get(root);
+            if let SqlValue::Json(JsonValue::Object(_)) = &row {
+                let SqlValue::Json(json) = &mut row else {
+                    unreachable!()
+                };
+                let mut field = json;
+                for part in path.split('.') {
+                    let object = field.as_object_mut().ok_or_else(|| {
+                        SqlError::InvalidSql(format!(
+                            "routine assignment {name} traverses a non-record value"
+                        ))
+                    })?;
+                    let key = object
+                        .keys()
+                        .find(|key| key.eq_ignore_ascii_case(part))
+                        .cloned()
+                        .ok_or_else(|| {
+                            SqlError::InvalidSql(format!("record {root} has no field {part}"))
+                        })?;
+                    field = object.get_mut(&key).expect("existing field");
+                }
+                *field = sql_value_to_json(value);
+                self.set(root, row);
+                return Ok(());
+            }
+            if root.eq_ignore_ascii_case("new") || root.eq_ignore_ascii_case("old") {
+                return Err(SqlError::InvalidSql(format!(
+                    "routine assignment {name} requires a record"
+                )));
+            }
+        }
         let key = normalized_object_name_ref(name);
         let value = match self.assignment_types.get(key.as_ref()) {
             Some(schema) => coerce_routine_assignment(value, schema)?,
@@ -4985,4 +5036,92 @@ mod leading_keyword_tests {
             assert!(!leading_keyword_bypasses_raw_probes(sql), "{sql}");
         }
     }
+}
+
+/// Reserve both row-type identities durably. Catalog hashes can collide,
+/// notably for quoted names differing only in case. Reservations survive DROP
+/// and rollback, so old type identities cannot be reassigned to a new object.
+pub(crate) fn reserve_relation_type_oids(
+    db: &mut BicDb,
+    namespace: &str,
+    name: &str,
+) -> Result<(i64, i64)> {
+    ensure_user_type_oid_collection(db)?;
+    let mut occupied = occupied_user_type_oids(db)?;
+    let relation_oids = catalog_relation_oid_set(db)?;
+    let namespace = legacy_namespace_oid(namespace);
+    let preferred = [
+        table_row_type_oid(namespace, name),
+        table_row_array_type_oid(namespace, name),
+    ];
+    let mut allocated = Vec::new();
+    for (index, base) in [1_100_000_000_i64, 1_300_000_000].into_iter().enumerate() {
+        let mut oid = preferred[index];
+        let mut attempts = 0;
+        loop {
+            let relation = i64::from((oid as u32) ^ 0x4000_0000);
+            let relation_conflict = index == 0
+                && (relation_oids.contains(&relation)
+                    || relation_oids.contains(&primary_index_oid(relation)));
+            if !occupied.contains(&oid) && !relation_conflict {
+                break;
+            }
+            attempts += 1;
+            if attempts >= 200_000_000 {
+                return Err(SqlError::InvalidSql("row type OID space exhausted".into()));
+            }
+            oid = base + (oid - base + 1) % 200_000_000;
+        }
+        occupied.insert(oid);
+        allocated.push(oid);
+    }
+    let records = allocated
+        .iter()
+        .map(|oid| {
+            Ok(
+                Record::new(format!("oid:{oid}")).with_metadata(serde_json::to_value(
+                    UserTypeOidReservation {
+                        version: USER_TYPE_OID_ALLOCATOR_VERSION,
+                        oid: *oid,
+                    },
+                )?),
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
+    db.batch_insert(USER_TYPE_OID_COLLECTION, records)?;
+    Ok((allocated[0], allocated[1]))
+}
+
+// Metadata only: allocating an identifier must not scan user table contents.
+pub(crate) fn catalog_relation_oid_set(db: &BicDb) -> Result<BTreeSet<i64>> {
+    let schemas = relation_schemas(db)?;
+    let table_oids = table_oids(db);
+    let mut occupied = table_oids.values().copied().collect::<BTreeSet<_>>();
+    for schema in &schemas {
+        if !primary_key_columns_for_schema(schema).is_empty() {
+            if let Some(oid) = table_oids.get(&schema.name) {
+                occupied.insert(primary_index_oid(*oid));
+            }
+        }
+    }
+    for index in catalog_indexes(&schemas, db) {
+        occupied.insert(secondary_index_oid(&index.schema_name, &index.name));
+    }
+    for sequence in list_sequences(db)? {
+        occupied.insert(sequence_oid(&sequence.name));
+    }
+    for user_type in list_user_types(db)? {
+        if let UserTypeKind::Composite { relation_oid, .. } = user_type.kind {
+            occupied.insert(relation_oid);
+        }
+    }
+    Ok(occupied)
+}
+pub(crate) fn require_unused_relation_oid(db: &BicDb, oid: i64) -> Result<()> {
+    if catalog_relation_oid_set(db)?.contains(&oid) {
+        return Err(SqlError::InvalidSql(format!(
+            "catalog relation OID {oid} collides with an existing object"
+        )));
+    }
+    Ok(())
 }

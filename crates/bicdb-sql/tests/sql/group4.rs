@@ -550,37 +550,33 @@ fn postgres_lastval_tracks_identity_insert_for_nextcloud_dav_setup() {
 }
 
 #[test]
-fn alter_table_set_schema_updates_catalog_namespace_and_rolls_back() {
+fn alter_table_set_schema_refuses_a_catalog_only_move_without_changing_data() {
     let (_dir, mut db) = empty_test_db();
     let mut session = SqlSession::new(&mut db);
-
     session
         .execute("CREATE SCHEMA gitlab_partitions_dynamic")
         .unwrap();
-    session
-        .execute("CREATE TABLE ci_build_needs (id bigint PRIMARY KEY)")
-        .unwrap();
-    assert_eq!(
-        session
+    session.execute("CREATE TABLE ci_build_needs (id bigint PRIMARY KEY); INSERT INTO ci_build_needs VALUES(42)").unwrap();
+    for transactional in [false, true] {
+        if transactional {
+            session.execute("BEGIN").unwrap();
+        }
+        let error = session
             .execute("ALTER TABLE IF EXISTS ci_build_needs SET SCHEMA gitlab_partitions_dynamic")
-            .unwrap()
-            .command_complete_tag(),
-        "ALTER TABLE"
-    );
-    assert_eq!(
-        session
-            .execute(
-                "SELECT n.nspname
-                 FROM pg_catalog.pg_class c
-                 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-                 WHERE c.relname = 'ci_build_needs'"
-            )
-            .unwrap()
-            .rows,
-        vec![vec![SqlValue::String(
-            "gitlab_partitions_dynamic".to_string()
-        )]]
-    );
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), "0A000");
+        if transactional {
+            session.execute("ROLLBACK").unwrap();
+        }
+        assert_eq!(
+            session
+                .execute("SELECT id FROM public.ci_build_needs")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(42)]]
+        );
+        assert_eq!(session.execute("SELECT table_schema FROM information_schema.tables WHERE table_name='ci_build_needs'").unwrap().rows, vec![vec![SqlValue::String("public".into())]]);
+    }
     assert_eq!(
         session
             .execute("ALTER TABLE IF EXISTS missing_table SET SCHEMA gitlab_partitions_dynamic")
@@ -588,25 +584,33 @@ fn alter_table_set_schema_updates_catalog_namespace_and_rolls_back() {
             .command_complete_tag(),
         "ALTER TABLE"
     );
-
-    session.execute("BEGIN").unwrap();
     session
-        .execute("ALTER TABLE IF EXISTS ci_build_needs SET SCHEMA public")
+        .execute("ALTER TABLE ci_build_needs SET SCHEMA public")
         .unwrap();
-    session.execute("ROLLBACK").unwrap();
+    session.execute(r#"CREATE SCHEMA "PUBLIC"; CREATE TABLE "PUBLIC".ci_build_needs(id INT PRIMARY KEY); INSERT INTO "PUBLIC".ci_build_needs VALUES(99)"#).unwrap();
     assert_eq!(
         session
-            .execute(
-                "SELECT n.nspname
-                 FROM pg_catalog.pg_class c
-                 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-                 WHERE c.relname = 'ci_build_needs'"
-            )
+            .execute(r#"ALTER TABLE public.ci_build_needs SET SCHEMA "PUBLIC""#)
+            .unwrap_err()
+            .sqlstate(),
+        "0A000"
+    );
+    assert_eq!(
+        session
+            .execute(r#"ALTER TABLE "PUBLIC".ci_build_needs SET SCHEMA public"#)
+            .unwrap_err()
+            .sqlstate(),
+        "0A000"
+    );
+    session
+        .execute(r#"ALTER TABLE "PUBLIC".ci_build_needs SET SCHEMA "PUBLIC""#)
+        .unwrap();
+    assert_eq!(
+        session
+            .execute(r#"SELECT id FROM "PUBLIC".ci_build_needs"#)
             .unwrap()
             .rows,
-        vec![vec![SqlValue::String(
-            "gitlab_partitions_dynamic".to_string()
-        )]]
+        vec![vec![SqlValue::Int(99)]]
     );
 }
 
@@ -1569,7 +1573,7 @@ fn postgres_constraints_are_enforced_and_visible() {
         constraint_usage.rows,
         vec![vec![
             SqlValue::String("employees_dept_fkey".to_string()),
-            SqlValue::String("dept_code".to_string()),
+            SqlValue::String("code".to_string()),
         ]]
     );
 

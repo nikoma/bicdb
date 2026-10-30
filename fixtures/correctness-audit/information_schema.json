@@ -1,0 +1,27 @@
+{
+  "id": "information_schema_empty_and_nonpublic",
+  "cleanup_sql": [
+    "DROP VIEW IF EXISTS audit_meta_private.visible",
+    "DROP TABLE IF EXISTS audit_meta_private.child",
+    "DROP TABLE IF EXISTS audit_meta_private.parent",
+    "DROP SEQUENCE IF EXISTS audit_meta_private.seq",
+    "DROP SCHEMA IF EXISTS audit_meta_private"
+  ],
+  "sql": [
+    "CREATE SCHEMA audit_meta_private",
+    "CREATE SEQUENCE audit_meta_private.seq AS INTEGER",
+    "CREATE TABLE audit_meta_private.parent(a INT,b INT,CONSTRAINT audit_meta_pk PRIMARY KEY(a,b))",
+    "CREATE TABLE audit_meta_private.child(x INT,y INT,CONSTRAINT audit_meta_fk FOREIGN KEY(x,y) REFERENCES audit_meta_private.parent(a,b),CONSTRAINT audit_meta_check CHECK(x>0))",
+    "CREATE VIEW audit_meta_private.visible AS SELECT x FROM audit_meta_private.child",
+    "SELECT sequence_schema,sequence_name,numeric_precision,numeric_precision_radix,numeric_scale FROM information_schema.sequences WHERE sequence_name='seq' ORDER BY sequence_schema",
+    "SELECT schemaname,sequencename FROM pg_sequences WHERE sequencename='seq' ORDER BY schemaname",
+    "SELECT n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname='seq' ORDER BY n.nspname",
+    "SELECT schema_name FROM information_schema.schemata WHERE schema_name='audit_meta_private'",
+    "SELECT table_schema,table_name,table_type FROM information_schema.tables WHERE table_schema='audit_meta_private' ORDER BY table_name",
+    "SELECT constraint_schema,table_schema,table_name FROM information_schema.table_constraints WHERE constraint_name='audit_meta_fk'",
+    "SELECT constraint_schema FROM information_schema.check_constraints WHERE constraint_name='audit_meta_check'",
+    "SELECT table_schema,table_name,column_name FROM information_schema.constraint_column_usage WHERE constraint_name='audit_meta_pk' ORDER BY column_name",
+    "SELECT constraint_schema,table_schema,table_name,column_name FROM information_schema.constraint_column_usage WHERE constraint_name='audit_meta_fk' ORDER BY column_name",
+    "SELECT sequence_name,numeric_precision,cycle_option FROM information_schema.sequences WHERE FALSE"
+  ]
+}

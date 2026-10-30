@@ -216,6 +216,7 @@ impl<'db> SqlSession<'db> {
         }
 
         let view = relation_name(&create_view.name)?;
+        require_user_relation_name(&view)?;
         self.require_schema_create_privilege(&relation_schema_name(&create_view.name))?;
         if load_schema(self.db_ref(), &view)?.is_some()
             || load_sequence(self.db_ref(), &view)?.is_some()
@@ -236,6 +237,9 @@ impl<'db> SqlSession<'db> {
             )));
         }
 
+        if load_view(self.db_ref(), &view)?.is_none() {
+            require_unused_relation_oid(self.db_ref(), named_relation_oid(&view))?;
+        }
         let mut columns = match view_columns_from_query(&create_view.query) {
             Ok(columns) => columns,
             Err(metadata_error) => {
@@ -327,8 +331,18 @@ impl<'db> SqlSession<'db> {
             self.sql_engine()
                 .authorize_read_relations(&create_view.query)?;
         }
+        let namespace = relation_schema_name(&create_view.name);
+        let (row_type_oid, row_array_type_oid) =
+            if let Some(existing) = load_view(self.db_ref(), &view)? {
+                let existing = catalog_view_schema(self.db_ref(), existing)?;
+                (existing.row_type_oid(), existing.row_array_type_oid())
+            } else {
+                reserve_relation_type_oids(self.db_mut()?, &namespace, &view)?
+            };
         self.save_session_view(&ViewSchema {
             name: view,
+            row_type_oid: Some(row_type_oid),
+            row_array_type_oid: Some(row_array_type_oid),
             query_sql: create_view.query.to_string(),
             columns,
             materialized: create_view.materialized,
@@ -392,11 +406,11 @@ impl<'db> SqlSession<'db> {
         let mut sequence =
             sequence_from_options(sequence_name, &sequence_data_type, sequence_options)?;
         if let Some(owned_by) = owned_by {
-            let owned_by = relation_name(owned_by)?;
-            let parts = owned_by.split('.').collect::<Vec<_>>();
+            let parts = object_name_parts(owned_by);
             if parts.len() >= 2 {
-                sequence.owned_by_table = Some(parts[parts.len() - 2].to_string());
-                sequence.owned_by_column = Some(parts[parts.len() - 1].to_string());
+                sequence.owned_by_table =
+                    Some(relation_name_from_parts(&parts[..parts.len() - 1])?);
+                sequence.owned_by_column = parts.last().cloned();
             }
         }
         self.create_session_sequence_if_missing(sequence, if_not_exists)?;
@@ -1782,13 +1796,13 @@ impl<'db> SqlSession<'db> {
         &mut self,
         create_policy: &CreatePolicy,
     ) -> Result<SqlResult> {
-        let table = normalize_object_name(&object_name(&create_policy.table_name)?);
+        let table = relation_name(&create_policy.table_name)?;
         // CR-4: an ungated CREATE POLICY let any user attach a permissive
         // `USING (true)` policy to someone else's RLS table.
         self.require_table_ownership(&table, "CREATE POLICY")?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
-        let name = normalize_object_name(&ident_value(&create_policy.name));
+        let name = ident_value(&create_policy.name);
         if schema
             .policies
             .iter()
@@ -1838,11 +1852,11 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_alter_policy(&mut self, alter_policy: &AlterPolicy) -> Result<SqlResult> {
-        let table = normalize_object_name(&object_name(&alter_policy.table_name)?);
+        let table = relation_name(&alter_policy.table_name)?;
         self.require_table_ownership(&table, "ALTER POLICY")?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
-        let name = normalize_object_name(&ident_value(&alter_policy.name));
+        let name = ident_value(&alter_policy.name);
         let position = schema
             .policies
             .iter()
@@ -1854,7 +1868,7 @@ impl<'db> SqlSession<'db> {
             })?;
         match &alter_policy.operation {
             AlterPolicyOperation::Rename { new_name } => {
-                let new_name = normalize_object_name(&ident_value(new_name));
+                let new_name = ident_value(new_name);
                 if schema
                     .policies
                     .iter()
@@ -1896,13 +1910,13 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_drop_policy(&mut self, drop_policy: &DropPolicy) -> Result<SqlResult> {
-        let table = normalize_object_name(&object_name(&drop_policy.table_name)?);
+        let table = relation_name(&drop_policy.table_name)?;
         // Dropping the isolating policy is as powerful as adding a permissive
         // one, so it needs the same gate.
         self.require_table_ownership(&table, "DROP POLICY")?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
-        let name = normalize_object_name(&ident_value(&drop_policy.name));
+        let name = ident_value(&drop_policy.name);
         // Policies have no dependents, so CASCADE and RESTRICT are both no-ops.
         let original_len = schema.policies.len();
         schema
@@ -2208,6 +2222,22 @@ impl<'db> SqlSession<'db> {
                     .map(relation_name)
                     .transpose()?
                     .unwrap_or_else(|| format!("idx_{}_{}", table, view.indexes.len() + 1));
+
+                if !self
+                    .db_ref()
+                    .index_definitions()
+                    .iter()
+                    .any(|definition| definition.name == index_name)
+                    && !view.indexes.iter().any(|index| index.name == index_name)
+                {
+                    require_unused_relation_oid(
+                        self.db_ref(),
+                        secondary_index_oid(
+                            &relation_schema_name(&create_index.table_name),
+                            &index_name,
+                        ),
+                    )?;
+                }
                 if view.indexes.iter().any(|index| index.name == index_name) {
                     if create_index.if_not_exists {
                         return Ok(SqlResult::command("CREATE INDEX"));
@@ -2255,6 +2285,19 @@ impl<'db> SqlSession<'db> {
             .map(relation_name)
             .transpose()?
             .unwrap_or_else(|| format!("idx_{}_{}", table, schema.indexes.len() + 1));
+        if !self
+            .db_ref()
+            .index_definitions()
+            .iter()
+            .any(|definition| definition.name == index_name)
+            && !schema.indexes.iter().any(|index| index.name == index_name)
+        {
+            require_unused_relation_oid(
+                self.db_ref(),
+                secondary_index_oid(&schema.schema_name, &index_name),
+            )?;
+        }
+
         let expression = create_index
             .columns
             .iter()

@@ -13,31 +13,48 @@ pub(crate) fn index_field_is_expression(field: &IndexField) -> bool {
     matches!(field, IndexField::Lower(_) | IndexField::Trim(_))
 }
 
+/// Exact storage names only: encoded relations in private schemas remain user data.
+pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
+    [
+        SCHEMA_COLLECTION,
+        NAMESPACE_COLLECTION,
+        DATABASE_COLLECTION,
+        EXTENSION_COLLECTION,
+        SEQUENCE_COLLECTION,
+        VIEW_COLLECTION,
+        ROUTINE_COLLECTION,
+        TRIGGER_COLLECTION,
+        NOTIFICATION_COLLECTION,
+        ROLE_COLLECTION,
+        ROLE_MEMBERSHIP_COLLECTION,
+        PRIVILEGE_COLLECTION,
+        DEFAULT_PRIVILEGE_COLLECTION,
+        USER_TYPE_COLLECTION,
+        USER_TYPE_OID_COLLECTION,
+        MIGRATION_VERSION_COLLECTION,
+        MIGRATION_HISTORY_COLLECTION,
+        crate::session::RECYCLE_BIN_COLLECTION,
+    ]
+    .contains(&name)
+        || bicdb_core::is_flashback_history_collection(name)
+        || crate::session::is_recycle_bin_name(name)
+}
+
+pub(crate) fn require_user_relation_name(name: &str) -> Result<()> {
+    if is_internal_sql_collection(name) {
+        return Err(SqlError::BicDb(BicDbError::Authorization(format!(
+            "internal collection {name} is not a SQL relation"
+        ))));
+    }
+    Ok(())
+}
+
 pub(crate) fn user_collection_names(db: &BicDb) -> Vec<String> {
     let mut names = db
         .collections()
         .into_iter()
         .map(|collection| collection.name)
-        .filter(|name| {
-            name != SCHEMA_COLLECTION
-                && name != DATABASE_COLLECTION
-                && name != SEQUENCE_COLLECTION
-                && name != VIEW_COLLECTION
-                && name != ROUTINE_COLLECTION
-                && name != TRIGGER_COLLECTION
-                && name != NOTIFICATION_COLLECTION
-                && name != ROLE_COLLECTION
-                && name != ROLE_MEMBERSHIP_COLLECTION
-                && name != PRIVILEGE_COLLECTION
-                && name != DEFAULT_PRIVILEGE_COLLECTION
-                && name != MIGRATION_VERSION_COLLECTION
-                && name != MIGRATION_HISTORY_COLLECTION
-                && name != crate::session::RECYCLE_BIN_COLLECTION
-                // Flashback history and recycle-bin tables are reached only
-                // through AS OF / VERSIONS and FLASHBACK TABLE.
-                && !bicdb_core::is_flashback_history_collection(name)
-                && !crate::session::is_recycle_bin_name(name)
-        })
+        .filter(|name| !is_internal_sql_collection(name))
         .collect::<Vec<_>>();
     names.sort();
     names
@@ -282,7 +299,7 @@ pub(crate) fn secondary_index_oid(schema_name: &str, name: &str) -> i64 {
 }
 
 pub(crate) fn table_row_type_oid(namespace_oid: i64, name: &str) -> i64 {
-    stable_name_hash_wide(
+    legacy_stable_name_hash_wide(
         1_100_000_000,
         &format!("{namespace_oid}.{name}"),
         200_000_000,
@@ -290,7 +307,7 @@ pub(crate) fn table_row_type_oid(namespace_oid: i64, name: &str) -> i64 {
 }
 
 pub(crate) fn table_row_array_type_oid(namespace_oid: i64, name: &str) -> i64 {
-    stable_name_hash_wide(
+    legacy_stable_name_hash_wide(
         1_300_000_000,
         &format!("{namespace_oid}.{name}"),
         200_000_000,
@@ -343,14 +360,10 @@ pub(crate) fn stable_name_hash(base: i64, name: &str) -> i64 {
 }
 
 pub(crate) fn stable_name_hash_wide(base: i64, name: &str, modulo: i64) -> i64 {
-    base + name
-        .to_ascii_lowercase()
-        .bytes()
-        .fold(0_i64, |hash, byte| {
-            hash.wrapping_mul(31).wrapping_add(byte as i64)
-        })
-        .abs()
-        % modulo
+    let hash = name.bytes().fold(0_i64, |hash, byte| {
+        hash.wrapping_mul(31).wrapping_add(byte as i64)
+    });
+    base + (hash.unsigned_abs() % modulo as u64) as i64
 }
 
 pub(crate) fn routine_language(language: Option<&Ident>, _return_type: &str) -> Result<String> {
@@ -855,10 +868,18 @@ pub(crate) fn project_virtual_rows(
     fallback_columns: &[String],
 ) -> Result<SqlResult> {
     if matches!(projection, [SelectItem::Wildcard(_)]) {
-        let columns = rows
-            .first()
-            .map(|row| row.keys().cloned().collect::<Vec<_>>())
-            .unwrap_or_else(|| fallback_columns.to_vec());
+        // A relation's column order cannot depend on whether it has rows.
+        // Catalog builders use BTreeMap for lookup, not for schema ordering.
+        let mut columns = fallback_columns.to_vec();
+        if let Some(row) = rows.first() {
+            for name in row.keys() {
+                // tableoid remains explicitly selectable, as in PostgreSQL,
+                // but is not part of an unqualified catalog wildcard.
+                if name != "tableoid" && !columns.contains(name) {
+                    columns.push(name.clone());
+                }
+            }
+        }
         let result_rows = rows
             .iter()
             .map(|row| {
@@ -1070,7 +1091,7 @@ pub(crate) fn eval_virtual_truth(
             Ok(sql_not(eval_virtual_truth(row, expr)?))
         }
         Expr::Nested(expr) => eval_virtual_truth(row, expr),
-        _ => Ok(Some(true)),
+        _ => sql_value_truth(eval_virtual_value(row, expr)?),
     }
 }
 
@@ -5865,5 +5886,19 @@ pub(crate) fn eval_predicate_truth(record: &Record, expr: &Expr) -> Result<Optio
         other => Err(SqlError::Unsupported(format!(
             "unsupported WHERE expression {other}"
         ))),
+    }
+}
+
+// Persisted table row types must retain the pre-audit hash when no explicit
+// identity was stored. New identities reserve a free OID before publication.
+pub(crate) fn legacy_stable_name_hash_wide(base: i64, name: &str, modulo: i64) -> i64 {
+    stable_name_hash_wide(base, &name.to_ascii_lowercase(), modulo)
+}
+pub(crate) fn legacy_namespace_oid(name: &str) -> i64 {
+    match name {
+        "public" => 2200,
+        "pg_catalog" => 11,
+        "information_schema" => 13207,
+        other => legacy_stable_name_hash_wide(80_000, other, 10_000),
     }
 }

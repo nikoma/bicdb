@@ -1448,7 +1448,8 @@ impl GucAssignmentTargets {
 pub(crate) struct TxnLookupCaches {
     tx_id: bicdb_core::TransactionId,
     schema_generation: u64,
-    index_catalog_len: usize,
+    index_generation: u64,
+    index_commit_seq: u64,
     index_lookup_cache: IndexLookupCache,
     rowid_index_lookup_cache: RowIdIndexLookupCache,
 }
@@ -2722,6 +2723,11 @@ impl<'db> SqlSession<'db> {
                 fields,
             )?);
         }
+        // BEFORE triggers can replace or suppress rows. Validate the rows
+        // actually being stored, just as INSERT does, rather than allowing
+        // COPY to bypass NOT NULL, CHECK and foreign-key constraints.
+        let mut records =
+            self.apply_before_insert_row_triggers(&table, schema.as_ref(), records)?;
         if let Some(schema) = schema.as_ref() {
             self.materialize_generated_columns(&table, schema, &mut records)?;
             validate_records_for_write(
@@ -2733,7 +2739,6 @@ impl<'db> SqlSession<'db> {
                 false,
             )?;
         }
-        let records = self.apply_before_insert_row_triggers(&table, schema.as_ref(), records)?;
         self.enforce_rls_checks(&table, schema.as_ref(), PolicyAction::Insert, &records)?;
         let count = records.len();
         self.insert_session_records(&table, records.clone())?;
@@ -3404,6 +3409,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn create_session_collection(&mut self, name: &str) -> Result<()> {
+        require_user_relation_name(name)?;
         let existed = self
             .db_ref()
             .collections()
@@ -4248,6 +4254,7 @@ impl<'db> SqlSession<'db> {
     /// treated as bootstrap-owned, matching the documented convention on
     /// `TableSchema::owner` and the existing view/sequence/type checks.
     pub(crate) fn require_table_ownership(&self, table: &str, action: &str) -> Result<()> {
+        require_user_relation_name(table)?;
         // Evaluated against the EFFECTIVE role, like PostgreSQL: `SET ROLE`
         // must actually drop privilege, so checking `session_user` here would
         // leave every gate open for a superuser-launched session.

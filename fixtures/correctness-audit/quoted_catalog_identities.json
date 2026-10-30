@@ -1,0 +1,37 @@
+{
+  "id": "quoted_catalog_identities",
+  "cleanup_sql": [
+    "DROP VIEW IF EXISTS \"IdentityView\"",
+    "DROP VIEW IF EXISTS identityview",
+    "DROP TABLE IF EXISTS \"IdentityTable\"",
+    "DROP TABLE IF EXISTS identitytable",
+    "DROP TABLE IF EXISTS \"IdentitySpace\".local",
+    "DROP TABLE IF EXISTS identityspace.local",
+    "DROP SEQUENCE IF EXISTS \"IdentitySequence\"",
+    "DROP SEQUENCE IF EXISTS identitysequence",
+    "DROP SCHEMA IF EXISTS \"IdentitySpace\"",
+    "DROP SCHEMA IF EXISTS identityspace"
+  ],
+  "sql": [
+    "CREATE SCHEMA \"IdentitySpace\"",
+    "CREATE SCHEMA identityspace",
+    "CREATE TABLE \"IdentitySpace\".local(id INT PRIMARY KEY)",
+    "CREATE TABLE identityspace.local(id INT PRIMARY KEY)",
+    "CREATE TABLE \"IdentityTable\"(\"Field\" INT PRIMARY KEY,field TEXT)",
+    "CREATE TABLE identitytable(field TEXT PRIMARY KEY)",
+    "CREATE VIEW \"IdentityView\" AS SELECT 1 AS n",
+    "CREATE VIEW identityview AS SELECT 2 AS n",
+    "CREATE INDEX \"IdentityIndex\" ON \"IdentityTable\"(\"Field\")",
+    "CREATE INDEX identityindex ON identitytable(field)",
+    "CREATE SEQUENCE \"IdentitySequence\"",
+    "CREATE SEQUENCE identitysequence",
+    "SELECT COUNT(*) AS objects,COUNT(DISTINCT oid) AS identifiers FROM pg_class WHERE relname IN ('IdentityTable','identitytable','IdentityView','identityview','IdentityIndex','identityindex','IdentitySequence','identitysequence')",
+    "SELECT COUNT(DISTINCT reltype) AS types FROM pg_class WHERE relname IN ('IdentityTable','identitytable','IdentityView','identityview')",
+    "SELECT COUNT(DISTINCT oid) AS namespaces FROM pg_namespace WHERE nspname IN ('IdentitySpace','identityspace')",
+    "SELECT '\"IdentityTable\"'::regclass::oid <> 'identitytable'::regclass::oid AS distinct_ids",
+    "SELECT attname,atttypid FROM pg_attribute WHERE attrelid='\"IdentityTable\"'::regclass AND attnum>0 AND attname IN ('Field','field') ORDER BY attname",
+    "SELECT '\"IdentityTable\"'::regclass::text AS rendered",
+    "SELECT n.nspname,c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname='local' AND n.nspname IN ('IdentitySpace','identityspace') ORDER BY n.nspname",
+    "SELECT c.relname,a.attname FROM (SELECT indexrelid,indrelid,unnest(indkey) AS attnum FROM pg_index) expanded JOIN pg_class c ON c.oid=expanded.indexrelid JOIN pg_attribute a ON a.attrelid=expanded.indrelid AND a.attnum=expanded.attnum WHERE c.relname IN ('IdentityIndex','identityindex') ORDER BY c.relname"
+  ]
+}

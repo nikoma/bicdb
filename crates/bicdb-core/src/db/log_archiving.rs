@@ -33,7 +33,7 @@ impl BicDb {
         // Retry a failed sync before allowing retention to advance.
         archive.sync()?;
         // Hold before reading, so a checkpoint cannot cut what is unread.
-        self.hold_log_for_archive(archive.last_commit_seq())?;
+        self.prepare_log_archive(archive)?;
         let frames = self.replication_frames_after(cursor, limit)?;
         if let Err(error) = archive.append(&self.config.replication.cluster_id, &frames) {
             // append may have completed a prefix. Resume from its exact
@@ -53,6 +53,36 @@ impl BicDb {
         }
         self.sync_quorum.hold(LOG_ARCHIVE_HOLDER, seq);
         self.persist_standby_slots()
+    }
+
+    /// Validate the archive identity before writing a base into its directory,
+    /// and pin its required suffix before a snapshot or export can race retention.
+    pub fn prepare_log_archive(&self, archive: &LogArchive) -> Result<()> {
+        if archive
+            .meta()
+            .is_some_and(|meta| meta.cluster_id != self.config.replication.cluster_id)
+        {
+            return Err(BicDbError::Backup(
+                "log archive: archive cluster identity mismatch".into(),
+            ));
+        }
+        self.hold_log_for_archive(archive.last_commit_seq())
+    }
+
+    /// Initialize a fresh archive only after this database published its base.
+    /// The base's suffix is retained by `archive_base_backup` across checkpoint
+    /// and the interval before the archive metadata is installed.
+    pub fn initialize_log_archive_from_base(
+        &self,
+        archive: &mut LogArchive,
+        base: &crate::log_archive::ArchivedBaseBackup,
+    ) -> Result<()> {
+        if base.commit_seq > self.current_commit_seq() {
+            return Err(BicDbError::Backup(
+                "archive base is ahead of this database".into(),
+            ));
+        }
+        archive.initialize_from_base(&self.config.replication.cluster_id, base.commit_seq)
     }
 
     /// Stops holding the transaction log for an archive (archiving was
@@ -181,6 +211,9 @@ impl BicDb {
         dir: &Path,
         key: &str,
     ) -> Result<crate::log_archive::ArchivedBaseBackup> {
+        // Establish retention before taking the snapshot. Pinning only after
+        // the base is published can lose its new suffix to a checkpoint.
+        self.hold_log_for_archive(0)?;
         let staging = dir.join(format!(".base-{}.partial", uuid::Uuid::new_v4().simple()));
         let (_, commit_seq) = self.create_consistent_backup(
             &staging,

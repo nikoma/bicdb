@@ -3792,6 +3792,7 @@ fn main() -> Result<()> {
             json,
         } => {
             let db = open_db_with_key_args(&path, key, key_env)?;
+            bicdb_sql::verify_catalog_identifiers(&db)?;
             let report = db.verify_integrity()?;
             let indexes = db.verify_indexes_consistently()?;
             if indexes.iter().any(|report| !report.valid) {
@@ -3814,7 +3815,7 @@ fn main() -> Result<()> {
                 println!(
                     "{}",
                     serde_json::to_string_pretty(
-                        &serde_json::json!({"integrity": report, "indexes": indexes, "vector_indexes": vector_indexes, "manifest": manifest, "restore_drill": drill})
+                        &serde_json::json!({"catalog_identifiers_valid": true, "integrity": report, "indexes": indexes, "vector_indexes": vector_indexes, "manifest": manifest, "restore_drill": drill})
                     )?
                 );
             } else {

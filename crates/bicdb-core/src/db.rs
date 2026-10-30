@@ -10068,7 +10068,9 @@ impl BicDb {
         ));
         let ha_node = ha_node::HaNode::load(
             &path,
-            if config.replication.enabled && config.replication.mode == ReplicationMode::Standby {
+            // Cell/external transports disable the native sender while still
+            // opening an import-only replica under their own authority.
+            if config.replication.mode == ReplicationMode::Standby {
                 NodeRole::Standby
             } else {
                 NodeRole::Primary
@@ -10997,8 +10999,7 @@ impl BicDb {
     }
 
     pub fn is_replication_standby(&self) -> bool {
-        self.ha_state.role == HaRole::Standby
-            || (self.config.replication.enabled && self.ha_node.role() == NodeRole::Standby)
+        self.ha_state.role == HaRole::Standby || self.ha_node.role() == NodeRole::Standby
     }
 
     fn replication_commits_from_retained_wal(&self) -> Result<Vec<RetainedReplicationCommit>> {
@@ -15535,6 +15536,26 @@ impl Transaction {
     /// of row-level visibility as well.
     pub fn scan_collection_for_integrity_check(&self, collection: &str) -> Result<Vec<Record>> {
         self.scan_collection_visible_unchecked(collection)
+    }
+
+    /// Reserve an engine-defined constraint key until commit, rollback, or
+    /// rollback to the savepoint preceding this call. The namespace is
+    /// separate from row locks; contenders fail with a retryable conflict.
+    /// Callers must reserve before checking current committed state, rather
+    /// than relying on their potentially older transaction snapshot.
+    pub fn reserve_integrity_key(&self, constraint: &str, key: &str) -> Result<()> {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        self.db_ref().lock_tx_record_with_attempts(
+            self.id,
+            &format!("\0bicdb:constraint:{constraint}"),
+            key,
+            0,
+            false,
+            false,
+            &self.locked_keys,
+        )
     }
 
     /// Snapshot-visible collection scan authorized by a [`SecurityContext`].

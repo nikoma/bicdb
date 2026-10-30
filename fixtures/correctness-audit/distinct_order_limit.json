@@ -1,0 +1,14 @@
+{
+  "id": "distinct_order_limit",
+  "description": "Strict edge oracle: distinct_order_limit",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_dist"
+  ],
+  "sql": [
+    "CREATE TABLE edge_dist(id INT PRIMARY KEY,k INT,v INT)",
+    "INSERT INTO edge_dist VALUES(1,1,4),(2,1,3),(3,2,2),(4,2,NULL),(5,NULL,1)",
+    "SELECT DISTINCT ON(k) k,v FROM edge_dist ORDER BY k NULLS FIRST,v NULLS LAST",
+    "SELECT k,v FROM edge_dist ORDER BY v DESC NULLS FIRST,id LIMIT 3 OFFSET 1",
+    "SELECT k,COUNT(*) AS n FROM edge_dist GROUP BY k ORDER BY n DESC,k NULLS LAST LIMIT 2"
+  ]
+}

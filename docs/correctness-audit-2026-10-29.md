@@ -119,6 +119,18 @@ row counts, column names and available wire type OIDs. No fixture in
 | Autocommit referential effects could survive a later statement failure | Put the root mutation and all dependent effects in one statement transaction; late-error rollback regression retained |
 | Scalar subquery aggregate metadata fell back to observed int8 values | Resolve the subquery's own relation environment, including empty MIN/MAX results |
 | Aliased base-table qualifier copies were mistaken for ambiguous columns | Deduplicate the same physical column within its base relation during type inference, retaining ambiguity across separate relations and derived outputs |
+| Catalog, plan and role caches keyed a database allocation address | Use the monotonic database instance ID; a deterministic address-reuse test checks table metadata and superuser isolation |
+| Native index replacement with unchanged name/count retained stale SQL lookup plans | Invalidate by index generation, and invalidate transaction lookup answers after a new commit |
+| Routine type caches shared catalog generations across databases, with collision-prone XOR stamps | Allocate distinct scope tokens for the complete database/catalog generation tuple; regression executes shared compiled code over different integer types |
+| Constraint OID arithmetic exceeded PostgreSQL's unsigned 32-bit range | Allocate bounded synthetic identifiers, detect collisions before exposing filtered catalogs, and test definition lookup and foreign-key joins |
+| Index catalog vectors used one-based subscripts and omitted per-column sort options | Preserve PostgreSQL zero-based intvector subscripts and expose direction/null-order flags; an actual Prisma introspection run found the mismatch |
+| COUNT output names differed from PostgreSQL, breaking unaliased derived-column references | Return `count` consistently for COUNT(*), COUNT(expr), and COUNT(DISTINCT expr); regression checks both storage modes and outer references |
+| Legacy virtual-query predicates accepted unsupported expressions as true, including WHERE FALSE | Use the shared SQL row executor for virtual relations; sequence filters evaluate SQL truth and propagate errors |
+| Policy DDL stripped table schemas and could alter a same-named public table | Resolve CREATE/ALTER/DROP POLICY through the shared relation-name encoder before checking ownership |
+| Explicit sequence names discarded schema qualifiers, sharing counters and default/ownership bindings | Resolve the same namespace-aware key for CREATE, runtime calls, defaults and ALTER ownership; preserve quoted identities and test independent counters through reopen |
+| Virtual catalog SELECT * changed order and exposed system tableoid when rows existed | Project declared column order for both empty and populated relations, retaining explicit system-column access |
+| Empty information_schema relations lost column/parameter types; several catalogs hardcoded public and physical names | Declare supported columns independently of data, preserve object namespaces/logical names, and expose every composite key and the referenced side of foreign-key usage |
+| View catalogs omitted `pg_views` and assigned nonpublic views to public | Expose typed `pg_views` rows and preserve view namespace/owner in relation catalogs |
 | Dynamic native-role checks rejected externally managed Cell replicas | Initialize import eligibility from the configured role even when the native transport is disabled; persisted promotion still wins over startup configuration |
 | PostgreSQL oracle re-executed row-returning statements to collect metadata | Describe prepared statements without execution; `returning_once` detects repeated mutations |
 | Oracle treated differing wire type OIDs as advisory | Available OID mismatches now fail strict comparisons; unit regression retained |
@@ -145,3 +157,13 @@ cargo run -p bicdb-cli --features bench --locked -- compat nightmare \
 
 The runner recreates its BicDB scratch path and the fixtures create/drop their
 named tables in PostgreSQL: both targets must be disposable test databases.
+
+### Sequence-name compatibility
+
+Older explicit CREATE SEQUENCE statements discarded nonpublic schema qualifiers.
+Those existing records are public sequence records: their original intended
+namespace cannot be recovered reliably from the stored name. Public records and
+existing SERIAL keys remain readable. Before changing an application that relied
+on the old alias, inspect its counter/default/ownership bindings and create the
+intended qualified sequence with the required current value. The fix preserves
+separate namespaces rather than guessing a migration or moving existing values.

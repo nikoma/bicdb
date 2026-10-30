@@ -343,14 +343,10 @@ pub(crate) fn stable_name_hash(base: i64, name: &str) -> i64 {
 }
 
 pub(crate) fn stable_name_hash_wide(base: i64, name: &str, modulo: i64) -> i64 {
-    base + name
-        .to_ascii_lowercase()
-        .bytes()
-        .fold(0_i64, |hash, byte| {
-            hash.wrapping_mul(31).wrapping_add(byte as i64)
-        })
-        .abs()
-        % modulo
+    let hash = name.to_ascii_lowercase().bytes().fold(0_i64, |hash, byte| {
+        hash.wrapping_mul(31).wrapping_add(byte as i64)
+    });
+    base + (hash.unsigned_abs() % modulo as u64) as i64
 }
 
 pub(crate) fn routine_language(language: Option<&Ident>, _return_type: &str) -> Result<String> {
@@ -855,10 +851,18 @@ pub(crate) fn project_virtual_rows(
     fallback_columns: &[String],
 ) -> Result<SqlResult> {
     if matches!(projection, [SelectItem::Wildcard(_)]) {
-        let columns = rows
-            .first()
-            .map(|row| row.keys().cloned().collect::<Vec<_>>())
-            .unwrap_or_else(|| fallback_columns.to_vec());
+        // A relation's column order cannot depend on whether it has rows.
+        // Catalog builders use BTreeMap for lookup, not for schema ordering.
+        let mut columns = fallback_columns.to_vec();
+        if let Some(row) = rows.first() {
+            for name in row.keys() {
+                // tableoid remains explicitly selectable, as in PostgreSQL,
+                // but is not part of an unqualified catalog wildcard.
+                if name != "tableoid" && !columns.contains(name) {
+                    columns.push(name.clone());
+                }
+            }
+        }
         let result_rows = rows
             .iter()
             .map(|row| {
@@ -1070,7 +1074,7 @@ pub(crate) fn eval_virtual_truth(
             Ok(sql_not(eval_virtual_truth(row, expr)?))
         }
         Expr::Nested(expr) => eval_virtual_truth(row, expr),
-        _ => Ok(Some(true)),
+        _ => sql_value_truth(eval_virtual_value(row, expr)?),
     }
 }
 

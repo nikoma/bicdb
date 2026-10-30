@@ -404,3 +404,307 @@ fn scalar_subquery_aggregate_metadata_uses_its_input_type_even_when_empty() {
         assert_eq!(result.rows, vec![vec![SqlValue::Null]]);
     }
 }
+
+#[test]
+fn view_catalogs_preserve_namespace_owner_and_typed_empty_results() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE SCHEMA audit_private; CREATE TABLE audit_private.base(id INT PRIMARY KEY); CREATE VIEW audit_private.visible AS SELECT id FROM audit_private.base; CREATE VIEW public.visible AS SELECT 1 AS id").unwrap();
+    let views=s.execute("SELECT schemaname,viewname,viewowner,definition FROM pg_catalog.pg_views WHERE viewname='visible' ORDER BY schemaname").unwrap();
+    assert_eq!(
+        views.column_types,
+        vec![
+            Some("name".into()),
+            Some("name".into()),
+            Some("name".into()),
+            Some("text".into())
+        ]
+    );
+    assert_eq!(views.rows.len(), 2);
+    assert_eq!(views.rows[0][0], SqlValue::String("audit_private".into()));
+    assert_eq!(views.rows[1][0], SqlValue::String("public".into()));
+    assert_eq!(s.execute("SELECT n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname='visible' ORDER BY n.nspname").unwrap().rows,vec![vec![SqlValue::String("audit_private".into())],vec![SqlValue::String("public".into())]]);
+    let empty = s
+        .execute("SELECT * FROM pg_views WHERE viewname='absent'")
+        .unwrap();
+    let populated = s
+        .execute("SELECT * FROM pg_views WHERE viewname='visible'")
+        .unwrap();
+    assert_eq!(populated.columns, empty.columns);
+    assert_eq!(
+        populated.columns,
+        vec!["schemaname", "viewname", "viewowner", "definition"]
+    );
+    assert!(empty.rows.is_empty());
+    assert_eq!(empty.column_types, views.column_types);
+}
+
+#[test]
+fn catalog_and_authorization_caches_do_not_follow_a_reused_database_address() {
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let mut slot = Box::new(BicDb::open(first.path()).unwrap());
+    SqlSession::new(slot.as_mut()).execute("CREATE ROLE audit_reader LOGIN SUPERUSER; CREATE TABLE alpha(id INT PRIMARY KEY); INSERT INTO alpha VALUES(1)").unwrap();
+    assert_eq!(
+        SqlSession::new_unprivileged(slot.as_mut(), "audit_reader")
+            .execute("SELECT id FROM alpha")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+    SqlSession::new(slot.as_mut())
+        .execute("SELECT oid FROM pg_class WHERE relname='alpha'")
+        .unwrap();
+    let mut replacement = BicDb::open(second.path()).unwrap();
+    SqlSession::new(&mut replacement).execute("CREATE ROLE audit_reader LOGIN NOSUPERUSER; CREATE TABLE beta(id INT PRIMARY KEY); INSERT INTO beta VALUES(2)").unwrap();
+    let old = std::mem::replace(slot.as_mut(), replacement);
+    drop(old);
+    let error = SqlSession::new_unprivileged(slot.as_mut(), "audit_reader")
+        .execute("SELECT id FROM beta")
+        .expect_err("superuser status from the former database must not survive address reuse");
+    assert_eq!(error.sqlstate(), "42501");
+    let mut s = SqlSession::new(slot.as_mut());
+    let rows = s
+        .execute("SELECT oid FROM pg_class WHERE relname='beta'")
+        .unwrap()
+        .rows;
+    assert_eq!(rows.len(), 1);
+    assert!(matches!(rows[0][0],SqlValue::Int(oid) if oid>0));
+    assert!(!s
+        .execute("SELECT 'beta'::regclass::oid")
+        .unwrap()
+        .rows
+        .is_empty());
+}
+
+#[test]
+fn replacing_a_native_index_with_the_same_name_and_count_invalidates_sql_locators() {
+    use bicdb_core::{IndexDefinition, IndexField, IndexKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    SqlSession::new(&mut db).execute("CREATE TABLE items(id INT PRIMARY KEY,a INT,b INT,n INT); INSERT INTO items VALUES(1,1,2,0),(2,2,1,0)").unwrap();
+    let definition = |column: &str| IndexDefinition {
+        name: "native_lookup".into(),
+        collection: "items".into(),
+        fields: vec![IndexField::MetadataPath(vec![column.into()])],
+        unique: false,
+        kind: IndexKind::BTree,
+        predicate: None,
+        exclusion: None,
+    };
+    db.create_index(definition("a")).unwrap();
+    SqlSession::new(&mut db)
+        .execute("UPDATE items SET n=n+1 WHERE a=1")
+        .unwrap();
+    db.drop_index("native_lookup").unwrap();
+    db.create_index(definition("b")).unwrap();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("UPDATE items SET n=n+1 WHERE a=1").unwrap();
+    assert_eq!(
+        s.execute("SELECT id,n FROM items ORDER BY id")
+            .unwrap()
+            .rows,
+        vec![
+            vec![SqlValue::Int(1), SqlValue::Int(2)],
+            vec![SqlValue::Int(2), SqlValue::Int(0)]
+        ]
+    );
+}
+
+#[test]
+fn table_and_domain_constraint_identifiers_fit_oid_and_round_trip_their_definition() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE DOMAIN positive_audit AS INT NOT NULL CHECK(VALUE>0); CREATE TABLE oid_parent(id INT PRIMARY KEY); CREATE TABLE oid_child(id INT PRIMARY KEY,p INT REFERENCES oid_parent(id),n positive_audit UNIQUE)").unwrap();
+    let result = s
+        .execute("SELECT oid::bigint,pg_get_constraintdef(oid) FROM pg_constraint ORDER BY oid")
+        .unwrap();
+    assert!(result.rows.len() >= 5);
+    let mut seen = std::collections::BTreeSet::new();
+    for row in result.rows {
+        let SqlValue::Int(oid) = row[0] else {
+            panic!("non-integer constraint OID")
+        };
+        assert!(oid > 0 && u32::try_from(oid).is_ok());
+        assert!(seen.insert(oid));
+        assert!(!matches!(row[1], SqlValue::Null));
+    }
+    let rows=s.execute("SELECT con.oid::oid,con.conname,child.attname,parent.attname AS parent_column FROM pg_constraint con JOIN pg_attribute child ON child.attrelid=con.conrelid AND child.attnum=con.conkey[1] JOIN pg_attribute parent ON parent.attrelid=con.confrelid AND parent.attnum=con.confkey[1] WHERE con.contype='f'").unwrap().rows;
+    assert_eq!(rows.len(), 1);
+}
+
+#[test]
+fn shared_routine_ir_does_not_share_catalog_types_between_databases() {
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let mut db1 = BicDb::open(first.path()).unwrap();
+    let mut db2 = BicDb::open(second.path()).unwrap();
+    for (db, kind, value, expected) in [
+        (&mut db1, "INT", "1", 2),
+        (&mut db2, "BIGINT", "2147483647", 2147483648),
+    ] {
+        let mut s = SqlSession::new(db);
+        s.execute(&format!("CREATE TABLE values_for_routine(v {kind}); INSERT INTO values_for_routine VALUES({value})")).unwrap();
+        s.execute("CREATE FUNCTION audit_increment() RETURNS BIGINT LANGUAGE plpgsql AS $$ DECLARE result BIGINT; BEGIN SELECT v+1 INTO result FROM values_for_routine; RETURN result; END $$").unwrap();
+        assert_eq!(
+            s.execute("SELECT audit_increment()").unwrap().rows,
+            vec![vec![SqlValue::Int(expected)]]
+        );
+    }
+}
+
+#[test]
+fn count_columns_use_postgresql_names_in_base_and_derived_queries() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db =
+            BicDb::open_with_config(dir.path(), DbConfig::default().with_storage_mode(mode))
+                .unwrap();
+        let mut s = SqlSession::new(&mut db);
+        s.execute("CREATE TABLE counted(v INT); INSERT INTO counted VALUES(1),(1),(NULL)")
+            .unwrap();
+        for (expression, expected) in [("COUNT(*)", 3), ("COUNT(v)", 2), ("COUNT(DISTINCT v)", 1)] {
+            let result = s
+                .execute(&format!("SELECT {expression} FROM counted"))
+                .unwrap();
+            assert_eq!(result.columns, vec!["count"]);
+            assert_eq!(
+                s.execute(&format!(
+                    "SELECT count FROM (SELECT {expression} FROM counted) AS totals"
+                ))
+                .unwrap()
+                .rows,
+                vec![vec![SqlValue::Int(expected)]]
+            );
+        }
+    }
+}
+
+#[test]
+fn index_catalog_vectors_have_zero_based_subscripts_and_complete_options() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut s = SqlSession::new(&mut db);
+    s.execute("CREATE TABLE indexed_for_catalog(a INT,b INT,PRIMARY KEY(a,b)); CREATE INDEX audit_order_idx ON indexed_for_catalog(a DESC NULLS LAST,b ASC NULLS FIRST)").unwrap();
+    let rows=s.execute("SELECT c.relname,unnest(i.indkey) AS attnum,generate_subscripts(i.indkey,1) AS ord,unnest(i.indoption) AS opt FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname='audit_order_idx' ORDER BY ord").unwrap().rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![
+                SqlValue::String("audit_order_idx".into()),
+                SqlValue::Int(1),
+                SqlValue::Int(0),
+                SqlValue::Int(1)
+            ],
+            vec![
+                SqlValue::String("audit_order_idx".into()),
+                SqlValue::Int(2),
+                SqlValue::Int(1),
+                SqlValue::Int(2)
+            ]
+        ]
+    );
+}
+
+#[test]
+fn information_schema_empty_types_and_nonpublic_identities_are_stable() {
+    use bicdb_sql::infer_parameter_types;
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    assert_eq!(
+        infer_parameter_types(
+            &db,
+            "SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema=ANY($1)"
+        )
+        .unwrap(),
+        vec![Some("name[]".into())]
+    );
+    for (relation, column) in [
+        ("tables", "table_schema"),
+        ("schemata", "schema_name"),
+        ("table_constraints", "constraint_schema"),
+        ("key_column_usage", "table_schema"),
+        ("constraint_column_usage", "table_schema"),
+        ("check_constraints", "constraint_schema"),
+        ("table_privileges", "table_schema"),
+    ] {
+        assert_eq!(
+            infer_parameter_types(
+                &db,
+                &format!(
+                    "SELECT {column} FROM information_schema.{relation} WHERE {column}=ANY($1)"
+                )
+            )
+            .unwrap(),
+            vec![Some("name[]".into())],
+            "{relation}"
+        );
+    }
+    {
+        let mut s = SqlSession::new(&mut db);
+        let empty=s.execute("SELECT sequence_name,numeric_precision,cycle_option FROM information_schema.sequences").unwrap();
+        assert!(empty.rows.is_empty());
+        assert_eq!(
+            empty.column_types,
+            vec![
+                Some("name".into()),
+                Some("int4".into()),
+                Some("varchar".into())
+            ]
+        );
+        s.execute("CREATE SCHEMA audit_catalog; CREATE SEQUENCE audit_catalog.seq AS INTEGER; CREATE TABLE audit_catalog.parent(a INT,b INT,CONSTRAINT audit_parent_pk PRIMARY KEY(a,b)); CREATE TABLE audit_catalog.child(x INT,y INT,CONSTRAINT audit_child_fk FOREIGN KEY(x,y) REFERENCES audit_catalog.parent(a,b),CONSTRAINT audit_child_check CHECK(x>0)); CREATE VIEW audit_catalog.visible AS SELECT x FROM audit_catalog.child").unwrap();
+        s.execute("CREATE ROLE audit_catalog_reader; GRANT SELECT ON audit_catalog.child TO audit_catalog_reader; CREATE POLICY audit_catalog_policy ON audit_catalog.child USING (x>0)").unwrap();
+        for query in ["SELECT table_schema FROM information_schema.table_privileges WHERE grantee='audit_catalog_reader'", "SELECT schemaname FROM pg_policies WHERE policyname='audit_catalog_policy'","SELECT sequence_schema FROM information_schema.sequences WHERE sequence_name='seq'","SELECT schemaname FROM pg_sequences WHERE sequencename='seq'","SELECT n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname='seq'","SELECT schema_name FROM information_schema.schemata WHERE schema_name='audit_catalog'","SELECT table_schema FROM information_schema.tables WHERE table_name='child'","SELECT table_schema FROM information_schema.tables WHERE table_name='visible'","SELECT constraint_schema FROM information_schema.table_constraints WHERE constraint_name='audit_child_fk'","SELECT constraint_schema FROM information_schema.check_constraints WHERE constraint_name='audit_child_check'"] {
+            assert_eq!(s.execute(query).unwrap().rows,vec![vec![SqlValue::String("audit_catalog".into())]],"{query}");
+        }
+        assert_eq!(s.execute("SELECT column_name FROM information_schema.constraint_column_usage WHERE constraint_name='audit_parent_pk' ORDER BY column_name").unwrap().rows,vec![vec![SqlValue::String("a".into())],vec![SqlValue::String("b".into())]]);
+        assert_eq!(s.execute("SELECT table_name,column_name FROM information_schema.constraint_column_usage WHERE constraint_name='audit_child_fk' ORDER BY column_name").unwrap().rows,vec![vec![SqlValue::String("parent".into()),SqlValue::String("a".into())],vec![SqlValue::String("parent".into()),SqlValue::String("b".into())]]);
+    }
+}
+
+#[test]
+fn qualified_sequence_counters_defaults_and_ownership_remain_isolated_after_reopen() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    {
+        let mut s = SqlSession::new(&mut db);
+        s.execute("CREATE SCHEMA audit_seq_a; CREATE SCHEMA audit_seq_b; CREATE SEQUENCE audit_seq_a.counter START WITH 10; CREATE SEQUENCE audit_seq_b.counter START WITH 100; CREATE SEQUENCE public.counter START WITH 1000; CREATE TABLE audit_seq_a.rows(id INT DEFAULT nextval('audit_seq_a.counter')); CREATE TABLE audit_seq_b.rows(id INT DEFAULT nextval('audit_seq_b.counter')); CREATE TABLE audit_seq_a.serials(id SERIAL PRIMARY KEY); CREATE SEQUENCE audit_seq_a.\"Mi.x\" START WITH 7").unwrap();
+        assert_eq!(s.execute("SELECT nextval('audit_seq_a.counter'),nextval('audit_seq_b.counter'),nextval('public.counter')").unwrap().rows,vec![vec![SqlValue::Int(10),SqlValue::Int(100),SqlValue::Int(1000)]]);
+        s.execute("INSERT INTO audit_seq_a.rows DEFAULT VALUES; INSERT INTO audit_seq_b.rows DEFAULT VALUES; INSERT INTO audit_seq_a.serials DEFAULT VALUES; ALTER SEQUENCE audit_seq_a.\"Mi.x\" RESTART WITH 9; ALTER SEQUENCE audit_seq_a.counter OWNED BY audit_seq_a.rows.id").unwrap();
+        assert_eq!(
+            s.execute("SELECT nextval('audit_seq_a.\"Mi.x\"')")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(9)]]
+        );
+        assert!(s
+            .execute("SELECT last_value FROM audit_seq_a.counter WHERE FALSE")
+            .unwrap()
+            .rows
+            .is_empty());
+        assert!(s
+            .execute("SELECT sequence_name FROM information_schema.sequences WHERE FALSE")
+            .unwrap()
+            .rows
+            .is_empty());
+        let seqs=s.execute("SELECT sequence_schema,sequence_name FROM information_schema.sequences WHERE sequence_schema='audit_seq_a' ORDER BY sequence_name").unwrap();
+        assert!(seqs
+            .rows
+            .iter()
+            .any(|r| r[1] == SqlValue::String("serials_id_seq".into())));
+    }
+    drop(db);
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut s = SqlSession::new(&mut db);
+    assert_eq!(s.execute("SELECT nextval('audit_seq_a.counter'),nextval('audit_seq_b.counter'),nextval('public.counter')").unwrap().rows,vec![vec![SqlValue::Int(12),SqlValue::Int(102),SqlValue::Int(1001)]]);
+    assert_eq!(
+        s.execute("SELECT id FROM audit_seq_a.rows").unwrap().rows,
+        vec![vec![SqlValue::Int(11)]]
+    );
+    assert_eq!(
+        s.execute("SELECT id FROM audit_seq_b.rows").unwrap().rows,
+        vec![vec![SqlValue::Int(101)]]
+    );
+}

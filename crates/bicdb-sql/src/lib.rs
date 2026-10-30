@@ -588,12 +588,12 @@ pub mod ir_update_plan {
 
 // Cached schemas are shared: a hit used to deep-clone the whole TableSchema
 // (every column String), and hot paths ask for the same schema per row.
-/// Per-db-instance table-schema cache: outer key is the `BicDb` address,
+/// Per-database table-schema cache: outer key is the monotonic instance ID,
 /// inner key the table name, so lookups borrow the name instead of allocating
-/// a `(usize, String)` key per call.
-type SqlSchemaCacheMap = FxHashMap<usize, FxHashMap<String, Option<Arc<TableSchema>>>>;
-type SqlSchemaListCacheMap = BTreeMap<usize, Arc<Vec<TableSchema>>>;
-type SqlIndexDefinitionsCacheMap = FxHashMap<usize, FxHashMap<String, Vec<IndexDefinition>>>;
+/// a `(u64, String)` key per call.
+type SqlSchemaCacheMap = FxHashMap<u64, FxHashMap<String, Option<Arc<TableSchema>>>>;
+type SqlSchemaListCacheMap = BTreeMap<u64, Arc<Vec<TableSchema>>>;
+type SqlIndexDefinitionsCacheMap = FxHashMap<u64, FxHashMap<String, Vec<IndexDefinition>>>;
 
 const SYNTHETIC_PRIMARY_KEY: &str = "__bicdb_rowid";
 const PG_PROC_CATALOG_OID: i64 = 1255;
@@ -1261,8 +1261,8 @@ fn sql_profile_schema_save(bytes: usize) {
     });
 }
 
-fn sql_db_cache_key(db: &BicDb) -> usize {
-    db as *const BicDb as usize
+fn sql_db_cache_key(db: &BicDb) -> u64 {
+    db.instance_id()
 }
 
 fn sql_schema_cache_get(db: &BicDb, table: &str) -> Option<Option<Arc<TableSchema>>> {
@@ -1404,8 +1404,8 @@ fn sql_index_definitions_for_collection(db: &BicDb, collection: &str) -> Vec<Ind
     indexes
 }
 
-fn sql_schema_list_cache_key(db: &BicDb) -> usize {
-    db as *const BicDb as usize
+fn sql_schema_list_cache_key(db: &BicDb) -> u64 {
+    db.instance_id()
 }
 
 fn sql_schema_list_cache_get(db: &BicDb) -> Option<Arc<Vec<TableSchema>>> {

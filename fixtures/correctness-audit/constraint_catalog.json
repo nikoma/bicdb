@@ -1,0 +1,18 @@
+{
+  "id": "constraint_catalog_oid_bounds",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS audit_oid_child",
+    "DROP TABLE IF EXISTS audit_oid_parent",
+    "DROP DOMAIN IF EXISTS audit_oid_positive"
+  ],
+  "sql": [
+    "CREATE DOMAIN audit_oid_positive AS INT CHECK(VALUE>0)",
+    "CREATE TABLE audit_oid_parent(id INT PRIMARY KEY)",
+    "CREATE TABLE audit_oid_child(id INT PRIMARY KEY,p INT REFERENCES audit_oid_parent(id),v audit_oid_positive UNIQUE)",
+    "SELECT COUNT(*) FROM pg_constraint WHERE conname LIKE 'audit_oid_%' AND (oid::bigint<=0 OR oid::bigint>4294967295)",
+    "SELECT conname,pg_get_constraintdef(oid) IS NOT NULL AS defined FROM pg_constraint WHERE conname LIKE 'audit_oid_%' ORDER BY conname",
+    "SELECT con.oid::bigint>0 AS valid,child.attname,parent.attname AS parent_column FROM pg_constraint con JOIN pg_class rel ON rel.oid=con.conrelid JOIN pg_attribute child ON child.attrelid=con.conrelid AND child.attnum=con.conkey[1] JOIN pg_attribute parent ON parent.attrelid=con.confrelid AND parent.attnum=con.confkey[1] WHERE con.contype='f' AND rel.relname='audit_oid_child'",
+    "SELECT count FROM (SELECT COUNT(*) FROM audit_oid_child) AS totals",
+    "SELECT rel.relname,unnest(idx.indkey) AS attnum,generate_subscripts(idx.indkey,1) AS ord,unnest(idx.indoption) AS opt FROM pg_index idx JOIN pg_class rel ON rel.oid=idx.indexrelid WHERE rel.relname='audit_oid_child_pkey' ORDER BY ord"
+  ]
+}

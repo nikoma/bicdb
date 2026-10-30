@@ -445,7 +445,7 @@ impl<'db> SqlEngine<'db> {
                 if idx % 1024 == 0 {
                     self.check_cancellation()?;
                 }
-                if eval_virtual_predicate(&row, selection).unwrap_or(false) {
+                if eval_virtual_predicate(&row, selection)? {
                     filtered.push(row);
                 }
             }
@@ -674,7 +674,7 @@ impl<'db> SqlEngine<'db> {
                 if idx % 1024 == 0 {
                     self.check_cancellation()?;
                 }
-                if eval_virtual_predicate(&row, selection).unwrap_or(false) {
+                if eval_virtual_predicate(&row, selection)? {
                     filtered.push(row);
                 }
             }
@@ -2289,7 +2289,12 @@ impl<'db> SqlEngine<'db> {
             return Some((rename_relation_columns(columns, alias_cols)?, false));
         }
         if load_sequence(self.db_ref(), table).ok().flatten().is_some() {
-            return None;
+            let columns = vec![
+                ("is_called".into(), Some("bool".into())),
+                ("last_value".into(), Some("int8".into())),
+                ("log_cnt".into(), Some("int8".into())),
+            ];
+            return Some((rename_relation_columns(columns, alias_cols)?, false));
         }
         let table = resolve_session_relation_name(self.db_ref(), table).ok()?;
         let schema = load_schema_shared(self.db_ref(), &table).ok().flatten()?;
@@ -3563,6 +3568,7 @@ impl<'db> SqlEngine<'db> {
                 Some(&aliases.conrelids),
             )?
         };
+        validate_constraint_catalog_oids(self.db_ref())?;
         let mut result_rows = pg_dump_constraint_inventory_result_rows(
             projection_kind,
             &schemas,

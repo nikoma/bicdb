@@ -1969,14 +1969,7 @@ impl RowAggregate {
     pub(crate) fn column_name(&self) -> String {
         match self {
             Self::OrderedSet(aggregate) => aggregate.column_name(),
-            Self::CountAll => "COUNT(*)".to_string(),
-            Self::CountExpr(expr, distinct) => {
-                if *distinct {
-                    format!("COUNT(DISTINCT {})", row_expr_column_name(expr))
-                } else {
-                    format!("COUNT({})", row_expr_column_name(expr))
-                }
-            }
+            Self::CountAll | Self::CountExpr(_, _) => "count".to_string(),
             Self::Sum(_, _) => "sum".to_string(),
             Self::Avg(_, _) => "avg".to_string(),
             Self::Min(_) => "min".to_string(),
@@ -3500,6 +3493,7 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
             | "pg_catalog.pg_sequence"
             | "pg_catalog.pg_sequences"
             | "pg_catalog.pg_tables"
+            | "pg_catalog.pg_views"
             | "pg_catalog.pg_index"
             | "pg_catalog.pg_indexes"
             | "pg_catalog.pg_constraint"
@@ -3572,6 +3566,7 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
             | "pg_sequence"
             | "pg_sequences"
             | "pg_tables"
+            | "pg_views"
             | "pg_index"
             | "pg_indexes"
             | "pg_constraint"
@@ -3645,10 +3640,7 @@ pub(crate) fn is_virtual_table(table: &str) -> bool {
 pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let table = table.strip_prefix("pg_catalog.").unwrap_or(table);
     let mut rows = match table {
-        "information_schema.schemata" => Ok(vec![virtual_row([
-            ("catalog_name", SqlValue::String("bicdb".to_string())),
-            ("schema_name", SqlValue::String("public".to_string())),
-        ])]),
+        "information_schema.schemata" => information_schema_schemata(db),
         "information_schema.tables" => information_schema_tables(db),
         "information_schema.columns" => information_schema_columns(db),
         "information_schema.domains" => information_schema_domains(db),
@@ -3709,6 +3701,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_sequence" => pg_sequence_rows(db),
         "pg_sequences" => pg_sequences_rows(db),
         "pg_tables" => pg_tables_rows(db),
+        "pg_views" => pg_views_rows(db),
         "pg_index" => pg_index_rows(db),
         "pg_indexes" => pg_indexes_rows(db),
         "pg_constraint" => pg_constraint_rows(db),
@@ -4686,6 +4679,12 @@ pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
             .map(str::to_string)
             .collect(),
         ),
+        "pg_views" => Some(
+            ["schemaname", "viewname", "viewowner", "definition"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        ),
         "pg_tables" => Some(
             [
                 "schemaname",
@@ -4852,13 +4851,111 @@ pub(crate) fn virtual_table_columns(table: &str) -> Option<Vec<String>> {
             .map(str::to_string)
             .collect(),
         ),
-        _ => None,
+        _ => virtual_table_column_types(table)
+            .map(|columns| columns.into_iter().map(|(name, _)| name).collect()),
     }
 }
 
 pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Option<String>)>> {
     let table = table.strip_prefix("pg_catalog.").unwrap_or(table);
     let columns: &[(&str, &str)] = match table {
+        "information_schema.tables" => &[
+            ("table_catalog", "name"),
+            ("table_schema", "name"),
+            ("table_name", "name"),
+            ("table_type", "varchar"),
+        ],
+        "information_schema.sequences" => &[
+            ("sequence_catalog", "name"),
+            ("sequence_schema", "name"),
+            ("sequence_name", "name"),
+            ("data_type", "varchar"),
+            ("numeric_precision", "int4"),
+            ("numeric_precision_radix", "int4"),
+            ("numeric_scale", "int4"),
+            ("start_value", "varchar"),
+            ("minimum_value", "varchar"),
+            ("maximum_value", "varchar"),
+            ("increment", "varchar"),
+            ("cycle_option", "varchar"),
+        ],
+        "information_schema.table_constraints" => &[
+            ("constraint_catalog", "name"),
+            ("constraint_schema", "name"),
+            ("constraint_name", "name"),
+            ("table_catalog", "name"),
+            ("table_schema", "name"),
+            ("table_name", "name"),
+            ("constraint_type", "varchar"),
+            ("is_deferrable", "varchar"),
+            ("initially_deferred", "varchar"),
+            ("enforced", "varchar"),
+            ("nulls_distinct", "varchar"),
+        ],
+        "information_schema.key_column_usage" => &[
+            ("constraint_catalog", "name"),
+            ("constraint_schema", "name"),
+            ("constraint_name", "name"),
+            ("table_catalog", "name"),
+            ("table_schema", "name"),
+            ("table_name", "name"),
+            ("column_name", "name"),
+            ("ordinal_position", "int4"),
+            ("position_in_unique_constraint", "int4"),
+        ],
+        "information_schema.constraint_column_usage" => &[
+            ("table_catalog", "name"),
+            ("table_schema", "name"),
+            ("table_name", "name"),
+            ("column_name", "name"),
+            ("constraint_catalog", "name"),
+            ("constraint_schema", "name"),
+            ("constraint_name", "name"),
+        ],
+        "information_schema.check_constraints" => &[
+            ("constraint_catalog", "name"),
+            ("constraint_schema", "name"),
+            ("constraint_name", "name"),
+            ("check_clause", "varchar"),
+        ],
+        "information_schema.schemata" => &[
+            ("catalog_name", "name"),
+            ("schema_name", "name"),
+            ("schema_owner", "name"),
+            ("default_character_set_catalog", "name"),
+            ("default_character_set_schema", "name"),
+            ("default_character_set_name", "name"),
+            ("sql_path", "varchar"),
+        ],
+        "information_schema.table_privileges" | "information_schema.role_table_grants" => &[
+            ("grantor", "name"),
+            ("grantee", "name"),
+            ("table_catalog", "name"),
+            ("table_schema", "name"),
+            ("table_name", "name"),
+            ("privilege_type", "varchar"),
+            ("is_grantable", "varchar"),
+            ("with_hierarchy", "varchar"),
+        ],
+        "pg_sequences" => &[
+            ("schemaname", "name"),
+            ("sequencename", "name"),
+            ("sequenceowner", "name"),
+            ("data_type", "regtype"),
+            ("start_value", "int8"),
+            ("min_value", "int8"),
+            ("max_value", "int8"),
+            ("increment_by", "int8"),
+            ("cycle", "bool"),
+            ("cache_size", "int8"),
+            ("last_value", "int8"),
+        ],
+        "pg_views" => &[
+            ("schemaname", "name"),
+            ("viewname", "name"),
+            ("viewowner", "name"),
+            ("definition", "text"),
+        ],
         "information_schema.domains" => &[
             ("domain_catalog", "name"),
             ("domain_schema", "name"),
@@ -6028,16 +6125,28 @@ pub(crate) fn information_schema_tables(db: &BicDb) -> Result<Vec<BTreeMap<Strin
     for collection in user_collection_names(db) {
         rows.push(virtual_row([
             ("table_catalog", SqlValue::String("bicdb".to_string())),
-            ("table_schema", SqlValue::String("public".to_string())),
-            ("table_name", SqlValue::String(collection)),
+            (
+                "table_schema",
+                SqlValue::String(relation_catalog_namespace(db, &collection)?),
+            ),
+            (
+                "table_name",
+                SqlValue::String(catalog_display_name(&collection)),
+            ),
             ("table_type", SqlValue::String("BASE TABLE".to_string())),
         ]));
     }
     for view in list_views(db)? {
         rows.push(virtual_row([
             ("table_catalog", SqlValue::String("bicdb".to_string())),
-            ("table_schema", SqlValue::String("public".to_string())),
-            ("table_name", SqlValue::String(view.name)),
+            (
+                "table_schema",
+                SqlValue::String(relation_catalog_namespace(db, &view.name)?),
+            ),
+            (
+                "table_name",
+                SqlValue::String(catalog_display_name(&view.name)),
+            ),
             ("table_type", SqlValue::String("VIEW".to_string())),
         ]));
     }
@@ -6795,7 +6904,7 @@ pub(crate) fn information_schema_table_constraints(
             }
             if !column.nullable || column.primary_key {
                 rows.push(table_constraint_row(
-                    &schema.name,
+                    &schema,
                     &not_null_constraint_name(&schema.name, &column.name),
                     "CHECK",
                 ));
@@ -6803,7 +6912,7 @@ pub(crate) fn information_schema_table_constraints(
         }
         if !primary_key_columns_for_schema(&schema).is_empty() {
             rows.push(table_constraint_row(
-                &schema.name,
+                &schema,
                 &schema.primary_key_constraint_name(),
                 "PRIMARY KEY",
             ));
@@ -6814,16 +6923,16 @@ pub(crate) fn information_schema_table_constraints(
                     if unique_constraint_is_primary_key(&schema, name, columns) {
                         continue;
                     }
-                    rows.push(table_constraint_row(&schema.name, name, "UNIQUE"));
+                    rows.push(table_constraint_row(&schema, name, "UNIQUE"));
                 }
                 ConstraintSchema::Check { name, .. } => {
-                    rows.push(table_constraint_row(&schema.name, name, "CHECK"));
+                    rows.push(table_constraint_row(&schema, name, "CHECK"));
                 }
                 ConstraintSchema::ForeignKey { name, .. } => {
-                    rows.push(table_constraint_row(&schema.name, name, "FOREIGN KEY"));
+                    rows.push(table_constraint_row(&schema, name, "FOREIGN KEY"));
                 }
                 ConstraintSchema::Exclusion { name, .. } => {
-                    rows.push(table_constraint_row(&schema.name, name, "EXCLUDE"));
+                    rows.push(table_constraint_row(&schema, name, "EXCLUDE"));
                 }
             }
         }
@@ -6839,7 +6948,7 @@ pub(crate) fn information_schema_key_column_usage(
     for schema in schemas {
         for (idx, column) in primary_key_columns_for_schema(&schema).iter().enumerate() {
             rows.push(key_column_usage_row(
-                &schema.name,
+                &schema,
                 &schema.primary_key_constraint_name(),
                 column,
                 idx as i64 + 1,
@@ -6852,22 +6961,12 @@ pub(crate) fn information_schema_key_column_usage(
                         continue;
                     }
                     for (idx, column) in columns.iter().enumerate() {
-                        rows.push(key_column_usage_row(
-                            &schema.name,
-                            name,
-                            column,
-                            idx as i64 + 1,
-                        ));
+                        rows.push(key_column_usage_row(&schema, name, column, idx as i64 + 1));
                     }
                 }
                 ConstraintSchema::ForeignKey { name, columns, .. } => {
                     for (idx, column) in columns.iter().enumerate() {
-                        rows.push(key_column_usage_row(
-                            &schema.name,
-                            name,
-                            column,
-                            idx as i64 + 1,
-                        ));
+                        rows.push(key_column_usage_row(&schema, name, column, idx as i64 + 1));
                     }
                 }
                 ConstraintSchema::Check { .. } => {}
@@ -6896,17 +6995,42 @@ pub(crate) fn information_schema_constraint_column_usage(
                 ));
             }
         }
-        if let Some(primary_key) = schema.primary_key_column().filter(|column| !column.hidden) {
+        for column in primary_key_columns_for_schema(&schema) {
             rows.push(constraint_column_usage_row(
                 &schema,
                 &schema.primary_key_constraint_name(),
-                &primary_key.name,
+                &column,
             ));
         }
         for constraint in &schema.constraints {
             match constraint {
-                ConstraintSchema::Unique { name, columns, .. }
-                | ConstraintSchema::ForeignKey { name, columns, .. } => {
+                ConstraintSchema::ForeignKey {
+                    name,
+                    foreign_table,
+                    referred_columns,
+                    ..
+                } => {
+                    let parent = load_schema(db, foreign_table)?.ok_or_else(|| {
+                        SqlError::InvalidSql(format!("missing referenced table {foreign_table}"))
+                    })?;
+                    let columns = if referred_columns.is_empty() {
+                        primary_key_columns_for_schema(&parent)
+                    } else {
+                        referred_columns.clone()
+                    };
+                    for column in columns {
+                        let mut row = constraint_column_usage_row(&parent, name, &column);
+                        row.insert(
+                            "constraint_schema".into(),
+                            SqlValue::String(schema.schema_name.clone()),
+                        );
+                        rows.push(row);
+                    }
+                }
+                ConstraintSchema::Unique { name, columns, .. } => {
+                    if unique_constraint_is_primary_key(&schema, name, columns) {
+                        continue;
+                    }
                     for column in columns {
                         rows.push(constraint_column_usage_row(&schema, name, column));
                     }

@@ -31,10 +31,18 @@ fi
 # remove only the executable that just ran; dependency artifacts remain hot.
 prune_test_executable() {
   local target_name=$1
+  local executable
   if [[ ! -d ${deps_dir} ]]; then
     return
   fi
-  find "${deps_dir}" -maxdepth 1 -type f -name "${target_name}-*" -perm -u+x -delete
+  # Other Cargo invocations may remove temporary directories in debug/deps
+  # while this suite runs. Glob only this target's artifacts rather than
+  # statting every unrelated directory (find can fail on that harmless race).
+  for executable in "${deps_dir}/${target_name}-"*; do
+    if [[ -f ${executable} && -x ${executable} ]]; then
+      rm -f -- "${executable}"
+    fi
+  done
 }
 
 unit_target=${package//-/_}

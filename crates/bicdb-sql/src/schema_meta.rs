@@ -2491,11 +2491,11 @@ pub(crate) fn initial_session_user_from_gucs(gucs: &HashMap<String, String>) -> 
 
 thread_local! {
     // role name -> parsed role, validated by the role catalog generation.
-    static ROLE_SCHEMA_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<(usize, String), (u64, Option<std::sync::Arc<RoleSchema>>)>> =
+    static ROLE_SCHEMA_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<(u64, String), (u64, Option<std::sync::Arc<RoleSchema>>)>> =
         std::cell::RefCell::new(rustc_hash::FxHashMap::default());
     // (role, routine) -> EXECUTE decision, validated by every catalog it
     // derives from: roles, routines (ownership), privileges, memberships.
-    static ROUTINE_EXECUTE_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<(usize, String, String), ([u64; 4], bool)>> =
+    static ROUTINE_EXECUTE_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<(u64, String, String), ([u64; 4], bool)>> =
         std::cell::RefCell::new(rustc_hash::FxHashMap::default());
 }
 
@@ -2514,7 +2514,7 @@ pub(crate) fn role_schema_shared(
         return Ok(Some(std::sync::Arc::new(current_role_schema())));
     }
     let generation = db.collection_generation(ROLE_COLLECTION);
-    let key = (db as *const BicDb as usize, name);
+    let key = (db.instance_id(), name);
     let hit = ROLE_SCHEMA_MEMO.with(|memo| {
         memo.borrow()
             .get(&key)
@@ -2808,19 +2808,16 @@ pub(crate) struct RelationNameMemoEntry {
 }
 
 thread_local! {
-    pub(crate) static RELATION_NAME_MEMO: RefCell<FxHashMap<(usize, String), RelationNameMemoEntry>> =
+    pub(crate) static RELATION_NAME_MEMO: RefCell<FxHashMap<(u64, String), RelationNameMemoEntry>> =
         RefCell::new(FxHashMap::default());
 }
 
 pub(crate) const RELATION_NAME_MEMO_CAP: usize = 1024;
 
 pub(crate) fn resolve_relation_name_memoized(db: &BicDb, name: &str) -> Option<String> {
-    // Keyed by the database instance address as well as the name: one thread
-    // can serve several BicDb instances (tests, embedded use), and generations
-    // alone do not distinguish them. A reused allocation address combined with
-    // identical catalog generations AND collection count is the only aliasing
-    // risk, and any DDL difference breaks it.
-    let db_key = db as *const BicDb as usize;
+    // Instance IDs distinguish databases even when an allocation address and
+    // every catalog generation are reused after closing another database.
+    let db_key = db.instance_id();
     let schema_generation = db.collection_generation(SCHEMA_COLLECTION);
     let view_generation = db.collection_generation(VIEW_COLLECTION);
     let collection_count = db.collection_count();
@@ -3025,22 +3022,28 @@ pub(crate) fn privilege_acl_code(privilege: &str) -> &str {
 pub(crate) fn information_schema_role_table_grants(
     db: &BicDb,
 ) -> Result<Vec<BTreeMap<String, SqlValue>>> {
-    Ok(list_privileges(db)?
+    list_privileges(db)?
         .into_iter()
         .filter(|grant| grant.object_type == PrivilegeObjectType::Table && grant.column.is_none())
         .map(|grant| {
-            virtual_row([
+            Ok(virtual_row([
                 ("grantor", SqlValue::String(current_role_name())),
                 ("grantee", SqlValue::String(grant.grantee)),
                 ("table_catalog", SqlValue::String("bicdb".to_string())),
-                ("table_schema", SqlValue::String("public".to_string())),
-                ("table_name", SqlValue::String(grant.object_name)),
+                (
+                    "table_schema",
+                    SqlValue::String(relation_catalog_namespace(db, &grant.object_name)?),
+                ),
+                (
+                    "table_name",
+                    SqlValue::String(catalog_display_name(&grant.object_name)),
+                ),
                 ("privilege_type", SqlValue::String(grant.privilege)),
                 ("is_grantable", SqlValue::String("NO".to_string())),
                 ("with_hierarchy", SqlValue::String("NO".to_string())),
-            ])
+            ]))
         })
-        .collect())
+        .collect()
 }
 
 pub(crate) fn has_schema_privilege(db: &BicDb, args: &[SqlValue]) -> Result<bool> {
@@ -3391,7 +3394,7 @@ pub(crate) fn role_can_execute_routine(db: &BicDb, role: &str, routine: &str) ->
         db.collection_generation(ROLE_MEMBERSHIP_COLLECTION),
     ];
     let key = (
-        db as *const BicDb as usize,
+        db.instance_id(),
         normalize_role_name(role),
         normalize_object_name(routine),
     );

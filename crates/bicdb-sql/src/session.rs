@@ -1448,7 +1448,8 @@ impl GucAssignmentTargets {
 pub(crate) struct TxnLookupCaches {
     tx_id: bicdb_core::TransactionId,
     schema_generation: u64,
-    index_catalog_len: usize,
+    index_generation: u64,
+    index_commit_seq: u64,
     index_lookup_cache: IndexLookupCache,
     rowid_index_lookup_cache: RowIdIndexLookupCache,
 }

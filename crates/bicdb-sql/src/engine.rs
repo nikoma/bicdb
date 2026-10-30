@@ -2513,7 +2513,7 @@ pub(crate) fn array_projection_set_values(
                             .map(|bounds| bounds.into_iter().map(i64::from).collect::<Vec<_>>()),
                     ),
                     Err(error) => match parse_pg_int_vector(&value) {
-                        Some(values) => (Some(vec![values.len()]), None),
+                        Some(values) => (Some(vec![values.len()]), Some(vec![0])),
                         None => return Err(error),
                     },
                 },
@@ -4153,6 +4153,18 @@ impl<'db> SqlEngine<'db> {
         if select.from.len() != 1 {
             return self.execute_row_query(select, query);
         }
+        // Catalogs and sequences are not native collections. Resolve them
+        // before collection-only count/stream/index optimizations, so plan
+        // choice cannot discard predicates or apply table privilege checks.
+        if let TableFactor::Table {
+            name, args: None, ..
+        } = &select.from[0].relation
+        {
+            let name = relation_name(name)?;
+            if is_virtual_table(&name) || load_sequence(self.db_ref(), &name)?.is_some() {
+                return self.execute_row_query(select, query);
+            }
+        }
         // Answered from the row count, without reading a row — see
         // `try_count_star_fast_path` for the guards that make that equivalent.
         if let Some(result) = self.try_count_star_fast_path(&select.from[0], select, query)? {
@@ -4291,7 +4303,7 @@ impl<'db> SqlEngine<'db> {
         }
 
         if is_virtual_table(&collection) {
-            return self.execute_virtual_table(select, query, &collection);
+            return self.execute_row_query(select, query);
         }
 
         if let Some(view) = load_view(self.db_ref(), &collection)? {
@@ -4975,10 +4987,10 @@ pub(crate) struct LocatorIndexPlan {
 
 /// Locator strategies by routine IR node (see `SqlEngine::ir_plan_node_key`):
 /// a routine-owned statement's WHERE never changes, so its strategy needs no
-/// hash or content verify per execution — only the index-catalog length,
+/// hash or content verify per execution — only the index-catalog generation,
 /// which the IR key's generation word does not cover.
 type LocatorStrategyNodeCache =
-    FxHashMap<(usize, u64, usize, usize), (usize, std::rc::Rc<LocatorStrategy>)>;
+    FxHashMap<(u64, u64, usize, usize), (u64, std::rc::Rc<LocatorStrategy>)>;
 
 thread_local! {
     static LOCATOR_STRATEGY_NODES: RefCell<LocatorStrategyNodeCache> =
@@ -4988,21 +5000,21 @@ thread_local! {
 const LOCATOR_STRATEGY_NODES_MAX: usize = 4096;
 
 pub(crate) fn locator_strategy_node_get(
-    key: (usize, u64, usize, usize),
-    index_len: usize,
+    key: (u64, u64, usize, usize),
+    index_generation: u64,
 ) -> Option<std::rc::Rc<LocatorStrategy>> {
     LOCATOR_STRATEGY_NODES.with(|cache| {
         cache
             .borrow()
             .get(&key)
-            .filter(|(cached_len, _)| *cached_len == index_len)
+            .filter(|(cached_generation, _)| *cached_generation == index_generation)
             .map(|(_, strategy)| strategy.clone())
     })
 }
 
 pub(crate) fn locator_strategy_node_set(
-    key: (usize, u64, usize, usize),
-    index_len: usize,
+    key: (u64, u64, usize, usize),
+    index_generation: u64,
     strategy: std::rc::Rc<LocatorStrategy>,
 ) {
     LOCATOR_STRATEGY_NODES.with(|cache| {
@@ -5010,13 +5022,13 @@ pub(crate) fn locator_strategy_node_set(
         if cache.len() >= LOCATOR_STRATEGY_NODES_MAX {
             cache.clear();
         }
-        cache.insert(key, (index_len, strategy));
+        cache.insert(key, (index_generation, strategy));
     });
 }
 
 struct LocatorStrategyEntry {
     schema_generation: u64,
-    index_len: usize,
+    index_generation: u64,
     selection: Expr,
     table: String,
     alias: String,
@@ -5024,7 +5036,7 @@ struct LocatorStrategyEntry {
 }
 
 thread_local! {
-    static LOCATOR_STRATEGIES: RefCell<FxHashMap<(usize, u64), LocatorStrategyEntry>> =
+    static LOCATOR_STRATEGIES: RefCell<FxHashMap<(u64, u64), LocatorStrategyEntry>> =
         RefCell::new(FxHashMap::default());
 }
 
@@ -5040,15 +5052,15 @@ fn locator_strategy_memo(
     selection.hash(&mut hasher);
     table.hash(&mut hasher);
     alias.hash(&mut hasher);
-    let key = (db as *const BicDb as usize, hasher.finish());
+    let key = (db.instance_id(), hasher.finish());
     let schema_generation = db.collection_generation(SCHEMA_COLLECTION);
-    let index_len = db.index_catalog_len();
+    let index_generation = db.index_generation();
     let hit = LOCATOR_STRATEGIES.with(|memo| {
         memo.borrow().get(&key).and_then(|entry| {
             // Full-content verify: hash collisions and recycled addresses can
             // never serve a wrong plan.
             (entry.schema_generation == schema_generation
-                && entry.index_len == index_len
+                && entry.index_generation == index_generation
                 && entry.table == table
                 && entry.alias == alias
                 && entry.selection == *selection)
@@ -5068,7 +5080,7 @@ fn locator_strategy_memo(
             key,
             LocatorStrategyEntry {
                 schema_generation,
-                index_len,
+                index_generation,
                 selection: selection.clone(),
                 table: table.to_string(),
                 alias: alias.to_string(),

@@ -229,14 +229,7 @@ impl Aggregate {
     pub(crate) fn column_name(&self) -> String {
         match self {
             Self::OrderedSet(aggregate) => aggregate.column_name(),
-            Self::CountAll => "COUNT(*)".to_string(),
-            Self::CountField(field, distinct) => {
-                if *distinct {
-                    format!("COUNT(DISTINCT {})", field.name())
-                } else {
-                    format!("COUNT({})", field.name())
-                }
-            }
+            Self::CountAll | Self::CountField(_, _) => "count".to_string(),
             Self::Sum(_, _, _) => "sum".to_string(),
             Self::Avg(_, _) => "avg".to_string(),
             Self::Min(_, _) => "min".to_string(),
@@ -472,19 +465,20 @@ pub(crate) fn env_lookup_unqualified(env: &[RelationColumns], name: &str) -> Opt
     let needle = name.to_ascii_lowercase();
     let mut found: Option<Option<String>> = None;
     for relation in env {
-        let mut seen_base_columns = BTreeSet::new();
+        let mut found_in_relation = false;
         for (column, ty) in &relation.columns {
             // Aliased base rows carry a second block for the physical-table
             // qualifier. Both entries name the same column, rather than two
             // ambiguous FROM sources. Derived-table duplicates remain errors.
-            if relation.row_type.is_some() && !seen_base_columns.insert(column) {
-                continue;
-            }
             if column == &needle {
+                if found_in_relation && relation.row_type.is_some() {
+                    continue;
+                }
                 if found.is_some() {
                     return None;
                 }
                 found = Some(ty.clone());
+                found_in_relation = true;
             }
         }
     }

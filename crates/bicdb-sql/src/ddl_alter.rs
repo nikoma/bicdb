@@ -2172,7 +2172,7 @@ pub(crate) fn raw_create_sequence(sql: &str) -> Result<Option<(String, SequenceS
         .transpose()?
         .unwrap_or(1);
     let mut sequence =
-        SequenceSchema::new_typed(normalize_sequence_name(name), data_type, increment_by);
+        SequenceSchema::new_typed(normalize_sequence_name(name)?, data_type, increment_by);
     let defaults = sequence.clone();
     let mut explicit_start = false;
     idx += 1;
@@ -2246,7 +2246,7 @@ pub(crate) fn raw_create_sequence(sql: &str) -> Result<Option<(String, SequenceS
                 };
                 if *owner != "none" {
                     if let Some((table, column)) = owner.rsplit_once('.') {
-                        sequence.owned_by_table = Some(normalize_object_name(table));
+                        sequence.owned_by_table = Some(normalize_sequence_name(table)?);
                         sequence.owned_by_column = Some(column.trim_matches('"').to_string());
                     }
                 }
@@ -2335,25 +2335,33 @@ pub(crate) enum RawAlterSequence {
 
 pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> {
     let normalized = normalize_sql(sql);
-    let tokens = normalized.split_whitespace().collect::<Vec<_>>();
-    if tokens.len() < 4 || tokens.first() != Some(&"alter") || tokens.get(1) != Some(&"sequence") {
+    let initial_tokens = normalized.split_whitespace().collect::<Vec<_>>();
+    if initial_tokens.len() < 4 || initial_tokens[0] != "alter" || initial_tokens[1] != "sequence" {
         return Ok(None);
     }
-    let sequence = normalize_sequence_name(tokens[2]);
+    let (_, rest) = parse_leading_sql_identifier(sql.trim())?;
+    let (_, rest) = parse_leading_sql_identifier(rest.trim())?;
+    let (target, options_source) = parse_leading_qualified_sql_identifier(rest.trim())?;
+    let sequence = normalize_sequence_name(&target)?;
+    let normalized = format!("alter sequence __target {}", normalize_sql(options_source));
+    let tokens = normalized.split_whitespace().collect::<Vec<_>>();
     if tokens.get(3..5) == Some(&["owner", "to"][..]) {
-        let Some(owner) = tokens.get(5) else {
+        let Some(_owner) = tokens.get(5) else {
             return Err(SqlError::InvalidSql(
                 "ALTER SEQUENCE OWNER TO expects a role".to_string(),
             ));
         };
-        if tokens.len() != 6 {
+        let (_, rest) = parse_leading_sql_identifier(options_source.trim())?;
+        let (_, rest) = parse_leading_sql_identifier(rest.trim())?;
+        let (owner, trailing) = parse_leading_sql_identifier(rest.trim())?;
+        if !trailing.trim().trim_end_matches(';').trim().is_empty() {
             return Err(SqlError::Unsupported(
                 "ALTER SEQUENCE OWNER TO trailing options are not supported".to_string(),
             ));
         }
         return Ok(Some(RawAlterSequence::OwnerTo {
             sequence,
-            owner: normalize_role_name(owner),
+            owner: normalize_role_name(&owner),
         }));
     }
     if tokens.get(3) == Some(&"restart") {
@@ -2382,28 +2390,37 @@ pub(crate) fn raw_alter_sequence(sql: &str) -> Result<Option<RawAlterSequence>> 
     if tokens.get(3) != Some(&"owned") || tokens.get(4) != Some(&"by") {
         return Ok(None);
     }
-    let Some(owner) = tokens.get(5) else {
-        return Err(SqlError::InvalidSql(
-            "ALTER SEQUENCE OWNED BY expects an owner".to_string(),
+    let (_, rest) = parse_leading_sql_identifier(options_source.trim())?;
+    let (_, rest) = parse_leading_sql_identifier(rest.trim())?;
+    let (owner, trailing) = parse_leading_qualified_sql_identifier(rest.trim())?;
+    if !trailing.trim().trim_end_matches(';').trim().is_empty() {
+        return Err(SqlError::Unsupported(
+            "ALTER SEQUENCE OWNED BY trailing options are not supported".into(),
         ));
-    };
-    if *owner == "none" {
+    }
+    if owner.eq_ignore_ascii_case("none") {
         return Ok(Some(RawAlterSequence::OwnedBy {
             sequence,
             owner: None,
         }));
     }
-    let Some((table, column)) = owner.rsplit_once('.') else {
+    let mut parser = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql(&owner)
+        .map_err(|e| SqlError::InvalidSql(e.to_string()))?;
+    let owner = parser
+        .parse_object_name(false)
+        .map_err(|e| SqlError::InvalidSql(e.to_string()))?;
+    let mut parts = object_name_parts(&owner);
+    if parts.len() < 2 {
         return Err(SqlError::InvalidSql(
-            "ALTER SEQUENCE OWNED BY expects table.column".to_string(),
+            "ALTER SEQUENCE OWNED BY expects table.column".into(),
         ));
-    };
+    }
+    let column = parts.pop().unwrap();
+    let table = relation_name_from_parts(&parts)?;
     Ok(Some(RawAlterSequence::OwnedBy {
         sequence,
-        owner: Some((
-            normalize_object_name(table),
-            column.trim_matches('"').to_string(),
-        )),
+        owner: Some((table, column)),
     }))
 }
 
@@ -3952,13 +3969,23 @@ pub(crate) fn sequence_name_for_column(table: &str, column: &str) -> String {
     format!("{table}_{column}_seq")
 }
 
-pub(crate) fn normalize_sequence_name(sequence: &str) -> String {
-    let name = sequence.rsplit('.').next().unwrap_or(sequence);
-    if name.starts_with('"') && name.ends_with('"') && name.len() >= 2 {
-        name[1..name.len() - 1].replace("\"\"", "\"")
-    } else {
-        name.to_ascii_lowercase()
+pub(crate) fn normalize_sequence_name(sequence: &str) -> Result<String> {
+    // Stored defaults and generated SERIAL keys already contain physical IDs.
+    if sequence.starts_with("__bicdb_s_") {
+        return Ok(sequence.to_string());
     }
+    let mut parser = Parser::new(&PostgreSqlDialect {})
+        .try_with_sql(sequence)
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    let name = parser
+        .parse_object_name(false)
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    if parser.peek_token().token != sqlparser::tokenizer::Token::EOF {
+        return Err(SqlError::InvalidSql(
+            "unexpected suffix in sequence name".into(),
+        ));
+    }
+    relation_name(&name)
 }
 
 pub(crate) fn is_sequence_function(function: &Function) -> Result<bool> {
@@ -4026,15 +4053,12 @@ pub(crate) fn default_sequence_from_expr(expr: &Expr) -> Result<Option<String>> 
                 ));
             }
             // Normalize to the stored key: `CREATE SEQUENCE` stores via
-            // `normalize_sequence_name` (schema stripped, unquoted,
-            // lowercased) and the runtime nextval/setval calls resolve the
-            // same way, but a DDL-time `nextval('public.foo'::regclass)`
-            // default kept its schema qualifier and never matched — the
-            // pg_dump SERIAL `SET DEFAULT` restore failure.
+            // `normalize_sequence_name`, and runtime sequence calls must resolve
+            // the identical namespace-aware key, including pg_dump defaults.
             Ok(Some(normalize_sequence_name(&sequence_arg(
                 function_args(function).first(),
                 "nextval",
-            )?)))
+            )?)?))
         }
         Expr::Cast { expr, .. } => default_sequence_from_expr(expr),
         Expr::Nested(expr) => default_sequence_from_expr(expr),
@@ -4050,10 +4074,9 @@ pub(crate) fn nextval_sequence_from_expr(expr: &Expr) -> Result<Option<String>> 
                 return Ok(None);
             }
             // Same normalization as `default_sequence_from_expr`: a
-            // schema-qualified nextval default in CREATE TABLE must bind to
-            // the stored (unqualified) sequence key.
+            // schema-qualified nextval default must bind to the stored sequence key.
             sequence_arg(function_args(function).first(), "nextval")
-                .map(|name| Some(normalize_sequence_name(&name)))
+                .and_then(|name| normalize_sequence_name(&name).map(Some))
         }
         Expr::Cast { expr, .. } | Expr::Nested(expr) => nextval_sequence_from_expr(expr),
         _ => Ok(None),

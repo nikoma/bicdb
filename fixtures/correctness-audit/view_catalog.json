@@ -1,0 +1,18 @@
+{
+  "id": "view_catalog_namespace",
+  "cleanup_sql": [
+    "DROP VIEW IF EXISTS audit_view_private.audit_visible",
+    "DROP VIEW IF EXISTS public.audit_visible",
+    "DROP TABLE IF EXISTS audit_view_private.audit_view_base",
+    "DROP SCHEMA IF EXISTS audit_view_private"
+  ],
+  "sql": [
+    "CREATE SCHEMA audit_view_private",
+    "CREATE TABLE audit_view_private.audit_view_base(id INT PRIMARY KEY)",
+    "CREATE VIEW audit_view_private.audit_visible AS SELECT id FROM audit_view_private.audit_view_base",
+    "CREATE VIEW public.audit_visible AS SELECT 1 AS id",
+    "SELECT schemaname,viewname,viewowner=current_user AS owned,definition IS NOT NULL AS defined FROM pg_catalog.pg_views WHERE viewname='audit_visible' ORDER BY schemaname",
+    "SELECT n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname='audit_visible' ORDER BY n.nspname",
+    "SELECT schemaname,viewname,viewowner,definition FROM pg_catalog.pg_views WHERE viewname='absent_audit_view'"
+  ]
+}

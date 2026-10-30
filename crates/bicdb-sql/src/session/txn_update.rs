@@ -157,9 +157,44 @@ impl StoredUpdateReadPlan {
     }
 }
 
+// A generation token identifies the complete database/catalog scope. XOR of
+// catalog counters can collide, and compiled IR is shared across databases.
+fn routine_memo_generation(db: &BicDb) -> u64 {
+    static NEXT_SCOPE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    thread_local! {
+        static SCOPES: std::cell::RefCell<FxHashMap<(u64,u64,u64,u64,u64),u64>> =
+            std::cell::RefCell::new(FxHashMap::default());
+    }
+    let key = (
+        db.instance_id(),
+        db.collection_generation(ROUTINE_COLLECTION),
+        db.collection_generation(SCHEMA_COLLECTION),
+        db.collection_generation(USER_TYPE_COLLECTION),
+        db.index_generation(),
+    );
+    SCOPES.with(|scopes| {
+        let mut scopes = scopes.borrow_mut();
+        if let Some(token) = scopes.get(&key) {
+            return *token;
+        }
+        if scopes.len() >= 4096 {
+            scopes.clear();
+        }
+        let token = NEXT_SCOPE
+            .fetch_update(
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+                |next| next.checked_add(1),
+            )
+            .expect("routine memo scope identity exhausted");
+        scopes.insert(key, token);
+        token
+    })
+}
+
 thread_local! {
     static STORED_UPDATE_READ_MEMO: std::cell::RefCell<
-        FxHashMap<(usize, u64, usize, usize), Rc<StoredUpdateReadPlan>>,
+        FxHashMap<(u64, u64, usize, usize), Rc<StoredUpdateReadPlan>>,
     > = std::cell::RefCell::new(FxHashMap::default());
     static ROUTINE_EXPR_TYPE_MEMO: std::cell::RefCell<
         rustc_hash::FxHashMap<(u64, usize, usize), std::rc::Rc<RoutineBinaryExprTypes>>,
@@ -269,12 +304,14 @@ impl<'db> SqlSession<'db> {
     ) -> (IndexLookupCache, RowIdIndexLookupCache) {
         let db = self.db_ref();
         let schema_generation = db.collection_generation(SCHEMA_COLLECTION);
-        let index_catalog_len = db.index_catalog_len();
+        let index_generation = db.index_generation();
+        let index_commit_seq = db.current_commit_seq();
         let mut slot = self.txn_lookup_caches.borrow_mut();
         if let Some(caches) = slot.as_ref() {
             if caches.tx_id == tx.id()
                 && caches.schema_generation == schema_generation
-                && caches.index_catalog_len == index_catalog_len
+                && caches.index_generation == index_generation
+                && caches.index_commit_seq == index_commit_seq
             {
                 return (
                     caches.index_lookup_cache.clone(),
@@ -285,7 +322,8 @@ impl<'db> SqlSession<'db> {
         let fresh = TxnLookupCaches {
             tx_id: tx.id(),
             schema_generation,
-            index_catalog_len,
+            index_generation,
+            index_commit_seq,
             index_lookup_cache: Rc::new(RefCell::new(FxHashMap::default())),
             rowid_index_lookup_cache: Rc::new(RefCell::new(FxHashMap::default())),
         };
@@ -3006,12 +3044,12 @@ impl<'db> SqlSession<'db> {
         match name.as_str() {
             "nextval" | "pg_catalog.nextval" => {
                 let sequence =
-                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "nextval")?);
+                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "nextval")?)?;
                 Ok(SqlValue::Int(self.nextval(&sequence)?))
             }
             "currval" | "pg_catalog.currval" => {
                 let sequence =
-                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "currval")?);
+                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "currval")?)?;
                 let key = sequence.clone();
                 self.currvals
                     .get(&key)
@@ -3046,7 +3084,7 @@ impl<'db> SqlSession<'db> {
                     ));
                 }
                 let sequence =
-                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "setval")?);
+                    normalize_sequence_name(&self.eval_sequence_arg(args.first(), "setval")?)?;
                 let value = self.eval_session_expr(&args[1])?;
                 let Some(value) = sql_value_i64(&value) else {
                     return Err(SqlError::InvalidSql(
@@ -3414,7 +3452,7 @@ impl<'db> SqlSession<'db> {
     ) -> Result<RoutineFrame> {
         let generation = crate::eval::expr_type_scope()
             .map(|(generation, _)| generation)
-            .unwrap_or_else(|| self.db_ref().collection_generation(ROUTINE_COLLECTION));
+            .unwrap_or_else(|| routine_memo_generation(self.db_ref()));
         let key = (generation, ir as *const RoutineIR as usize);
         let template = FRAME_TEMPLATE_MEMO.with(|memo| {
             if let Some(hit) = memo.borrow().get(&key) {
@@ -3442,13 +3480,7 @@ impl<'db> SqlSession<'db> {
         &self,
         ir: &RoutineIR,
     ) -> crate::eval::ExprTypeScopeGuard {
-        let db = self.db_ref();
-        // The user-type catalog joins the key: the catalog-aware typer
-        // (`projected_expr_pg_type_with_db`) memoizes under it too.
-        let generation = db.collection_generation(ROUTINE_COLLECTION)
-            ^ db.collection_generation(SCHEMA_COLLECTION).rotate_left(32)
-            ^ db.collection_generation(USER_TYPE_COLLECTION)
-                .rotate_left(16);
+        let generation = routine_memo_generation(self.db_ref());
         crate::eval::enter_expr_type_scope(generation, ir as *const RoutineIR as usize)
     }
 
@@ -3473,7 +3505,9 @@ impl<'db> SqlSession<'db> {
                 right,
             ));
         };
-        let generation = self.db_ref().collection_generation(ROUTINE_COLLECTION);
+        let generation = crate::eval::expr_type_scope()
+            .map(|(generation, _)| generation)
+            .unwrap_or_else(|| routine_memo_generation(self.db_ref()));
         let key = (generation, ir, left as *const Expr as usize);
         if let Some(hit) = ROUTINE_EXPR_TYPE_MEMO.with(|memo| memo.borrow().get(&key).cloned()) {
             return hit;

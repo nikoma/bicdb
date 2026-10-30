@@ -392,11 +392,11 @@ impl<'db> SqlSession<'db> {
         let mut sequence =
             sequence_from_options(sequence_name, &sequence_data_type, sequence_options)?;
         if let Some(owned_by) = owned_by {
-            let owned_by = relation_name(owned_by)?;
-            let parts = owned_by.split('.').collect::<Vec<_>>();
+            let parts = object_name_parts(owned_by);
             if parts.len() >= 2 {
-                sequence.owned_by_table = Some(parts[parts.len() - 2].to_string());
-                sequence.owned_by_column = Some(parts[parts.len() - 1].to_string());
+                sequence.owned_by_table =
+                    Some(relation_name_from_parts(&parts[..parts.len() - 1])?);
+                sequence.owned_by_column = parts.last().cloned();
             }
         }
         self.create_session_sequence_if_missing(sequence, if_not_exists)?;
@@ -1782,13 +1782,13 @@ impl<'db> SqlSession<'db> {
         &mut self,
         create_policy: &CreatePolicy,
     ) -> Result<SqlResult> {
-        let table = normalize_object_name(&object_name(&create_policy.table_name)?);
+        let table = relation_name(&create_policy.table_name)?;
         // CR-4: an ungated CREATE POLICY let any user attach a permissive
         // `USING (true)` policy to someone else's RLS table.
         self.require_table_ownership(&table, "CREATE POLICY")?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
-        let name = normalize_object_name(&ident_value(&create_policy.name));
+        let name = ident_value(&create_policy.name);
         if schema
             .policies
             .iter()
@@ -1838,11 +1838,11 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_alter_policy(&mut self, alter_policy: &AlterPolicy) -> Result<SqlResult> {
-        let table = normalize_object_name(&object_name(&alter_policy.table_name)?);
+        let table = relation_name(&alter_policy.table_name)?;
         self.require_table_ownership(&table, "ALTER POLICY")?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
-        let name = normalize_object_name(&ident_value(&alter_policy.name));
+        let name = ident_value(&alter_policy.name);
         let position = schema
             .policies
             .iter()
@@ -1854,7 +1854,7 @@ impl<'db> SqlSession<'db> {
             })?;
         match &alter_policy.operation {
             AlterPolicyOperation::Rename { new_name } => {
-                let new_name = normalize_object_name(&ident_value(new_name));
+                let new_name = ident_value(new_name);
                 if schema
                     .policies
                     .iter()
@@ -1896,13 +1896,13 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_drop_policy(&mut self, drop_policy: &DropPolicy) -> Result<SqlResult> {
-        let table = normalize_object_name(&object_name(&drop_policy.table_name)?);
+        let table = relation_name(&drop_policy.table_name)?;
         // Dropping the isolating policy is as powerful as adding a permissive
         // one, so it needs the same gate.
         self.require_table_ownership(&table, "DROP POLICY")?;
         let mut schema = load_schema(self.db_ref(), &table)?
             .ok_or_else(|| SqlError::InvalidCollection(table.clone()))?;
-        let name = normalize_object_name(&ident_value(&drop_policy.name));
+        let name = ident_value(&drop_policy.name);
         // Policies have no dependents, so CASCADE and RESTRICT are both no-ops.
         let original_len = schema.policies.len();
         schema

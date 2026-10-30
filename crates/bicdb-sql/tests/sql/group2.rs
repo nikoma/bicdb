@@ -2034,7 +2034,7 @@ fn count_aggregate() {
         .execute("SELECT COUNT(*) FROM wearable WHERE metadata.metric = 'hrv'")
         .unwrap();
 
-    assert_eq!(result.columns, ["COUNT(*)"]);
+    assert_eq!(result.columns, ["count"]);
     assert_eq!(result.rows, vec![vec![SqlValue::Int(2)]]);
 }
 
@@ -2163,7 +2163,7 @@ fn group_by_with_aggregates() {
         )
         .unwrap();
 
-    assert_eq!(result.columns, ["metric", "COUNT(*)", "avg", "min", "max"]);
+    assert_eq!(result.columns, ["metric", "count", "avg", "min", "max"]);
     assert_eq!(
         result.rows,
         vec![

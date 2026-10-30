@@ -893,3 +893,56 @@ fn internal_metadata_is_hidden_and_cannot_be_mutated_through_sql() {
         vec![vec![SqlValue::Int(7)]]
     );
 }
+
+#[test]
+fn renaming_or_restoring_into_internal_names_preserves_the_original_data() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let dir = tempfile::tempdir().unwrap();
+        let config = DbConfig::default()
+            .with_fsync(false)
+            .with_storage_mode(mode);
+        let mut db = BicDb::open_with_config(dir.path(), config.clone()).unwrap();
+        {
+            let mut s = SqlSession::new(&mut db);
+            s.execute("CREATE TABLE retained_data(id INT PRIMARY KEY); INSERT INTO retained_data VALUES(42)").unwrap();
+            for transactional in [false, true] {
+                if transactional {
+                    s.execute("BEGIN").unwrap();
+                }
+                assert!(s
+                    .execute("ALTER TABLE retained_data RENAME TO __bicdb_migration_history")
+                    .is_err());
+                if transactional {
+                    s.execute("ROLLBACK").unwrap();
+                }
+                assert_eq!(
+                    s.execute("SELECT id FROM retained_data").unwrap().rows,
+                    vec![vec![SqlValue::Int(42)]]
+                );
+            }
+            s.execute("DROP TABLE retained_data").unwrap();
+            assert!(s.execute("FLASHBACK TABLE retained_data TO BEFORE DROP RENAME TO __bicdb_migration_history").is_err());
+            assert_eq!(s.execute("SHOW RECYCLEBIN").unwrap().rows.len(), 1);
+            s.execute("FLASHBACK TABLE retained_data TO BEFORE DROP")
+                .unwrap();
+            assert_eq!(
+                s.execute("SELECT id FROM retained_data").unwrap().rows,
+                vec![vec![SqlValue::Int(42)]]
+            );
+        }
+        assert!(!db
+            .collections()
+            .iter()
+            .any(|collection| collection.name == "__bicdb_migration_history"));
+        drop(db);
+        let mut db = BicDb::open_with_config(dir.path(), config).unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute("SELECT id FROM retained_data")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(42)]]
+        );
+        bicdb_sql::verify_catalog_identifiers(&db).unwrap();
+    }
+}

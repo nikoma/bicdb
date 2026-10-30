@@ -212,19 +212,15 @@ pub(crate) fn relation_name(name: &ObjectName) -> Result<String> {
 /// and silently wrote into `public`.
 pub(crate) fn relation_name_from_parts(parts: &[String]) -> Result<String> {
     match parts {
-        [schema, table] if schema.eq_ignore_ascii_case("pg_catalog") => {
-            Ok(format!("pg_catalog.{table}"))
-        }
-        [schema, table] if schema.eq_ignore_ascii_case("information_schema") => {
+        [schema, table] if schema == "pg_catalog" => Ok(format!("pg_catalog.{table}")),
+        [schema, table] if schema == "information_schema" => {
             Ok(format!("information_schema.{table}"))
         }
         // Durable aggregate projections are virtual relations, not stored
         // collections, so the qualifier must survive rather than being
         // encoded into a physical collection name.
-        [schema, table] if schema.eq_ignore_ascii_case("bicdb_projection") => {
-            Ok(format!("bicdb_projection.{table}"))
-        }
-        [schema, table] if schema.eq_ignore_ascii_case("public") => Ok(table.clone()),
+        [schema, table] if schema == "bicdb_projection" => Ok(format!("bicdb_projection.{table}")),
+        [schema, table] if schema == "public" => Ok(table.clone()),
         [schema, table] => {
             // Core collections have no schema dimension. Encode a
             // non-public SQL schema into a path-safe, collision-resistant

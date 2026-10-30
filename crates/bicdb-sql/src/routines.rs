@@ -2267,6 +2267,7 @@ pub(crate) fn alter_table_rename_table(
     schema: &mut TableSchema,
     track_undo: bool,
 ) -> Result<Option<DdlUndo>> {
+    require_user_relation_name(new_table)?;
     if user_collection_names(db)
         .iter()
         .any(|name| name.eq_ignore_ascii_case(new_table))

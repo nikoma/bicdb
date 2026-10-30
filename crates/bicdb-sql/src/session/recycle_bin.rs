@@ -253,6 +253,7 @@ impl<'db> SqlSession<'db> {
         entry: &RecycleBinEntry,
         target: &str,
     ) -> Result<()> {
+        require_user_relation_name(target)?;
         // Check every conflict before changing anything.
         if load_schema(self.db_ref(), target)?.is_some()
             || self

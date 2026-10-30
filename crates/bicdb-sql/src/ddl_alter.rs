@@ -2828,11 +2828,14 @@ pub(crate) fn raw_alter_table_set_schema(sql: &str) -> Result<Option<RawAlterTab
         ));
     }
 
-    let (_, table) = identifier_schema_and_name(&target);
-    let (_, schema_name) = identifier_schema_and_name(&schema);
+    let target_parts = sql_identifier_parts(&target)?;
+    let schema_parts = sql_identifier_parts(&schema)?;
     Ok(Some(RawAlterTableSetSchema {
-        table: normalize_object_name(&table),
-        schema_name: normalize_object_name(&schema_name),
+        table: relation_name_from_parts(&target_parts)?,
+        schema_name: schema_parts
+            .last()
+            .cloned()
+            .ok_or_else(|| SqlError::InvalidSql("missing schema name".into()))?,
         if_exists,
     }))
 }

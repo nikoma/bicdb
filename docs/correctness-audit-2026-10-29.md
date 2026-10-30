@@ -186,7 +186,7 @@ functions or rewrite user rows.
 
 ## Follow-up execution evidence
 
-- The focused platform audit has **24 passing regressions**, including both
+- The focused platform audit has **25 passing regressions**, including both
   storage modes, constraint races, trigger effects, namespace isolation, catalog
   identity/reopen checks and injected legacy type aliases.
 - The main SQL compatibility target has **416 passing tests** after the catalog
@@ -217,3 +217,19 @@ DDL cannot publish a user schema over those native collections. A regression che
 catalog visibility, SELECT, INSERT, UPDATE, DELETE, COPY, TRUNCATE, DROP, ALTER, GRANT
 and CREATE paths for both ordinary and bootstrap roles, verifies metadata is unchanged,
 and preserves user relations with the same logical name in a private schema.
+
+Table rename and recycle-bin restore validate the target storage name before
+moving any records or deleting the original SQL schema. The retained regression
+checks autocommit and transactional rename refusal, failed restore followed by a
+successful restore, and data preservation after reopen in both storage modes.
+
+`ALTER TABLE SET SCHEMA` previously changed only catalog metadata, leaving the
+physical namespace and dependent relation bindings at the old name. A real move
+now fails explicitly with `0A000` before mutation; same-schema operations and
+`IF EXISTS` for a missing table remain no-ops. The regression verifies data and
+namespace preservation inside and outside transactions. Implementing an atomic
+physical move with dependency rebinding remains a separate capability.
+
+Qualified schema parsing retains quoted case, including a user schema named
+`"PUBLIC"`, so it cannot alias the actual `public` namespace. The namespace-move
+regression checks both independently populated tables before refusing a move.

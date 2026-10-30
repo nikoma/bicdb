@@ -366,3 +366,68 @@ fn an_empty_database_also_has_a_verifiable_archive_identity() {
     )
     .unwrap();
 }
+
+#[test]
+fn a_new_archive_starts_at_its_published_base_and_retains_the_new_suffix() {
+    for storage in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("source");
+        let dir = root.path().join("archive");
+        {
+            // Historical commits were made before commit-frame retention existed.
+            let mut db = BicDb::open_with_config(
+                &source,
+                DbConfig::default()
+                    .with_fsync(false)
+                    .with_storage_mode(storage.clone()),
+            )
+            .unwrap();
+            db.create_collection("items").unwrap();
+            put(&db, "old", 1);
+            db.compact().unwrap();
+        }
+        let mut db = BicDb::open_with_config(&source, primary_config(storage.clone())).unwrap();
+        let mut archive = LogArchive::open(&dir, false).unwrap();
+        let base = db.archive_base_backup(&dir, KEY).unwrap();
+        assert!(base.commit_seq > 0);
+        // Checkpoint during the base-publication/metadata-installation window
+        // must not retire a commit needed after that base.
+        put(&db, "during_initialization", 2);
+        db.compact().unwrap();
+        db.initialize_log_archive_from_base(&mut archive, &base)
+            .unwrap();
+        assert_eq!(archive.last_commit_seq(), base.commit_seq);
+        assert!(
+            db.initialize_log_archive_from_base(&mut archive, &base)
+                .is_err(),
+            "an existing archive must never be silently rebased"
+        );
+        let mut cursor = ReplicationCursor::new(archive.last_commit_seq());
+        while db.archive_commits(&mut archive, &mut cursor, 7).unwrap() > 0 {}
+        put(&db, "after_initialization", 3);
+        while db.archive_commits(&mut archive, &mut cursor, 7).unwrap() > 0 {}
+        let final_seq = db.current_commit_seq();
+        drop(archive);
+        assert_eq!(
+            LogArchive::open(&dir, false).unwrap().last_commit_seq(),
+            final_seq
+        );
+        let restored = root.path().join("restored");
+        let report = bicdb_core::restore_point_in_time(
+            &dir,
+            &restored,
+            KEY,
+            false,
+            ReplayTarget {
+                commit_seq: Some(final_seq),
+                timestamp: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(report.restored_commit_seq, final_seq);
+        assert_eq!(
+            ids(&restored, storage),
+            vec!["after_initialization", "during_initialization", "old"]
+        );
+    }
+}

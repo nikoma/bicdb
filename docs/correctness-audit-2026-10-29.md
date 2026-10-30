@@ -233,3 +233,21 @@ physical move with dependency rebinding remains a separate capability.
 Qualified schema parsing retains quoted case, including a user schema named
 `"PUBLIC"`, so it cannot alias the actual `public` namespace. The namespace-move
 regression checks both independently populated tables before refusing a move.
+
+### Starting archival on an existing database
+
+An end-to-end smoke against the 171-collection oracle database exposed startup
+attempting to export commit 1 after publishing a base at commit 765. Pre-archive
+history was already retired, so the worker never reached its scheduled drill.
+A fresh archive now installs durable metadata anchored at its newly published
+consistent base. A retention hold precedes base creation and protects commits
+made before archive initialization, including across a checkpoint. Existing
+archive histories cannot be silently rebased over a missing suffix. Identity is
+checked before a foreign source can write a base into an existing archive.
+
+Archive export errors now publish a failed restore result and failure metrics
+instead of suppressing verification and leaving an old success visible. Tests
+cover initialization and replay in both storage modes, commits/checkpoint in the
+base-publication window, server startup on pre-existing non-replicated data,
+and visible failure for a mismatched archive identity without adding a foreign
+base backup.

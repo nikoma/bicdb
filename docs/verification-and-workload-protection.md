@@ -30,6 +30,12 @@ your provider's routing and network partitions.
 
 The archive worker runs its own drill, excluding archive append and pruning
 while restore reads those files. Writes continue and the WAL remains retained.
+Enabling a fresh archive on an existing database creates a consistent base and
+anchors the archive at that durable prefix, retaining its new suffix before
+base creation. Previously retired pre-archive commits are not required. An
+existing archive is never rebased over a gap; use a new archive and verified
+base if its required suffix is gone. Archive identity/export failures publish
+failed restore results and unhealthy metrics instead of suppressing drills.
 The next interval starts after the previous run finishes. Without an archive,
 verification checks local tables and indexes and reports `restore_and_failover =
 false`. With an archive configured, scheduled verification requires its base

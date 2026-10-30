@@ -175,9 +175,34 @@ impl LogArchive {
         self.meta.as_ref()
     }
 
-    /// The last archived commit (0 for an empty archive).
+    /// Last recoverable prefix, including a fresh archive's initial base backup.
     pub fn last_commit_seq(&self) -> u64 {
         self.last_commit_seq
+    }
+
+    /// Anchor a fresh archive at an already-published consistent base backup.
+    /// Existing archive histories must never be rebased over a missing suffix.
+    pub fn initialize_from_base(&mut self, cluster_id: &str, base_commit_seq: u64) -> Result<()> {
+        if self.poisoned || self.meta.is_some() || self.segment.is_some() {
+            return Err(archive_error(
+                "only an uninitialized archive can start from a base backup",
+            ));
+        }
+        let first_commit_seq = base_commit_seq
+            .checked_add(1)
+            .ok_or_else(|| archive_error("base commit sequence exhausted"))?;
+        let meta = LogArchiveMeta {
+            cluster_id: cluster_id.into(),
+            first_commit_seq,
+        };
+        crate::storage::write_atomic(
+            &self.dir.join(META_FILE),
+            &serde_json::to_vec_pretty(&meta)?,
+            self.fsync,
+        )?;
+        self.meta = Some(meta);
+        self.last_commit_seq = base_commit_seq;
+        Ok(())
     }
 
     /// Appends consecutive commit frames durably.

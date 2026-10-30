@@ -94,7 +94,30 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
             while !server.is_shutdown_requested() {
                 if config.base_backup_key.is_some() && Instant::now() >= next_base {
                     next_base = Instant::now() + config.base_backup_interval;
-                    if let Err(error) = take_base_backup(&server, &config, &dir) {
+                    let initialized = server
+                        .read_db()
+                        .map_err(|error| error.to_string())
+                        .and_then(|db| {
+                            db.prepare_log_archive(&archive)
+                                .map_err(|error| error.to_string())
+                        })
+                        .and_then(|_| {
+                            take_base_backup(&server, &config, &dir, archive.meta().is_none())
+                        })
+                        .and_then(|base| {
+                            if archive.meta().is_none() {
+                                if let Some(base) = base {
+                                    server
+                                        .read_db()
+                                        .map_err(|error| error.to_string())?
+                                        .initialize_log_archive_from_base(&mut archive, &base)
+                                        .map_err(|error| error.to_string())?;
+                                    cursor = ReplicationCursor::new(archive.last_commit_seq());
+                                }
+                            }
+                            Ok(())
+                        });
+                    if let Err(error) = initialized {
                         eprintln!("bicdb log archive: base backup failed: {error}");
                         next_base = Instant::now() + Duration::from_secs(60);
                     }
@@ -109,7 +132,7 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
                         db.archive_commits(&mut archive, &mut cursor, BATCH_COMMITS)
                             .map_err(|error| error.to_string())
                     });
-                if archived.is_ok() && Instant::now() >= next_verify {
+                if Instant::now() >= next_verify {
                     if let Some(verify) = &server.config.verification {
                         // Base selection and restore run on this worker so a
                         // retention pass cannot delete files during the drill.
@@ -119,7 +142,10 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
                             .as_deref()
                             .filter(|_| primary)
                             .map(|key| (dir.as_path(), key, &mut archive, &mut cursor));
-                        verification::run(&server, input);
+                        match &archived {
+                            Ok(_) => verification::run(&server, input),
+                            Err(error) => verification::archive_failure(&server, error),
+                        }
                         next_verify = Instant::now() + verify.interval;
                     }
                 }
@@ -148,9 +174,10 @@ fn take_base_backup(
     server: &Arc<PgWireServer>,
     config: &LogArchiveConfig,
     dir: &std::path::Path,
-) -> std::result::Result<(), String> {
+    force: bool,
+) -> std::result::Result<Option<bicdb_core::log_archive::ArchivedBaseBackup>, String> {
     let Some(key) = &config.base_backup_key else {
-        return Ok(());
+        return Ok(None);
     };
     let newest = bicdb_core::log_archive::list_base_backups(dir)
         .map_err(|error| error.to_string())?
@@ -163,9 +190,9 @@ fn take_base_backup(
     });
     let db = server.read_db().map_err(|error| error.to_string())?;
     if db.is_standby_role() {
-        return Ok(());
+        return Ok(None);
     }
-    if due {
+    let base = if force || due {
         let base = db
             .archive_base_backup(dir, key)
             .map_err(|error| error.to_string())?;
@@ -174,7 +201,10 @@ fn take_base_backup(
             base.commit_seq,
             base.path.display()
         );
-    }
+        Some(base)
+    } else {
+        None
+    };
     drop(db);
     let pruned = bicdb_core::log_archive::prune_log_archive(
         dir,
@@ -188,5 +218,5 @@ fn take_base_backup(
             pruned.base_backups, pruned.segments
         );
     }
-    Ok(())
+    Ok(base)
 }

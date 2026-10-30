@@ -2722,6 +2722,11 @@ impl<'db> SqlSession<'db> {
                 fields,
             )?);
         }
+        // BEFORE triggers can replace or suppress rows. Validate the rows
+        // actually being stored, just as INSERT does, rather than allowing
+        // COPY to bypass NOT NULL, CHECK and foreign-key constraints.
+        let mut records =
+            self.apply_before_insert_row_triggers(&table, schema.as_ref(), records)?;
         if let Some(schema) = schema.as_ref() {
             self.materialize_generated_columns(&table, schema, &mut records)?;
             validate_records_for_write(
@@ -2733,7 +2738,6 @@ impl<'db> SqlSession<'db> {
                 false,
             )?;
         }
-        let records = self.apply_before_insert_row_triggers(&table, schema.as_ref(), records)?;
         self.enforce_rls_checks(&table, schema.as_ref(), PolicyAction::Insert, &records)?;
         let count = records.len();
         self.insert_session_records(&table, records.clone())?;

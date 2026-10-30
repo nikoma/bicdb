@@ -1,0 +1,24 @@
+{
+  "id": "double",
+  "description": "Strict edge oracle: double",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_double"
+  ],
+  "sql": [
+    "CREATE TABLE edge_double(id INT PRIMARY KEY,v DOUBLE PRECISION)",
+    "INSERT INTO edge_double VALUES(0,1.5)",
+    "INSERT INTO edge_double VALUES(1,0.0)",
+    "INSERT INTO edge_double VALUES(2,'NaN')",
+    "INSERT INTO edge_double VALUES(3,'Infinity')",
+    "SELECT id,v FROM edge_double ORDER BY id",
+    "SELECT id FROM edge_double WHERE v=1.5::DOUBLE PRECISION ORDER BY id",
+    "SELECT id FROM edge_double WHERE v=0.0::DOUBLE PRECISION ORDER BY id",
+    "SELECT id FROM edge_double WHERE v='NaN'::DOUBLE PRECISION ORDER BY id",
+    "SELECT id FROM edge_double WHERE v='Infinity'::DOUBLE PRECISION ORDER BY id",
+    "CREATE INDEX edge_double_idx ON edge_double(v)",
+    "SELECT id FROM edge_double WHERE v=1.5::DOUBLE PRECISION ORDER BY id",
+    "SELECT id FROM edge_double WHERE v=0.0::DOUBLE PRECISION ORDER BY id",
+    "SELECT id FROM edge_double WHERE v='NaN'::DOUBLE PRECISION ORDER BY id",
+    "SELECT id FROM edge_double WHERE v='Infinity'::DOUBLE PRECISION ORDER BY id"
+  ]
+}

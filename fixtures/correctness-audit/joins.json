@@ -1,0 +1,27 @@
+{
+  "id": "joins",
+  "description": "Strict correctness oracle: joins",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS audit_left",
+    "DROP TABLE IF EXISTS audit_right"
+  ],
+  "sql": [
+    "CREATE TABLE audit_left(id TEXT PRIMARY KEY,k INT)",
+    "CREATE TABLE audit_right(id TEXT PRIMARY KEY,k INT,n INT)",
+    "INSERT INTO audit_left VALUES('a',1),('b',2),('c',NULL),('d',4)",
+    "INSERT INTO audit_right VALUES('x',1,3),('y',1,4),('z',NULL,9),('w',3,5)",
+    "SELECT a.id,b.id AS bid FROM audit_left a LEFT JOIN audit_right b ON a.k=b.k ORDER BY a.id,b.id NULLS FIRST",
+    "SELECT a.id,b.id AS bid FROM audit_left a FULL JOIN audit_right b ON a.k=b.k ORDER BY a.id NULLS FIRST,b.id NULLS FIRST",
+    "SELECT id FROM audit_left a WHERE EXISTS(SELECT 1 FROM audit_right b WHERE b.k=a.k) ORDER BY id",
+    "SELECT id FROM audit_left a WHERE k NOT IN(SELECT k FROM audit_right) ORDER BY id",
+    "SELECT a.id,(SELECT MAX(b.n) FROM audit_right b WHERE b.k=a.k) AS m FROM audit_left a ORDER BY a.id",
+    "SELECT a.k,COUNT(b.id) AS n,SUM(b.n) AS total FROM audit_left a LEFT JOIN audit_right b ON a.k=b.k GROUP BY a.k ORDER BY a.k NULLS FIRST",
+    "CREATE INDEX audit_right_k ON audit_right(k)",
+    "SELECT a.id,b.id AS bid FROM audit_left a LEFT JOIN audit_right b ON a.k=b.k ORDER BY a.id,b.id NULLS FIRST",
+    "SELECT a.id,b.id AS bid FROM audit_left a FULL JOIN audit_right b ON a.k=b.k ORDER BY a.id NULLS FIRST,b.id NULLS FIRST",
+    "SELECT id FROM audit_left a WHERE EXISTS(SELECT 1 FROM audit_right b WHERE b.k=a.k) ORDER BY id",
+    "SELECT id FROM audit_left a WHERE k NOT IN(SELECT k FROM audit_right) ORDER BY id",
+    "SELECT a.id,(SELECT MAX(b.n) FROM audit_right b WHERE b.k=a.k) AS m FROM audit_left a ORDER BY a.id",
+    "SELECT a.k,COUNT(b.id) AS n,SUM(b.n) AS total FROM audit_left a LEFT JOIN audit_right b ON a.k=b.k GROUP BY a.k ORDER BY a.k NULLS FIRST"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "boolean_algebra",
+  "description": "Strict edge oracle: boolean_algebra",
+  "cleanup_sql": [],
+  "sql": [
+    "SELECT (true AND true) AS a,(true OR true) AS o,NOT (true AND true) AS na,(true IS DISTINCT FROM true) AS d",
+    "SELECT (true AND false) AS a,(true OR false) AS o,NOT (true AND false) AS na,(true IS DISTINCT FROM false) AS d",
+    "SELECT (true AND NULL::boolean) AS a,(true OR NULL::boolean) AS o,NOT (true AND NULL::boolean) AS na,(true IS DISTINCT FROM NULL::boolean) AS d",
+    "SELECT (false AND true) AS a,(false OR true) AS o,NOT (false AND true) AS na,(false IS DISTINCT FROM true) AS d",
+    "SELECT (false AND false) AS a,(false OR false) AS o,NOT (false AND false) AS na,(false IS DISTINCT FROM false) AS d",
+    "SELECT (false AND NULL::boolean) AS a,(false OR NULL::boolean) AS o,NOT (false AND NULL::boolean) AS na,(false IS DISTINCT FROM NULL::boolean) AS d",
+    "SELECT (NULL::boolean AND true) AS a,(NULL::boolean OR true) AS o,NOT (NULL::boolean AND true) AS na,(NULL::boolean IS DISTINCT FROM true) AS d",
+    "SELECT (NULL::boolean AND false) AS a,(NULL::boolean OR false) AS o,NOT (NULL::boolean AND false) AS na,(NULL::boolean IS DISTINCT FROM false) AS d",
+    "SELECT (NULL::boolean AND NULL::boolean) AS a,(NULL::boolean OR NULL::boolean) AS o,NOT (NULL::boolean AND NULL::boolean) AS na,(NULL::boolean IS DISTINCT FROM NULL::boolean) AS d"
+  ]
+}

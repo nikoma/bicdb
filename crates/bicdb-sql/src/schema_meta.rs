@@ -4134,6 +4134,38 @@ impl RoutineFrame {
     /// User-visible assignment checks the declared type before changing a slot.
     /// Internal values such as FOUND continue to use the raw frame setters.
     pub(crate) fn assign(&mut self, name: &str, value: SqlValue) -> Result<()> {
+        if let Some((root, path)) = name.split_once('.') {
+            let mut row = self.get(root);
+            if let SqlValue::Json(JsonValue::Object(_)) = &row {
+                let SqlValue::Json(json) = &mut row else {
+                    unreachable!()
+                };
+                let mut field = json;
+                for part in path.split('.') {
+                    let object = field.as_object_mut().ok_or_else(|| {
+                        SqlError::InvalidSql(format!(
+                            "routine assignment {name} traverses a non-record value"
+                        ))
+                    })?;
+                    let key = object
+                        .keys()
+                        .find(|key| key.eq_ignore_ascii_case(part))
+                        .cloned()
+                        .ok_or_else(|| {
+                            SqlError::InvalidSql(format!("record {root} has no field {part}"))
+                        })?;
+                    field = object.get_mut(&key).expect("existing field");
+                }
+                *field = sql_value_to_json(value);
+                self.set(root, row);
+                return Ok(());
+            }
+            if root.eq_ignore_ascii_case("new") || root.eq_ignore_ascii_case("old") {
+                return Err(SqlError::InvalidSql(format!(
+                    "routine assignment {name} requires a record"
+                )));
+            }
+        }
         let key = normalized_object_name_ref(name);
         let value = match self.assignment_types.get(key.as_ref()) {
             Some(schema) => coerce_routine_assignment(value, schema)?,

@@ -1353,6 +1353,7 @@ fn sql_index_definitions_for_collection(db: &BicDb, collection: &str) -> Vec<Ind
         .filter(|schema| primary_key_index_is_unreadable(schema))
         .map(|schema| schema.primary_key_constraint_name().to_ascii_lowercase());
     let locale_ordered_indexes = schema
+        .as_ref()
         .map(|schema| {
             schema
                 .indexes
@@ -1375,6 +1376,18 @@ fn sql_index_definitions_for_collection(db: &BicDb, collection: &str) -> Vec<Ind
         .filter(|index| {
             index.collection == collection
                 && index.predicate.is_none()
+                // Core metadata B-tree keys preserve JSON object order and
+                // scalar representation. SQL JSONB equality and ordering do
+                // not: using those keys can omit equivalent objects, confuse
+                // JSON null with SQL NULL, and misorder numeric values. Keep
+                // existing indexes durable, but scan until their key format
+                // carries SQL JSONB semantics. GIN containment is independent.
+                && !(index.kind == IndexKind::BTree
+                    && schema.as_ref().is_some_and(|schema| {
+                        index.fields.iter().any(|field| {
+                            index_field_pg_type(schema, field).as_deref() == Some("jsonb")
+                        })
+                    }))
                 && !locale_ordered_indexes.contains(&index.name.to_ascii_lowercase())
                 && unreadable_primary_key_index.as_deref() != Some(&index.name.to_ascii_lowercase())
         })

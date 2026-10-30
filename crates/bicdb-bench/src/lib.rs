@@ -9987,17 +9987,17 @@ fn observe_postgres_step(client: &mut PostgresClient, sql: &str) -> PostgresObse
             }
 
             if !rows.is_empty() || !columns.is_empty() {
-                if let Ok(metadata_rows) = client.query(sql, &[]) {
-                    if let Some(row) = metadata_rows.first() {
-                        columns = row
-                            .columns()
-                            .iter()
-                            .map(|column| PostgresObservedColumn {
-                                name: column.name().to_string(),
-                                type_oid: Some(column.type_().oid()),
-                            })
-                            .collect();
-                    }
+                // Describe without executing again: RETURNING statements and
+                // volatile SELECT expressions must run exactly once.
+                if let Ok(statement) = client.prepare(sql) {
+                    columns = statement
+                        .columns()
+                        .iter()
+                        .map(|column| PostgresObservedColumn {
+                            name: column.name().to_string(),
+                            type_oid: Some(column.type_().oid()),
+                        })
+                        .collect();
                 }
             }
 
@@ -10305,6 +10305,14 @@ fn diff_observations(
             .collect::<Vec<_>>();
         if pg_column_names != bicdb_column_names {
             differences.push(format!("step {step} column names differ"));
+        }
+        for (column, (pg_column, bicdb_column)) in pg.columns.iter().zip(&bicdb.columns).enumerate()
+        {
+            if let (Some(pg_type), Some(bicdb_type)) = (pg_column.type_oid, bicdb_column.type_oid) {
+                if pg_type != bicdb_type {
+                    differences.push(format!("step {step} column {} type OID differs: postgres={pg_type} bicdb={bicdb_type}", column + 1));
+                }
+            }
         }
         if pg.rows != bicdb.rows {
             differences.push(format!("step {step} rows differ"));
@@ -11187,6 +11195,16 @@ mod tests {
         let markdown = report.to_markdown();
         assert!(markdown.contains("# PostgreSQL Differential Compatibility Report"));
         assert!(markdown.contains("| select_1 |"));
+    }
+
+    #[test]
+    fn differential_comparison_rejects_equal_text_with_wrong_wire_type() {
+        let postgres = observed_rows("SELECT 1", &[&["1"]]);
+        let mut bicdb = postgres.clone();
+        bicdb.columns[0].type_oid = Some(20);
+        assert!(diff_observations(&[postgres], &[bicdb])
+            .iter()
+            .any(|difference| difference.contains("type OID differs")));
     }
 
     fn observed_rows(sql: &str, rows: &[&[&str]]) -> PostgresObservedStep {

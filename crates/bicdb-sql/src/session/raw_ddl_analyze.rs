@@ -1007,7 +1007,7 @@ impl<'db> SqlSession<'db> {
         if matches!(
             statement,
             Statement::Insert(_) | Statement::Update(_) | Statement::Delete(_)
-        ) && (self.tx.is_some() || self.mutation_has_row_triggers(statement)?)
+        ) && (self.tx.is_some() || self.mutation_needs_atomic_effects(statement)?)
         {
             return self
                 .with_statement_transaction(|session| session.execute_statement_inner(statement));

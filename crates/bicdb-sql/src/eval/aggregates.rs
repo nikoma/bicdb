@@ -472,7 +472,14 @@ pub(crate) fn env_lookup_unqualified(env: &[RelationColumns], name: &str) -> Opt
     let needle = name.to_ascii_lowercase();
     let mut found: Option<Option<String>> = None;
     for relation in env {
+        let mut seen_base_columns = BTreeSet::new();
         for (column, ty) in &relation.columns {
+            // Aliased base rows carry a second block for the physical-table
+            // qualifier. Both entries name the same column, rather than two
+            // ambiguous FROM sources. Derived-table duplicates remain errors.
+            if relation.row_type.is_some() && !seen_base_columns.insert(column) {
+                continue;
+            }
             if column == &needle {
                 if found.is_some() {
                     return None;
@@ -1853,8 +1860,14 @@ pub(crate) fn scalar_subquery_pg_type(
             if shadowed(&name) {
                 return None;
             }
-            let schema = load_schema_shared(db, &name).ok().flatten()?;
-            projected_expr_pg_type(expr, Some(&schema))
+            load_schema_shared(db, &name).ok().flatten()?;
+            // Aggregate return types need the subquery's relation/alias
+            // environment. The schema-only helper cannot type MAX(alias.n)
+            // and used to advertise int8 from the observed value instead of
+            // the declared int4, including for an empty scalar subquery.
+            let engine = SqlEngine::new(db);
+            let env = engine.from_relation_columns(&select.from)?;
+            engine.infer_env_expr_type(expr, &env)
         }
         _ => None,
     }

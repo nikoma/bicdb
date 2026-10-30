@@ -1,0 +1,15 @@
+{
+  "id": "returning_once",
+  "description": "Strict correctness oracle: returning_once",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS audit_once"
+  ],
+  "sql": [
+    "CREATE TABLE audit_once(id INT PRIMARY KEY,n INT)",
+    "INSERT INTO audit_once VALUES(1,0) RETURNING id,n",
+    "UPDATE audit_once SET n=n+1 WHERE id=1 RETURNING id,n",
+    "SELECT id,n FROM audit_once ORDER BY id",
+    "DELETE FROM audit_once WHERE id=1 RETURNING id,n",
+    "SELECT COUNT(*) AS n FROM audit_once"
+  ]
+}

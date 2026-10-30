@@ -91,3 +91,57 @@ native HA still closes writer authority and wakes quorum waiters; the full
 
 The original squashed feature tips are retained in the merge ancestry without
 reapplying their old file contents over subsequent fixes.
+
+## Whole-platform follow-up
+
+The follow-up expands execution to every workspace package, all core and SQL
+integration targets, protocol clients, and the platform Python/JavaScript
+contracts. Static review also follows application receipts/outboxes, native
+state acknowledgement, peer synchronization, constraint enforcement and query
+materialization. This is a finite audit, not proof that the platform has no bugs.
+
+Strict comparisons run against an isolated PostgreSQL 18.4 database, with seeded
+query/mutation cases and focused regressions. They check rows, errors, affected
+row counts, column names and available wire type OIDs. No fixture in
+`fixtures/correctness-audit` allows an expected difference.
+
+| Additional finding | Correction and retained regression |
+| --- | --- |
+| JSONB B-tree probes matched object serialization rather than SQL equality | Keep those indexes durable but exclude them from SQL query planning; scan/index/reopen and predicate-sensitive UPDATE/DELETE coverage in `platform_correctness_audit` |
+| Paged streaming ORDER BY used JSONB equality keys as ordered keys | Use the semantic materializing sorter; regression checks limited results after reopen |
+| Overlapping UNIQUE JSON writes could both commit equivalent objects | Reserve canonical constraint keys until transaction/savepoint completion, then check current committed rows plus pending writes |
+| Child insertion could race parent deletion/update and leave an orphan | Child checks and parent actions reserve the same referenced key, with current-state integrity reads |
+| Nullable composite references were incorrectly restricted or cascaded | Apply MATCH SIMPLE's any-NULL exemption to parent actions as well as insert checks |
+| PL/pgSQL `NEW.field := ...` silently assigned an unrelated local | Preserve and assign the record path; returned trigger rows now contain the change |
+| Generated columns preceded BEFORE-trigger changes | Generate from the final trigger postimage in INSERT, UPDATE, upsert and COPY |
+| COPY validated rows before BEFORE triggers | Validate postimages and roll back all copied rows and trigger effects on failure |
+| Referential actions stopped at immediate children and bypassed child triggers | Traverse descendants with cancellation/depth bounds and cycle tracking, execute row triggers and generated-column/constraint checks |
+| Autocommit referential effects could survive a later statement failure | Put the root mutation and all dependent effects in one statement transaction; late-error rollback regression retained |
+| Scalar subquery aggregate metadata fell back to observed int8 values | Resolve the subquery's own relation environment, including empty MIN/MAX results |
+| Aliased base-table qualifier copies were mistaken for ambiguous columns | Deduplicate the same physical column within its base relation during type inference, retaining ambiguity across separate relations and derived outputs |
+| Dynamic native-role checks rejected externally managed Cell replicas | Initialize import eligibility from the configured role even when the native transport is disabled; persisted promotion still wins over startup configuration |
+| PostgreSQL oracle re-executed row-returning statements to collect metadata | Describe prepared statements without execution; `returning_once` detects repeated mutations |
+| Oracle treated differing wire type OIDs as advisory | Available OID mismatches now fail strict comparisons; unit regression retained |
+
+The constraint reservations deliberately return retryable transaction conflicts
+on contention. Foreign-key reservations currently serialize writers referring
+to the same parent key; they do not implement PostgreSQL's shared key locks.
+JSONB B-tree queries can be slower because their existing physical key format
+does not implement SQL JSONB equality/order; JSONB GIN containment remains
+independent. Referential cascades fail explicitly beyond 64 levels. A composite
+primary-key identity change remains an explicit unsupported operation, rather
+than silently applying an incomplete update.
+
+To reproduce strict oracle coverage with a disposable PostgreSQL 18.4 target:
+
+```sh
+python3 scripts/platform/generate_correctness_fixtures.py /tmp/bicdb-audit-fixtures --seeds 128
+cargo run -p bicdb-cli --features bench --locked -- compat nightmare \
+  /tmp/bicdb-audit-db --fixtures /tmp/bicdb-audit-fixtures \
+  --pg-host 127.0.0.1 --pg-port "$PG18_HOST_PORT" \
+  --pg-database compat --pg-user postgres --pg-password "$PG18_PASSWORD" \
+  --json-out /tmp/bicdb-audit-results.json
+```
+
+The runner recreates its BicDB scratch path and the fixtures create/drop their
+named tables in PostgreSQL: both targets must be disposable test databases.

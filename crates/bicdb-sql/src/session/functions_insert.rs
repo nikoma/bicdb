@@ -661,14 +661,14 @@ impl<'db> SqlSession<'db> {
                 )?,
             }
         };
-        if let Some(schema) = schema.as_deref() {
-            self.materialize_generated_columns(&table, schema, &mut records)?;
-        }
         // BEFORE INSERT row triggers run before conflict arbitration and
         // constraint validation, on the exact rows about to be written.
         let triggered;
         (records, triggered) =
             self.apply_before_insert_row_triggers_reporting(&table, schema.as_deref(), records)?;
+        if let Some(schema) = schema.as_deref() {
+            self.materialize_generated_columns(&table, schema, &mut records)?;
+        }
         if triggered {
             prechecked = None;
         }
@@ -1356,15 +1356,10 @@ impl<'db> SqlSession<'db> {
                             )?;
                             set_record_column(&mut updated, Some(schema), &column, value)?;
                         }
-                        self.materialize_generated_columns(
-                            table,
-                            schema,
-                            std::slice::from_mut(&mut updated),
-                        )?;
                         // ON CONFLICT DO UPDATE takes the update path, so
                         // BEFORE/AFTER UPDATE row triggers apply — the same
                         // guards a plain UPDATE of the row would run.
-                        let Some(updated) = self.apply_before_update_row_triggers(
+                        let Some(mut updated) = self.apply_before_update_row_triggers(
                             table,
                             Some(schema),
                             &existing,
@@ -1373,6 +1368,11 @@ impl<'db> SqlSession<'db> {
                         else {
                             continue;
                         };
+                        self.materialize_generated_columns(
+                            table,
+                            schema,
+                            std::slice::from_mut(&mut updated),
+                        )?;
                         validate_records_for_write(
                             self.db_ref(),
                             self.tx.as_ref(),
@@ -1381,9 +1381,9 @@ impl<'db> SqlSession<'db> {
                             &[updated.clone()],
                             true,
                         )?;
-                        self.apply_foreign_key_parent_update(table, schema, &existing, &updated)?;
                         self.enforce_rls_check(table, PolicyAction::Update, &updated)?;
                         self.update_session_record(table, updated.clone())?;
+                        self.apply_foreign_key_parent_update(table, schema, &existing, &updated)?;
                         self.fire_after_row_triggers(
                             table,
                             Some(schema),

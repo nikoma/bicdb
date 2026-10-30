@@ -1,0 +1,18 @@
+{
+  "id": "jsonb",
+  "description": "Strict edge oracle: jsonb",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_jsonb"
+  ],
+  "sql": [
+    "CREATE TABLE edge_jsonb(id INT PRIMARY KEY,v JSONB)",
+    "INSERT INTO edge_jsonb VALUES(0,'{\"a\":1,\"b\":2}')",
+    "INSERT INTO edge_jsonb VALUES(1,'{\"b\":2,\"a\":1}')",
+    "SELECT id,v FROM edge_jsonb ORDER BY id",
+    "SELECT id FROM edge_jsonb WHERE v='{\"a\":1,\"b\":2}'::JSONB ORDER BY id",
+    "SELECT id FROM edge_jsonb WHERE v='{\"b\":2,\"a\":1}'::JSONB ORDER BY id",
+    "CREATE INDEX edge_jsonb_idx ON edge_jsonb(v)",
+    "SELECT id FROM edge_jsonb WHERE v='{\"a\":1,\"b\":2}'::JSONB ORDER BY id",
+    "SELECT id FROM edge_jsonb WHERE v='{\"b\":2,\"a\":1}'::JSONB ORDER BY id"
+  ]
+}

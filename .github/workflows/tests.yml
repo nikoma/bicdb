@@ -141,11 +141,16 @@ jobs:
         if: matrix.suite.name == 'bicdb-core'
         run: cargo build -p bicdb-core --example chaos_child --locked
       - name: cargo test ${{ matrix.suite.args }}
-        if: matrix.suite.name != 'bicdb-sql'
+        if: matrix.suite.name != 'bicdb-sql' && matrix.suite.name != 'rest of workspace'
         run: cargo test ${{ matrix.suite.args }} --locked -- --test-threads=4
       - name: cargo test bicdb-sql with bounded linked artifacts
         if: matrix.suite.name == 'bicdb-sql'
         run: ./scripts/run-cargo-test-targets-bounded.sh bicdb-sql
+      - name: cargo test remaining workspace with bounded linked artifacts
+        if: matrix.suite.name == 'rest of workspace'
+        run: >-
+          python3 scripts/platform/run_workspace_tests_bounded.py
+          --exclude bicdb-core --exclude bicdb-sql --exclude bicdb-pgwire
       - name: Cluster harness and offline queue contracts
         if: matrix.suite.name == 'rest of workspace'
         run: |

@@ -1189,13 +1189,6 @@ impl<'db> SqlSession<'db> {
                 }
                 set_record_column(&mut record, schema.as_deref(), &column, value)?;
             }
-            if let Some(schema) = schema.as_deref() {
-                self.materialize_generated_columns(
-                    &table,
-                    schema,
-                    std::slice::from_mut(&mut record),
-                )?;
-            }
             // BEFORE UPDATE row triggers see the fully assigned row and may
             // veto it (skip this candidate) or modify it. They run before the
             // repair/RETURNING bookkeeping so a suppressed row leaves no
@@ -1216,6 +1209,13 @@ impl<'db> SqlSession<'db> {
                 None => record,
             };
             let mut record = record;
+            if let Some(schema) = schema.as_deref() {
+                self.materialize_generated_columns(
+                    &table,
+                    schema,
+                    std::slice::from_mut(&mut record),
+                )?;
+            }
             let repair_plan = match repair_assignments.as_ref() {
                 Some(assignments) => {
                     // The delta expressions are row-independent by analysis;
@@ -1315,7 +1315,6 @@ impl<'db> SqlSession<'db> {
                 &updated_records,
                 &before_after_records,
             )?;
-            self.apply_foreign_key_parent_update_batch(&table, schema, &before_after_records)?;
         }
         self.enforce_rls_checks(
             &table,
@@ -1361,6 +1360,9 @@ impl<'db> SqlSession<'db> {
             )?;
         } else {
             self.insert_session_records(&table, updated_records)?;
+        }
+        if let Some(schema) = schema.as_deref() {
+            self.apply_foreign_key_parent_update_batch(&table, schema, &before_after_records)?;
         }
         self.publish_extension_database_events(
             &table,
@@ -2193,9 +2195,6 @@ impl<'db> SqlSession<'db> {
             deleted_record_snapshots.push(statement_snapshot);
             deleted_records.push(record);
         }
-        if let Some(schema) = schema.as_ref() {
-            self.apply_foreign_key_parent_delete_batch(&table, schema, &deleted_records)?;
-        }
         let deleted = if deleted_record_snapshots
             .iter()
             .any(|snapshot| *snapshot != 0)
@@ -2210,6 +2209,9 @@ impl<'db> SqlSession<'db> {
         } else {
             self.delete_session_records(&table, &deleted_record_ids)?
         };
+        if let Some(schema) = schema.as_ref() {
+            self.apply_foreign_key_parent_delete_batch(&table, schema, &deleted_records)?;
+        }
         self.publish_extension_database_events(
             &table,
             DatabaseOperation::Delete,
@@ -4441,6 +4443,29 @@ impl<'db> SqlSession<'db> {
         schema: &TableSchema,
         records: &[Record],
     ) -> Result<()> {
+        self.apply_foreign_key_parent_delete_inner(table, schema, records, &mut BTreeSet::new(), 0)
+    }
+
+    fn apply_foreign_key_parent_delete_inner(
+        &mut self,
+        table: &str,
+        schema: &TableSchema,
+        records: &[Record],
+        deleting: &mut BTreeSet<(String, String)>,
+        depth: usize,
+    ) -> Result<()> {
+        self.cancellation.check()?;
+        if depth > 64 {
+            return Err(SqlError::InvalidSql(
+                "foreign-key cascade exceeds 64 levels".into(),
+            ));
+        }
+        let records = records
+            .iter()
+            .filter(|record| deleting.insert((table.to_string(), record.id.clone())))
+            .cloned()
+            .collect::<Vec<_>>();
+        let records = records.as_slice();
         if records.is_empty() {
             return Ok(());
         }
@@ -4465,6 +4490,18 @@ impl<'db> SqlSession<'db> {
             })
             .collect::<Vec<_>>();
 
+        // Child inserts and parent removal reserve the same referenced key.
+        // A snapshot-only check lets them both commit, leaving an orphan.
+        for (_, _, _, referred_columns, _) in &inbound_constraints {
+            for record in records {
+                reserve_foreign_key(
+                    self.tx.as_ref(),
+                    schema,
+                    referred_columns,
+                    &record_column_values(record, schema, referred_columns),
+                )?;
+            }
+        }
         for (child_schema, name, columns, referred_columns, on_delete) in &inbound_constraints {
             if !matches!(
                 on_delete,
@@ -4486,16 +4523,18 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
 
-            let child_records = self
-                .db_ref()
-                .scan_collection_unchecked(&child_schema.name)?;
+            let child_records =
+                current_integrity_records(self.db_ref(), self.tx.as_ref(), &child_schema.name)?;
             sql_profile_foreign_key_child_scan();
             for child in child_records {
-                let child_key = typed_column_key_label(
-                    schema,
-                    referred_columns,
-                    &record_column_values(&child, child_schema, columns),
-                )?;
+                if deleting.contains(&(child_schema.name.clone(), child.id.clone())) {
+                    continue;
+                }
+                let values = record_column_values(&child, child_schema, columns);
+                if unique_key_has_null(&values) {
+                    continue;
+                }
+                let child_key = typed_column_key_label(schema, referred_columns, &values)?;
                 if parent_keys.contains(&child_key) {
                     return Err(foreign_key_violation(&child_schema.name, name));
                 }
@@ -4523,22 +4562,34 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
 
-            let child_records = self
-                .db_ref()
-                .scan_collection_unchecked(&child_schema.name)?;
+            let child_records =
+                current_integrity_records(self.db_ref(), self.tx.as_ref(), &child_schema.name)?;
             sql_profile_foreign_key_child_scan();
             let mut cascade_ids = Vec::new();
+            let mut cascade_records = Vec::new();
             for mut child in child_records {
-                let child_key = typed_column_key_label(
-                    schema,
-                    &referred_columns,
-                    &record_column_values(&child, &child_schema, &columns),
-                )?;
+                let before_child = child.clone();
+                if deleting.contains(&(child_schema.name.clone(), child.id.clone())) {
+                    continue;
+                }
+                let values = record_column_values(&child, &child_schema, &columns);
+                if unique_key_has_null(&values) {
+                    continue;
+                }
+                let child_key = typed_column_key_label(schema, &referred_columns, &values)?;
                 if !parent_keys.contains(&child_key) {
                     continue;
                 }
                 match on_delete {
                     ForeignKeyAction::Cascade => {
+                        if !self.apply_before_delete_row_triggers(
+                            &child_schema.name,
+                            Some(&child_schema),
+                            &child,
+                        )? {
+                            continue;
+                        }
+                        cascade_records.push(child.clone());
                         cascade_ids.push(child.id.clone());
                     }
                     ForeignKeyAction::SetNull => {
@@ -4550,20 +4601,12 @@ impl<'db> SqlSession<'db> {
                                 SqlValue::Null,
                             )?;
                         }
-                        validate_record_local_constraints(
-                            &child_schema.name,
+                        self.apply_referential_child_update(
                             &child_schema,
-                            &child,
+                            &before_child,
+                            child,
+                            depth + 1,
                         )?;
-                        validate_unique_constraints(
-                            self.db_ref(),
-                            self.tx.as_ref(),
-                            &child_schema.name,
-                            &child_schema,
-                            &[child.clone()],
-                            true,
-                        )?;
-                        self.update_session_record(&child_schema.name, child)?;
                     }
                     ForeignKeyAction::SetDefault => {
                         for column in &columns {
@@ -4580,20 +4623,12 @@ impl<'db> SqlSession<'db> {
                         if parent_keys.contains(&updated_key) {
                             return Err(foreign_key_violation(&child_schema.name, &name));
                         }
-                        validate_record_local_constraints(
-                            &child_schema.name,
+                        self.apply_referential_child_update(
                             &child_schema,
-                            &child,
+                            &before_child,
+                            child,
+                            depth + 1,
                         )?;
-                        validate_unique_constraints(
-                            self.db_ref(),
-                            self.tx.as_ref(),
-                            &child_schema.name,
-                            &child_schema,
-                            &[child.clone()],
-                            true,
-                        )?;
-                        self.update_session_record(&child_schema.name, child)?;
                     }
                     ForeignKeyAction::NoAction | ForeignKeyAction::Restrict => {
                         continue;
@@ -4601,10 +4636,75 @@ impl<'db> SqlSession<'db> {
                 }
             }
             if !cascade_ids.is_empty() {
+                self.apply_foreign_key_parent_delete_inner(
+                    &child_schema.name,
+                    &child_schema,
+                    &cascade_records,
+                    deleting,
+                    depth + 1,
+                )?;
                 self.delete_session_records(&child_schema.name, &cascade_ids)?;
+                self.publish_extension_database_events(
+                    &child_schema.name,
+                    DatabaseOperation::Delete,
+                    cascade_records.iter().map(|record| (Some(record), None)),
+                )?;
+                self.fire_after_row_triggers(
+                    &child_schema.name,
+                    Some(&child_schema),
+                    "delete",
+                    cascade_records.iter().map(|record| (Some(record), None)),
+                )?;
             }
         }
         Ok(())
+    }
+
+    fn apply_referential_child_update(
+        &mut self,
+        schema: &TableSchema,
+        before: &Record,
+        after: Record,
+        depth: usize,
+    ) -> Result<()> {
+        if depth > 64 {
+            return Err(SqlError::InvalidSql(
+                "foreign-key cascade exceeds 64 levels".into(),
+            ));
+        }
+        let table = &schema.name;
+        let Some(mut after) =
+            self.apply_before_update_row_triggers(table, Some(schema), before, after)?
+        else {
+            return Ok(());
+        };
+        self.materialize_generated_columns(table, schema, std::slice::from_mut(&mut after))?;
+        validate_records_for_write(
+            self.db_ref(),
+            self.tx.as_ref(),
+            table,
+            schema,
+            std::slice::from_ref(&after),
+            true,
+        )?;
+        self.update_session_record(table, after.clone())?;
+        self.apply_foreign_key_parent_update_inner(
+            table,
+            schema,
+            &[(before.clone(), after.clone())],
+            depth,
+        )?;
+        self.publish_extension_database_events(
+            table,
+            DatabaseOperation::Update,
+            std::iter::once((Some(before), Some(&after))),
+        )?;
+        self.fire_after_row_triggers(
+            table,
+            Some(schema),
+            "update",
+            std::iter::once((Some(before), Some(&after))),
+        )
     }
 
     pub(crate) fn apply_foreign_key_parent_update(
@@ -4627,6 +4727,22 @@ impl<'db> SqlSession<'db> {
         schema: &TableSchema,
         before_after_records: &[(Record, Record)],
     ) -> Result<()> {
+        self.apply_foreign_key_parent_update_inner(table, schema, before_after_records, 0)
+    }
+
+    fn apply_foreign_key_parent_update_inner(
+        &mut self,
+        table: &str,
+        schema: &TableSchema,
+        before_after_records: &[(Record, Record)],
+        depth: usize,
+    ) -> Result<()> {
+        self.cancellation.check()?;
+        if depth > 64 {
+            return Err(SqlError::InvalidSql(
+                "foreign-key cascade exceeds 64 levels".into(),
+            ));
+        }
         if before_after_records.is_empty() {
             return Ok(());
         }
@@ -4636,6 +4752,25 @@ impl<'db> SqlSession<'db> {
             return Ok(());
         }
 
+        for constraint in inbound_constraints.iter() {
+            for (before, after) in before_after_records {
+                let old = record_column_values(before, schema, &constraint.referred_columns);
+                let new = record_column_values(after, schema, &constraint.referred_columns);
+                if !typed_column_values_not_distinct(
+                    schema,
+                    &constraint.referred_columns,
+                    &old,
+                    &new,
+                )? {
+                    reserve_foreign_key(
+                        self.tx.as_ref(),
+                        schema,
+                        &constraint.referred_columns,
+                        &old,
+                    )?;
+                }
+            }
+        }
         for constraint in inbound_constraints.iter() {
             if !matches!(
                 constraint.on_update,
@@ -4652,15 +4787,19 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
             sql_profile_foreign_key_child_scan();
-            for child in self
-                .db_ref()
-                .scan_collection_unchecked(&constraint.child_schema.name)?
-            {
-                let child_key = typed_column_key_label(
-                    schema,
-                    &constraint.referred_columns,
-                    &record_column_values(&child, &constraint.child_schema, &constraint.columns),
-                )?;
+            for child in current_integrity_records(
+                self.db_ref(),
+                self.tx.as_ref(),
+                &constraint.child_schema.name,
+            )? {
+                let before_child = child.clone();
+                let values =
+                    record_column_values(&child, &constraint.child_schema, &constraint.columns);
+                if unique_key_has_null(&values) {
+                    continue;
+                }
+                let child_key =
+                    typed_column_key_label(schema, &constraint.referred_columns, &values)?;
                 if changed_keys
                     .iter()
                     .any(|(old_key, _)| *old_key == child_key)
@@ -4689,15 +4828,19 @@ impl<'db> SqlSession<'db> {
                 continue;
             }
             sql_profile_foreign_key_child_scan();
-            for mut child in self
-                .db_ref()
-                .scan_collection_unchecked(&constraint.child_schema.name)?
-            {
-                let child_key = typed_column_key_label(
-                    schema,
-                    &constraint.referred_columns,
-                    &record_column_values(&child, &constraint.child_schema, &constraint.columns),
-                )?;
+            for mut child in current_integrity_records(
+                self.db_ref(),
+                self.tx.as_ref(),
+                &constraint.child_schema.name,
+            )? {
+                let before_child = child.clone();
+                let values =
+                    record_column_values(&child, &constraint.child_schema, &constraint.columns);
+                if unique_key_has_null(&values) {
+                    continue;
+                }
+                let child_key =
+                    typed_column_key_label(schema, &constraint.referred_columns, &values)?;
                 let Some((_, new_key)) = changed_keys
                     .iter()
                     .find(|(old_key, _)| *old_key == child_key)
@@ -4714,20 +4857,12 @@ impl<'db> SqlSession<'db> {
                                 value.clone(),
                             )?;
                         }
-                        validate_record_local_constraints(
-                            &constraint.child_schema.name,
+                        self.apply_referential_child_update(
                             &constraint.child_schema,
-                            &child,
+                            &before_child,
+                            child,
+                            depth + 1,
                         )?;
-                        validate_unique_constraints(
-                            self.db_ref(),
-                            self.tx.as_ref(),
-                            &constraint.child_schema.name,
-                            &constraint.child_schema,
-                            &[child.clone()],
-                            true,
-                        )?;
-                        self.update_session_record(&constraint.child_schema.name, child)?;
                     }
                     ForeignKeyAction::SetNull => {
                         for column in &constraint.columns {
@@ -4738,20 +4873,12 @@ impl<'db> SqlSession<'db> {
                                 SqlValue::Null,
                             )?;
                         }
-                        validate_record_local_constraints(
-                            &constraint.child_schema.name,
+                        self.apply_referential_child_update(
                             &constraint.child_schema,
-                            &child,
+                            &before_child,
+                            child,
+                            depth + 1,
                         )?;
-                        validate_unique_constraints(
-                            self.db_ref(),
-                            self.tx.as_ref(),
-                            &constraint.child_schema.name,
-                            &constraint.child_schema,
-                            &[child.clone()],
-                            true,
-                        )?;
-                        self.update_session_record(&constraint.child_schema.name, child)?;
                     }
                     ForeignKeyAction::SetDefault => {
                         for column in &constraint.columns {
@@ -4765,27 +4892,12 @@ impl<'db> SqlSession<'db> {
                                 value,
                             )?;
                         }
-                        validate_record_local_constraints(
-                            &constraint.child_schema.name,
+                        self.apply_referential_child_update(
                             &constraint.child_schema,
-                            &child,
+                            &before_child,
+                            child,
+                            depth + 1,
                         )?;
-                        validate_unique_constraints(
-                            self.db_ref(),
-                            self.tx.as_ref(),
-                            &constraint.child_schema.name,
-                            &constraint.child_schema,
-                            &[child.clone()],
-                            true,
-                        )?;
-                        validate_foreign_keys(
-                            self.db_ref(),
-                            self.tx.as_ref(),
-                            &constraint.child_schema.name,
-                            &constraint.child_schema,
-                            &child,
-                        )?;
-                        self.update_session_record(&constraint.child_schema.name, child)?;
                     }
                     ForeignKeyAction::NoAction | ForeignKeyAction::Restrict => {}
                 }

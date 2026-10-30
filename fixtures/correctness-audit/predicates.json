@@ -1,0 +1,16 @@
+{
+  "id": "predicates",
+  "description": "Strict correctness oracle: predicates",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS audit_pred"
+  ],
+  "sql": [
+    "CREATE TABLE audit_pred(id TEXT PRIMARY KEY,k INT,v TEXT)",
+    "INSERT INTO audit_pred VALUES('a',1,'x'),('b',2,NULL),('c',3,'y')",
+    "UPDATE audit_pred SET k=99 WHERE id='a' AND k=2",
+    "DELETE FROM audit_pred WHERE id=(SELECT id FROM audit_pred WHERE k=2) AND k=3",
+    "UPDATE audit_pred SET k=k+10 WHERE id IN (SELECT id FROM audit_pred WHERE k<3)",
+    "DELETE FROM audit_pred WHERE id=NULL",
+    "SELECT id,k,v FROM audit_pred ORDER BY id"
+  ]
+}

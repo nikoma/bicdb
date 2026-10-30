@@ -1,0 +1,14 @@
+{
+  "id": "typed_unique",
+  "description": "Strict edge oracle: typed_unique",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_uq"
+  ],
+  "sql": [
+    "CREATE TABLE edge_uq(id INT PRIMARY KEY,n NUMERIC UNIQUE,t TIMESTAMPTZ UNIQUE)",
+    "INSERT INTO edge_uq VALUES(1,1.00,'2025-01-01 12:00:00+00')",
+    "INSERT INTO edge_uq VALUES(2,1.0,'2026-01-01 12:00:00+00') ON CONFLICT(n) DO NOTHING",
+    "INSERT INTO edge_uq VALUES(3,2.0,'2025-01-01 13:00:00+01') ON CONFLICT(t) DO NOTHING",
+    "SELECT id,n,t FROM edge_uq ORDER BY id"
+  ]
+}

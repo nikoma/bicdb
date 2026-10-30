@@ -1,0 +1,18 @@
+{
+  "id": "bytea",
+  "description": "Strict edge oracle: bytea",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_bytea"
+  ],
+  "sql": [
+    "CREATE TABLE edge_bytea(id INT PRIMARY KEY,v BYTEA)",
+    "INSERT INTO edge_bytea VALUES(0,'\\x00ff')",
+    "INSERT INTO edge_bytea VALUES(1,'\\x0011')",
+    "SELECT id,v FROM edge_bytea ORDER BY id",
+    "SELECT id FROM edge_bytea WHERE v='\\x00ff'::BYTEA ORDER BY id",
+    "SELECT id FROM edge_bytea WHERE v='\\x0011'::BYTEA ORDER BY id",
+    "CREATE INDEX edge_bytea_idx ON edge_bytea(v)",
+    "SELECT id FROM edge_bytea WHERE v='\\x00ff'::BYTEA ORDER BY id",
+    "SELECT id FROM edge_bytea WHERE v='\\x0011'::BYTEA ORDER BY id"
+  ]
+}

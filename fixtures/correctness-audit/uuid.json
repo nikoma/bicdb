@@ -1,0 +1,18 @@
+{
+  "id": "uuid",
+  "description": "Strict edge oracle: uuid",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_uuid"
+  ],
+  "sql": [
+    "CREATE TABLE edge_uuid(id INT PRIMARY KEY,v UUID)",
+    "INSERT INTO edge_uuid VALUES(0,'00000000-0000-0000-0000-000000000001')",
+    "INSERT INTO edge_uuid VALUES(1,'00000000-0000-0000-0000-000000000002')",
+    "SELECT id,v FROM edge_uuid ORDER BY id",
+    "SELECT id FROM edge_uuid WHERE v='00000000-0000-0000-0000-000000000001'::UUID ORDER BY id",
+    "SELECT id FROM edge_uuid WHERE v='00000000-0000-0000-0000-000000000002'::UUID ORDER BY id",
+    "CREATE INDEX edge_uuid_idx ON edge_uuid(v)",
+    "SELECT id FROM edge_uuid WHERE v='00000000-0000-0000-0000-000000000001'::UUID ORDER BY id",
+    "SELECT id FROM edge_uuid WHERE v='00000000-0000-0000-0000-000000000002'::UUID ORDER BY id"
+  ]
+}

@@ -2672,6 +2672,13 @@ impl<'db> SqlEngine<'db> {
             let Some(pg_type) = projected_expr_pg_type(&order.expr, schema) else {
                 return Ok(None);
             };
+            // JSONB's canonical key encodes equality, not PostgreSQL's
+            // type/numeric/container order. Memcmp sorting those keys put
+            // arrays before numbers and JSON null, changing LIMIT results
+            // when a paged scan switched to this streaming path after reopen.
+            if pg_type == "jsonb" || pg_type == "jsonb[]" {
+                return Ok(None);
+            }
             // "default" is the byte order pg_typed_index_key encodes; only a
             // NON-default collation makes the key ordering unfaithful.
             if crate::eval::expr_collation(&order.expr, schema)?

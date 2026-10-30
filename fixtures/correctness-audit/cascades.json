@@ -1,0 +1,23 @@
+{
+  "id": "multi_level_cascades",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_leaf",
+    "DROP TABLE IF EXISTS edge_middle",
+    "DROP TABLE IF EXISTS edge_root"
+  ],
+  "sql": [
+    "CREATE TABLE edge_root(id INT PRIMARY KEY)",
+    "CREATE TABLE edge_middle(id INT PRIMARY KEY,p INT REFERENCES edge_root(id) ON DELETE CASCADE)",
+    "CREATE TABLE edge_leaf(id INT PRIMARY KEY,p INT REFERENCES edge_middle(id) ON DELETE CASCADE)",
+    "INSERT INTO edge_root VALUES(1)",
+    "INSERT INTO edge_middle VALUES(2,1)",
+    "INSERT INTO edge_leaf VALUES(3,2)",
+    "BEGIN",
+    "DELETE FROM edge_root WHERE id=1",
+    "SELECT COUNT(*) AS n FROM edge_leaf",
+    "ROLLBACK",
+    "SELECT COUNT(*) AS n FROM edge_leaf",
+    "DELETE FROM edge_root WHERE id=1",
+    "SELECT COUNT(*) AS n FROM edge_leaf"
+  ]
+}

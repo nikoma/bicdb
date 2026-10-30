@@ -1,0 +1,24 @@
+{
+  "id": "numeric",
+  "description": "Strict edge oracle: numeric",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_numeric"
+  ],
+  "sql": [
+    "CREATE TABLE edge_numeric(id INT PRIMARY KEY,v NUMERIC)",
+    "INSERT INTO edge_numeric VALUES(0,1.00)",
+    "INSERT INTO edge_numeric VALUES(1,2.50)",
+    "INSERT INTO edge_numeric VALUES(2,-0.0)",
+    "INSERT INTO edge_numeric VALUES(3,99999999999999999999.123)",
+    "SELECT id,v FROM edge_numeric ORDER BY id",
+    "SELECT id FROM edge_numeric WHERE v=1.00::NUMERIC ORDER BY id",
+    "SELECT id FROM edge_numeric WHERE v=2.50::NUMERIC ORDER BY id",
+    "SELECT id FROM edge_numeric WHERE v=-0.0::NUMERIC ORDER BY id",
+    "SELECT id FROM edge_numeric WHERE v=99999999999999999999.123::NUMERIC ORDER BY id",
+    "CREATE INDEX edge_numeric_idx ON edge_numeric(v)",
+    "SELECT id FROM edge_numeric WHERE v=1.00::NUMERIC ORDER BY id",
+    "SELECT id FROM edge_numeric WHERE v=2.50::NUMERIC ORDER BY id",
+    "SELECT id FROM edge_numeric WHERE v=-0.0::NUMERIC ORDER BY id",
+    "SELECT id FROM edge_numeric WHERE v=99999999999999999999.123::NUMERIC ORDER BY id"
+  ]
+}

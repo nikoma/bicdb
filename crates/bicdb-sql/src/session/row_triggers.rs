@@ -50,17 +50,14 @@ const MAX_TRIGGER_DEPTH: usize = 64;
 
 impl<'db> SqlSession<'db> {
     /// Inspect mutation targets (including writing CTEs) before executing any
-    /// part of the statement. Ordinary trigger-free autocommit writes retain
-    /// their native-policy path; triggered statements need transactional guards.
-    pub(super) fn mutation_has_row_triggers(
+    /// part of the statement. Trigger effects and referential actions must
+    /// share the statement transaction so a later failure rolls back all of it.
+    pub(super) fn mutation_needs_atomic_effects(
         &self,
         ast: &impl sqlparser::ast::Visit,
     ) -> Result<bool> {
         use std::ops::ControlFlow;
         let triggers = crate::catalog_memo::triggers_shared(self.db_ref())?;
-        if !triggers.iter().any(|trigger| trigger.enabled) {
-            return Ok(false);
-        }
         let result = sqlparser::ast::visit_statements(ast, |statement| {
             let table = match statement {
                 Statement::Insert(insert) => match &insert.table {
@@ -79,6 +76,14 @@ impl<'db> SqlSession<'db> {
                 Ok(table) => resolve_session_relation_name_if_exists(self.db_ref(), &table),
                 Err(error) => return ControlFlow::Break(Err(error)),
             };
+            if matches!(statement, Statement::Update(_) | Statement::Delete(_)) {
+                match crate::catalog_memo::inbound_foreign_key_deletes_shared(self.db_ref(), &table)
+                {
+                    Ok(inbound) if !inbound.is_empty() => return ControlFlow::Break(Ok(true)),
+                    Err(error) => return ControlFlow::Break(Err(error)),
+                    _ => {}
+                }
+            }
             if triggers.iter().any(|trigger| {
                 trigger.enabled
                     && trigger.for_each.eq_ignore_ascii_case("row")

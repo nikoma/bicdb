@@ -222,7 +222,9 @@ pub(crate) fn collect_routine_assignment_target_symbol(
     seen: &mut BTreeSet<String>,
 ) {
     match target {
-        RoutineAssignmentTarget::Variable(name) => add_routine_symbol(name, names, seen),
+        RoutineAssignmentTarget::Variable(name) => {
+            add_routine_symbol(name.split('.').next().unwrap_or(name), names, seen)
+        }
         RoutineAssignmentTarget::ArrayElement { array_name, .. } => {
             add_routine_symbol(array_name, names, seen);
         }
@@ -1498,6 +1500,15 @@ pub(crate) fn parse_routine_fetch(rest: &str) -> Result<RoutineStmt> {
 
 pub(crate) fn parse_routine_assignment_target(target: &str) -> Result<RoutineAssignmentTarget> {
     if !target.contains('[') {
+        if let Expr::CompoundIdentifier(parts) = parse_routine_expr(target)? {
+            return Ok(RoutineAssignmentTarget::Variable(
+                parts
+                    .iter()
+                    .map(|part| normalize_object_name(&part.value))
+                    .collect::<Vec<_>>()
+                    .join("."),
+            ));
+        }
         return Ok(RoutineAssignmentTarget::Variable(normalize_object_name(
             target,
         )));

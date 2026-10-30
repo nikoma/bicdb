@@ -1,0 +1,16 @@
+{
+  "id": "aggregate_empty",
+  "description": "Strict edge oracle: aggregate_empty",
+  "cleanup_sql": [
+    "DROP TABLE IF EXISTS edge_agg"
+  ],
+  "sql": [
+    "CREATE TABLE edge_agg(id INT PRIMARY KEY,v INT)",
+    "SELECT COUNT(*) AS n,COUNT(v) AS nv,SUM(v) AS s,MIN(v) AS lo,MAX(v) AS hi,AVG(v) AS a FROM edge_agg",
+    "SELECT v,COUNT(*) AS n FROM edge_agg GROUP BY v",
+    "INSERT INTO edge_agg VALUES(1,NULL),(2,NULL),(3,2),(4,2),(5,3)",
+    "SELECT COUNT(DISTINCT v) AS n,SUM(DISTINCT v) AS s,AVG(DISTINCT v) AS a FROM edge_agg",
+    "SELECT COUNT(*) FILTER(WHERE v IS NULL) AS n,SUM(v) FILTER(WHERE v>2) AS s FROM edge_agg",
+    "SELECT v,COUNT(*) AS n FROM edge_agg GROUP BY v HAVING COUNT(*)>1 ORDER BY v NULLS FIRST"
+  ]
+}

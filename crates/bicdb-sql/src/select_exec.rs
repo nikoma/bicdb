@@ -5088,6 +5088,7 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("typcollation", "oid"),
             ("typdefaultbin", "text"),
             ("typdefault", "text"),
+            ("typacl", "aclitem[]"),
         ],
         "pg_cast" => &[
             ("oid", "oid"),

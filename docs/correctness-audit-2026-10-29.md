@@ -251,3 +251,12 @@ cover initialization and replay in both storage modes, commits/checkpoint in the
 base-publication window, server startup on pre-existing non-replicated data,
 and visible failure for a mismatched archive identity without adding a foreign
 base backup.
+
+### User-type ACL catalog projection
+
+The full SQL suite caught the shared row executor discarding `pg_type.typacl`
+because its declared catalog schema omitted that column, even though the row
+builder computed explicit grants correctly. Declare the column as `aclitem[]`;
+retain default-NULL and explicit-grant values, empty-result typing, pg_dump
+inventory, reopen, and privilege rollback checks. A strict PostgreSQL fixture
+also compares implicit/explicit ACL visibility and grant/revoke decisions.

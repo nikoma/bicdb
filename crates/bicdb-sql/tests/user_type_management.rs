@@ -14,6 +14,13 @@ fn type_acls_match_postgres_defaults_and_enforce_usage() {
     let mut db = BicDb::open(root.path()).unwrap();
     let mut session = SqlSession::new(&mut db);
 
+    let empty_acl = session
+        .execute("SELECT typacl FROM pg_type WHERE FALSE")
+        .unwrap();
+    assert_eq!(empty_acl.columns, vec!["typacl"]);
+    assert_eq!(empty_acl.column_types, vec![Some("aclitem[]".into())]);
+    assert!(empty_acl.rows.is_empty());
+
     session.execute("CREATE ROLE type_reader LOGIN").unwrap();
     session
         .execute("CREATE TYPE managed_state AS ENUM ('open', 'closed')")

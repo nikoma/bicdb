@@ -161,6 +161,15 @@ fn extent_epochs_survive_reopen_and_distinguish_writes_after_the_cut() {
         .write_all(b"torn")
         .unwrap();
     let store = open(root.path());
+    let durable = std::fs::read(&tracker).unwrap();
+    assert_ne!(
+        hex::encode(&durable[8..24]),
+        reopened.identity,
+        "corrupt tracking identity must be replaced before any writes, even without another backup"
+    );
+    write(&store, per_extent + 1, 13);
+    drop(store);
+    let store = open(root.path()); // A second reopen must keep the reset durable.
     let reset = capture(&store, "d");
     assert_ne!(
         reopened.identity,

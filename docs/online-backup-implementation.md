@@ -75,6 +75,12 @@ source bytes. A later incremental restores after restart and after deleting its
 parent manifest files. Reports distinguish copied/reused page extents and reused
 extent bytes from ordinary content deduplication.
 
+Missing, torn or corrupt extent journals acquire a fresh durable identity when
+the tracked store opens, before WAL recovery or foreground writes. Regressions
+cover two successive reopens without an intervening backup, checksum corruption,
+and restored stores starting a distinct lineage. This prevents a second crash
+from resurrecting a prior journal identity after untracked writes.
+
 Retention scans every retained authenticated manifest under the repository
 ownership lock. Missing references and corrupted magic abort collection.
 Observed manifest retirements are synced before any payload deletion, preventing

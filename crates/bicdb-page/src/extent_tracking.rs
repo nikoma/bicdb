@@ -58,12 +58,12 @@ fn options() -> OpenOptions {
 }
 impl ExtentTracker {
     /// A missing, truncated or corrupt journal has no reusable identity. It is
-    /// replaced at the next capture, before any new parent can depend on it.
+    /// replaced durably before the store can perform recovery or new writes.
     pub(crate) fn load(base: &Path) -> Result<Option<Self>> {
         let path = tracker_path(base);
         let file = match options().open(&path) {
             Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Self::new(base).map(Some),
             Err(e) => return Err(PageError::io(&path, e)),
         };
         let mut bytes = Vec::new();
@@ -76,7 +76,7 @@ impl ExtentTracker {
             || &bytes[..8] != MAGIC
             || (bytes.len() - 24) % 20 != 0
         {
-            return Ok(None);
+            return Self::reset_uncertain(base, file);
         }
         let mut versions = BTreeMap::new();
         let mut epoch: u64 = 1;
@@ -84,20 +84,20 @@ impl ExtentTracker {
             if crc32fast::hash(&record[..16])
                 != u32::from_le_bytes(record[16..].try_into().unwrap())
             {
-                return Ok(None);
+                return Self::reset_uncertain(base, file);
             }
             let generation = u64::from_le_bytes(record[..8].try_into().unwrap());
             let index = u64::from_le_bytes(record[8..16].try_into().unwrap());
             if index == SEAL {
                 if Some(generation) != epoch.checked_add(1) {
-                    return Ok(None);
+                    return Self::reset_uncertain(base, file);
                 }
                 epoch = generation;
             } else {
                 if generation != epoch
                     || (versions.len() >= MAX_EXTENTS && !versions.contains_key(&index))
                 {
-                    return Ok(None);
+                    return Self::reset_uncertain(base, file);
                 }
                 versions.insert(index, generation);
             }
@@ -111,6 +111,14 @@ impl ExtentTracker {
             bytes: bytes.len() as u64,
             failed: false,
         }))
+    }
+
+    fn reset_uncertain(base: &Path, file: File) -> Result<Option<Self>> {
+        // Before permitting recovery/foreground writes, make the old identity
+        // durably unreachable. Merely disabling tracking in memory lets a
+        // second crash resurrect an old valid prefix after untracked writes.
+        drop(file);
+        Self::new(base).map(Some)
     }
 
     pub(crate) fn new(base: &Path) -> Result<Self> {
@@ -216,6 +224,31 @@ impl ExtentTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn corrupt_or_missing_tracking_is_durably_replaced_before_writes() {
+        let root = tempfile::tempdir().unwrap();
+        let base = root.path().join("store.pages");
+        let mut tracker = ExtentTracker::new(&base).unwrap();
+        tracker.mark(&base, 0).unwrap();
+        let old = tracker.identity.clone();
+        let path = tracker.path.clone();
+        drop(tracker);
+        let mut bytes = std::fs::read(&path).unwrap();
+        *bytes.last_mut().unwrap() ^= 1; // Valid length, invalid record checksum.
+        std::fs::write(&path, bytes).unwrap();
+        let reset = ExtentTracker::load(&base).unwrap().unwrap();
+        assert_ne!(reset.identity, old);
+        let new = reset.identity.clone();
+        drop(reset);
+        assert_eq!(ExtentTracker::load(&base).unwrap().unwrap().identity, new);
+        std::fs::remove_file(path).unwrap();
+        let missing = ExtentTracker::load(&base).unwrap().unwrap();
+        assert_ne!(missing.identity, new);
+        let fresh = missing.identity.clone();
+        drop(missing);
+        assert_eq!(ExtentTracker::load(&base).unwrap().unwrap().identity, fresh);
+    }
+
     #[test]
     fn tracking_io_failure_never_acknowledges_a_dirty_extent_and_remains_sticky() {
         let root = tempfile::tempdir().unwrap();

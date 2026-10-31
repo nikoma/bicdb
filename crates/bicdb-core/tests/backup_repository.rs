@@ -370,6 +370,13 @@ fn incrementals_skip_unchanged_extents_survive_restart_and_restore_without_paren
         },
     )
     .unwrap();
+    let restored_tracker = target.path().join("paged/.backup-extents-store.pages");
+    assert!(
+        !restored_tracker.exists(),
+        "runtime tracking must not be restored"
+    );
+    let original_tracker =
+        std::fs::read(source.path().join("paged/.backup-extents-store.pages")).unwrap();
     let restored =
         BicDb::open_with_config(target.path(), config(StorageMode::ServerPaged)).unwrap();
     assert_eq!(restored.verification_manifest().unwrap(), expected);
@@ -378,10 +385,12 @@ fn incrementals_skip_unchanged_extents_survive_restart_and_restore_without_paren
         .unwrap()
         .iter()
         .all(|index| index.valid));
-    assert!(!target
-        .path()
-        .join("paged/.backup-extents-store.pages")
-        .exists());
+    let fresh_tracker = std::fs::read(restored_tracker).unwrap();
+    assert_ne!(
+        &original_tracker[8..24],
+        &fresh_tracker[8..24],
+        "a restored store must durably start a new tracking lineage before recovery writes"
+    );
 }
 
 #[test]

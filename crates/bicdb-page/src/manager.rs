@@ -827,7 +827,7 @@ impl PageStore {
         } else {
             let mut store = Self {
                 backup_format: AtomicBool::new(false),
-                extent_tracker: Mutex::new(crate::extent_tracking::ExtentTracker::load(&path)?),
+                extent_tracker: Mutex::new(None),
                 backup: Mutex::new(None),
                 path,
                 segments: parking_lot::RwLock::new(vec![file]),
@@ -845,9 +845,6 @@ impl PageStore {
                 faults: FaultInjection::default(),
             };
             let superblock = store.read_superblock(options.page_size)?;
-            if !store.backup_format.load(Ordering::Acquire) {
-                *store.extent_tracker.lock() = None;
-            }
             store
                 .extent_pages
                 .store(superblock.extent_pages, Ordering::Release);
@@ -860,6 +857,12 @@ impl PageStore {
             *store.meta.lock() = superblock;
             store.page_size = options.page_size;
             store.open_existing_segments(superblock.page_count)?;
+            if store.backup_format.load(Ordering::Acquire) {
+                // Validate the physical format before touching its tracker,
+                // then durably reset uncertainty before any WAL replay writes.
+                *store.extent_tracker.lock() =
+                    crate::extent_tracking::ExtentTracker::load(&store.path)?;
+            }
             store
         };
 

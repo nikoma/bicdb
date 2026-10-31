@@ -33,10 +33,11 @@ struct Job {
 #[derive(Debug, Default)]
 pub(crate) struct BackupJobs {
     jobs: VecDeque<Job>,
+    restore_drill: bool,
 }
 
 impl BackupJobs {
-    fn status(&self, id: Option<Uuid>) -> serde_json::Value {
+    pub(crate) fn status(&self, id: Option<Uuid>) -> serde_json::Value {
         let rows = self
             .jobs
             .iter()
@@ -136,13 +137,14 @@ fn start(
     if server.is_shutdown_requested() {
         return Err(PgWireError::QueryRejected("server is shutting down".into()));
     }
-    if jobs
-        .jobs
-        .iter()
-        .any(|job| job.outcome.lock().unwrap().is_none())
+    if jobs.restore_drill
+        || jobs
+            .jobs
+            .iter()
+            .any(|job| job.outcome.lock().unwrap().is_none())
     {
         return Err(PgWireError::QueryRejected(
-            "an online backup is already running".into(),
+            "an online backup or restore drill is already running".into(),
         ));
     }
     while jobs.jobs.len() >= 64 {
@@ -206,10 +208,11 @@ pub(crate) fn archive_base(
     let outcome = Arc::new(Mutex::new(None));
     {
         let mut jobs = server.backup_jobs.lock().unwrap();
-        if jobs
-            .jobs
-            .iter()
-            .any(|job| job.outcome.lock().unwrap().is_none())
+        if jobs.restore_drill
+            || jobs
+                .jobs
+                .iter()
+                .any(|job| job.outcome.lock().unwrap().is_none())
         {
             return Ok(None);
         }
@@ -482,5 +485,63 @@ mod archive_admission_tests {
             matches!(result, Ok(None)),
             "busy archive must defer rather than fail resource admission: {result:?}"
         );
+    }
+}
+
+/// Restore drills and immutable-object publication share repository ownership.
+/// Reserve admission, rather than holding the jobs mutex over either operation.
+pub(crate) struct RestoreDrillGuard(Arc<PgWireServer>);
+impl Drop for RestoreDrillGuard {
+    fn drop(&mut self) {
+        self.0.backup_jobs.lock().unwrap().restore_drill = false;
+    }
+}
+pub(crate) fn begin_restore_drill(server: &Arc<PgWireServer>) -> Option<RestoreDrillGuard> {
+    let mut jobs = server.backup_jobs.lock().unwrap();
+    if jobs.restore_drill
+        || jobs
+            .jobs
+            .iter()
+            .any(|job| job.outcome.lock().unwrap().is_none())
+        || server.is_shutdown_requested()
+    {
+        return None;
+    }
+    jobs.restore_drill = true;
+    Some(RestoreDrillGuard(Arc::clone(server)))
+}
+
+#[cfg(test)]
+mod restore_drill_admission_tests {
+    use super::*;
+    #[test]
+    fn restore_drill_reserves_admission_without_holding_the_jobs_mutex() {
+        let root = tempfile::tempdir().unwrap();
+        let mut config = PgWireConfig::default();
+        config.fsync = false;
+        config.online_backups = Some(OnlineBackupConfig {
+            directory: root.path().join("repository"),
+            key: "key".into(),
+        });
+        let server = PgWireServer::open(root.path().join("db"), config).unwrap();
+        let guard = begin_restore_drill(&server).unwrap();
+        assert!(begin_restore_drill(&server).is_none());
+        assert!(start(&server, "blocked", None).is_err());
+        assert!(matches!(
+            archive_base(&server, &root.path().join("repository"), "key"),
+            Ok(None)
+        ));
+        assert!(server
+            .backup_jobs
+            .lock()
+            .unwrap()
+            .status(None)
+            .as_array()
+            .unwrap()
+            .is_empty());
+        drop(guard);
+        assert!(begin_restore_drill(&server).is_some());
+        assert!(!root.path().join("repository").exists());
+        server.request_shutdown();
     }
 }

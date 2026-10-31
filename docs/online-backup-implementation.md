@@ -149,3 +149,14 @@ and an upgraded archive with a recent v3 base skips object GC until a v4
 repository exists. Existing objects without their repository configuration still
 fail closed. Both regression tests, live protocol/verification tests and the
 workspace all-target compile passed after the fixes.
+
+A final PITR-cadence review separated periodic base payload copying from the
+established commit-archive worker. Initial bootstrap still anchors only after a
+published first base. Later copies run on a registered, cancellable worker;
+retention and restore drills stay serialized on the archive worker. A short
+admission guard excludes backup publication while a scheduled restore drill owns
+the repository, without holding a database or jobs mutex during either operation.
+A deliberately throttled periodic full base must remain in copying phase while a
+new acknowledged commit reaches the fsynced archive within four seconds. That
+regression, all 116 pgwire unit tests, seven protocol/verification tests and the
+workspace all-target compile passed; shutdown proves both workers quiesce.

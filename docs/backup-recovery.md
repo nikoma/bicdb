@@ -107,6 +107,11 @@ corrupt manifests abort collection before deletion. Dry-run reports candidates.
 Publication, verification, restore and collection share a repository lock.
 Automatic log archival takes an initial full v4 snapshot, then incrementals from
 the latest retained v4 base, and performs grace-protected object collection.
+After the first published base anchors a fresh archive, periodic base copying
+runs on its own registered worker so commit archival continues during long
+copies. Pruning and scheduled restore drills remain on the archive worker;
+backup/drill admission prevents repository ownership conflicts. Shutdown cancels
+and waits for the copy worker to release its pins.
 
 `--backup-limits <json-file>` overrides `OnlineBackupLimits`. Defaults include
 65,536 files, a 64 MiB manifest, a 1 GiB/262,144-page before-image journal,

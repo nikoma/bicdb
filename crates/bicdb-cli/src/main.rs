@@ -5,6 +5,8 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 mod app_command;
+mod backup_command;
+use backup_command::BackupConnectionArgs;
 mod cluster_events_command;
 mod sync_server;
 
@@ -2122,6 +2124,41 @@ enum SyncCommand {
 
 #[derive(Debug, Subcommand)]
 enum BackupCommand {
+    /// Collect objects unreferenced by every retained repository manifest.
+    RepositoryGc {
+        repository: PathBuf,
+        #[arg(long, default_value_t = 3600)]
+        min_age_seconds: u64,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        key: Option<String>,
+        #[arg(long)]
+        key_env: Option<String>,
+    },
+    /// Start a database-wide online backup through the running server.
+    Start {
+        name: String,
+        #[arg(long)]
+        base: Option<String>,
+        #[arg(long)]
+        wait: bool,
+        #[command(flatten)]
+        connection: BackupConnectionArgs,
+    },
+    /// Inspect online backup jobs (all recent jobs when --job is omitted).
+    Status {
+        #[arg(long)]
+        job: Option<String>,
+        #[command(flatten)]
+        connection: BackupConnectionArgs,
+    },
+    /// Request cancellation of an online backup job.
+    Cancel {
+        job: String,
+        #[command(flatten)]
+        connection: BackupConnectionArgs,
+    },
     /// Online checkpoint-consistent backup of a paged database: streams a
     /// base archive plus a WAL-tail archive (the consistency cut) while the
     /// handle stays open. Requires an extent-segmented store. To restore,
@@ -5029,6 +5066,44 @@ fn main() -> Result<()> {
             }
         },
         Command::Backup { command } => match command {
+            BackupCommand::RepositoryGc {
+                repository,
+                min_age_seconds,
+                dry_run,
+                key,
+                key_env,
+            } => {
+                let report = bicdb_core::prune_backup_repository(
+                    &repository,
+                    &backup_key(key, key_env)?,
+                    Duration::from_secs(min_age_seconds),
+                    dry_run,
+                )?;
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            }
+            BackupCommand::Start {
+                name,
+                base,
+                wait,
+                connection,
+            } => {
+                let mut args = vec![name];
+                if let Some(base) = base {
+                    args.push(base);
+                }
+                backup_command::remote(connection, "bicdb_backup_start", args, wait)?;
+            }
+            BackupCommand::Status { job, connection } => {
+                backup_command::remote(
+                    connection,
+                    "bicdb_backup_status",
+                    job.into_iter().collect(),
+                    false,
+                )?;
+            }
+            BackupCommand::Cancel { job, connection } => {
+                backup_command::remote(connection, "bicdb_backup_cancel", vec![job], false)?;
+            }
             BackupCommand::PruneArchive { archive, base } => {
                 let report = bicdb_core::prune_archived_wal(&archive, &base)?;
                 println!(
@@ -5225,6 +5300,17 @@ fn main() -> Result<()> {
                             max_records_per_batch: pitr_record_batch,
                             max_events_per_batch: pitr_event_batch,
                             max_event_bytes_per_batch: pitr_event_bytes,
+                        },
+                    )?
+                } else if bicdb_core::is_repository_backup(backup.last().unwrap())? {
+                    // Repository manifests describe the entire object set;
+                    // install the final snapshot once after chain validation.
+                    restore_backup(
+                        backup.last().unwrap(),
+                        &target,
+                        BackupRestoreOptions {
+                            passphrase: passphrase.clone(),
+                            force,
                         },
                     )?
                 } else {
@@ -5714,6 +5800,7 @@ fn main() -> Result<()> {
                 storage_sync,
             )?;
             config.log_archive = replication.log_archive_config()?;
+            backup_command::configure(&mut config, &operator)?;
             config.metrics_listen = operator.metrics_listen;
             config.region = operator.region.clone();
             config.workload = operator
@@ -8980,6 +9067,15 @@ impl ServeReplicationArgs {
 
 #[derive(Debug, clap::Args)]
 struct OperatorArgs {
+    /// Directory for encrypted online backups requested through SQL/CLI.
+    #[arg(long, requires = "backup_key_env")]
+    backup_repository: Option<PathBuf>,
+    /// Server environment variable holding the online repository key.
+    #[arg(long, requires = "backup_repository")]
+    backup_key_env: Option<String>,
+    /// JSON copy/coordination/retention limits for online backups.
+    #[arg(long)]
+    backup_limits: Option<PathBuf>,
     /// Balance distributed replicas and leaders automatically, or retain manual placement.
     #[arg(long, value_enum, default_value_t = ClusterController::Balanced)]
     cluster_controller: ClusterController,

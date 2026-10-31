@@ -15,7 +15,7 @@ use std::io;
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
@@ -33,6 +33,9 @@ const SUPERBLOCK_MAGIC: [u8; 8] = *b"BICDBPG\0";
 /// engine that predates segmentation fail closed (`NotAPageFile`) instead of
 /// silently reading segment 0 as the whole store.
 const SUPERBLOCK_MAGIC_SEGMENTED: [u8; 8] = *b"BICDBPG2";
+// Older page engines must not modify files without marking tracked extents.
+const SUPERBLOCK_MAGIC_TRACKED: [u8; 8] = *b"BICDBPG3";
+const SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC: [u8; 8] = *b"BICDBPG4";
 /// Smallest legal extent: keeps segment counts sane and guarantees the
 /// superblock page fits in segment 0 at any page size.
 pub const MIN_EXTENT_BYTES: u64 = 1024 * 1024;
@@ -691,6 +694,11 @@ fn validate_free_list_metadata(meta: &Superblock) -> Result<()> {
 /// the read path.
 #[derive(Debug)]
 pub struct PageStore {
+    backup_format: AtomicBool,
+    extent_tracker: Mutex<Option<crate::extent_tracking::ExtentTracker>>,
+    /// Serializes physical page overwrites with snapshot reads/capture only.
+    /// The snapshot itself holds no writer gate while it uploads bytes.
+    backup: Mutex<Option<std::sync::Weak<Mutex<crate::backup::PageBackupState>>>>,
     path: PathBuf,
     /// Open segment files. Index 0 is `store.pages` (and the whole store in
     /// the legacy monolithic layout); segment `i > 0` is `store.pages.i`.
@@ -748,7 +756,11 @@ impl PageStore {
         file.read_exact(&mut prefix)
             .map_err(|e| PageError::io(path, e))?;
         let body = &prefix[PAGE_HEADER_BYTES..];
-        if body[0..8] != SUPERBLOCK_MAGIC && body[0..8] != SUPERBLOCK_MAGIC_SEGMENTED {
+        if body[0..8] != SUPERBLOCK_MAGIC
+            && body[0..8] != SUPERBLOCK_MAGIC_SEGMENTED
+            && body[0..8] != SUPERBLOCK_MAGIC_TRACKED
+            && body[0..8] != SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
+        {
             let mut found = [0u8; 4];
             found.copy_from_slice(&body[0..4]);
             return Err(PageError::NotAPageFile {
@@ -791,6 +803,9 @@ impl PageStore {
 
         let store = if len == 0 {
             let store = Self {
+                backup_format: AtomicBool::new(false),
+                extent_tracker: Mutex::new(None),
+                backup: Mutex::new(None),
                 path,
                 segments: parking_lot::RwLock::new(vec![file]),
                 dirty_segments: Mutex::new(BTreeSet::new()),
@@ -811,6 +826,9 @@ impl PageStore {
             store
         } else {
             let mut store = Self {
+                backup_format: AtomicBool::new(false),
+                extent_tracker: Mutex::new(crate::extent_tracking::ExtentTracker::load(&path)?),
+                backup: Mutex::new(None),
                 path,
                 segments: parking_lot::RwLock::new(vec![file]),
                 dirty_segments: Mutex::new(BTreeSet::new()),
@@ -827,6 +845,9 @@ impl PageStore {
                 faults: FaultInjection::default(),
             };
             let superblock = store.read_superblock(options.page_size)?;
+            if !store.backup_format.load(Ordering::Acquire) {
+                *store.extent_tracker.lock() = None;
+            }
             store
                 .extent_pages
                 .store(superblock.extent_pages, Ordering::Release);
@@ -848,6 +869,100 @@ impl PageStore {
     /// Path of segment `index`: the base path for 0, `<base>.<index>` above.
     fn segment_path(&self, index: usize) -> PathBuf {
         segment_path_for(&self.path, index)
+    }
+
+    /// Capture file identities and enable page before-images. The caller must
+    /// retain the required WAL and coordinate the database commit boundary.
+    pub fn begin_backup_snapshot(
+        &self,
+        journal_path: &Path,
+        limits: crate::backup::PageBackupLimits,
+    ) -> Result<crate::backup::PageBackupSnapshot> {
+        limits.validate(self.page_size)?;
+        let capture_started = Instant::now();
+        // Match the allocator's meta -> physical-write lock order.
+        let meta = self.meta.lock();
+        if self.extent_pages() == 0 || self.migration_target_pages.load(Ordering::Acquire) != 0 {
+            return Err(PageError::BackupSnapshot {
+                reason: "snapshot requires a segmented store with no active layout migration"
+                    .into(),
+            });
+        }
+        if !self.backup_format.load(Ordering::Acquire) {
+            self.backup_format.store(true, Ordering::Release);
+            // Format fencing is required even for buffered data configurations.
+            if let Err(error) = self
+                .write_superblock_meta(&meta)
+                .and_then(|()| self.sync_data_observed())
+            {
+                self.backup_format.store(false, Ordering::Release);
+                return Err(error);
+            }
+        }
+        let mut active = self.backup.lock();
+        if active.as_ref().and_then(std::sync::Weak::upgrade).is_some() {
+            return Err(PageError::BackupSnapshot {
+                reason: "another snapshot is active".into(),
+            });
+        }
+        if self.extent_pages() == 0 || self.migration_target_pages.load(Ordering::Acquire) != 0 {
+            return Err(PageError::BackupSnapshot {
+                reason: "snapshot requires a segmented store with no active layout migration"
+                    .into(),
+            });
+        }
+        let segments = self.segments.read();
+        if segments.len() > limits.max_segments {
+            return Err(PageError::BackupSnapshot {
+                reason: "snapshot segment count exceeds its limit".into(),
+            });
+        }
+        let mut files = Vec::with_capacity(segments.len());
+        let mut lengths = Vec::with_capacity(segments.len());
+        for (index, file) in segments.iter().enumerate() {
+            if capture_started.elapsed().as_millis() > u128::from(limits.max_coordination_millis) {
+                return Err(PageError::BackupSnapshot {
+                    reason: "snapshot coordination budget exceeded".into(),
+                });
+            }
+            files.push(
+                file.try_clone()
+                    .map_err(|e| PageError::io(self.segment_path(index), e))?,
+            );
+            let len = file
+                .metadata()
+                .map_err(|e| PageError::io(self.segment_path(index), e))?
+                .len();
+            if len % u64::from(self.page_size) != 0 {
+                return Err(PageError::BackupSnapshot {
+                    reason: "page segment length is not page-aligned".into(),
+                });
+            }
+            lengths.push(len);
+        }
+        let generations = {
+            let mut tracker = self.extent_tracker.lock();
+            if tracker.is_none() {
+                *tracker = Some(crate::extent_tracking::ExtentTracker::new(&self.path)?);
+            }
+            tracker.as_mut().unwrap().seal(
+                &self.path,
+                segments.len(),
+                self.extent_pages(),
+                self.page_size,
+            )?
+        };
+        let mut snapshot = crate::backup::PageBackupSnapshot::create(
+            files,
+            lengths,
+            self.extent_pages(),
+            self.page_size,
+            journal_path,
+            limits,
+        )?;
+        snapshot.generations = Some(generations);
+        *active = Some(std::sync::Arc::downgrade(&snapshot.state));
+        Ok(snapshot)
     }
 
     /// Open every segment the published page count requires (plus any
@@ -1194,6 +1309,9 @@ impl PageStore {
                 .map_err(|e| PageError::io(self.segment_path(index), e))?
                 .len();
             if current < target {
+                if let Some(tracker) = self.extent_tracker.lock().as_mut() {
+                    tracker.mark(&self.path, index as u64)?;
+                }
                 file.set_len(target)
                     .map_err(|e| PageError::io(self.segment_path(index), e))?;
                 changed.push(index);
@@ -1666,6 +1784,16 @@ impl PageStore {
             .fetch_add(1, Ordering::Relaxed);
         let mut report = TailReclaimReport::default();
         let mut meta = self.meta.lock();
+        if self
+            .backup
+            .lock()
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
+            .is_some()
+        {
+            report.deferred = true;
+            return Ok(report);
+        }
         validate_free_list_metadata(&meta)?;
         let page_count = meta.page_count;
         if page_count <= 1 {
@@ -1853,12 +1981,18 @@ impl PageStore {
         let mut segments = self.segments.write();
         while segments.len() > last_segment + 1 {
             let index = segments.len() - 1;
+            if let Some(tracker) = self.extent_tracker.lock().as_mut() {
+                tracker.mark(&self.path, index as u64)?;
+            }
             segments.pop();
             let path = self.segment_path(index);
             std::fs::remove_file(&path).map_err(|e| PageError::io(&path, e))?;
         }
         let tail_bytes =
             (page_count - last_segment as u64 * extent_pages) * u64::from(self.page_size);
+        if let Some(tracker) = self.extent_tracker.lock().as_mut() {
+            tracker.mark(&self.path, last_segment as u64)?;
+        }
         segments[last_segment]
             .set_len(tail_bytes)
             .map_err(|e| PageError::io(self.segment_path(last_segment), e))?;
@@ -2116,6 +2250,16 @@ impl PageStore {
     }
 
     fn write_page_raw(&self, page_id: PageId, buffer: &mut [u8], generation: u64) -> Result<()> {
+        if page_id == SUPERBLOCK_PAGE_ID && self.backup_format.load(Ordering::Acquire) {
+            let magic = if self.extent_pages() == 0
+                && self.migration_target_pages.load(Ordering::Acquire) == 0
+            {
+                &SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
+            } else {
+                &SUPERBLOCK_MAGIC_TRACKED
+            };
+            buffer[PAGE_HEADER_BYTES..PAGE_HEADER_BYTES + 8].copy_from_slice(magic);
+        }
         page::finalize(buffer, generation);
         let page_type = PageType::from_u8(buffer[6]);
         // Online migration: a write beyond the first extent must serialize
@@ -2134,6 +2278,13 @@ impl PageStore {
         let to_write = self.faults.intercept(buffer.len())?;
         let started = Instant::now();
         let written = {
+            let active = self.backup.lock();
+            if let Some(tracker) = self.extent_tracker.lock().as_mut() {
+                tracker.mark(&self.path, segment as u64)?;
+            }
+            if let Some(snapshot) = active.as_ref().and_then(std::sync::Weak::upgrade) {
+                snapshot.lock().preserve(page_id);
+            }
             let segments = self.segments.read();
             crate::pio::write_at(&segments[segment], &buffer[..to_write], offset)
                 .map_err(|e| PageError::io(self.segment_path(segment), e))?
@@ -2207,7 +2358,11 @@ impl PageStore {
             });
         }
         let body = &probe[PAGE_HEADER_BYTES..];
-        if body[0..8] != SUPERBLOCK_MAGIC && body[0..8] != SUPERBLOCK_MAGIC_SEGMENTED {
+        if body[0..8] != SUPERBLOCK_MAGIC
+            && body[0..8] != SUPERBLOCK_MAGIC_SEGMENTED
+            && body[0..8] != SUPERBLOCK_MAGIC_TRACKED
+            && body[0..8] != SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
+        {
             let mut found = [0u8; 4];
             found.copy_from_slice(&body[0..4]);
             return Err(PageError::NotAPageFile {
@@ -2245,9 +2400,17 @@ impl PageStore {
         // misread — including a migration in progress, where some pages
         // already live in segment files a v1 reader knows nothing about.
         if extent_pages == 0 && migration_target == 0 {
-            body[0..8].copy_from_slice(&SUPERBLOCK_MAGIC);
+            body[0..8].copy_from_slice(if self.backup_format.load(Ordering::Acquire) {
+                &SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
+            } else {
+                &SUPERBLOCK_MAGIC
+            });
         } else {
-            body[0..8].copy_from_slice(&SUPERBLOCK_MAGIC_SEGMENTED);
+            body[0..8].copy_from_slice(if self.backup_format.load(Ordering::Acquire) {
+                &SUPERBLOCK_MAGIC_TRACKED
+            } else {
+                &SUPERBLOCK_MAGIC_SEGMENTED
+            });
         }
         body[8..12].copy_from_slice(&self.page_size.to_le_bytes());
         body[12..20].copy_from_slice(&meta.page_count.to_le_bytes());
@@ -2289,8 +2452,15 @@ impl PageStore {
         }
 
         let body = &page[PAGE_HEADER_BYTES..];
-        let segmented = body[0..8] == SUPERBLOCK_MAGIC_SEGMENTED;
-        if !segmented && body[0..8] != SUPERBLOCK_MAGIC {
+        let tracked = body[0..8] == SUPERBLOCK_MAGIC_TRACKED
+            || body[0..8] == SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC;
+        self.backup_format.store(tracked, Ordering::Release);
+        let segmented =
+            body[0..8] == SUPERBLOCK_MAGIC_SEGMENTED || body[0..8] == SUPERBLOCK_MAGIC_TRACKED;
+        if !segmented
+            && body[0..8] != SUPERBLOCK_MAGIC
+            && body[0..8] != SUPERBLOCK_MAGIC_TRACKED_MONOLITHIC
+        {
             let mut found = [0u8; 4];
             found.copy_from_slice(&body[0..4]);
             return Err(PageError::NotAPageFile {
@@ -2370,6 +2540,23 @@ pub fn convert_extent_layout(
     if source.extent_pages() == target_extent_pages {
         return Ok(());
     }
+    // Physical extent identities change during relayout. Invalidate tracking
+    // durably before replacing any file, including a crash or a later relayout
+    // back to the original extent size.
+    let tracking = base.parent().unwrap_or(Path::new(".")).join(format!(
+        ".backup-extents-{}",
+        base.file_name().unwrap().to_string_lossy()
+    ));
+    match std::fs::remove_file(&tracking) {
+        Ok(()) => {
+            #[cfg(unix)]
+            File::open(tracking.parent().unwrap())
+                .and_then(|file| file.sync_all())
+                .map_err(|e| PageError::io(&tracking, e))?;
+        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => return Err(PageError::io(&tracking, e)),
+    }
     let meta = *source.meta.lock();
     let staging = relayout_staging_dir(base);
     let _ = std::fs::remove_dir_all(&staging);
@@ -2384,6 +2571,9 @@ pub fn convert_extent_layout(
         )
     };
     let target = PageStore {
+        backup_format: AtomicBool::new(source.backup_format.load(Ordering::Acquire)),
+        extent_tracker: Mutex::new(None),
+        backup: Mutex::new(None),
         path: file_name(0),
         segments: parking_lot::RwLock::new(Vec::new()),
         dirty_segments: Mutex::new(BTreeSet::new()),

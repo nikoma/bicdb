@@ -21,7 +21,12 @@ pub const MIN_WRITE_FORMAT_VERSION: u32 = 2;
 /// holds for binaries already in the field, not just future ones.
 pub const SERVER_PAGED_FEATURE_FLAG: &str = "server_paged_storage";
 
-const KNOWN_FEATURE_FLAGS: &[&str] = &["format_metadata_v2", SERVER_PAGED_FEATURE_FLAG];
+pub const ONLINE_BACKUP_EXTENT_FEATURE_FLAG: &str = "online_backup_extent_tracking_v1";
+const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    "format_metadata_v2",
+    SERVER_PAGED_FEATURE_FLAG,
+    ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
+];
 
 /// Which storage engine owns a database's durable state. See
 /// `docs/decisions/ADR-004-storage-mode-compatibility.md` and
@@ -319,13 +324,23 @@ pub fn check_backup_restore_compatible(metadata: &FormatMetadata) -> Result<()> 
 pub fn persist_current(root: &Path, fsync: bool) -> Result<()> {
     let mode = read_or_legacy_metadata(root)?.storage_mode;
     ensure_mode_supported(&mode)?;
-    persist_metadata(root, &FormatMetadata::current_with_mode(mode), fsync)
+    let mut metadata = FormatMetadata::current_with_mode(mode);
+    if let Some(previous) = load_metadata(root)? {
+        validate_supported(&previous)?;
+        metadata.feature_flags.extend(previous.feature_flags);
+    }
+    persist_metadata(root, &metadata, fsync)
 }
 
 /// Initialize format metadata for a database being created in `mode`.
 pub fn persist_current_with_mode(root: &Path, mode: StorageMode, fsync: bool) -> Result<()> {
     ensure_mode_supported(&mode)?;
-    persist_metadata(root, &FormatMetadata::current_with_mode(mode), fsync)
+    let mut metadata = FormatMetadata::current_with_mode(mode);
+    if let Some(previous) = load_metadata(root)? {
+        validate_supported(&previous)?;
+        metadata.feature_flags.extend(previous.feature_flags);
+    }
+    persist_metadata(root, &metadata, fsync)
 }
 
 /// Refuse a storage mode this build cannot run. Public so that `open` can reject
@@ -425,11 +440,11 @@ fn migrate_to_current(
     persist_migration_state(root, &state, fsync)?;
     // Carry the existing mode forward. A version migration must never be the
     // thing that changes which engine owns the data.
-    persist_metadata(
-        root,
-        &FormatMetadata::current_with_mode(metadata.storage_mode.clone()),
-        fsync,
-    )?;
+    let mut migrated = FormatMetadata::current_with_mode(metadata.storage_mode.clone());
+    migrated
+        .feature_flags
+        .extend(metadata.feature_flags.iter().cloned());
+    persist_metadata(root, &migrated, fsync)?;
     let state = FormatMigrationState {
         steps_completed: plan.steps.len(),
         ..state
@@ -504,4 +519,19 @@ fn cleanup_migration_state(root: &Path) -> Result<()> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.into()),
     }
+}
+
+/// Fence writers predating durable extent tracking before a reusable identity
+/// can be published. Routine metadata rewrites must preserve this capability.
+pub(crate) fn enable_online_backup_extent_tracking(root: &Path) -> Result<()> {
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if metadata.storage_mode == StorageMode::ServerPaged
+        && metadata
+            .feature_flags
+            .insert(ONLINE_BACKUP_EXTENT_FEATURE_FLAG.into())
+    {
+        persist_metadata(root, &metadata, true)?;
+    }
+    Ok(())
 }

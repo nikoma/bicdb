@@ -86,6 +86,8 @@ impl BicDb {
         let copied = (|| {
             // No commit may be in flight or start while the files are copied.
             let _quiesced = self.serializable_commit_admission.write();
+            self.tx_log_handle()
+                .write_durable(self.last_applied_commit_seq())?;
             self.flush()?;
             crate::backup::copy_open_database_files(&self.path, &staging, self.config.fsync)?;
             Ok::<_, BicDbError>(self.last_applied_commit_seq())

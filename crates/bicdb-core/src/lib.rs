@@ -97,11 +97,14 @@ mod vector;
 pub use backup::{
     apply_archived_wal, create_backup, create_backup_from_open_database, create_backup_to_writer,
     create_online_paged_base_backup, create_wal_tail_backup, drill_backup_restore,
-    drill_backup_restore_with_limits, prune_archived_wal, restore_backup, restore_backup_to_point,
+    drill_backup_restore_with_limits, is_repository_backup, prune_archived_wal,
+    prune_backup_repository, restore_backup, restore_backup_to_point,
     restore_backup_to_point_with_limits, verify_backup, verify_backup_chain,
     verify_backup_from_reader, wal_floor_of_base, BackupChainVerifyReport, BackupCreateOptions,
     BackupCreateReport, BackupDrillReport, BackupPitrReplayLimits, BackupPointInTimeRestoreOptions,
-    BackupRestoreOptions, BackupRestoreReport, BackupVerifyReport, WalPruneReport,
+    BackupRestoreOptions, BackupRestoreReport, BackupVerifyReport, OnlineBackupControl,
+    OnlineBackupLimits, OnlineBackupPhase, OnlineBackupProgress, OnlineBackupSnapshot,
+    RepositoryBackupReport, RepositoryPruneReport, WalPruneReport,
 };
 pub use bicdb_page::{
     BTreeNodeViolation, BTreePageExpectation, BTreeVerifyCursor, BTreeVerifyFault,

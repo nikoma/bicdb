@@ -14,6 +14,8 @@ pub type Result<T> = std::result::Result<T, PageError>;
 /// only being able to log.
 #[derive(Debug, thiserror::Error)]
 pub enum PageError {
+    #[error("page backup snapshot: {reason}")]
+    BackupSnapshot { reason: String },
     #[error("page store io error at {path}: {source}")]
     Io {
         path: PathBuf,

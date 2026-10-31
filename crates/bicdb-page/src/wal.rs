@@ -421,6 +421,48 @@ impl Wal {
             .collect()
     }
 
+    /// Open independent read descriptors at one WAL boundary. The caller holds
+    /// the paged writer gate and a backup pin, so reset cannot invalidate these
+    /// prefixes. Subsequent rotation is safe: descriptors retain old inodes.
+    pub(crate) fn capture_backup_files(
+        &self,
+        max_files: usize,
+        deadline: std::time::Instant,
+    ) -> Result<Vec<(PathBuf, File, u64)>> {
+        let _writer = self.file.lock();
+        let mut paths = self.sealed_segment_paths();
+        paths.push(self.path.clone());
+        if paths.len() > max_files {
+            return Err(PageError::BackupSnapshot {
+                reason: "captured WAL file limit exceeded".into(),
+            });
+        }
+        let mut captured = Vec::with_capacity(paths.len());
+        for path in paths {
+            if std::time::Instant::now() >= deadline {
+                return Err(PageError::BackupSnapshot {
+                    reason: "WAL capture coordination budget exceeded".into(),
+                });
+            }
+            let mut options = OpenOptions::new();
+            options.read(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.custom_flags(libc::O_NOFOLLOW);
+            }
+            let file = options.open(&path).map_err(|e| PageError::io(&path, e))?;
+            let meta = file.metadata().map_err(|e| PageError::io(&path, e))?;
+            if !meta.is_file() {
+                return Err(PageError::BackupSnapshot {
+                    reason: "WAL source is not a regular file".into(),
+                });
+            }
+            captured.push((path, file, meta.len()));
+        }
+        Ok(captured)
+    }
+
     /// Explicitly seal the active file (online backup's consistency cut).
     /// A no-op when the active file is empty. Refused when segmentation is
     /// disabled: sealed files next to a legacy-layout store would be

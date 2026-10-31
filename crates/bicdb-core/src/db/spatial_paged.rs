@@ -1562,6 +1562,8 @@ impl BicDb {
     /// close+reopen per checkpoint paid a full recovery scan every cycle,
     /// and the cost grows with the store.
     pub fn checkpoint_for_resume(&self) -> Result<()> {
+        let _admission = self.serializable_commit_admission.write();
+        self.tx_log.flush_pending()?;
         if let Some(paged) = &self.paged_records {
             paged.checkpoint()?;
             let log_path = self.tx_log_path();
@@ -1601,16 +1603,21 @@ impl BicDb {
                 "online backup requires server_paged storage".to_string(),
             ));
         };
+        // This compatibility API has no owned core snapshot. Keep its core
+        // history fixed for both artifacts; raw page-store traffic can still
+        // run under the WAL pin. New live callers should capture an owned v4
+        // snapshot and release their host guard before copying.
+        self.checkpoint_for_resume()?;
+        let _quiesced = self.serializable_commit_admission.write();
+        self.tx_log_handle()
+            .write_durable(self.last_applied_commit_seq())?;
         online_backup_pinned(
             paged,
             &self.path,
             base_path.as_ref(),
             wal_tail_path.as_ref(),
             options,
-            // Materialize dirty pages and bound the core log first: the base
-            // is as close to the pin point as a checkpoint can make it, and
-            // the pin keeps the WAL covering everything after it.
-            || self.checkpoint_for_resume(),
+            || Ok(()),
         )
     }
 
@@ -1741,6 +1748,7 @@ impl BicDb {
     }
 
     pub fn close(self) -> Result<()> {
+        self.tx_log.flush_pending()?;
         // Paged mode: bound the core transaction log at the session boundary,
         // same contract as the truncation at open (see there for why nothing
         // else bounds it in this mode). Checkpoint the page store first so the

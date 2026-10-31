@@ -9,56 +9,132 @@ including regular and FTS indexes, multi-store backup sets, direct repository
 uploads, retention, and acceptance criteria is documented in
 [`incremental-online-backup-contract.md`](incremental-online-backup-contract.md).
 
-BicDB backups are encrypted archives with a manifest checksum, per-file
-checksums, encryption metadata, recovery metadata, and source on-disk format
-metadata. A backup captures an online checkpoint after flushing database
-format metadata, catalogs, record segments, transactions, events, sync logs,
-indexes, planner statistics, and `large_values/` sidecar attachments. Record
-audit events are the point-in-time
-recovery log for BicDB-first transactional deployments, so PITR requires databases to run
-with audit events enabled before the backup is taken. Schema migration metadata
-in `__bicdb_schema_version` and
-`__bicdb_migration_history` is stored as durable records and is included in
-the same backup/restore flow.
+The running server supports full online database snapshots and changed-extent
+incrementals in an encrypted `BICBAK04` object repository. Ordinary SQL writes,
+reads and DDL continue during payload copying. A short coordination interval
+establishes one committed boundary; it does not flush or copy the entire store.
 
-New backups use the streaming `BICBAK03` container. BicDB walks and hashes the
-source through fixed buffers, encrypts an authenticated manifest separately,
-then reads each included file in independently authenticated 1 MiB frames.
-Each frame is compressed with zstd only when that makes it smaller. Nonces and
-associated data bind every frame to the backup header and its exact sequence,
-so truncation, insertion, or reordering fails authentication. Create, verify,
-and restore therefore keep payload memory constant as database size grows.
+## Online full and incremental backups
 
-The encrypted manifest and file list are capped at 64 MiB/one million files,
-and source-manifest accumulation has its own conservative 64 MiB charge limit;
-individual paths are capped at 16 KiB; chunk sizes and ciphertext lengths are
-validated before allocation; and decompression is output-bounded. Recovery
-event bounds are reduced in place rather than cloning the event archive. Source files
-are hashed before streaming and hashed again while copied, so a file that
-changes during the protected checkpoint fails the backup instead of producing
-a mismatched archive. New full and incremental artifacts are written to a
-temporary file, flushed, and atomically renamed only after completion. Failure
-removes the incomplete temporary file and preserves any previously published
-backup at the destination. The online checkpoint marker is protected by an
-OS-owned exclusive lock, so two backups cannot claim the same checkpoint; a
-marker left by a crashed process is detected as ownerless and removed before
-the next storage write. Source and restore-path symbolic links are rejected so
-an archive cannot escape the database or restore root.
+Configure the server with a repository outside its database directory:
 
-Incremental v3 archives also carry authenticated deletion entries, so applying
-an incremental removes files absent from its final manifest instead of leaving
-stale sidecars from the base. Restore verifies the complete artifact before it
-changes the target, writes each restored file through a flushed temporary, and
-then verifies the final manifest with streaming hashes.
+```sh
+export BACKUP_KEY='use-a-secret-from-your-secret-manager'
+bicdb serve /data/bicdb --backup-repository /backups/bicdb --backup-key-env BACKUP_KEY
+bicdb backup start daily --wait
+bicdb backup start quarter-hour --base daily --wait
+bicdb backup status
+# bicdb backup cancel <job-uuid>
+```
 
-Restore and verify remain backward compatible with encrypted v1 JSON and
-`BICBAK02` archives. Those historical formats were monolithic, so reading an
-old artifact may still require memory proportional to that artifact; creating
-all new backups in v3 and rotating old chains after a verified restore drill is
-recommended.
+These commands connect to the running SQL listener at `127.0.0.1:5433`; use
+`--server`, `--user`, `--dbname` and `--password-env` as needed. The CLI accepts
+loopback or SSH-forwarded connections. A remote TLS-capable PostgreSQL client
+can invoke the same standalone superuser functions:
 
-Database format compatibility policy, migration crash recovery, and failed
-upgrade rollback are documented in [`on-disk-format.md`](on-disk-format.md).
+```sql
+SELECT bicdb_backup_start('daily');
+SELECT bicdb_backup_start('quarter-hour', 'daily');
+SELECT bicdb_backup_status();
+SELECT bicdb_backup_cancel('job-uuid');
+```
+
+SQL arguments name artifacts within the host-configured repository. They never
+supply paths or encryption keys. Calls require an effective superuser, outside
+a transaction and delegation. One job runs per server database; cancellation
+and shutdown release the capture. Status includes the recovery commit sequence,
+phase, copied/source/uploaded/reused bytes and failures. `bicdb_backup_*` metrics
+also expose progress and success. The backup uses the node governor's
+`backup_restore` lane with a bounded memory/I/O reservation and CPU slot.
+
+At capture, core append-log prefixes, catalogs and atomic-replacement sidecars
+retain independent file descriptors. The page store pins its WAL prefix and
+preserves the first before-image of each uncopied physical page. Required WAL
+is copied first, allowing checkpoint and WAL recycling to resume during the
+remaining upload. The restored disk pages plus this exact WAL prefix recover
+the declared committed boundary, including native indexes and FTS. Large-value
+attachments retain their captured inodes if later replaced or deleted. No
+outer database read guard is held across compression, encryption or copying.
+
+Each physical page extent becomes an immutable content-addressed object.
+Incrementals use a durable, checksummed extent-generation journal: the first
+physical change in an epoch is recorded and synced **before** the page write.
+Capture advances the epoch before foreground writes resume. Matching source,
+tracking identity, layout, extent generation and length allow unchanged source
+extents to be skipped. Tracking survives restart; corrupt/missing tracking or
+bounded journal rollover changes identity and safely forces recopying. Relayout
+invalidates tracking before replacing files. Branches and restored databases
+start with fresh backup identities. Native paged FTS follows the same tracker.
+The first paged capture enables an on-disk compatibility guard: earlier core
+binaries and page tools refuse the tracked database. Use this version or a newer
+compatible version for later opens, restores and branches; see
+[format compatibility](on-disk-format.md#online-extent-tracking-compatibility).
+Other metadata, append streams and blob files are safely recaptured and
+content-deduplicated; source-read avoidance currently applies to page extents,
+not all nonpaged components or embedded-memory stores.
+
+Objects use independently authenticated, optionally compressed 1 MiB frames;
+plaintext hashes bind their identity. Files and newly created directories are
+synced before the authenticated encrypted manifest is published without
+replacing an existing name. Each manifest lists the **complete** required
+object set, so the newest incremental restores directly even after parent
+manifest files are retired. Objects referenced by retained manifests must stay
+in the repository. Copy the repository, including `objects/`, when transporting
+backups; a `.bicbackup` file alone is not a portable v4 backup.
+
+```sh
+bicdb backup verify /backups/bicdb/quarter-hour.bicbackup --key-env BACKUP_KEY
+bicdb backup restore /backups/bicdb/quarter-hour.bicbackup /restore/bicdb --key-env BACKUP_KEY
+bicdb backup drill /backups/bicdb/quarter-hour.bicbackup --key-env BACKUP_KEY
+bicdb backup repository-gc /backups/bicdb --key-env BACKUP_KEY --dry-run
+```
+
+Verification authenticates and hashes every referenced object. Publication
+checks every reference and fully verifies newly uploaded objects; reuse does
+not reread every old payload on each incremental. Schedule full verification
+and actual restore drills to detect storage bit rot. A supplied ordered chain
+is checked before CLI restore, which installs its final v4 snapshot once.
+Restore authenticates payloads in an inactive staging directory before acquiring
+the destination's stable ownership lock and installing them. An interrupted
+install leaves a durable pending marker; opening that partial database fails
+until a forced restore succeeds. Active databases cannot be overwritten, even
+with `--force`.
+
+Remove only retired manifest files, then run `repository-gc` to sweep objects
+unreachable from **all** authenticated retained manifests. The default grace is
+one hour; `--min-age-seconds` changes it. Missing references, wrong keys and
+corrupt manifests abort collection before deletion. Dry-run reports candidates.
+Publication, verification, restore and collection share a repository lock.
+Automatic log archival takes an initial full v4 snapshot, then incrementals from
+the latest retained v4 base, and performs grace-protected object collection.
+
+`--backup-limits <json-file>` overrides `OnlineBackupLimits`. Defaults include
+65,536 files, a 64 MiB manifest, a 1 GiB/262,144-page before-image journal,
+1 second of cooperative capture coordination, 8 GiB retained WAL, and a six-hour
+job duration. `bytes_per_second` defaults to unlimited. Budgets and cancellation
+are checked between bounded frames; operating-system I/O itself cannot be
+preempted by a deadline. Exceeding a before-image budget fails the backup while
+allowing foreground page writes. A tracking-journal write error refuses the
+physical page write rather than falsely marking it unchanged; reopen after
+resolving the underlying I/O problem. Logs and before-image files left by killed
+uploaders are reclaimed under ownership locks.
+
+## Legacy archives and compatibility
+
+`backup create`, the older paged `backup online` base/WAL-tail interface, and
+existing v1-v3 readers remain available. New live server work should use
+`backup start`; offline legacy creation may pause writes and is not the new
+whole-database capture interface. Streaming `BICBAK03` archives own their
+payloads and apply deletion-aware incrementals in order. Historical v1/v2
+readers may use memory proportional to the archive size. Stable OS-owned lock
+inodes are retained across releases; an unlocked file left by a crash does not
+block normal writes or the next backup.
+
+Core audit-event PITR and commit-log archive PITR are distinct recovery paths.
+Audit-event PITR requires audit events to have been enabled before capture.
+Schema migration records are included with the database's durable records.
+Format compatibility and upgrade recovery are documented in
+[`on-disk-format.md`](on-disk-format.md).
 
 ## Schedule
 
@@ -130,7 +206,7 @@ other way, use `bicdb backup restore <backup> <target> --log-archive DIR
   fsynced. The server keeps its transaction log until a commit is archived,
   also across restarts, so a stalled archive directory cannot lose commits
   (watch its free space: the log grows while archiving is stalled).
-- Base backups pause commits while they are written locally. Old base backups
+- Server-managed v4 bases coordinate briefly, then copy while commits continue. Old base backups
   beyond `--log-archive-keep`, and log segments only they needed, are removed.
 - Targets are commit sequence numbers or Unix seconds; commits that wrote
   nothing do not stop a time-based replay.

@@ -2307,9 +2307,6 @@ impl BicDb {
             .map(|paged| PagedStorageOpsHandle {
                 paged: Arc::clone(paged),
                 path: self.path.clone(),
-                fsync: self.config.fsync,
-                commit_seq: Arc::clone(&self.commit_seq),
-                sync_quorum: Arc::clone(&self.sync_quorum),
             })
     }
 

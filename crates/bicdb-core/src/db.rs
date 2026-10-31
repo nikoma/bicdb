@@ -4,6 +4,7 @@ mod collection_rename;
 mod commit_snapshot;
 mod ha_bootstrap;
 mod ha_node;
+mod online_backup;
 pub use ha_bootstrap::{
     finish_standby_bootstrap, stage_standby_bootstrap, standby_bootstrap_staging, StandbyResume,
 };
@@ -3415,9 +3416,12 @@ impl PagedCheckpointMaintenanceHandle {
 /// work — an online backup of a terabyte store streams for the better part
 /// of an hour, and a host that holds its outer read guard that long starves
 /// every writer queued behind a reader-preferring lock. The page store's
-/// own pins and gates already serialize these operations against foreground
-/// commits, so the outer guard adds no safety — only starvation. Row,
-/// schema, transaction, and mutation APIs are excluded by construction.
+/// own pins and gates serialize physical storage operations. The legacy
+/// two-artifact backup additionally requires the caller to exclude core DML
+/// and DDL for the entire copy; this narrow capability does not own catalogs
+/// or core commit admission. Use `capture_online_backup` for a complete live
+/// database snapshot whose copy needs no host database guard. Row, schema,
+/// transaction, and mutation APIs are excluded by construction.
 ///
 /// The handle keeps the paged store — and its directory lock — alive for as
 /// long as any clone exists: drop every handle before expecting
@@ -3426,19 +3430,17 @@ impl PagedCheckpointMaintenanceHandle {
 pub struct PagedStorageOpsHandle {
     paged: Arc<crate::paged_collection::PagedRecords>,
     path: PathBuf,
-    fsync: bool,
-    commit_seq: Arc<AtomicU64>,
-    sync_quorum: Arc<SyncQuorum>,
 }
 
 impl PagedStorageOpsHandle {
     /// Online, checkpoint-consistent backup; see
     /// [`BicDb::create_online_backup`] for the artifact contract.
     ///
-    /// The preparation step bounds the paged and core transaction logs like
-    /// `checkpoint_for_resume`, but omits the full-database segment flush —
-    /// in `server_paged` mode record durability lives in the paged store the
-    /// checkpoint just bounded.
+    /// The caller must exclude core DML and DDL throughout this legacy copy.
+    /// Prefer `BicDb::capture_online_backup` for live whole-database backups.
+    /// Preparation checkpoints the paged store. This narrow handle does not
+    /// own core commit admission or the transaction-log writer and therefore
+    /// must never replace/truncate the core transaction-log inode.
     pub fn create_online_backup(
         &self,
         base_path: impl AsRef<Path>,
@@ -3453,17 +3455,6 @@ impl PagedStorageOpsHandle {
             options,
             || {
                 self.paged.checkpoint()?;
-                let log_path = self.path.join(DEFAULT_TRANSACTION_LOG);
-                let log_len = file_len(&log_path)?;
-                let current = self.commit_seq.load(AtomicOrdering::SeqCst);
-                let standby_needs_log = self
-                    .sync_quorum
-                    .retention_floor()
-                    .is_some_and(|acked| acked < current);
-                if log_len > 0 && !standby_needs_log {
-                    persist_commit_seq_floor(&self.path, current, current, self.fsync)?;
-                    copy_transaction_log_tail(&log_path, log_len, self.fsync)?;
-                }
                 Ok(())
             },
         )
@@ -3602,7 +3593,7 @@ pub struct BicDb {
     /// paged engine has always taken this claim on its own subdirectory; this
     /// one covers the database root, so every storage mode is excluded rather
     /// than only the paged one.
-    _directory_lock: Option<bicdb_page::DirectoryLock>,
+    _directory_lock: Option<Arc<bicdb_page::DirectoryLock>>,
     config: DbConfig,
     ha_state: HaState,
     replication_state: ReplicationApplyState,
@@ -9133,6 +9124,8 @@ impl BicDb {
         options: crate::backup::BackupCreateOptions,
     ) -> Result<(crate::backup::BackupCreateReport, u64)> {
         let _quiesced = self.serializable_commit_admission.write();
+        self.tx_log_handle()
+            .write_durable(self.last_applied_commit_seq())?;
         let report = crate::backup::create_backup_from_open_database(self, backup_path, options)?;
         Ok((report, self.last_applied_commit_seq()))
     }
@@ -9260,6 +9253,7 @@ impl BicDb {
         }
         config.consensus.validate()?;
         let path = path.as_ref().to_path_buf();
+        online_backup::ensure_no_pending_restore(&path)?;
         // A standby bootstrap staged by the previous run is installed first.
         ha_bootstrap::finish_standby_bootstrap(&path)?;
         let open_trace = std::env::var("BICDB_OPEN_TRACE").is_ok();
@@ -9278,7 +9272,7 @@ impl BicDb {
         // Storage-mode fencing is entirely read-only and runs before anything
         // can write to `path`, including the format-version migration below.
         let effective_mode = format::ensure_storage_mode_compatible(&path, &config.storage_mode)?;
-        format::ensure_open_compatible_in_mode(&path, config.fsync, effective_mode.clone())?;
+        format::verify_open_compatible(&path)?;
         // Also read-only, and also before any directory is created: the paged
         // engine cannot honour encryption at rest yet, and a refused open must
         // not leave `encryption.json` behind (see ADR-004).
@@ -9287,7 +9281,7 @@ impl BicDb {
             &effective_mode,
             encryption_config.as_ref(),
         )?;
-        fs::create_dir_all(path.join(DEFAULT_SEGMENTS_DIR))?;
+        fs::create_dir_all(&path)?;
 
         // Claim the directory before anything reads or writes state in it. A
         // second writer here is unrecoverable rather than merely racy, so this
@@ -9298,6 +9292,13 @@ impl BicDb {
                 path.display()
             ))
         })?;
+        // Recheck after claiming ownership: a restore may have started after
+        // the read-only preflight and then died before this lock was acquired.
+        online_backup::ensure_no_pending_restore(&path)?;
+        // Format migration and cleanup can write. Do them only after ownership
+        // and the restore marker have been checked under the directory lock.
+        format::ensure_open_compatible_in_mode(&path, config.fsync, effective_mode.clone())?;
+        fs::create_dir_all(path.join(DEFAULT_SEGMENTS_DIR))?;
         // This inode must exist before recovery or any foreground append. A
         // backup takes it exclusively while every physical writer holds it
         // shared, eliminating the check-then-write race of the old marker.
@@ -10079,7 +10080,7 @@ impl BicDb {
         )?;
         let mut db = Self {
             path,
-            _directory_lock: Some(directory_lock),
+            _directory_lock: Some(Arc::new(directory_lock)),
             config,
             ha_state,
             replication_state,

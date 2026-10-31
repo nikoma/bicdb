@@ -27,7 +27,9 @@ mod high_availability;
 pub use embedded_ha::{EmbeddedHaDatabase, HaWriterLease};
 mod live_queries;
 pub use live_queries::EmbeddedSubscription;
+mod backups;
 mod log_archive;
+pub use backups::OnlineBackupConfig;
 mod metrics;
 pub(crate) use checkpoint_driver::*;
 pub use connectors::{ConnectorStatus, ConnectorsConfig};
@@ -346,6 +348,8 @@ pub struct PgWireConfig {
     pub high_availability: Option<HaServerConfig>,
     /// Commit log archive for whole-database point-in-time recovery.
     pub log_archive: Option<LogArchiveConfig>,
+    pub online_backups: Option<OnlineBackupConfig>,
+    pub online_backup_limits: bicdb_core::OnlineBackupLimits,
     pub verification: Option<VerificationConfig>,
     pub workload: WorkloadConfig,
     /// Operator label for the region serving this node.
@@ -426,6 +430,8 @@ impl Default for PgWireConfig {
             fsync: true,
             high_availability: None,
             log_archive: None,
+            online_backups: None,
+            online_backup_limits: bicdb_core::OnlineBackupLimits::default(),
             verification: None,
             workload: WorkloadConfig::default(),
             region: String::new(),
@@ -454,6 +460,7 @@ fn default_max_queued_queries() -> usize {
 fn database_config_for_server(path: &Path, config: &PgWireConfig) -> Result<DbConfig> {
     // The server checkpoints from its own background worker (BICDB_AUTO_COMPACT_WAL_MB).
     let mut db_config = DbConfig::default()
+        .with_storage_mode(bicdb_core::storage_mode(path)?)
         .with_auto_checkpoint_wal_bytes(0)
         .with_fsync(config.fsync)
         .with_paged_rowid_registry(config.paged_rowid_registry);
@@ -975,6 +982,7 @@ pub struct PgWireServer {
     /// Subscriptions registered with `SUBSCRIBE name AS ...`.
     live_registry: live_queries::LiveRegistry,
     verification_runs: Mutex<Vec<verification::VerificationRun>>,
+    backup_jobs: Mutex<backups::BackupJobs>,
     workload: workload::WorkloadState,
     live_breaker_trips: AtomicU64,
     replica_read_watermark: Mutex<Option<Instant>>,
@@ -4142,6 +4150,9 @@ fn execute_server_sql_with_options_normalized(
         )?;
     }
     if let Some(result) = high_availability::execute_switchover(server, state, sql)? {
+        return Ok(result);
+    }
+    if let Some(result) = backups::execute(server, state, sql)? {
         return Ok(result);
     }
     let role_permit = workload::admit(server, &state.user, state.security_context.as_ref(), sql)?;

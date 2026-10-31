@@ -22,6 +22,7 @@
 //! The only dependencies are a CRC implementation, a mutex, a hash map, and
 //! serde.
 
+pub mod backup;
 pub mod btree;
 pub mod catalog;
 pub mod error;
@@ -42,6 +43,7 @@ pub mod tiered_manifest;
 pub mod tiered_reader;
 pub mod wal;
 
+pub use backup::{PageBackupLimits, PageBackupSnapshot, PageBackupStats};
 pub use btree::{
     BTree, BTreeNodeViolation, BTreePageExpectation, BTreeRange, BTreeVerifyCursor,
     BTreeVerifyFault, BTreeVerifyLimits, BTreeVerifyReport, BTreeVerifyStepReport,
@@ -71,8 +73,8 @@ pub use page::{
 };
 pub use paged::{
     abort_exception_capacity, extract_status_spill, inspect_meta_page, repair_status_spill,
-    status_spill_entries_per_page, HintedRead, MetaPageInspection, PagedCheckpointCursor,
-    PagedCheckpointLimits, PagedCheckpointPhase, PagedCheckpointStepReport,
+    status_spill_entries_per_page, HintedRead, MetaPageInspection, PagedBackupCapture,
+    PagedCheckpointCursor, PagedCheckpointLimits, PagedCheckpointPhase, PagedCheckpointStepReport,
     PagedCheckpointStopReason, PagedIntegrityReport, PagedLocalityBatch, PagedPaths, PagedScan,
     PagedScanHeads, PagedStore, PagedStoreOptions, PagedStoreSnapshot, StatusSpillRepairReport,
     VacuumCursor, VacuumLimits, VacuumReport, VacuumStopReason, VersionChainFaultSample,
@@ -115,3 +117,6 @@ pub use wal::{
     recover, CheckpointReport, Checkpointer, Lsn, RecordKind, RecoveryReport, Wal, WalRecord,
     WalSnapshot, MAX_WAL_RECORD_BYTES,
 };
+
+mod extent_tracking;
+pub use extent_tracking::ExtentGenerations;

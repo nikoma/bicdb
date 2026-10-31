@@ -19,6 +19,15 @@ use crate::error::{BicDbError, Result};
 use crate::format::{self, FormatMetadata};
 use crate::storage;
 
+mod capture;
+mod repository;
+pub(crate) use capture::capture as capture_online_database;
+pub use capture::{
+    OnlineBackupControl, OnlineBackupLimits, OnlineBackupPhase, OnlineBackupProgress,
+    OnlineBackupSnapshot,
+};
+pub use repository::{prune_backup_repository, RepositoryBackupReport, RepositoryPruneReport};
+
 const LEGACY_BACKUP_VERSION: u32 = 1;
 const BACKUP_VERSION: u32 = 2;
 const BACKUP_MAGIC: &[u8; 8] = b"BICBAK02";
@@ -394,6 +403,7 @@ const NODE_LOCAL_FILES: &[&str] = &[
     "server.shutdown",
     "ha-node.json",
     "replication-state.json",
+    "backup-source.json",
 ];
 
 /// Copies the files of an open database into `target` behind the physical
@@ -728,6 +738,10 @@ pub fn verify_backup(
     backup_path: impl AsRef<Path>,
     passphrase: impl AsRef<str>,
 ) -> Result<BackupVerifyReport> {
+    if repository::is_manifest(backup_path.as_ref())? {
+        return repository::verify_header(backup_path.as_ref(), passphrase.as_ref(), true)
+            .map(|header| verify_report_from_header(&header));
+    }
     let mut reader = BufReader::new(File::open(backup_path)?);
     let header = verify_backup_reader_header(&mut reader, passphrase.as_ref())?;
     Ok(verify_report_from_header(&header))
@@ -744,6 +758,10 @@ where
     let passphrase = passphrase.as_ref();
     let mut archives = Vec::new();
     for path in backup_paths {
+        if repository::is_manifest(path.as_ref())? {
+            archives.push(repository::verify_header(path.as_ref(), passphrase, true)?);
+            continue;
+        }
         let mut reader = BufReader::new(File::open(path)?);
         archives.push(verify_backup_reader_header(&mut reader, passphrase)?);
     }
@@ -805,6 +823,9 @@ pub fn restore_backup(
     target_path: impl AsRef<Path>,
     options: BackupRestoreOptions,
 ) -> Result<BackupRestoreReport> {
+    if repository::is_manifest(backup_path.as_ref())? {
+        return repository::restore(backup_path.as_ref(), target_path.as_ref(), &options);
+    }
     let mut reader = BufReader::new(File::open(backup_path)?);
     let verified = verify_backup_reader_header(&mut reader, &options.passphrase)?;
     format::check_backup_restore_compatible(&verified.source_format)?;
@@ -820,10 +841,8 @@ pub fn restore_backup(
         )));
     }
 
-    if options.force && verified.full && target_path.exists() {
-        fs::remove_dir_all(target_path)?;
-    }
-    fs::create_dir_all(target_path)?;
+    repository::durable_create_dir_all(target_path)?;
+    let mut ownership = RestoreOwnership::acquire(target_path)?;
     if verified.full && !options.force && target_has_entries(target_path)? {
         return Err(BicDbError::Backup(format!(
             "restore target {} is not empty; pass --force for a full restore",
@@ -831,6 +850,23 @@ pub fn restore_backup(
         )));
     }
 
+    let marker = target_path.join("backup-restore.pending");
+    storage::write_atomic(
+        &marker,
+        &serde_json::to_vec(&(verified.backup_id, &verified.manifest.manifest_hash))?,
+        true,
+    )?;
+    if options.force && verified.full {
+        clear_restore_payloads(target_path)?;
+    }
+    if verified
+        .manifest
+        .files
+        .iter()
+        .any(|entry| entry.path.starts_with("paged/"))
+    {
+        ownership.ensure_paged(target_path)?;
+    }
     reader.seek(SeekFrom::Start(0))?;
     let mut magic = [0_u8; 8];
     reader.read_exact(&mut magic)?;
@@ -843,9 +879,12 @@ pub fn restore_backup(
         let encrypted = decode_encrypted_backup(&bytes)?;
         let archive = decrypt_archive(&encrypted, &options.passphrase)?;
         for file in &archive.files {
+            if runtime_lock_path(&file.path) {
+                continue;
+            }
             let path = safe_join(target_path, &file.path)?;
             if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
+                repository::durable_create_dir_all(parent)?;
             }
             write_atomic(&path, &file.bytes)?;
         }
@@ -853,6 +892,8 @@ pub fn restore_backup(
     };
 
     verify_restored_manifest(target_path, &verified.manifest)?;
+    fs::remove_file(&marker)?;
+    sync_parent_directory(&marker)?;
     Ok(BackupRestoreReport {
         backup_id: verified.backup_id,
         files_restored,
@@ -1522,6 +1563,12 @@ fn verify_backup_reader_header<R: Read>(
         }
         prefix_len += read;
     }
+    if prefix_len == 8 && &prefix == repository::MAGIC {
+        return Err(BicDbError::Backup(
+            "repository manifests require path-based verification with their objects directory"
+                .into(),
+        ));
+    }
     let prefix_bytes = prefix[..prefix_len].to_vec();
     let mut chained = Cursor::new(prefix_bytes).chain(reader);
     if prefix_len == STREAMING_BACKUP_MAGIC.len() && &prefix == STREAMING_BACKUP_MAGIC {
@@ -1586,6 +1633,9 @@ fn restore_streaming_archive<R: Read>(
         ));
     }
     for removed in &archive.removed_files {
+        if runtime_lock_path(removed) {
+            continue;
+        }
         let path = safe_join(target_path, removed)?;
         match fs::symlink_metadata(&path) {
             Ok(metadata) if metadata.file_type().is_symlink() || metadata.is_file() => {
@@ -1604,10 +1654,14 @@ fn restore_streaming_archive<R: Read>(
     }
     for entry in &archive.files {
         let path = safe_join(target_path, &entry.path)?;
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        let mut temporary = TemporaryRestoreFile::create(&path)?;
+        let mut temporary = if runtime_lock_path(&entry.path) {
+            None
+        } else {
+            if let Some(parent) = path.parent() {
+                repository::durable_create_dir_all(parent)?;
+            }
+            Some(TemporaryRestoreFile::create(&path)?)
+        };
         let mut remaining = entry.size;
         let mut hasher = Sha256::new();
         while remaining > 0 {
@@ -1619,7 +1673,9 @@ fn restore_streaming_archive<R: Read>(
                     entry.path
                 )));
             }
-            temporary.file.write_all(&chunk)?;
+            if let Some(temporary) = &mut temporary {
+                temporary.file.write_all(&chunk)?;
+            }
             hasher.update(&chunk);
             remaining -= chunk.len() as u64;
         }
@@ -1629,7 +1685,9 @@ fn restore_streaming_archive<R: Read>(
                 entry.path
             )));
         }
-        temporary.publish()?;
+        if let Some(temporary) = temporary {
+            temporary.publish()?;
+        }
     }
     stream.ensure_eof()?;
     Ok(archive.files.len())
@@ -1956,10 +2014,17 @@ fn collect_source_files_inner(
         if matches!(
             path.file_name().and_then(|name| name.to_str()),
             Some(storage::BACKUP_ONLINE_LOCK | storage::BACKUP_WRITE_GATE)
-        ) || exclude.is_some_and(|exclude| {
-            paths_identical(&path, exclude)
-                || paths_identical(&path, &exclude.with_extension("tmp"))
-        }) {
+        ) || path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| {
+                name.starts_with(".backup-") || name == "backup-source.json" || name == "store.lock"
+            })
+            || exclude.is_some_and(|exclude| {
+                paths_identical(&path, exclude)
+                    || paths_identical(&path, &exclude.with_extension("tmp"))
+            })
+        {
             continue;
         }
         let file_type = entry.file_type()?;
@@ -2155,7 +2220,7 @@ fn sync_parent_directory(_path: &Path) -> Result<()> {
 }
 
 #[derive(Debug)]
-struct OnlineBackupCheckpoint {
+pub(crate) struct OnlineBackupCheckpoint {
     path: PathBuf,
     lock_file: Option<File>,
     snapshot_gate: Option<storage::BackupGateGuard>,
@@ -2189,7 +2254,7 @@ impl OnlineBackupCheckpoint {
         Ok(checkpoint)
     }
 
-    fn begin_open_database(db_path: &Path) -> Result<Self> {
+    pub(crate) fn begin_open_database(db_path: &Path) -> Result<Self> {
         let path = db_path.join(storage::BACKUP_ONLINE_LOCK);
         let mut lock_file = open_backup_lock_file(&path)?;
         lock_file.set_len(0)?;
@@ -2216,7 +2281,9 @@ impl OnlineBackupCheckpoint {
 impl Drop for OnlineBackupCheckpoint {
     fn drop(&mut self) {
         drop(self.snapshot_gate.take());
+        // Keep a stable inode: unlinking after unlock permits two owners.
         drop(self.lock_file.take());
+        #[cfg(not(any(unix, windows)))]
         let _ = fs::remove_file(&self.path);
     }
 }
@@ -2225,10 +2292,12 @@ impl Drop for OnlineBackupCheckpoint {
 fn open_backup_lock_file(path: &Path) -> Result<File> {
     use std::os::fd::AsRawFd;
 
+    use std::os::unix::fs::OpenOptionsExt;
     let file = OpenOptions::new()
         .create(true)
         .read(true)
         .write(true)
+        .custom_flags(libc::O_NOFOLLOW)
         .open(path)?;
     let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
     if result != 0 {
@@ -2576,6 +2645,9 @@ fn feature_flags(metadata: &FormatMetadata) -> Vec<String> {
 
 fn verify_restored_manifest(root: &Path, manifest: &BackupManifest) -> Result<()> {
     for entry in &manifest.files {
+        if runtime_lock_path(&entry.path) {
+            continue;
+        }
         let path = safe_join(root, &entry.path)?;
         if !path.exists() {
             return Err(BicDbError::Backup(format!(
@@ -2652,7 +2724,15 @@ fn safe_join(root: &Path, relative: &str) -> Result<PathBuf> {
 }
 
 fn target_has_entries(path: &Path) -> Result<bool> {
-    Ok(path.exists() && fs::read_dir(path)?.next().transpose()?.is_some())
+    if !path.exists() {
+        return Ok(false);
+    }
+    for entry in fs::read_dir(path)? {
+        if entry?.file_name() != "store.lock" {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
@@ -2832,7 +2912,7 @@ mod tests {
     }
 
     #[test]
-    fn online_backup_lock_has_one_owner_and_is_removed_on_release() {
+    fn online_backup_lock_has_one_owner_and_reuses_a_stable_inode() {
         let root = tempfile::tempdir().unwrap();
         drop(BicDb::open(root.path()).unwrap());
         let first = OnlineBackupCheckpoint::begin(root.path()).unwrap();
@@ -2847,9 +2927,9 @@ mod tests {
         assert!(lock.exists());
 
         drop(first);
-        assert!(!lock.exists());
+        assert!(lock.exists());
         drop(OnlineBackupCheckpoint::begin(root.path()).unwrap());
-        assert!(!lock.exists());
+        assert!(lock.exists());
     }
 
     #[cfg(unix)]
@@ -3031,4 +3111,79 @@ mod tests {
         assert_eq!(report.backup_id, backup_id);
         assert!(report.full);
     }
+}
+
+/// Whether this path is a complete snapshot manifest in an object repository.
+pub fn is_repository_backup(path: impl AsRef<Path>) -> Result<bool> {
+    repository::is_manifest(path.as_ref())
+}
+
+fn runtime_lock_path(path: &str) -> bool {
+    matches!(
+        path,
+        "store.lock" | "paged/store.lock" | "backup-restore.pending"
+    )
+}
+
+/// Both root and child store ownership matter: a narrow storage handle can
+/// keep the child engine alive after its enclosing BicDb has been dropped.
+struct RestoreOwnership {
+    _root: bicdb_page::DirectoryLock,
+    paged: Option<bicdb_page::DirectoryLock>,
+}
+impl RestoreOwnership {
+    fn acquire(root: &Path) -> Result<Self> {
+        let root_lock = bicdb_page::DirectoryLock::acquire(root)
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
+        let mut ownership = Self {
+            _root: root_lock,
+            paged: None,
+        };
+        match fs::symlink_metadata(root.join("paged")) {
+            Ok(metadata) if metadata.is_dir() => ownership.ensure_paged(root)?,
+            Ok(_) => return Err(BicDbError::Backup("unsafe restore paged directory".into())),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+        Ok(ownership)
+    }
+    fn ensure_paged(&mut self, root: &Path) -> Result<()> {
+        if self.paged.is_none() {
+            let path = root.join("paged");
+            fs::create_dir_all(&path)?;
+            self.paged = Some(
+                bicdb_page::DirectoryLock::acquire(&path)
+                    .map_err(|e| BicDbError::Backup(e.to_string()))?,
+            );
+            sync_parent_directory(&path)?;
+        }
+        Ok(())
+    }
+}
+fn remove_restore_entry(path: &Path) -> Result<()> {
+    if fs::symlink_metadata(path)?.is_dir() {
+        fs::remove_dir_all(path)?;
+    } else {
+        fs::remove_file(path)?;
+    }
+    Ok(())
+}
+fn clear_restore_payloads(root: &Path) -> Result<()> {
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        if entry.file_name() == "store.lock" || entry.file_name() == "backup-restore.pending" {
+            continue;
+        }
+        if entry.file_name() == "paged" && entry.file_type()?.is_dir() {
+            for child in fs::read_dir(entry.path())? {
+                let child = child?;
+                if child.file_name() != "store.lock" {
+                    remove_restore_entry(&child.path())?;
+                }
+            }
+        } else {
+            remove_restore_entry(&entry.path())?;
+        }
+    }
+    Ok(())
 }

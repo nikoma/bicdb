@@ -797,7 +797,85 @@ impl PagedPaths {
     }
 }
 
+/// An owned page/WAL capture. Retention and the store's directory ownership
+/// remain live until copying finishes or the capture is abandoned.
+pub struct PagedBackupCapture {
+    pub pages: crate::backup::PageBackupSnapshot,
+    pub wal: Vec<(std::path::PathBuf, std::fs::File, u64)>,
+    pub lsn: u64,
+    owner: Arc<PagedStore>,
+    wal_pin: std::sync::atomic::AtomicBool,
+}
+
+impl Drop for PagedBackupCapture {
+    fn drop(&mut self) {
+        self.release_wal_pin();
+    }
+}
+
+impl PagedBackupCapture {
+    pub fn retained_wal_bytes(&self) -> u64 {
+        if self.wal_pin.load(Ordering::Acquire) {
+            self.owner.wal.size_bytes()
+        } else {
+            0
+        }
+    }
+    /// The WAL prefix has been copied durably. The page before-images still
+    /// protect the original disk cut while checkpoints and WAL recycling resume.
+    pub fn release_wal_pin(&self) {
+        if self.wal_pin.swap(false, Ordering::AcqRel) {
+            self.owner.end_backup_pin();
+        }
+    }
+}
+
 impl PagedStore {
+    /// Capture physical pages and their exact WAL prefix without holding the
+    /// writer gate during copying. A database host must also quiesce its own
+    /// commit/catalog boundary while constructing the enclosing backup.
+    pub fn capture_backup(
+        self: &std::sync::Arc<Self>,
+        journal_path: &std::path::Path,
+        limits: crate::backup::PageBackupLimits,
+    ) -> Result<PagedBackupCapture> {
+        let deadline = std::time::Instant::now()
+            + std::time::Duration::from_millis(limits.max_coordination_millis);
+        let _writer = self
+            .write_lock
+            .try_lock_for(std::time::Duration::from_millis(
+                limits.max_coordination_millis,
+            ))
+            .ok_or_else(|| PageError::BackupSnapshot {
+                reason: "paged writer gate exceeded the backup coordination budget".into(),
+            })?;
+        self.begin_backup_pin();
+        let captured = (|| {
+            self.wal.sync()?;
+            let pages = self
+                .pool
+                .store()
+                .begin_backup_snapshot(journal_path, limits)?;
+            let wal = self
+                .wal
+                .capture_backup_files(limits.max_segments, deadline)?;
+            let lsn = self.wal.snapshot().next_lsn.saturating_sub(1);
+            Ok((pages, wal, lsn))
+        })();
+        match captured {
+            Ok((pages, wal, lsn)) => Ok(PagedBackupCapture {
+                pages,
+                wal,
+                lsn,
+                owner: std::sync::Arc::clone(self),
+                wal_pin: std::sync::atomic::AtomicBool::new(true),
+            }),
+            Err(error) => {
+                self.end_backup_pin();
+                Err(error)
+            }
+        }
+    }
     /// Open or create a store in `dir`, recovering from the log if needed.
     pub fn open(
         dir: impl AsRef<Path>,

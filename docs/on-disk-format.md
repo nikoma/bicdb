@@ -84,3 +84,19 @@ For every format-changing release:
 4. If retry fails, restore the last pre-upgrade backup into a clean path.
 5. Open the restored database with a binary that supports its source format and
    verify application smoke tests before resuming traffic.
+
+## Online extent tracking compatibility
+
+The first paged online backup durably enables
+`online_backup_extent_tracking_v1` in database format metadata and upgrades the
+page superblock magic to `BICDBPG3` (tracked segmented layout). A tracked store
+converted offline to monolithic layout uses `BICDBPG4`. Earlier core binaries
+reject the unknown feature flag, and earlier page tools reject these page
+magics before writing. This prevents old writers from bypassing the extent
+journal and making a later incremental reuse changed data.
+
+Flush, reopen, checkpoint, historical WAL replay and offline relayout preserve
+these guards. Relayout invalidates the journal identity before changing files.
+There is no implicit downgrade after enabling tracking: use a compatible binary
+for the database, its restored copies and branches. v1-v3 backup readers remain
+available, but an artifact's source-format feature flags still apply.

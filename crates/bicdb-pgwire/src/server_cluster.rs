@@ -916,6 +916,7 @@ impl PgWireServer {
             live_incremental_runs: AtomicU64::new(0),
             live_registry: Default::default(),
             verification_runs: Mutex::new(Vec::new()),
+            backup_jobs: Mutex::new(Default::default()),
             workload: Default::default(),
             live_breaker_trips: AtomicU64::new(0),
             replica_read_watermark: Mutex::new(None),
@@ -1106,6 +1107,7 @@ impl PgWireServer {
 
     pub(crate) fn begin_shutdown(&self) {
         self.shutdown.store(true, Ordering::SeqCst);
+        backups::cancel_all(self);
         // Commits waiting for standbys would hold shutdown forever.
         // A standalone server drains its already-running queries normally.
         // Native HA must wake confirmation waiters and revoke writer authority.

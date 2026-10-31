@@ -84,9 +84,11 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
         dir.display(),
         archive.last_commit_seq()
     );
+    let worker = BackgroundWorker::register(Arc::clone(&server));
     std::thread::Builder::new()
         .name("bicdb-log-archiver".to_string())
         .spawn(move || {
+            let _worker = worker;
             let mut cursor = ReplicationCursor::new(archive.last_commit_seq());
             let mut last_error = None::<String>;
             let mut next_base = Instant::now();
@@ -105,6 +107,10 @@ pub(crate) fn start(server: Arc<PgWireServer>) -> Result<()> {
                             take_base_backup(&server, &config, &dir, archive.meta().is_none())
                         })
                         .and_then(|base| {
+                            if base.is_none() {
+                                next_base = Instant::now()
+                                    + config.base_backup_interval.min(Duration::from_secs(1));
+                            }
                             if archive.meta().is_none() {
                                 if let Some(base) = base {
                                     server
@@ -192,10 +198,24 @@ fn take_base_backup(
     if db.is_standby_role() {
         return Ok(None);
     }
+    drop(db);
     let base = if force || due {
-        let base = db
-            .archive_base_backup(dir, key)
-            .map_err(|error| error.to_string())?;
+        let Some(report) = backups::archive_base(server, dir, key).map_err(|e| e.to_string())?
+        else {
+            return Ok(None);
+        };
+        bicdb_core::log_archive::record_base_backup(
+            &report.artifact.path,
+            report.commit_seq,
+            report.captured_at,
+            server.config.fsync,
+        )
+        .map_err(|e| e.to_string())?;
+        let base = bicdb_core::log_archive::ArchivedBaseBackup {
+            commit_seq: report.commit_seq,
+            created_at: report.captured_at,
+            path: report.artifact.path,
+        };
         eprintln!(
             "bicdb log archive: base backup at commit {} ({})",
             base.commit_seq,
@@ -205,7 +225,6 @@ fn take_base_backup(
     } else {
         None
     };
-    drop(db);
     let pruned = bicdb_core::log_archive::prune_log_archive(
         dir,
         config.keep_base_backups,
@@ -217,6 +236,10 @@ fn take_base_backup(
             "bicdb log archive: removed {} old base backup(s) and {} log segment(s)",
             pruned.base_backups, pruned.segments
         );
+    }
+    if let Some(key) = &config.base_backup_key {
+        bicdb_core::prune_backup_repository(dir, key, Duration::from_secs(3600), false)
+            .map_err(|error| error.to_string())?;
     }
     Ok(base)
 }

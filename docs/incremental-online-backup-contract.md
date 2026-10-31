@@ -11,8 +11,15 @@ search (FTS), and every durable sidecar needed to reopen the database. A
 successful restore must produce one transactionally consistent database, not a
 collection of files captured at unrelated times.
 
-This document defines the required behavior. It does not change the current
-`BICBAK03` format by itself.
+The single-database online capture and paged changed-extent reuse are now
+implemented in `BICBAK04` repositories; see [backup operation](backup-recovery.md).
+Every v4 manifest contains the complete required object set. Dirty-page
+before-images plus an exact WAL prefix preserve the start cut, rather than the
+fuzzy start/end sequence below. A durable extent journal survives restarts and
+fails closed before physical writes. Nonpaged files are safely recaptured and
+deduplicated; multi-store atomic backup sets, object-store transports and
+per-component source-read avoidance remain broader requirements, not claims of
+this implementation. The remaining sections describe the larger target contract.
 
 ## Required outcomes
 

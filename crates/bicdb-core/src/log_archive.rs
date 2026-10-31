@@ -509,7 +509,12 @@ pub fn list_base_backups(dir: &Path) -> Result<Vec<ArchivedBaseBackup>> {
         info.path = path;
         bases.push(info);
     }
-    bases.sort_by_key(|base| base.commit_seq);
+    bases.sort_by(|a, b| {
+        a.commit_seq
+            .cmp(&b.commit_seq)
+            .then(a.created_at.cmp(&b.created_at))
+            .then(a.path.cmp(&b.path))
+    });
     Ok(bases)
 }
 

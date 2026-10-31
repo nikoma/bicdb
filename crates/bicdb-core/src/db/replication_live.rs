@@ -310,6 +310,10 @@ impl BicDb {
     /// lie before `keep_from`. Never drops a frame a standby has not yet
     /// acknowledged: the cut moves back to that standby's position instead.
     pub(crate) fn cut_transaction_log(&self, keep_from: u64, dropped_through: u64) -> Result<()> {
+        // Every caller excludes core committers (through &mut self or commit
+        // admission). Drain before replacing the inode, and invalidate here,
+        // rather than relying on each checkpoint/close caller to remember it.
+        self.tx_log.flush_pending()?;
         // Retention must survive a restart: persist the positions it is based on.
         self.persist_standby_slots()?;
         let path = self.tx_log_path();
@@ -328,12 +332,14 @@ impl BicDb {
             self.config.fsync,
         )?;
         if keep_from >= log_len {
-            truncate_log_file(&path, self.config.fsync)
+            truncate_log_file(&path, self.config.fsync)?;
         } else if keep_from > 0 {
-            copy_transaction_log_tail(&path, keep_from, self.config.fsync)
+            copy_transaction_log_tail(&path, keep_from, self.config.fsync)?;
         } else {
-            Ok(())
+            return Ok(());
         }
+        self.tx_log.invalidate();
+        Ok(())
     }
 
     /// The synchronous-quorum tracker; pgwire senders record standby

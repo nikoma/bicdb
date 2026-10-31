@@ -94,6 +94,13 @@ impl Exposition {
 
 fn render(server: &Arc<PgWireServer>) -> Result<String> {
     let mut out = Exposition(String::new());
+    for (name, value) in backups::metric_values(server) {
+        out.gauge(
+            name,
+            "Most recent online backup job (bounded per-database history).",
+            value,
+        );
+    }
     let stats = server.stats_snapshot();
     out.counter(
         "bicdb_live_breaker_trips_total",

@@ -200,7 +200,7 @@ pub(crate) fn archive_base(
     directory: &Path,
     key: &str,
 ) -> Result<Option<RepositoryBackupReport>> {
-    let _permit = admit(server)?;
+    let permit;
     let id = Uuid::new_v4();
     let control = OnlineBackupControl::default();
     let outcome = Arc::new(Mutex::new(None));
@@ -216,6 +216,9 @@ pub(crate) fn archive_base(
         if server.is_shutdown_requested() {
             return Ok(None);
         }
+        // Defer first when another job owns the slot: reserving here keeps
+        // a normal busy retry from reporting a resource-exhaustion failure.
+        permit = admit(server)?;
         while jobs.jobs.len() >= 64 {
             jobs.jobs.pop_front();
         }
@@ -227,6 +230,7 @@ pub(crate) fn archive_base(
             outcome: Arc::clone(&outcome),
         });
     }
+    let _permit = permit;
     let result = (|| -> Result<RepositoryBackupReport> {
         let capture = {
             server
@@ -447,4 +451,36 @@ fn admit(server: &PgWireServer) -> Result<bicdb_core::ResourcePermit> {
             cluster_now_ms(),
         )
         .map_err(PgWireError::from)
+}
+
+#[cfg(test)]
+mod archive_admission_tests {
+    use super::*;
+    #[test]
+    fn busy_archive_defers_before_reserving_another_background_slot() {
+        let root = tempfile::tempdir().unwrap();
+        let mut config = PgWireConfig::default();
+        config.fsync = false;
+        config.automatic_paged_checkpoint = false;
+        config
+            .resource_governor
+            .lanes
+            .get_mut(&bicdb_core::ResourceLane::BackupRestore)
+            .unwrap()
+            .max_active = 1;
+        let server = PgWireServer::open(root.path().join("db"), config).unwrap();
+        let _active = admit(&server).unwrap();
+        server.backup_jobs.lock().unwrap().jobs.push_back(Job {
+            id: Uuid::new_v4(),
+            name: "running operator backup".into(),
+            started_at: 0,
+            control: OnlineBackupControl::default(),
+            outcome: Arc::new(Mutex::new(None)),
+        });
+        let result = archive_base(&server, &root.path().join("repository"), "key");
+        assert!(
+            matches!(result, Ok(None)),
+            "busy archive must defer rather than fail resource admission: {result:?}"
+        );
+    }
 }

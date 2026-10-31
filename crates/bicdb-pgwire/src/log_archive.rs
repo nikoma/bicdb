@@ -237,9 +237,53 @@ fn take_base_backup(
             pruned.base_backups, pruned.segments
         );
     }
-    if let Some(key) = &config.base_backup_key {
+    // A fresh upgrade can retain a recent v3 base until the next base is due.
+    // It has no object repository yet. Existing objects without configuration
+    // still fail closed rather than being mistaken for a legacy-only archive.
+    if dir.join("repository.json").exists() || dir.join("objects").exists() {
         bicdb_core::prune_backup_repository(dir, key, Duration::from_secs(3600), false)
             .map_err(|error| error.to_string())?;
     }
     Ok(base)
+}
+
+#[cfg(test)]
+mod legacy_archive_tests {
+    use super::*;
+    #[test]
+    fn a_recent_legacy_base_needs_no_repository_gc_before_v4_adoption() {
+        let root = tempfile::tempdir().unwrap();
+        let archive = root.path().join("archive");
+        std::fs::create_dir(&archive).unwrap();
+        let mut config = PgWireConfig::default();
+        config.fsync = false;
+        let server = PgWireServer::open(root.path().join("db"), config).unwrap();
+        let path = bicdb_core::log_archive::base_backup_path(&archive, 0);
+        let (_, sequence) = server
+            .read_db()
+            .unwrap()
+            .create_consistent_backup(
+                &path,
+                bicdb_core::BackupCreateOptions {
+                    passphrase: "key".into(),
+                    base_backup: None,
+                },
+            )
+            .unwrap();
+        bicdb_core::log_archive::record_base_backup(&path, sequence, unix_timestamp(), true)
+            .unwrap();
+        let settings = LogArchiveConfig {
+            dir: archive.clone(),
+            base_backup_key: Some("key".into()),
+            base_backup_interval: Duration::from_secs(24 * 3600),
+            keep_base_backups: 7,
+        };
+        let result = take_base_backup(&server, &settings, &archive, false);
+        assert!(
+            matches!(result, Ok(None)),
+            "legacy-only archives have no v4 repository to collect: {result:?}"
+        );
+        assert!(!archive.join("repository.json").exists());
+        bicdb_core::verify_backup(path, "key").unwrap();
+    }
 }

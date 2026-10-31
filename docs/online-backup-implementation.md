@@ -142,3 +142,10 @@ verification, and create nested directories durably. All 14 repository tests,
 legacy backup/online/paged restore suites, and the source/child-ownership
 regression passed. The complete workspace audit and remote CI are separate final
 delivery checks.
+
+Two final archive-service regressions were reproduced with failing tests and
+fixed: automatic work defers a busy job before taking another resource permit,
+and an upgraded archive with a recent v3 base skips object GC until a v4
+repository exists. Existing objects without their repository configuration still
+fail closed. Both regression tests, live protocol/verification tests and the
+workspace all-target compile passed after the fixes.

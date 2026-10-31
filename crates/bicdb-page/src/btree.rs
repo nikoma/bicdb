@@ -498,6 +498,12 @@ impl<'a> Node<'a> {
                 return true;
             }
             // Different size: remove then reinsert so the layout stays simple.
+            // Removal reclaims the directory slot, not the old payload bytes.
+            // Check first so a failed attempt leaves the old value available
+            // for the split/rebuild path and for error recovery.
+            if self.free_space().saturating_add(ENTRY_BYTES) < Self::required_space(key, value) {
+                return false;
+            }
             self.remove_at(index);
         }
 
@@ -559,7 +565,19 @@ impl<'a> Node<'a> {
     }
 
     /// Replace the node's contents with `entries`, which must be sorted.
-    fn rebuild(&mut self, entries: &[(Vec<u8>, Vec<u8>)], page_size: u32) {
+    fn rebuild(&mut self, entries: &[(Vec<u8>, Vec<u8>)], page_size: u32) -> Result<()> {
+        let needed: usize = entries
+            .iter()
+            .map(|(key, value)| Self::required_space(key, value))
+            .sum();
+        let available = crate::page::usable_bytes(page_size);
+        if needed > available {
+            return Err(PageError::ValueTooLarge {
+                page_id: self.page_id(),
+                len: needed,
+                free: available,
+            });
+        }
         let page_id = self.page_id();
         let leaf = self.is_leaf();
         let next = self.next_page();
@@ -574,9 +592,49 @@ impl<'a> Node<'a> {
 
         for (key, value) in entries {
             let inserted = self.insert(key, value);
-            debug_assert!(inserted, "rebuild overflowed a node");
+            if !inserted {
+                return Err(PageError::ValueTooLarge {
+                    page_id,
+                    len: needed,
+                    free: available,
+                });
+            }
         }
+        Ok(())
     }
+}
+
+/// Count-balanced splits can overflow one half when keys/values have different
+/// sizes. Select a byte-balanced boundary whose two results are both valid
+/// BEFORE changing either page. Interior nodes remove the promoted entry.
+fn byte_split(entries: &[(Vec<u8>, Vec<u8>)], usable: usize, interior: bool) -> Result<usize> {
+    let total: usize = entries
+        .iter()
+        .map(|(key, value)| Node::required_space(key, value))
+        .sum();
+    let mut left = 0usize;
+    let mut best = None;
+    for (index, (key, value)) in entries.iter().enumerate() {
+        let size = Node::required_space(key, value);
+        let right = total - left - if interior { size } else { 0 };
+        if index > 0
+            && (!interior || index + 1 < entries.len())
+            && left <= usable
+            && right <= usable
+        {
+            let imbalance = left.abs_diff(right);
+            if best.is_none_or(|(_, previous)| imbalance < previous) {
+                best = Some((index, imbalance));
+            }
+        }
+        left += size;
+    }
+    best.map(|(index, _)| index)
+        .ok_or(PageError::ValueTooLarge {
+            page_id: 0,
+            len: total,
+            free: usable,
+        })
 }
 
 fn structural_fault(page_id: PageId, violation: BTreeNodeViolation) -> BTreeVerifyFault {
@@ -933,7 +991,7 @@ impl BTree {
         }
         let page_size = self.pool.page_size();
         let usable = crate::page::usable_bytes(page_size);
-        if Node::required_space(key, value) * 2 > usable {
+        if Node::required_space(key, value).max(key.len() + 8 + ENTRY_BYTES) * 2 > usable {
             // A node must hold at least two entries or a split cannot make
             // progress. Refusing here beats an infinite split loop later.
             return Err(PageError::ValueTooLarge {
@@ -973,7 +1031,20 @@ impl BTree {
             Err(index) => entries.insert(index, (key.to_vec(), value.to_vec())),
         }
 
-        let middle = entries.len() / 2;
+        // Replacement/deletion leaves bounded payload fragmentation. If the
+        // live entries still fit, compact this leaf instead of attempting an
+        // impossible two-way split of a singleton (or growing the tree merely
+        // because its old payload bytes were not reclaimed).
+        let needed: usize = entries
+            .iter()
+            .map(|(key, value)| Node::required_space(key, value))
+            .sum();
+        if needed <= crate::page::usable_bytes(page_size) {
+            let mut guard = self.pool.get_mut(leaf_id)?;
+            return Node::new(guard.bytes_mut()).rebuild(&entries, page_size);
+        }
+
+        let middle = byte_split(&entries, crate::page::usable_bytes(page_size), false)?;
         let (left_entries, right_entries) = entries.split_at(middle);
         // The separator is the smallest key in the right half. Under this
         // tree's convention (child i holds keys < key i) it therefore points at
@@ -992,12 +1063,12 @@ impl BTree {
             let mut guard = self.pool.get_mut(right_id)?;
             let mut right = Node::init(guard.bytes_mut(), right_id, page_size, true);
             right.set_next_page(old_next);
-            right.rebuild(right_entries, page_size);
+            right.rebuild(right_entries, page_size)?;
         }
         {
             let mut guard = self.pool.get_mut(leaf_id)?;
             let mut left = Node::new(guard.bytes_mut());
-            left.rebuild(left_entries, page_size);
+            left.rebuild(left_entries, page_size)?;
             left.set_next_page(right_id);
         }
 
@@ -1043,7 +1114,13 @@ impl BTree {
             {
                 let mut guard = self.pool.get_mut(new_root)?;
                 let mut node = Node::init(guard.bytes_mut(), new_root, page_size, false);
-                node.insert(&separator, &left_child.to_le_bytes());
+                if !node.insert(&separator, &left_child.to_le_bytes()) {
+                    return Err(PageError::ValueTooLarge {
+                        page_id: new_root,
+                        len: separator.len() + 8,
+                        free: usable,
+                    });
+                }
                 node.set_next_page(right_child);
             }
             // The new root is made durable BEFORE anyone is told about it. A
@@ -1099,7 +1176,7 @@ impl BTree {
         if needed <= usable {
             let mut guard = self.pool.get_mut(parent_id)?;
             let mut node = Node::new(guard.bytes_mut());
-            node.rebuild(&entries, page_size);
+            node.rebuild(&entries, page_size)?;
             node.set_next_page(new_rightmost);
             return Ok(());
         }
@@ -1110,7 +1187,7 @@ impl BTree {
         // child it pointed at becomes the left node's rightmost. Copying it
         // would leave the same separator at two levels and route a lookup into
         // a subtree that no longer covers it.
-        let middle = entries.len() / 2;
+        let middle = byte_split(&entries, usable, true)?;
         let promoted = entries[middle].0.clone();
         let promoted_child = u64::from_le_bytes(entries[middle].1.as_slice().try_into().unwrap());
         let left_entries = entries[..middle].to_vec();
@@ -1120,13 +1197,13 @@ impl BTree {
         {
             let mut guard = self.pool.get_mut(new_interior)?;
             let mut node = Node::init(guard.bytes_mut(), new_interior, page_size, false);
-            node.rebuild(&right_entries, page_size);
+            node.rebuild(&right_entries, page_size)?;
             node.set_next_page(new_rightmost);
         }
         {
             let mut guard = self.pool.get_mut(parent_id)?;
             let mut node = Node::new(guard.bytes_mut());
-            node.rebuild(&left_entries, page_size);
+            node.rebuild(&left_entries, page_size)?;
             node.set_next_page(promoted_child);
         }
 
@@ -2026,6 +2103,70 @@ mod tests {
             Some(&b"a-much-longer-third-value"[..])
         );
         assert_eq!(tree.len().unwrap(), 1);
+    }
+
+    #[test]
+    fn variable_size_splits_preserve_every_entry_through_reopen() {
+        let dir = TempDir::new().unwrap();
+        let (store, tree) = tree(&dir, 1024, 256 * 1024);
+        let mut expected = std::collections::BTreeMap::new();
+        for index in 0..400usize {
+            let mut key = format!("entry-{index:05}").into_bytes();
+            if index >= 32 && index % 5 != 0 {
+                key.extend(std::iter::repeat_n(b'x', 320));
+            }
+            let value = vec![index as u8; if key.len() > 100 { 8 } else { 16 + index % 200 }];
+            tree.insert(&key, &value).unwrap();
+            expected.insert(key, value);
+        }
+        for (key, value) in &expected {
+            assert_eq!(tree.get(key).unwrap().as_ref(), Some(value));
+        }
+        assert_eq!(
+            tree.iter().unwrap().collect::<Result<Vec<_>>>().unwrap(),
+            expected.clone().into_iter().collect::<Vec<_>>()
+        );
+        let report = tree.verify().unwrap();
+        assert!(report.valid, "{report:?}");
+        tree.pool.flush_all().unwrap();
+        store.publish_root(tree.root_page(), 0).unwrap();
+        let path = store.path().to_path_buf();
+        drop(tree);
+        drop(store);
+        let store = Arc::new(
+            PageStore::open(
+                path,
+                PageStoreOptions::default()
+                    .with_page_size(1024)
+                    .with_fsync(false),
+            )
+            .unwrap(),
+        );
+        let pool = Arc::new(
+            BufferPool::new(
+                store,
+                BufferPoolOptions::default().with_budget_bytes(256 * 1024),
+            )
+            .unwrap(),
+        );
+        let tree = BTree::open(pool).unwrap();
+        for (key, value) in &expected {
+            assert_eq!(tree.get(key).unwrap().as_ref(), Some(value));
+        }
+        assert_eq!(tree.len().unwrap(), expected.len());
+    }
+
+    #[test]
+    fn repeated_variable_size_replacements_reclaim_leaf_fragmentation() {
+        let dir = TempDir::new().unwrap();
+        let (_store, tree) = tree(&dir, 512, 64 * 1024);
+        for i in 0..500 {
+            let value = vec![i as u8; 1 + i % 150];
+            tree.insert(b"one-key", &value).unwrap();
+            assert_eq!(tree.get(b"one-key").unwrap(), Some(value));
+            assert_eq!(tree.len().unwrap(), 1);
+            assert_eq!(tree.height().unwrap(), 1);
+        }
     }
 
     #[test]

@@ -670,6 +670,13 @@ fn create_user_record(
             "password must not be empty".to_string(),
         ));
     }
+    // Derivation is deliberately outside catalog ownership. A password
+    // rotation must not serialize identity/list/revoke requests behind KDF work.
+    // Recheck SQL authority after acquiring the lock to close the marker race.
+    if sql_origin {
+        check_sql_credential_mutation(path)?;
+    }
+    let mut user = password_record(username, password, None, false)?;
     let _lock = lock_user_catalog(path)?;
     if sql_origin {
         check_sql_credential_mutation(path)?;
@@ -690,7 +697,8 @@ fn create_user_record(
         .users
         .get(username)
         .is_some_and(|user| user.disabled);
-    let user = password_record(username, password, security_identity, disabled)?;
+    user.security_identity = security_identity;
+    user.disabled = disabled;
     if !catalog.users.contains_key(username) {
         delegation::write_policy_locked(path, username, None)?;
     }

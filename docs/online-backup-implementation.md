@@ -160,3 +160,18 @@ A deliberately throttled periodic full base must remain in copying phase while a
 new acknowledged commit reaches the fsynced archive within four seconds. That
 regression, all 116 pgwire unit tests, seven protocol/verification tests and the
 workspace all-target compile passed; shutdown proves both workers quiesce.
+
+The full local workspace audit completed 349 successful Cargo targets with 3,639
+passing tests and 16 existing ignores. The cell unit harness initially exceeded
+its protected executable-size limit because of DWARF; stripping only debug
+symbols allowed all 40 cell tests and the remaining targets to run with assertions
+and the size guard intact. Two variable-size B-tree regressions also pass in the
+optimized release profile.
+
+Final CI exposed login-catalog lock starvation during concurrent local password
+rotation and operator identity updates. Credential derivation now runs outside
+catalog ownership; existence, disabled state, identity and SQL authority are
+checked/merged under the lock against the latest record. Password KDF parameters
+and test deadlines are unchanged. The seven operator API tests passed with four
+test threads constrained to two CPUs, followed by pgwire unit/protocol and
+workspace all-target checks.

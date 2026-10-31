@@ -300,6 +300,17 @@ impl ApiState {
         Ok(())
     }
     fn apply(&self, operation: Operation) -> Result<(StatusCode, JsonValue)> {
+        // Only credentials are prepared outside ownership. Identity, disabled
+        // state and existence are read from the latest catalog under the lock.
+        let mut prepared = match &operation {
+            Operation::Create {
+                username, password, ..
+            }
+            | Operation::Password { username, password } => {
+                Some(password_record(username, password, None, false)?)
+            }
+            _ => None,
+        };
         let _lock = lock_user_catalog(&self.path)?;
         let mut catalog = load_user_catalog(&self.path)?;
         if let Operation::List { after, limit } = operation {
@@ -335,21 +346,17 @@ impl ApiState {
             return Ok((StatusCode::NOT_FOUND, json!({"error":"login not found"})));
         }
         match operation {
-            Operation::Create {
-                password, identity, ..
-            } => {
-                let user = password_record(&username, &password, Some(identity), false)?;
+            Operation::Create { identity, .. } => {
+                let mut user = prepared.take().expect("prepared create credentials");
+                user.security_identity = Some(identity);
                 delegation::write_policy_locked(&self.path, &username, None)?;
                 catalog.users.insert(username.clone(), user);
             }
-            Operation::Password { password, .. } => {
-                let user = &catalog.users[&username];
-                let user = password_record(
-                    &username,
-                    &password,
-                    user.security_identity.clone(),
-                    user.disabled,
-                )?;
+            Operation::Password { .. } => {
+                let latest = &catalog.users[&username];
+                let mut user = prepared.take().expect("prepared password credentials");
+                user.security_identity = latest.security_identity.clone();
+                user.disabled = latest.disabled;
                 catalog.users.insert(username.clone(), user);
             }
             Operation::Identity { identity, .. } => {

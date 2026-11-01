@@ -470,6 +470,9 @@ fn canonical_tokens(db: &BicDb, source: &[Token]) -> Result<Vec<Token>> {
                         "CAST(date_trunc('second', clock_timestamp()) AS TIMESTAMP(0))".into(),
                     ),
                     "NVL" => pieces.push("coalesce".into()),
+                    "TO_DATE" if source.get(i + 1) == Some(&Token::LParen) => {
+                        pieces.push("bicdb_oracle_to_date".into())
+                    }
                     "ORGANIZATION" => {
                         return Err(unsupported(
                             "index-organized storage requires an explicit heap-storage migration",
@@ -720,6 +723,33 @@ fn lower_native(sql: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hr_to_date_preserves_time_without_changing_postgres_to_date() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        for (source, expected) in [
+            (
+                "SELECT TO_DATE('2020-02-29 12:34:56','YYYY-MM-DD HH24:MI:SS') FROM DUAL",
+                "2020-02-29 12:34:56",
+            ),
+            (
+                "SELECT TO_DATE('2020-02-29','YYYY-MM-DD') FROM DUAL",
+                "2020-02-29 00:00:00",
+            ),
+        ] {
+            let lowered = lower_hr_sql(&db, source).unwrap();
+            let result = SqlSession::new(&mut db).execute(&lowered).unwrap();
+            assert_eq!(result.rows[0][0].to_cell(), expected);
+            assert_eq!(result.column_types, vec![Some("timestamp".into())]);
+        }
+        let mut session = SqlSession::new(&mut db);
+        let result = session
+            .execute("SELECT to_date('2020-02-29 12:34:56','YYYY-MM-DD HH24:MI:SS')")
+            .unwrap();
+        assert_eq!(result.rows[0][0].to_cell(), "2020-02-29");
+        assert_eq!(result.column_types, vec![Some("date".into())]);
+    }
+
     #[test]
     fn hr_front_end_preserves_postgres_and_lowers_oracle() {
         let root = tempfile::tempdir().unwrap();

@@ -7,9 +7,12 @@ Oracle Net listener or Oracle Database installation is required to run this
 example on BicDB.
 
 This is a first schema acceptance, not general Oracle Database compatibility.
-It has not been differentially certified against Oracle Database. In
-particular, its transaction, locking, error and procedural execution contracts
-remain BicDB's documented PostgreSQL-shaped contracts.
+The [reference harness](../examples/oracle/reference/README.md) compares a small
+set of query values with Oracle Free Lite. This does not qualify general Oracle
+behavior. In particular, transaction, locking, error and procedural execution
+contracts remain BicDB's documented PostgreSQL-shaped contracts. The
+[full compatibility programme](oracle-compatibility-programme.md) tracks the
+remaining work beyond this first schema.
 
 ## Provision and connect
 
@@ -118,6 +121,12 @@ the DUAL dummy row, empty character literals/parameters, same-type NVL,
 null-tolerant scalar concatenation, anonymous INSERT blocks, and the sample's
 procedure with table-column `%TYPE` parameters. Native authorization and
 constraint checks still apply to every lowered operation.
+
+The fixed-format `TO_DATE` path preserves whole-second time as a timestamp;
+ordinary PostgreSQL `to_date` still returns a date. Views preserve types from
+all source relations, including joined numeric columns. For databases imported
+with earlier builds, recreate affected views and procedure definitions to adopt
+these fixes. Previously truncated time values require a reload from the source.
 
 The profile is deliberately incomplete:
 

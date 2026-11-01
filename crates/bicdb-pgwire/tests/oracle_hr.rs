@@ -126,6 +126,22 @@ async fn published_oracle_hr_runs_over_pg_driver_without_changing_postgres() {
     assert_eq!(row.get::<_, String>(0), "X");
     assert_eq!(row.get::<_, String>(1), "fallback");
     assert_eq!(row.get::<_, String>(2), "A");
+    let date = client
+        .prepare("SELECT TO_DATE('2020-02-29 12:34:56','YYYY-MM-DD HH24:MI:SS') FROM DUAL")
+        .await
+        .unwrap();
+    assert_eq!(
+        date.columns()[0].type_(),
+        &tokio_postgres::types::Type::TIMESTAMP
+    );
+    let view = client
+        .prepare("SELECT location_id FROM emp_details_view WHERE employee_id=$1")
+        .await
+        .unwrap();
+    assert_eq!(
+        view.columns()[0].type_(),
+        &tokio_postgres::types::Type::NUMERIC
+    );
     client
         .batch_execute(
             "CREATE TABLE profile_values(id NUMBER PRIMARY KEY, value VARCHAR2(20), happened DATE)",

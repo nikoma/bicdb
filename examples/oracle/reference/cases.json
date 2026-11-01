@@ -1,0 +1,32 @@
+{
+  "format": 1,
+  "cases": [
+    {"id": "dual-dummy", "sql": "SELECT DUMMY FROM DUAL"},
+    {"id": "empty-is-null", "sql": "SELECT CASE WHEN '' IS NULL THEN 1 ELSE 0 END FROM DUAL"},
+    {"id": "concat-null-right", "sql": "SELECT 'A' || NULL FROM DUAL"},
+    {"id": "concat-null-left", "sql": "SELECT NULL || 'A' FROM DUAL"},
+    {"id": "concat-both-null", "sql": "SELECT NULL || NULL FROM DUAL"},
+    {"id": "concat-empty", "sql": "SELECT '' || '' FROM DUAL"},
+    {"id": "concat-padding", "sql": "SELECT 'A ' || ' B' FROM DUAL"},
+    {"id": "nvl-text", "sql": "SELECT NVL(NULL, 'fallback') FROM DUAL"},
+    {"id": "nvl-empty", "sql": "SELECT NVL('', 'fallback') FROM DUAL"},
+    {"id": "nvl-number", "sql": "SELECT NVL(2, 3) FROM DUAL"},
+    {"id": "three-valued-logic", "sql": "SELECT CASE WHEN NULL = NULL THEN 1 ELSE 0 END FROM DUAL"},
+    {"id": "number-exact-38", "sql": "SELECT CAST(12345678901234567890123456789012345678 AS NUMBER(38)) FROM DUAL"},
+    {"id": "number-round-scale", "sql": "SELECT CAST(123.456 AS NUMBER(5,2)) FROM DUAL"},
+    {"id": "number-negative-scale", "sql": "SELECT CAST(12345 AS NUMBER(5,-2)) FROM DUAL"},
+    {"id": "date-literal", "sql": "SELECT DATE '2020-02-29' FROM DUAL"},
+    {"id": "date-time", "sql": "SELECT TO_DATE('2020-02-29 12:34:56', 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id": "nvl2", "sql": "SELECT NVL2(NULL, 'present', 'absent') FROM DUAL"},
+    {"id": "decode-null", "sql": "SELECT DECODE(NULL, NULL, 'equal', 'other') FROM DUAL"},
+    {"id": "hr-regions", "sql": "SELECT region_id, region_name FROM regions ORDER BY region_id"},
+    {"id": "hr-countries", "sql": "SELECT country_id, country_name, region_id FROM countries ORDER BY country_id"},
+    {"id": "hr-locations", "sql": "SELECT location_id, street_address, postal_code, city, state_province, country_id FROM locations ORDER BY location_id"},
+    {"id": "hr-departments", "sql": "SELECT department_id, department_name, manager_id, location_id FROM departments ORDER BY department_id"},
+    {"id": "hr-jobs", "sql": "SELECT job_id, job_title, min_salary, max_salary FROM jobs ORDER BY job_id"},
+    {"id": "hr-employees", "sql": "SELECT employee_id, first_name, last_name, email, phone_number, hire_date, job_id, salary, commission_pct, manager_id, department_id FROM employees ORDER BY employee_id"},
+    {"id": "hr-history", "sql": "SELECT employee_id, start_date, end_date, job_id, department_id FROM job_history WHERE start_date < DATE '2020-01-01' ORDER BY employee_id, start_date"},
+    {"id": "hr-view", "sql": "SELECT employee_id, job_id, manager_id, department_id, location_id, country_id, first_name, last_name, salary, commission_pct, department_name, job_title, city, state_province, country_name, region_name FROM emp_details_view ORDER BY employee_id"},
+    {"id": "hr-indexed-join", "sql": "SELECT e.department_id, COUNT(*), SUM(e.salary) FROM employees e JOIN departments d ON e.department_id = d.department_id GROUP BY e.department_id ORDER BY e.department_id"}
+  ]
+}

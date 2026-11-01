@@ -259,6 +259,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "make_interval"
             | "date_bin"
             | "to_date"
+            | "bicdb_oracle_to_date"
             | "timezone"
             | "similarity"
     );
@@ -501,6 +502,13 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             let (source, origin) = (timestamp_micros(&args[1])?, timestamp_micros(&args[2])?);
             let binned = origin + (source - origin).div_euclid(stride) * stride;
             SqlValue::String(render_like_source(binned, has_offset(&text(1))))
+        }
+        // Oracle DATE includes whole-second time, unlike PostgreSQL date.
+        // The explicit Oracle front end selects this separate function, also
+        // inside stored procedure bodies. PostgreSQL to_date stays unchanged.
+        "bicdb_oracle_to_date" => {
+            arity(name, args, 2..=2)?;
+            eval_to_timestamp(args)?
         }
         "to_date" => {
             arity(name, args, 2..=2)?;

@@ -156,5 +156,6 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts/platform -p 'test_*.py'
           python3 -m unittest discover -s examples/oracle/hr -p 'test_*.py'
+          python3 -m unittest discover -s examples/oracle/reference -p 'test_*.py'
           python3 examples/oracle/hr/prepare.py --check
           node --test examples/platform/notebook/*.test.mjs

@@ -4677,6 +4677,12 @@ impl<'db> SqlEngine<'db> {
                 .map(|column| column.name.clone())
                 .collect(),
             result.rows,
+        )
+        .with_column_types(
+            view.columns
+                .iter()
+                .map(|column| Some(column.pg_type.clone()))
+                .collect(),
         ))
     }
 

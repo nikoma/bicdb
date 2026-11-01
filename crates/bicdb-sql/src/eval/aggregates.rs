@@ -1652,6 +1652,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             "similarity" => return Some("float4".to_string()),
             "age" | "make_interval" => return Some("interval".to_string()),
             "to_date" => return Some("date".to_string()),
+            "bicdb_oracle_to_date" => return Some("timestamp".to_string()),
             _ => {}
         }
         if unqualified_name == "array_to_string" {

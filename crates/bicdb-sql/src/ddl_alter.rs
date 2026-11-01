@@ -1679,20 +1679,41 @@ pub(crate) fn inherit_view_source_column_types(
     let SetExpr::Select(select) = query.body.as_ref() else {
         return Ok(());
     };
-    let Some(from) = select.from.first() else {
-        return Ok(());
-    };
-    let TableFactor::Table { name, .. } = &from.relation else {
-        return Ok(());
-    };
-    let relation = relation_name(name)?;
-    let source_columns = if let Some(schema) = load_schema(db, &relation)? {
-        schema.columns
-    } else if let Some(view) = load_view(db, &relation)? {
-        view.columns
-    } else {
-        return Ok(());
-    };
+    // Infer expressions and every joined relation without executing the view.
+    // Looking only at the first FROM item mislabels later numeric columns as
+    // text and can copy a same-named column's unrelated type modifier.
+    if let Some(types) = SqlEngine::new(db).infer_row_select_column_types(select) {
+        if types.len() == columns.len() {
+            for (target, inferred) in columns.iter_mut().zip(types) {
+                if let Some(pg_type) = inferred {
+                    target.array_ndims = pg_type.matches("[]").count().try_into().unwrap_or(0);
+                    target.pg_type = pg_type;
+                }
+            }
+        }
+    }
+    let mut sources = Vec::new();
+    for from in &select.from {
+        for factor in std::iter::once(&from.relation).chain(from.joins.iter().map(|j| &j.relation))
+        {
+            let TableFactor::Table { name, alias, .. } = factor else {
+                continue;
+            };
+            let relation = relation_name(name)?;
+            let source_columns = if let Some(schema) = load_schema(db, &relation)? {
+                schema.columns
+            } else if let Some(view) = load_view(db, &relation)? {
+                view.columns
+            } else {
+                continue;
+            };
+            let qualifier = alias
+                .as_ref()
+                .map(|a| ident_value(&a.name))
+                .unwrap_or_else(|| relation.rsplit('.').next().unwrap_or(&relation).to_string());
+            sources.push((qualifier, source_columns));
+        }
+    }
 
     for (item, target) in select.projection.iter().zip(columns.iter_mut()) {
         let expr = match item {
@@ -1701,22 +1722,31 @@ pub(crate) fn inherit_view_source_column_types(
             | SelectItem::UnnamedExpr(expr) => expr,
             _ => continue,
         };
-        let source_name = match expr {
-            Expr::Identifier(ident) => Some(ident.value.as_str()),
-            Expr::CompoundIdentifier(idents) => idents.last().map(|ident| ident.value.as_str()),
-            _ => None,
+        let (qualifier, source_name) = match expr {
+            Expr::Identifier(ident) => (None, ident_value(ident)),
+            Expr::CompoundIdentifier(idents) if idents.len() >= 2 => (
+                Some(ident_value(&idents[idents.len() - 2])),
+                ident_value(idents.last().unwrap()),
+            ),
+            _ => continue,
         };
-        let Some(source) = source_name.and_then(|source_name| {
-            source_columns
-                .iter()
-                .find(|column| column.name.eq_ignore_ascii_case(source_name))
-        }) else {
+        let mut candidates = sources
+            .iter()
+            .filter(|(name, _)| qualifier.as_ref().is_none_or(|q| q == name))
+            .flat_map(|(_, columns)| columns)
+            .filter(|column| column.name == source_name);
+        let Some(source) = candidates.next() else {
             continue;
         };
+        if candidates.next().is_some() {
+            continue;
+        }
         target.pg_type = source.pg_type.clone();
         target.type_modifier = source.type_modifier.clone();
         target.vector_dim = source.vector_dim;
-        target.nullable = source.nullable;
+        target.array_ndims = source.array_ndims;
+        // An outer join can make a NOT NULL source column nullable. View
+        // columns remain conservatively nullable as PostgreSQL reports them.
     }
     Ok(())
 }

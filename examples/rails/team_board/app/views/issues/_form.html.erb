@@ -1,0 +1,15 @@
+<% if @issue.errors.any? %><div class="flash alert"><%= @issue.errors.full_messages.to_sentence %></div><% end %>
+<%= form_with model: [@project, @issue] do |form| %>
+  <%= form.label :title %><%= form.text_field :title, required: true %>
+  <%= form.label :body, "Description" %><%= form.text_area :body, rows: 6 %>
+  <div class="form-grid">
+    <div><%= form.label :status %><%= form.select :status, Issue.statuses.keys.map { |s| [s.humanize, s] } %></div>
+    <div><%= form.label :priority %><%= form.select :priority, (0..3).map { |n| ["P#{n}", n] } %></div>
+    <div><%= form.label :assignee_id %><%= form.collection_select :assignee_id, @project.workspace.users.order(:name), :id, :name, include_blank: "Unassigned" %></div>
+    <div><%= form.label :due_on %><%= form.date_field :due_on %></div>
+  </div>
+  <fieldset><legend>Labels</legend><%= form.collection_check_boxes :label_ids, @project.workspace.labels.order(:name), :id, :name do |box| %><label class="checkbox"><%= box.check_box %><%= box.text %></label><% end %></fieldset>
+  <%= form.label :attachments %><%= form.file_field :attachments, multiple: true %>
+  <%= form.hidden_field :lock_version %>
+  <%= form.submit "Save issue", class: "button" %>
+<% end %>

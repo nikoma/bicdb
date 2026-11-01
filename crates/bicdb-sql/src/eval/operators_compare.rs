@@ -1657,6 +1657,17 @@ pub(crate) fn eval_between_truth(
     Ok(sql_and(lower, upper).map(|matched| if negated { !matched } else { matched }))
 }
 
+pub(crate) fn quantified_operand_value(value: SqlValue, pg_type: Option<&str>) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) || !matches!(pg_type, Some("int2vector" | "oidvector")) {
+        return Ok(value);
+    }
+    let values = pg_int_vector_values(&value.to_cell())
+        .ok_or_else(|| SqlError::InvalidSql("invalid vector array operand".into()))?;
+    Ok(SqlValue::Json(JsonValue::Array(
+        values.into_iter().map(sql_value_to_json).collect(),
+    )))
+}
+
 pub(crate) fn eval_quantified_truth(
     left: SqlValue,
     op: &BinaryOperator,

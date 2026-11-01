@@ -1,0 +1,3 @@
+#!/usr/bin/env ruby
+# The demo's setup includes its own database and worker processes.
+load File.expand_path("dev", __dir__)

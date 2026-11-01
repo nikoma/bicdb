@@ -15,3 +15,13 @@ reports/performance/**/raw/**
 *.seg
 *.wal
 *.log
+
+# Rails demo runtime data, local gems and credentials never enter build context.
+examples/rails/team_board/.bicdb
+examples/rails/team_board/tmp
+examples/rails/team_board/log
+examples/rails/team_board/storage
+examples/rails/team_board/.bundle
+examples/rails/team_board/vendor/bundle
+examples/rails/team_board/config/master.key
+examples/rails/team_board/config/credentials*.enc

@@ -1457,6 +1457,16 @@ impl<'db> SqlSession<'db> {
         table: &str,
         schema: &TableSchema,
     ) -> Result<bool> {
+        // Foreign-key rechecks need the old key, even when an assignment or a
+        // trigger leaves it unchanged. Unrelated child updates must not reserve
+        // the common parent key and conflict with one another.
+        if schema
+            .constraints
+            .iter()
+            .any(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { .. }))
+        {
+            return Ok(true);
+        }
         let mut assigned = Vec::with_capacity(update.assignments.len());
         for assignment in &update.assignments {
             let AssignmentTarget::ColumnName(column_name) = &assignment.target else {

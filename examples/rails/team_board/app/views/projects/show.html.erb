@@ -1,0 +1,28 @@
+<%= turbo_stream_from @project %>
+<%= link_to "← All projects", projects_path, class: "back" %>
+<div class="heading"><div><span class="eyebrow"><%= @project.workspace.name %></span><h1><%= @project.name %></h1><p class="muted">A shared view of what is moving forward.</p></div><%= link_to "+ New issue", new_project_issue_path(@project), class: "button" %></div>
+<div class="toolbar panel">
+  <%= form_with url: project_path(@project), method: :get, class: "search-form" do |form| %>
+    <%= form.search_field :q, value: params[:q], placeholder: "Search titles and descriptions…", aria: { label: "Full-text search" } %>
+    <%= form.submit "Search", class: "button secondary" %>
+    <% if params[:q].present? %><%= link_to "Clear", project_path(@project) %><% end %>
+  <% end %>
+  <%= button_to "Generate report", project_reports_path(@project), class: "button secondary" %>
+</div>
+<div class="board">
+  <% Issue.statuses.each_key do |status| %>
+    <section class="column">
+      <h2><span class="dot <%= status %>"></span><%= status.humanize %><span class="count"><%= @counts.fetch(status, 0) %></span></h2>
+      <% (@issues[status] || []).each do |issue| %>
+        <%= link_to project_issue_path(@project, issue), class: "issue-card" do %>
+          <span class="issue-number">#<%= issue.id %> · P<%= issue.priority %></span>
+          <h3><%= issue.title %></h3>
+          <div class="labels"><% issue.labels.each do |label| %><span class="label"><%= label.name %></span><% end %></div>
+          <div class="card-bottom"><span><%= issue.assignee&.name || "Unassigned" %></span><span><%= issue.comments_count %> comments</span></div>
+        <% end %>
+      <% end %>
+      <% if (@issues[status] || []).empty? %><div class="empty">No issues here.</div><% end %>
+    </section>
+  <% end %>
+</div>
+<%= render "report", report: @report %>

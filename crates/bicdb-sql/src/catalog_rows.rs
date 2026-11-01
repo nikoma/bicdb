@@ -1180,387 +1180,6 @@ pub(crate) fn set_view_column_pg_type(columns: &mut [ColumnSchema], name: &str, 
     }
 }
 
-pub(crate) fn active_record_column_definitions_fast_path(
-    db: &BicDb,
-    normalized: &str,
-) -> Result<Option<SqlResult>> {
-    let Some(relation) = active_record_column_definitions_relation(normalized) else {
-        return Ok(None);
-    };
-    let relation_exists = table_oids(db).contains_key(&relation);
-    if !relation_exists {
-        return Ok(Some(SqlResult::new(
-            active_record_column_definition_columns(normalized),
-            Vec::new(),
-        )));
-    }
-    let include_identity = normalized.contains("attidentity as identity");
-    let include_generated = normalized.contains("attgenerated as attgenerated");
-    let columns = catalog_columns_for_relation(db, &relation)?;
-    let mut rows = Vec::new();
-    for column in columns {
-        let atttypid = column.type_oid();
-        let formatted_type = column.formatted_pg_type();
-        let atttypmod = column.catalog_typmod();
-        let mut row = vec![
-            SqlValue::String(column.name),
-            SqlValue::String(formatted_type),
-            if let Some(expression) = column.generated_expr.as_ref() {
-                SqlValue::String(expression.clone())
-            } else if column.identity.is_none() {
-                column
-                    .default_sequence
-                    .as_deref()
-                    .map(pg_attrdef_expr)
-                    .unwrap_or(SqlValue::Null)
-            } else {
-                SqlValue::Null
-            },
-            SqlValue::Bool(!column.nullable || column.primary_key),
-            SqlValue::Int(atttypid),
-            SqlValue::Int(atttypmod),
-            SqlValue::Null,
-            SqlValue::Null,
-        ];
-        if include_identity {
-            row.push(SqlValue::String(column.identity.unwrap_or_default()));
-        }
-        if include_generated {
-            row.push(SqlValue::String(
-                column
-                    .generated_expr
-                    .as_ref()
-                    .map_or("", |_| "s")
-                    .to_string(),
-            ));
-        }
-        rows.push(row);
-    }
-    Ok(Some(SqlResult::new(
-        active_record_column_definition_columns(normalized),
-        rows,
-    )))
-}
-
-pub(crate) fn active_record_column_definitions_relation(normalized: &str) -> Option<String> {
-    if !(normalized.starts_with("select a.attname, format_type(a.atttypid, a.atttypmod)")
-        || normalized
-            .starts_with("select a.attname, pg_catalog.format_type(a.atttypid, a.atttypmod)"))
-    {
-        return None;
-    }
-    if !(normalized.contains(" from pg_attribute a ")
-        || normalized.contains(" from pg_catalog.pg_attribute a "))
-    {
-        return None;
-    }
-    if !(normalized.contains(" join pg_attrdef d ")
-        || normalized.contains(" join pg_catalog.pg_attrdef d "))
-    {
-        return None;
-    }
-    if !normalized.contains(" where a.attrelid = '") {
-        return None;
-    }
-    if !normalized.contains(" and a.attnum > 0")
-        || !normalized.contains("not a.attisdropped")
-        || !normalized.contains(" order by a.attnum")
-    {
-        return None;
-    }
-    let literal = normalized
-        .split(" where a.attrelid = '")
-        .nth(1)?
-        .split("'::regclass")
-        .next()?;
-    Some(normalize_object_name(literal))
-}
-
-pub(crate) fn active_record_column_definition_columns(normalized: &str) -> Vec<String> {
-    let mut columns = vec![
-        "attname".to_string(),
-        "format_type".to_string(),
-        "pg_get_expr".to_string(),
-        "attnotnull".to_string(),
-        "atttypid".to_string(),
-        "atttypmod".to_string(),
-        "collname".to_string(),
-        "comment".to_string(),
-    ];
-    if normalized.contains("attidentity as identity") {
-        columns.push("identity".to_string());
-    }
-    if normalized.contains("attgenerated as attgenerated") {
-        columns.push("attgenerated".to_string());
-    }
-    columns
-}
-
-pub(crate) fn active_record_primary_key_fast_path(
-    db: &BicDb,
-    normalized: &str,
-) -> Result<Option<SqlResult>> {
-    let Some(relation) = active_record_primary_key_relation(normalized) else {
-        return Ok(None);
-    };
-    let Some(schema) = load_schema(db, &relation)? else {
-        return Ok(Some(SqlResult::new(
-            vec!["attname".to_string()],
-            Vec::new(),
-        )));
-    };
-    let rows = primary_key_columns_for_schema(&schema)
-        .into_iter()
-        .map(|column| vec![SqlValue::String(column)])
-        .collect();
-    Ok(Some(SqlResult::new(vec!["attname".to_string()], rows)))
-}
-
-pub(crate) fn active_record_primary_key_relation(normalized: &str) -> Option<String> {
-    if !normalized.starts_with("select a.attname ") {
-        return None;
-    }
-    if !(normalized.contains(" from pg_index i ")
-        || normalized.contains(" from pg_catalog.pg_index i "))
-    {
-        return None;
-    }
-    if !(normalized.contains(" join pg_attribute a ")
-        || normalized.contains(" join pg_catalog.pg_attribute a "))
-    {
-        return None;
-    }
-    if !normalized.contains(" on a.attrelid = i.indrelid ") {
-        return None;
-    }
-    if !(normalized.contains(" and a.attnum = any(i.indkey) ")
-        || normalized.contains(" and a.attnum = any (i.indkey) "))
-    {
-        return None;
-    }
-    if !normalized.contains(" and i.indisprimary") {
-        return None;
-    }
-    if !normalized.contains(" order by array_position(i.indkey, a.attnum)") {
-        return None;
-    }
-    let literal = normalized
-        .split(" where i.indrelid = '")
-        .nth(1)?
-        .split("'::regclass")
-        .next()?;
-    Some(normalize_object_name(&regclass_relation_name(literal)))
-}
-
-pub(crate) fn active_record_foreign_keys_fast_path(
-    db: &BicDb,
-    normalized: &str,
-) -> Result<Option<SqlResult>> {
-    let Some(relation) = active_record_foreign_keys_relation(normalized) else {
-        return Ok(None);
-    };
-    let schema_filter = active_record_foreign_keys_schema_filter(normalized);
-    let Some(schema) = load_schema(db, &relation)? else {
-        return Ok(Some(SqlResult::new(
-            active_record_foreign_keys_columns(),
-            Vec::new(),
-        )));
-    };
-    if !catalog_name_matches(schema_filter.as_ref(), &schema.schema_name) {
-        return Ok(Some(SqlResult::new(
-            active_record_foreign_keys_columns(),
-            Vec::new(),
-        )));
-    }
-
-    let table_oids = table_oids(db);
-    let conrelid = *table_oids.get(&schema.name).unwrap_or(&0);
-    let mut rows = Vec::new();
-    for constraint in &schema.constraints {
-        let ConstraintSchema::ForeignKey {
-            name,
-            columns,
-            foreign_table,
-            referred_columns,
-            on_delete,
-            on_update,
-            validated,
-        } = constraint
-        else {
-            continue;
-        };
-        let Some(foreign_schema) = load_schema(db, foreign_table)? else {
-            continue;
-        };
-        let confrelid = *table_oids.get(&foreign_schema.name).unwrap_or(&0);
-        let conkey = attnums_for_schema_columns(&schema, columns);
-        let confkey = attnums_for_schema_columns(&foreign_schema, referred_columns);
-        rows.push(vec![
-            SqlValue::String(regclass_text_for_schema(&foreign_schema)),
-            columns
-                .first()
-                .cloned()
-                .map(SqlValue::String)
-                .unwrap_or(SqlValue::Null),
-            referred_columns
-                .first()
-                .cloned()
-                .map(SqlValue::String)
-                .unwrap_or(SqlValue::Null),
-            SqlValue::String(name.clone()),
-            SqlValue::String(fk_action_code(*on_update).to_string()),
-            SqlValue::String(fk_action_code(*on_delete).to_string()),
-            SqlValue::Bool(*validated),
-            SqlValue::Bool(false),
-            SqlValue::Bool(false),
-            constraint_key_value(&conkey),
-            constraint_key_value(&confkey),
-            SqlValue::Int(conrelid),
-            SqlValue::Int(confrelid),
-        ]);
-    }
-    rows.sort_by(|left, right| left[3].to_cell().cmp(&right[3].to_cell()));
-
-    Ok(Some(SqlResult::new(
-        active_record_foreign_keys_columns(),
-        rows,
-    )))
-}
-
-pub(crate) fn active_record_foreign_keys_relation(normalized: &str) -> Option<String> {
-    if !normalized.starts_with("select t2.oid::regclass::text as to_table") {
-        return None;
-    }
-    for required in [
-        " c.confupdtype as on_update",
-        " c.confdeltype as on_delete",
-        " c.convalidated as valid",
-        " c.condeferrable as deferrable",
-        " c.condeferred as deferred",
-        " c.conrelid, c.confrelid",
-        " from pg_constraint c ",
-        " join pg_class t1 on c.conrelid = t1.oid ",
-        " join pg_class t2 on c.confrelid = t2.oid ",
-        " join pg_attribute a1 on a1.attnum = c.conkey[1] and a1.attrelid = t1.oid ",
-        " join pg_attribute a2 on a2.attnum = c.confkey[1] and a2.attrelid = t2.oid ",
-        " join pg_namespace t3 on c.connamespace = t3.oid ",
-        " where c.contype = 'f' ",
-        " order by c.conname",
-    ] {
-        if !normalized.contains(required) {
-            return None;
-        }
-    }
-    normalized_quoted_value_after(normalized, " and t1.relname = '")
-        .as_deref()
-        .map(normalize_object_name)
-}
-
-pub(crate) fn active_record_foreign_keys_schema_filter(
-    normalized: &str,
-) -> Option<BTreeSet<String>> {
-    if normalized.contains(" and t3.nspname = any (current_schemas(false))")
-        || normalized.contains(" and t3.nspname = any(current_schemas(false))")
-    {
-        return Some(BTreeSet::from(["public".to_string()]));
-    }
-    normalized_quoted_value_after(normalized, " and t3.nspname = '")
-        .map(|schema| BTreeSet::from([schema]))
-}
-
-pub(crate) fn active_record_foreign_keys_columns() -> Vec<String> {
-    [
-        "to_table",
-        "column",
-        "primary_key",
-        "name",
-        "on_update",
-        "on_delete",
-        "valid",
-        "deferrable",
-        "deferred",
-        "conkey",
-        "confkey",
-        "conrelid",
-        "confrelid",
-    ]
-    .into_iter()
-    .map(str::to_string)
-    .collect()
-}
-
-pub(crate) fn active_record_index_invalid_fast_path(
-    db: &BicDb,
-    normalized: &str,
-) -> Result<Option<SqlResult>> {
-    let Some(index_name) = active_record_index_invalid_name(normalized) else {
-        return Ok(None);
-    };
-    let schema_filter = active_record_index_invalid_schema_filter(normalized);
-    let rows = if catalog_index_name_exists(db, &index_name, schema_filter.as_ref())? {
-        vec![vec![SqlValue::Bool(false)]]
-    } else {
-        Vec::new()
-    };
-    Ok(Some(SqlResult::new(vec!["?column?".to_string()], rows)))
-}
-
-pub(crate) fn active_record_index_invalid_name(normalized: &str) -> Option<String> {
-    if !normalized.starts_with("select not i.indisvalid") {
-        return None;
-    }
-    for required in [
-        " from pg_class c ",
-        " join pg_index i ",
-        " on c.oid = i.indexrelid ",
-        " join pg_namespace n ",
-        " on n.oid = c.relnamespace ",
-    ] {
-        if !normalized.contains(required) {
-            return None;
-        }
-    }
-    normalized_quoted_value_after(normalized, " and c.relname = '")
-        .as_deref()
-        .map(normalize_object_name)
-}
-
-pub(crate) fn active_record_index_invalid_schema_filter(
-    normalized: &str,
-) -> Option<BTreeSet<String>> {
-    if normalized.contains(" n.nspname = current_schema()")
-        || normalized.contains(" n.nspname = current_schema() ")
-        || normalized.contains(" n.nspname = current_schema")
-    {
-        return Some(BTreeSet::from(["public".to_string()]));
-    }
-    normalized_quoted_value_after(normalized, " n.nspname = '")
-        .map(|schema| BTreeSet::from([schema]))
-}
-
-pub(crate) fn normalized_quoted_value_after(normalized: &str, marker: &str) -> Option<String> {
-    normalized
-        .split(marker)
-        .nth(1)?
-        .split('\'')
-        .next()
-        .map(|value| value.replace("''", "'"))
-}
-
-pub(crate) fn attnums_for_schema_columns(schema: &TableSchema, columns: &[String]) -> Vec<i64> {
-    columns
-        .iter()
-        .map(|column| {
-            schema
-                .columns
-                .iter()
-                .position(|candidate| candidate.name.as_str() == column)
-                .map(|idx| idx as i64 + 1)
-                .unwrap_or(0)
-        })
-        .collect()
-}
-
 pub(crate) fn regclass_text_for_schema(schema: &TableSchema) -> String {
     let name = pg_quote_ident(&catalog_display_name(&schema.name));
     if schema.schema_name == "public" {
@@ -1568,24 +1187,6 @@ pub(crate) fn regclass_text_for_schema(schema: &TableSchema) -> String {
     } else {
         format!("{}.{}", pg_quote_ident(&schema.schema_name), name)
     }
-}
-
-pub(crate) fn catalog_index_name_exists(
-    db: &BicDb,
-    index_name: &str,
-    schema_filter: Option<&BTreeSet<String>>,
-) -> Result<bool> {
-    Ok(list_schemas(db)?.into_iter().any(|schema| {
-        catalog_name_matches(schema_filter, &schema.schema_name)
-            && ((schema.primary_key_column().is_some()
-                && schema
-                    .primary_key_constraint_name()
-                    .eq_ignore_ascii_case(index_name))
-                || schema
-                    .indexes
-                    .iter()
-                    .any(|index| index.name.eq_ignore_ascii_case(index_name)))
-    }))
 }
 
 pub(crate) fn pg_attribute_rows_for_attrelid(
@@ -3669,7 +3270,7 @@ pub(crate) fn pg_attrdef_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValu
     for schema in &schemas {
         let table_oid = *table_oids.get(&schema.name).unwrap_or(&0);
         for column in &schema.columns {
-            if let Some(expression) = column_attrdef_expression(column) {
+            if let Some(expression) = column_attrdef_expression(column)? {
                 rows.push(virtual_row([
                     ("oid", SqlValue::Int(oid)),
                     ("adrelid", SqlValue::Int(table_oid)),
@@ -3718,7 +3319,7 @@ pub(crate) fn pg_attrdef_rows_for_adrelids(
     for schema in &schemas {
         let table_oid = *table_oids.get(&schema.name).unwrap_or(&0);
         for column in &schema.columns {
-            if let Some(expression) = column_attrdef_expression(column) {
+            if let Some(expression) = column_attrdef_expression(column)? {
                 if relations
                     .get(&table_oid)
                     .is_some_and(|relation| schema.name.as_str() == relation)
@@ -3743,19 +3344,38 @@ pub(crate) fn pg_attrdef_rows_for_adrelids(
     Ok(rows)
 }
 
-pub(crate) fn column_attrdef_expression(column: &ColumnSchema) -> Option<SqlValue> {
-    column
-        .generated_expr
-        .clone()
-        .map(SqlValue::String)
-        .or_else(|| {
-            column
-                .default_sequence
-                .as_deref()
-                .filter(|_| column.identity.is_none())
-                .map(pg_attrdef_expr)
-        })
-        .or_else(|| column.default_expr.clone().map(SqlValue::String))
+pub(crate) fn column_attrdef_expression(column: &ColumnSchema) -> Result<Option<SqlValue>> {
+    if let Some(expression) = column.generated_expr.as_ref() {
+        return Ok(Some(SqlValue::String(expression.clone())));
+    }
+    if let Some(sequence) = column
+        .default_sequence
+        .as_deref()
+        .filter(|_| column.identity.is_none())
+    {
+        return Ok(Some(pg_attrdef_expr(sequence)));
+    }
+    let Some(value) = column.default_value.as_ref() else {
+        return Ok(column.default_expr.clone().map(SqlValue::String));
+    };
+    // Literal defaults have the same catalog presence as expression defaults.
+    // Quote and cast text-like values so clients can deserialize their defaults
+    // using the declared column type, including JSON and PostgreSQL arrays.
+    let expression = match value {
+        SqlValue::Null => "NULL".to_string(),
+        SqlValue::Bool(_) | SqlValue::Int(_) => value.to_cell(),
+        SqlValue::Float(number) if number.is_finite() => value.to_cell(),
+        value => {
+            let text = if column.type_is_array() {
+                PgCanonicalTextCodec
+                    .canonical_text(value, PgCodecContext::new(column.type_oid() as i32, -1))?
+            } else {
+                value.to_cell()
+            };
+            format!("'{}'::{}", text.replace('\'', "''"), column.pg_type)
+        }
+    };
+    Ok(Some(SqlValue::String(expression)))
 }
 
 pub(crate) fn pg_attrdef_expr(sequence: &str) -> SqlValue {
@@ -5071,8 +4691,8 @@ pub(crate) fn pg_constraint_row(row: PgConstraintRow) -> BTreeMap<String, SqlVal
         ("coninhcount", SqlValue::Int(0)),
         ("connoinherit", SqlValue::Bool(true)),
         ("conperiod", SqlValue::Bool(false)),
-        ("conkey", constraint_key_value(&row.conkey)),
-        ("confkey", constraint_key_value(&row.confkey)),
+        ("conkey", constraint_array_value(&row.conkey)),
+        ("confkey", constraint_array_value(&row.confkey)),
         ("conpfeqop", SqlValue::Null),
         ("conppeqop", SqlValue::Null),
         ("conffeqop", SqlValue::Null),
@@ -5083,6 +4703,15 @@ pub(crate) fn pg_constraint_row(row: PgConstraintRow) -> BTreeMap<String, SqlVal
             row.conbin.map(SqlValue::String).unwrap_or(SqlValue::Null),
         ),
     ])
+}
+
+// pg_constraint keys are int2[] (one-based), unlike int2vector catalog fields.
+pub(crate) fn constraint_array_value(attnums: &[i64]) -> SqlValue {
+    if attnums.is_empty() {
+        SqlValue::Null
+    } else {
+        SqlValue::Json(serde_json::json!(attnums))
+    }
 }
 
 pub(crate) fn constraint_key_value(attnums: &[i64]) -> SqlValue {
@@ -5855,6 +5484,9 @@ pub(crate) fn check_definition_literal_expr(expr: &Expr) -> Option<String> {
 
 pub(crate) fn constraint_attnums_from_value(value: &SqlValue) -> Vec<i64> {
     match value {
+        SqlValue::Json(JsonValue::Array(values)) => {
+            values.iter().filter_map(JsonValue::as_i64).collect()
+        }
         SqlValue::String(value) => value
             .split_whitespace()
             .filter_map(|part| part.parse().ok())

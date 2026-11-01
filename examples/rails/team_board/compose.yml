@@ -1,0 +1,15 @@
+services:
+  web:
+    build:
+      context: ../../..
+      dockerfile: examples/rails/team_board/Dockerfile
+    ports:
+      - "127.0.0.1:${TEAM_BOARD_PORT:-3000}:3000"
+    volumes:
+      - database:/app/.bicdb
+      - attachments:/app/storage
+    init: true
+    stop_grace_period: 45s
+volumes:
+  database:
+  attachments:

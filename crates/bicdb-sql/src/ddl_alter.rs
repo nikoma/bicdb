@@ -3440,7 +3440,32 @@ fn split_setting_list(value: &str) -> Vec<String> {
     parts
 }
 
+fn sql_comments_as_whitespace(sql: &str) -> Result<std::borrow::Cow<'_, str>> {
+    if !sql.contains("/*") && !sql.contains("--") {
+        return Ok(std::borrow::Cow::Borrowed(sql));
+    }
+    // Keep quoted spellings intact and let the PostgreSQL lexer handle nested
+    // comments. Raw DDL parsers must treat comments as whitespace, just as the
+    // AST parser does.
+    use sqlparser::tokenizer::{Token, Tokenizer};
+    let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
+        .with_unescape(false)
+        .tokenize()
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    Ok(std::borrow::Cow::Owned(
+        tokens
+            .into_iter()
+            .map(|token| match token {
+                Token::Whitespace(_) => " ".to_string(),
+                token => token.to_string(),
+            })
+            .collect(),
+    ))
+}
+
 pub fn parse_database_ddl(sql: &str) -> Result<Option<DatabaseDdl>> {
+    let uncommented = sql_comments_as_whitespace(sql)?;
+    let sql = uncommented.as_ref();
     let statement = trim_sql_statement(sql);
     if let Some(rest) = strip_prefix_ci(statement, "CREATE DATABASE ") {
         let (name, mut rest) = parse_leading_sql_identifier(rest)?;
@@ -3662,6 +3687,8 @@ pub(crate) fn normalize_pg_dump_range_zero_options(sql: &str) -> Result<Option<S
 }
 
 pub(crate) fn parse_raw_create_extension(sql: &str) -> Result<Option<(ExtensionSchema, bool)>> {
+    let uncommented = sql_comments_as_whitespace(sql)?;
+    let sql = uncommented.as_ref();
     // The raw parser owns one statement.  Without this guard a simple-query
     // batch beginning with CREATE EXTENSION greedily consumed every following
     // statement as extension options, so a valid BicDB application migration such as

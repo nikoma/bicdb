@@ -1,0 +1,57 @@
+{
+  "passed": true,
+  "binary_sha256": "b1a6f31bc72918c8d9e0e7cc4108095ec877765d97c92674e99061797cc850a9",
+  "ruby": "3.4.12",
+  "rails": "8.1.4",
+  "pg": "1.7.0",
+  "solid_queue": "1.7.0",
+  "solid_cache": "1.0.10",
+  "solid_cable": "3.0.12",
+  "checks": [
+    "Rails test suite with two parallel workers",
+    "Pending jobs and binary Solid Cache value survive BicDB SIGKILL/restart",
+    "Concurrent Solid Queue worker processes, rollbacks, aggregation, cache and cable",
+    "Real HTTP requests with CSRF-protected login and form submission"
+  ],
+  "jobs": {
+    "rails": "8.1.4",
+    "adapter": "PostgreSQL",
+    "reports": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25
+    ],
+    "rolled_back_job_absent": true,
+    "canary_sha256": "58cd318748766064d32851225788c587ed0d1fb6b0e1ad927dd733e7702e74fc",
+    "passed": true,
+    "worker_pids": [
+      398,
+      403
+    ],
+    "overlapping_workers": true,
+    "completed_reports": 24,
+    "cable_messages": 24,
+    "failed_jobs": 0
+  }
+}

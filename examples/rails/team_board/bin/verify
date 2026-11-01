@@ -1,0 +1,83 @@
+#!/usr/bin/env ruby
+require_relative "../script/runtime"
+require "json"
+require "digest"
+require "tmpdir"
+require "optparse"
+require "net/http"
+require "time"
+
+options = {}
+OptionParser.new { |parser| parser.on("--work-dir PATH") { |value| options[:directory] = File.expand_path(value) } }.parse!
+if options[:directory]
+  abort "Verification needs a new work directory" if File.exist?(options[:directory])
+  directory = options[:directory]
+else
+  FileUtils.mkdir_p(File.join(DemoRuntime::ROOT, "tmp"))
+  directory = Dir.mktmpdir("qualification-", File.join(DemoRuntime::ROOT, "tmp"))
+end
+ENV["RAILS_ENV"] = "development"
+DemoRuntime.dependencies!
+ENV["TEAM_BOARD_DB_PREFIX"] = "team_board_qualification"
+ENV["TEAM_BOARD_EVIDENCE_DIR"] = directory
+ENV["JOB_CONCURRENCY"] = "2"
+processes = DemoRuntime::Processes.new(directory, DemoRuntime.binary!)
+started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+report = { "passed" => false, "binary_sha256" => Digest::SHA256.file(processes.binary).hexdigest,
+  "started_at" => Time.now.utc.iso8601,
+  "ruby" => RUBY_VERSION, "rails" => Gem.loaded_specs.fetch("rails").version.to_s,
+  "pg" => Gem.loaded_specs.fetch("pg").version.to_s,
+  "solid_queue" => Gem.loaded_specs.fetch("solid_queue").version.to_s,
+  "solid_cache" => Gem.loaded_specs.fetch("solid_cache").version.to_s,
+  "solid_cable" => Gem.loaded_specs.fetch("solid_cable").version.to_s, "checks" => [] }
+trap("INT") { exit }
+trap("TERM") { exit }
+begin
+  processes.database
+  processes.rails("prepare", "db:prepare")
+  processes.rails("prepare-idempotent", "db:prepare")
+  processes.rails("migration-rollback", "db:rollback:primary", "STEP=#{Dir.glob(File.join(DemoRuntime::ROOT, 'db/migrate/*.rb')).length}")
+  processes.rails("migration-reapply", "db:migrate:primary")
+  report["checks"] << "Fresh schema load, repeated preparation, all migrations rolled back and reapplied"
+  processes.rails("tests", "test", env: { "PARALLEL_WORKERS" => "2", "RAILS_ENV" => "test" })
+  summary = File.read(File.join(directory, "tests.log")).match(/(\d+) runs, (\d+) assertions, (\d+) failures, (\d+) errors, (\d+) skips/)
+  abort "Rails test summary missing" unless summary
+  report["rails_tests"] = %w[runs assertions failures errors skips].zip(summary.captures.map(&:to_i)).to_h
+  abort "Rails tests must run without failures, errors or skips" unless report["rails_tests"]["runs"].positive? && %w[failures errors skips].all? { |key| report["rails_tests"][key].zero? }
+  report["checks"] << "Rails test suite with two parallel workers"
+  processes.rails("seed", "db:seed")
+  processes.rails("seed-idempotent", "db:seed")
+  report["checks"] << "Repeated application seeding"
+  processes.rails("queue-pending", "runner", "script/acceptance.rb", "prepare")
+  processes.restart_database(crash: true)
+  processes.rails("queue-recovered", "runner", "script/acceptance.rb", "after_restart")
+  report["checks"] << "Pending jobs and binary Solid Cache value survive BicDB SIGKILL/restart"
+  worker = processes.start("workers", RbConfig.ruby, "bin/jobs", "--skip-recurring")
+  processes.rails("queue-completed", "runner", "script/acceptance.rb", "wait")
+  report["jobs"] = JSON.parse(File.read(File.join(directory, "job-receipt.json")))
+  report["checks"] << "Concurrent Solid Queue worker processes, rollbacks, aggregation, cache and cable"
+  port = DemoRuntime.free_port
+  web = processes.start("web", RbConfig.ruby, "bin/rails", "server", "--binding", "127.0.0.1", "--port", port.to_s)
+  Timeout.timeout(60) do
+    loop do
+      begin
+        break if Net::HTTP.get_response(URI("http://127.0.0.1:#{port}/up")).code == "200"
+      rescue Errno::ECONNREFUSED
+      end
+      sleep 0.1
+    end
+  end
+  processes.command("http", RbConfig.ruby, "script/http_smoke.rb",
+    env: { "TEAM_BOARD_HTTP_URL" => "http://127.0.0.1:#{port}" })
+  processes.stop(web)
+  processes.stop(worker)
+  report["checks"] << "Real HTTP login, CSRF-protected forms, assets and search; worker Turbo update over WebSocket"
+  report["passed"] = true
+ensure
+  processes.close
+  report["finished_at"] = Time.now.utc.iso8601
+  report["elapsed_seconds"] = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).round(3)
+  File.write(File.join(directory, "report.json"), JSON.pretty_generate(report))
+  puts "Evidence: #{directory}"
+end
+puts JSON.pretty_generate(report)

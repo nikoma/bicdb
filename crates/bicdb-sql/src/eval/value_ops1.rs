@@ -1025,15 +1025,49 @@ pub(crate) fn eval_db_catalog_function_value(
             Ok(Some(definition))
         }
         "pg_get_indexdef" | "pg_catalog.pg_get_indexdef" => {
-            let definition = args
-                .first()
-                .and_then(sql_value_i64)
-                .map(|indexrelid| pg_indexdef_for_oid(db, indexrelid))
-                .transpose()?
-                .flatten()
-                .map(SqlValue::String)
-                .unwrap_or(SqlValue::Null);
-            Ok(Some(definition))
+            if !matches!(args.len(), 1 | 3) {
+                return Err(SqlError::InvalidSql(
+                    "pg_get_indexdef expects one or three arguments".into(),
+                ));
+            }
+            if args.iter().any(|value| matches!(value, SqlValue::Null)) {
+                return Ok(Some(SqlValue::Null));
+            }
+            let Some(indexrelid) = args.first().and_then(sql_value_i64) else {
+                return Err(SqlError::InvalidSql(
+                    "pg_get_indexdef requires an index OID".into(),
+                ));
+            };
+            let column = if args.len() == 3 {
+                sql_value_i64(&args[1]).ok_or_else(|| {
+                    SqlError::InvalidSql("pg_get_indexdef column number must be an integer".into())
+                })?
+            } else {
+                0
+            };
+            let definition = pg_indexdef_for_oid(db, indexrelid)?;
+            let definition = match definition {
+                Some(definition) if column != 0 => {
+                    let statements = Parser::parse_sql(&PostgreSqlDialect {}, &definition)
+                        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+                    let Some(Statement::CreateIndex(index)) = statements.into_iter().next() else {
+                        return Err(SqlError::InvalidSql(
+                            "invalid stored index definition".into(),
+                        ));
+                    };
+                    let expression = column
+                        .checked_sub(1)
+                        .and_then(|position| usize::try_from(position).ok())
+                        .and_then(|position| index.columns.get(position))
+                        .map(|column| column.column.expr.to_string())
+                        .unwrap_or_default();
+                    Some(expression)
+                }
+                other => other,
+            };
+            Ok(Some(
+                definition.map(SqlValue::String).unwrap_or(SqlValue::Null),
+            ))
         }
         "to_regproc"
         | "pg_catalog.to_regproc"

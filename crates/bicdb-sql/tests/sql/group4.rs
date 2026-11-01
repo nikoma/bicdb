@@ -1733,7 +1733,7 @@ fn postgres_alter_table_add_composite_primary_key_reports_primary_catalogs() {
             .rows,
         vec![vec![
             SqlValue::String("p".to_string()),
-            SqlValue::String("1 2".to_string()),
+            SqlValue::Json(json!([1, 2])),
         ]]
     );
     assert_eq!(
@@ -1808,7 +1808,7 @@ fn postgres_primary_key_using_index_promotes_existing_unique_index() {
             .rows,
         vec![vec![
             SqlValue::String("p".to_string()),
-            SqlValue::String("1 2".to_string()),
+            SqlValue::Json(json!([1, 2])),
         ]]
     );
     assert_eq!(
@@ -1953,7 +1953,7 @@ fn legacy_unique_pkey_constraint_reports_as_primary_key() {
             .rows,
         vec![vec![
             SqlValue::String("p".to_string()),
-            SqlValue::String("2".to_string()),
+            SqlValue::Json(json!([2])),
         ]]
     );
     assert_eq!(
@@ -2364,8 +2364,8 @@ fn rails_foreign_key_introspection_indexes_catalog_arrays() {
             SqlValue::String("provider_id".to_string()),
             SqlValue::String("id".to_string()),
             SqlValue::String("fk_security_trainings_provider".to_string()),
-            SqlValue::String("2".to_string()),
-            SqlValue::String("1".to_string()),
+            SqlValue::Json(json!([2])),
+            SqlValue::Json(json!([1])),
         ]]
     );
 }

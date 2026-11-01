@@ -19,6 +19,12 @@ operate a collection of databases, search services, and message brokers.
 · [Quickstart](#five-minute-quickstart) · [Compatibility](POSTGRES_COMPATIBILITY.md)
 · [Documentation](#documentation)
 
+**Try a complete Rails application:** [Team Board](examples/rails/team_board/README.md)
+uses Rails 8.1.4, the standard PostgreSQL adapter, Solid Queue, Solid Cache,
+Solid Cable, full-text search, and attachments. Start it with one Docker Compose
+command; run its included verification script to exercise migrations, concurrent
+workers, transaction rollback, and recovery of pending jobs after a crash.
+
 ## Less infrastructure between your idea and your application
 
 | Commonly separate service | BicDB capability |

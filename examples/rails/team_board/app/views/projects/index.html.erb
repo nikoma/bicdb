@@ -1,0 +1,12 @@
+<div class="heading"><div><span class="eyebrow">WORKSPACE OVERVIEW</span><h1>Your projects</h1><p class="muted">From an idea to a finished release.</p></div><span class="pill">BicDB connected</span></div>
+<div class="project-grid">
+  <% @projects.each do |project| %>
+    <%= link_to project_path(project), class: "project-card panel" do %>
+      <span class="eyebrow"><%= project.workspace.name %></span>
+      <h2><%= project.name %> <span class="arrow">↗</span></h2>
+      <p class="muted">Owned by <%= project.owner.name %></p>
+      <div class="card-bottom"><span><%= project.issues.count %> issues</span><span>Open board →</span></div>
+    <% end %>
+  <% end %>
+</div>
+<% if @projects.empty? %><p class="panel">No projects yet. Run <code>bin/rails db:seed</code> to create the demo workspace.</p><% end %>

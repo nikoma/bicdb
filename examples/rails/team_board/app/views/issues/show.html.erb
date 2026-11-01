@@ -1,0 +1,14 @@
+<%= link_to "← Back to board", project_path(@project), class: "back" %>
+<div class="detail-grid">
+  <section class="panel detail">
+    <span class="eyebrow"><%= @project.name %> / #<%= @issue.id %></span><h1><%= @issue.title %></h1>
+    <p class="muted">Opened by <%= @issue.author.name %></p>
+    <div class="description"><%= simple_format @issue.body %></div>
+    <div class="labels"><% @issue.labels.each do |label| %><span class="label"><%= label.name %></span><% end %></div>
+    <% @issue.attachments.each do |attachment| %><p><%= link_to attachment.filename, rails_blob_path(attachment, disposition: "attachment") %></p><% end %>
+    <hr><h2>Discussion <span class="count"><%= @issue.comments_count %></span></h2>
+    <% @issue.comments.order(:created_at).each do |comment| %><article class="comment"><strong><%= comment.author.name %></strong><%= simple_format comment.body %></article><% end %>
+    <%= form_with model: [@project, @issue, Comment.new] do |form| %><%= form.label :body, "Add a comment" %><%= form.text_area :body, rows: 3, required: true %><%= form.submit "Post comment", class: "button" %><% end %>
+  </section>
+  <aside class="panel detail"><h2>Update issue</h2><%= render "form" %></aside>
+</div>

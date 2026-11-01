@@ -1,0 +1,64 @@
+name: Rails application
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'examples/rails/**'
+      - '.github/workflows/rails.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'examples/rails/**'
+      - '.github/workflows/rails.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rails-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  team-board:
+    name: Rails 8.1.4 with stock PostgreSQL adapter
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CARGO_BUILD_JOBS: '1'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.96.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rails-demo
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4.12'
+          bundler-cache: true
+          working-directory: examples/rails/team_board
+      - name: Build BicDB from the tested source
+        run: cargo build --locked -p bicdb-cli --bin bicdb
+      - name: Migrations, Rails tests, concurrent jobs, crash recovery and HTTP/WebSocket
+        working-directory: examples/rails/team_board
+        env:
+          BICDB_BIN: ${{ github.workspace }}/target/debug/bicdb
+        run: bin/verify --work-dir "$RUNNER_TEMP/team-board"
+      - name: Retain qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rails-team-board-evidence
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/team-board/*.json
+            ${{ runner.temp }}/team-board/*.log

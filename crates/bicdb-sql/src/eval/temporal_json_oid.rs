@@ -297,7 +297,18 @@ pub(crate) fn resolve_regclass_oid(db: &BicDb, name: &str) -> Option<i64> {
     if let Some(sequence) = load_sequence(db, &physical).ok().flatten() {
         return Some(sequence_oid(&sequence.name));
     }
-    table_oids(db).get(&physical).copied()
+    if let Some(oid) = table_oids(db).get(&physical).copied() {
+        return Some(oid);
+    }
+    let (namespace, name) = relation_schema_and_name(&physical);
+    pg_class_rows(db).ok()?.into_iter().find_map(|row| {
+        (matches!(virtual_cell(&row, "relkind").to_cell().as_str(), "i" | "I")
+            && virtual_cell(&row, "relname").to_cell() == name
+            && sql_value_i64(&virtual_cell(&row, "relnamespace"))
+                == Some(namespace_oid(&namespace)))
+        .then(|| sql_value_i64(&virtual_cell(&row, "oid")))
+        .flatten()
+    })
 }
 
 pub(crate) fn resolve_regclass_name(db: &BicDb, oid: i64) -> Result<Option<String>> {

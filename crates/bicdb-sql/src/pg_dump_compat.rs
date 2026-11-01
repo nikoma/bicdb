@@ -2296,7 +2296,7 @@ pub(crate) fn pg_class_namespace_summary_path_allowed(
     order_by.is_none_or(|order_by| order_by_references_only_allowed_columns(order_by, &allowed))
 }
 
-pub(crate) fn active_record_table_name_aliases(
+pub(crate) fn catalog_relation_name_aliases(
     from: &TableWithJoins,
 ) -> Result<Option<(String, String)>> {
     let Some((_, class_alias)) = table_factor_relation_alias(&from.relation, "pg_class")? else {
@@ -2329,7 +2329,7 @@ pub(crate) fn active_record_table_name_aliases(
     Ok(Some((class_alias, namespace_alias)))
 }
 
-pub(crate) fn active_record_table_name_projection_matches(
+pub(crate) fn catalog_relation_name_projection_matches(
     projection: &[SelectItem],
     class_alias: &str,
 ) -> bool {
@@ -2344,7 +2344,7 @@ pub(crate) fn active_record_table_name_projection_matches(
     }
 }
 
-pub(crate) fn active_record_table_name_order_by_matches(
+pub(crate) fn catalog_relation_name_order_by_matches(
     order_by: Option<&OrderBy>,
     class_alias: &str,
 ) -> bool {
@@ -2583,7 +2583,7 @@ pub(crate) fn pg_class_namespace_summary_join_rows(
     Ok(rows)
 }
 
-pub(crate) fn active_record_table_name_rows(
+pub(crate) fn catalog_relation_name_rows(
     db: &BicDb,
     relnames: Option<&BTreeSet<String>>,
     relkinds: Option<&BTreeSet<String>>,

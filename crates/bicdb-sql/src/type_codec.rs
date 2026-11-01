@@ -374,6 +374,33 @@ fn canonical_text_for_value(
             })
             .collect::<Result<Vec<_>>>()?
             .join(" "),
+        PgCanonicalValue::Array(value) => {
+            let array = cast_value_to_pg_type(original.clone(), &format!("{}[]", spec.name))?;
+            let text = crate::postgres_array_text_value(
+                &array,
+                crate::pg_type_delimiter(spec.name).unwrap_or(','),
+            )?;
+            if value
+                .dimensions
+                .iter()
+                .any(|dimension| dimension.lower_bound != 1)
+            {
+                let bounds = value
+                    .dimensions
+                    .iter()
+                    .map(|dimension| {
+                        format!(
+                            "[{}:{}]",
+                            dimension.lower_bound,
+                            i64::from(dimension.lower_bound) + dimension.length as i64 - 1
+                        )
+                    })
+                    .collect::<String>();
+                format!("{bounds}={text}")
+            } else {
+                text
+            }
+        }
         _ => cast_value_to_pg_type(original.clone(), spec.name)?.to_cell(),
     })
 }

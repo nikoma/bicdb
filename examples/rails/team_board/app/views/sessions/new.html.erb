@@ -1,0 +1,13 @@
+<section class="login panel">
+  <span class="eyebrow">YOUR TEAM, IN ONE PLACE</span>
+  <h1>Less infrastructure.<br>More getting things done.</h1>
+  <p class="muted">An issue tracker powered by standard Rails and BicDB.</p>
+  <%= form_with url: session_path do |form| %>
+    <%= form.label :email %>
+    <%= form.email_field :email, value: "demo@example.test", required: true, autocomplete: "username" %>
+    <%= form.label :password %>
+    <%= form.password_field :password, required: true, autocomplete: "current-password" %>
+    <%= form.submit "Sign in", class: "button" %>
+  <% end %>
+  <p class="hint">Local demo: demo@example.test / demo-password-please-change</p>
+</section>

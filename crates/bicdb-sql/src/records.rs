@@ -369,12 +369,10 @@ pub(crate) fn validate_records_for_write_prechecked(
     validate_exclusion_constraints(db, table, schema, records, allow_existing_same_id)
 }
 
-/// Validates UPDATE results. `after_records` are all updated rows;
-/// `before_after_records` carries (before, after) pairs only when a unique
-/// key can change (see `update_needs_before_image`) — the unique-key change
-/// check is the sole consumer of the before image here, and an empty pair
-/// list means no unique key was assigned, which is exactly the case where
-/// that check has nothing to do.
+/// Validates UPDATE results. Before images are retained whenever foreign keys
+/// exist or another constraint/trigger requires them (see
+/// `update_needs_before_image`). Unchanged foreign keys retain their established
+/// reference and do not need to reserve the parent key again.
 pub(crate) fn validate_updated_records(
     db: &BicDb,
     tx: Option<&Transaction>,
@@ -386,9 +384,25 @@ pub(crate) fn validate_updated_records(
     if after_records.is_empty() {
         return Ok(());
     }
+    let before_by_id = before_after_records
+        .iter()
+        .map(|(before, after)| (after.id.as_str(), before))
+        .collect::<BTreeMap<_, _>>();
     for record in after_records {
         validate_record_local_constraints(table, schema, record)?;
-        validate_foreign_keys(db, tx, table, schema, record)?;
+        let before = before_by_id.get(record.id.as_str()).copied();
+        for constraint in &schema.constraints {
+            if let (Some(before), ConstraintSchema::ForeignKey { columns, .. }) =
+                (before, constraint)
+            {
+                let old_key = record_column_values(before, schema, columns);
+                let new_key = record_column_values(record, schema, columns);
+                if typed_column_values_not_distinct(schema, columns, &old_key, &new_key)? {
+                    continue;
+                }
+            }
+            validate_foreign_key_constraint(db, tx, table, schema, record, constraint)?;
+        }
     }
     if !before_after_records.is_empty() {
         validate_unique_constraints_for_update(db, tx, table, schema, before_after_records)?;
@@ -2254,7 +2268,12 @@ pub(crate) fn record_schema_column_value(
             .unwrap_or(SqlValue::Null);
     }
     let stored = record_json_column_value_typed(record, &column.name, &column.pg_type);
-    if !matches!(stored, SqlValue::Null) {
+    // An explicitly stored SQL NULL is authoritative, including for names
+    // shared with native Record fields. Legacy native-field fallback applies
+    // only when the SQL cell is absent.
+    if !matches!(stored, SqlValue::Null)
+        || json_value_for_key_case_insensitive(&record.metadata, &column.name).is_some()
+    {
         return stored;
     }
     // Schema column names are lowercase in practice; only allocate the folded
@@ -2266,13 +2285,6 @@ pub(crate) fn record_schema_column_value(
             std::borrow::Cow::Borrowed(column.name.as_str())
         };
     match name_folded.as_ref() {
-        "metadata" => SqlValue::Json(
-            record
-                .metadata
-                .get("metadata")
-                .cloned()
-                .unwrap_or_else(|| record.metadata.clone()),
-        ),
         "timestamp" => record
             .timestamp
             .map(SqlValue::Int)

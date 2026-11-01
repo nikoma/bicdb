@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= content_for(:title) || "Team Board · Rails + BicDB" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+  </head>
+  <body>
+    <header class="topbar">
+      <%= link_to "◈ Team Board", root_path, class: "brand" %>
+      <span class="stack">Rails 8.1.4 + BicDB</span>
+      <% if current_user %>
+        <span class="user"><%= current_user.name %></span>
+        <%= button_to "Sign out", session_path, method: :delete, class: "quiet" %>
+      <% end %>
+    </header>
+    <main>
+      <% flash.each do |kind, message| %><div class="flash <%= kind %>" role="status"><%= message %></div><% end %>
+      <%= yield %>
+    </main>
+    <footer>One Rails application. One database engine. SQL · search · jobs · cache · live updates.</footer>
+  </body>
+</html>

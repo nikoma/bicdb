@@ -1,0 +1,23 @@
+#!/usr/bin/env ruby
+require_relative "../script/runtime"
+
+ENV["RAILS_ENV"] ||= "development"
+abort "bin/dev is a local development launcher" unless ENV["RAILS_ENV"] == "development"
+DemoRuntime.dependencies!
+processes = DemoRuntime::Processes.new(File.join(DemoRuntime::ROOT, ".bicdb"), DemoRuntime.binary!,
+  port: ENV["BICDB_PORT"]&.to_i)
+trap("INT") { exit }
+trap("TERM") { exit }
+begin
+  processes.database
+  processes.rails("prepare", "db:prepare")
+  processes.rails("seed", "db:seed")
+  processes.start("jobs", RbConfig.ruby, "bin/jobs")
+  processes.start("web", RbConfig.ruby, "bin/rails", "server", "--binding", ENV.fetch("BINDING", "127.0.0.1"), "--port", ENV.fetch("PORT", "3000"))
+  puts "Team Board: http://127.0.0.1:#{ENV.fetch('PORT', '3000')}"
+  puts "Sign in: demo@example.test / demo-password-please-change"
+  puts "Logs: #{processes.directory}; Ctrl-C stops all demo processes."
+  processes.wait
+ensure
+  processes.close
+end

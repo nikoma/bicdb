@@ -1912,13 +1912,11 @@ pub(crate) fn schema_projected_field(field: FieldRef, schema: Option<&TableSchem
                 .unwrap_or(FieldRef::Column(column)),
             None => FieldRef::MetadataPath(path),
         },
-        FieldRef::Metadata
-            if schema
-                .column("metadata")
-                .is_some_and(|column| is_json_pg_type(&column.pg_type)) =>
-        {
-            FieldRef::JsonColumn("metadata".to_string())
-        }
+        FieldRef::Metadata => schema
+            .column("metadata")
+            .filter(|column| !column.hidden)
+            .map(schema_column_field_ref)
+            .unwrap_or(FieldRef::Metadata),
         FieldRef::Payload => match schema.column("payload") {
             Some(column) if is_json_pg_type(&column.pg_type) => {
                 FieldRef::JsonColumn(column.name.clone())
@@ -2528,7 +2526,11 @@ pub(crate) fn schema_column_field_ref(column: &ColumnSchema) -> FieldRef {
             array_delimiter: schema_column_array_delimiter(column),
         }
     } else if name.eq_ignore_ascii_case("metadata") {
-        FieldRef::Metadata
+        FieldRef::TypedColumn {
+            name: column.name.clone(),
+            pg_type: schema_column_projected_pg_type(column),
+            array_delimiter: schema_column_array_delimiter(column),
+        }
     } else if name.eq_ignore_ascii_case("timestamp") {
         FieldRef::Timestamp
     } else if name.eq_ignore_ascii_case("payload") {
@@ -2912,6 +2914,11 @@ pub(crate) fn table_function_expr_args(args: &TableFunctionArgs) -> Result<Vec<E
 pub(crate) fn is_generate_series_table_function(table: &str) -> bool {
     table.eq_ignore_ascii_case("generate_series")
         || table.eq_ignore_ascii_case("pg_catalog.generate_series")
+}
+
+pub(crate) fn is_generate_subscripts_table_function(table: &str) -> bool {
+    table.eq_ignore_ascii_case("generate_subscripts")
+        || table.eq_ignore_ascii_case("pg_catalog.generate_subscripts")
 }
 
 pub(crate) fn is_regexp_split_to_table_function(table: &str) -> bool {
@@ -4676,12 +4683,19 @@ pub(crate) fn parse_leading_sql_identifier(value: &str) -> Result<(String, &str)
         return Err(SqlError::InvalidSql("expected identifier".to_string()));
     }
     if let Some(rest) = value.strip_prefix('"') {
-        let Some(end) = rest.find('"') else {
-            return Err(SqlError::InvalidSql(
-                "unterminated quoted identifier".to_string(),
-            ));
-        };
-        return Ok((rest[..end].to_string(), &rest[end + 1..]));
+        let mut chars = rest.char_indices().peekable();
+        while let Some((end, ch)) = chars.next() {
+            if ch == '"' {
+                if chars.peek().is_some_and(|(_, next)| *next == '"') {
+                    chars.next();
+                    continue;
+                }
+                return Ok((rest[..end].replace("\"\"", "\""), &rest[end + 1..]));
+            }
+        }
+        return Err(SqlError::InvalidSql(
+            "unterminated quoted identifier".to_string(),
+        ));
     }
     let end = value
         .char_indices()

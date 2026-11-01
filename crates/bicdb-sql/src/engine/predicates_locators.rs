@@ -713,6 +713,14 @@ impl<'db> SqlEngine<'db> {
             if is_generate_series_table_function(&table) {
                 return self.generate_series_row_set(&table, table_alias, args, *with_ordinality);
             }
+            if is_generate_subscripts_table_function(&table) {
+                return self.generate_subscripts_row_set(
+                    &table,
+                    table_alias,
+                    args,
+                    *with_ordinality,
+                );
+            }
             if is_regexp_split_to_table_function(&table) || is_regexp_matches_table_function(&table)
             {
                 return self.regexp_split_to_table_row_set(
@@ -3800,6 +3808,56 @@ impl<'db> SqlEngine<'db> {
         })
     }
 
+    pub(crate) fn generate_subscripts_row_set(
+        &self,
+        table: &str,
+        table_alias: Option<&TableAlias>,
+        args: &TableFunctionArgs,
+        with_ordinality: bool,
+    ) -> Result<RowSet> {
+        let alias_name = table_alias
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| "generate_subscripts".to_string());
+        let mut source_columns = vec!["generate_subscripts".to_string()];
+        if with_ordinality {
+            source_columns.push("ordinality".to_string());
+        }
+        let source_columns =
+            table_function_source_columns_for_alias(table_alias, &alias_name, source_columns);
+        let columns = table_alias_columns(
+            table,
+            &alias_name,
+            table_alias
+                .map(|alias| alias.columns.as_slice())
+                .unwrap_or(&[]),
+            &source_columns,
+        )?;
+        let arguments = table_function_expr_args(args)?
+            .iter()
+            .map(|expr| self.eval_select_constant_expr(expr))
+            .collect::<Result<Vec<_>>>()?;
+        let values = array_projection_set_values(
+            ArrayProjectionSetReturningFunction::GenerateSubscripts,
+            arguments,
+        )?;
+        let mut rows = Vec::with_capacity(values.len());
+        for (index, value) in values.into_iter().enumerate() {
+            if index % 1024 == 0 {
+                self.check_cancellation()?;
+            }
+            let mut source = vec![value];
+            if with_ordinality {
+                source.push(SqlValue::Int(index as i64 + 1));
+            }
+            rows.push(slot_row_from_values(&columns, &source));
+        }
+        sql_profile_sql_rows_materialized(&rows);
+        Ok(RowSet {
+            rows,
+            columns: aliased_row_output_columns(&alias_name, &columns),
+        })
+    }
+
     pub(crate) fn regexp_split_to_table_row_set(
         &self,
         table: &str,
@@ -4324,17 +4382,30 @@ impl<'db> SqlEngine<'db> {
                 "UNNEST expects at least one array argument".to_string(),
             ));
         }
+        let function_name = if call.generate_subscripts {
+            "generate_subscripts"
+        } else {
+            "unnest"
+        };
         let alias = call.alias.as_ref();
         let alias_name = alias
             .map(|alias| alias.name.value.clone())
-            .unwrap_or_else(|| "unnest".to_string());
+            .unwrap_or_else(|| function_name.to_string());
         let source_columns = table_function_source_columns_for_alias(
             alias,
             &alias_name,
-            unnest_source_columns(call.args.len(), false, None, call.with_ordinality),
+            if call.generate_subscripts {
+                let mut columns = vec![function_name.to_string()];
+                if call.with_ordinality {
+                    columns.push("ordinality".to_string());
+                }
+                columns
+            } else {
+                unnest_source_columns(call.args.len(), false, None, call.with_ordinality)
+            },
         );
         let columns = table_alias_columns(
-            "unnest",
+            function_name,
             &alias_name,
             alias.map(|alias| alias.columns.as_slice()).unwrap_or(&[]),
             &source_columns,
@@ -4353,7 +4424,7 @@ impl<'db> SqlEngine<'db> {
             if left_idx % 128 == 0 {
                 self.check_cancellation()?;
             }
-            let mut value_sets = Vec::with_capacity(call.args.len());
+            let mut arguments = Vec::with_capacity(call.args.len());
             for (arg, bound) in call.args.iter().zip(&bound_args) {
                 let value = match bound {
                     Some(bound) => bound.eval(&BoundExprFrame {
@@ -4364,8 +4435,19 @@ impl<'db> SqlEngine<'db> {
                     })?,
                     None => self.eval_slot_row_value(left_row, &context, arg)?,
                 };
-                value_sets.push(unnest_values_from_sql(value)?);
+                arguments.push(value);
             }
+            let value_sets = if call.generate_subscripts {
+                vec![array_projection_set_values(
+                    ArrayProjectionSetReturningFunction::GenerateSubscripts,
+                    arguments,
+                )?]
+            } else {
+                arguments
+                    .into_iter()
+                    .map(unnest_values_from_sql)
+                    .collect::<Result<Vec<_>>>()?
+            };
             let count = value_sets.iter().map(Vec::len).max().unwrap_or_default();
             candidate_pairs = candidate_pairs.saturating_add(count);
             let mut matched_left = false;
@@ -4917,7 +4999,9 @@ impl<'db> SqlEngine<'db> {
                 )?;
                 return Ok(Some(aliased_row_output_columns(&alias_name, &columns)));
             }
-            if is_regexp_split_to_table_function(&table) || is_regexp_matches_table_function(&table)
+            if is_regexp_split_to_table_function(&table)
+                || is_regexp_matches_table_function(&table)
+                || is_generate_subscripts_table_function(&table)
             {
                 let mut source_columns = table_function_source_columns_for_alias(
                     table_alias,

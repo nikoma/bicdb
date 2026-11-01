@@ -42,6 +42,7 @@ Local report tree:
 
 | App | Source | Revision | Migration status | Current blocker |
 | --- | --- | --- | --- | --- |
+| [Team Board / Rails 8.1.4](rails-8.1.4/report.md) | in-repository runnable sample | this checkout | Fresh schema load, rollback/reapply and 19 Rails tests pass; concurrent Solid Queue, Solid Cache, Solid Cable and pending-job crash recovery verified | no blocker in the recorded campaign; sample scope is documented |
 | WalkNorth Carrier Chat | local read-only archive | `9aab20b` | 2,873-line schema applies; final and repeated apps/gallery smokes plus health, readiness, auth, hubs, and overlay write/read return HTTP 200 on `7e6d325` | no blocker in exercised routes; full PostgreSQL 18 JSON and unrestricted lateral parity are not claimed |
 | Mastodon | https://github.com/mastodon/mastodon | `1b82717b833a7b3d8b0f84653bf1628a8ade34c5` | passed `db:migrate` on benchmark-primary | App runtime smoke still needs Redis process; database compatibility blockers cleared through migration |
 | Odoo | https://github.com/odoo/odoo | `2d0219d5998d4ff996053fa6b61939f1542f1d1b` | pending | source cloned |

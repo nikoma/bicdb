@@ -715,7 +715,7 @@ impl<'db> SqlEngine<'db> {
         if let Some(result) = self.odoo_auto_install_dependency_query(select, query, from)? {
             return Ok(result);
         }
-        if let Some(result) = self.active_record_table_name_query(select, query, from)? {
+        if let Some(result) = self.catalog_relation_name_query(select, query, from)? {
             return Ok(result);
         }
         if let Some(result) = self.pg_dump_relation_inventory_query(select, query, from)? {
@@ -2122,6 +2122,41 @@ impl<'db> SqlEngine<'db> {
                 if matches!(lateral_unnest_call(factor), Ok(Some(_))) =>
             {
                 let call = lateral_unnest_call(factor).ok()??;
+                if call.generate_subscripts {
+                    let alias_name = call
+                        .alias
+                        .as_ref()
+                        .map(|alias| alias.name.value.clone())
+                        .unwrap_or_else(|| "generate_subscripts".to_string());
+                    let mut names = vec!["generate_subscripts".to_string()];
+                    if call.with_ordinality {
+                        names.push("ordinality".to_string());
+                    }
+                    let names = table_function_source_columns_for_alias(
+                        call.alias.as_ref(),
+                        &alias_name,
+                        names,
+                    );
+                    let columns = names
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, name)| {
+                            (name, Some(if i == 0 { "int4" } else { "int8" }.to_string()))
+                        })
+                        .collect();
+                    env.push(RelationColumns {
+                        alias: alias_name.to_ascii_lowercase(),
+                        row_type: None,
+                        columns: rename_relation_columns(
+                            columns,
+                            call.alias
+                                .as_ref()
+                                .map(|alias| alias.columns.as_slice())
+                                .unwrap_or(&[]),
+                        )?,
+                    });
+                    return Some(());
+                }
                 let (alias, array_exprs, with_ordinality) =
                     (&call.alias, call.args, &call.with_ordinality);
                 let alias_name = alias
@@ -3264,19 +3299,19 @@ impl<'db> SqlEngine<'db> {
         select_common_pg_type(self.db_ref(), &types, "CASE").ok()
     }
 
-    pub(crate) fn active_record_table_name_query(
+    pub(crate) fn catalog_relation_name_query(
         &self,
         select: &Select,
         query: &Query,
         from: &TableWithJoins,
     ) -> Result<Option<SqlResult>> {
-        let Some((class_alias, namespace_alias)) = active_record_table_name_aliases(from)? else {
+        let Some((class_alias, namespace_alias)) = catalog_relation_name_aliases(from)? else {
             return Ok(None);
         };
-        if !active_record_table_name_projection_matches(&select.projection, &class_alias) {
+        if !catalog_relation_name_projection_matches(&select.projection, &class_alias) {
             return Ok(None);
         }
-        if !active_record_table_name_order_by_matches(query.order_by.as_ref(), &class_alias) {
+        if !catalog_relation_name_order_by_matches(query.order_by.as_ref(), &class_alias) {
             return Ok(None);
         }
         if !pg_class_namespace_summary_selection_covered(
@@ -3304,7 +3339,7 @@ impl<'db> SqlEngine<'db> {
             "pg_namespace",
             &["nspname"],
         )?;
-        let mut rows = active_record_table_name_rows(
+        let mut rows = catalog_relation_name_rows(
             self.db_ref(),
             relnames.as_ref(),
             relkinds.as_ref(),

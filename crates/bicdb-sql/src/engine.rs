@@ -13,6 +13,7 @@ mod joins_windows;
 pub(crate) mod materialize;
 mod pg_catalog;
 mod predicates_locators;
+mod quantified_vectors;
 mod records_plan;
 mod row_eval;
 pub(crate) use row_eval::SubqueryMemo;
@@ -1238,6 +1239,7 @@ impl JsonSetReturningFunction {
 /// `t, unnest(t.a) AS r(x)`, `JOIN unnest(...) ON ...`).
 #[derive(Clone, Debug)]
 pub(crate) struct LateralUnnestCall {
+    pub(crate) generate_subscripts: bool,
     pub(crate) alias: Option<TableAlias>,
     pub(crate) args: Vec<Expr>,
     pub(crate) with_ordinality: bool,
@@ -1256,6 +1258,7 @@ pub(crate) fn lateral_unnest_call(relation: &TableFactor) -> Result<Option<Later
             with_ordinality,
             ..
         } => Ok(Some(LateralUnnestCall {
+            generate_subscripts: false,
             alias: alias.clone(),
             args: array_exprs.clone(),
             with_ordinality: *with_ordinality,
@@ -1267,6 +1270,7 @@ pub(crate) fn lateral_unnest_call(relation: &TableFactor) -> Result<Option<Later
             with_ordinality,
             ..
         } if is_unnest(&name.to_string()) => Ok(Some(LateralUnnestCall {
+            generate_subscripts: false,
             alias: alias.clone(),
             args: table_function_expr_args(args)?,
             with_ordinality: *with_ordinality,
@@ -1278,6 +1282,7 @@ pub(crate) fn lateral_unnest_call(relation: &TableFactor) -> Result<Option<Later
             alias,
             ..
         } if is_unnest(&name.to_string()) => Ok(Some(LateralUnnestCall {
+            generate_subscripts: false,
             alias: alias.clone(),
             args: positional_json_set_table_args(args)?,
             with_ordinality: *with_ordinality,
@@ -1292,6 +1297,7 @@ pub(crate) fn lateral_unnest_call(relation: &TableFactor) -> Result<Option<Later
             with_ordinality,
             ..
         } if is_regexp_split(&name.to_string()) => Ok(Some(LateralUnnestCall {
+            generate_subscripts: false,
             alias: alias.clone(),
             args: vec![crate::order_by_ordinal::function_call(
                 "regexp_split_to_array",
@@ -1306,6 +1312,7 @@ pub(crate) fn lateral_unnest_call(relation: &TableFactor) -> Result<Option<Later
             alias,
             ..
         } if is_regexp_split(&name.to_string()) => Ok(Some(LateralUnnestCall {
+            generate_subscripts: false,
             alias: alias.clone(),
             args: vec![crate::order_by_ordinal::function_call(
                 "regexp_split_to_array",
@@ -1313,6 +1320,34 @@ pub(crate) fn lateral_unnest_call(relation: &TableFactor) -> Result<Option<Later
             )],
             with_ordinality: *with_ordinality,
         })),
+        TableFactor::Table {
+            name,
+            alias,
+            args: Some(args),
+            with_ordinality,
+            ..
+        } if is_generate_subscripts_table_function(&name.to_string()) => {
+            Ok(Some(LateralUnnestCall {
+                generate_subscripts: true,
+                alias: alias.clone(),
+                args: table_function_expr_args(args)?,
+                with_ordinality: *with_ordinality,
+            }))
+        }
+        TableFactor::Function {
+            name,
+            args,
+            alias,
+            with_ordinality,
+            ..
+        } if is_generate_subscripts_table_function(&name.to_string()) => {
+            Ok(Some(LateralUnnestCall {
+                generate_subscripts: true,
+                alias: alias.clone(),
+                args: positional_json_set_table_args(args)?,
+                with_ordinality: *with_ordinality,
+            }))
+        }
         _ => Ok(None),
     }
 }
@@ -2487,6 +2522,18 @@ pub(crate) fn array_projection_set_values(
             unnest_values_from_sql(arguments.into_iter().next().unwrap_or(SqlValue::Null))
         }
         ArrayProjectionSetReturningFunction::GenerateSubscripts => {
+            if !(2..=3).contains(&arguments.len()) {
+                return Err(SqlError::InvalidSql(format!(
+                    "generate_subscripts expects two or three arguments, got {}",
+                    arguments.len()
+                )));
+            }
+            if arguments
+                .iter()
+                .any(|value| matches!(value, SqlValue::Null))
+            {
+                return Ok(Vec::new());
+            }
             let array = arguments.first().cloned().unwrap_or(SqlValue::Null);
             if matches!(array, SqlValue::Null) {
                 return Ok(Vec::new());
@@ -2504,7 +2551,16 @@ pub(crate) fn array_projection_set_values(
                 .flatten()
                 .unwrap_or(false);
             let (dimensions, lower_bounds) = match array {
-                SqlValue::Json(value) => (array_json_dimensions(&value), None),
+                value @ SqlValue::Json(_) => {
+                    let Some((array, bounds)) = array_json_parts(&value, "generate_subscripts")?
+                    else {
+                        return Ok(Vec::new());
+                    };
+                    (
+                        array_json_dimensions(array),
+                        Some(bounds.into_iter().map(i64::from).collect::<Vec<_>>()),
+                    )
+                }
                 SqlValue::String(value) => match parse_pg_array_value(&value) {
                     Ok(parsed) => (
                         array_json_dimensions(&parsed.value),
@@ -3712,20 +3768,6 @@ impl<'db> SqlEngine<'db> {
 
     pub(crate) fn execute_builtin(&self, sql: &str) -> Result<Option<SqlResult>> {
         let normalized = normalize_sql(sql);
-        if let Some(result) =
-            active_record_column_definitions_fast_path(self.db_ref(), &normalized)?
-        {
-            return Ok(Some(result));
-        }
-        if let Some(result) = active_record_primary_key_fast_path(self.db_ref(), &normalized)? {
-            return Ok(Some(result));
-        }
-        if let Some(result) = active_record_foreign_keys_fast_path(self.db_ref(), &normalized)? {
-            return Ok(Some(result));
-        }
-        if let Some(result) = active_record_index_invalid_fast_path(self.db_ref(), &normalized)? {
-            return Ok(Some(result));
-        }
         match normalized.as_str() {
             "select 1" => Ok(Some(SqlResult::new(
                 vec!["?column?".to_string()],
@@ -4130,6 +4172,9 @@ impl<'db> SqlEngine<'db> {
                 ));
             }
         };
+        if let Some(rewritten) = self.rewrite_quantified_vectors(query, select)? {
+            return self.execute_query(&rewritten);
+        }
         validate_window_functions(select, query)?;
         self.validate_money_aggregate_signatures(select, query)?;
         let has_windows = select_has_window_functions(select, query)?;

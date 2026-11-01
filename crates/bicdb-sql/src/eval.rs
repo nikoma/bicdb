@@ -992,7 +992,10 @@ pub(crate) fn eval_constant_truth(expr: &Expr) -> Result<Option<bool>> {
         } => eval_quantified_truth(
             eval_constant_expr(left)?,
             compare_op,
-            eval_constant_expr(right)?,
+            quantified_operand_value(
+                eval_constant_expr(right)?,
+                projected_expr_pg_type(right, None).as_deref(),
+            )?,
             false,
         ),
         Expr::AllOp {
@@ -1002,7 +1005,10 @@ pub(crate) fn eval_constant_truth(expr: &Expr) -> Result<Option<bool>> {
         } => eval_quantified_truth(
             eval_constant_expr(left)?,
             compare_op,
-            eval_constant_expr(right)?,
+            quantified_operand_value(
+                eval_constant_expr(right)?,
+                projected_expr_pg_type(right, None).as_deref(),
+            )?,
             true,
         ),
         Expr::IsNull(expr) => Ok(Some(value_is_null_predicate(&eval_constant_expr(expr)?))),

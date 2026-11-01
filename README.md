@@ -1,13 +1,103 @@
 # BicDB
 
-**Embed a database. Query it with PostgreSQL clients.**
+## One database. Not six services.
 
-BicDB is a Rust database with native search and durable local storage. Start
-with one local directory; use the same data through the PostgreSQL wire protocol.
+**Beta · Built in Rust · From embedded applications to distributed clusters**
+
+BicDB is a next-generation database for AI-native applications. SQL, durable
+cache, queues, full-text search, vectors, spatial queries, and analytics share
+one engine. Connect with PostgreSQL and Redis clients, embed it in an application,
+or run it as a server.
+
+Built for AI agents and developers who would rather build applications than
+operate a collection of databases, search services, and message brokers.
+
+**Source-available**, with commercial restrictions under the
+[BicDB License](LICENSE). See [license scope](#license).
 
 [Download 1.0.438-beta](https://github.com/nikoma/bicdb/releases/tag/v1.0.438-beta)
-· [Compatibility](POSTGRES_COMPATIBILITY.md) · [Documentation](#documentation)
-· [License](#license)
+· [Quickstart](#five-minute-quickstart) · [Compatibility](POSTGRES_COMPATIBILITY.md)
+· [Documentation](#documentation)
+
+## Less infrastructure between your idea and your application
+
+| Commonly separate service | BicDB capability |
+| --- | --- |
+| PostgreSQL | [SQL and transactions](TRANSACTIONS.md) |
+| Redis | [Durable cache with Redis clients](docs/redis-cache.md) |
+| Elasticsearch | [Native full-text search](#native-full-text-search) |
+| Pinecone / pgvector | [Vector search](VECTOR_INDEXES.md) |
+| RabbitMQ | [Durable queues and events](STREAM_BROKER.md) |
+| ClickHouse-style analytics | [Incremental OLAP cubes](docs/olap-cubes.md) |
+| PostGIS | [Spatial queries](docs/SPATIAL.md) |
+
+These are capability comparisons, not claims of complete compatibility or
+equivalent performance. PostgreSQL support has a
+[tested boundary](POSTGRES_COMPATIBILITY.md); broker protocol frontends are
+[separate integrations](#broker-integrations). Distributed production-scale
+[certification remains unfinished](docs/automatic-distributed-sharding-todo.md).
+
+## One application: SQL, search, vectors, and queues
+
+After [downloading the CLI](#1-download), run this example in a fresh `agent-demo`
+directory. A notes application stores its data, searches text, finds a nearby
+vector, and hands a job to a worker through the same database:
+
+```sh
+./bicdb sql ./agent-demo "
+  CREATE TABLE notes (id BIGINT PRIMARY KEY, body TEXT NOT NULL, embedding VECTOR(3));
+  INSERT INTO notes VALUES
+    (1, 'Search works offline', '[1,0,0]'),
+    (2, 'Ship fewer services', '[0,1,0]');
+  CREATE INDEX notes_search ON notes USING GIN (to_tsvector('english', body));
+"
+
+# Full-text search: returns note 1.
+./bicdb sql ./agent-demo --csv "
+  SELECT id, body FROM notes
+  WHERE to_tsvector('english', body) @@ plainto_tsquery('english', 'offline');
+"
+
+# Vector search: returns note 1 using exact cosine distance.
+./bicdb sql ./agent-demo --csv "
+  SELECT id FROM notes ORDER BY embedding <=> '[1,0,0]' LIMIT 1;
+"
+
+# Durable queue: publish a job, then deliver it to a worker in a new process.
+./bicdb sql ./agent-demo --json "
+  SELECT broker_publish('note_jobs', json_build_object('note_id', 1), NULL);
+"
+./bicdb sql ./agent-demo --json "
+  SELECT broker_consume('note_jobs', 'workers', 'worker-1', 1, 30000);
+"
+```
+
+Each command reopens the same local database. No additional server is needed.
+The queue delivery contains `payload: {"note_id": 1}`; a real worker acknowledges
+its message ID with `broker_ack` after completing the job. These queue calls take
+effect immediately; use [transactional publishing](STREAM_BROKER.md) when an
+event must follow a SQL commit. The three-dimensional vectors are fixtures;
+your application supplies real embeddings.
+
+## Built for applications developed and operated by AI agents
+
+Agent-first means concrete tools for building and operating an application:
+
+- **Structured diagnostics:** `bicdb doctor ./db --json` and
+  `bicdb check ./db --json` produce reports that automation can inspect
+  ([operations](docs/owners-guide.md)).
+- **Repeatable migrations:** ordered SQL files, checksums, dry runs, and
+  persisted migration status make schema changes reviewable
+  ([migration contracts](docs/schema-migrations.md)).
+- **Controlled permissions:** roles, row-level security, and declared application
+  capabilities define what an application or agent may access
+  ([security](docs/security.md), [application runtime](docs/stateful-application-platform.md)).
+- **Recovery evidence:** scheduled integrity and restore drills expose results
+  through SQL and metrics. The
+  [backup qualification campaign](docs/evidence/online-backup-qualification-2026-11-01/README.md)
+  also retains transaction intent, injected faults, and independent restore
+  checks that can be audited and replayed
+  ([continuous verification](docs/verification-and-workload-protection.md)).
 
 ## Five-minute quickstart
 
@@ -102,11 +192,6 @@ your hardware. The retained [full-text findings](docs/fts-real-corpus-findings.m
 describe the corpus, comparisons, and limits behind search performance claims.
 The [PostgreSQL compatibility report](POSTGRES_COMPATIBILITY.md) separates
 retained differential evidence from the current source version.
-
-**License: Apache 2.0 + three exceptions.** The combined [BicDB License](LICENSE)
-is source-available. Commercial applications and application SaaS are permitted;
-database-product sales, general-purpose database hosting, and console
-white-labeling require separate commercial authorization. See [scope](#license).
 
 ## More ways to use BicDB
 

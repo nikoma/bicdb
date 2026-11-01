@@ -1,6 +1,9 @@
-# Incremental OLAP: aggregate projections (and, eventually, cubes)
+# Incremental OLAP cubes and aggregate projections
 
-Status: design. No `CREATE CUBE` surface is exposed, deliberately — see §10.
+Current SQL surface: `CREATE CUBE`, `REFRESH CUBE`, `DROP CUBE`, and queries over
+`bicdb_projection.<name>` are implemented; see §12o for syntax and limits.
+Sections 1–10 preserve the original design, while later sections record the
+implementation milestones and their remaining boundaries.
 
 ## 1. Position
 

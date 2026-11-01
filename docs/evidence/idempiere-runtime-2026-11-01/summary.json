@@ -72,5 +72,19 @@
     "experimental_first_lock_wait": null
   },
   "core_db_source_sha256": "a82046305cdc98667806715c382ffed9017605374bb3e291c3690915f42817a1",
-  "scope": "Development routine execution and bounded concurrent ID allocation; not complete application or operational qualification"
+  "scope": "Development routine execution and bounded concurrent ID allocation; not complete application or operational qualification",
+  "authentication_lookup_comparison": {
+    "oracle_rows": 1,
+    "bicdb_rows": 1,
+    "matched": true,
+    "application_qualified": false
+  },
+  "language_scalar_metadata": {
+    "rows": 1,
+    "type_oid": 1043,
+    "scalar_string": true
+  },
+  "logical_binding_source_base": "4104f2e4210511e13da47f442b585857babe2481",
+  "oracle_frontend_source_sha256": "fa19dd3116ef36357b90c4a298c48616a432864501fea81b049ca22c40558220",
+  "type_inference_source_sha256": "d240bee15efcd1bdbd08379b45ecb24bd24e48aab528a5bd0746c0b9058154dc"
 }

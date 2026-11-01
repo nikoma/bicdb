@@ -2635,11 +2635,23 @@ impl<'db> SqlEngine<'db> {
             {
                 Some("name".to_string())
             }
-            Expr::Identifier(ident) => env
-                .iter()
-                .find(|relation| relation.alias.eq_ignore_ascii_case(&ident.value))
-                .and_then(|relation| relation.row_type.clone())
-                .or_else(|| env_lookup_unqualified(env, &ident.value)),
+            Expr::Identifier(ident) => {
+                // An ordinary column wins over a same-named whole-row alias.
+                // Keep metadata aligned with the row evaluator's lookup order,
+                // including columns whose type is unknown or ambiguous.
+                if env.iter().any(|relation| {
+                    relation
+                        .columns
+                        .iter()
+                        .any(|(name, _)| name.eq_ignore_ascii_case(&ident.value))
+                }) {
+                    env_lookup_unqualified(env, &ident.value)
+                } else {
+                    env.iter()
+                        .find(|relation| relation.alias.eq_ignore_ascii_case(&ident.value))
+                        .and_then(|relation| relation.row_type.clone())
+                }
+            }
             Expr::CompoundIdentifier(parts) => {
                 let column = parts.last()?.value.to_ascii_lowercase();
                 let qualifier = parts

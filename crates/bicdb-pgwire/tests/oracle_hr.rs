@@ -334,9 +334,9 @@ async fn oracle_preview_schema_selection_applies_to_simple_prepared_and_copy_que
     admin
         .batch_execute(
             "CREATE SCHEMA red; CREATE SCHEMA blue;
-        CREATE TABLE red.entries(k NUMBER PRIMARY KEY, value VARCHAR2(20));
-        CREATE TABLE blue.entries(k NUMBER PRIMARY KEY, value VARCHAR2(20));
-        INSERT INTO red.entries VALUES(1,'red'); INSERT INTO blue.entries VALUES(1,'blue')",
+        CREATE TABLE red.entries(k NUMBER PRIMARY KEY, value VARCHAR2(20), entries VARCHAR2(20));
+        CREATE TABLE blue.entries(k NUMBER PRIMARY KEY, value VARCHAR2(20), entries VARCHAR2(20));
+        INSERT INTO red.entries VALUES(1,'red','red'); INSERT INTO blue.entries VALUES(1,'blue','blue')",
         )
         .await
         .unwrap();
@@ -346,7 +346,7 @@ async fn oracle_preview_schema_selection_applies_to_simple_prepared_and_copy_que
         let (client, connection) = connect(path).await;
         let statement = client
             .prepare_typed(
-                "SELECT value FROM entries WHERE k=$1",
+                "SELECT entries.value FROM entries WHERE entries.k=$1",
                 &[tokio_postgres::types::Type::INT4],
             )
             .await
@@ -354,6 +354,14 @@ async fn oracle_preview_schema_selection_applies_to_simple_prepared_and_copy_que
         assert_eq!(
             client
                 .query_one(&statement, &[&1i32])
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            expected
+        );
+        assert_eq!(
+            client
+                .query_one("SELECT entries FROM entries WHERE k=1", &[])
                 .await
                 .unwrap()
                 .get::<_, String>(0),

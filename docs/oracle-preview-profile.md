@@ -50,6 +50,14 @@ prepared SQL retains the namespace resolved during Parse. Schema selection does
 not grant table privileges. The bounded HR profile retains its public-namespace
 contract; native PostgreSQL relation resolution is unchanged by this front end.
 
+An unaliased application table keeps its logical name as a visible alias when
+the storage relation is schema-qualified. This preserves `table.column` filters,
+projections, wildcard projections, joins and correlated outer references. An
+explicit SQL alias stays unchanged. UPDATE and DELETE predicates use the same
+logical binding; COPY retains its table-target binding.
+When an ordinary column and a row alias share a name, type inference prefers
+the scalar column, matching row evaluation and preserving driver scalar types.
+
 Oracle `FOR UPDATE OF column` resolves the owning base-table alias and lowers
 to the native table-lock target. Qualified columns in inner joins lock their
 owning table, rather than every joined table. Missing or ambiguous owners fail.

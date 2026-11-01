@@ -146,6 +146,33 @@ pub fn lower_session_sql(
             self.ctes.pop();
             ControlFlow::Continue(())
         }
+        fn pre_visit_table_factor(&mut self, table: &mut TableFactor) -> ControlFlow<()> {
+            if let TableFactor::Table {
+                name,
+                alias,
+                args: None,
+                ..
+            } = table
+            {
+                let parts = object_name_parts(name);
+                let is_cte =
+                    parts.len() == 1 && self.ctes.iter().rev().any(|ctes| ctes.contains(&parts[0]));
+                if alias.is_none() && !is_cte {
+                    if let Some(table) = parts.last() {
+                        // The storage relation is encoded for schema isolation.
+                        // Retain Oracle's visible table name for table.column
+                        // references, including correlated outer references.
+                        *alias = Some(TableAlias {
+                            explicit: true,
+                            name: Ident::with_quote('"', table),
+                            columns: Vec::new(),
+                            at: None,
+                        });
+                    }
+                }
+            }
+            ControlFlow::Continue(())
+        }
         fn pre_visit_relation(&mut self, name: &mut ObjectName) -> ControlFlow<()> {
             let parts = object_name_parts(name);
             if let [table] = parts.as_slice() {
@@ -1182,6 +1209,87 @@ fn lower_native(sql: &str, preview: bool) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preview_table_qualifiers_survive_schema_binding_in_filters_and_correlations() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        for source in [
+            "CREATE SCHEMA app_data",
+            "CREATE TABLE app_data.accounts(k NUMBER PRIMARY KEY, client_k NUMBER, active CHAR(1))",
+            "CREATE TABLE app_data.clients(k NUMBER PRIMARY KEY, active CHAR(1))",
+            "CREATE TABLE app_data.language_rows(language_rows VARCHAR2(20))",
+            "INSERT INTO app_data.accounts VALUES(1,10,'Y'),(2,20,'Y')",
+            "INSERT INTO app_data.clients VALUES(10,'Y'),(20,'N')",
+            "INSERT INTO app_data.language_rows VALUES('en_US')",
+        ] {
+            let lowered = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            SqlSession::new(&mut db).execute(&lowered).unwrap();
+        }
+        for source in [
+            "SELECT accounts.k FROM accounts WHERE accounts.active='Y' AND EXISTS(SELECT 1 FROM clients WHERE clients.k=accounts.client_k AND clients.active='Y')",
+            "SELECT accounts.k FROM accounts JOIN clients ON clients.k=accounts.client_k WHERE clients.active='Y'",
+            "SELECT a.k FROM accounts a WHERE a.active='Y' AND EXISTS(SELECT 1 FROM clients c WHERE c.k=a.client_k AND c.active='Y')",
+        ] {
+            let lowered = lower_session_sql(&db, source, ORACLE_PREVIEW_PROFILE, Some("app_data"), "bicdb").unwrap();
+            let result = SqlSession::new(&mut db).execute(&lowered).unwrap();
+            assert_eq!(result.rows.len(), 1, "{source}");
+            assert_eq!(result.rows[0][0].to_cell(), "1");
+        }
+        let lowered = lower_session_sql(
+            &db,
+            "SELECT accounts.* FROM accounts WHERE accounts.k=1",
+            ORACLE_PREVIEW_PROFILE,
+            Some("app_data"),
+            "bicdb",
+        )
+        .unwrap();
+        let result = SqlSession::new(&mut db).execute(&lowered).unwrap();
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(result.columns.len(), 3);
+        for source in [
+            "UPDATE accounts SET active='N' WHERE accounts.k=1",
+            "DELETE FROM accounts WHERE accounts.k=2",
+        ] {
+            let lowered = lower_session_sql(
+                &db,
+                source,
+                ORACLE_PREVIEW_PROFILE,
+                Some("app_data"),
+                "bicdb",
+            )
+            .unwrap();
+            SqlSession::new(&mut db).execute(&lowered).unwrap();
+        }
+        let lowered = lower_session_sql(
+            &db,
+            "SELECT accounts.k FROM accounts WHERE accounts.active='N'",
+            ORACLE_PREVIEW_PROFILE,
+            Some("app_data"),
+            "bicdb",
+        )
+        .unwrap();
+        let result = SqlSession::new(&mut db).execute(&lowered).unwrap();
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(result.rows[0][0].to_cell(), "1");
+        let lowered = lower_session_sql(
+            &db,
+            "SELECT language_rows FROM language_rows",
+            ORACLE_PREVIEW_PROFILE,
+            Some("app_data"),
+            "bicdb",
+        )
+        .unwrap();
+        let result = SqlSession::new(&mut db).execute(&lowered).unwrap();
+        assert_eq!(result.column_types, vec![Some("varchar".into())]);
+        assert_eq!(result.rows[0][0].to_cell(), "en_US");
+        let mut native = SqlSession::new(&mut db);
+        native.execute("CREATE TABLE word_list(word_list varchar(20)); INSERT INTO word_list VALUES('value')").unwrap();
+        let result = native
+            .execute("SELECT word_list FROM word_list AS word_list")
+            .unwrap();
+        assert_eq!(result.column_types, vec![Some("varchar".into())]);
+        assert_eq!(result.rows[0][0].to_cell(), "value");
+    }
     #[test]
     fn preview_stored_functions_lower_returns_and_local_declarations() {
         let root = tempfile::tempdir().unwrap();

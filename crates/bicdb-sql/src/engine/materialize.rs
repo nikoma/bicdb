@@ -1902,11 +1902,33 @@ impl<'db> SqlEngine<'db> {
         if let Ok(Some(rewritten)) = rewrite_row_type_constructs(self.db_ref(), query) {
             return self.query_output_columns(&rewritten);
         }
-        if query.with.is_some() {
-            // A subquery that introduces its own CTEs is not materialized at type
-            // resolution time; bail to the value-independent fallback rather than
-            // risk a wrong type. (Rare in practice.)
-            return None;
+        if let Some(with) = &query.with {
+            // Describe CTEs from their projections, never their values: a CTE
+            // can call volatile functions or read rows locked by another client.
+            // Recursive CTEs need a separate fixed-point type resolver.
+            if with.recursive {
+                return None;
+            }
+            let mut engine = self
+                .inherit_transaction(SqlEngine::with_ctes_and_context(
+                    self.db_ref(),
+                    self.settings,
+                    self.ctes.clone(),
+                    self.security_context.clone(),
+                    self.session_gucs.clone(),
+                ))
+                .with_shared_routine_vars(self.routine_vars.clone());
+            for cte in &with.cte_tables {
+                let columns = engine.query_output_columns(&cte.query)?;
+                let columns = rename_relation_columns(columns, &cte.alias.columns)?;
+                let (names, types) = columns.into_iter().unzip();
+                let name = cte.alias.name.value.clone();
+                engine.ctes.insert(
+                    cte_key(&name),
+                    CteResult::new(name, names, Vec::new()).with_column_types(types),
+                );
+            }
+            return engine.set_expr_output_columns(query.body.as_ref());
         }
         self.set_expr_output_columns(query.body.as_ref())
     }
@@ -3037,7 +3059,7 @@ impl<'db> SqlEngine<'db> {
             "similarity" => Some("float4".to_string()),
             "age" | "make_interval" => Some("interval".to_string()),
             "to_date" => Some("date".to_string()),
-            "bicdb_oracle_to_date" => Some("timestamp".to_string()),
+            "bicdb_oracle_to_date" | "bicdb_oracle_trunc_date" => Some("timestamp".to_string()),
             "regexp_match" | "regexp_split_to_array" => Some("text[]".to_string()),
             "substr" | "substring" => match self.infer_env_expr_type(args.first()?, env).as_deref()
             {

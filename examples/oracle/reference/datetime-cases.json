@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "cases": [
+    {
+      "id": "trunc_datetime_default",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_dd",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'DD'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_ddd",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'DDD'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_j",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'J'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_mm",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'MM'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_month",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'MONTH'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_q",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'Q'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_yyyy",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'YYYY'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_year",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'YEAR'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_iw",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'IW'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_hh24",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'HH24'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_mi",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'MI'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_datetime_cc",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2024-02-29 23:59:58.123456', 'CC'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    },
+    {
+      "id": "trunc_iso_week_year_boundary",
+      "sql": "SELECT TO_CHAR(TRUNC(TIMESTAMP '2021-01-01 13:14:15','IW'), 'YYYY-MM-DD HH24:MI:SS') FROM DUAL"
+    }
+  ]
+}

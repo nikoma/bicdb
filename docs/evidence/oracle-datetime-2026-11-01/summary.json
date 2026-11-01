@@ -1,0 +1,268 @@
+{
+  "format": 1,
+  "created_at": "2026-11-01T15:34:51.547545+00:00",
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "oracle_driver_version": "26.1.0",
+  "pg_driver_version": "3.3.6",
+  "fixture_sha256": "94874bec1a6d84efaa13d17cc4f09b1f3fd1bcffc0e0a66334b52bca7c563f35",
+  "total": 14,
+  "matched": 14,
+  "different": 0,
+  "cases": [
+    {
+      "id": "trunc_datetime_default",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-02-29 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-02-29 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_dd",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-02-29 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-02-29 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_ddd",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-02-29 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-02-29 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_j",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-02-29 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-02-29 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_mm",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-02-01 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-02-01 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_month",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-02-01 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-02-01 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_q",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-01-01 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-01-01 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_yyyy",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-01-01 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-01-01 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_year",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-01-01 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-01-01 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_iw",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-02-26 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-02-26 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_hh24",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-02-29 23:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-02-29 23:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_mi",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2024-02-29 23:59:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2024-02-29 23:59:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_datetime_cc",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2001-01-01 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2001-01-01 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "trunc_iso_week_year_boundary",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2020-12-28 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2020-12-28 00:00:00"
+          ]
+        ]
+      }
+    }
+  ],
+  "scope": "Query values only; not type metadata, errors, transactions, or full conformance",
+  "application_qualified": false
+}

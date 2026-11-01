@@ -5,6 +5,7 @@ use crate::*;
 use sqlparser::{dialect::OracleDialect, keywords::Keyword};
 
 pub mod assessment;
+mod date_trunc;
 
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
 pub const ORACLE_PREVIEW_PROFILE: &str = "oracle-preview-v1";
@@ -65,12 +66,33 @@ pub fn lower_profile_sql(db: &BicDb, sql: &str, profile: &str) -> Result<String>
             "Oracle front end requires an Oracle SQL profile",
         ));
     }
-    lower_oracle_sql(db, sql, profile == ORACLE_PREVIEW_PROFILE).map_err(|error| match error {
-        SqlError::Unsupported(message) if profile == ORACLE_PREVIEW_PROFILE => {
-            SqlError::Unsupported(message.replacen(ORACLE_HR_PROFILE, profile, 1))
-        }
-        other => other,
-    })
+    let lowered = lower_oracle_sql(db, sql, profile == ORACLE_PREVIEW_PROFILE).map_err(
+        |error| match error {
+            SqlError::Unsupported(message) if profile == ORACLE_PREVIEW_PROFILE => {
+                SqlError::Unsupported(message.replacen(ORACLE_HR_PROFILE, profile, 1))
+            }
+            other => other,
+        },
+    )?;
+    if profile == ORACLE_PREVIEW_PROFILE {
+        date_trunc::lower(db, &lowered, &[])
+    } else {
+        Ok(lowered)
+    }
+}
+
+/// Resolve datetime overloads using explicit PostgreSQL Parse parameter OIDs.
+pub fn lower_typed_native_sql(
+    db: &BicDb,
+    sql: &str,
+    profile: &str,
+    oids: &[i32],
+) -> Result<String> {
+    if profile == ORACLE_PREVIEW_PROFILE {
+        date_trunc::lower(db, sql, oids)
+    } else {
+        Ok(sql.to_string())
+    }
 }
 
 /// Resolve preview application relations in one explicitly selected schema.
@@ -147,6 +169,7 @@ pub fn lower_session_sql(
             ctes: Vec::new(),
         },
     );
+    date_trunc::rewrite(db, &mut statements)?;
     struct Locks<'a>(&'a BicDb);
     impl sqlparser::ast::VisitorMut for Locks<'_> {
         type Break = SqlError;
@@ -1072,6 +1095,65 @@ fn lower_native(sql: &str, preview: bool) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preview_datetime_trunc_uses_column_types_and_keeps_postgres_trunc_numeric() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        for source in [
+            "CREATE SCHEMA calendar",
+            "CREATE TABLE calendar.events(k NUMBER PRIMARY KEY, happened DATE)",
+            "INSERT INTO calendar.events VALUES(1,TIMESTAMP '2024-02-29 23:59:58')",
+        ] {
+            let sql = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            SqlSession::new(&mut db).execute(&sql).unwrap();
+        }
+        for source in [
+            "SELECT TRUNC(happened,'MM') FROM events",
+            "WITH days AS (SELECT TRUNC(happened) AS d FROM events) SELECT TRUNC(d,'MM') FROM days",
+        ] {
+            let sql = lower_session_sql(
+                &db,
+                source,
+                ORACLE_PREVIEW_PROFILE,
+                Some("calendar"),
+                "bicdb",
+            )
+            .unwrap();
+            let result = SqlSession::new(&mut db).execute(&sql).unwrap();
+            assert_eq!(result.column_types, vec![Some("timestamp".into())]);
+            assert_eq!(result.rows[0][0].to_cell(), "2024-02-01 00:00:00");
+        }
+        let update = lower_session_sql(
+            &db,
+            "UPDATE events SET happened=TRUNC(happened)",
+            ORACLE_PREVIEW_PROFILE,
+            Some("calendar"),
+            "bicdb",
+        )
+        .unwrap();
+        SqlSession::new(&mut db).execute(&update).unwrap();
+        let result = SqlSession::new(&mut db)
+            .execute("SELECT \"HAPPENED\" FROM \"CALENDAR\".\"EVENTS\"")
+            .unwrap();
+        assert_eq!(result.rows[0][0].to_cell(), "2024-02-29 00:00:00");
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute("SELECT trunc(123.75)")
+                .unwrap()
+                .rows[0][0],
+            SqlValue::Float(123.0)
+        );
+        assert!(SqlSession::new(&mut db)
+            .execute("SELECT trunc(TIMESTAMP '2024-02-29 23:59:58')")
+            .is_err());
+        let invalid = lower_profile_sql(
+            &db,
+            "SELECT TRUNC(TIMESTAMP '2024-02-29 23:59:58',NULL,NULL) FROM DUAL",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        assert!(SqlSession::new(&mut db).execute(&invalid).is_err());
+    }
     #[test]
     fn preview_session_schema_resolves_tables_and_preserves_cte_and_quoted_names() {
         let root = tempfile::tempdir().unwrap();

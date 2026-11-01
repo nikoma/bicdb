@@ -60,6 +60,25 @@ conformance are not claimed. INSERT, UPDATE and COPY column names also retain
 Oracle folding when a column is named with an otherwise syntactic word such as
 VALUE.
 
+## Datetime truncation
+
+The preview resolves `TRUNC` on known date/timestamp expressions to an Oracle
+datetime helper returning native `timestamp` (the mapping for Oracle DATE).
+Resolution uses metadata, including ordinary CTE projections, without executing
+queries. Explicit PostgreSQL Parse parameter OIDs for date and timestamp also
+select this overload. Numeric `trunc` and the default PostgreSQL profile retain
+their existing behavior. Unspecified or text parameter types are not guessed to
+be datetime values.
+
+Supported format groups are day (`DD`, `DDD`, `J`, and the omitted default),
+month (`MM`, `MON`, `MONTH`, `RM`), year (`YYYY`, `YYY`, `YY`, `Y`, `YEAR`,
+`SYEAR`, `SYYYY`), quarter (`Q`), ISO week (`IW`), hour (`HH`, `HH12`, `HH24`),
+minute (`MI`) and century (`CC`, `SCC`). Other formats fail explicitly. This
+does not establish NLS-dependent week rules, timezone overloads, general Oracle
+implicit conversions, or datetime truncation of untyped PL/SQL variables.
+The [reference evidence](evidence/oracle-datetime-2026-11-01/README.md) records
+14 query-value comparisons against an installed Oracle reference.
+
 Oracle LOB APIs, full LAX JSON rules, character padding/encoding equivalence,
 Oracle catalogs, PL/SQL packages, autonomous transactions, Oracle transaction
 semantics and general application compatibility are not established by these

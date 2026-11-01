@@ -260,11 +260,15 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "date_bin"
             | "to_date"
             | "bicdb_oracle_to_date"
+            | "bicdb_oracle_trunc_date"
             | "timezone"
             | "similarity"
     );
     if !known {
         return Ok(None);
+    }
+    if name == "bicdb_oracle_trunc_date" {
+        arity(name, args, 1..=2)?;
     }
     // make_interval and age(ts) accept missing/NULL-free forms; everything else is strict.
     if name != "make_interval" && any_null(args) {
@@ -509,6 +513,41 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         "bicdb_oracle_to_date" => {
             arity(name, args, 2..=2)?;
             eval_to_timestamp(args)?
+        }
+        "bicdb_oracle_trunc_date" => {
+            let format = args
+                .get(1)
+                .map(SqlValue::to_cell)
+                .unwrap_or_else(|| "DD".into())
+                .to_ascii_uppercase();
+            let field = match format.as_str() {
+                "DD" | "DDD" | "J" => "day",
+                "MM" | "MON" | "MONTH" | "RM" => "month",
+                "YYYY" | "YYY" | "YY" | "Y" | "YEAR" | "SYEAR" | "SYYYY" => "year",
+                "Q" => "quarter",
+                "IW" => "week",
+                "HH" | "HH12" | "HH24" => "hour",
+                "MI" => "minute",
+                "CC" | "SCC" => "century",
+                _ => {
+                    return Err(SqlError::Unsupported(format!(
+                        "Oracle datetime TRUNC format {format} is not implemented"
+                    )))
+                }
+            };
+            let source = PgTimestamp::from_postgres_text(&text(0), false)
+                .map_err(|error| postgres_timestamp_input_error(&text(0), error))?;
+            if source.finite_micros().is_none() {
+                return Err(SqlError::invalid_parameter_value(
+                    "Oracle datetime TRUNC requires a finite datetime",
+                ));
+            }
+            SqlValue::String(
+                source
+                    .truncate(field)
+                    .map_err(|error| postgres_timestamp_input_error(&text(0), error))?
+                    .to_iso_text(false),
+            )
         }
         "to_date" => {
             arity(name, args, 2..=2)?;

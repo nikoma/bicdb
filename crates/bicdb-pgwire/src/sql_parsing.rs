@@ -2129,7 +2129,7 @@ pub(crate) fn parse_message(
     let mut idx = 0;
     let name = read_cstr(payload, &mut idx)?;
     let sql = read_cstr(payload, &mut idx)?;
-    let sql = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+    let mut sql = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
         let db = server.read_db()?;
         bicdb_sql::oracle::lower_session_sql(
             &db,
@@ -2151,6 +2151,12 @@ pub(crate) fn parse_message(
         param_type_oids.push(read_i32(payload, &mut idx)?);
     }
     let db = server.read_db()?;
+    sql = bicdb_sql::oracle::lower_typed_native_sql(
+        &db,
+        &sql,
+        &server.config.sql_profile,
+        &param_type_oids,
+    )?;
     // Parameters of a SUBSCRIBE belong to the query it wraps.
     let typed_sql = live_queries::parse_subscribe(&sql)
         .map(|subscribe| subscribe.query)

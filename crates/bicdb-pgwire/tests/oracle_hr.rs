@@ -58,6 +58,56 @@ impl Running {
 }
 
 #[tokio::test]
+async fn oracle_datetime_trunc_preserves_prepared_timestamp_metadata() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let (client, connection) = tokio_postgres::Config::new()
+        .host("127.0.0.1")
+        .port(server.port)
+        .user("bicdb")
+        .dbname("bicdb")
+        .options("-c bicdb.sql_profile=oracle-preview-v1")
+        .connect(tokio_postgres::NoTls)
+        .await
+        .unwrap();
+    let connection = tokio::spawn(async move {
+        connection.await.unwrap();
+    });
+    let statement = client
+        .prepare_typed(
+            "SELECT TRUNC($1,$2)",
+            &[
+                tokio_postgres::types::Type::TIMESTAMP,
+                tokio_postgres::types::Type::TEXT,
+            ],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        *statement.columns()[0].type_(),
+        tokio_postgres::types::Type::TIMESTAMP
+    );
+    let input = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1709251198);
+    let expected = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1706745600);
+    assert_eq!(
+        client
+            .query_one(&statement, &[&input, &"MM"])
+            .await
+            .unwrap()
+            .get::<_, std::time::SystemTime>(0),
+        expected
+    );
+    assert!(client
+        .query_one(&statement, &[&input, &Option::<String>::None])
+        .await
+        .unwrap()
+        .get::<_, Option<std::time::SystemTime>>(0)
+        .is_none());
+    drop(client);
+    connection.await.unwrap();
+}
+
+#[tokio::test]
 async fn oracle_column_lock_targets_the_owning_join_alias() {
     let directory = tempfile::tempdir().unwrap();
     let server = Running::with_profile(directory.path(), "oracle-preview-v1");

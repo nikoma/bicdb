@@ -83,6 +83,8 @@ def main():
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN',
                         help='environment variable containing the BicDB PostgreSQL DSN')
     parser.add_argument('--cases', type=Path, default=ROOT / 'cases.json')
+    parser.add_argument('--profile', choices=('oracle-hr-v1', 'oracle-preview-v1'),
+                        default='oracle-hr-v1', help='explicit target database SQL profile')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     import oracledb
@@ -98,10 +100,10 @@ def main():
                           service_name=config['service_name']) as oracle:
         oracle.call_timeout = 10000
         with psycopg.connect(os.environ[args.pg_dsn_env], autocommit=True,
-                             options='-c bicdb.sql_profile=oracle-hr-v1',
+                             options=f'-c bicdb.sql_profile={args.profile}',
                              connect_timeout=10) as bicdb:
             profile = bicdb.info.parameter_status('bicdb_sql_profile')
-            if profile != 'oracle-hr-v1':
+            if profile != args.profile:
                 raise RuntimeError('server did not confirm the requested SQL profile')
             results = compare_cases(oracle, bicdb, fixture['cases'])
             matched = sum(result['matched'] for result in results)

@@ -1,0 +1,32 @@
+{
+  "recorded_at_utc": "2026-11-01T04:50:16.705440+00:00",
+  "result": "passed",
+  "profile": "default Cargo release with thin LTO",
+  "runtime_source_commit": "a6fc1c31e2cf2b4cc19ef34bf5958a445fc16dcb",
+  "qualification_source_commit": "a8fb422dcf275135c7b91fe283aaa65082eefcf0",
+  "raw_artifacts": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification",
+  "transcript_outcomes": {
+    "acknowledged": 19007,
+    "aborted": 34654,
+    "resolved_committed": 2,
+    "resolved_aborted": 2
+  },
+  "referenced_objects_each_tested_with_four_mutations": 20,
+  "payload_fixture_sha256": "c51af1a917a5ee9cbdc3fdce4685510dc58010967c8f29ac7f3b73a10326899f",
+  "payload_fixture": "SHAKE256(UTF8(payload:<id>)).hexdigest(seed_bytes//2)",
+  "file_sha256": {
+    "README.md": "24f98ebca644cc5203df2e58cf2cdc6d97097fa60ff02475d0a4aa1f27033adc",
+    "ci-summary.json": "a2602d99b3991bcd66a50b10ee9e24baccc966d95516234e9d7a3fb3cce980a9",
+    "ci.json": "bf122a9df558f2d575d47be2ff1a5befbc918a8785da8be7a736e56bebfed70b",
+    "evidence-replay.json": "f1752854ab2d495d02724119ebea141130c6559c03fc70904aeae184f0429db9",
+    "fault-trace.txt": "c7ada6b17e02744be939cea937137588f6adaf7f8d53c0af16c441e001268c80",
+    "oracle-tests.txt": "cecbc97ed3632d2c86184592754eeb1f8d77f39d2cb64868052f59e6a110f593",
+    "release-build.json": "f8586140548099abda64ecd258c1bf685456da01dd981b5eae1264f2f0f30302",
+    "release-report.json": "f0220156a115d17823c756a70283fcb89ffecbf518443e1dd6833ca8ccb9d0ec",
+    "replay_evidence.py": "7c8aea4b9fcb544d5570b0559044423b8d3cb854eb167128c0bfcf1193ced91a",
+    "transaction-intents.jsonl.gz": "424f6c5ddc659129ebcd55ddb489f34091e6ba6ad0a90042f2c39f9deca27069"
+  },
+  "scope": "Eight clients, 30-minute workload, Linux process crashes and injected libc I/O errors, all referenced backup objects corrupted; no hardware power-cut or WAN qualification.",
+  "source_ci_run": "https://github.com/nikoma/bicdb/actions/runs/41271849946",
+  "source_ci_head": "a8fb422dcf275135c7b91fe283aaa65082eefcf0"
+}

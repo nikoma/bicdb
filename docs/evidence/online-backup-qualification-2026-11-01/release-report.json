@@ -1,0 +1,4831 @@
+{
+  "passed": true,
+  "binary": "/root/bicdb-audit-artifacts/online-backups/a6fc1c3-release/bicdb",
+  "binary_sha256": "d96836c9f92a47d96eea335f206c24adf83a49bea852585b8070275ccac4ddbb",
+  "harness_sha256": "d6d30b61cd3edf45b853695a78d2fa1aa7533a7e720a980bce4229d89334b552",
+  "fault_helper_sha256": "064c33f4ff165a924716586ac2f69b85004f66664e7c34822b59d450a747e73f",
+  "parameters": {
+    "binary": "/root/bicdb-audit-artifacts/online-backups/a6fc1c3-release/bicdb",
+    "work_dir": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification",
+    "duration": 1800.0,
+    "writers": 8,
+    "interval": 40,
+    "writer_pause": 0.03,
+    "copy_rate": 4194304,
+    "seed_rows": 1024,
+    "seed_bytes": 8192,
+    "minimum_backups": 10,
+    "corrupt_objects": 1000
+  },
+  "backups": [
+    {
+      "name": "load-000",
+      "parent": null,
+      "id": "143bc6ad-6ffc-45c9-8a13-9f22d4032e65",
+      "lower_heads": {},
+      "upper_heads": {
+        "0": 2,
+        "1": 1,
+        "2": 1,
+        "3": 1,
+        "4": 1,
+        "5": 1,
+        "6": 1,
+        "7": 1
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "c00b3f86-07d7-4f45-9473-fffe485d7c1c",
+          "full": true,
+          "files_total": 19,
+          "files_included": 19,
+          "plaintext_bytes": 49342930,
+          "encrypted_bytes": 9388970,
+          "manifest_hash": "2d2c4770335084c413e4bf0118563d7f7850edf019fcad357e7c2b34afe1d0ef",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-000.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 183,
+        "captured_at": 1793506447,
+        "wal_lsn": 2997,
+        "coordination_millis": 154,
+        "source_bytes_read": 49342930,
+        "uploaded_bytes": 9388970,
+        "reused_bytes": 0,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 155,
+      "acknowledged_after_copy_observed": 153
+    },
+    {
+      "name": "load-001",
+      "parent": "load-000",
+      "id": "bc4e9f69-656e-4ec2-9b70-8c80fb7213f7",
+      "lower_heads": {
+        "0": 213,
+        "1": 214,
+        "2": 218,
+        "3": 217,
+        "4": 217,
+        "5": 208,
+        "6": 211,
+        "7": 214
+      },
+      "upper_heads": {
+        "0": 215,
+        "1": 221,
+        "2": 219,
+        "3": 218,
+        "4": 219,
+        "5": 217,
+        "6": 215,
+        "7": 217
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "4f8ef411-26b4-4e01-a16f-283534004d0b",
+          "full": false,
+          "files_total": 20,
+          "files_included": 20,
+          "plaintext_bytes": 116363474,
+          "encrypted_bytes": 13701180,
+          "manifest_hash": "fbc04ab468b6f79adde085b7a88191e8d7715f490773186392f9c54490097eab",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-001.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 758,
+        "captured_at": 1793506487,
+        "wal_lsn": 11432,
+        "coordination_millis": 55,
+        "source_bytes_read": 116363474,
+        "uploaded_bytes": 13701180,
+        "reused_bytes": 10172,
+        "page_before_image_bytes": 17940480,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 357,
+      "acknowledged_after_copy_observed": 355
+    },
+    {
+      "name": "load-002",
+      "parent": null,
+      "id": "b2ff079a-d2cc-4bca-816c-e500b57fdf78",
+      "lower_heads": {
+        "0": 409,
+        "1": 411,
+        "2": 412,
+        "3": 417,
+        "4": 413,
+        "5": 409,
+        "6": 401,
+        "7": 409
+      },
+      "upper_heads": {
+        "0": 412,
+        "1": 416,
+        "2": 413,
+        "3": 418,
+        "4": 416,
+        "5": 411,
+        "6": 406,
+        "7": 413
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "8365cc4c-89ef-40f0-bc82-4e04daeceae9",
+          "full": true,
+          "files_total": 23,
+          "files_included": 23,
+          "plaintext_bytes": 185117346,
+          "encrypted_bytes": 18043526,
+          "manifest_hash": "f336916a82b81e60249a12ff184866bcacc5d532f21e0cc7df16c20cd6a1af5f",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-002.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 1265,
+        "captured_at": 1793506527,
+        "wal_lsn": 20033,
+        "coordination_millis": 17,
+        "source_bytes_read": 185117346,
+        "uploaded_bytes": 18043526,
+        "reused_bytes": 67116580,
+        "page_before_image_bytes": 958464,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 540,
+      "acknowledged_after_copy_observed": 539
+    },
+    {
+      "name": "load-003",
+      "parent": "load-002",
+      "id": "83ec7133-8c12-48b9-a6ad-e1a107741602",
+      "lower_heads": {
+        "0": 617,
+        "1": 625,
+        "2": 622,
+        "3": 628,
+        "4": 623,
+        "5": 613,
+        "6": 610,
+        "7": 623
+      },
+      "upper_heads": {
+        "0": 621,
+        "1": 626,
+        "2": 624,
+        "3": 631,
+        "4": 625,
+        "5": 623,
+        "6": 614,
+        "7": 625
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "22a8cb10-46a4-494c-a364-655b24edd724",
+          "full": false,
+          "files_total": 24,
+          "files_included": 24,
+          "plaintext_bytes": 259886226,
+          "encrypted_bytes": 19565387,
+          "manifest_hash": "dffcd0e4c3946ae85c61c2f74bf494c2773e1d1b72320c4c4a18772c2192a8ad",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-003.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 1806,
+        "captured_at": 1793506572,
+        "wal_lsn": 29384,
+        "coordination_millis": 12,
+        "source_bytes_read": 259886226,
+        "uploaded_bytes": 19565387,
+        "reused_bytes": 134219973,
+        "page_before_image_bytes": 1073152,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 760,
+      "acknowledged_after_copy_observed": 758
+    },
+    {
+      "name": "load-004",
+      "parent": null,
+      "id": "77e99706-b878-432d-804d-771969b5c050",
+      "lower_heads": {
+        "0": 923,
+        "1": 926,
+        "2": 926,
+        "3": 931,
+        "4": 928,
+        "5": 923,
+        "6": 911,
+        "7": 932
+      },
+      "upper_heads": {
+        "0": 925,
+        "1": 929,
+        "2": 927,
+        "3": 936,
+        "4": 933,
+        "5": 927,
+        "6": 916,
+        "7": 934
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "ed17cdef-1551-4364-85a8-ba09f5e1b762",
+          "full": true,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 47816485,
+          "encrypted_bytes": 12103693,
+          "manifest_hash": "80dba8ab3c6a844ba9d591da440e8b157bd1a75b71799feab2dd9b40d1994fca",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-004.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 2566,
+        "captured_at": 1793506634,
+        "wal_lsn": 42409,
+        "coordination_millis": 28,
+        "source_bytes_read": 47816485,
+        "uploaded_bytes": 12103693,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 1114112,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 131,
+      "acknowledged_after_copy_observed": 129
+    },
+    {
+      "name": "load-005",
+      "parent": "load-004",
+      "id": "b03ec4e8-1b47-4b01-9ec1-ad7aca2adddd",
+      "lower_heads": {
+        "0": 1118,
+        "1": 1120,
+        "2": 1120,
+        "3": 1126,
+        "4": 1125,
+        "5": 1121,
+        "6": 1106,
+        "7": 1125
+      },
+      "upper_heads": {
+        "0": 1119,
+        "1": 1128,
+        "2": 1122,
+        "3": 1130,
+        "4": 1130,
+        "5": 1122,
+        "6": 1110,
+        "7": 1128
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "2d7e89a0-59ee-408f-a513-25f2b568e6fb",
+          "full": false,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 62489980,
+          "encrypted_bytes": 13696277,
+          "manifest_hash": "97ecda66fa2a799b291de085cc66667cecff6988bed9a2a98d909b4da637e74c",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-005.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 3077,
+        "captured_at": 1793506674,
+        "wal_lsn": 51198,
+        "coordination_millis": 57,
+        "source_bytes_read": 62489980,
+        "uploaded_bytes": 13696277,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 217,
+      "acknowledged_after_copy_observed": 215
+    },
+    {
+      "name": "load-006",
+      "parent": null,
+      "id": "d1f8dd3d-3212-4e67-917a-09c27cf5c189",
+      "lower_heads": {
+        "0": 1333,
+        "1": 1338,
+        "2": 1330,
+        "3": 1338,
+        "4": 1338,
+        "5": 1328,
+        "6": 1317,
+        "7": 1336
+      },
+      "upper_heads": {
+        "0": 1334,
+        "1": 1339,
+        "2": 1333,
+        "3": 1340,
+        "4": 1340,
+        "5": 1333,
+        "6": 1321,
+        "7": 1340
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "430335b2-d6dc-413f-bea9-b950d441776f",
+          "full": true,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 140992887,
+          "encrypted_bytes": 21636845,
+          "manifest_hash": "032892265ee669abf142580eb5ae433c103e1894f6a6f233904c471bf699b1e6",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-006.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 3648,
+        "captured_at": 1793506714,
+        "wal_lsn": 61014,
+        "coordination_millis": 17,
+        "source_bytes_read": 140992887,
+        "uploaded_bytes": 21636845,
+        "reused_bytes": 12556,
+        "page_before_image_bytes": 2301952,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 408,
+      "acknowledged_after_copy_observed": 408
+    },
+    {
+      "name": "load-007",
+      "parent": "load-006",
+      "id": "0a82e57a-e0c4-4990-9928-8e4a644314fd",
+      "lower_heads": {
+        "0": 1521,
+        "1": 1528,
+        "2": 1517,
+        "3": 1519,
+        "4": 1522,
+        "5": 1501,
+        "6": 1504,
+        "7": 1521
+      },
+      "upper_heads": {
+        "0": 1522,
+        "1": 1529,
+        "2": 1519,
+        "3": 1522,
+        "4": 1525,
+        "5": 1517,
+        "6": 1508,
+        "7": 1529
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "49dd2b07-9a40-493b-9a01-1b61033249b0",
+          "full": false,
+          "files_total": 23,
+          "files_included": 23,
+          "plaintext_bytes": 206514086,
+          "encrypted_bytes": 21801619,
+          "manifest_hash": "be6087c2c19b62dbbf50020c6b524cd71ec3c4ade0766d95c23080aee33d719d",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-007.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 4125,
+        "captured_at": 1793506754,
+        "wal_lsn": 69206,
+        "coordination_millis": 52,
+        "source_bytes_read": 206514086,
+        "uploaded_bytes": 21801619,
+        "reused_bytes": 67113005,
+        "page_before_image_bytes": 1458176,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 531,
+      "acknowledged_after_copy_observed": 529
+    },
+    {
+      "name": "load-008",
+      "parent": null,
+      "id": "8d40c199-ce68-4b0d-9ed8-3560db8a95eb",
+      "lower_heads": {
+        "0": 1722,
+        "1": 1733,
+        "2": 1715,
+        "3": 1722,
+        "4": 1732,
+        "5": 1723,
+        "6": 1708,
+        "7": 1724
+      },
+      "upper_heads": {
+        "0": 1726,
+        "1": 1735,
+        "2": 1721,
+        "3": 1727,
+        "4": 1734,
+        "5": 1724,
+        "6": 1714,
+        "7": 1731
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "7e875bf5-5b47-442d-b7aa-1f33b9f401d3",
+          "full": true,
+          "files_total": 24,
+          "files_included": 24,
+          "plaintext_bytes": 279275307,
+          "encrypted_bytes": 22624253,
+          "manifest_hash": "4975a59ebf628588cc0689ffd4b6fe06ee0ab97aeba3445be35da0bdbf85ec77",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-008.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 4656,
+        "captured_at": 1793506804,
+        "wal_lsn": 78309,
+        "coordination_millis": 46,
+        "source_bytes_read": 279275307,
+        "uploaded_bytes": 22624253,
+        "reused_bytes": 134215613,
+        "page_before_image_bytes": 1523712,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 717,
+      "acknowledged_after_copy_observed": 715
+    },
+    {
+      "name": "load-009",
+      "parent": "load-008",
+      "id": "977a8896-70be-4aa6-b8b1-be31885717e8",
+      "lower_heads": {
+        "0": 1992,
+        "1": 2005,
+        "2": 1990,
+        "3": 1993,
+        "4": 1999,
+        "5": 1989,
+        "6": 1978,
+        "7": 1996
+      },
+      "upper_heads": {
+        "0": 1997,
+        "1": 2006,
+        "2": 1994,
+        "3": 1999,
+        "4": 2007,
+        "5": 1992,
+        "6": 1980,
+        "7": 1998
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "bf05e5de-0bd6-440a-84d6-bd3455f4851b",
+          "full": false,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 64958962,
+          "encrypted_bytes": 14628995,
+          "manifest_hash": "21c422274873fa89ab8ca02e0ce31cbd178ced4fb905efc333c2a713a2e64474",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-009.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 5374,
+        "captured_at": 1793506870,
+        "wal_lsn": 90750,
+        "coordination_millis": 50,
+        "source_bytes_read": 64958962,
+        "uploaded_bytes": 14628995,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 196,
+      "acknowledged_after_copy_observed": 194
+    },
+    {
+      "name": "load-010",
+      "parent": null,
+      "id": "d828d5d6-ed2f-44f6-87eb-af0924c965a3",
+      "lower_heads": {
+        "0": 2176,
+        "1": 2188,
+        "2": 2175,
+        "3": 2177,
+        "4": 2180,
+        "5": 2169,
+        "6": 2160,
+        "7": 2174
+      },
+      "upper_heads": {
+        "0": 2180,
+        "1": 2190,
+        "2": 2178,
+        "3": 2179,
+        "4": 2187,
+        "5": 2170,
+        "6": 2162,
+        "7": 2178
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "6cdd4eca-0177-4f9d-993f-adf9a5261485",
+          "full": true,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 136095223,
+          "encrypted_bytes": 21903695,
+          "manifest_hash": "5908ef6759271c604d33ecaaef9c28ac81b08a2de156b0fb81b8c1318945e29a",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-010.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 5889,
+        "captured_at": 1793506910,
+        "wal_lsn": 99642,
+        "coordination_millis": 13,
+        "source_bytes_read": 136095223,
+        "uploaded_bytes": 21903695,
+        "reused_bytes": 12539,
+        "page_before_image_bytes": 2555904,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 379,
+      "acknowledged_after_copy_observed": 377
+    },
+    {
+      "name": "load-011",
+      "parent": "load-010",
+      "id": "a5a3f8a0-2f67-4986-93c5-0cce345a8341",
+      "lower_heads": {
+        "0": 2341,
+        "1": 2353,
+        "2": 2338,
+        "3": 2337,
+        "4": 2347,
+        "5": 2333,
+        "6": 2323,
+        "7": 2340
+      },
+      "upper_heads": {
+        "0": 2344,
+        "1": 2355,
+        "2": 2340,
+        "3": 2345,
+        "4": 2350,
+        "5": 2337,
+        "6": 2324,
+        "7": 2341
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "73f7582e-3ee6-4f9e-a055-9c1d25352e22",
+          "full": false,
+          "files_total": 23,
+          "files_included": 23,
+          "plaintext_bytes": 200573780,
+          "encrypted_bytes": 21913057,
+          "manifest_hash": "457909d7075d58ddc3a0e62f7fc18ac6c4d8dd3afeede69c463d87b98cf6dad7",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-011.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 6358,
+        "captured_at": 1793506950,
+        "wal_lsn": 107700,
+        "coordination_millis": 12,
+        "source_bytes_read": 200573780,
+        "uploaded_bytes": 21913057,
+        "reused_bytes": 67113045,
+        "page_before_image_bytes": 1785856,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 532,
+      "acknowledged_after_copy_observed": 531
+    },
+    {
+      "name": "load-012",
+      "parent": null,
+      "id": "124d7ec7-1478-495b-ab0d-35c7d3081949",
+      "lower_heads": {
+        "0": 2534,
+        "1": 2548,
+        "2": 2526,
+        "3": 2535,
+        "4": 2544,
+        "5": 2528,
+        "6": 2513,
+        "7": 2527
+      },
+      "upper_heads": {
+        "0": 2536,
+        "1": 2549,
+        "2": 2528,
+        "3": 2538,
+        "4": 2546,
+        "5": 2530,
+        "6": 2514,
+        "7": 2531
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "8975eff2-4c17-4eb1-898d-5d8410fc1723",
+          "full": true,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 71506658,
+          "encrypted_bytes": 15718207,
+          "manifest_hash": "00e752608555826d6be9a3e30b1c0316fc6dc55de3ba4ee550ee83fc2217bfa0",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-012.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 6891,
+        "captured_at": 1793506998,
+        "wal_lsn": 116886,
+        "coordination_millis": 17,
+        "source_bytes_read": 71506658,
+        "uploaded_bytes": 15718207,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 212,
+      "acknowledged_after_copy_observed": 211
+    },
+    {
+      "name": "load-013",
+      "parent": "load-012",
+      "id": "fbf83dd1-56b7-4adf-bcb1-cca56d6b837e",
+      "lower_heads": {
+        "0": 2703,
+        "1": 2719,
+        "2": 2696,
+        "3": 2705,
+        "4": 2708,
+        "5": 2697,
+        "6": 2672,
+        "7": 2692
+      },
+      "upper_heads": {
+        "0": 2706,
+        "1": 2720,
+        "2": 2697,
+        "3": 2708,
+        "4": 2712,
+        "5": 2699,
+        "6": 2678,
+        "7": 2699
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "b2b54cba-7f4b-4f70-a9d7-a04102f3ee3d",
+          "full": false,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 138527835,
+          "encrypted_bytes": 22586476,
+          "manifest_hash": "9517a35efd45979b6071163b64a8263dd3d966d2b8199aaf407b43f303ac1fc8",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-013.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 7377,
+        "captured_at": 1793507039,
+        "wal_lsn": 125264,
+        "coordination_millis": 17,
+        "source_bytes_read": 138527835,
+        "uploaded_bytes": 22586476,
+        "reused_bytes": 12558,
+        "page_before_image_bytes": 2785280,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 363,
+      "acknowledged_after_copy_observed": 361
+    },
+    {
+      "name": "load-014",
+      "parent": null,
+      "id": "6a111881-9d71-431f-bd1e-969f030fb03c",
+      "lower_heads": {
+        "0": 2867,
+        "1": 2878,
+        "2": 2858,
+        "3": 2867,
+        "4": 2865,
+        "5": 2852,
+        "6": 2837,
+        "7": 2856
+      },
+      "upper_heads": {
+        "0": 2869,
+        "1": 2880,
+        "2": 2859,
+        "3": 2869,
+        "4": 2874,
+        "5": 2858,
+        "6": 2838,
+        "7": 2857
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "9ffa615b-e2b6-49e0-820a-7ea1ddbfb5c4",
+          "full": true,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 68883210,
+          "encrypted_bytes": 15794055,
+          "manifest_hash": "3562dc4dcc9d9af0374165dd6f307f7313b2494db13b4d39468ecd884c49f792",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-014.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 7822,
+        "captured_at": 1793507079,
+        "wal_lsn": 132892,
+        "coordination_millis": 22,
+        "source_bytes_read": 68883210,
+        "uploaded_bytes": 15794055,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 191,
+      "acknowledged_after_copy_observed": 190
+    },
+    {
+      "name": "load-015",
+      "parent": "load-014",
+      "id": "1377ac31-22f9-4747-86d1-f86d39e087a7",
+      "lower_heads": {
+        "0": 3027,
+        "1": 3037,
+        "2": 3024,
+        "3": 3031,
+        "4": 3035,
+        "5": 3020,
+        "6": 3000,
+        "7": 3012
+      },
+      "upper_heads": {
+        "0": 3031,
+        "1": 3044,
+        "2": 3026,
+        "3": 3032,
+        "4": 3039,
+        "5": 3021,
+        "6": 3003,
+        "7": 3019
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "eba6aef4-1712-41c3-a385-f9b861d7beb0",
+          "full": false,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 133732912,
+          "encrypted_bytes": 22415431,
+          "manifest_hash": "db13f870379c311295f2ba273f4bbd6c04689d5fc093bcbde4c8aba58a0877f7",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-015.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 8291,
+        "captured_at": 1793507119,
+        "wal_lsn": 140999,
+        "coordination_millis": 18,
+        "source_bytes_read": 133732912,
+        "uploaded_bytes": 22415431,
+        "reused_bytes": 12559,
+        "page_before_image_bytes": 2777088,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 343,
+      "acknowledged_after_copy_observed": 342
+    },
+    {
+      "name": "load-016",
+      "parent": null,
+      "id": "3d1737d5-1f25-4981-8fed-e11cb3723671",
+      "lower_heads": {
+        "0": 3182,
+        "1": 3195,
+        "2": 3173,
+        "3": 3177,
+        "4": 3186,
+        "5": 3170,
+        "6": 3151,
+        "7": 3166
+      },
+      "upper_heads": {
+        "0": 3183,
+        "1": 3196,
+        "2": 3174,
+        "3": 3184,
+        "4": 3191,
+        "5": 3172,
+        "6": 3153,
+        "7": 3171
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "5da708f4-93bc-427f-bdd5-372362d91140",
+          "full": true,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 192267937,
+          "encrypted_bytes": 21708946,
+          "manifest_hash": "f6cdf76b53604efe3deafbf8e99b49d0170ef7de6a5ffcbd0f23d5e0ad99ca6f",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-016.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 8719,
+        "captured_at": 1793507159,
+        "wal_lsn": 148319,
+        "coordination_millis": 29,
+        "source_bytes_read": 192267937,
+        "uploaded_bytes": 21708946,
+        "reused_bytes": 67113085,
+        "page_before_image_bytes": 1695744,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 489,
+      "acknowledged_after_copy_observed": 488
+    },
+    {
+      "name": "load-017",
+      "parent": "load-016",
+      "id": "554d519a-f9a2-4966-99f0-cecc753b5946",
+      "lower_heads": {
+        "0": 3360,
+        "1": 3364,
+        "2": 3348,
+        "3": 3356,
+        "4": 3362,
+        "5": 3352,
+        "6": 3324,
+        "7": 3346
+      },
+      "upper_heads": {
+        "0": 3363,
+        "1": 3372,
+        "2": 3349,
+        "3": 3359,
+        "4": 3369,
+        "5": 3353,
+        "6": 3325,
+        "7": 3348
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "5404c376-71f0-493d-a0dc-e67078e3957b",
+          "full": false,
+          "files_total": 23,
+          "files_included": 23,
+          "plaintext_bytes": 260914433,
+          "encrypted_bytes": 28941644,
+          "manifest_hash": "cb2180290143a5c40c2eeb66d6f0b76d3dc04d91dc1ba55541c54ec83e0bcf56",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-017.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 9209,
+        "captured_at": 1793507205,
+        "wal_lsn": 156908,
+        "coordination_millis": 16,
+        "source_bytes_read": 260914433,
+        "uploaded_bytes": 28941644,
+        "reused_bytes": 67113085,
+        "page_before_image_bytes": 3211264,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 687,
+      "acknowledged_after_copy_observed": 684
+    },
+    {
+      "name": "load-018",
+      "parent": null,
+      "id": "e6d76077-d0d7-4b37-acee-af5ad6afa74c",
+      "lower_heads": {
+        "0": 3594,
+        "1": 3605,
+        "2": 3583,
+        "3": 3594,
+        "4": 3595,
+        "5": 3580,
+        "6": 3545,
+        "7": 3578
+      },
+      "upper_heads": {
+        "0": 3596,
+        "1": 3608,
+        "2": 3584,
+        "3": 3598,
+        "4": 3602,
+        "5": 3583,
+        "6": 3555,
+        "7": 3579
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "25cfaae6-5354-4d39-930e-04d668cd3411",
+          "full": true,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 88526208,
+          "encrypted_bytes": 18445244,
+          "manifest_hash": "b0d57b0680e6562b6aa388699468c275763b80de664f92d3338cf739887d5181",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-018.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 9896,
+        "captured_at": 1793507267,
+        "wal_lsn": 168944,
+        "coordination_millis": 23,
+        "source_bytes_read": 88526208,
+        "uploaded_bytes": 18445244,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 231,
+      "acknowledged_after_copy_observed": 230
+    },
+    {
+      "name": "load-019",
+      "parent": "load-018",
+      "id": "1fe78854-4578-4f60-bfb1-72645499f35a",
+      "lower_heads": {
+        "0": 3743,
+        "1": 3755,
+        "2": 3731,
+        "3": 3743,
+        "4": 3750,
+        "5": 3727,
+        "6": 3700,
+        "7": 3717
+      },
+      "upper_heads": {
+        "0": 3747,
+        "1": 3756,
+        "2": 3734,
+        "3": 3744,
+        "4": 3751,
+        "5": 3730,
+        "6": 3702,
+        "7": 3725
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "b35bed46-7e21-46b2-8194-222a7320ba78",
+          "full": false,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 150777682,
+          "encrypted_bytes": 24985246,
+          "manifest_hash": "69804c04d308b69a89fc1c344b16c156164d8cd789edc2e460c0e16f16b8e2d6",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-019.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 10342,
+        "captured_at": 1793507307,
+        "wal_lsn": 176729,
+        "coordination_millis": 18,
+        "source_bytes_read": 150777682,
+        "uploaded_bytes": 24985246,
+        "reused_bytes": 12541,
+        "page_before_image_bytes": 3612672,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 352,
+      "acknowledged_after_copy_observed": 350
+    },
+    {
+      "name": "load-020",
+      "parent": null,
+      "id": "45b1ec70-f961-4499-a725-783d65f29eab",
+      "lower_heads": {
+        "0": 3882,
+        "1": 3895,
+        "2": 3868,
+        "3": 3882,
+        "4": 3886,
+        "5": 3867,
+        "6": 3835,
+        "7": 3858
+      },
+      "upper_heads": {
+        "0": 3886,
+        "1": 3897,
+        "2": 3871,
+        "3": 3885,
+        "4": 3890,
+        "5": 3868,
+        "6": 3838,
+        "7": 3864
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "7826e1ae-aaa4-4e12-b6c3-0c544481eba5",
+          "full": true,
+          "files_total": 23,
+          "files_included": 23,
+          "plaintext_bytes": 205770145,
+          "encrypted_bytes": 24022164,
+          "manifest_hash": "e7db8bf7ed65fd01ee4943f83f39a9d0ec9148fe82c2b4fba4e529c8b9d94999",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-020.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 10733,
+        "captured_at": 1793507347,
+        "wal_lsn": 183600,
+        "coordination_millis": 20,
+        "source_bytes_read": 205770145,
+        "uploaded_bytes": 24022164,
+        "reused_bytes": 67112645,
+        "page_before_image_bytes": 2285568,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 478,
+      "acknowledged_after_copy_observed": 476
+    },
+    {
+      "name": "load-021",
+      "parent": "load-020",
+      "id": "edcbbb4b-eef8-4d3f-9f6d-f046634cb323",
+      "lower_heads": {
+        "0": 4057,
+        "1": 4063,
+        "2": 4035,
+        "3": 4050,
+        "4": 4052,
+        "5": 4035,
+        "6": 4001,
+        "7": 4025
+      },
+      "upper_heads": {
+        "0": 4058,
+        "1": 4064,
+        "2": 4038,
+        "3": 4053,
+        "4": 4060,
+        "5": 4036,
+        "6": 4004,
+        "7": 4030
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "daf258e7-bdd5-4a74-ba1a-950ee70c7d2f",
+          "full": false,
+          "files_total": 23,
+          "files_included": 23,
+          "plaintext_bytes": 272767167,
+          "encrypted_bytes": 24001076,
+          "manifest_hash": "715f55d5a64bc358b2e52fb7fd69b0a4194d6fd62baccdeca30491a6230181ec",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-021.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 11212,
+        "captured_at": 1793507397,
+        "wal_lsn": 191975,
+        "coordination_millis": 18,
+        "source_bytes_read": 272767167,
+        "uploaded_bytes": 24001076,
+        "reused_bytes": 134214933,
+        "page_before_image_bytes": 3063808,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 655,
+      "acknowledged_after_copy_observed": 653
+    },
+    {
+      "name": "load-022",
+      "parent": null,
+      "id": "4031dbd0-3e4f-446b-ba66-06920c247cde",
+      "lower_heads": {
+        "0": 4278,
+        "1": 4286,
+        "2": 4251,
+        "3": 4278,
+        "4": 4281,
+        "5": 4259,
+        "6": 4221,
+        "7": 4254
+      },
+      "upper_heads": {
+        "0": 4283,
+        "1": 4288,
+        "2": 4262,
+        "3": 4281,
+        "4": 4282,
+        "5": 4263,
+        "6": 4222,
+        "7": 4256
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "aa539f5a-aaee-4b87-bdd5-3cf533a64669",
+          "full": true,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 96351236,
+          "encrypted_bytes": 19809391,
+          "manifest_hash": "8913643a625b5a77de1fe03f6118e20e7f4d2ce32e996f1d5262c49e9223124f",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-022.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 11867,
+        "captured_at": 1793507462,
+        "wal_lsn": 203483,
+        "coordination_millis": 24,
+        "source_bytes_read": 96351236,
+        "uploaded_bytes": 19809391,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 226,
+      "acknowledged_after_copy_observed": 224
+    },
+    {
+      "name": "load-023",
+      "parent": "load-022",
+      "id": "5766e37a-0f82-47ab-8ca5-0ffb838af7f3",
+      "lower_heads": {
+        "0": 4409,
+        "1": 4425,
+        "2": 4398,
+        "3": 4417,
+        "4": 4417,
+        "5": 4398,
+        "6": 4357,
+        "7": 4388
+      },
+      "upper_heads": {
+        "0": 4420,
+        "1": 4427,
+        "2": 4400,
+        "3": 4420,
+        "4": 4418,
+        "5": 4401,
+        "6": 4361,
+        "7": 4392
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "794b4e93-af64-474e-8898-89dbebda065f",
+          "full": false,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 154292991,
+          "encrypted_bytes": 25878091,
+          "manifest_hash": "0860b9b8f3f60f0a536e82762ef6622a56f67c9b93afd6e9f77fdd65e9220ce3",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-023.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 12279,
+        "captured_at": 1793507502,
+        "wal_lsn": 210728,
+        "coordination_millis": 28,
+        "source_bytes_read": 154292991,
+        "uploaded_bytes": 25878091,
+        "reused_bytes": 12552,
+        "page_before_image_bytes": 3620864,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 366,
+      "acknowledged_after_copy_observed": 364
+    },
+    {
+      "name": "load-024",
+      "parent": null,
+      "id": "10e8c4bc-04e5-4c57-8fb0-a969cec00153",
+      "lower_heads": {
+        "0": 4553,
+        "1": 4560,
+        "2": 4530,
+        "3": 4550,
+        "4": 4545,
+        "5": 4530,
+        "6": 4492,
+        "7": 4525
+      },
+      "upper_heads": {
+        "0": 4555,
+        "1": 4561,
+        "2": 4531,
+        "3": 4553,
+        "4": 4552,
+        "5": 4535,
+        "6": 4494,
+        "7": 4526
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "d7ce2ded-a2e0-40ce-b47a-23ff65c31a8d",
+          "full": true,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 210109147,
+          "encrypted_bytes": 24899062,
+          "manifest_hash": "2daf4e2f793290deb6bcd8c88705bf0a263b51645205785c4c5c0deaad7cff6e",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-024.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 12676,
+        "captured_at": 1793507542,
+        "wal_lsn": 217697,
+        "coordination_millis": 26,
+        "source_bytes_read": 210109147,
+        "uploaded_bytes": 24899062,
+        "reused_bytes": 67112525,
+        "page_before_image_bytes": 3457024,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 483,
+      "acknowledged_after_copy_observed": 482
+    },
+    {
+      "name": "load-025",
+      "parent": "load-024",
+      "id": "f7aa20cd-aceb-4ee7-abe7-0d172614a2da",
+      "lower_heads": {
+        "0": 4716,
+        "1": 4724,
+        "2": 4692,
+        "3": 4716,
+        "4": 4716,
+        "5": 4696,
+        "6": 4656,
+        "7": 4688
+      },
+      "upper_heads": {
+        "0": 4719,
+        "1": 4727,
+        "2": 4694,
+        "3": 4719,
+        "4": 4717,
+        "5": 4698,
+        "6": 4658,
+        "7": 4689
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "e3ea71ef-f83c-482c-b24f-0a0050687302",
+          "full": false,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 95749107,
+          "encrypted_bytes": 20137964,
+          "manifest_hash": "17711d0fc0c8e387179b0b8a60c848714dbb7cbd222c3afb73a3e0ba1d645475",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-025.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 13160,
+        "captured_at": 1793507592,
+        "wal_lsn": 226176,
+        "coordination_millis": 17,
+        "source_bytes_read": 95749107,
+        "uploaded_bytes": 20137964,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 226,
+      "acknowledged_after_copy_observed": 224
+    },
+    {
+      "name": "load-026",
+      "parent": null,
+      "id": "1922116e-00bf-4bac-8f30-b08953fc460d",
+      "lower_heads": {
+        "0": 4847,
+        "1": 4859,
+        "2": 4827,
+        "3": 4853,
+        "4": 4849,
+        "5": 4828,
+        "6": 4787,
+        "7": 4817
+      },
+      "upper_heads": {
+        "0": 4854,
+        "1": 4862,
+        "2": 4828,
+        "3": 4855,
+        "4": 4852,
+        "5": 4834,
+        "6": 4788,
+        "7": 4821
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "f4d65be0-2a03-41d1-bc93-035abb910bed",
+          "full": true,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 151145449,
+          "encrypted_bytes": 25913677,
+          "manifest_hash": "939af47f7daccf9c5fea1fa83a2529d9e56f1c9c143acf5e4277f81b3922eb1b",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-026.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 13554,
+        "captured_at": 1793507632,
+        "wal_lsn": 233096,
+        "coordination_millis": 16,
+        "source_bytes_read": 151145449,
+        "uploaded_bytes": 25913677,
+        "reused_bytes": 12552,
+        "page_before_image_bytes": 3719168,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 359,
+      "acknowledged_after_copy_observed": 357
+    },
+    {
+      "name": "load-027",
+      "parent": "load-026",
+      "id": "fcc68fe6-50c2-424b-8f54-c63f62747730",
+      "lower_heads": {
+        "0": 4986,
+        "1": 4993,
+        "2": 4957,
+        "3": 4979,
+        "4": 4978,
+        "5": 4963,
+        "6": 4916,
+        "7": 4952
+      },
+      "upper_heads": {
+        "0": 4987,
+        "1": 4995,
+        "2": 4959,
+        "3": 4987,
+        "4": 4981,
+        "5": 4966,
+        "6": 4917,
+        "7": 4954
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "5dab85da-bf39-488b-983e-b47d91b9e4b2",
+          "full": false,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 206808377,
+          "encrypted_bytes": 24914165,
+          "manifest_hash": "2bdcab73ffa0c68233f710a99edd129f9b9c9394d1413967a0a78578737f2332",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-027.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 13952,
+        "captured_at": 1793507673,
+        "wal_lsn": 240057,
+        "coordination_millis": 20,
+        "source_bytes_read": 206808377,
+        "uploaded_bytes": 24914165,
+        "reused_bytes": 67112685,
+        "page_before_image_bytes": 3588096,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 457,
+      "acknowledged_after_copy_observed": 457
+    },
+    {
+      "name": "load-028",
+      "parent": null,
+      "id": "d48a8a15-6c11-4d06-8679-a4a8ca6b8d1b",
+      "lower_heads": {
+        "0": 5143,
+        "1": 5147,
+        "2": 5111,
+        "3": 5138,
+        "4": 5135,
+        "5": 5121,
+        "6": 5072,
+        "7": 5105
+      },
+      "upper_heads": {
+        "0": 5144,
+        "1": 5150,
+        "2": 5114,
+        "3": 5140,
+        "4": 5136,
+        "5": 5122,
+        "6": 5073,
+        "7": 5108
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "dd1d1967-f51c-4d6c-a844-51c94d4ea4d7",
+          "full": true,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 97747228,
+          "encrypted_bytes": 20700988,
+          "manifest_hash": "a3edf8d6b31e90a19b0f859a583d87555930dd1f24123cae35d7f051e34d34c2",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-028.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 14411,
+        "captured_at": 1793507722,
+        "wal_lsn": 248155,
+        "coordination_millis": 31,
+        "source_bytes_read": 97747228,
+        "uploaded_bytes": 20700988,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 217,
+      "acknowledged_after_copy_observed": 215
+    },
+    {
+      "name": "load-029",
+      "parent": "load-028",
+      "id": "bc56153b-37de-4900-8459-fc4590901fea",
+      "lower_heads": {
+        "0": 5268,
+        "1": 5274,
+        "2": 5238,
+        "3": 5264,
+        "4": 5255,
+        "5": 5246,
+        "6": 5198,
+        "7": 5231
+      },
+      "upper_heads": {
+        "0": 5270,
+        "1": 5277,
+        "2": 5239,
+        "3": 5268,
+        "4": 5263,
+        "5": 5249,
+        "6": 5199,
+        "7": 5234
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "816f3a42-8b1d-47b9-b0d5-74d215969e33",
+          "full": false,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 151597882,
+          "encrypted_bytes": 26311622,
+          "manifest_hash": "79598aa9930677fc0800a5ca90bfa1f85461cd277f473222a1c780e48587acd3",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-029.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 14794,
+        "captured_at": 1793507762,
+        "wal_lsn": 254884,
+        "coordination_millis": 58,
+        "source_bytes_read": 151597882,
+        "uploaded_bytes": 26311622,
+        "reused_bytes": 12552,
+        "page_before_image_bytes": 3809280,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 320,
+      "acknowledged_after_copy_observed": 318
+    },
+    {
+      "name": "load-030",
+      "parent": null,
+      "id": "017bffb5-8f11-4e40-b6bb-a6dc2133c9f5",
+      "lower_heads": {
+        "0": 5385,
+        "1": 5398,
+        "2": 5358,
+        "3": 5388,
+        "4": 5375,
+        "5": 5369,
+        "6": 5322,
+        "7": 5355
+      },
+      "upper_heads": {
+        "0": 5393,
+        "1": 5401,
+        "2": 5362,
+        "3": 5391,
+        "4": 5384,
+        "5": 5371,
+        "6": 5323,
+        "7": 5357
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "c7662331-4b76-4977-b12d-21dfba2885d6",
+          "full": true,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 113798532,
+          "encrypted_bytes": 22563731,
+          "manifest_hash": "0992357145539b31ff41e616b710753b47b17021fa659a221f9b1200bc0b47dc",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-030.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 15150,
+        "captured_at": 1793507802,
+        "wal_lsn": 261083,
+        "coordination_millis": 18,
+        "source_bytes_read": 113798532,
+        "uploaded_bytes": 22563731,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 249,
+      "acknowledged_after_copy_observed": 248
+    },
+    {
+      "name": "load-031",
+      "parent": "load-030",
+      "id": "4c30b100-3f6f-4c81-a138-014dcaac0a68",
+      "lower_heads": {
+        "0": 5514,
+        "1": 5520,
+        "2": 5479,
+        "3": 5506,
+        "4": 5498,
+        "5": 5490,
+        "6": 5442,
+        "7": 5476
+      },
+      "upper_heads": {
+        "0": 5517,
+        "1": 5521,
+        "2": 5482,
+        "3": 5513,
+        "4": 5503,
+        "5": 5491,
+        "6": 5443,
+        "7": 5479
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "1a2ff0e9-f9c2-436d-a709-7ba97d771989",
+          "full": false,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 165727081,
+          "encrypted_bytes": 28123449,
+          "manifest_hash": "d79d61924b9daefffb44944f93aa7b87b687410f48a81833990be5ead47c047c",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-031.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 15520,
+        "captured_at": 1793507842,
+        "wal_lsn": 267573,
+        "coordination_millis": 19,
+        "source_bytes_read": 165727081,
+        "uploaded_bytes": 28123449,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 2326528,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 349,
+      "acknowledged_after_copy_observed": 348
+    },
+    {
+      "name": "load-032",
+      "parent": null,
+      "id": "844fca44-3b4e-4d11-af82-6d55cd40e1a2",
+      "lower_heads": {
+        "0": 5633,
+        "1": 5629,
+        "2": 5598,
+        "3": 5628,
+        "4": 5620,
+        "5": 5604,
+        "6": 5558,
+        "7": 5595
+      },
+      "upper_heads": {
+        "0": 5635,
+        "1": 5637,
+        "2": 5599,
+        "3": 5631,
+        "4": 5622,
+        "5": 5607,
+        "6": 5560,
+        "7": 5596
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "75ca2336-0f08-421d-9429-82b42859e9dd",
+          "full": true,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 111510619,
+          "encrypted_bytes": 22568815,
+          "manifest_hash": "e4481f1e1d0ee3781c0461fafc174ce0490547867ee0c6e4017e34b11920be93",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-032.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 15874,
+        "captured_at": 1793507882,
+        "wal_lsn": 273832,
+        "coordination_millis": 21,
+        "source_bytes_read": 111510619,
+        "uploaded_bytes": 22568815,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 248,
+      "acknowledged_after_copy_observed": 247
+    },
+    {
+      "name": "load-033",
+      "parent": "load-032",
+      "id": "e5da1cb5-311b-4c0a-bc10-6b519dd196ab",
+      "lower_heads": {
+        "0": 5758,
+        "1": 5757,
+        "2": 5722,
+        "3": 5751,
+        "4": 5741,
+        "5": 5725,
+        "6": 5674,
+        "7": 5715
+      },
+      "upper_heads": {
+        "0": 5760,
+        "1": 5759,
+        "2": 5723,
+        "3": 5754,
+        "4": 5745,
+        "5": 5728,
+        "6": 5682,
+        "7": 5716
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "5c1100b1-85d1-4436-ae14-b8ad87842a46",
+          "full": false,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 163552015,
+          "encrypted_bytes": 27999827,
+          "manifest_hash": "dee9668680fe3b650fd2ed75ef4f7b2793125b024058a565813ed884e0ffbf79",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-033.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 16246,
+        "captured_at": 1793507922,
+        "wal_lsn": 280339,
+        "coordination_millis": 18,
+        "source_bytes_read": 163552015,
+        "uploaded_bytes": 27999827,
+        "reused_bytes": 12555,
+        "page_before_image_bytes": 3956736,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 346,
+      "acknowledged_after_copy_observed": 344
+    },
+    {
+      "name": "load-034",
+      "parent": null,
+      "id": "dc10bea9-9130-4d53-aaff-ca33e9700b77",
+      "lower_heads": {
+        "0": 5872,
+        "1": 5873,
+        "2": 5837,
+        "3": 5867,
+        "4": 5857,
+        "5": 5837,
+        "6": 5793,
+        "7": 5828
+      },
+      "upper_heads": {
+        "0": 5877,
+        "1": 5875,
+        "2": 5840,
+        "3": 5868,
+        "4": 5860,
+        "5": 5843,
+        "6": 5795,
+        "7": 5833
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "16d7cf7c-c1c9-4c40-93a9-506d51aaa621",
+          "full": true,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 213357890,
+          "encrypted_bytes": 26376761,
+          "manifest_hash": "6929195bd6846cd7eea9e2b9ed8e8e65b7436424561536586122f260640fe403",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-034.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 16599,
+        "captured_at": 1793507962,
+        "wal_lsn": 286564,
+        "coordination_millis": 22,
+        "source_bytes_read": 213357890,
+        "uploaded_bytes": 26376761,
+        "reused_bytes": 67112485,
+        "page_before_image_bytes": 3686400,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 443,
+      "acknowledged_after_copy_observed": 443
+    },
+    {
+      "name": "load-035",
+      "parent": "load-034",
+      "id": "105558e9-ad2d-497a-8844-f8034c35c4bb",
+      "lower_heads": {
+        "0": 6022,
+        "1": 6019,
+        "2": 5983,
+        "3": 6008,
+        "4": 6005,
+        "5": 5988,
+        "6": 5941,
+        "7": 5975
+      },
+      "upper_heads": {
+        "0": 6024,
+        "1": 6022,
+        "2": 5986,
+        "3": 6015,
+        "4": 6007,
+        "5": 5992,
+        "6": 5942,
+        "7": 5977
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "d54ce081-6f6f-4c56-bbc5-abf7baf47219",
+          "full": false,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 111789118,
+          "encrypted_bytes": 22926465,
+          "manifest_hash": "ea3dcf078661c078797319c944aacbaef7b7f1fb37496376437b4f21f7be0207",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-035.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 17043,
+        "captured_at": 1793508014,
+        "wal_lsn": 294348,
+        "coordination_millis": 16,
+        "source_bytes_read": 111789118,
+        "uploaded_bytes": 22926465,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 186,
+      "acknowledged_after_copy_observed": 185
+    },
+    {
+      "name": "load-036",
+      "parent": null,
+      "id": "115eba12-07b2-468e-ab2a-fe79a0b4afb7",
+      "lower_heads": {
+        "0": 6126,
+        "1": 6123,
+        "2": 6089,
+        "3": 6117,
+        "4": 6104,
+        "5": 6096,
+        "6": 6043,
+        "7": 6079
+      },
+      "upper_heads": {
+        "0": 6130,
+        "1": 6124,
+        "2": 6091,
+        "3": 6118,
+        "4": 6110,
+        "5": 6097,
+        "6": 6047,
+        "7": 6081
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "631b096e-e5b7-43a9-b962-39f7ef889082",
+          "full": true,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 154344366,
+          "encrypted_bytes": 27388094,
+          "manifest_hash": "37881769911d86a0e51636ca597c4a1322527e456de0c74b68522d04fa0d09c5",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-036.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 17347,
+        "captured_at": 1793508054,
+        "wal_lsn": 299673,
+        "coordination_millis": 19,
+        "source_bytes_read": 154344366,
+        "uploaded_bytes": 27388094,
+        "reused_bytes": 12552,
+        "page_before_image_bytes": 3768320,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 309,
+      "acknowledged_after_copy_observed": 308
+    },
+    {
+      "name": "load-037",
+      "parent": "load-036",
+      "id": "8041c8bf-7f61-4e6b-9cf1-b69366b42b3b",
+      "lower_heads": {
+        "0": 6242,
+        "1": 6228,
+        "2": 6200,
+        "3": 6228,
+        "4": 6219,
+        "5": 6206,
+        "6": 6157,
+        "7": 6189
+      },
+      "upper_heads": {
+        "0": 6243,
+        "1": 6236,
+        "2": 6203,
+        "3": 6229,
+        "4": 6221,
+        "5": 6208,
+        "6": 6159,
+        "7": 6190
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "c91cc327-e30e-4bdc-8e3e-8fbebc701fa9",
+          "full": false,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 201698422,
+          "encrypted_bytes": 32434086,
+          "manifest_hash": "2ab0c2eb4edae8bbdbe4903723cc9d8c0cfed280df06cef2d384d50326709486",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-037.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 17683,
+        "captured_at": 1793508094,
+        "wal_lsn": 305592,
+        "coordination_millis": 18,
+        "source_bytes_read": 201698422,
+        "uploaded_bytes": 32434086,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 3579904,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 401,
+      "acknowledged_after_copy_observed": 400
+    },
+    {
+      "name": "load-038",
+      "parent": null,
+      "id": "0878f031-d93d-4c75-a3f1-03cbb98606a5",
+      "lower_heads": {
+        "0": 6378,
+        "1": 6370,
+        "2": 6339,
+        "3": 6364,
+        "4": 6353,
+        "5": 6343,
+        "6": 6289,
+        "7": 6320
+      },
+      "upper_heads": {
+        "0": 6381,
+        "1": 6373,
+        "2": 6340,
+        "3": 6365,
+        "4": 6356,
+        "5": 6345,
+        "6": 6294,
+        "7": 6324
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "5afa73ed-1aea-4a46-a3bf-39f7cc9f9fd9",
+          "full": true,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 118773652,
+          "encrypted_bytes": 24000758,
+          "manifest_hash": "4f3db09fb74c0beaff55c1ab7cfc03cd881515156512f2e6c88553c3cb8d901f",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-038.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 18086,
+        "captured_at": 1793508142,
+        "wal_lsn": 312679,
+        "coordination_millis": 42,
+        "source_bytes_read": 118773652,
+        "uploaded_bytes": 24000758,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 244,
+      "acknowledged_after_copy_observed": 242
+    },
+    {
+      "name": "load-039",
+      "parent": "load-038",
+      "id": "8b41ba69-80ee-47ea-a882-d1ce3199ddcc",
+      "lower_heads": {
+        "0": 6492,
+        "1": 6483,
+        "2": 6447,
+        "3": 6474,
+        "4": 6465,
+        "5": 6445,
+        "6": 6406,
+        "7": 6432
+      },
+      "upper_heads": {
+        "0": 6494,
+        "1": 6484,
+        "2": 6452,
+        "3": 6477,
+        "4": 6467,
+        "5": 6456,
+        "6": 6408,
+        "7": 6436
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "d164ed2f-a31b-401e-a848-7b4d37e9c7ba",
+          "full": false,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 167678541,
+          "encrypted_bytes": 29251891,
+          "manifest_hash": "63b0ed2decdebcc049f8c7e37a3ca3deed2bc1bdb69de283cdb4705a2b95a390",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-039.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 18429,
+        "captured_at": 1793508182,
+        "wal_lsn": 318783,
+        "coordination_millis": 20,
+        "source_bytes_read": 167678541,
+        "uploaded_bytes": 29251891,
+        "reused_bytes": 12551,
+        "page_before_image_bytes": 4169728,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 335,
+      "acknowledged_after_copy_observed": 334
+    },
+    {
+      "name": "load-040",
+      "parent": null,
+      "id": "c9da9c72-7164-4598-8f34-d061b66c8c68",
+      "lower_heads": {
+        "0": 6602,
+        "1": 6586,
+        "2": 6557,
+        "3": 6586,
+        "4": 6570,
+        "5": 6564,
+        "6": 6513,
+        "7": 6543
+      },
+      "upper_heads": {
+        "0": 6605,
+        "1": 6595,
+        "2": 6558,
+        "3": 6587,
+        "4": 6576,
+        "5": 6565,
+        "6": 6515,
+        "7": 6546
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "454ac2c8-d9b7-40dc-8fc0-5b60715a2389",
+          "full": true,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 215436126,
+          "encrypted_bytes": 34423266,
+          "manifest_hash": "cddb79f5bfac68c565279c701f4fdf3b43a9b956bb147b9e6dddf495784c4b77",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/load-040.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 18765,
+        "captured_at": 1793508223,
+        "wal_lsn": 324753,
+        "coordination_millis": 20,
+        "source_bytes_read": 215436126,
+        "uploaded_bytes": 34423266,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 4063232,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 421,
+      "acknowledged_after_copy_observed": 419
+    },
+    {
+      "name": "fault-baseline",
+      "parent": null,
+      "id": "c1b0538e-2fa5-4601-b406-51c65e68a338",
+      "lower_heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "upper_heads": {
+        "0": 6745,
+        "1": 6733,
+        "2": 6698,
+        "3": 6729,
+        "4": 6714,
+        "5": 6705,
+        "6": 6653,
+        "7": 6684
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "458e5f74-357d-4526-ba1f-6b3b9b3a4a9a",
+          "full": true,
+          "files_total": 21,
+          "files_included": 21,
+          "plaintext_bytes": 104963026,
+          "encrypted_bytes": 22855638,
+          "manifest_hash": "8e7457b427242aa99c78b0d395a688a493c789c18962ac3a6bc3a3bff6be98b5",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/fault-baseline.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 19190,
+        "captured_at": 1793508406,
+        "wal_lsn": 332273,
+        "coordination_millis": 19,
+        "source_bytes_read": 104963026,
+        "uploaded_bytes": 22855638,
+        "reused_bytes": 10357,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 0,
+      "acknowledged_after_copy_observed": 0
+    },
+    {
+      "name": "after-uncertain",
+      "parent": "fault-baseline",
+      "id": "2f34d4b2-cec6-4e5e-87a6-ad5e8b520bf9",
+      "lower_heads": {
+        "0": 6746,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "upper_heads": {
+        "0": 6746,
+        "1": 6734,
+        "2": 6698,
+        "3": 6729,
+        "4": 6714,
+        "5": 6705,
+        "6": 6653,
+        "7": 6684
+      },
+      "result": {
+        "artifact": {
+          "backup_id": "5ecbf7b6-4011-47cd-9298-6852f9e96ab1",
+          "full": false,
+          "files_total": 22,
+          "files_included": 22,
+          "plaintext_bytes": 66143046,
+          "encrypted_bytes": 14754371,
+          "manifest_hash": "741cca64b02ec312c60c3674d6709da22b33c487c7616c7a10c5213f02be245d",
+          "path": "/root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/after-uncertain.bicbackup",
+          "source_format_version": 2,
+          "source_feature_flags": [
+            "format_metadata_v2",
+            "online_backup_extent_tracking_v1",
+            "server_paged_storage"
+          ]
+        },
+        "source_id": "8f450c77-a4b2-481b-9cfe-d32fa2903b4c",
+        "commit_seq": 19191,
+        "captured_at": 1793508555,
+        "wal_lsn": 332293,
+        "coordination_millis": 9,
+        "source_bytes_read": 66143046,
+        "uploaded_bytes": 14754371,
+        "reused_bytes": 12550,
+        "page_before_image_bytes": 0,
+        "page_extents_copied": 1,
+        "page_extents_reused": 0,
+        "page_extent_bytes_reused": 0
+      },
+      "error": null,
+      "acknowledged_during_job": 0,
+      "acknowledged_after_copy_observed": 0
+    }
+  ],
+  "restores": [
+    {
+      "label": "load-000",
+      "heads": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0
+      },
+      "ledger_rows": 0,
+      "queries_compared": 14,
+      "oracle_sha256": "e94aa46e3c11155c3b2a7e5f20d0a6cbf4b6353f8df0ca159248df920912c186"
+    },
+    {
+      "label": "load-001",
+      "heads": {
+        "0": 213,
+        "1": 214,
+        "2": 218,
+        "3": 217,
+        "4": 217,
+        "5": 208,
+        "6": 214,
+        "7": 216
+      },
+      "ledger_rows": 575,
+      "queries_compared": 14,
+      "oracle_sha256": "55895ecc8c105915028b6c228c09d4dd8e3f902011c703cd71f771bac31fb8b9"
+    },
+    {
+      "label": "load-002",
+      "heads": {
+        "0": 409,
+        "1": 411,
+        "2": 412,
+        "3": 417,
+        "4": 415,
+        "5": 409,
+        "6": 401,
+        "7": 409
+      },
+      "ledger_rows": 1082,
+      "queries_compared": 14,
+      "oracle_sha256": "7b4a7c77231a5a04f376bf7a52943bad966fd1e9e0086689df127cb3cee11cc2"
+    },
+    {
+      "label": "load-003",
+      "heads": {
+        "0": 617,
+        "1": 625,
+        "2": 622,
+        "3": 628,
+        "4": 623,
+        "5": 613,
+        "6": 613,
+        "7": 623
+      },
+      "ledger_rows": 1623,
+      "queries_compared": 14,
+      "oracle_sha256": "7373a36e0e0457baa6120734fdf390e99e24fbe5b6ab908326df35f8d0ad69e9"
+    },
+    {
+      "label": "load-004",
+      "heads": {
+        "0": 923,
+        "1": 928,
+        "2": 926,
+        "3": 931,
+        "4": 928,
+        "5": 923,
+        "6": 911,
+        "7": 932
+      },
+      "ledger_rows": 2383,
+      "queries_compared": 14,
+      "oracle_sha256": "2e244ad66f950243fb07d3f0e9a39feda7622b49a50442d45c5321d38e436de7"
+    },
+    {
+      "label": "load-005",
+      "heads": {
+        "0": 1118,
+        "1": 1127,
+        "2": 1121,
+        "3": 1126,
+        "4": 1125,
+        "5": 1121,
+        "6": 1106,
+        "7": 1125
+      },
+      "ledger_rows": 2894,
+      "queries_compared": 14,
+      "oracle_sha256": "2884e3a62617152fb4218a79dc983ee12f708a4f0ffaa2d8e1cf44dde815dd9f"
+    },
+    {
+      "label": "load-006",
+      "heads": {
+        "0": 1333,
+        "1": 1338,
+        "2": 1330,
+        "3": 1338,
+        "4": 1338,
+        "5": 1332,
+        "6": 1317,
+        "7": 1336
+      },
+      "ledger_rows": 3465,
+      "queries_compared": 14,
+      "oracle_sha256": "c8d7044b32dcba1e90b02a6389d89c4c4a09b3e1c79ac49e9665a2c9dceb6461"
+    },
+    {
+      "label": "load-007",
+      "heads": {
+        "0": 1521,
+        "1": 1528,
+        "2": 1517,
+        "3": 1519,
+        "4": 1522,
+        "5": 1501,
+        "6": 1504,
+        "7": 1528
+      },
+      "ledger_rows": 3942,
+      "queries_compared": 14,
+      "oracle_sha256": "26a2e6f1267b2c9bb7b6719de59a6b9bbdf7cfd25031b1a8d1cf0609c2e94bc4"
+    },
+    {
+      "label": "load-008",
+      "heads": {
+        "0": 1722,
+        "1": 1734,
+        "2": 1715,
+        "3": 1722,
+        "4": 1732,
+        "5": 1723,
+        "6": 1708,
+        "7": 1724
+      },
+      "ledger_rows": 4473,
+      "queries_compared": 14,
+      "oracle_sha256": "754a8f2218e6497c441ae57173ef051db2ad9d8e1b54b1edc3b56085124f3ba1"
+    },
+    {
+      "label": "load-009",
+      "heads": {
+        "0": 1992,
+        "1": 2005,
+        "2": 1993,
+        "3": 1993,
+        "4": 2007,
+        "5": 1989,
+        "6": 1978,
+        "7": 1996
+      },
+      "ledger_rows": 5191,
+      "queries_compared": 14,
+      "oracle_sha256": "bdab311209539f964a46c7dc1a37fd6dcacb1a5c13c397c9e0f11aecdfe7f13e"
+    },
+    {
+      "label": "load-010",
+      "heads": {
+        "0": 2176,
+        "1": 2188,
+        "2": 2175,
+        "3": 2177,
+        "4": 2180,
+        "5": 2169,
+        "6": 2160,
+        "7": 2177
+      },
+      "ledger_rows": 5706,
+      "queries_compared": 14,
+      "oracle_sha256": "7d11780c5ab199d8336e4f10f77016ad322e72880496ae91b5ddcf767474d153"
+    },
+    {
+      "label": "load-011",
+      "heads": {
+        "0": 2341,
+        "1": 2353,
+        "2": 2338,
+        "3": 2337,
+        "4": 2349,
+        "5": 2333,
+        "6": 2323,
+        "7": 2340
+      },
+      "ledger_rows": 6175,
+      "queries_compared": 14,
+      "oracle_sha256": "859de42a8867660362f18f236a071dd7ec87b11ec025a9990441ac71fc240010"
+    },
+    {
+      "label": "load-012",
+      "heads": {
+        "0": 2534,
+        "1": 2548,
+        "2": 2526,
+        "3": 2535,
+        "4": 2544,
+        "5": 2529,
+        "6": 2513,
+        "7": 2527
+      },
+      "ledger_rows": 6708,
+      "queries_compared": 14,
+      "oracle_sha256": "3c7199521b41d287d08be99643cebb04c87c7433e32814311f5c98d77054b0d8"
+    },
+    {
+      "label": "load-013",
+      "heads": {
+        "0": 2703,
+        "1": 2719,
+        "2": 2696,
+        "3": 2705,
+        "4": 2712,
+        "5": 2697,
+        "6": 2672,
+        "7": 2692
+      },
+      "ledger_rows": 7194,
+      "queries_compared": 14,
+      "oracle_sha256": "f70d33d8cf04541b2cc311cdcf5256bf68d169b30adbf1fd862a408612ac9054"
+    },
+    {
+      "label": "load-014",
+      "heads": {
+        "0": 2867,
+        "1": 2878,
+        "2": 2858,
+        "3": 2867,
+        "4": 2865,
+        "5": 2852,
+        "6": 2837,
+        "7": 2857
+      },
+      "ledger_rows": 7639,
+      "queries_compared": 14,
+      "oracle_sha256": "51bc4fa83ad9ea1dfff168bcd67288157b478a595437ab82291e9a3f6dbb776a"
+    },
+    {
+      "label": "load-015",
+      "heads": {
+        "0": 3027,
+        "1": 3037,
+        "2": 3024,
+        "3": 3031,
+        "4": 3035,
+        "5": 3020,
+        "6": 3002,
+        "7": 3012
+      },
+      "ledger_rows": 8108,
+      "queries_compared": 14,
+      "oracle_sha256": "4c0c2dc4db30e31b9014b92e013154f4e758451d5be75dad6ec2536374b23ea9"
+    },
+    {
+      "label": "load-016",
+      "heads": {
+        "0": 3183,
+        "1": 3195,
+        "2": 3173,
+        "3": 3177,
+        "4": 3186,
+        "5": 3170,
+        "6": 3151,
+        "7": 3166
+      },
+      "ledger_rows": 8536,
+      "queries_compared": 14,
+      "oracle_sha256": "0fd3979584c820ecb516cc5ed65b8512ef1479d247a61af8586dd32ebef95725"
+    },
+    {
+      "label": "load-017",
+      "heads": {
+        "0": 3360,
+        "1": 3372,
+        "2": 3348,
+        "3": 3356,
+        "4": 3362,
+        "5": 3352,
+        "6": 3324,
+        "7": 3346
+      },
+      "ledger_rows": 9026,
+      "queries_compared": 14,
+      "oracle_sha256": "75fe81bb0464fba4cd719e4a1a9f0ecaf8612fcada2402c467fcba03124181e5"
+    },
+    {
+      "label": "load-018",
+      "heads": {
+        "0": 3594,
+        "1": 3605,
+        "2": 3583,
+        "3": 3594,
+        "4": 3595,
+        "5": 3582,
+        "6": 3545,
+        "7": 3578
+      },
+      "ledger_rows": 9713,
+      "queries_compared": 14,
+      "oracle_sha256": "070e85576ed3d4f00ee406440cbd915542e1113cee5dd93d3ce445a134dccebd"
+    },
+    {
+      "label": "load-019",
+      "heads": {
+        "0": 3747,
+        "1": 3755,
+        "2": 3731,
+        "3": 3743,
+        "4": 3750,
+        "5": 3727,
+        "6": 3700,
+        "7": 3717
+      },
+      "ledger_rows": 10159,
+      "queries_compared": 14,
+      "oracle_sha256": "30866e6cd67d4ccfd97b5078e7ec9eb917f42b5bba52094a65a5e2d7b51b5cf2"
+    },
+    {
+      "label": "load-020",
+      "heads": {
+        "0": 3882,
+        "1": 3895,
+        "2": 3868,
+        "3": 3882,
+        "4": 3886,
+        "5": 3867,
+        "6": 3837,
+        "7": 3858
+      },
+      "ledger_rows": 10550,
+      "queries_compared": 14,
+      "oracle_sha256": "312b7e00c642f4e102991128143214bdf3ff0d343116764c60e08ee2e4f152da"
+    },
+    {
+      "label": "load-021",
+      "heads": {
+        "0": 4057,
+        "1": 4063,
+        "2": 4035,
+        "3": 4050,
+        "4": 4052,
+        "5": 4035,
+        "6": 4001,
+        "7": 4029
+      },
+      "ledger_rows": 11029,
+      "queries_compared": 14,
+      "oracle_sha256": "2150bb0252f3ecb0290b872419f651cf1f350e7941c9011db0e5cf9ab4fd8f6d"
+    },
+    {
+      "label": "load-022",
+      "heads": {
+        "0": 4278,
+        "1": 4286,
+        "2": 4251,
+        "3": 4278,
+        "4": 4281,
+        "5": 4262,
+        "6": 4221,
+        "7": 4254
+      },
+      "ledger_rows": 11684,
+      "queries_compared": 14,
+      "oracle_sha256": "cfed9d002cbdc763dd2bbe2ab865845a0b24134be95e71557168328f53bd6162"
+    },
+    {
+      "label": "load-023",
+      "heads": {
+        "0": 4409,
+        "1": 4425,
+        "2": 4399,
+        "3": 4417,
+        "4": 4417,
+        "5": 4398,
+        "6": 4357,
+        "7": 4388
+      },
+      "ledger_rows": 12096,
+      "queries_compared": 14,
+      "oracle_sha256": "d3a2d0a1c3778e8e37dfa5ba4d99b907c9f9970d5f154cb903357d4f366c64bb"
+    },
+    {
+      "label": "load-024",
+      "heads": {
+        "0": 4553,
+        "1": 4560,
+        "2": 4530,
+        "3": 4552,
+        "4": 4545,
+        "5": 4530,
+        "6": 4492,
+        "7": 4525
+      },
+      "ledger_rows": 12493,
+      "queries_compared": 14,
+      "oracle_sha256": "ba7c84e4bc3f7d339c03b0f2443925045d15e85b78c1c844c9bcae75b3db504b"
+    },
+    {
+      "label": "load-025",
+      "heads": {
+        "0": 4716,
+        "1": 4724,
+        "2": 4692,
+        "3": 4716,
+        "4": 4716,
+        "5": 4696,
+        "6": 4656,
+        "7": 4688
+      },
+      "ledger_rows": 12977,
+      "queries_compared": 14,
+      "oracle_sha256": "5b329fac34c9f5ed1a94ecde3e013cf11d7b31e957070e46e0cf7d04cbbf1b38"
+    },
+    {
+      "label": "load-026",
+      "heads": {
+        "0": 4847,
+        "1": 4859,
+        "2": 4828,
+        "3": 4853,
+        "4": 4849,
+        "5": 4828,
+        "6": 4787,
+        "7": 4817
+      },
+      "ledger_rows": 13371,
+      "queries_compared": 14,
+      "oracle_sha256": "d4b3d4a570190e6d38d1dbc51dac1d6607282bf18703d6b4b3b94702193cd994"
+    },
+    {
+      "label": "load-027",
+      "heads": {
+        "0": 4986,
+        "1": 4993,
+        "2": 4957,
+        "3": 4979,
+        "4": 4978,
+        "5": 4963,
+        "6": 4916,
+        "7": 4953
+      },
+      "ledger_rows": 13769,
+      "queries_compared": 14,
+      "oracle_sha256": "3de372f9f7d52c24d76c3d0717ad7583ac48af8a058c9d6a6d4b3477354383f3"
+    },
+    {
+      "label": "load-028",
+      "heads": {
+        "0": 5143,
+        "1": 5147,
+        "2": 5111,
+        "3": 5138,
+        "4": 5135,
+        "5": 5122,
+        "6": 5072,
+        "7": 5105
+      },
+      "ledger_rows": 14228,
+      "queries_compared": 14,
+      "oracle_sha256": "76a1c82feb9f5ff677b864c16ce72243d99ad7a33b52279aad3a79afd22d9c7e"
+    },
+    {
+      "label": "load-029",
+      "heads": {
+        "0": 5268,
+        "1": 5276,
+        "2": 5238,
+        "3": 5264,
+        "4": 5255,
+        "5": 5246,
+        "6": 5199,
+        "7": 5231
+      },
+      "ledger_rows": 14611,
+      "queries_compared": 14,
+      "oracle_sha256": "bcd1bd5e0739d660d3914571bab54d5377eefbfc6bcef13522bcd34aa5c43c7f"
+    },
+    {
+      "label": "load-030",
+      "heads": {
+        "0": 5385,
+        "1": 5398,
+        "2": 5358,
+        "3": 5388,
+        "4": 5383,
+        "5": 5369,
+        "6": 5322,
+        "7": 5355
+      },
+      "ledger_rows": 14967,
+      "queries_compared": 14,
+      "oracle_sha256": "bfbb97165538a0c316ae5d918b99d3ccee9a3e1fbefb9905115fe5e4c926581b"
+    },
+    {
+      "label": "load-031",
+      "heads": {
+        "0": 5516,
+        "1": 5520,
+        "2": 5479,
+        "3": 5506,
+        "4": 5498,
+        "5": 5490,
+        "6": 5442,
+        "7": 5476
+      },
+      "ledger_rows": 15337,
+      "queries_compared": 14,
+      "oracle_sha256": "3d0d6a68b6faebd9e903e9131380e0c91f2d100484d0226b71a3977109785fc3"
+    },
+    {
+      "label": "load-032",
+      "heads": {
+        "0": 5635,
+        "1": 5629,
+        "2": 5598,
+        "3": 5628,
+        "4": 5620,
+        "5": 5604,
+        "6": 5558,
+        "7": 5595
+      },
+      "ledger_rows": 15691,
+      "queries_compared": 14,
+      "oracle_sha256": "a32c204b7f7a22631a5484d5b01990fac20a4007aa982381bc5f76dacbc2d052"
+    },
+    {
+      "label": "load-033",
+      "heads": {
+        "0": 5758,
+        "1": 5757,
+        "2": 5722,
+        "3": 5751,
+        "4": 5741,
+        "5": 5725,
+        "6": 5681,
+        "7": 5715
+      },
+      "ledger_rows": 16063,
+      "queries_compared": 14,
+      "oracle_sha256": "ec014c04d25ab46c80a64ad0c79f51023a93befb3ac4ac4564f06bddae750303"
+    },
+    {
+      "label": "load-034",
+      "heads": {
+        "0": 5876,
+        "1": 5873,
+        "2": 5837,
+        "3": 5867,
+        "4": 5857,
+        "5": 5837,
+        "6": 5793,
+        "7": 5828
+      },
+      "ledger_rows": 16416,
+      "queries_compared": 14,
+      "oracle_sha256": "d7ce0f309da8eeee362310270d94fef1efe372e948e0a5222c2c4eac76cfc717"
+    },
+    {
+      "label": "load-035",
+      "heads": {
+        "0": 6023,
+        "1": 6019,
+        "2": 5983,
+        "3": 6008,
+        "4": 6005,
+        "5": 5988,
+        "6": 5941,
+        "7": 5975
+      },
+      "ledger_rows": 16860,
+      "queries_compared": 14,
+      "oracle_sha256": "f2d1f57e74d6bedd94ebbfc6c768b78e9dc89334b8afa37532516f72eb0735a2"
+    },
+    {
+      "label": "load-036",
+      "heads": {
+        "0": 6126,
+        "1": 6123,
+        "2": 6089,
+        "3": 6117,
+        "4": 6104,
+        "5": 6096,
+        "6": 6043,
+        "7": 6081
+      },
+      "ledger_rows": 17164,
+      "queries_compared": 14,
+      "oracle_sha256": "4b6f77acbe050b579ddd83a155a745961f1db527cdf2f2eefe8473b3a9b60a5d"
+    },
+    {
+      "label": "load-037",
+      "heads": {
+        "0": 6242,
+        "1": 6235,
+        "2": 6200,
+        "3": 6228,
+        "4": 6219,
+        "5": 6206,
+        "6": 6157,
+        "7": 6189
+      },
+      "ledger_rows": 17500,
+      "queries_compared": 14,
+      "oracle_sha256": "e29d36f12aa137ba353afce36eea9979f98dd625ca4f15f14a37483ddea812cd"
+    },
+    {
+      "label": "load-038",
+      "heads": {
+        "0": 6378,
+        "1": 6370,
+        "2": 6340,
+        "3": 6364,
+        "4": 6353,
+        "5": 6343,
+        "6": 6289,
+        "7": 6320
+      },
+      "ledger_rows": 17903,
+      "queries_compared": 14,
+      "oracle_sha256": "2eb0c7fe133792ed9bc45536f2bb379e760de8dc26375cc1f207613da1fda100"
+    },
+    {
+      "label": "load-039",
+      "heads": {
+        "0": 6492,
+        "1": 6483,
+        "2": 6451,
+        "3": 6474,
+        "4": 6465,
+        "5": 6445,
+        "6": 6406,
+        "7": 6436
+      },
+      "ledger_rows": 18246,
+      "queries_compared": 14,
+      "oracle_sha256": "027a766afc0692f7305151c262eadf643d421dd634c29134f7819ea8e781c3b2"
+    },
+    {
+      "label": "load-040",
+      "heads": {
+        "0": 6602,
+        "1": 6586,
+        "2": 6558,
+        "3": 6586,
+        "4": 6570,
+        "5": 6564,
+        "6": 6513,
+        "7": 6543
+      },
+      "ledger_rows": 18582,
+      "queries_compared": 14,
+      "oracle_sha256": "026ee8cbb2e320cfc59b87294e5014753a9f8231ea2bca9a059bb50cf71b6241"
+    },
+    {
+      "label": "eio-dir-sync",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "eio-published-dir-sync",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "stall-published",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "fault-baseline",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "after-uncertain",
+      "heads": {
+        "0": 6746,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19008,
+      "queries_compared": 14,
+      "oracle_sha256": "1298d84eced2b52784b34b1f1687e3f67e18a947a85d50242879f7f9187efe50"
+    },
+    {
+      "label": "repaired-interrupted-restore",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    }
+  ],
+  "oracle_checks": [
+    {
+      "label": "live-source",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "load-000",
+      "heads": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0
+      },
+      "ledger_rows": 0,
+      "queries_compared": 14,
+      "oracle_sha256": "e94aa46e3c11155c3b2a7e5f20d0a6cbf4b6353f8df0ca159248df920912c186"
+    },
+    {
+      "label": "load-001",
+      "heads": {
+        "0": 213,
+        "1": 214,
+        "2": 218,
+        "3": 217,
+        "4": 217,
+        "5": 208,
+        "6": 214,
+        "7": 216
+      },
+      "ledger_rows": 575,
+      "queries_compared": 14,
+      "oracle_sha256": "55895ecc8c105915028b6c228c09d4dd8e3f902011c703cd71f771bac31fb8b9"
+    },
+    {
+      "label": "load-002",
+      "heads": {
+        "0": 409,
+        "1": 411,
+        "2": 412,
+        "3": 417,
+        "4": 415,
+        "5": 409,
+        "6": 401,
+        "7": 409
+      },
+      "ledger_rows": 1082,
+      "queries_compared": 14,
+      "oracle_sha256": "7b4a7c77231a5a04f376bf7a52943bad966fd1e9e0086689df127cb3cee11cc2"
+    },
+    {
+      "label": "load-003",
+      "heads": {
+        "0": 617,
+        "1": 625,
+        "2": 622,
+        "3": 628,
+        "4": 623,
+        "5": 613,
+        "6": 613,
+        "7": 623
+      },
+      "ledger_rows": 1623,
+      "queries_compared": 14,
+      "oracle_sha256": "7373a36e0e0457baa6120734fdf390e99e24fbe5b6ab908326df35f8d0ad69e9"
+    },
+    {
+      "label": "load-004",
+      "heads": {
+        "0": 923,
+        "1": 928,
+        "2": 926,
+        "3": 931,
+        "4": 928,
+        "5": 923,
+        "6": 911,
+        "7": 932
+      },
+      "ledger_rows": 2383,
+      "queries_compared": 14,
+      "oracle_sha256": "2e244ad66f950243fb07d3f0e9a39feda7622b49a50442d45c5321d38e436de7"
+    },
+    {
+      "label": "load-005",
+      "heads": {
+        "0": 1118,
+        "1": 1127,
+        "2": 1121,
+        "3": 1126,
+        "4": 1125,
+        "5": 1121,
+        "6": 1106,
+        "7": 1125
+      },
+      "ledger_rows": 2894,
+      "queries_compared": 14,
+      "oracle_sha256": "2884e3a62617152fb4218a79dc983ee12f708a4f0ffaa2d8e1cf44dde815dd9f"
+    },
+    {
+      "label": "load-006",
+      "heads": {
+        "0": 1333,
+        "1": 1338,
+        "2": 1330,
+        "3": 1338,
+        "4": 1338,
+        "5": 1332,
+        "6": 1317,
+        "7": 1336
+      },
+      "ledger_rows": 3465,
+      "queries_compared": 14,
+      "oracle_sha256": "c8d7044b32dcba1e90b02a6389d89c4c4a09b3e1c79ac49e9665a2c9dceb6461"
+    },
+    {
+      "label": "load-007",
+      "heads": {
+        "0": 1521,
+        "1": 1528,
+        "2": 1517,
+        "3": 1519,
+        "4": 1522,
+        "5": 1501,
+        "6": 1504,
+        "7": 1528
+      },
+      "ledger_rows": 3942,
+      "queries_compared": 14,
+      "oracle_sha256": "26a2e6f1267b2c9bb7b6719de59a6b9bbdf7cfd25031b1a8d1cf0609c2e94bc4"
+    },
+    {
+      "label": "load-008",
+      "heads": {
+        "0": 1722,
+        "1": 1734,
+        "2": 1715,
+        "3": 1722,
+        "4": 1732,
+        "5": 1723,
+        "6": 1708,
+        "7": 1724
+      },
+      "ledger_rows": 4473,
+      "queries_compared": 14,
+      "oracle_sha256": "754a8f2218e6497c441ae57173ef051db2ad9d8e1b54b1edc3b56085124f3ba1"
+    },
+    {
+      "label": "load-009",
+      "heads": {
+        "0": 1992,
+        "1": 2005,
+        "2": 1993,
+        "3": 1993,
+        "4": 2007,
+        "5": 1989,
+        "6": 1978,
+        "7": 1996
+      },
+      "ledger_rows": 5191,
+      "queries_compared": 14,
+      "oracle_sha256": "bdab311209539f964a46c7dc1a37fd6dcacb1a5c13c397c9e0f11aecdfe7f13e"
+    },
+    {
+      "label": "load-010",
+      "heads": {
+        "0": 2176,
+        "1": 2188,
+        "2": 2175,
+        "3": 2177,
+        "4": 2180,
+        "5": 2169,
+        "6": 2160,
+        "7": 2177
+      },
+      "ledger_rows": 5706,
+      "queries_compared": 14,
+      "oracle_sha256": "7d11780c5ab199d8336e4f10f77016ad322e72880496ae91b5ddcf767474d153"
+    },
+    {
+      "label": "load-011",
+      "heads": {
+        "0": 2341,
+        "1": 2353,
+        "2": 2338,
+        "3": 2337,
+        "4": 2349,
+        "5": 2333,
+        "6": 2323,
+        "7": 2340
+      },
+      "ledger_rows": 6175,
+      "queries_compared": 14,
+      "oracle_sha256": "859de42a8867660362f18f236a071dd7ec87b11ec025a9990441ac71fc240010"
+    },
+    {
+      "label": "load-012",
+      "heads": {
+        "0": 2534,
+        "1": 2548,
+        "2": 2526,
+        "3": 2535,
+        "4": 2544,
+        "5": 2529,
+        "6": 2513,
+        "7": 2527
+      },
+      "ledger_rows": 6708,
+      "queries_compared": 14,
+      "oracle_sha256": "3c7199521b41d287d08be99643cebb04c87c7433e32814311f5c98d77054b0d8"
+    },
+    {
+      "label": "load-013",
+      "heads": {
+        "0": 2703,
+        "1": 2719,
+        "2": 2696,
+        "3": 2705,
+        "4": 2712,
+        "5": 2697,
+        "6": 2672,
+        "7": 2692
+      },
+      "ledger_rows": 7194,
+      "queries_compared": 14,
+      "oracle_sha256": "f70d33d8cf04541b2cc311cdcf5256bf68d169b30adbf1fd862a408612ac9054"
+    },
+    {
+      "label": "load-014",
+      "heads": {
+        "0": 2867,
+        "1": 2878,
+        "2": 2858,
+        "3": 2867,
+        "4": 2865,
+        "5": 2852,
+        "6": 2837,
+        "7": 2857
+      },
+      "ledger_rows": 7639,
+      "queries_compared": 14,
+      "oracle_sha256": "51bc4fa83ad9ea1dfff168bcd67288157b478a595437ab82291e9a3f6dbb776a"
+    },
+    {
+      "label": "load-015",
+      "heads": {
+        "0": 3027,
+        "1": 3037,
+        "2": 3024,
+        "3": 3031,
+        "4": 3035,
+        "5": 3020,
+        "6": 3002,
+        "7": 3012
+      },
+      "ledger_rows": 8108,
+      "queries_compared": 14,
+      "oracle_sha256": "4c0c2dc4db30e31b9014b92e013154f4e758451d5be75dad6ec2536374b23ea9"
+    },
+    {
+      "label": "load-016",
+      "heads": {
+        "0": 3183,
+        "1": 3195,
+        "2": 3173,
+        "3": 3177,
+        "4": 3186,
+        "5": 3170,
+        "6": 3151,
+        "7": 3166
+      },
+      "ledger_rows": 8536,
+      "queries_compared": 14,
+      "oracle_sha256": "0fd3979584c820ecb516cc5ed65b8512ef1479d247a61af8586dd32ebef95725"
+    },
+    {
+      "label": "load-017",
+      "heads": {
+        "0": 3360,
+        "1": 3372,
+        "2": 3348,
+        "3": 3356,
+        "4": 3362,
+        "5": 3352,
+        "6": 3324,
+        "7": 3346
+      },
+      "ledger_rows": 9026,
+      "queries_compared": 14,
+      "oracle_sha256": "75fe81bb0464fba4cd719e4a1a9f0ecaf8612fcada2402c467fcba03124181e5"
+    },
+    {
+      "label": "load-018",
+      "heads": {
+        "0": 3594,
+        "1": 3605,
+        "2": 3583,
+        "3": 3594,
+        "4": 3595,
+        "5": 3582,
+        "6": 3545,
+        "7": 3578
+      },
+      "ledger_rows": 9713,
+      "queries_compared": 14,
+      "oracle_sha256": "070e85576ed3d4f00ee406440cbd915542e1113cee5dd93d3ce445a134dccebd"
+    },
+    {
+      "label": "load-019",
+      "heads": {
+        "0": 3747,
+        "1": 3755,
+        "2": 3731,
+        "3": 3743,
+        "4": 3750,
+        "5": 3727,
+        "6": 3700,
+        "7": 3717
+      },
+      "ledger_rows": 10159,
+      "queries_compared": 14,
+      "oracle_sha256": "30866e6cd67d4ccfd97b5078e7ec9eb917f42b5bba52094a65a5e2d7b51b5cf2"
+    },
+    {
+      "label": "load-020",
+      "heads": {
+        "0": 3882,
+        "1": 3895,
+        "2": 3868,
+        "3": 3882,
+        "4": 3886,
+        "5": 3867,
+        "6": 3837,
+        "7": 3858
+      },
+      "ledger_rows": 10550,
+      "queries_compared": 14,
+      "oracle_sha256": "312b7e00c642f4e102991128143214bdf3ff0d343116764c60e08ee2e4f152da"
+    },
+    {
+      "label": "load-021",
+      "heads": {
+        "0": 4057,
+        "1": 4063,
+        "2": 4035,
+        "3": 4050,
+        "4": 4052,
+        "5": 4035,
+        "6": 4001,
+        "7": 4029
+      },
+      "ledger_rows": 11029,
+      "queries_compared": 14,
+      "oracle_sha256": "2150bb0252f3ecb0290b872419f651cf1f350e7941c9011db0e5cf9ab4fd8f6d"
+    },
+    {
+      "label": "load-022",
+      "heads": {
+        "0": 4278,
+        "1": 4286,
+        "2": 4251,
+        "3": 4278,
+        "4": 4281,
+        "5": 4262,
+        "6": 4221,
+        "7": 4254
+      },
+      "ledger_rows": 11684,
+      "queries_compared": 14,
+      "oracle_sha256": "cfed9d002cbdc763dd2bbe2ab865845a0b24134be95e71557168328f53bd6162"
+    },
+    {
+      "label": "load-023",
+      "heads": {
+        "0": 4409,
+        "1": 4425,
+        "2": 4399,
+        "3": 4417,
+        "4": 4417,
+        "5": 4398,
+        "6": 4357,
+        "7": 4388
+      },
+      "ledger_rows": 12096,
+      "queries_compared": 14,
+      "oracle_sha256": "d3a2d0a1c3778e8e37dfa5ba4d99b907c9f9970d5f154cb903357d4f366c64bb"
+    },
+    {
+      "label": "load-024",
+      "heads": {
+        "0": 4553,
+        "1": 4560,
+        "2": 4530,
+        "3": 4552,
+        "4": 4545,
+        "5": 4530,
+        "6": 4492,
+        "7": 4525
+      },
+      "ledger_rows": 12493,
+      "queries_compared": 14,
+      "oracle_sha256": "ba7c84e4bc3f7d339c03b0f2443925045d15e85b78c1c844c9bcae75b3db504b"
+    },
+    {
+      "label": "load-025",
+      "heads": {
+        "0": 4716,
+        "1": 4724,
+        "2": 4692,
+        "3": 4716,
+        "4": 4716,
+        "5": 4696,
+        "6": 4656,
+        "7": 4688
+      },
+      "ledger_rows": 12977,
+      "queries_compared": 14,
+      "oracle_sha256": "5b329fac34c9f5ed1a94ecde3e013cf11d7b31e957070e46e0cf7d04cbbf1b38"
+    },
+    {
+      "label": "load-026",
+      "heads": {
+        "0": 4847,
+        "1": 4859,
+        "2": 4828,
+        "3": 4853,
+        "4": 4849,
+        "5": 4828,
+        "6": 4787,
+        "7": 4817
+      },
+      "ledger_rows": 13371,
+      "queries_compared": 14,
+      "oracle_sha256": "d4b3d4a570190e6d38d1dbc51dac1d6607282bf18703d6b4b3b94702193cd994"
+    },
+    {
+      "label": "load-027",
+      "heads": {
+        "0": 4986,
+        "1": 4993,
+        "2": 4957,
+        "3": 4979,
+        "4": 4978,
+        "5": 4963,
+        "6": 4916,
+        "7": 4953
+      },
+      "ledger_rows": 13769,
+      "queries_compared": 14,
+      "oracle_sha256": "3de372f9f7d52c24d76c3d0717ad7583ac48af8a058c9d6a6d4b3477354383f3"
+    },
+    {
+      "label": "load-028",
+      "heads": {
+        "0": 5143,
+        "1": 5147,
+        "2": 5111,
+        "3": 5138,
+        "4": 5135,
+        "5": 5122,
+        "6": 5072,
+        "7": 5105
+      },
+      "ledger_rows": 14228,
+      "queries_compared": 14,
+      "oracle_sha256": "76a1c82feb9f5ff677b864c16ce72243d99ad7a33b52279aad3a79afd22d9c7e"
+    },
+    {
+      "label": "load-029",
+      "heads": {
+        "0": 5268,
+        "1": 5276,
+        "2": 5238,
+        "3": 5264,
+        "4": 5255,
+        "5": 5246,
+        "6": 5199,
+        "7": 5231
+      },
+      "ledger_rows": 14611,
+      "queries_compared": 14,
+      "oracle_sha256": "bcd1bd5e0739d660d3914571bab54d5377eefbfc6bcef13522bcd34aa5c43c7f"
+    },
+    {
+      "label": "load-030",
+      "heads": {
+        "0": 5385,
+        "1": 5398,
+        "2": 5358,
+        "3": 5388,
+        "4": 5383,
+        "5": 5369,
+        "6": 5322,
+        "7": 5355
+      },
+      "ledger_rows": 14967,
+      "queries_compared": 14,
+      "oracle_sha256": "bfbb97165538a0c316ae5d918b99d3ccee9a3e1fbefb9905115fe5e4c926581b"
+    },
+    {
+      "label": "load-031",
+      "heads": {
+        "0": 5516,
+        "1": 5520,
+        "2": 5479,
+        "3": 5506,
+        "4": 5498,
+        "5": 5490,
+        "6": 5442,
+        "7": 5476
+      },
+      "ledger_rows": 15337,
+      "queries_compared": 14,
+      "oracle_sha256": "3d0d6a68b6faebd9e903e9131380e0c91f2d100484d0226b71a3977109785fc3"
+    },
+    {
+      "label": "load-032",
+      "heads": {
+        "0": 5635,
+        "1": 5629,
+        "2": 5598,
+        "3": 5628,
+        "4": 5620,
+        "5": 5604,
+        "6": 5558,
+        "7": 5595
+      },
+      "ledger_rows": 15691,
+      "queries_compared": 14,
+      "oracle_sha256": "a32c204b7f7a22631a5484d5b01990fac20a4007aa982381bc5f76dacbc2d052"
+    },
+    {
+      "label": "load-033",
+      "heads": {
+        "0": 5758,
+        "1": 5757,
+        "2": 5722,
+        "3": 5751,
+        "4": 5741,
+        "5": 5725,
+        "6": 5681,
+        "7": 5715
+      },
+      "ledger_rows": 16063,
+      "queries_compared": 14,
+      "oracle_sha256": "ec014c04d25ab46c80a64ad0c79f51023a93befb3ac4ac4564f06bddae750303"
+    },
+    {
+      "label": "load-034",
+      "heads": {
+        "0": 5876,
+        "1": 5873,
+        "2": 5837,
+        "3": 5867,
+        "4": 5857,
+        "5": 5837,
+        "6": 5793,
+        "7": 5828
+      },
+      "ledger_rows": 16416,
+      "queries_compared": 14,
+      "oracle_sha256": "d7ce0f309da8eeee362310270d94fef1efe372e948e0a5222c2c4eac76cfc717"
+    },
+    {
+      "label": "load-035",
+      "heads": {
+        "0": 6023,
+        "1": 6019,
+        "2": 5983,
+        "3": 6008,
+        "4": 6005,
+        "5": 5988,
+        "6": 5941,
+        "7": 5975
+      },
+      "ledger_rows": 16860,
+      "queries_compared": 14,
+      "oracle_sha256": "f2d1f57e74d6bedd94ebbfc6c768b78e9dc89334b8afa37532516f72eb0735a2"
+    },
+    {
+      "label": "load-036",
+      "heads": {
+        "0": 6126,
+        "1": 6123,
+        "2": 6089,
+        "3": 6117,
+        "4": 6104,
+        "5": 6096,
+        "6": 6043,
+        "7": 6081
+      },
+      "ledger_rows": 17164,
+      "queries_compared": 14,
+      "oracle_sha256": "4b6f77acbe050b579ddd83a155a745961f1db527cdf2f2eefe8473b3a9b60a5d"
+    },
+    {
+      "label": "load-037",
+      "heads": {
+        "0": 6242,
+        "1": 6235,
+        "2": 6200,
+        "3": 6228,
+        "4": 6219,
+        "5": 6206,
+        "6": 6157,
+        "7": 6189
+      },
+      "ledger_rows": 17500,
+      "queries_compared": 14,
+      "oracle_sha256": "e29d36f12aa137ba353afce36eea9979f98dd625ca4f15f14a37483ddea812cd"
+    },
+    {
+      "label": "load-038",
+      "heads": {
+        "0": 6378,
+        "1": 6370,
+        "2": 6340,
+        "3": 6364,
+        "4": 6353,
+        "5": 6343,
+        "6": 6289,
+        "7": 6320
+      },
+      "ledger_rows": 17903,
+      "queries_compared": 14,
+      "oracle_sha256": "2eb0c7fe133792ed9bc45536f2bb379e760de8dc26375cc1f207613da1fda100"
+    },
+    {
+      "label": "load-039",
+      "heads": {
+        "0": 6492,
+        "1": 6483,
+        "2": 6451,
+        "3": 6474,
+        "4": 6465,
+        "5": 6445,
+        "6": 6406,
+        "7": 6436
+      },
+      "ledger_rows": 18246,
+      "queries_compared": 14,
+      "oracle_sha256": "027a766afc0692f7305151c262eadf643d421dd634c29134f7819ea8e781c3b2"
+    },
+    {
+      "label": "load-040",
+      "heads": {
+        "0": 6602,
+        "1": 6586,
+        "2": 6558,
+        "3": 6586,
+        "4": 6570,
+        "5": 6564,
+        "6": 6513,
+        "7": 6543
+      },
+      "ledger_rows": 18582,
+      "queries_compared": 14,
+      "oracle_sha256": "026ee8cbb2e320cfc59b87294e5014753a9f8231ea2bca9a059bb50cf71b6241"
+    },
+    {
+      "label": "enospc-object",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "eio-file-sync",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "eio-dir-sync",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "eio-dir-sync",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "eio-published-dir-sync",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "eio-published-dir-sync",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "eio-manifest",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "restart-stall-object",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "restart-stall-manifest",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "restart-stall-published",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "stall-published",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "fault-baseline",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "acknowledgement-window-restart",
+      "heads": {
+        "0": 6746,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19008,
+      "queries_compared": 14,
+      "oracle_sha256": "1298d84eced2b52784b34b1f1687e3f67e18a947a85d50242879f7f9187efe50"
+    },
+    {
+      "label": "after-uncertain",
+      "heads": {
+        "0": 6746,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19008,
+      "queries_compared": 14,
+      "oracle_sha256": "1298d84eced2b52784b34b1f1687e3f67e18a947a85d50242879f7f9187efe50"
+    },
+    {
+      "label": "eio-source-wal-restart",
+      "heads": {
+        "0": 6746,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19008,
+      "queries_compared": 14,
+      "oracle_sha256": "1298d84eced2b52784b34b1f1687e3f67e18a947a85d50242879f7f9187efe50"
+    },
+    {
+      "label": "eio-page-wal-restart",
+      "heads": {
+        "0": 6748,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19009,
+      "queries_compared": 14,
+      "oracle_sha256": "b503b12adc73a52feb431fcc5bff520e53cc04f1ba7ef57d9fa30316ba194bf5"
+    },
+    {
+      "label": "repaired-interrupted-restore",
+      "heads": {
+        "0": 6745,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19007,
+      "queries_compared": 14,
+      "oracle_sha256": "cc68856c16bb0b31fca28b86a0ea2598307fbc857f9afc7c468c7d6d645b1b24"
+    },
+    {
+      "label": "final-source",
+      "heads": {
+        "0": 6748,
+        "1": 6730,
+        "2": 6698,
+        "3": 6729,
+        "4": 6712,
+        "5": 6705,
+        "6": 6653,
+        "7": 6675
+      },
+      "ledger_rows": 19009,
+      "queries_compared": 14,
+      "oracle_sha256": "b503b12adc73a52feb431fcc5bff520e53cc04f1ba7ef57d9fa30316ba194bf5"
+    }
+  ],
+  "faults": [
+    {
+      "kind": "enospc-object",
+      "hits": [
+        "enospc-object /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/objects/.tmp-9f0ae923-a154-4add-9aa6-93d2c6715046",
+        "enospc-object /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/objects/.tmp-9f0ae923-a154-4add-9aa6-93d2c6715046"
+      ],
+      "complete_or_absent": true,
+      "publication_acknowledged": false,
+      "published_and_verified": false,
+      "error": "bicdb error: io error: No space left on device (os error 28)"
+    },
+    {
+      "kind": "eio-file-sync",
+      "hits": [
+        "eio-file-sync /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/objects/.tmp-2946531c-a367-4861-b565-62e958ec4641"
+      ],
+      "complete_or_absent": true,
+      "publication_acknowledged": false,
+      "published_and_verified": false,
+      "error": "bicdb error: io error: Input/output error (os error 5)"
+    },
+    {
+      "kind": "eio-dir-sync",
+      "hits": [
+        "eio-dir-sync /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository"
+      ],
+      "complete_or_absent": true,
+      "publication_acknowledged": false,
+      "published_and_verified": true,
+      "error": "bicdb error: io error: Input/output error (os error 5)"
+    },
+    {
+      "kind": "eio-published-dir-sync",
+      "hits": [
+        "eio-published-dir-sync /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository"
+      ],
+      "complete_or_absent": true,
+      "publication_acknowledged": false,
+      "published_and_verified": true,
+      "error": "bicdb error: io error: Input/output error (os error 5)"
+    },
+    {
+      "kind": "eio-manifest",
+      "hits": [
+        "eio-manifest /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/eio-manifest.bicbackup"
+      ],
+      "complete_or_absent": true,
+      "publication_acknowledged": false,
+      "published_and_verified": false,
+      "error": "bicdb error: io error: Input/output error (os error 5)"
+    },
+    {
+      "kind": "stall-object",
+      "sigkill": true,
+      "published": false,
+      "acknowledged_source_preserved": true
+    },
+    {
+      "kind": "stall-manifest",
+      "sigkill": true,
+      "published": false,
+      "acknowledged_source_preserved": true
+    },
+    {
+      "kind": "stall-published",
+      "sigkill": true,
+      "published": true,
+      "acknowledged_source_preserved": true
+    },
+    {
+      "kind": "commit-before-oracle-ack-sigkill",
+      "resolved_transactions": [
+        {
+          "writer": 0,
+          "seq": 6746,
+          "transaction_id": "0866ab56925ad1d56112da1815fcc34a2356e2f13e6e886e9a8104e9b740e29c",
+          "outcome": "resolved_committed"
+        },
+        {
+          "writer": 1,
+          "seq": 6734,
+          "transaction_id": "b9d05bba5bd2a515687aa01058a91191ca4e461e3ac1b34a3ae29c21a544afc4",
+          "outcome": "resolved_aborted"
+        }
+      ]
+    },
+    {
+      "kind": "eio-source-wal",
+      "commit_rejected": true,
+      "acknowledged_source_preserved": true,
+      "new_connection_read_refused": "paged storage error: database requires recovery after a transaction durability/materialization failure; reopen before serving data",
+      "resolved_transactions": [
+        {
+          "writer": 0,
+          "seq": 6747,
+          "transaction_id": "9195b81759545deda96fe69d164897c00db23695f6d61a4668db14f2ad6757b5",
+          "outcome": "resolved_aborted"
+        }
+      ]
+    },
+    {
+      "kind": "eio-page-wal",
+      "commit_rejected": true,
+      "acknowledged_source_preserved": true,
+      "new_connection_read_refused": "paged storage error: database requires recovery after a transaction durability/materialization failure; reopen before serving data",
+      "resolved_transactions": [
+        {
+          "writer": 0,
+          "seq": 6748,
+          "transaction_id": "b5279f72a48b3d8e83791477dec15cf4527fc93b25b4d51da7041118c03508d3",
+          "outcome": "resolved_committed"
+        }
+      ]
+    },
+    {
+      "kind": "restore-install-sigkill",
+      "partial_target_refused": true,
+      "fresh_restore_verified": true
+    }
+  ],
+  "corruption": [
+    {
+      "case": "object-e675b3d77e35c453486aab6468933adcb1807122b5abe84282e6af8dbcf00755-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-e675b3d77e35c453486aab6468933adcb1807122b5abe84282e6af8dbcf00755-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-e675b3d77e35c453486aab6468933adcb1807122b5abe84282e6af8dbcf00755-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-e675b3d77e35c453486aab6468933adcb1807122b5abe84282e6af8dbcf00755-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-611d108e5f445f8de95fdf7e107dce84085862d4d4477a814a3761f1d11f4606-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-611d108e5f445f8de95fdf7e107dce84085862d4d4477a814a3761f1d11f4606-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-611d108e5f445f8de95fdf7e107dce84085862d4d4477a814a3761f1d11f4606-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-611d108e5f445f8de95fdf7e107dce84085862d4d4477a814a3761f1d11f4606-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-8e1fdc66967caeb7110cd64203384a6f0556575a8319ca47bb6c120e580b4941-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-8e1fdc66967caeb7110cd64203384a6f0556575a8319ca47bb6c120e580b4941-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-8e1fdc66967caeb7110cd64203384a6f0556575a8319ca47bb6c120e580b4941-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-8e1fdc66967caeb7110cd64203384a6f0556575a8319ca47bb6c120e580b4941-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-d508543957097529d3e0e56677d2b72c5d9deb42fba7ccfe2eef830076634b12-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-d508543957097529d3e0e56677d2b72c5d9deb42fba7ccfe2eef830076634b12-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-d508543957097529d3e0e56677d2b72c5d9deb42fba7ccfe2eef830076634b12-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-d508543957097529d3e0e56677d2b72c5d9deb42fba7ccfe2eef830076634b12-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-1f9cd4936ca9281b3cb9be974ffe9fa085745bf2071f9cc69b64de157f2e4f94-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-1f9cd4936ca9281b3cb9be974ffe9fa085745bf2071f9cc69b64de157f2e4f94-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-1f9cd4936ca9281b3cb9be974ffe9fa085745bf2071f9cc69b64de157f2e4f94-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-1f9cd4936ca9281b3cb9be974ffe9fa085745bf2071f9cc69b64de157f2e4f94-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-acb90874bb7111638a4dbb188072f2166c155bb0aa439d5a6f6ba3ee76a9a8d1-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-acb90874bb7111638a4dbb188072f2166c155bb0aa439d5a6f6ba3ee76a9a8d1-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-acb90874bb7111638a4dbb188072f2166c155bb0aa439d5a6f6ba3ee76a9a8d1-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-acb90874bb7111638a4dbb188072f2166c155bb0aa439d5a6f6ba3ee76a9a8d1-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-23a8054104e0305d1e003d32bf142ffd330bc17ea377daa8d741bea8015f1927-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-23a8054104e0305d1e003d32bf142ffd330bc17ea377daa8d741bea8015f1927-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-23a8054104e0305d1e003d32bf142ffd330bc17ea377daa8d741bea8015f1927-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-23a8054104e0305d1e003d32bf142ffd330bc17ea377daa8d741bea8015f1927-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-cca257a93020dd62df7dd65753e489c5f1bbd4ddb77c06603544c9c39f1394c6-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-cca257a93020dd62df7dd65753e489c5f1bbd4ddb77c06603544c9c39f1394c6-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-cca257a93020dd62df7dd65753e489c5f1bbd4ddb77c06603544c9c39f1394c6-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-cca257a93020dd62df7dd65753e489c5f1bbd4ddb77c06603544c9c39f1394c6-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-3a9cdc860ae38f97c071321047b0afc181848b5a4035dd2e81a209c57eb244e5-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-3a9cdc860ae38f97c071321047b0afc181848b5a4035dd2e81a209c57eb244e5-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-3a9cdc860ae38f97c071321047b0afc181848b5a4035dd2e81a209c57eb244e5-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-3a9cdc860ae38f97c071321047b0afc181848b5a4035dd2e81a209c57eb244e5-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-dd1d8cd064371d2f3ad642b4efb304455a00b2578a2bf36a46ce1d40fdcca2b5-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-dd1d8cd064371d2f3ad642b4efb304455a00b2578a2bf36a46ce1d40fdcca2b5-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-dd1d8cd064371d2f3ad642b4efb304455a00b2578a2bf36a46ce1d40fdcca2b5-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-dd1d8cd064371d2f3ad642b4efb304455a00b2578a2bf36a46ce1d40fdcca2b5-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-3d0e6fc7d0053f4e9d0fb192364f827c4ed904d5ed1e65e67f5f063d3612ca9f-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-3d0e6fc7d0053f4e9d0fb192364f827c4ed904d5ed1e65e67f5f063d3612ca9f-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-3d0e6fc7d0053f4e9d0fb192364f827c4ed904d5ed1e65e67f5f063d3612ca9f-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-3d0e6fc7d0053f4e9d0fb192364f827c4ed904d5ed1e65e67f5f063d3612ca9f-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-85194bdde6c4256fcd98f9cb93d34b190366156ba3af972dd5f368a2a10e3a6d-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-85194bdde6c4256fcd98f9cb93d34b190366156ba3af972dd5f368a2a10e3a6d-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-85194bdde6c4256fcd98f9cb93d34b190366156ba3af972dd5f368a2a10e3a6d-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-85194bdde6c4256fcd98f9cb93d34b190366156ba3af972dd5f368a2a10e3a6d-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-7bce8f7af1618a834d2ba8b05b581627a30b4a06f6d9dfe2b06b84544efddda3-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-7bce8f7af1618a834d2ba8b05b581627a30b4a06f6d9dfe2b06b84544efddda3-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-7bce8f7af1618a834d2ba8b05b581627a30b4a06f6d9dfe2b06b84544efddda3-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-7bce8f7af1618a834d2ba8b05b581627a30b4a06f6d9dfe2b06b84544efddda3-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-a97ab1702175d0271368ed5e2b4d413c398732462899b7b21a644089573bd9f8-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-a97ab1702175d0271368ed5e2b4d413c398732462899b7b21a644089573bd9f8-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-a97ab1702175d0271368ed5e2b4d413c398732462899b7b21a644089573bd9f8-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-a97ab1702175d0271368ed5e2b4d413c398732462899b7b21a644089573bd9f8-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-10888c3b2be3a5fc3996a7339a5f57773db8c04a9f366f1e65f5728283d6cc3b-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-10888c3b2be3a5fc3996a7339a5f57773db8c04a9f366f1e65f5728283d6cc3b-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-10888c3b2be3a5fc3996a7339a5f57773db8c04a9f366f1e65f5728283d6cc3b-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-10888c3b2be3a5fc3996a7339a5f57773db8c04a9f366f1e65f5728283d6cc3b-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-6ff4cfbd615aaf0af0e3bbde512b6dadd5a7bd0734f1282549b48e06f6396212-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-6ff4cfbd615aaf0af0e3bbde512b6dadd5a7bd0734f1282549b48e06f6396212-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-6ff4cfbd615aaf0af0e3bbde512b6dadd5a7bd0734f1282549b48e06f6396212-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-6ff4cfbd615aaf0af0e3bbde512b6dadd5a7bd0734f1282549b48e06f6396212-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-e2785a60ce6ae13d90b6df472a4d579c98479a05a6c26d6ee9e391b4b5b3a19f-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-e2785a60ce6ae13d90b6df472a4d579c98479a05a6c26d6ee9e391b4b5b3a19f-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-e2785a60ce6ae13d90b6df472a4d579c98479a05a6c26d6ee9e391b4b5b3a19f-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-e2785a60ce6ae13d90b6df472a4d579c98479a05a6c26d6ee9e391b4b5b3a19f-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-62c2a97434d6bd332b55ea53127aa3f0ffefb0d3ec5529358b8e4ae0b6c3193f-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-62c2a97434d6bd332b55ea53127aa3f0ffefb0d3ec5529358b8e4ae0b6c3193f-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-62c2a97434d6bd332b55ea53127aa3f0ffefb0d3ec5529358b8e4ae0b6c3193f-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-62c2a97434d6bd332b55ea53127aa3f0ffefb0d3ec5529358b8e4ae0b6c3193f-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-7dba0804420cabca819e5f7b4f1ae18ebb93fa222208a4e7e5f38eebc24b4b0b-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-7dba0804420cabca819e5f7b4f1ae18ebb93fa222208a4e7e5f38eebc24b4b0b-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-7dba0804420cabca819e5f7b4f1ae18ebb93fa222208a4e7e5f38eebc24b4b0b-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-7dba0804420cabca819e5f7b4f1ae18ebb93fa222208a4e7e5f38eebc24b4b0b-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-bit-flip",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-trailing-garbage",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "object-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-missing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "manifest-magic",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "manifest-ciphertext",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "manifest-truncated",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    },
+    {
+      "case": "manifest-trailing",
+      "verify_rejected": true,
+      "restore_rejected_before_install": true
+    }
+  ],
+  "fault_model": "Linux process crashes and injected libc I/O errors; not machine power cuts or storage-controller testing",
+  "sustained_seconds": 1827.1834699739702,
+  "acknowledged_transactions": 19007,
+  "rollback_attempts": 4874,
+  "peak_inflight_transactions": 8,
+  "writers": [
+    {
+      "commits": 2420,
+      "rollbacks": 226,
+      "serialization_aborts": 4099,
+      "transaction_with_oracle_intent_p99_seconds": 0.33812243212014437,
+      "transaction_with_oracle_intent_max_seconds": 1.2487632208503783
+    },
+    {
+      "commits": 2421,
+      "rollbacks": 263,
+      "serialization_aborts": 4049,
+      "transaction_with_oracle_intent_p99_seconds": 0.346976256929338,
+      "transaction_with_oracle_intent_max_seconds": 1.3423285577446222
+    },
+    {
+      "commits": 2358,
+      "rollbacks": 212,
+      "serialization_aborts": 4128,
+      "transaction_with_oracle_intent_p99_seconds": 0.3552728369832039,
+      "transaction_with_oracle_intent_max_seconds": 0.4682312551885843
+    },
+    {
+      "commits": 2389,
+      "rollbacks": 231,
+      "serialization_aborts": 4109,
+      "transaction_with_oracle_intent_p99_seconds": 0.3443569643422961,
+      "transaction_with_oracle_intent_max_seconds": 0.5578028098680079
+    },
+    {
+      "commits": 2358,
+      "rollbacks": 203,
+      "serialization_aborts": 4153,
+      "transaction_with_oracle_intent_p99_seconds": 0.3478337898850441,
+      "transaction_with_oracle_intent_max_seconds": 0.5086105307564139
+    },
+    {
+      "commits": 2409,
+      "rollbacks": 212,
+      "serialization_aborts": 4084,
+      "transaction_with_oracle_intent_p99_seconds": 0.33315538661554456,
+      "transaction_with_oracle_intent_max_seconds": 0.5474580735899508
+    },
+    {
+      "commits": 2347,
+      "rollbacks": 248,
+      "serialization_aborts": 4058,
+      "transaction_with_oracle_intent_p99_seconds": 0.34897100273519754,
+      "transaction_with_oracle_intent_max_seconds": 1.3223106693476439
+    },
+    {
+      "commits": 2305,
+      "rollbacks": 249,
+      "serialization_aborts": 4130,
+      "transaction_with_oracle_intent_p99_seconds": 0.33730311319231987,
+      "transaction_with_oracle_intent_max_seconds": 0.6041963188908994
+    }
+  ],
+  "elapsed_seconds": 2168.5839799898677,
+  "all_processes_stopped": true
+}

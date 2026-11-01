@@ -1,0 +1,13 @@
+enospc-object /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/objects/.tmp-9f0ae923-a154-4add-9aa6-93d2c6715046
+enospc-object /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/objects/.tmp-9f0ae923-a154-4add-9aa6-93d2c6715046
+eio-file-sync /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/objects/.tmp-2946531c-a367-4861-b565-62e958ec4641
+eio-dir-sync /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository
+eio-published-dir-sync /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository
+eio-manifest /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/eio-manifest.bicbackup
+stall-object /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/objects/.tmp-05d89414-38bb-4ccc-a06f-f4a28b63c1e9
+stall-manifest /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/stall-manifest.bicbackup
+stall-published /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/repository/stall-published.bicbackup
+eio-source-wal /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/db/transactions.log
+eio-source-wal /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/db/transactions.log
+eio-page-wal /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/db/paged/store.wal
+stall-install /root/bicdb-audit-artifacts/online-backup-fixed-release-qualification/interrupted-restore/sync_state.json

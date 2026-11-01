@@ -126,6 +126,16 @@ uploaders are reclaimed under ownership locks.
 
 ## Qualification with an external restore oracle
 
+The corrected optimized build passed the
+[2026-11-01 qualification campaign](evidence/online-backup-qualification-2026-11-01/README.md):
+eight concurrent clients sustained writes for 1,827 seconds, recording 19,007
+acknowledged transactions while 41 alternating full/incremental backups copied
+data. Including the fault-phase snapshots, 43 backups and 47 independent restores
+were checked. All 12 process/I/O fault cases and 84 corruption cases passed;
+every referenced object was tested with four mutations. The evidence includes
+the executable digest, external intent transcript, per-restore oracle results
+and fault trace. This is evidence for the recorded workload and fault model.
+
 The initial optimized campaign reproduced a real atomicity failure: after a
 page-WAL sync error, an account update survived restart while its ledger insert
 did not. The transaction's uncertain outcome had already been reconciled by ID;

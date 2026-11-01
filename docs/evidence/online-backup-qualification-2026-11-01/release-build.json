@@ -1,0 +1,16 @@
+{
+  "runtime_source_commit": "a6fc1c31e2cf2b4cc19ef34bf5958a445fc16dcb",
+  "qualification_source_commit": "a8fb422dcf275135c7b91fe283aaa65082eefcf0",
+  "runtime_tree_sha256": "fc9411c9629626022e50662c9691582a233a31a953e40f1343d6df399ff33ca4",
+  "profile": "default Cargo release, thin LTO; debug sections stripped; no compiler profile overrides",
+  "command": "CARGO_TARGET_DIR=/root/bicdb-target-schema CARGO_BUILD_JOBS=4 cargo build -p bicdb-cli --bin bicdb --release --locked",
+  "binary": "/root/bicdb-audit-artifacts/online-backups/a6fc1c3-release/bicdb",
+  "binary_sha256": "d96836c9f92a47d96eea335f206c24adf83a49bea852585b8070275ccac4ddbb",
+  "raw_binary_sha256": "1ff26e8152f9b242d3f1944576880d29ead0058ad1baecf0af28f975b4894fef",
+  "bytes": 290963392,
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "version": "bicdb 1.0.438-beta",
+  "production_deployed": false,
+  "recorded_at_utc": "2026-11-01T04:13:54.525847+00:00",
+  "ci_run": "https://github.com/nikoma/bicdb/actions/runs/41271849946"
+}

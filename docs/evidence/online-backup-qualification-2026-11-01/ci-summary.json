@@ -1,0 +1,32 @@
+{
+  "status": "completed",
+  "conclusion": "success",
+  "green": 8,
+  "running": [],
+  "suites": {
+    "bicdb-pgwire": {
+      "passed": 317,
+      "ignored": 2,
+      "targets": 13,
+      "conclusion": "success"
+    },
+    "rest of workspace": {
+      "passed": 864,
+      "ignored": 5,
+      "targets": 109,
+      "conclusion": "success"
+    },
+    "bicdb-sql": {
+      "passed": 1409,
+      "ignored": 4,
+      "targets": 138,
+      "conclusion": "success"
+    },
+    "bicdb-core": {
+      "passed": 1057,
+      "ignored": 5,
+      "targets": 90,
+      "conclusion": "success"
+    }
+  }
+}

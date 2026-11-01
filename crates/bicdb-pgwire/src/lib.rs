@@ -79,7 +79,7 @@ use bicdb_core::{
 };
 use bicdb_sql::{
     copy_cluster_role_catalog, ensure_primary_key_indexes, ensure_unique_constraint_indexes,
-    format_pg_lsn, infer_parameter_types, infer_query_result_columns_without_from,
+    format_pg_lsn, infer_parameter_types, infer_query_result_columns_for_describe,
     infer_query_result_types, is_role_membership_ddl, parse_database_ddl,
     parse_pg_canonical_special, parse_transaction_control, pg_type_from_data_type,
     postgres_jsonb_text, routine_exception_counts_snapshot, split_sql_statements, DatabaseDdl,
@@ -3623,7 +3623,7 @@ fn execute_server_sql_for_describe_inner(
     }
     {
         let db = server.read_db()?;
-        if let Some(columns) = infer_query_result_columns_without_from(&db, sql)? {
+        if let Some(columns) = infer_query_result_columns_for_describe(&db, sql)? {
             let (names, types): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
             return Ok(SqlResult::empty(names).with_column_types(types));
         }

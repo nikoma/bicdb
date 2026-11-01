@@ -109,6 +109,24 @@ pub fn infer_query_result_columns_without_from(
     db: &BicDb,
     sql: &str,
 ) -> Result<Option<Vec<(String, Option<String>)>>> {
+    infer_describe_columns(db, sql, false)
+}
+
+/// Describe explicit, fully typed projections without running their FROM or
+/// WHERE clauses. Preparing a query must not execute volatile projections or
+/// perform a potentially expensive join just to obtain column metadata.
+pub fn infer_query_result_columns_for_describe(
+    db: &BicDb,
+    sql: &str,
+) -> Result<Option<Vec<(String, Option<String>)>>> {
+    infer_describe_columns(db, sql, true)
+}
+
+fn infer_describe_columns(
+    db: &BicDb,
+    sql: &str,
+    explicit_from: bool,
+) -> Result<Option<Vec<(String, Option<String>)>>> {
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     reject_oversized_sql(sql_for_parse)?;
@@ -125,11 +143,28 @@ pub fn infer_query_result_columns_without_from(
     let SetExpr::Select(select) = query.body.as_ref() else {
         return Ok(None);
     };
-    if !select.from.is_empty() && !query_has_row_locks(&query) {
+    let new_projection = !select.from.is_empty() && !query_has_row_locks(&query);
+    if new_projection
+        && (!explicit_from
+            || select.projection.iter().any(|item| {
+                matches!(
+                    item,
+                    SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(..)
+                )
+            }))
+    {
         return Ok(None);
     }
     let engine = SqlEngine::new(db);
-    Ok(engine.query_output_columns(&query))
+    let columns = engine.query_output_columns(&query);
+    if new_projection
+        && columns
+            .as_ref()
+            .is_some_and(|columns| columns.iter().any(|(_, kind)| kind.is_none()))
+    {
+        return Ok(None);
+    }
+    Ok(columns)
 }
 
 struct ParameterTypeResolver<'engine, 'db> {

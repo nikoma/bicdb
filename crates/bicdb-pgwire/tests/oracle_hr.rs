@@ -58,6 +58,47 @@ impl Running {
 }
 
 #[tokio::test]
+async fn preparing_a_typed_projection_with_from_does_not_evaluate_rows() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(directory.path(), profile);
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb");
+        if profile != "postgres" {
+            config.options("-c bicdb.sql_profile=oracle-preview-v1");
+        }
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let connection = tokio::spawn(async move {
+            connection.await.unwrap();
+        });
+        client.batch_execute("CREATE TABLE source_rows(k INT PRIMARY KEY); INSERT INTO source_rows VALUES(1),(2)").await.unwrap();
+        let statement = client
+            .prepare("SELECT 1/(k-k) AS deferred_error FROM source_rows")
+            .await
+            .unwrap();
+        let error = client.query(&statement, &[]).await.unwrap_err();
+        assert_eq!(
+            error.as_db_error().unwrap().code(),
+            &tokio_postgres::error::SqlState::DIVISION_BY_ZERO
+        );
+        assert_eq!(
+            client
+                .query_one("SELECT COUNT(*) FROM source_rows", &[])
+                .await
+                .unwrap()
+                .get::<_, i64>(0),
+            2
+        );
+        drop(client);
+        connection.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn first_read_committed_row_lock_waits_for_a_younger_holder() {
     for profile in ["postgres", "oracle-preview-v1"] {
         let directory = tempfile::tempdir().unwrap();

@@ -57,6 +57,11 @@ explicit SQL alias stays unchanged. UPDATE and DELETE predicates use the same
 logical binding; COPY retains its table-target binding.
 When an ordinary column and a row alias share a name, type inference prefers
 the scalar column, matching row evaluation and preserving driver scalar types.
+PostgreSQL protocol Describe also resolves explicit, fully typed FROM
+projections from metadata. Preparing those queries does not run their joins,
+filters or projections; a row-dependent expression error is reported when the
+query executes. Wildcard and unresolved projection paths retain their existing
+fallback and are not qualified by this change.
 
 Oracle `FOR UPDATE OF column` resolves the owning base-table alias and lowers
 to the native table-lock target. Qualified columns in inner joins lock their

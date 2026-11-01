@@ -1,0 +1,45 @@
+{
+  "bicdb_source_commit": "72b83846cdeaddd11ee0891e251edd57dc9d8531",
+  "binary_sha256": "3cdf346c3f85dcfd38911e1afc3bac3afddee86551995a5c7c6a612209edd8e2",
+  "acceptance": {
+    "profile": "oracle-hr-v1",
+    "driver": "psycopg",
+    "driver_version": "3.3.4",
+    "source_commit": "6660bad68c07bd143430ace58565b3f727e17263",
+    "migration_statements": 87,
+    "initial_counts": {
+      "regions": 5,
+      "countries": 25,
+      "locations": 23,
+      "departments": 27,
+      "jobs": 19,
+      "employees": 107,
+      "job_history": 10
+    },
+    "joined_view_rows": 106,
+    "procedure_commit": true,
+    "procedure_constraint_rollback": true,
+    "parameterized_query": true,
+    "adaptations": [
+      "countries IOT -> heap storage",
+      "native views enforce read-only access",
+      "fixed English sample date language",
+      "cyclic department-manager FK validated after load",
+      "add_job_history imported; secure_dml and Oracle triggers deferred"
+    ],
+    "oracle_database_comparison": false
+  },
+  "post_restart_counts": {
+    "regions": 5,
+    "countries": 25,
+    "locations": 23,
+    "departments": 27,
+    "jobs": 19,
+    "employees": 107,
+    "job_history": 11
+  },
+  "restart_verified": true,
+  "classification": "local_functional_acceptance",
+  "oracle_database_comparison": false,
+  "read_only_view_verified": true
+}

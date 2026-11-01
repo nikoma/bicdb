@@ -83,6 +83,14 @@ async fn published_oracle_hr_runs_over_pg_driver_without_changing_postgres() {
         .unwrap();
     let employees: String = row.get(0);
     assert_eq!(employees, "107");
+    let error = client
+        .batch_execute("UPDATE emp_details_view SET salary=salary+1 WHERE employee_id=100")
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.as_db_error().unwrap().code(),
+        &tokio_postgres::error::SqlState::FEATURE_NOT_SUPPORTED
+    );
     assert_eq!(
         client
             .query_one("SELECT COUNT(*)::text FROM emp_details_view", &[])
@@ -193,10 +201,8 @@ async fn published_oracle_hr_runs_over_pg_driver_without_changing_postgres() {
         )
         .await
         .is_err());
-    client
-        .batch_execute("RESET ALL; DISCARD ALL")
-        .await
-        .unwrap();
+    client.batch_execute("RESET ALL").await.unwrap();
+    client.batch_execute("DISCARD ALL").await.unwrap();
     assert_eq!(
         client
             .query_one("SELECT current_setting('bicdb.sql_profile')", &[])

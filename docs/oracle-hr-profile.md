@@ -155,6 +155,9 @@ PostgreSQL database verifies unchanged empty-string/concatenation behavior and
 transactional DDL rollback. Startup mismatches and profile switching are
 negative controls. Full PostgreSQL suites remain release gates.
 
+See the [retained local acceptance](evidence/oracle-hr-2026-11-01/README.md)
+for the psycopg run, exact binary/source identity and post-restart row counts.
+
 The sample also exposed a native prepared-index join defect: typed numeric
 probes did not use the stored index's typed encoding. The shared executor now
 uses the same conversion as ordinary predicates. `prepared_typed_join` checks

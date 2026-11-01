@@ -2124,13 +2124,24 @@ pub(crate) fn normalize_relation_identifier(value: &str) -> String {
 pub(crate) fn parse_message(
     payload: &[u8],
     server: &Arc<PgWireServer>,
+    state: &ConnectionState,
 ) -> Result<ParsedStatementMessage> {
     let mut idx = 0;
     let name = read_cstr(payload, &mut idx)?;
     let sql = read_cstr(payload, &mut idx)?;
     let sql = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
         let db = server.read_db()?;
-        bicdb_sql::oracle::lower_profile_sql(&db, &sql, &server.config.sql_profile)?
+        bicdb_sql::oracle::lower_session_sql(
+            &db,
+            &sql,
+            &server.config.sql_profile,
+            state
+                .session_state
+                .session_gucs()
+                .get("search_path")
+                .map(String::as_str),
+            &state.user,
+        )?
     } else {
         sql
     };

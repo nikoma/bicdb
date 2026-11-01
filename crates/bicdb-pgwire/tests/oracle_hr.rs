@@ -58,6 +58,159 @@ impl Running {
 }
 
 #[tokio::test]
+async fn oracle_column_lock_targets_the_owning_join_alias() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let connect = || {
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb")
+            .options("-c bicdb.sql_profile=oracle-preview-v1");
+        async move {
+            let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+            (
+                client,
+                tokio::spawn(async move {
+                    connection.await.unwrap();
+                }),
+            )
+        }
+    };
+    let (one, c1) = connect().await;
+    let (two, c2) = connect().await;
+    one.batch_execute(
+        "CREATE TABLE parent_rows(k NUMBER PRIMARY KEY, value VARCHAR2(20));
+        CREATE TABLE child_rows(k NUMBER PRIMARY KEY, value VARCHAR2(20));
+        INSERT INTO parent_rows VALUES(1,'parent'); INSERT INTO child_rows VALUES(1,'child')",
+    )
+    .await
+    .unwrap();
+    one.batch_execute("BEGIN").await.unwrap();
+    let locked = one
+        .query(
+            "SELECT p.k FROM parent_rows p JOIN child_rows c ON p.k=c.k FOR UPDATE OF c.value",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(locked.len(), 1);
+    // The unrelated parent row remains writable; the selected child is locked.
+    two.batch_execute("UPDATE parent_rows SET value='changed' WHERE k=1")
+        .await
+        .unwrap();
+    let error = two
+        .batch_execute("UPDATE child_rows SET value='blocked' WHERE k=1")
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.as_db_error().unwrap().code(),
+        &tokio_postgres::error::SqlState::T_R_SERIALIZATION_FAILURE
+    );
+    one.batch_execute("ROLLBACK").await.unwrap();
+    two.batch_execute("UPDATE child_rows SET value='released' WHERE k=1")
+        .await
+        .unwrap();
+    assert!(one
+        .query(
+            "SELECT p.k FROM parent_rows p JOIN child_rows c ON p.k=c.k FOR UPDATE OF value",
+            &[]
+        )
+        .await
+        .is_err());
+    drop(one);
+    drop(two);
+    c1.await.unwrap();
+    c2.await.unwrap();
+}
+
+#[tokio::test]
+async fn oracle_preview_schema_selection_applies_to_simple_prepared_and_copy_queries() {
+    use futures_util::SinkExt;
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let connect = |path: &str| {
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb")
+            .options(format!(
+                "-c bicdb.sql_profile=oracle-preview-v1 -c search_path={path}"
+            ));
+        async move {
+            let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+            (
+                client,
+                tokio::spawn(async move {
+                    connection.await.unwrap();
+                }),
+            )
+        }
+    };
+    let (admin, connection) = connect("public").await;
+    admin
+        .batch_execute(
+            "CREATE SCHEMA red; CREATE SCHEMA blue;
+        CREATE TABLE red.entries(k NUMBER PRIMARY KEY, value VARCHAR2(20));
+        CREATE TABLE blue.entries(k NUMBER PRIMARY KEY, value VARCHAR2(20));
+        INSERT INTO red.entries VALUES(1,'red'); INSERT INTO blue.entries VALUES(1,'blue')",
+        )
+        .await
+        .unwrap();
+    drop(admin);
+    connection.await.unwrap();
+    for (path, expected) in [("red", "red"), ("\"BLUE\"", "blue")] {
+        let (client, connection) = connect(path).await;
+        let statement = client
+            .prepare_typed(
+                "SELECT value FROM entries WHERE k=$1",
+                &[tokio_postgres::types::Type::INT4],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            client
+                .query_one(&statement, &[&1i32])
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            expected
+        );
+        let sink = client
+            .copy_in("COPY entries(k,value) FROM STDIN")
+            .await
+            .unwrap();
+        tokio::pin!(sink);
+        sink.send(&b"2\tlocal\n"[..]).await.unwrap();
+        assert_eq!(sink.finish().await.unwrap(), 1);
+        let messages = client
+            .simple_query("SELECT COUNT(*) FROM entries")
+            .await
+            .unwrap();
+        assert!(messages.iter().any(|message| matches!(message, tokio_postgres::SimpleQueryMessage::Row(row) if row.get(0)==Some("2"))));
+        drop(client);
+        connection.await.unwrap();
+    }
+    let (client, connection) = connect("absent").await;
+    assert_eq!(
+        client
+            .query("SELECT * FROM entries", &[])
+            .await
+            .unwrap_err()
+            .as_db_error()
+            .unwrap()
+            .code(),
+        &tokio_postgres::error::SqlState::UNDEFINED_TABLE
+    );
+    drop(client);
+    connection.await.unwrap();
+}
+
+#[tokio::test]
 async fn postgres_extended_copy_recovers_after_constraint_error_and_copies_out() {
     use futures_util::{SinkExt, StreamExt};
     let directory = tempfile::tempdir().unwrap();

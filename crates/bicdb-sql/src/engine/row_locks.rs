@@ -74,18 +74,31 @@ impl SqlEngine<'_> {
                     continue;
                 };
                 let physical_name = relation_name(name)?;
-                let name = object_name(name)?;
-                let alias = alias
+                let logical_alias = alias
                     .as_ref()
                     .map(|a| a.name.value.clone())
-                    .unwrap_or_else(|| unqualified_relation(&name).to_string());
+                    .unwrap_or_else(|| object_name_parts(name).last().cloned().unwrap_or_default());
+                let name = object_name(name)?;
                 if requested
                     .as_ref()
-                    .is_some_and(|requested| requested != &alias && requested != &name)
+                    .is_some_and(|requested| requested != &logical_alias && requested != &name)
                 {
                     continue;
                 }
                 let table = resolve_session_relation_name(self.db_ref(), &physical_name)?;
+                // Unaliased row sets use the encoded physical relation as
+                // their column prefix. OF resolves a logical SQL table name,
+                // but lock-key extraction must address that actual row set.
+                let row_alias = alias
+                    .as_ref()
+                    .map(|a| a.name.value.clone())
+                    .unwrap_or_else(|| {
+                        physical_name
+                            .rsplit('.')
+                            .next()
+                            .unwrap_or(&physical_name)
+                            .to_string()
+                    });
                 self.require_relation_privilege(&table, "SELECT")?;
                 self.require_relation_privilege(&table, "UPDATE")?;
                 let schema = load_schema(self.db_ref(), &table)?.ok_or_else(|| {
@@ -97,7 +110,7 @@ impl SqlEngine<'_> {
                         "row locking currently requires a primary key".into(),
                     ));
                 }
-                targets.push((table, alias, schema, keys, lock.nonblock));
+                targets.push((table, row_alias, schema, keys, lock.nonblock));
             }
             if targets.len() == before {
                 return Err(SqlError::InvalidSql(

@@ -73,6 +73,207 @@ pub fn lower_profile_sql(db: &BicDb, sql: &str, profile: &str) -> Result<String>
     })
 }
 
+/// Resolve preview application relations in one explicitly selected schema.
+/// The bounded HR profile keeps its public-namespace contract. Native table
+/// privileges still apply after qualification; selecting a schema grants none.
+pub fn lower_session_sql(
+    db: &BicDb,
+    sql: &str,
+    profile: &str,
+    search_path: Option<&str>,
+    user: &str,
+) -> Result<String> {
+    let lowered = lower_profile_sql(db, sql, profile)?;
+    if profile != ORACLE_PREVIEW_PROFILE {
+        return Ok(lowered);
+    }
+    let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);
+    let mut statements = parse_statements(&lowered)?;
+    struct Qualify {
+        schema: String,
+        ctes: Vec<BTreeSet<String>>,
+    }
+    impl sqlparser::ast::VisitorMut for Qualify {
+        type Break = ();
+        fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<()> {
+            if let Statement::Copy {
+                source: sqlparser::ast::CopySource::Table { table_name, .. },
+                ..
+            } = statement
+            {
+                return self.pre_visit_relation(table_name);
+            }
+            ControlFlow::Continue(())
+        }
+        fn pre_visit_query(&mut self, query: &mut Query) -> ControlFlow<()> {
+            self.ctes.push(
+                query
+                    .with
+                    .as_ref()
+                    .map(|with| {
+                        with.cte_tables
+                            .iter()
+                            .map(|cte| ident_value(&cte.alias.name))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            );
+            ControlFlow::Continue(())
+        }
+        fn post_visit_query(&mut self, _: &mut Query) -> ControlFlow<()> {
+            self.ctes.pop();
+            ControlFlow::Continue(())
+        }
+        fn pre_visit_relation(&mut self, name: &mut ObjectName) -> ControlFlow<()> {
+            let parts = object_name_parts(name);
+            if let [table] = parts.as_slice() {
+                if !self.ctes.iter().rev().any(|ctes| ctes.contains(table)) {
+                    name.0.insert(
+                        0,
+                        sqlparser::ast::ObjectNamePart::Identifier(Ident::with_quote(
+                            '"',
+                            &self.schema,
+                        )),
+                    );
+                }
+            }
+            ControlFlow::Continue(())
+        }
+    }
+    let _ = sqlparser::ast::VisitMut::visit(
+        &mut statements,
+        &mut Qualify {
+            schema,
+            ctes: Vec::new(),
+        },
+    );
+    struct Locks<'a>(&'a BicDb);
+    impl sqlparser::ast::VisitorMut for Locks<'_> {
+        type Break = SqlError;
+        fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<SqlError> {
+            match lower_column_locks(self.0, query) {
+                Ok(()) => ControlFlow::Continue(()),
+                Err(error) => ControlFlow::Break(error),
+            }
+        }
+    }
+    if let ControlFlow::Break(error) =
+        sqlparser::ast::VisitMut::visit(&mut statements, &mut Locks(db))
+    {
+        return Err(error);
+    }
+    Ok(statements
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; "))
+}
+
+fn lower_column_locks(db: &BicDb, query: &mut Query) -> Result<()> {
+    if !query.locks.iter().any(|lock| lock.of.is_some()) {
+        return Ok(());
+    }
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return Err(unsupported("FOR UPDATE OF requires a base-table SELECT"));
+    };
+    let mut sources = Vec::new();
+    for from in &select.from {
+        for table in
+            std::iter::once(&from.relation).chain(from.joins.iter().map(|join| &join.relation))
+        {
+            if let TableFactor::Table {
+                name,
+                alias,
+                args: None,
+                ..
+            } = table
+            {
+                let physical = relation_name(name)?;
+                if let Some(schema) = load_schema(db, &physical)? {
+                    let parts = object_name_parts(name);
+                    let alias = alias
+                        .as_ref()
+                        .map(|a| ident_value(&a.name))
+                        .unwrap_or_else(|| parts.last().unwrap().clone());
+                    sources.push((parts, alias, schema));
+                }
+            }
+        }
+    }
+    for lock in &mut query.locks {
+        let Some(of) = lock.of.as_ref() else {
+            continue;
+        };
+        let parts = object_name_parts(of);
+        let Some((column, qualifier)) = parts.split_last() else {
+            return Err(unsupported("empty FOR UPDATE OF column"));
+        };
+        let owners = sources
+            .iter()
+            .filter(|(name, alias, schema)| {
+                schema.column(column).is_some()
+                    && (qualifier.is_empty()
+                        || qualifier == [alias.clone()]
+                        || name
+                            .last()
+                            .is_some_and(|table| qualifier == [table.clone()])
+                        || qualifier == name.as_slice())
+            })
+            .collect::<Vec<_>>();
+        if owners.len() != 1 {
+            return Err(unsupported(format!(
+                "FOR UPDATE OF column {of} has no unique base-table owner"
+            )));
+        }
+        lock.of = Some(ObjectName::from(vec![Ident::with_quote('"', &owners[0].1)]));
+    }
+    Ok(())
+}
+
+fn preview_schema(db: &BicDb, path: Option<&str>, user: &str) -> Result<Option<String>> {
+    if let Some(path) = path {
+        let mut path_tokens = Tokenizer::new(&PostgreSqlDialect {}, path)
+            .tokenize()
+            .map_err(|e| unsupported(format!("invalid search_path: {e}")))?
+            .into_iter()
+            .filter(|t| !matches!(t, Token::Whitespace(_)))
+            .peekable();
+        let mut candidates = Vec::new();
+        while let Some(token) = path_tokens.next() {
+            let Token::Word(name) = token else {
+                return Err(unsupported("invalid search_path schema name"));
+            };
+            candidates.push(if name.value == "$user" {
+                user.to_uppercase()
+            } else if name.quote_style.is_some() {
+                name.value
+            } else if name.value.eq_ignore_ascii_case("public") {
+                "public".into()
+            } else {
+                name.value.to_uppercase()
+            });
+            if path_tokens.peek().is_some() && path_tokens.next() != Some(Token::Comma) {
+                return Err(unsupported("invalid search_path separator"));
+            }
+        }
+        if candidates.is_empty() {
+            return Err(unsupported(
+                "preview requires a nonempty application schema selection",
+            ));
+        }
+        for schema in &candidates {
+            if schema == "public" || load_namespace(db, schema)?.is_some() {
+                return Ok(Some(schema.clone()));
+            }
+        }
+        // Preserve an explicitly selected missing namespace: a query must fail
+        // there instead of falling through into another application's tables.
+        return Ok(candidates.into_iter().next());
+    }
+    let schema = user.to_uppercase();
+    Ok(load_namespace(db, &schema)?.map(|_| schema))
+}
+
 fn unsupported(message: impl Into<String>) -> SqlError {
     SqlError::Unsupported(format!("{ORACLE_HR_PROFILE}: {}", message.into()))
 }
@@ -736,6 +937,14 @@ fn lower_native(sql: &str, preview: bool) -> Result<String> {
     struct Dual;
     impl sqlparser::ast::VisitorMut for Dual {
         type Break = SqlError;
+        fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<Self::Break> {
+            for lock in &mut query.locks {
+                if let Some(of) = &mut lock.of {
+                    fold_name(of);
+                }
+            }
+            ControlFlow::Continue(())
+        }
         fn pre_visit_select(&mut self, select: &mut Select) -> ControlFlow<Self::Break> {
             let only_dual = select.from.len() == 1
                 && select.from[0].joins.is_empty()
@@ -788,6 +997,27 @@ fn lower_native(sql: &str, preview: bool) -> Result<String> {
                     fold(&mut column.name);
                 }
             }
+            if let Statement::Copy {
+                source: sqlparser::ast::CopySource::Table { columns, .. },
+                ..
+            } = statement
+            {
+                columns.iter_mut().for_each(fold);
+            }
+            if let Statement::Insert(insert) = statement {
+                insert.columns.iter_mut().for_each(fold_name);
+            }
+            if let Statement::Update(update) = statement {
+                for assignment in &mut update.assignments {
+                    let names = match &mut assignment.target {
+                        sqlparser::ast::AssignmentTarget::ColumnName(name) => {
+                            std::slice::from_mut(name)
+                        }
+                        sqlparser::ast::AssignmentTarget::Tuple(names) => names.as_mut_slice(),
+                    };
+                    names.iter_mut().for_each(fold_name);
+                }
+            }
             ControlFlow::Continue(())
         }
         fn post_visit_table_factor(&mut self, table: &mut TableFactor) -> ControlFlow<Self::Break> {
@@ -822,6 +1052,13 @@ fn lower_native(sql: &str, preview: bool) -> Result<String> {
             *ident = Ident::with_quote('"', ident.value.to_uppercase());
         }
     }
+    fn fold_name(name: &mut ObjectName) {
+        for part in &mut name.0 {
+            if let sqlparser::ast::ObjectNamePart::Identifier(ident) = part {
+                fold(ident);
+            }
+        }
+    }
     if let ControlFlow::Break(error) = sqlparser::ast::VisitMut::visit(&mut statements, &mut Dual) {
         return Err(error);
     }
@@ -835,6 +1072,65 @@ fn lower_native(sql: &str, preview: bool) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preview_session_schema_resolves_tables_and_preserves_cte_and_quoted_names() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        for source in [
+            "CREATE SCHEMA red",
+            "CREATE SCHEMA blue",
+            "CREATE TABLE red.entries(k NUMBER PRIMARY KEY, value VARCHAR2(20))",
+            "CREATE TABLE blue.entries(k NUMBER PRIMARY KEY, value VARCHAR2(20))",
+            "INSERT INTO red.entries VALUES(1,'red')",
+            "INSERT INTO blue.entries VALUES(1,'blue')",
+        ] {
+            let sql = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            SqlSession::new(&mut db).execute(&sql).unwrap();
+        }
+        for (path, expected) in [("\"RED\"", "red"), ("\"BLUE\"", "blue")] {
+            let sql = lower_session_sql(
+                &db,
+                "WITH chosen AS (SELECT value FROM entries WHERE k=1) SELECT value FROM chosen",
+                ORACLE_PREVIEW_PROFILE,
+                Some(path),
+                "bicdb",
+            )
+            .unwrap();
+            assert_eq!(
+                SqlSession::new(&mut db).execute(&sql).unwrap().rows,
+                vec![vec![SqlValue::String(expected.into())]]
+            );
+        }
+        let own = lower_session_sql(
+            &db,
+            "SELECT value FROM entries",
+            ORACLE_PREVIEW_PROFILE,
+            None,
+            "red",
+        )
+        .unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db).execute(&own).unwrap().rows,
+            vec![vec![SqlValue::String("red".into())]]
+        );
+        let missing = lower_session_sql(
+            &db,
+            "SELECT value FROM entries",
+            ORACLE_PREVIEW_PROFILE,
+            Some("\"ABSENT\""),
+            "red",
+        )
+        .unwrap();
+        assert!(SqlSession::new(&mut db).execute(&missing).is_err());
+        assert!(lower_session_sql(
+            &db,
+            "SELECT value FROM entries",
+            ORACLE_PREVIEW_PROFILE,
+            Some(""),
+            "red"
+        )
+        .is_err());
+    }
     #[test]
     fn preview_has_a_separate_durable_profile_and_executes_logical_schema_checks() {
         let root = tempfile::tempdir().unwrap();

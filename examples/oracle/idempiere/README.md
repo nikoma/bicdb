@@ -29,7 +29,13 @@ would test a different route. Its Oracle provider constructs Oracle JDBC
 connections and uses Oracle-specific interfaces, so selecting a PostgreSQL JDBC
 URL alone is insufficient. A transport/provider integration must preserve Oracle
 SQL selection while implementing PostgreSQL binding and connection behavior.
-That integration remains outstanding.
+The external provider preparation and transport probe now implement the explicit
+PostgreSQL transport option. The preview's application-schema binding and
+Oracle column-lock translation also pass focused tests. The actual product
+serves `/webui/` over loopback HTTP, and its Oracle sequence-lock query executes
+on BicDB. Session initialization and login remain unqualified: the next observed
+startup blocker is Oracle date truncation in the session insert. A served HTML
+page does not establish a usable application.
 
 The pinned seed in [seed.json](seed.json) is an Oracle Data Pump export. The
 reference installation must include Data Pump; Oracle Free Lite does not. A

@@ -3633,3 +3633,19 @@ $$
         assert_eq!(payload, expected);
     }
 }
+#[test]
+fn jdbc_current_schema_startup_parameter_is_retained() {
+    let params = HashMap::from([
+        (
+            "options".into(),
+            "-c bicdb.sql_profile=oracle-preview-v1".into(),
+        ),
+        ("search_path".into(), "\"Application Schema\"".into()),
+    ]);
+    assert_eq!(
+        startup_session_gucs(&params)
+            .get("search_path")
+            .map(String::as_str),
+        Some("\"Application Schema\"")
+    );
+}

@@ -2040,6 +2040,9 @@ pub(crate) fn startup(
 
 pub(crate) fn startup_session_gucs(params: &HashMap<String, String>) -> HashMap<String, String> {
     let mut gucs = HashMap::new();
+    if let Some(path) = params.get("search_path") {
+        gucs.insert("search_path".to_string(), path.clone());
+    }
     let Some(options) = params.get("options") else {
         return gucs;
     };

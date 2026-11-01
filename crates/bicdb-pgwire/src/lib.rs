@@ -2500,8 +2500,18 @@ fn handle_frontend_message(
             let lowered;
             let query = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
                 let result = server.read_db().and_then(|db| {
-                    bicdb_sql::oracle::lower_profile_sql(&db, query, &server.config.sql_profile)
-                        .map_err(PgWireError::from)
+                    bicdb_sql::oracle::lower_session_sql(
+                        &db,
+                        query,
+                        &server.config.sql_profile,
+                        state
+                            .session_state
+                            .session_gucs()
+                            .get("search_path")
+                            .map(String::as_str),
+                        &state.user,
+                    )
+                    .map_err(PgWireError::from)
                 });
                 match result {
                     Ok(sql) => {
@@ -2551,7 +2561,7 @@ fn handle_frontend_message(
                 }
             }
         }
-        b'P' => match parse_message(&payload, server) {
+        b'P' => match parse_message(&payload, server, state) {
             Ok(parsed) => {
                 state.prepared.insert(parsed.name, parsed.statement);
                 parse_complete(stream)?;

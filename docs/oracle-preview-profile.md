@@ -30,6 +30,36 @@ The preview adds logical application-schema support to the HR front end:
   adaptation; enabled constraints retain native enforcement. Disabled constraints
   fail rather than silently disappearing.
 
+## Application schemas and row locks
+
+The preview binds an unqualified application relation to the selected application
+schema before parameter inference and execution. PostgreSQL JDBC's
+`currentSchema` startup parameter and PostgreSQL startup `search_path` options
+supply that selection. Quoted names retain their case; unquoted application
+schema names follow Oracle uppercase folding. The first existing namespace in
+the supplied list selects one current application schema; this does not implement
+PostgreSQL's full relation-by-relation search-path fallback in Oracle mode.
+An explicitly missing schema is preserved so table lookup fails there. An empty
+selection is rejected. Without an explicit selection, an existing uppercase
+username schema is used, otherwise the bootstrap public namespace is retained.
+Provision the application namespace before connecting.
+
+CTE names remain local query names. Qualified relations retain their explicit
+namespace. Simple queries, prepared statements and COPY use the same binding;
+prepared SQL retains the namespace resolved during Parse. Schema selection does
+not grant table privileges. The bounded HR profile retains its public-namespace
+contract; native PostgreSQL relation resolution is unchanged by this front end.
+
+Oracle `FOR UPDATE OF column` resolves the owning base-table alias and lowers
+to the native table-lock target. Qualified columns in inner joins lock their
+owning table, rather than every joined table. Missing or ambiguous owners fail.
+The native row-lock implementation now distinguishes the logical OF target from
+the physical row-set prefix, including schema-qualified quoted tables. Native
+locking, retry and error contracts still apply; Oracle blocking and isolation
+conformance are not claimed. INSERT, UPDATE and COPY column names also retain
+Oracle folding when a column is named with an otherwise syntactic word such as
+VALUE.
+
 Oracle LOB APIs, full LAX JSON rules, character padding/encoding equivalence,
 Oracle catalogs, PL/SQL packages, autonomous transactions, Oracle transaction
 semantics and general application compatibility are not established by these

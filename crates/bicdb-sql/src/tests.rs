@@ -1092,6 +1092,36 @@ fn primary_key_upserts_use_record_id_lookups_without_full_scans() {
 }
 
 #[test]
+fn postgres_schema_qualified_quoted_lock_target_reads_its_primary_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            r#"CREATE SCHEMA "Locks";
+        CREATE TABLE "Locks"."Sequences"("Id" NUMERIC PRIMARY KEY, "NextNo" NUMERIC);
+        INSERT INTO "Locks"."Sequences" VALUES(1,10); BEGIN"#,
+        )
+        .unwrap();
+    let result = session
+        .execute(r#"SELECT "NextNo" FROM "Locks"."Sequences" FOR UPDATE OF "Sequences""#)
+        .unwrap();
+    assert_eq!(result.rows.len(), 1);
+    assert_eq!(result.rows[0][0].to_cell(), "10");
+    session
+        .execute(r#"UPDATE "Locks"."Sequences" SET "NextNo"="NextNo"+1 WHERE "Id"=1; COMMIT"#)
+        .unwrap();
+    assert_eq!(
+        session
+            .execute(r#"SELECT "NextNo" FROM "Locks"."Sequences""#)
+            .unwrap()
+            .rows[0][0]
+            .to_cell(),
+        "11"
+    );
+}
+
+#[test]
 fn copy_batches_preserve_pending_numeric_and_secondary_unique_keys_and_typed_checks() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();

@@ -1769,6 +1769,7 @@ pub fn run_storage_baseline(
     db.create_collection("baseline")?;
     for index in 0..index_count {
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: format!("baseline_field{index}"),
             collection: "baseline".to_string(),
             fields: vec![IndexField::MetadataPath(vec![format!("field{index}")])],
@@ -10379,6 +10380,7 @@ fn insert_index_bench_records(
 fn create_index_bench_indexes(db: &mut BicDb, collection: &str, prefix: &str) -> Result<()> {
     for definition in [
         IndexDefinition {
+            nulls_not_distinct: false,
             name: format!("{prefix}_{collection}_device"),
             collection: collection.to_string(),
             fields: vec![IndexField::MetadataPath(vec!["device_id".to_string()])],
@@ -10388,6 +10390,7 @@ fn create_index_bench_indexes(db: &mut BicDb, collection: &str, prefix: &str) ->
             exclusion: None,
         },
         IndexDefinition {
+            nulls_not_distinct: false,
             name: format!("{prefix}_{collection}_device_metric"),
             collection: collection.to_string(),
             fields: vec![
@@ -10400,6 +10403,7 @@ fn create_index_bench_indexes(db: &mut BicDb, collection: &str, prefix: &str) ->
             exclusion: None,
         },
         IndexDefinition {
+            nulls_not_distinct: false,
             name: format!("{prefix}_{collection}_timestamp"),
             collection: collection.to_string(),
             fields: vec![IndexField::Timestamp],
@@ -10409,6 +10413,7 @@ fn create_index_bench_indexes(db: &mut BicDb, collection: &str, prefix: &str) ->
             exclusion: None,
         },
         IndexDefinition {
+            nulls_not_distinct: false,
             name: format!("{prefix}_{collection}_clinic"),
             collection: collection.to_string(),
             fields: vec![IndexField::MetadataPath(vec!["clinic".to_string()])],

@@ -302,7 +302,7 @@ impl BicDb {
                     .new_record
                     .index_key(&state.definition.fields)?
                     .expect("post-image present");
-                if index_key_contains_null(&key) {
+                if !state.definition.enforces_unique_key(&key) {
                     continue;
                 }
                 // Same record keeping the same key introduces nothing new.
@@ -931,7 +931,7 @@ impl BicDb {
                         .old_record
                         .index_key(&definition.fields)?
                         .expect("pre-image present");
-                    if !index_key_contains_null(&values) {
+                    if definition.enforces_unique_key(&values) {
                         let encoded = encode_index_key(&values);
                         if !touched.contains_key(&encoded) {
                             let pks = paged
@@ -964,7 +964,7 @@ impl BicDb {
                     .index_key(&definition.fields)?
                     .expect("post-image present");
                 let new_id = mutation.new_record.id().expect("post-image present");
-                if index_key_contains_null(&values) {
+                if !definition.enforces_unique_key(&values) {
                     continue;
                 }
                 let encoded = encode_index_key(&values);
@@ -1483,6 +1483,9 @@ impl BicDb {
     pub(crate) fn persist_index_catalog(&self) -> Result<()> {
         let mut indexes = self.index_definitions();
         indexes.sort_by(|left, right| left.name.cmp(&right.name));
+        if indexes.iter().any(|index| index.nulls_not_distinct) {
+            format::enable_unique_nulls_not_distinct(&self.path)?;
+        }
         let catalog = IndexCatalog { indexes };
         let bytes = serde_json::to_vec_pretty(&catalog)?;
         write_sidecar(

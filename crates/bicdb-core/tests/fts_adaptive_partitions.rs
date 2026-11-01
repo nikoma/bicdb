@@ -128,6 +128,7 @@ fn concurrent_queries_narrow_each_others_plans() {
         .collect();
     db.bulk_load_insert("docs", rows).unwrap();
     db.create_index(bicdb_core::IndexDefinition {
+        nulls_not_distinct: false,
         name: "docs_fts".into(),
         collection: "docs".into(),
         fields: vec![bicdb_core::IndexField::MetadataPath(vec!["body".into()])],

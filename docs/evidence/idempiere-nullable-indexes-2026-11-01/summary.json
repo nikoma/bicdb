@@ -1,0 +1,81 @@
+{
+  "profile": "oracle-preview-v1",
+  "application_source": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "original_seed_index_run": {
+    "source_manifest_sha256": "b26d853ba81cdc10f7451fa39683ca081d2a889b2417f7537ce533990ec7775c",
+    "logical_indexes": 267,
+    "verified_executable_indexes": 266,
+    "remaining": [
+      {
+        "name": "FACT_ACCT_TRUNC_DATEACCT",
+        "reason": "expression_index_unavailable"
+      }
+    ],
+    "nullable_composite_uniqueness_verified": true,
+    "index_phase_complete": false
+  },
+  "oracle_null_comparison": {
+    "cases": 9,
+    "equal": true,
+    "accepted": 6,
+    "duplicate_rejections": 3,
+    "includes_duplicate_all_null": true,
+    "includes_partially_null_duplicates": true,
+    "oracle_unique_violation_code": 1,
+    "bicdb_unique_violation_sqlstate": "23505"
+  },
+  "older_reader_guard": {
+    "previous_development_binary_source": "b016db421db187511a03c2f7fd14c6fca121c58f",
+    "isolated_format_fixture": true,
+    "older_reader_refused_feature": true,
+    "format_metadata_unchanged": true
+  },
+  "release13_baseline": {
+    "reference_migrations": 24,
+    "registration_adaptation": "Registration follows committed SQL effects and successful recompilation",
+    "native_bicdb_migration_sql_qualified": false,
+    "source_schema": "IDEMPIERE_QUAL",
+    "tables": 915,
+    "rows": 185471,
+    "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+    "invalid_reference_objects": 0,
+    "native_bicdb_import_phases": {
+      "tables": {
+        "success": true,
+        "completed_tables": 915
+      },
+      "data": {
+        "success": true,
+        "completed_tables": 915
+      },
+      "verify": {
+        "success": true,
+        "completed_tables": 915
+      }
+    },
+    "import_binary_source": "b016db421db187511a03c2f7fd14c6fca121c58f",
+    "persistent_development_storage": true
+  },
+  "application_qualified": false,
+  "outstanding": [
+    "datetime expression indexing",
+    "nullable composite UNIQUE constraints",
+    "deferred foreign keys",
+    "routines and views",
+    "prepared dictionary lookups and remaining driver integration",
+    "desktop and business workflows",
+    "operational qualification"
+  ],
+  "validation": {
+    "core_unit_passed": 439,
+    "core_unit_ignored": 3,
+    "core_storage_conformance_passed": 20,
+    "core_nullable_unique_passed": 4,
+    "sql_unit_passed": 338,
+    "sql_unit_ignored": 3,
+    "sql_integration_passed": 416,
+    "pgwire_protocol_passed": 165,
+    "oracle_driver_integration_passed": 10,
+    "python_migration_policy_passed": 13
+  }
+}

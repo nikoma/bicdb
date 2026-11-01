@@ -1358,6 +1358,7 @@ fn equality_predicates_do_not_use_full_text_indexes_as_btrees() {
         )
         .unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "InsuranceCoverage_search".to_string(),
         collection: "insurance_coverages".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["org_id".to_string()])],
@@ -1368,6 +1369,7 @@ fn equality_predicates_do_not_use_full_text_indexes_as_btrees() {
     })
     .unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "idx_insurance_coverages_org_id".to_string(),
         collection: "insurance_coverages".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["org_id".to_string()])],

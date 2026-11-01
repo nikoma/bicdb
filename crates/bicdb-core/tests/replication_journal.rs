@@ -212,6 +212,7 @@ fn an_invalid_projection_commits_neither_a_row_prefix_nor_its_origin_history() {
             .unwrap();
         target
             .create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "unique_value".into(),
                 collection: "items".into(),
                 fields: vec![IndexField::MetadataPath(vec!["value".into()])],

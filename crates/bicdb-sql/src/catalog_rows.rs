@@ -3933,6 +3933,10 @@ pub(crate) fn pg_index_rows_filtered(
                 index.predicate,
                 definition,
             );
+            row.insert(
+                "indnullsnotdistinct".into(),
+                SqlValue::Bool(index.nulls_not_distinct),
+            );
             row.insert("indisvalid".into(), SqlValue::Bool(executable));
             row.insert("indisready".into(), SqlValue::Bool(executable));
             rows.push(row);
@@ -4217,6 +4221,9 @@ pub(crate) fn catalog_indexdef_string(index: &CatalogIndex) -> String {
         &index.access_method,
         &index.expression,
     );
+    if index.nulls_not_distinct {
+        definition.push_str(" NULLS NOT DISTINCT");
+    }
     if let Some(predicate) = index.predicate.as_deref() {
         definition.push_str(&format!(" WHERE ({})", predicate.trim_matches(['(', ')'])));
     }
@@ -6589,6 +6596,7 @@ pub(crate) fn index_expression_for_columns(columns: &[String]) -> String {
 }
 
 pub(crate) struct CatalogIndex {
+    pub(crate) nulls_not_distinct: bool,
     pub(crate) name: String,
     pub(crate) collection: String,
     pub(crate) schema_name: String,
@@ -6674,6 +6682,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
                     })
                     .collect::<Vec<_>>();
                 indexes.push(CatalogIndex {
+                    nulls_not_distinct: false,
                     name: index.name.clone(),
                     collection: schema.name.clone(),
                     schema_name: schema.schema_name.clone(),
@@ -6692,6 +6701,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
             }
             if index.metadata_only {
                 indexes.push(CatalogIndex {
+                    nulls_not_distinct: false,
                     name: index.name.clone(),
                     collection: schema.name.clone(),
                     schema_name: schema.schema_name.clone(),
@@ -6713,6 +6723,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
             };
             let full_text = definition.kind == IndexKind::FullText;
             indexes.push(CatalogIndex {
+                nulls_not_distinct: definition.nulls_not_distinct,
                 name: index.name.clone(),
                 collection: definition.collection.clone(),
                 schema_name: schema.schema_name.clone(),
@@ -6757,6 +6768,7 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
             };
             let columns = exclusion_constraint_columns(equal_columns, range);
             indexes.push(CatalogIndex {
+                nulls_not_distinct: false,
                 name: name.clone(),
                 collection: schema.name.clone(),
                 schema_name: schema.schema_name.clone(),
@@ -6888,7 +6900,8 @@ pub(crate) fn index_field_attnum(
         IndexField::MetadataPath(_)
         | IndexField::Lower(_)
         | IndexField::Upper(_)
-        | IndexField::Trim(_) => None,
+        | IndexField::Trim(_)
+        | IndexField::Coalesce { .. } => None,
     }
 }
 

@@ -35,6 +35,7 @@ fn run(threads: usize) -> f64 {
     // sharding distributes warehouses across index shards (the keystone), so
     // disjoint-warehouse commits write disjoint index shards.
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "idx_ol_w_n".to_string(),
         collection: "ol".to_string(),
         fields: vec![

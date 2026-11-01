@@ -32,6 +32,7 @@ fn open(dir: &TempDir) -> BicDb {
 
 fn kind_index() -> IndexDefinition {
     IndexDefinition {
+        nulls_not_distinct: false,
         name: "notes_kind".to_string(),
         collection: "notes".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["kind".to_string()])],

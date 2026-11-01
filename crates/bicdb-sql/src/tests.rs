@@ -7973,3 +7973,182 @@ fn metadata_only_indexes_are_not_catalogued_as_ready_or_valid() {
         ]
     );
 }
+
+#[test]
+fn unique_nulls_not_distinct_supports_pending_keys_conflicts_and_reopen() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let config = bicdb_core::DbConfig::default().with_storage_mode(mode);
+        {
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            let mut session = SqlSession::new(&mut db);
+            session
+                .execute("CREATE TABLE null_keys(k int PRIMARY KEY,a int,b text,note text)")
+                .unwrap();
+            session
+                .execute("INSERT INTO null_keys VALUES(1,1,NULL,'seed')")
+                .unwrap();
+            session
+                .execute("CREATE UNIQUE INDEX null_keys_uq ON null_keys(a,b) NULLS NOT DISTINCT")
+                .unwrap();
+            assert!(session
+                .execute("INSERT INTO null_keys VALUES(2,1,NULL,'duplicate')")
+                .is_err());
+            session
+                .execute("INSERT INTO null_keys VALUES(2,1,'NULL','text')")
+                .unwrap();
+            session.execute("INSERT INTO null_keys VALUES(3,1,NULL,'changed') ON CONFLICT(a,b) DO UPDATE SET note=excluded.note").unwrap();
+            assert_eq!(
+                session
+                    .execute("SELECT note FROM null_keys WHERE k=1")
+                    .unwrap()
+                    .rows[0][0],
+                SqlValue::String("changed".into())
+            );
+            session.execute("INSERT INTO null_keys VALUES(4,2,NULL,'new'),(5,2,NULL,'skip') ON CONFLICT(a,b) DO NOTHING").unwrap();
+            assert_eq!(
+                session
+                    .execute("SELECT count(*) FROM null_keys WHERE a=2")
+                    .unwrap()
+                    .rows[0][0],
+                SqlValue::Int(1)
+            );
+            session.execute("BEGIN").unwrap();
+            session
+                .execute("UPDATE null_keys SET a=3 WHERE k=1")
+                .unwrap();
+            session
+                .execute("INSERT INTO null_keys VALUES(6,1,NULL,'reused')")
+                .unwrap();
+            session.execute("COMMIT").unwrap();
+            assert!(session
+                .execute("UPDATE null_keys SET a=1 WHERE k=1")
+                .is_err());
+            assert!(session
+                .execute("INSERT INTO null_keys VALUES(7,4,NULL,'one'),(8,4,NULL,'two')")
+                .is_err());
+            assert_eq!(
+                session
+                    .execute("SELECT count(*) FROM null_keys WHERE a=4")
+                    .unwrap()
+                    .rows[0][0],
+                SqlValue::Int(0)
+            );
+            let rows=session.execute("SELECT i.indnullsnotdistinct FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid WHERE c.relname='null_keys_uq'").unwrap().rows;
+            assert_eq!(rows, vec![vec![SqlValue::Bool(true)]]);
+            let ddl = session
+                .execute(
+                    "SELECT indexdef FROM pg_catalog.pg_indexes WHERE indexname='null_keys_uq'",
+                )
+                .unwrap()
+                .rows[0][0]
+                .to_cell();
+            assert!(ddl.contains("NULLS NOT DISTINCT"));
+            session
+                .execute("CREATE TABLE default_null_keys(k int PRIMARY KEY,a int,b text)")
+                .unwrap();
+            session
+                .execute("INSERT INTO default_null_keys VALUES(1,1,NULL),(2,1,NULL)")
+                .unwrap();
+            session
+                .execute("CREATE UNIQUE INDEX default_null_keys_uq ON default_null_keys(a,b)")
+                .unwrap();
+            session
+                .execute("INSERT INTO default_null_keys VALUES(3,1,NULL)")
+                .unwrap();
+        }
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        assert!(db.verify_index("null_keys_uq").unwrap().valid);
+        assert!(SqlSession::new(&mut db)
+            .execute("INSERT INTO null_keys VALUES(9,1,NULL,'duplicate')")
+            .is_err());
+    }
+}
+
+#[test]
+fn coalesce_unique_indexes_enforce_text_and_exact_numeric_fallbacks() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let config = bicdb_core::DbConfig::default().with_storage_mode(mode);
+        {
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            let mut session = SqlSession::new(&mut db);
+            session
+                .execute("CREATE TABLE account_keys(k int PRIMARY KEY, username text, domain text)")
+                .unwrap();
+            session
+                .execute("INSERT INTO account_keys VALUES(1,'Alice',NULL)")
+                .unwrap();
+            session.execute("CREATE UNIQUE INDEX account_keys_uq ON account_keys(lower((username)::text),COALESCE(lower((domain)::text),''::text))").unwrap();
+            assert!(session
+                .execute("INSERT INTO account_keys VALUES(2,'alice','')")
+                .is_err());
+            session
+                .execute("UPDATE account_keys SET domain='Example' WHERE k=1")
+                .unwrap();
+            session
+                .execute("INSERT INTO account_keys VALUES(2,'alice','')")
+                .unwrap();
+            assert!(session
+                .execute("INSERT INTO account_keys VALUES(3,'ALICE','EXAMPLE')")
+                .is_err());
+            session
+                .execute(
+                    "CREATE TABLE numeric_keys(k int PRIMARY KEY,tenant numeric,role_id numeric)",
+                )
+                .unwrap();
+            session
+                .execute("INSERT INTO numeric_keys VALUES(1,7,NULL)")
+                .unwrap();
+            session.execute("CREATE UNIQUE INDEX numeric_keys_uq ON numeric_keys(tenant,COALESCE(role_id,0))").unwrap();
+            assert!(session
+                .execute("INSERT INTO numeric_keys VALUES(2,7,0)")
+                .is_err());
+            session
+                .execute(
+                    "INSERT INTO numeric_keys VALUES(3,7,0.00000000000000000000000000000000000001)",
+                )
+                .unwrap();
+            session
+                .execute("CREATE TABLE nullable_keys(k int PRIMARY KEY,role_id numeric)")
+                .unwrap();
+            session
+                .execute(
+                    "CREATE UNIQUE INDEX nullable_keys_uq ON nullable_keys(COALESCE(role_id,NULL))",
+                )
+                .unwrap();
+            session
+                .execute("INSERT INTO nullable_keys VALUES(1,NULL),(2,NULL)")
+                .unwrap();
+            // A volatile fallback or a value-changing input cast is not a
+            // constant/type-preserving executable field.
+            assert!(session
+                .execute(
+                    "CREATE UNIQUE INDEX unsafe_random ON numeric_keys(COALESCE(role_id,random()))"
+                )
+                .is_err());
+            assert!(session
+                .execute(
+                    "CREATE UNIQUE INDEX unsafe_text_coerce ON account_keys(COALESCE(username,0))"
+                )
+                .is_err());
+            assert!(session.execute("CREATE UNIQUE INDEX unsafe_fraction ON numeric_keys(COALESCE(role_id,0.00000000000000000000000000000000000001))").is_err());
+            assert!(session.execute("CREATE UNIQUE INDEX unsafe_scale ON numeric_keys(COALESCE(CAST(role_id AS numeric(3,1)),0))").is_err());
+            drop(session);
+            assert!(db.verify_index("account_keys_uq").unwrap().valid);
+            assert!(db.verify_index("numeric_keys_uq").unwrap().valid);
+        }
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        assert!(db.verify_index("account_keys_uq").unwrap().valid);
+        assert!(db.verify_index("numeric_keys_uq").unwrap().valid);
+        assert!(SqlSession::new(&mut db)
+            .execute("INSERT INTO numeric_keys VALUES(4,7,0)")
+            .is_err());
+    }
+}

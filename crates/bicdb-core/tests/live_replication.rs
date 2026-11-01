@@ -907,6 +907,7 @@ fn standbys_build_the_primarys_indexes_from_their_own_rows() {
             put(&primary, &format!("k{index}"), index % 5);
         }
         let definition = IndexDefinition {
+            nulls_not_distinct: false,
             name: "items_value".to_string(),
             collection: "items".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["value".to_string()])],

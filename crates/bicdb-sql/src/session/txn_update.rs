@@ -1484,7 +1484,10 @@ impl<'db> SqlSession<'db> {
             match field {
                 IndexField::Id => primary_key_columns.iter().any(|c| touches(c)),
                 IndexField::MetadataPath(path) => path.first().is_none_or(|head| touches(head)),
-                IndexField::Lower(inner) | IndexField::Upper(inner) | IndexField::Trim(inner) => {
+                IndexField::Lower(inner)
+                | IndexField::Upper(inner)
+                | IndexField::Trim(inner)
+                | IndexField::Coalesce { field: inner, .. } => {
                     index_field_touches(inner, touches, primary_key_columns)
                 }
                 IndexField::Timestamp | IndexField::Geometry => true,

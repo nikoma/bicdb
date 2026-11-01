@@ -4160,6 +4160,7 @@ mod tests {
         )
         .unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "documents_search".to_string(),
             collection: "documents".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["title".to_string()])],

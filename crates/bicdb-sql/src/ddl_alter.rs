@@ -334,6 +334,7 @@ pub(crate) fn alter_table_add_constraint(
             rewrite_records_for_primary_key(db, table, schema)?;
             db.drop_index(&executable.name)?;
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: constraint_name.clone(),
                 collection: table.to_string(),
                 fields,

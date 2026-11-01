@@ -789,6 +789,7 @@ pub(crate) fn validate_unique_constraints(
 
 #[derive(Clone, Debug)]
 pub(crate) struct UniqueConflictArbiter {
+    pub(crate) nulls_not_distinct: bool,
     pub(crate) name: String,
     pub(crate) key: UniqueKey,
     pub(crate) index_name: Option<String>,
@@ -797,6 +798,10 @@ pub(crate) struct UniqueConflictArbiter {
 }
 
 impl UniqueConflictArbiter {
+    pub(crate) fn skips_null_key(&self, values: &[SqlValue]) -> bool {
+        !self.nulls_not_distinct && unique_key_has_null(values)
+    }
+
     /// Whether `record` takes part in this uniqueness rule (always, unless the index is partial).
     pub(crate) fn applies_to(&self, record: &Record) -> Result<bool> {
         match &self.predicate {
@@ -839,6 +844,7 @@ pub(crate) fn unique_arbiters_for_table_uncached(
     if !primary_key_columns.is_empty() {
         let key = UniqueKey::Columns(primary_key_columns);
         arbiters.push(UniqueConflictArbiter {
+            nulls_not_distinct: false,
             name: schema.primary_key_constraint_name(),
             index_name: unique_index_name_for_key(table, schema, &key, &executable_indexes),
             key,
@@ -856,6 +862,7 @@ pub(crate) fn unique_arbiters_for_table_uncached(
                     }
                     let key = UniqueKey::Columns(columns.clone());
                     Some(UniqueConflictArbiter {
+                        nulls_not_distinct: false,
                         name: name.clone(),
                         index_name: unique_index_name_for_key(
                             table,
@@ -895,6 +902,8 @@ pub(crate) fn unique_arbiters_for_table_uncached(
                 unique_index_name_for_key(table, schema, &key, &executable_indexes)
             };
             arbiters.push(UniqueConflictArbiter {
+                nulls_not_distinct: definition
+                    .is_some_and(|definition| definition.nulls_not_distinct),
                 name: index.name.clone(),
                 index_name,
                 key,
@@ -954,7 +963,7 @@ fn json_unique_existing_records(
         let constraint = serde_json::to_string(&(table, &arbiter.name))?;
         for record in records {
             let values = unique_key_values(record, schema, &arbiter.key);
-            if !unique_key_has_null(&values) && arbiter.applies_to(record)? {
+            if !arbiter.skips_null_key(&values) && arbiter.applies_to(record)? {
                 let key =
                     serde_json::to_string(&typed_unique_key_label(schema, &arbiter.key, &values)?)?;
                 tx.reserve_integrity_key(&constraint, &key)?;
@@ -1014,7 +1023,7 @@ pub(crate) fn validate_unique_arbiter_records(
     let mut seen = BTreeMap::<Vec<String>, String>::new();
     for record in records {
         let key_values = unique_key_values(record, schema, &arbiter.key);
-        if unique_key_has_null(&key_values) || !arbiter.applies_to(record)? {
+        if arbiter.skips_null_key(&key_values) || !arbiter.applies_to(record)? {
             continue;
         }
         let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
@@ -1062,7 +1071,7 @@ pub(crate) fn validate_unique_arbiter_records(
         let existing = unique_key_record_ids(schema, &arbiter.key, &existing_records)?;
         for record in records {
             let key_values = unique_key_values(record, schema, &arbiter.key);
-            if unique_key_has_null(&key_values) || !arbiter.applies_to(record)? {
+            if arbiter.skips_null_key(&key_values) || !arbiter.applies_to(record)? {
                 continue;
             }
             let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
@@ -1083,7 +1092,7 @@ pub(crate) fn validate_unique_arbiter_records(
     if let Some(tx) = tx {
         for pending in tx.pending_records(table) {
             let values = unique_key_values(&pending, schema, &arbiter.key);
-            if !unique_key_has_null(&values) && arbiter.applies_to(&pending)? {
+            if !arbiter.skips_null_key(&values) && arbiter.applies_to(&pending)? {
                 pending_keys
                     .entry(typed_unique_key_label(schema, &arbiter.key, &values)?)
                     .or_default()
@@ -1094,7 +1103,7 @@ pub(crate) fn validate_unique_arbiter_records(
 
     for record in records {
         let key_values = unique_key_values(record, schema, &arbiter.key);
-        if unique_key_has_null(&key_values) || !arbiter.applies_to(record)? {
+        if arbiter.skips_null_key(&key_values) || !arbiter.applies_to(record)? {
             continue;
         }
         sql_profile_index_lookup();
@@ -1165,7 +1174,7 @@ pub(crate) fn non_conflicting_records(
     let mut inserted = Vec::new();
     for record in records {
         let key_values = unique_key_values(&record, schema, &arbiter.key);
-        if !unique_key_has_null(&key_values) && arbiter.applies_to(&record)? {
+        if !arbiter.skips_null_key(&key_values) && arbiter.applies_to(&record)? {
             let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
             if !seen.insert(key) {
                 continue;
@@ -1188,7 +1197,7 @@ pub(crate) fn non_conflicting_records(
                 let mut pending_conflict = false;
                 for pending in tx.pending_records(table) {
                     let pending_values = unique_key_values(&pending, schema, &arbiter.key);
-                    if unique_key_has_null(&pending_values) || !arbiter.applies_to(&pending)? {
+                    if arbiter.skips_null_key(&pending_values) || !arbiter.applies_to(&pending)? {
                         continue;
                     }
                     if typed_unique_key_label(schema, &arbiter.key, &pending_values)?
@@ -1228,7 +1237,7 @@ pub(crate) fn validate_unique_primary_key_arbiter_records(
     }
     for record in records {
         let key_values = record_column_values(record, schema, &columns);
-        if unique_key_has_null(&key_values) {
+        if arbiter.skips_null_key(&key_values) {
             continue;
         }
         sql_profile_index_lookup();
@@ -1525,7 +1534,7 @@ pub(crate) fn non_conflicting_records_from_scan(
     let mut inserted = Vec::new();
     for record in records {
         let key_values = unique_key_values(&record, schema, &arbiter.key);
-        if !unique_key_has_null(&key_values) && arbiter.applies_to(&record)? {
+        if !arbiter.skips_null_key(&key_values) && arbiter.applies_to(&record)? {
             let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
             if existing.contains_key(&key) || !seen.insert(key) {
                 continue;
@@ -1544,9 +1553,6 @@ pub(crate) fn unique_key_record_ids(
     let mut ids = BTreeMap::<Vec<String>, Vec<String>>::new();
     for record in records {
         let values = unique_key_values(record, schema, key);
-        if unique_key_has_null(&values) {
-            continue;
-        }
         ids.entry(typed_unique_key_label(schema, key, &values)?)
             .or_default()
             .push(record.id.clone());
@@ -1669,6 +1675,9 @@ pub(crate) fn unique_key_index_values(
         .iter()
         .zip(pg_types.into_iter().zip(column_schemas))
         .map(|(value, (pg_type, column))| {
+            if matches!(value, SqlValue::Null) {
+                return Ok(IndexValue::Null);
+            }
             if let Some(column) = column.filter(|column| column.user_type.is_some()) {
                 return column_typed_index_label(column, value).map(IndexValue::String);
             }
@@ -1743,6 +1752,7 @@ pub(crate) fn unique_key_values_not_distinct(
 
 pub(crate) fn index_field_pg_type(schema: &TableSchema, field: &IndexField) -> Option<String> {
     match field {
+        IndexField::Coalesce { field, .. } => index_field_pg_type(schema, field),
         IndexField::Id => schema
             .column(schema.primary_key())
             .map(|column| column.pg_type.clone()),
@@ -1880,14 +1890,25 @@ pub(crate) fn unique_key_values(
                     Some(column) if schema.column(&column).is_some() => {
                         record_column_value(record, schema, &column)
                     }
-                    _ => record_index_field_sql_value(record, field),
+                    _ => record_index_field_sql_value(record, field, Some(schema)),
                 }
             })
             .collect(),
     }
 }
 
-pub(crate) fn record_index_field_sql_value(record: &Record, field: &IndexField) -> SqlValue {
+pub(crate) fn record_index_field_sql_value(
+    record: &Record,
+    field: &IndexField,
+    schema: Option<&TableSchema>,
+) -> SqlValue {
+    if let Some(schema) = schema {
+        if let Some(column) =
+            index_field_column_name(schema, field).filter(|name| schema.column(name).is_some())
+        {
+            return record_column_value(record, schema, &column);
+        }
+    }
     match field {
         IndexField::Id => SqlValue::String(record.id.clone()),
         IndexField::Timestamp => record
@@ -1903,15 +1924,27 @@ pub(crate) fn record_index_field_sql_value(record: &Record, field: &IndexField) 
         IndexField::MetadataPath(path) => FieldRef::MetadataPath(path.clone())
             .value(record)
             .unwrap_or(SqlValue::Null),
-        IndexField::Upper(inner) => match record_index_field_sql_value(record, inner) {
+        IndexField::Coalesce { field, value, .. } => {
+            match record_index_field_sql_value(record, field, schema) {
+                SqlValue::Null => match value {
+                    IndexValue::Null => SqlValue::Null,
+                    IndexValue::Bool(value) => SqlValue::Bool(*value),
+                    IndexValue::Int(value) => SqlValue::Int(*value),
+                    IndexValue::Float(bits) => SqlValue::Float(f64::from_bits(*bits)),
+                    IndexValue::String(value) => SqlValue::String(value.clone()),
+                },
+                value => value,
+            }
+        }
+        IndexField::Upper(inner) => match record_index_field_sql_value(record, inner, schema) {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::String(value.to_cell().to_ascii_uppercase()),
         },
-        IndexField::Lower(inner) => match record_index_field_sql_value(record, inner) {
+        IndexField::Lower(inner) => match record_index_field_sql_value(record, inner, schema) {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::String(value.to_cell().to_ascii_lowercase()),
         },
-        IndexField::Trim(inner) => match record_index_field_sql_value(record, inner) {
+        IndexField::Trim(inner) => match record_index_field_sql_value(record, inner, schema) {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::String(value.to_cell().trim().to_string()),
         },
@@ -1924,7 +1957,7 @@ pub(crate) fn record_index_key_from_sql_record(
 ) -> Result<Vec<IndexValue>> {
     fields
         .iter()
-        .map(|field| index_value_from_sql(record_index_field_sql_value(record, field)))
+        .map(|field| index_value_from_sql(record_index_field_sql_value(record, field, None)))
         .collect()
 }
 

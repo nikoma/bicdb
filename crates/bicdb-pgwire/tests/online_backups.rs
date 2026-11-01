@@ -66,6 +66,7 @@ async fn live_sql_commits_and_ddl_continue_during_a_full_backup_and_restore_exac
             .unwrap();
     }
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "items_fts".into(),
         collection: "items".into(),
         fields: vec![IndexField::MetadataPath(vec!["body".into()])],

@@ -223,6 +223,7 @@ fn spatial_index_create_and_rebuild_emit_spatial_index_events() {
     .unwrap();
 
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "idx_places_geometry".to_string(),
         collection: "places".to_string(),
         fields: vec![IndexField::Geometry],

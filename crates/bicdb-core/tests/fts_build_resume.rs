@@ -93,6 +93,7 @@ fn seeded(dir: &std::path::Path, rows: usize) -> BicDb {
 
 fn definition() -> IndexDefinition {
     IndexDefinition {
+        nulls_not_distinct: false,
         name: INDEX.to_string(),
         collection: "articles".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["body".to_string()])],

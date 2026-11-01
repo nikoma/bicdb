@@ -40,6 +40,7 @@ fn main() {
         let mut db = BicDb::open_with_config(&dir, config.clone()).unwrap();
         db.create_collection("orders").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "orders_bucket".to_string(),
             collection: "orders".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["bucket".to_string()])],

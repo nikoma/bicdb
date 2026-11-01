@@ -52,6 +52,7 @@ fn rekey_migrates_a_v2_index_to_intern_entries() {
         let mut db = BicDb::open_with_config(dir.path(), config.clone()).unwrap();
         db.create_collection("articles").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "articles_year".to_string(),
             collection: "articles".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["year".to_string()])],

@@ -84,6 +84,7 @@ fn indexed_collections_fall_back_to_the_checked_path() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = reopened_with_collection(dir.path(), "places");
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "places-by-value".to_string(),
         collection: "places".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["value".to_string()])],

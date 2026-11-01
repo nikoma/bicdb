@@ -74,6 +74,7 @@ fn sync_import_updates_secondary_indexes() {
     target.create_collection("patients").unwrap();
     target
         .create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_patients_clinic".to_string(),
             collection: "patients".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["clinic".to_string()])],

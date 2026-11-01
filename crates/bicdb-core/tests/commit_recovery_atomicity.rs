@@ -108,6 +108,7 @@ fn crash_after_failed_apply_recovers_the_entire_durable_transaction() {
                 )
                 .unwrap();
                 db.create_index(IndexDefinition {
+                    nulls_not_distinct: false,
                     name: format!("{collection}_v"),
                     collection: collection.into(),
                     fields: vec![IndexField::MetadataPath(vec!["v".into()])],

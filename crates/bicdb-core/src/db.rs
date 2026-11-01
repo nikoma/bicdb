@@ -4432,18 +4432,116 @@ impl residency::ResidentBytes for VectorStore {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(
+    try_from = "PersistedIndexDefinition",
+    into = "PersistedIndexDefinition"
+)]
 pub struct IndexDefinition {
     pub name: String,
     pub collection: String,
     pub fields: Vec<IndexField>,
     #[serde(default)]
     pub unique: bool,
+    /// Compare NULL components as equal in a unique key. The default preserves
+    /// PostgreSQL's ordinary NULLS DISTINCT indexes and older catalogs.
+    #[serde(default)]
+    pub nulls_not_distinct: bool,
     #[serde(default)]
     pub kind: IndexKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub predicate: Option<IndexPredicate>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exclusion: Option<IndexExclusion>,
+}
+
+// Extended uniqueness uses a non-boolean wire value so older readers and
+// replication peers reject it instead of silently ignoring a new flag.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum PersistedIndexUniqueness {
+    Legacy(bool),
+    Extended(IndexUniquenessPolicy),
+}
+
+impl Default for PersistedIndexUniqueness {
+    fn default() -> Self {
+        Self::Legacy(false)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum IndexUniquenessPolicy {
+    NullsNotDistinct,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct PersistedIndexDefinition {
+    name: String,
+    collection: String,
+    fields: Vec<IndexField>,
+    #[serde(default)]
+    unique: PersistedIndexUniqueness,
+    // Accept the explicit API input as well as the extended persisted form.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    nulls_not_distinct: bool,
+    #[serde(default)]
+    kind: IndexKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    predicate: Option<IndexPredicate>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    exclusion: Option<IndexExclusion>,
+}
+
+impl From<IndexDefinition> for PersistedIndexDefinition {
+    fn from(definition: IndexDefinition) -> Self {
+        let unique = if definition.unique && definition.nulls_not_distinct {
+            PersistedIndexUniqueness::Extended(IndexUniquenessPolicy::NullsNotDistinct)
+        } else {
+            PersistedIndexUniqueness::Legacy(definition.unique)
+        };
+        Self {
+            name: definition.name,
+            collection: definition.collection,
+            fields: definition.fields,
+            unique,
+            nulls_not_distinct: definition.nulls_not_distinct && !definition.unique,
+            kind: definition.kind,
+            predicate: definition.predicate,
+            exclusion: definition.exclusion,
+        }
+    }
+}
+
+impl TryFrom<PersistedIndexDefinition> for IndexDefinition {
+    type Error = String;
+    fn try_from(definition: PersistedIndexDefinition) -> std::result::Result<Self, String> {
+        let (unique, nulls_not_distinct) = match definition.unique {
+            PersistedIndexUniqueness::Legacy(unique) => (unique, definition.nulls_not_distinct),
+            PersistedIndexUniqueness::Extended(IndexUniquenessPolicy::NullsNotDistinct) => {
+                (true, true)
+            }
+        };
+        if nulls_not_distinct && !unique {
+            return Err("NULLS NOT DISTINCT requires a unique index".into());
+        }
+        Ok(Self {
+            name: definition.name,
+            collection: definition.collection,
+            fields: definition.fields,
+            unique,
+            nulls_not_distinct,
+            kind: definition.kind,
+            predicate: definition.predicate,
+            exclusion: definition.exclusion,
+        })
+    }
+}
+
+impl IndexDefinition {
+    fn enforces_unique_key(&self, key: &[IndexValue]) -> bool {
+        self.unique && (self.nulls_not_distinct || !index_key_contains_null(key))
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -4535,6 +4633,14 @@ pub enum IndexField {
     Lower(Box<IndexField>),
     Upper(Box<IndexField>),
     Trim(Box<IndexField>),
+    /// A type-preserving COALESCE with a constant fallback. `value` retains
+    /// the scalar for predicate evaluation; `index_value` uses the field's
+    /// canonical key encoding, including exact numeric encodings.
+    Coalesce {
+        field: Box<IndexField>,
+        value: IndexValue,
+        index_value: IndexValue,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -6090,7 +6196,7 @@ impl IndexState {
                     .old_record
                     .index_key(&self.definition.fields)?
                     .expect("pre-image present");
-                if !index_key_contains_null(&key) {
+                if self.definition.enforces_unique_key(&key) {
                     let encoded = mutation
                         .old_record
                         .encoded_index_key(&self.definition.fields)?
@@ -6119,7 +6225,7 @@ impl IndexState {
                     .index_key(&self.definition.fields)?
                     .expect("post-image present");
                 let record_id = mutation.new_record.id().expect("post-image present");
-                if !index_key_contains_null(&key) {
+                if self.definition.enforces_unique_key(&key) {
                     let encoded = mutation
                         .new_record
                         .encoded_index_key(&self.definition.fields)?
@@ -6219,7 +6325,7 @@ impl IndexState {
                 .new_record
                 .encoded_index_key(&self.definition.fields)?
                 .expect("post-image key encodes");
-            if self.definition.unique && !index_key_contains_null(&key) {
+            if self.definition.enforces_unique_key(&key) {
                 match self.store.insert_if_unique(&encoded, rowid) {
                     Some(inserted) => changed |= inserted,
                     None => {
@@ -8852,9 +8958,10 @@ impl IndexRecordMutation {
         fn base_column(field: &IndexField) -> Option<&str> {
             match field {
                 IndexField::MetadataPath(path) => path.first().map(String::as_str),
-                IndexField::Lower(inner) | IndexField::Upper(inner) | IndexField::Trim(inner) => {
-                    base_column(inner)
-                }
+                IndexField::Lower(inner)
+                | IndexField::Upper(inner)
+                | IndexField::Trim(inner)
+                | IndexField::Coalesce { field: inner, .. } => base_column(inner),
                 // The id cannot change here; timestamps and geometry are
                 // not top-level keys the writer accounts for.
                 IndexField::Id | IndexField::Timestamp | IndexField::Geometry => None,
@@ -9530,6 +9637,7 @@ impl BicDb {
                             predicate: definition.predicate.clone(),
                             entry_format,
                             unique: definition.unique,
+                            nulls_not_distinct: definition.nulls_not_distinct,
                         },
                     );
                 }
@@ -20794,7 +20902,7 @@ fn build_index_state_with_options(
             let t_insert = t0.elapsed();
             let mut has_duplicate = false;
             index.store.scan_from(&[], &mut |key, ids| {
-                if ids.count() > 1 && !index_key_contains_null(&decode_index_key(key)) {
+                if ids.count() > 1 && index.definition.enforces_unique_key(&decode_index_key(key)) {
                     has_duplicate = true;
                     return false;
                 }
@@ -20923,7 +21031,7 @@ fn diff_index_state(state: &IndexState, expected: &IndexState) -> (usize, usize,
             let duplicate_entries = if state.definition.unique {
                 let mut dups = 0usize;
                 state.store.scan_from(&[], &mut |key, ids| {
-                    if !index_key_contains_null(&decode_index_key(key)) {
+                    if state.definition.enforces_unique_key(&decode_index_key(key)) {
                         dups += ids.count().saturating_sub(1);
                     }
                     true
@@ -21039,6 +21147,12 @@ fn index_state_record_count(state: &IndexState) -> usize {
 }
 
 fn validate_index_definition(definition: &IndexDefinition) -> Result<()> {
+    if definition.nulls_not_distinct && (!definition.unique || definition.kind != IndexKind::BTree)
+    {
+        return Err(BicDbError::Index(
+            "NULLS NOT DISTINCT requires a unique B-tree index".into(),
+        ));
+    }
     validate_collection_name(&definition.name)?;
     validate_collection_name(&definition.collection)?;
     if definition.fields.is_empty() {
@@ -21215,7 +21329,10 @@ fn validate_secure_index_field(
             }
             Ok(())
         }
-        IndexField::Lower(inner) | IndexField::Upper(inner) | IndexField::Trim(inner) => {
+        IndexField::Lower(inner)
+        | IndexField::Upper(inner)
+        | IndexField::Trim(inner)
+        | IndexField::Coalesce { field: inner, .. } => {
             validate_secure_index_field(collection, unique, policy, inner)
         }
     }
@@ -21224,14 +21341,27 @@ fn validate_secure_index_field(
 fn index_field_contains_geometry(field: &IndexField) -> bool {
     match field {
         IndexField::Geometry => true,
-        IndexField::Lower(inner) | IndexField::Upper(inner) | IndexField::Trim(inner) => {
-            index_field_contains_geometry(inner)
-        }
+        IndexField::Lower(inner)
+        | IndexField::Upper(inner)
+        | IndexField::Trim(inner)
+        | IndexField::Coalesce { field: inner, .. } => index_field_contains_geometry(inner),
         IndexField::Id | IndexField::Timestamp | IndexField::MetadataPath(_) => false,
     }
 }
 
 fn validate_index_field(index: &str, field: &IndexField) -> Result<()> {
+    if let IndexField::Coalesce {
+        value, index_value, ..
+    } = field
+    {
+        for literal in [value, index_value] {
+            if matches!(literal, IndexValue::Float(bits) if !f64::from_bits(*bits).is_finite()) {
+                return Err(BicDbError::Index(
+                    "COALESCE index fallback must be a finite scalar".into(),
+                ));
+            }
+        }
+    }
     match field {
         IndexField::MetadataPath(path) => {
             if path.is_empty() || path.iter().any(|part| part.is_empty()) {
@@ -21240,9 +21370,10 @@ fn validate_index_field(index: &str, field: &IndexField) -> Result<()> {
                 )));
             }
         }
-        IndexField::Lower(inner) | IndexField::Upper(inner) | IndexField::Trim(inner) => {
-            validate_index_field(index, inner)?
-        }
+        IndexField::Lower(inner)
+        | IndexField::Upper(inner)
+        | IndexField::Trim(inner)
+        | IndexField::Coalesce { field: inner, .. } => validate_index_field(index, inner)?,
         IndexField::Id | IndexField::Timestamp | IndexField::Geometry => {}
     }
     Ok(())
@@ -21448,6 +21579,12 @@ fn image_cells_index_key(
                 [name] => cell_index_value(base, cells, name)?,
                 _ => return None,
             },
+            IndexField::Coalesce {
+                field, index_value, ..
+            } => match field_value(stored, cells, field)? {
+                IndexValue::Null => index_value.clone(),
+                value => value,
+            },
             IndexField::Upper(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
                 value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
@@ -21537,6 +21674,12 @@ fn stored_index_key(stored: &StoredRecord, fields: &[IndexField]) -> Option<Vec<
                 [name] => cell_index_value(cells, name)?,
                 _ => return None,
             },
+            IndexField::Coalesce {
+                field, index_value, ..
+            } => match field_value(stored, cells, field)? {
+                IndexValue::Null => index_value.clone(),
+                value => value,
+            },
             IndexField::Upper(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
                 value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
@@ -21575,6 +21718,10 @@ fn record_index_field_json(record: &Record, field: &IndexField) -> Value {
             })
             .cloned()
             .unwrap_or(Value::Null),
+        IndexField::Coalesce { field, value, .. } => match record_index_field_json(record, field) {
+            Value::Null => index_literal_json(value),
+            value => value,
+        },
         IndexField::Upper(inner) => match record_index_field_json(record, inner) {
             Value::Null => Value::Null,
             value => Value::String(predicate_value_text(&value).to_ascii_uppercase()),
@@ -21587,6 +21734,16 @@ fn record_index_field_json(record: &Record, field: &IndexField) -> Value {
             Value::Null => Value::Null,
             value => Value::String(predicate_value_text(&value).trim().to_string()),
         },
+    }
+}
+
+fn index_literal_json(value: &IndexValue) -> Value {
+    match value {
+        IndexValue::Null => Value::Null,
+        IndexValue::Bool(value) => Value::Bool(*value),
+        IndexValue::Int(value) => Value::from(*value),
+        IndexValue::Float(bits) => Value::from(f64::from_bits(*bits)),
+        IndexValue::String(value) => Value::String(value.clone()),
     }
 }
 
@@ -21966,6 +22123,12 @@ fn record_index_field_value(record: &Record, field: &IndexField) -> IndexValue {
             })
             .map(json_to_index_value)
             .unwrap_or(IndexValue::Null),
+        IndexField::Coalesce {
+            field, index_value, ..
+        } => match record_index_field_value(record, field) {
+            IndexValue::Null => index_value.clone(),
+            value => value,
+        },
         IndexField::Upper(inner) => match record_index_field_value(record, inner) {
             IndexValue::Null => IndexValue::Null,
             value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
@@ -22588,6 +22751,7 @@ struct PagedDurableIndexDef {
     /// validation plus per-key claims; the probe is the in-transaction
     /// backstop.
     unique: bool,
+    nulls_not_distinct: bool,
 }
 
 /// Whether the apply-time unique probe runs. Always in debug builds; release
@@ -22810,7 +22974,8 @@ fn apply_paged_index_upsert(
                     // machinery is retired.
                     if def.unique
                         && paged_unique_apply_probe_enabled()
-                        && !index_key_contains_null(&decode_index_key(new_key))
+                        && (def.nulls_not_distinct
+                            || !index_key_contains_null(&decode_index_key(new_key)))
                     {
                         let own_writes = bicdb_page::Snapshot {
                             xid,
@@ -23747,6 +23912,11 @@ fn index_field_stats_name(field: &IndexField) -> String {
         IndexField::Timestamp => "timestamp".to_string(),
         IndexField::Geometry => "geometry".to_string(),
         IndexField::MetadataPath(path) => path.join("."),
+        IndexField::Coalesce { field, value, .. } => format!(
+            "coalesce({},{})",
+            index_field_stats_name(field),
+            index_value_text(value)
+        ),
         IndexField::Upper(inner) => format!("upper({})", index_field_stats_name(inner)),
         IndexField::Lower(inner) => format!("lower({})", index_field_stats_name(inner)),
         IndexField::Trim(inner) => format!("trim({})", index_field_stats_name(inner)),
@@ -24535,6 +24705,11 @@ fn spatial_field_name(field: &IndexField) -> String {
         IndexField::MetadataPath(path) => path.join("."),
         IndexField::Id => "id".to_string(),
         IndexField::Timestamp => "timestamp".to_string(),
+        IndexField::Coalesce { field, value, .. } => format!(
+            "coalesce({},{})",
+            spatial_field_name(field),
+            index_value_text(value)
+        ),
         IndexField::Upper(inner) => format!("upper({})", spatial_field_name(inner)),
         IndexField::Lower(inner) => format!("lower({})", spatial_field_name(inner)),
         IndexField::Trim(inner) => format!("trim({})", spatial_field_name(inner)),
@@ -25690,6 +25865,7 @@ mod schema_compatibility_tests {
 
         right
             .create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "patients_name".to_string(),
                 collection: "patients".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["name".to_string()])],
@@ -25745,6 +25921,7 @@ mod schema_compatibility_tests {
             .unwrap();
         source
             .create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "patients_name".to_string(),
                 collection: "patients".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["name".to_string()])],
@@ -25798,6 +25975,7 @@ mod schema_compatibility_tests {
         desired.create_collection("appointments").unwrap();
         desired
             .create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "patients_name".to_string(),
                 collection: "patients".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["name".to_string()])],
@@ -25883,6 +26061,7 @@ mod schema_compatibility_tests {
             .unwrap();
         desired
             .create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "patients_name".to_string(),
                 collection: "patients".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["name".to_string()])],
@@ -26059,6 +26238,7 @@ mod schema_compatibility_tests {
         target.create_collection("patients").unwrap();
         target
             .create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "patients_name".to_string(),
                 collection: "patients".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["name".to_string()])],
@@ -26141,6 +26321,7 @@ mod paged_read_ahead_tests {
             .with_fsync(false)
             .with_storage_mode(StorageMode::ServerPaged);
         let definition = IndexDefinition {
+            nulls_not_distinct: false,
             name: "runtime_backend_pid".to_string(),
             collection: "runtime_contexts".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["backend_pid".to_string()])],
@@ -26606,6 +26787,7 @@ mod index_maintenance_tests {
             .with_storage_mode(StorageMode::ServerPaged)
             .with_btree_build_batch_limits(1, 64 * 1024);
         let definition = IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_items_bucket".to_string(),
             collection: "items".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["bucket".to_string()])],
@@ -26774,6 +26956,7 @@ mod index_maintenance_tests {
         db.create_collection("items").unwrap();
         db.insert("items", Record::new("before")).unwrap();
         let definition = IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_items_id".to_string(),
             collection: "items".to_string(),
             fields: vec![IndexField::Id],
@@ -26819,6 +27002,7 @@ mod index_maintenance_tests {
             .with_storage_mode(StorageMode::ServerPaged)
             .with_btree_build_batch_limits(1, 64 * 1024);
         let definition = IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_items_id".to_string(),
             collection: "items".to_string(),
             fields: vec![IndexField::Id],
@@ -26932,6 +27116,7 @@ mod index_maintenance_tests {
         )
         .unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "active_reservations".into(),
             collection: "reservations".into(),
             fields: vec![
@@ -26990,6 +27175,7 @@ mod index_maintenance_tests {
         let starts_on = IndexField::MetadataPath(vec!["starts_on".into()]);
         let ends_on = IndexField::MetadataPath(vec!["ends_on".into()]);
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "reservations_no_overlap".into(),
             collection: "reservations".into(),
             fields: vec![tenant.clone(), starts_on.clone(), ends_on.clone()],
@@ -27408,6 +27594,7 @@ mod index_maintenance_tests {
             ("stock_data", vec!["d"], false),
         ] {
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: name.to_string(),
                 collection: "stock".to_string(),
                 fields: fields
@@ -27669,6 +27856,7 @@ mod index_maintenance_tests {
                 BicDb::open_with_config(dir.path(), DbConfig::default().with_fsync(false)).unwrap();
             db.create_collection("orders").unwrap();
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "orders_cust".to_string(),
                 collection: "orders".to_string(),
                 fields: vec![
@@ -28168,6 +28356,7 @@ mod index_maintenance_tests {
                 db.create_collection("widgets").unwrap();
                 if indexed {
                     db.create_index(IndexDefinition {
+                        nulls_not_distinct: false,
                         name: "unchanged_idx".into(),
                         collection: "widgets".into(),
                         fields: vec![IndexField::MetadataPath(vec!["unchanged".into()])],
@@ -28435,6 +28624,7 @@ mod index_maintenance_tests {
         let mut db = BicDb::open(dir.path()).unwrap();
         db.create_collection("widgets").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "widgets_color".to_string(),
             collection: "widgets".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["color".to_string()])],
@@ -28567,6 +28757,7 @@ mod index_maintenance_tests {
                 .with_storage_mode(mode.clone());
             let ctx = SecurityContext::new("owner", "org-a");
             let unique = IndexDefinition {
+                nulls_not_distinct: false,
                 name: "s_key_key".to_string(),
                 collection: "s".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["key".to_string()])],
@@ -28637,6 +28828,7 @@ mod index_maintenance_tests {
             .unwrap();
             db.create_collection("jobs").unwrap();
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "idx_jobs_queued_migration_version".to_string(),
                 collection: "jobs".to_string(),
                 fields: vec![IndexField::MetadataPath(vec![
@@ -28746,6 +28938,7 @@ mod index_maintenance_tests {
         )
         .unwrap();
         db.create_index_online(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_orders_tenant_created".to_string(),
             collection: "orders".to_string(),
             fields: vec![
@@ -28798,6 +28991,7 @@ mod index_maintenance_tests {
                     .unwrap();
             db.create_collection("jobs").unwrap();
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "idx_jobs_bucket".to_string(),
                 collection: "jobs".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["bucket".to_string()])],
@@ -29067,6 +29261,7 @@ mod index_maintenance_tests {
                     .unwrap();
             db.create_collection("jobs").unwrap();
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "idx_jobs_bucket".to_string(),
                 collection: "jobs".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["bucket".to_string()])],
@@ -29120,6 +29315,7 @@ mod index_maintenance_tests {
                     .unwrap();
             db.create_collection("jobs").unwrap();
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "idx_jobs_bucket".to_string(),
                 collection: "jobs".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["bucket".to_string()])],
@@ -29168,6 +29364,7 @@ mod index_maintenance_tests {
                     .unwrap();
             db.create_collection("jobs").unwrap();
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "idx_jobs_bucket".to_string(),
                 collection: "jobs".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["bucket".to_string()])],
@@ -29240,6 +29437,7 @@ mod index_maintenance_tests {
         )
         .unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_orders_tenant".to_string(),
             collection: "orders".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["tenant".to_string()])],
@@ -29287,6 +29485,7 @@ mod index_maintenance_tests {
         )
         .unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_patients_clinic".to_string(),
             collection: "patients".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["clinic".to_string()])],
@@ -29345,6 +29544,7 @@ mod index_maintenance_tests {
         )
         .unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_patients_email".to_string(),
             collection: "patients".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["email".to_string()])],
@@ -29382,6 +29582,7 @@ mod index_maintenance_tests {
         .unwrap();
 
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_jobs_queued_migration_version".to_string(),
             collection: "jobs".to_string(),
             fields: vec![IndexField::MetadataPath(vec![
@@ -29431,6 +29632,7 @@ mod index_maintenance_tests {
         )
         .unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_items_bucket".to_string(),
             collection: "items".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["bucket".to_string()])],
@@ -29489,6 +29691,7 @@ mod index_maintenance_tests {
             BicDb::open_with_config(temp.path(), DbConfig::default().with_fsync(false)).unwrap();
         db.create_collection("items").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_items_scope_status_rank".to_string(),
             collection: "items".to_string(),
             fields: vec![
@@ -29604,6 +29807,7 @@ mod index_maintenance_tests {
             BicDb::open_with_config(temp.path(), DbConfig::default().with_fsync(false)).unwrap();
         db.create_collection("items").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_items_status".to_string(),
             collection: "items".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["status".to_string()])],
@@ -29646,6 +29850,7 @@ mod index_maintenance_tests {
             BicDb::open_with_config(temp.path(), DbConfig::default().with_fsync(false)).unwrap();
         db.create_collection("events").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_events_bucket_position".to_string(),
             collection: "events".to_string(),
             fields: vec![
@@ -29709,6 +29914,7 @@ mod index_maintenance_tests {
             BicDb::open_with_config(temp.path(), DbConfig::default().with_fsync(false)).unwrap();
         db.create_collection("ledger_entries").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_ledger_entries_external_ref".to_string(),
             collection: "ledger_entries".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["external_ref".to_string()])],
@@ -29781,6 +29987,7 @@ mod index_maintenance_tests {
         )
         .unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_ledger_events_bucket".to_string(),
             collection: "ledger_events".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["bucket".to_string()])],
@@ -31844,6 +32051,7 @@ mod index_maintenance_tests {
         let mut db = BicDb::open_with_config(temp.path(), config).unwrap();
         db.create_collection("codes").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "codes_code".to_string(),
             collection: "codes".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["code".to_string()])],
@@ -31867,6 +32075,7 @@ mod index_maintenance_tests {
         // durable entries directly inside a paged transaction: the atomic
         // apply-time probe under the store write guard must reject it.
         let defs = [PagedDurableIndexDef {
+            nulls_not_distinct: false,
             name: "codes_code".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["code".to_string()])],
             kind: IndexKind::BTree,
@@ -31895,6 +32104,7 @@ mod index_maintenance_tests {
         // The batch's own earlier writes are visible to the probe: two rows
         // with the same new key in ONE transaction collide.
         let defs_second = [PagedDurableIndexDef {
+            nulls_not_distinct: false,
             name: "codes_code".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["code".to_string()])],
             kind: IndexKind::BTree,

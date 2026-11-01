@@ -1507,6 +1507,7 @@ impl<'db> SqlSession<'db> {
             return non_conflicting_records_from_scan(
                 schema,
                 &UniqueConflictArbiter {
+                    nulls_not_distinct: false,
                     name: conflict_columns.join("_"),
                     key: UniqueKey::Columns(conflict_columns.to_vec()),
                     index_name: None,
@@ -1562,10 +1563,15 @@ impl<'db> SqlSession<'db> {
             return Ok(None);
         };
         let key = record_column_values(record, schema, conflict_columns);
-        if key.iter().any(|value| matches!(value, SqlValue::Null)) {
+        let arbiter = self.memoized_unique_arbiter(table, schema, conflict_columns)?;
+        if key.iter().any(|value| matches!(value, SqlValue::Null))
+            && !arbiter
+                .as_ref()
+                .is_some_and(|arbiter| arbiter.nulls_not_distinct)
+        {
             return Ok(None);
         }
-        if let Some(arbiter) = self.memoized_unique_arbiter(table, schema, conflict_columns)? {
+        if let Some(arbiter) = arbiter {
             if let Some(columns) = primary_key_columns_for_unique_arbiter(schema, &arbiter) {
                 if !primary_key_requires_typed_identity(schema) {
                     sql_profile_index_lookup();

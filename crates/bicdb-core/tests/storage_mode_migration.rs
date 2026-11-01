@@ -38,6 +38,7 @@ fn seed_source(path: &std::path::Path, rows: usize) {
 
     // A unique index (the conflict target shape) and a non-unique one.
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "landings_source_message_id".to_string(),
         collection: "landings".to_string(),
         fields: vec![IndexField::MetadataPath(vec![
@@ -50,6 +51,7 @@ fn seed_source(path: &std::path::Path, rows: usize) {
     })
     .unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "landings_domain".to_string(),
         collection: "landings".to_string(),
         fields: vec![IndexField::MetadataPath(vec![

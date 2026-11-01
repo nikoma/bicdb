@@ -348,6 +348,7 @@ impl BicDb {
                 } else {
                     let entry_format = paged.entry_format_cached(&state.physical_name)?;
                     let def = PagedDurableIndexDef {
+                        nulls_not_distinct: false,
                         name: state.physical_name.clone(),
                         fields: state.definition.fields.clone(),
                         kind: IndexKind::BTree,
@@ -472,7 +473,9 @@ impl BicDb {
                     for (_, encoded, _) in &entries {
                         if state.definition.unique
                             && previous.as_deref() == Some(encoded.as_slice())
-                            && !index_key_contains_null(&decode_index_key(encoded))
+                            && state
+                                .definition
+                                .enforces_unique_key(&decode_index_key(encoded))
                         {
                             return Err(BicDbError::Index(format!(
                                 "unique index `{}` has duplicate keys",
@@ -1453,6 +1456,7 @@ impl BicDb {
         }
         let entry_format = paged.entry_format_cached(&definition.name)?;
         let defs = [PagedDurableIndexDef {
+            nulls_not_distinct: false,
             name: definition.name.clone(),
             fields: definition.fields.clone(),
             kind: definition.kind.clone(),
@@ -1776,6 +1780,7 @@ impl BicDb {
         let paged = Arc::clone(self.paged_records.as_ref().expect("server-paged checked"));
         let entry_format = paged.entry_format_cached(&definition.name)?;
         let def = PagedDurableIndexDef {
+            nulls_not_distinct: false,
             name: definition.name.clone(),
             fields: definition.fields.clone(),
             kind: definition.kind.clone(),

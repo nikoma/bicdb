@@ -22,7 +22,9 @@ pub const MIN_WRITE_FORMAT_VERSION: u32 = 2;
 pub const SERVER_PAGED_FEATURE_FLAG: &str = "server_paged_storage";
 
 pub const ONLINE_BACKUP_EXTENT_FEATURE_FLAG: &str = "online_backup_extent_tracking_v1";
+pub const UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG: &str = "unique_nulls_not_distinct_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
     "format_metadata_v2",
     SERVER_PAGED_FEATURE_FLAG,
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
@@ -530,6 +532,19 @@ pub(crate) fn enable_online_backup_extent_tracking(root: &Path) -> Result<()> {
         && metadata
             .feature_flags
             .insert(ONLINE_BACKUP_EXTENT_FEATURE_FLAG.into())
+    {
+        persist_metadata(root, &metadata, true)?;
+    }
+    Ok(())
+}
+
+/// Older binaries must refuse a database whose unique keys compare NULLs as equal.
+pub(crate) fn enable_unique_nulls_not_distinct(root: &Path) -> Result<()> {
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if metadata
+        .feature_flags
+        .insert(UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG.into())
     {
         persist_metadata(root, &metadata, true)?;
     }

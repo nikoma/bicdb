@@ -37,6 +37,7 @@ fn main() {
     eprintln!("ingested {total}");
 
     let definition = IndexDefinition {
+        nulls_not_distinct: false,
         name: "articles_year".to_string(),
         collection: "articles".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["year".to_string()])],

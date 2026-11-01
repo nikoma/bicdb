@@ -942,6 +942,7 @@ pub(crate) fn ensure_unique_constraint_indexes_for_schema(
                 .collection
                 .eq_ignore_ascii_case(&definition.collection)
                 && existing.unique == definition.unique
+                && existing.nulls_not_distinct == definition.nulls_not_distinct
                 && existing.kind == definition.kind
                 && index_field_lists_match(&existing.fields, &definition.fields)
                 && existing.predicate == definition.predicate
@@ -973,6 +974,7 @@ pub(crate) fn unique_constraint_index_definitions_for_schema(
                 return None;
             }
             Some(IndexDefinition {
+                nulls_not_distinct: false,
                 name: name.clone(),
                 collection: schema.name.clone(),
                 fields: primary_key_index_fields_for_columns(columns),
@@ -1052,6 +1054,7 @@ pub(crate) fn primary_key_index_definition_for_schema(
         return None;
     }
     Some(IndexDefinition {
+        nulls_not_distinct: false,
         name: schema.primary_key_constraint_name(),
         collection: schema.name.clone(),
         fields: primary_key_index_fields_for_columns(&columns),

@@ -71,6 +71,7 @@ fn main() {
         let mut db = BicDb::open_with_config(path, config()).unwrap();
         db.create_collection("articles").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "articles_fts".to_string(),
             collection: "articles".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["terms".to_string()])],

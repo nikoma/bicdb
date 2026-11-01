@@ -23,6 +23,7 @@ fn direct_documents_use_native_fields_compressed_source_and_compact_impacts() {
     let mut db = BicDb::open_with_config(directory.path(), config).unwrap();
     db.create_collection("documents").unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "documents_fts".to_string(),
         collection: "documents".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["unused".to_string()])],
@@ -212,6 +213,7 @@ fn sealed_direct_documents_are_searchable_without_reverse_term_blobs() {
     let mut db = BicDb::open_with_config(directory.path(), config).unwrap();
     db.create_collection("documents").unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "documents_fts".to_string(),
         collection: "documents".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["unused".to_string()])],
@@ -306,6 +308,7 @@ fn sealed_direct_progressive_documents_are_searchable_before_completion() {
     let mut db = BicDb::open_with_config(directory.path(), config.clone()).unwrap();
     db.create_collection("documents").unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "documents_fts".to_string(),
         collection: "documents".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["unused".to_string()])],
@@ -425,6 +428,7 @@ fn progressive_replacement_never_shadows_the_published_generation() {
     let mut db = BicDb::open_with_config(directory.path(), config.clone()).unwrap();
     db.create_collection("documents").unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "documents_fts".to_string(),
         collection: "documents".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["unused".to_string()])],

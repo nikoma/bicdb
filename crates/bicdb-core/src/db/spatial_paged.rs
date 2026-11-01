@@ -1389,6 +1389,7 @@ impl BicDb {
                             None => crate::paged_collection::IndexEntryFormat::V2,
                         };
                         Ok(PagedDurableIndexDef {
+                            nulls_not_distinct: state.definition.nulls_not_distinct,
                             name: state.definition.name.clone(),
                             fields: state.definition.fields.clone(),
                             kind: state.definition.kind.clone(),

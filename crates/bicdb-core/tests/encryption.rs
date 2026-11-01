@@ -310,6 +310,7 @@ fn protected_data_rejects_direct_indexes_over_encrypted_fields() {
 
     assert!(matches!(
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "patients_email_idx".to_string(),
             collection: "patients".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["email".to_string()])],
@@ -322,6 +323,7 @@ fn protected_data_rejects_direct_indexes_over_encrypted_fields() {
     ));
 
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "patients_email_blind_idx".to_string(),
         collection: "patients".to_string(),
         fields: vec![IndexField::MetadataPath(vec![

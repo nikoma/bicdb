@@ -485,6 +485,7 @@ fn replacing_a_native_index_with_the_same_name_and_count_invalidates_sql_locator
     let mut db = BicDb::open(dir.path()).unwrap();
     SqlSession::new(&mut db).execute("CREATE TABLE items(id INT PRIMARY KEY,a INT,b INT,n INT); INSERT INTO items VALUES(1,1,2,0),(2,2,1,0)").unwrap();
     let definition = |column: &str| IndexDefinition {
+        nulls_not_distinct: false,
         name: "native_lookup".into(),
         collection: "items".into(),
         fields: vec![IndexField::MetadataPath(vec![column.into()])],

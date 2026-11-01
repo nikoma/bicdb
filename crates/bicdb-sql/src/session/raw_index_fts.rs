@@ -211,6 +211,7 @@ impl<'db> SqlSession<'db> {
         }
         let index_field = spatial_index_field_from_name(&field)?;
         self.create_session_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: index_name.clone(),
             collection: table.clone(),
             fields: vec![index_field],

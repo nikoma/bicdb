@@ -263,6 +263,7 @@ impl BicDb {
         let index_field = spatial_field_from_name(field)?;
         let name = spatial_index_name(collection, field);
         self.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name,
             collection: collection.to_string(),
             fields: vec![index_field],
@@ -777,6 +778,7 @@ impl BicDb {
         }
         let name = spatial_index_name(collection, field);
         let definition = IndexDefinition {
+            nulls_not_distinct: false,
             name: name.clone(),
             collection: collection.to_string(),
             fields: vec![index_field],

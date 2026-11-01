@@ -87,6 +87,7 @@ fn build(dir: &std::path::Path, packed: bool, rows: usize) -> BicDb {
     )
     .unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: INDEX.into(),
         collection: "articles".into(),
         fields: vec![IndexField::MetadataPath(vec!["body".into()])],
@@ -370,6 +371,7 @@ fn drop_and_rebuild_reclaim_and_recreate_the_segment() {
     );
 
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: INDEX.into(),
         collection: "articles".into(),
         fields: vec![IndexField::MetadataPath(vec!["body".into()])],

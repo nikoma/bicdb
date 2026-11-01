@@ -12,7 +12,10 @@ use crate::*;
 pub(crate) fn index_field_is_expression(field: &IndexField) -> bool {
     matches!(
         field,
-        IndexField::Lower(_) | IndexField::Upper(_) | IndexField::Trim(_)
+        IndexField::Lower(_)
+            | IndexField::Upper(_)
+            | IndexField::Trim(_)
+            | IndexField::Coalesce { .. }
     )
 }
 
@@ -2630,8 +2633,164 @@ pub(crate) fn collect_expression_metadata_paths(expr: &Expr, paths: &mut Vec<Vec
     }
 }
 
+fn literal_index_fallback(expr: &Expr) -> bool {
+    match expr {
+        Expr::Value(value) => matches!(
+            value.value,
+            Value::Null | Value::Boolean(_) | Value::Number(..) | Value::SingleQuotedString(_)
+        ),
+        Expr::Nested(expr) | Expr::Cast { expr, .. } => literal_index_fallback(expr),
+        Expr::UnaryOp {
+            op: UnaryOperator::Plus | UnaryOperator::Minus,
+            expr,
+        } => literal_index_fallback(expr),
+        _ => false,
+    }
+}
+
+fn coalesce_key_family(pg_type: &str) -> Option<&str> {
+    match pg_type {
+        "text" | "varchar" => Some("text"),
+        "int2" | "int4" | "int8" => Some("integer"),
+        "numeric" => Some("numeric"),
+        "bool" => Some("bool"),
+        _ => None,
+    }
+}
+
+fn coalesce_input_preserves_values(expr: &Expr, schema: Option<&TableSchema>) -> bool {
+    match expr {
+        Expr::Identifier(_) | Expr::CompoundIdentifier(_) => true,
+        Expr::Nested(expr) => coalesce_input_preserves_values(expr, schema),
+        // Text casts of text/varchar preserve the indexed string. Numeric
+        // scale casts and other conversions need their own executable field.
+        Expr::Cast {
+            expr,
+            data_type: DataType::Text,
+            format: None,
+            array: false,
+            ..
+        } => {
+            matches!(
+                projected_expr_pg_type(expr, schema).as_deref(),
+                Some("text" | "varchar")
+            ) && coalesce_input_preserves_values(expr, schema)
+        }
+        Expr::Function(function)
+            if function_name_is(function, "lower") || function_name_is(function, "upper") =>
+        {
+            positional_function_args(&function.args).is_some_and(|args| {
+                args.len() == 1
+                    && (schema.is_none()
+                        || matches!(
+                            projected_expr_pg_type(args[0], schema).as_deref(),
+                            Some("text" | "varchar")
+                        ))
+                    && function.over.is_none()
+                    && function.filter.is_none()
+                    && function.within_group.is_empty()
+                    && function.null_treatment.is_none()
+                    && coalesce_input_preserves_values(args[0], schema)
+            })
+        }
+        _ => false,
+    }
+}
+
+fn coalesce_index_field(
+    expr: &Expr,
+    function: &Function,
+    schema: Option<&TableSchema>,
+) -> Result<IndexField> {
+    let unsupported = || {
+        SqlError::Unsupported(
+            "COALESCE index requires a type-preserving scalar input and a constant fallback".into(),
+        )
+    };
+    let FunctionArguments::List(list) = &function.args else {
+        return Err(unsupported());
+    };
+    if list.duplicate_treatment.is_some()
+        || !list.clauses.is_empty()
+        || function.over.is_some()
+        || function.filter.is_some()
+        || !function.within_group.is_empty()
+        || function.null_treatment.is_some()
+        || !matches!(function.parameters, FunctionArguments::None)
+    {
+        return Err(unsupported());
+    }
+    let args = positional_function_args(&function.args).ok_or_else(unsupported)?;
+    if args.len() != 2
+        || !literal_index_fallback(args[1])
+        || !coalesce_input_preserves_values(args[0], schema)
+    {
+        return Err(unsupported());
+    }
+    let field = match schema {
+        Some(schema) => index_field_from_expr_for_schema(schema, args[0])?,
+        None => index_field_from_expr(args[0])?,
+    };
+    let input_type = match schema {
+        Some(schema) => index_field_pg_type(schema, &field),
+        None if matches!(
+            field,
+            IndexField::Lower(_) | IndexField::Upper(_) | IndexField::Trim(_)
+        ) =>
+        {
+            Some("text".into())
+        }
+        None => None,
+    }
+    .ok_or_else(unsupported)?;
+    let output_type = projected_expr_pg_type(expr, schema).ok_or_else(unsupported)?;
+    if coalesce_key_family(&input_type).is_none()
+        || coalesce_key_family(&input_type) != coalesce_key_family(&output_type)
+    {
+        return Err(unsupported());
+    }
+    let fallback = eval_constant_expr(args[1])?;
+    // A fallback must already have a compatible scalar representation.
+    // In particular, do not turn a text default into an integer key or
+    // persist a rounded floating literal as an exact NUMERIC default.
+    let compatible = match coalesce_key_family(&input_type) {
+        Some("text") => matches!(fallback, SqlValue::Null | SqlValue::String(_)),
+        Some("integer") => matches!(fallback, SqlValue::Null | SqlValue::Int(_)),
+        Some("numeric") => matches!(
+            fallback,
+            SqlValue::Null | SqlValue::Int(_) | SqlValue::String(_)
+        ),
+        Some("bool") => matches!(fallback, SqlValue::Null | SqlValue::Bool(_)),
+        _ => false,
+    };
+    if !compatible {
+        return Err(unsupported());
+    }
+    let value = index_value_from_sql(fallback.clone())?;
+    if matches!(value, IndexValue::Float(bits) if !f64::from_bits(bits).is_finite()) {
+        return Err(unsupported());
+    }
+    let index_value = match schema {
+        Some(schema) => unique_key_index_values(
+            schema,
+            &UniqueKey::IndexFields(vec![field.clone()]),
+            &[fallback],
+        )?
+        .remove(0),
+        None => value.clone(),
+    };
+    Ok(IndexField::Coalesce {
+        field: Box::new(field),
+        value,
+        index_value,
+    })
+}
+
 pub(crate) fn index_field_from_expr(expr: &Expr) -> Result<IndexField> {
     match expr {
+        Expr::Function(function) if function_name_is(function, "coalesce") => {
+            return coalesce_index_field(expr, function, None)
+        }
         Expr::Function(function) if function_name_is(function, "upper") => {
             let Some(args) = positional_function_args(&function.args) else {
                 return Err(SqlError::Unsupported(
@@ -2681,6 +2840,9 @@ pub(crate) fn index_field_from_expr_for_schema(
     expr: &Expr,
 ) -> Result<IndexField> {
     match expr {
+        Expr::Function(function) if function_name_is(function, "coalesce") => {
+            return coalesce_index_field(expr, function, Some(schema))
+        }
         Expr::Function(function) if function_name_is(function, "upper") => {
             let Some(args) = positional_function_args(&function.args) else {
                 return Err(SqlError::Unsupported(
@@ -3615,6 +3777,15 @@ pub(crate) fn canonical_index_field_for_schema(
             .column(&path[0])
             .map(|column| IndexField::MetadataPath(vec![column.name.clone()]))
             .unwrap_or(IndexField::MetadataPath(path)),
+        IndexField::Coalesce {
+            field,
+            value,
+            index_value,
+        } => IndexField::Coalesce {
+            field: Box::new(canonical_index_field_for_schema(schema, *field)),
+            value,
+            index_value,
+        },
         IndexField::Upper(inner) => {
             IndexField::Upper(Box::new(canonical_index_field_for_schema(schema, *inner)))
         }
@@ -5002,6 +5173,18 @@ pub(crate) fn index_field_matches(left: &IndexField, right: &IndexField) -> bool
         (IndexField::MetadataPath(left), IndexField::MetadataPath(right)) => {
             metadata_paths_match(left, right)
         }
+        (
+            IndexField::Coalesce {
+                field: left,
+                value: lv,
+                index_value: li,
+            },
+            IndexField::Coalesce {
+                field: right,
+                value: rv,
+                index_value: ri,
+            },
+        ) => lv == rv && li == ri && index_field_matches(left, right),
         (IndexField::Upper(left), IndexField::Upper(right))
         | (IndexField::Lower(left), IndexField::Lower(right))
         | (IndexField::Trim(left), IndexField::Trim(right)) => index_field_matches(left, right),

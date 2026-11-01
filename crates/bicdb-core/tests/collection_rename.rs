@@ -43,6 +43,7 @@ fn ids(db: &BicDb, collection: &str) -> Vec<String> {
 
 fn color_index(collection: &str) -> IndexDefinition {
     IndexDefinition {
+        nulls_not_distinct: false,
         name: format!("{collection}_color"),
         collection: collection.to_string(),
         fields: vec![IndexField::MetadataPath(vec!["color".to_string()])],

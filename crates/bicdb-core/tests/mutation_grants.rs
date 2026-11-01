@@ -83,6 +83,7 @@ fn protected_mutations_require_and_consume_exact_native_grants() {
     )
     .unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "documents_search".to_string(),
         collection: "documents".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["name".to_string()])],

@@ -389,6 +389,7 @@ fn main() {
             let mut db = BicDb::open_with_config(path, config()).expect("open");
             let started = Instant::now();
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "articles_fts".to_string(),
                 collection: "articles".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["body".to_string()])],

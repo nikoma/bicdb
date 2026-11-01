@@ -30,6 +30,12 @@ class IndexPolicies(unittest.TestCase):
         manifest['indexes'][1]['status'] = 'UNUSABLE'
         with self.assertRaises(ValueError): indexes.index_plan(manifest)
 
+    def test_resume_normalizes_late_retries_without_accepting_unknown_or_duplicate_indexes(self):
+        names = ['EARLY', 'MIDDLE', 'LATE']
+        self.assertEqual(indexes.completed_in_source_order(['LATE', 'EARLY'], names), ['EARLY', 'LATE'])
+        for completed in [['EARLY', 'EARLY'], ['UNKNOWN'], [None]]:
+            with self.assertRaises(ValueError): indexes.completed_in_source_order(completed, names)
+
     def test_plain_keys_remain_prefix_indexable(self):
         sql = indexes.index_ddl('S', index([key('A')]), self.columns)
         self.assertEqual(sql, 'CREATE UNIQUE INDEX "S"."IX" ON "S"."T"("A" ASC)')

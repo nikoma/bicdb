@@ -37,6 +37,15 @@ def index_plan(manifest):
     return logical, storage
 
 
+def completed_in_source_order(completed, names):
+    if (not isinstance(completed, list) or any(not isinstance(n, str) for n in completed)
+            or len(set(completed)) != len(completed) or any(n not in names for n in completed)):
+        raise ValueError('index journal is not a unique subset of this snapshot')
+    # A resumed pass can finish an earlier unsupported index after later ones.
+    # Normalize those valid older journals and keep every new write ordered.
+    return [name for name in names if name in completed]
+
+
 def known_nonnull_key(table, key, columns):
     if key['expression'] is None:
         return columns[(table, key['column'])]['nullable'] == 'N'
@@ -166,9 +175,7 @@ def migrate(args):
         if any(previous.get(key) != report[key] for key in
                ['format', 'phase', 'profile', 'schema_manifest_sha256', 'source_logical_indexes']):
             raise ValueError('index journal does not match this snapshot and phase')
-        completed = previous['completed']
-        if len(set(completed)) != len(completed) or completed != [n for n in names if n in completed]:
-            raise ValueError('index journal is not an ordered subset of this snapshot')
+        previous['completed'] = completed_in_source_order(previous['completed'], names)
         report = previous
         report.update(success=False, failures=[])
     try:
@@ -217,6 +224,7 @@ def migrate(args):
                         else:
                             report['definitions'][name] = definition
                             report['completed'].append(name)
+                            report['completed'] = completed_in_source_order(report['completed'], names)
                     except psycopg.Error as error:
                         report['failures'].append(dict(name=name, reason='target_sql_error', sqlstate=error.sqlstate))
                     save_report(args.report, report)

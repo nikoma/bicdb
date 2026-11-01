@@ -2332,6 +2332,7 @@ pub(crate) fn alter_table_rename_table(
         db.drop_collection(old_table)?;
         for index in &indexes {
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: index.name.clone(),
                 collection: new_table.to_string(),
                 fields: index.fields.clone(),

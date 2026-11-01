@@ -4195,6 +4195,7 @@ mod tests {
         let mut db = BicDb::open(directory.path().join("database")).unwrap();
         db.create_collection("widgets").unwrap();
         let previous = IndexDefinition {
+            nulls_not_distinct: false,
             name: "widgets_identity_uq".to_string(),
             collection: "widgets".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["name".to_string()])],
@@ -4224,6 +4225,7 @@ mod tests {
         let mut db = BicDb::open(directory.path().join("database")).unwrap();
         db.create_collection("quotation_lines").unwrap();
         let previous = IndexDefinition {
+            nulls_not_distinct: false,
             name: "quotation_lines_search".to_string(),
             collection: "quotation_lines".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["description".to_string()])],
@@ -4250,6 +4252,7 @@ mod tests {
     #[test]
     fn schema_unique_index_field_change_remains_incompatible() {
         let previous = IndexDefinition {
+            nulls_not_distinct: false,
             name: "accounts_code_uq".to_string(),
             collection: "accounts".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["code".to_string()])],

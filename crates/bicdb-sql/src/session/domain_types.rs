@@ -1430,7 +1430,7 @@ impl<'db> SqlSession<'db> {
             let mut seen = BTreeSet::new();
             for record in records {
                 let values = unique_key_values(record, schema, &arbiter.key);
-                if unique_key_has_null(&values) || !arbiter.applies_to(record)? {
+                if arbiter.skips_null_key(&values) || !arbiter.applies_to(record)? {
                     continue;
                 }
                 let key = typed_unique_key_label(schema, &arbiter.key, &values)?;
@@ -2507,6 +2507,7 @@ impl<'db> SqlSession<'db> {
             }
             for (internal_name, projection) in internal_index_names.iter().zip(projections) {
                 self.create_session_index(IndexDefinition {
+                    nulls_not_distinct: false,
                     name: internal_name.clone(),
                     collection: table.clone(),
                     fields: vec![IndexField::MetadataPath(vec![projection])],
@@ -2553,6 +2554,7 @@ impl<'db> SqlSession<'db> {
                 self.insert_session_records(&table, records)?;
             }
             self.create_session_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: index_name.clone(),
                 collection: table.clone(),
                 fields: vec![IndexField::MetadataPath(vec![projection])],
@@ -2602,6 +2604,7 @@ impl<'db> SqlSession<'db> {
                 self.insert_session_records(&table, records)?;
             }
             self.create_session_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: index_name.clone(),
                 collection: table.clone(),
                 fields: vec![IndexField::MetadataPath(vec![projection])],
@@ -2721,6 +2724,7 @@ impl<'db> SqlSession<'db> {
                 }
             }
             self.create_session_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: index_name.clone(),
                 collection: table.clone(),
                 fields: vec![IndexField::MetadataPath(vec![full_text_projection_field(
@@ -2788,6 +2792,7 @@ impl<'db> SqlSession<'db> {
             .and(create_index.predicate.as_ref())
             .map(|predicate| predicate.to_string());
         self.create_session_index(IndexDefinition {
+            nulls_not_distinct: create_index.nulls_distinct == Some(false),
             name: index_name.clone(),
             collection: table.clone(),
             fields,

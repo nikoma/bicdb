@@ -83,6 +83,33 @@ Oracle-preview connections. The
 [application runtime evidence](evidence/idempiere-runtime-2026-11-01/README.md)
 records a concurrent sequence-allocation check, not full transaction conformance.
 
+## Native unique index policies
+
+`CREATE UNIQUE INDEX ... NULLS NOT DISTINCT` compares NULL components as equal.
+Without that explicit option, PostgreSQL's ordinary NULLS DISTINCT behavior is
+preserved. Oracle composite uniqueness additionally permits duplicate all-NULL
+keys; the migration tool excludes those rows with a partial-index predicate when
+necessary. This index policy does not yet qualify nullable composite UNIQUE
+**table constraints** in the Oracle import.
+
+Native `UPPER` and type-preserving two-argument `COALESCE` fields provide actual
+index backfill and write enforcement. COALESCE supports compatible text/varchar,
+integer, numeric and boolean scalar inputs with compatible literal fallbacks.
+Numeric integer defaults use exact canonical keys. Fractional floating literals,
+volatile fallbacks and value-changing input casts are rejected for unique indexes;
+this is a bounded expression subset, not general expression indexing. Its case
+conversion follows the engine's existing ASCII behavior, not Oracle NLS rules.
+Metadata-only non-unique placeholders are neither valid nor ready; unsupported
+expressions cannot create unique placeholders.
+
+The on-disk index policy has a capability flag. Its extended uniqueness wire
+encoding also makes older readers/replication peers reject it. Existing ordinary
+indexes retain their boolean encoding. Enabling this feature requires compatible
+binaries; the capability flag is retained after index removal. This is not a
+qualified cluster upgrade or downgrade procedure. The
+[development evidence](evidence/idempiere-nullable-indexes-2026-11-01/README.md)
+records runtime checks against Oracle and an older development binary.
+
 ## Datetime truncation
 
 The preview resolves `TRUNC` on known date/timestamp expressions to an Oracle

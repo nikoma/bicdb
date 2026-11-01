@@ -777,3 +777,100 @@ async fn published_oracle_hr_runs_over_pg_driver_without_changing_postgres() {
     drop(client);
     connection.await.unwrap();
 }
+
+#[tokio::test]
+async fn nullable_composite_unique_policy_is_enforced_over_the_pg_driver() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let root = tempfile::tempdir().unwrap();
+        let running = Running::with_profile(root.path(), profile);
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(running.port)
+            .user("bicdb")
+            .dbname("bicdb")
+            .options(&format!("-c bicdb.sql_profile={profile}"));
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let task = tokio::spawn(async move { connection.await.unwrap() });
+        client.batch_execute("CREATE TABLE unique_policy(k INTEGER PRIMARY KEY,a INTEGER,b VARCHAR(20));
+            CREATE UNIQUE INDEX unique_policy_uq ON unique_policy(a,b) NULLS NOT DISTINCT WHERE a IS NOT NULL OR b IS NOT NULL;
+            INSERT INTO unique_policy VALUES(1,NULL,NULL),(2,NULL,NULL)").await.unwrap();
+        let insert = client
+            .prepare("INSERT INTO unique_policy VALUES($1,$2,$3)")
+            .await
+            .unwrap();
+        let absent: Option<&str> = None;
+        client
+            .execute(&insert, &[&3i32, &1i32, &absent])
+            .await
+            .unwrap();
+        let error = client
+            .execute(&insert, &[&4i32, &1i32, &absent])
+            .await
+            .unwrap_err();
+        assert_eq!(error.code().unwrap().code(), "23505");
+        client
+            .execute(&insert, &[&4i32, &1i32, &Some("NULL")])
+            .await
+            .unwrap();
+        assert_eq!(
+            client
+                .query_one("SELECT COUNT(*) FROM unique_policy", &[])
+                .await
+                .unwrap()
+                .get::<_, i64>(0),
+            4
+        );
+        client
+            .batch_execute(
+                "CREATE TABLE ordinary_policy(k INTEGER PRIMARY KEY,a INTEGER,b VARCHAR(20));
+            CREATE UNIQUE INDEX ordinary_policy_uq ON ordinary_policy(a,b);
+            INSERT INTO ordinary_policy VALUES(1,1,NULL),(2,1,NULL)",
+            )
+            .await
+            .unwrap();
+        client.batch_execute("CREATE TABLE source_keys(k INTEGER PRIMARY KEY,tenant NUMERIC,role_id NUMERIC,language VARCHAR(6));
+            CREATE UNIQUE INDEX source_keys_uq ON source_keys(tenant,COALESCE(role_id,0),COALESCE(language,'')) NULLS NOT DISTINCT;
+            INSERT INTO source_keys VALUES(1,7,NULL,NULL)").await.unwrap();
+        let error = client
+            .batch_execute("INSERT INTO source_keys VALUES(2,7,0,'')")
+            .await
+            .unwrap_err();
+        assert_eq!(error.code().unwrap().code(), "23505");
+        if profile == "postgres" {
+            client.batch_execute("CREATE TABLE numeric_nulls(k INTEGER PRIMARY KEY,a NUMERIC,b NUMERIC,note VARCHAR(20));
+                CREATE UNIQUE INDEX numeric_nulls_uq ON numeric_nulls(a,b) NULLS NOT DISTINCT;
+                INSERT INTO numeric_nulls VALUES(1,1,NULL,'seed');
+                INSERT INTO numeric_nulls VALUES(2,1,NULL,'changed') ON CONFLICT(a,b) DO UPDATE SET note=excluded.note").await.unwrap();
+            assert_eq!(
+                client
+                    .query_one("SELECT note FROM numeric_nulls WHERE k=1", &[])
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "changed"
+            );
+        }
+        drop(insert);
+        drop(client);
+        task.await.unwrap();
+        drop(running);
+        let running = Running::with_profile(root.path(), profile);
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(running.port)
+            .user("bicdb")
+            .dbname("bicdb")
+            .options(&format!("-c bicdb.sql_profile={profile}"));
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let task = tokio::spawn(async move { connection.await.unwrap() });
+        let error = client
+            .batch_execute("INSERT INTO unique_policy VALUES(5,1,NULL)")
+            .await
+            .unwrap_err();
+        assert_eq!(error.code().unwrap().code(), "23505");
+        drop(client);
+        task.await.unwrap();
+    }
+}

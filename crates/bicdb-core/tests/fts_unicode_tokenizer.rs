@@ -42,6 +42,7 @@ fn indexed(dir: &std::path::Path, bodies: &[&str]) -> BicDb {
     )
     .unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "docs_fts".into(),
         collection: "docs".into(),
         fields: vec![IndexField::MetadataPath(vec!["body".into()])],

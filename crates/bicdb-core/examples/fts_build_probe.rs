@@ -115,6 +115,7 @@ fn main() {
             let serial = std::env::var("BICDB_FTS_BUILD_SERIAL").as_deref() == Ok("1");
             let started = Instant::now();
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "articles_fts".to_string(),
                 collection: "articles".to_string(),
                 fields: vec![

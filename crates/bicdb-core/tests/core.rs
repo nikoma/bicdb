@@ -1140,6 +1140,7 @@ fn ha_shipping_converges_standby_and_promote_preserves_state() {
             .unwrap();
         primary
             .create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "patients_name".to_string(),
                 collection: "patients".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["name".to_string()])],
@@ -1370,6 +1371,7 @@ fn durable_collection_and_index_names_are_length_bounded() {
     db.create_collection("records").unwrap();
     let error = db
         .create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: oversized,
             collection: "records".to_string(),
             fields: vec![IndexField::Id],
@@ -1394,6 +1396,7 @@ fn planted_index_catalog_paths_are_rejected_on_open() {
         let mut db = BicDb::open(&db_path).unwrap();
         db.create_collection("places").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "places_geom".to_string(),
             collection: "places".to_string(),
             fields: vec![IndexField::Geometry],
@@ -1508,6 +1511,7 @@ fn secondary_index_survives_reopen_and_verifies() {
         )
         .unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_patients_clinic".to_string(),
             collection: "patients".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["clinic".to_string()])],
@@ -1545,6 +1549,7 @@ fn secondary_index_tracks_update_delete_and_rollback() {
     )
     .unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "idx_patients_age".to_string(),
         collection: "patients".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["age".to_string()])],
@@ -1613,6 +1618,7 @@ fn spatial_index_reopens_and_returns_radius_and_nearest_candidates() {
         )
         .unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_places_geometry".to_string(),
             collection: "places".to_string(),
             fields: vec![IndexField::Geometry],
@@ -2233,6 +2239,7 @@ fn compaction_rewrites_live_records_and_preserves_indexes_vectors_and_reopen() {
             assert!(db.delete("patients", &format!("p-{idx:03}")).unwrap());
         }
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_patients_clinic".to_string(),
             collection: "patients".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["clinic".to_string()])],
@@ -2435,6 +2442,7 @@ fn recovery_does_not_replay_transaction_over_later_segment_delete() {
             BicDb::open_with_config(temp.path(), DbConfig::default().with_fsync(false)).unwrap();
         db.create_collection("jobs").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "idx_jobs_queued_migration_version".to_string(),
             collection: "jobs".to_string(),
             fields: vec![IndexField::MetadataPath(vec![
@@ -4158,6 +4166,7 @@ fn concurrent_unique_inserts_cannot_half_apply_a_commit() {
     let (_temp, mut db) = open_temp();
     db.create_collection("accounts").unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "accounts_email_unique".to_string(),
         collection: "accounts".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["email".to_string()])],

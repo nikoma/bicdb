@@ -22,6 +22,7 @@ fn paged_config() -> DbConfig {
 
 fn fts_index() -> IndexDefinition {
     IndexDefinition {
+        nulls_not_distinct: false,
         name: "articles_fts".to_string(),
         collection: "articles".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["terms".to_string()])],
@@ -51,6 +52,7 @@ fn declared_raw_text_fields_are_tokenized_natively_with_positions() {
         )
         .unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "resources_search".to_string(),
             collection: "resources".to_string(),
             fields: vec![
@@ -169,6 +171,7 @@ fn direct_primary_key_fts_reader_can_skip_the_startup_rowid_registry() {
         db.create_collection("articles").unwrap();
         db.create_index(fts_index()).unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "articles_pkey".to_string(),
             collection: "articles".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["document_id".to_string()])],
@@ -695,6 +698,7 @@ fn an_aborted_direct_build_refuses_lookups_rather_than_answering_empty() {
     // The abort knob matches by index name; a unique name keeps parallel
     // sibling tests (which create `articles_fts`) out of the blast radius.
     let abort_index = || IndexDefinition {
+        nulls_not_distinct: false,
         name: "articles_fts_abort".to_string(),
         ..fts_index()
     };

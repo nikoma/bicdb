@@ -941,6 +941,7 @@ impl BicDb {
             name = format!("{}{suffix}", history_rid_index(history));
         }
         self.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name,
             collection: history.to_string(),
             fields: vec![IndexField::MetadataPath(vec!["rid".to_string()])],

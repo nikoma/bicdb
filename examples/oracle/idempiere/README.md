@@ -53,6 +53,13 @@ of existing rows. Those states must be retained in the target. The March 2026
 seed also requires the remaining release-13 migrations for the pinned October
 application source. These counts describe this seed, not application completion.
 
+A separate Oracle copy has now applied all 24 migrations missing from the pinned
+seed's ledger, including five older than its latest recorded migration. It has
+915 tables and 185,471 rows, with no invalid objects. A separate native BicDB
+instance imported and reconciled every table/row multiset from that upgraded
+snapshot. This does not qualify migration SQL execution on BicDB, its remaining
+schema objects or application workflows. The original seed is preserved separately.
+
 ## Reproduce schema/data development
 
 Use a private working directory outside the repository. `prepare_seed.py`
@@ -106,8 +113,11 @@ index definitions/states are checked on resume. A negative control first rejects
 older servers that incorrectly report placeholders as valid. The DDL-oriented
 phase disables automatic prepared-statement caching.
 
-The [measured index run](../../../docs/evidence/idempiere-indexes-2026-11-01/README.md)
-verified 237 executable indexes; 30 remain unsupported. The application dictionary
+The [initial index run](../../../docs/evidence/idempiere-indexes-2026-11-01/README.md)
+verified 237 executable indexes. The
+[nullable-index follow-up](../../../docs/evidence/idempiere-nullable-indexes-2026-11-01/README.md)
+verified 266 of 267 against the original seed snapshot. Datetime expression
+indexing remains unsupported in that run. The application dictionary
 query returned the same 49 rows as Oracle using the original composite index,
 without the temporary diagnostic lookup index.
 
@@ -116,8 +126,8 @@ permit duplicate all-NULL keys but reject duplicate partially NULL keys with the
 same non-NULL components. The importer models this with `NULLS NOT DISTINCT` and,
 where necessary, a predicate excluding all-NULL keys. It first probes actual
 duplicate rejection; syntax acceptance alone does not qualify that behavior.
-The preview currently fails this capability probe, so these indexes are skipped
-with explicit failures. Existing nullable composite UNIQUE **constraints** also
+The preview now passes this capability probe and the original snapshot's 24
+nullable composite unique indexes were installed with that policy. Existing nullable composite UNIQUE **constraints** also
 remain an outstanding migration requirement. No complete constraint equivalence
 is claimed by a successful table/data import.
 

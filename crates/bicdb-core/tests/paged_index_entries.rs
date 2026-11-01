@@ -24,6 +24,7 @@ fn paged_config() -> DbConfig {
 
 fn year_index() -> IndexDefinition {
     IndexDefinition {
+        nulls_not_distinct: false,
         name: "articles_year".to_string(),
         collection: "articles".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["year".to_string()])],

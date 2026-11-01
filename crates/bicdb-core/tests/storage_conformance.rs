@@ -292,6 +292,7 @@ fn index_lookup_finds_matching_records() {
                 .unwrap();
         }
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "notes_kind".to_string(),
             collection: "notes".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["kind".to_string()])],
@@ -319,6 +320,7 @@ fn index_reflects_writes_made_after_it_was_created() {
     for_each_mode(|db, mode| {
         db.create_collection("notes").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "notes_kind".to_string(),
             collection: "notes".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["kind".to_string()])],
@@ -355,6 +357,7 @@ fn unique_index_rejects_a_duplicate_key() {
     for_each_mode(|db, mode| {
         db.create_collection("notes").unwrap();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "notes_kind_unique".to_string(),
             collection: "notes".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["kind".to_string()])],
@@ -442,6 +445,7 @@ fn indexes_are_queryable_after_reopen() {
             let mut db = open_in(dir, mode);
             db.create_collection("notes").unwrap();
             db.create_index(IndexDefinition {
+                nulls_not_distinct: false,
                 name: "notes_kind".to_string(),
                 collection: "notes".to_string(),
                 fields: vec![IndexField::MetadataPath(vec!["kind".to_string()])],

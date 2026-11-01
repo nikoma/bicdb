@@ -181,6 +181,7 @@ fn export_does_not_load_unrelated_secondary_indexes() {
     )
     .unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "events_value".to_string(),
         collection: "events".to_string(),
         fields: vec![IndexField::MetadataPath(vec!["value".to_string()])],

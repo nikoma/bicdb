@@ -36,6 +36,7 @@ fn filtered_ranking_is_equivalent_and_running_scans_observe_cancellation() {
     )
     .unwrap();
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "fts".into(),
         collection: "docs".into(),
         fields: vec![IndexField::MetadataPath(vec!["body".into()])],

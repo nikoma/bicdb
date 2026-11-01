@@ -45,6 +45,7 @@ fn seed(path: &std::path::Path, mode: StorageMode) -> BicDb {
         ("rows_fts", IndexKind::FullText, "body"),
     ] {
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: name.into(),
             collection: "rows".into(),
             fields: vec![IndexField::MetadataPath(vec![field.into()])],

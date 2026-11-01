@@ -2729,6 +2729,7 @@ impl ApplicationRuntime {
                     create_schema_index(
                         &mut db,
                         IndexDefinition {
+                            nulls_not_distinct: false,
                             name: resource_search_index_name(contract),
                             collection: contract.relation.clone(),
                             fields: contract
@@ -2748,6 +2749,7 @@ impl ApplicationRuntime {
                     create_schema_index(
                         &mut db,
                         IndexDefinition {
+                            nulls_not_distinct: false,
                             name: target.index_name.clone().unwrap_or_else(|| {
                                 format!("{}_unique_{}", contract.name, target.target)
                             }),
@@ -2786,6 +2788,7 @@ impl ApplicationRuntime {
                     create_schema_index(
                         &mut db,
                         IndexDefinition {
+                            nulls_not_distinct: false,
                             name: index.name.clone(),
                             collection: contract.relation.clone(),
                             fields,
@@ -2849,6 +2852,7 @@ impl ApplicationRuntime {
                     create_schema_index(
                         &mut db,
                         IndexDefinition {
+                            nulls_not_distinct: false,
                             name: exclusion.name.clone(),
                             collection: contract.relation.clone(),
                             fields,

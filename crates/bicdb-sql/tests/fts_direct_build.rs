@@ -392,6 +392,7 @@ fn direct_build_is_blocks_only_and_matches_oracle_across_chunks() {
     // generation bitset and enforced inside scoring, before result
     // materialization or application-level candidate overfetching.
     db.create_index(IndexDefinition {
+        nulls_not_distinct: false,
         name: "idx_docs_id_filter".to_string(),
         collection: "docs".to_string(),
         fields: vec![IndexField::Id],

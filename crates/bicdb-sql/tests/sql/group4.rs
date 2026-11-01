@@ -1161,13 +1161,25 @@ fn postgres_index_catalog_oids_do_not_collide_and_expression_defs_match_clients(
         vec![vec![
             SqlValue::String("index_accounts_on_username_and_domain_lower".to_string()),
             SqlValue::Bool(true),
-            SqlValue::String("0".to_string()),
+            SqlValue::String("0 0".to_string()),
             SqlValue::String(
                 "CREATE UNIQUE INDEX index_accounts_on_username_and_domain_lower ON accounts USING btree (lower((username)::text), COALESCE(lower((domain)::text), ''::text))"
                     .to_string()
             ),
         ]]
     );
+    // pg_index has one indkey entry per indexed attribute; each expression
+    // contributes a zero (https://www.postgresql.org/docs/current/catalog-pg-index.html).
+    assert_eq!(engine.execute("SELECT indnatts,indnkeyatts,indkey FROM pg_catalog.pg_index WHERE indexrelid=(SELECT oid FROM pg_catalog.pg_class WHERE relname='index_accounts_on_username_and_domain_lower')").unwrap().rows,
+        vec![vec![SqlValue::Int(2),SqlValue::Int(2),SqlValue::String("0 0".into())]]);
+    drop(engine);
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("INSERT INTO accounts VALUES(1,'alice',NULL)")
+        .unwrap();
+    assert!(session
+        .execute("INSERT INTO accounts VALUES(2,'ALICE','')")
+        .is_err());
 }
 
 #[test]

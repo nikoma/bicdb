@@ -3209,6 +3209,7 @@ mod tests {
         desired.create_collection("new_items").unwrap();
         desired
             .create_index(crate::IndexDefinition {
+                nulls_not_distinct: false,
                 name: "items_kind".to_string(),
                 collection: "items".to_string(),
                 fields: vec![crate::IndexField::MetadataPath(vec!["kind".to_string()])],

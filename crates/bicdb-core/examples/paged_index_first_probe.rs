@@ -43,6 +43,7 @@ fn main() {
         db.create_collection("articles").expect("create");
         let started = std::time::Instant::now();
         db.create_index(IndexDefinition {
+            nulls_not_distinct: false,
             name: "articles_year".to_string(),
             collection: "articles".to_string(),
             fields: vec![IndexField::MetadataPath(vec!["year".to_string()])],

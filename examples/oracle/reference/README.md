@@ -134,3 +134,9 @@ python3 -m unittest discover -s examples/oracle/reference -p 'test_*.py'
 
 The regular CI suite runs these harness checks. Live Oracle comparisons require
 the external reference database and must be reported separately from CI checks.
+
+The preview's standalone datetime extraction fixtures use
+`--profile oracle-preview-v1 --cases examples/oracle/reference/extract-cases.json`.
+They check date year/month/day fields, timestamp clock fields, conditional
+aggregates and an application column named `YEAR`. These are value comparisons;
+they do not qualify all Oracle datetime types, errors, NLS rules or metadata.

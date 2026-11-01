@@ -1,0 +1,197 @@
+{
+  "format": 1,
+  "created_at": "2026-11-01T20:48:50.233335+00:00",
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "oracle_driver_version": "26.1.0",
+  "pg_driver_version": "3.3.6",
+  "fixture_sha256": "30b2a701ffcfc6860c6ae520821be0de50c0d05437e26ef88ae38c823eb926fb",
+  "total": 8,
+  "matched": 8,
+  "different": 0,
+  "cases": [
+    {
+      "id": "extract_date_year",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2002"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2002"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "extract_date_month",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "extract_date_day",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "extract_timestamp_hour",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "extract_timestamp_minute",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "5"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "extract_timestamp_second",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "6.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "6.123456"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "extract_case_aggregate",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "extract_field_and_column_name",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2002"
+            },
+            {
+              "number": "1999"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2002"
+            },
+            {
+              "number": "1999"
+            }
+          ]
+        ]
+      }
+    }
+  ],
+  "scope": "Query values only; not type metadata, errors, transactions, or full conformance"
+}

@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "cases": [
+    {
+      "id": "extract_date_year",
+      "sql": "SELECT EXTRACT(YEAR FROM TO_DATE('2002-02-03','YYYY-MM-DD')) FROM DUAL"
+    },
+    {
+      "id": "extract_date_month",
+      "sql": "SELECT EXTRACT(MONTH FROM TO_DATE('2002-02-03','YYYY-MM-DD')) FROM DUAL"
+    },
+    {
+      "id": "extract_date_day",
+      "sql": "SELECT EXTRACT(DAY FROM TO_DATE('2002-02-03','YYYY-MM-DD')) FROM DUAL"
+    },
+    {
+      "id": "extract_timestamp_hour",
+      "sql": "SELECT EXTRACT(HOUR FROM TIMESTAMP '2002-02-03 04:05:06.123456') FROM DUAL"
+    },
+    {
+      "id": "extract_timestamp_minute",
+      "sql": "SELECT EXTRACT(MINUTE FROM TIMESTAMP '2002-02-03 04:05:06.123456') FROM DUAL"
+    },
+    {
+      "id": "extract_timestamp_second",
+      "sql": "SELECT EXTRACT(SECOND FROM TIMESTAMP '2002-02-03 04:05:06.123456') FROM DUAL"
+    },
+    {
+      "id": "extract_case_aggregate",
+      "sql": "SELECT SUM(CASE WHEN EXTRACT(YEAR FROM happened)=2002 THEN 1 ELSE 0 END) FROM (SELECT TIMESTAMP '2002-02-03 04:05:06' AS happened FROM DUAL UNION ALL SELECT TIMESTAMP '2024-03-04 05:06:07' AS happened FROM DUAL) events"
+    },
+    {
+      "id": "extract_field_and_column_name",
+      "sql": "SELECT extract(year FROM happened),year FROM (SELECT TIMESTAMP '2002-02-03 04:05:06' AS happened,1999 AS year FROM DUAL) events"
+    }
+  ]
+}

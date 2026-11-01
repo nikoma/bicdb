@@ -122,6 +122,11 @@ records runtime checks against Oracle and an older development binary.
 
 ## Datetime truncation
 
+Datetime `EXTRACT` retains its field grammar rather than folding the field as an
+application column. Conditional aggregates using extracted years are covered by
+native query tests and [Oracle comparisons](evidence/oracle-extract-2026-11-01/README.md).
+This does not qualify every Oracle extraction overload or error condition.
+
 The preview resolves `TRUNC` on known date/timestamp expressions to an Oracle
 datetime helper returning native `timestamp` (the mapping for Oracle DATE).
 Resolution uses metadata, including ordinary CTE projections, without executing

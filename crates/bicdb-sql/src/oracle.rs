@@ -805,6 +805,18 @@ fn canonical_tokens(db: &BicDb, source: &[Token], preview: bool) -> Result<Vec<T
             let upper = w.value.to_ascii_uppercase();
             if w.quote_style.is_none() {
                 if preview
+                    && i >= 2
+                    && source[i - 1] == Token::LParen
+                    && word(&source[i - 2], "EXTRACT")
+                    && (i < 3 || source[i - 3] != Token::Period)
+                {
+                    // EXTRACT's field is grammar, not an application column.
+                    // Let the native parser validate the field vocabulary.
+                    pieces.push(upper);
+                    i += 1;
+                    continue;
+                }
+                if preview
                     && matches!(upper.as_str(), "VARCHAR2" | "CHAR")
                     && source.get(i + 1) == Some(&Token::LParen)
                     && matches!(source.get(i + 2), Some(Token::Number(..)))
@@ -874,6 +886,9 @@ fn canonical_tokens(db: &BicDb, source: &[Token], preview: bool) -> Result<Vec<T
                     "NVL" => pieces.push("coalesce".into()),
                     "TO_DATE" if source.get(i + 1) == Some(&Token::LParen) => {
                         pieces.push("bicdb_oracle_to_date".into())
+                    }
+                    "EXTRACT" if preview && source.get(i + 1) == Some(&Token::LParen) => {
+                        pieces.push("extract".into())
                     }
                     "ORGANIZATION" => {
                         return Err(unsupported(
@@ -1374,6 +1389,42 @@ mod tests {
         )
         .is_err());
     }
+    #[test]
+    fn preview_extract_fields_and_case_aggregates_keep_their_grammar() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        for source in [
+            "CREATE TABLE extract_events(k NUMBER PRIMARY KEY, happened TIMESTAMP(6), year NUMBER)",
+            "INSERT INTO extract_events VALUES(1,TIMESTAMP '2002-02-03 04:05:06',1999),(2,TIMESTAMP '2024-03-04 05:06:07',1998)",
+        ] {
+            let sql = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            SqlSession::new(&mut db).execute(&sql).unwrap();
+        }
+        for (sql, expected) in [
+            ("SELECT EXTRACT(YEAR FROM happened),year FROM extract_events WHERE k=1",vec!["2002","1999"]),
+            ("SELECT SUM(CASE WHEN EXTRACT(YEAR FROM happened)=2002 THEN 1 ELSE 0 END), SUM(CASE WHEN EXTRACT(MONTH FROM happened)=3 THEN 1 ELSE 0 END) FROM extract_events",vec!["1","1"]),
+            ("SELECT EXTRACT(DAY FROM happened),EXTRACT(HOUR FROM happened),EXTRACT(MINUTE FROM happened),EXTRACT(SECOND FROM happened) FROM extract_events WHERE k=1",vec!["3","4","5","6.000000"]),
+            ("SELECT EXTRACT(YEAR FROM TO_DATE('2002-02-03','YYYY-MM-DD')) FROM DUAL",vec!["2002"]),
+        ] {
+            let lowered = lower_profile_sql(&db, sql, ORACLE_PREVIEW_PROFILE).unwrap();
+            let result = SqlSession::new(&mut db).execute(&lowered).unwrap();
+            assert_eq!(result.rows[0].iter().map(SqlValue::to_cell).collect::<Vec<_>>(),expected, "{sql}");
+        }
+        let invalid = lower_profile_sql(
+            &db,
+            "SELECT EXTRACT(unknown_part FROM happened) FROM extract_events",
+            ORACLE_PREVIEW_PROFILE,
+        );
+        assert!(match invalid {
+            Err(_) => true,
+            Ok(sql) => SqlSession::new(&mut db).execute(&sql).is_err(),
+        });
+        let native = SqlSession::new(&mut db)
+            .execute("SELECT EXTRACT(YEAR FROM TIMESTAMP '2024-03-04 05:06:07')")
+            .unwrap();
+        assert_eq!(native.rows[0][0].to_cell(), "2024");
+    }
+
     #[test]
     fn preview_datetime_trunc_uses_column_types_and_keeps_postgres_trunc_numeric() {
         let root = tempfile::tempdir().unwrap();

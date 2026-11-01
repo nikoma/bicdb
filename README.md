@@ -189,6 +189,9 @@ The [BicDB Owner's Guide](docs/owners-guide.md) covers architecture, operations,
 Cells, application hosting, and the boundaries between built-in protocols and
 separate messaging adapters. It is a reference for when you need those features.
 
+The [query planner roadmap](docs/query-planner-roadmap.md) proposes a correctness-first,
+cost-based optimizer, with measurable plan-quality goals and a staged rollout.
+
 ### Deployment and benchmark evidence
 
 BicDB powers [Wewobo](https://wewobo.com) (Web Without Borders), a web-search project indexing

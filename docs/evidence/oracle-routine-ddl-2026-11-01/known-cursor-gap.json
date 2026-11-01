@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "name": "PAYMENTTERMDUEDATE",
+  "source_sha256": "f2945cb88b4e4242a218f02515455eb52a061e72d811bcacbea7159906c33008",
+  "only_adaptation": "explicit destination namespace",
+  "success": false,
+  "created": true,
+  "sqlstate": "42601",
+  "error": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"CUR_PT\" at Line: 1, Column: 1",
+  "unqualified_probe_function_removed": true
+}

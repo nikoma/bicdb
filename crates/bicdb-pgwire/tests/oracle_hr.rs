@@ -58,6 +58,140 @@ impl Running {
 }
 
 #[tokio::test]
+async fn routine_drop_preserves_owner_checks_and_rollback_over_the_driver() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        // Administrative fixture provisioning uses the native API. Oracle
+        // preview role DDL/procedure creation are not qualified by this test.
+        {
+            let mut db = bicdb_core::BicDb::open(directory.path()).unwrap();
+            bicdb_sql::oracle::ensure_database_profile(&mut db, profile).unwrap();
+            let mut session = bicdb_sql::SqlSession::new(&mut db);
+            for source in [
+                "CREATE ROLE routine_owner LOGIN", "CREATE ROLE routine_other LOGIN",
+                "CREATE SCHEMA routine_space AUTHORIZATION routine_owner", "SET ROLE routine_owner",
+                "CREATE FUNCTION routine_space.drop_fn() RETURNS INT LANGUAGE plpgsql AS $$BEGIN RETURN 7; END$$",
+                "CREATE PROCEDURE routine_space.drop_proc(p_in INT) LANGUAGE plpgsql AS $$BEGIN RETURN; END$$",
+                "GRANT EXECUTE ON FUNCTION drop_fn() TO routine_other"
+            ] { session.execute(source).unwrap(); }
+        }
+        let server = Running::with_profile(directory.path(), profile);
+        let connect = |user: &str| {
+            let mut config = tokio_postgres::Config::new();
+            config
+                .host("127.0.0.1")
+                .port(server.port)
+                .user(user)
+                .dbname("bicdb");
+            if profile != "postgres" {
+                config.options("-c bicdb.sql_profile=oracle-preview-v1");
+            }
+            async move {
+                let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+                (
+                    client,
+                    tokio::spawn(async move {
+                        connection.await.unwrap();
+                    }),
+                )
+            }
+        };
+        let (owner, owner_connection) = connect("routine_owner").await;
+        let (other, other_connection) = connect("routine_other").await;
+        let query = if profile == "postgres" {
+            "SELECT CAST(drop_fn() AS VARCHAR(20))"
+        } else {
+            "SELECT CAST(drop_fn() AS VARCHAR2(20)) FROM DUAL"
+        };
+        assert_eq!(
+            other
+                .query_one(query, &[])
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "7"
+        );
+        let drops = [
+            r#"DROP FUNCTION "routine_space".drop_fn"#,
+            r#"DROP PROCEDURE "routine_space".drop_proc"#,
+        ];
+        for source in drops {
+            assert_eq!(
+                other
+                    .batch_execute(source)
+                    .await
+                    .unwrap_err()
+                    .as_db_error()
+                    .unwrap()
+                    .code(),
+                &tokio_postgres::error::SqlState::INSUFFICIENT_PRIVILEGE
+            );
+        }
+        for source in [
+            r#"DROP FUNCTION "wrong_space".drop_fn"#,
+            r#"DROP PROCEDURE "wrong_space".drop_proc"#,
+        ] {
+            assert!(owner.batch_execute(source).await.is_err());
+        }
+        owner.batch_execute(r#"DROP FUNCTION IF EXISTS "wrong_space".drop_fn CASCADE; DROP PROCEDURE IF EXISTS "wrong_space".drop_proc"#).await.unwrap();
+        assert_eq!(
+            owner
+                .query_one(query, &[])
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "7"
+        );
+        for source in [
+            r#"DROP FUNCTION "routine_space".drop_fn, "routine_space".missing_fn"#,
+            r#"DROP PROCEDURE "routine_space".drop_proc, "routine_space".missing_proc"#,
+        ] {
+            assert!(owner.batch_execute(source).await.is_err());
+            assert_eq!(
+                owner
+                    .query_one(query, &[])
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "7"
+            );
+        }
+        let drop_batch = drops.join("; ");
+        owner.batch_execute("BEGIN").await.unwrap();
+        owner.batch_execute(&drop_batch).await.unwrap();
+        owner.batch_execute("ROLLBACK").await.unwrap();
+        assert_eq!(
+            owner
+                .query_one(query, &[])
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "7"
+        );
+        let count = r#"SELECT COUNT(*) FROM "pg_catalog"."pg_proc" WHERE "proname" IN ('drop_fn','drop_proc')"#;
+        assert_eq!(
+            owner.query_one(count, &[]).await.unwrap().get::<_, i64>(0),
+            2
+        );
+        owner.batch_execute(&drop_batch).await.unwrap();
+        for source in drops {
+            let source = source
+                .replacen("DROP FUNCTION", "DROP FUNCTION IF EXISTS", 1)
+                .replacen("DROP PROCEDURE", "DROP PROCEDURE IF EXISTS", 1);
+            owner.batch_execute(&source).await.unwrap();
+        }
+        assert_eq!(
+            owner.query_one(count, &[]).await.unwrap().get::<_, i64>(0),
+            0
+        );
+        drop(owner);
+        drop(other);
+        owner_connection.await.unwrap();
+        other_connection.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn nullable_unique_constraints_keep_profile_rules_across_copy_and_restart() {
     use futures_util::{SinkExt, StreamExt};
     for profile in ["postgres", "oracle-preview-v1"] {

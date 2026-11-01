@@ -436,6 +436,24 @@ impl<'db> SqlSession<'db> {
         Ok(SqlResult::command("CREATE TRIGGER"))
     }
 
+    fn owned_routine_for_drop(
+        &self,
+        kind: RoutineKind,
+        name_ast: &ObjectName,
+    ) -> Result<Option<RoutineSchema>> {
+        let (schema, name) = routine_schema_and_name(&object_name(name_ast)?);
+        let routine = load_routine(self.db_ref(), kind, &name)?
+            .filter(|routine| name_ast.0.len() == 1 || routine_schema_name(routine) == schema);
+        if let Some(routine) = &routine {
+            let object = match kind {
+                RoutineKind::Function => "function",
+                RoutineKind::Procedure => "procedure",
+            };
+            self.require_object_ownership(routine.owner(), &format!("{object} {name}"), "drop it")?;
+        }
+        Ok(routine)
+    }
+
     pub(crate) fn execute_drop_function(
         &mut self,
         drop_function: &DropFunction,
@@ -445,9 +463,17 @@ impl<'db> SqlSession<'db> {
             Some(sqlparser::ast::DropBehavior::Cascade)
         );
         for desc in &drop_function.func_desc {
-            let name = relation_name(&desc.name)?;
-            let existed_before =
-                load_routine(self.db_ref(), RoutineKind::Function, &name)?.is_some();
+            // Match CREATE's routine keys; table relation encoding is separate.
+            let name = normalize_object_name(&object_name(&desc.name)?);
+            let Some(routine) = self.owned_routine_for_drop(RoutineKind::Function, &desc.name)?
+            else {
+                if drop_function.if_exists {
+                    continue;
+                }
+                return Err(SqlError::InvalidSql(format!(
+                    "function \"{name}\" does not exist"
+                )));
+            };
             let dependents = list_user_types(self.db_ref())?
                 .into_iter()
                 .filter(|user_type| base_type_uses_routine(user_type, &name))
@@ -464,13 +490,8 @@ impl<'db> SqlSession<'db> {
                     self.drop_user_type_definition(&dependent, true, &mut dropped)?;
                 }
             }
-            let existed =
-                delete_routine(self.db_mut()?, RoutineKind::Function, &name)? || existed_before;
-            if !existed && !drop_function.if_exists {
-                return Err(SqlError::InvalidSql(format!(
-                    "function \"{name}\" does not exist"
-                )));
-            }
+            // CASCADE can already have removed the function with its type.
+            self.delete_session_routine(&routine)?;
         }
         Ok(SqlResult::command("DROP FUNCTION"))
     }
@@ -481,8 +502,11 @@ impl<'db> SqlSession<'db> {
         proc_desc: &[FunctionDesc],
     ) -> Result<SqlResult> {
         for desc in proc_desc {
-            let name = relation_name(&desc.name)?;
-            let existed = delete_routine(self.db_mut()?, RoutineKind::Procedure, &name)?;
+            let name = normalize_object_name(&object_name(&desc.name)?);
+            let existed = match self.owned_routine_for_drop(RoutineKind::Procedure, &desc.name)? {
+                Some(routine) => self.delete_session_routine(&routine)?,
+                None => false,
+            };
             if !existed && !if_exists {
                 return Err(SqlError::InvalidSql(format!(
                     "procedure \"{name}\" does not exist"

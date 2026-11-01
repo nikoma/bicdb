@@ -422,11 +422,12 @@ fn lower_oracle_sql(db: &BicDb, sql: &str, preview: bool) -> Result<String> {
     let block = word(&source[0], "BEGIN")
         && (!preview || source.get(1) != Some(&Token::SemiColon))
         && source.iter().any(|t| word(t, "END"));
-    let procedural = source
-        .iter()
-        .take(4)
-        .any(|t| word(t, "PROCEDURE") || word(t, "FUNCTION"))
-        || block;
+    let routine_declaration = word(&source[0], "CREATE")
+        && source
+            .iter()
+            .take(4)
+            .any(|token| word(token, "PROCEDURE") || word(token, "FUNCTION"));
+    let procedural = routine_declaration || block;
     if preview && !procedural && source[..source.len() - 1].contains(&Token::SemiColon) {
         return source
             .split(|token| *token == Token::SemiColon)
@@ -485,10 +486,11 @@ fn lower_oracle_sql(db: &BicDb, sql: &str, preview: bool) -> Result<String> {
         }
         source.retain(|t| !word(t, "ENABLE"));
     }
-    let routine = source
-        .iter()
-        .take(4)
-        .any(|t| word(t, "PROCEDURE") || (preview && word(t, "FUNCTION")));
+    let routine = routine_declaration
+        && source
+            .iter()
+            .take(4)
+            .any(|token| word(token, "PROCEDURE") || (preview && word(token, "FUNCTION")));
     if routine || block {
         return lower_block(db, &source, routine, preview);
     }
@@ -1369,6 +1371,154 @@ mod tests {
         assert_eq!(result.column_types, vec![Some("varchar".into())]);
         assert_eq!(result.rows[0][0].to_cell(), "value");
     }
+    #[test]
+    fn oracle_procedure_drop_does_not_enter_the_declaration_lowerer() {
+        for profile in [ORACLE_HR_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open(root.path()).unwrap();
+            ensure_database_profile(&mut db, profile).unwrap();
+            for source in [
+                "CREATE PROCEDURE cleanup_proc(p_value IN NUMBER) AS BEGIN RETURN; END;",
+                "DROP PROCEDURE cleanup_proc",
+                "DROP PROCEDURE IF EXISTS cleanup_proc",
+            ] {
+                let sql = lower_session_sql(&db, source, profile, None, "bicdb").unwrap();
+                SqlSession::new(&mut db).execute(&sql).unwrap();
+            }
+            assert!(load_routine(&db, RoutineKind::Procedure, "cleanup_proc")
+                .unwrap()
+                .is_none());
+        }
+    }
+
+    #[test]
+    fn routine_drop_respects_ownership_qualified_keys_and_transaction_rollback() {
+        fn execute(session: &mut SqlSession<'_>, profile: &str, source: &str) -> Result<SqlResult> {
+            let sql = if profile == POSTGRES_PROFILE {
+                source.to_string()
+            } else {
+                lower_session_sql(session.db_ref(), source, profile, None, "bicdb")?
+            };
+            session.execute(&sql)
+        }
+        for profile in [POSTGRES_PROFILE, ORACLE_PREVIEW_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open(root.path()).unwrap();
+            ensure_database_profile(&mut db, profile).unwrap();
+            let mut session = SqlSession::new(&mut db);
+            for source in [
+                "CREATE ROLE routine_owner",
+                "CREATE ROLE routine_other",
+                "CREATE SCHEMA routine_space AUTHORIZATION routine_owner",
+                "SET ROLE routine_owner",
+            ] {
+                session.execute(source).unwrap();
+            }
+            let function = if profile == POSTGRES_PROFILE {
+                "CREATE FUNCTION routine_space.drop_fn() RETURNS INT LANGUAGE plpgsql AS $$BEGIN RETURN 7; END$$"
+            } else {
+                r#"CREATE FUNCTION "routine_space".drop_fn RETURN NUMBER AS BEGIN RETURN 7; END;"#
+            };
+            execute(&mut session, profile, function).unwrap();
+            // Provision this procedure with the backend API. Preview Oracle
+            // procedure creation remains outside this deletion regression.
+            session.execute("CREATE PROCEDURE routine_space.drop_proc(p_in INT) LANGUAGE plpgsql AS $$BEGIN RETURN; END$$").unwrap();
+            session
+                .execute("GRANT EXECUTE ON FUNCTION drop_fn() TO routine_other")
+                .unwrap();
+            session.execute("SET ROLE routine_other").unwrap();
+            let query = if profile == POSTGRES_PROFILE {
+                "SELECT drop_fn()"
+            } else {
+                "SELECT drop_fn() FROM DUAL"
+            };
+            assert_eq!(
+                execute(&mut session, profile, query).unwrap().rows[0][0].to_cell(),
+                "7"
+            );
+            for source in [
+                r#"DROP FUNCTION "routine_space".drop_fn"#,
+                r#"DROP PROCEDURE "routine_space".drop_proc"#,
+            ] {
+                let error = execute(&mut session, profile, source).unwrap_err();
+                assert_eq!(error.sqlstate(), "42501", "{profile}: {error}");
+            }
+            session.execute("SET ROLE routine_owner").unwrap();
+            for source in [
+                r#"DROP FUNCTION "wrong_space".drop_fn"#,
+                r#"DROP PROCEDURE "wrong_space".drop_proc"#,
+            ] {
+                assert!(execute(&mut session, profile, source).is_err());
+            }
+            execute(&mut session,profile,r#"DROP FUNCTION IF EXISTS "wrong_space".drop_fn CASCADE; DROP PROCEDURE IF EXISTS "wrong_space".drop_proc"#).unwrap();
+            assert!(
+                load_routine(session.db_ref(), RoutineKind::Function, "drop_fn")
+                    .unwrap()
+                    .is_some()
+            );
+            assert!(
+                load_routine(session.db_ref(), RoutineKind::Procedure, "drop_proc")
+                    .unwrap()
+                    .is_some()
+            );
+            for source in [
+                r#"DROP FUNCTION "routine_space".drop_fn, "routine_space".missing_fn"#,
+                r#"DROP PROCEDURE "routine_space".drop_proc, "routine_space".missing_proc"#,
+            ] {
+                assert!(execute(&mut session, profile, source).is_err());
+                assert!(
+                    load_routine(session.db_ref(), RoutineKind::Function, "drop_fn")
+                        .unwrap()
+                        .is_some()
+                );
+                assert!(
+                    load_routine(session.db_ref(), RoutineKind::Procedure, "drop_proc")
+                        .unwrap()
+                        .is_some()
+                );
+            }
+            session.execute("BEGIN").unwrap();
+            execute(&mut session,profile,r#"DROP FUNCTION "routine_space".drop_fn; DROP PROCEDURE "routine_space".drop_proc"#).unwrap();
+            assert!(
+                load_routine(session.db_ref(), RoutineKind::Function, "drop_fn")
+                    .unwrap()
+                    .is_none()
+            );
+            assert!(
+                load_routine(session.db_ref(), RoutineKind::Procedure, "drop_proc")
+                    .unwrap()
+                    .is_none()
+            );
+            session.execute("ROLLBACK").unwrap();
+            assert!(
+                load_routine(session.db_ref(), RoutineKind::Function, "drop_fn")
+                    .unwrap()
+                    .is_some()
+            );
+            assert!(
+                load_routine(session.db_ref(), RoutineKind::Procedure, "drop_proc")
+                    .unwrap()
+                    .is_some()
+            );
+            assert_eq!(
+                session.execute("SELECT drop_fn()").unwrap().rows[0][0].to_cell(),
+                "7"
+            );
+            execute(&mut session,profile,r#"DROP FUNCTION "routine_space".drop_fn; DROP PROCEDURE "routine_space".drop_proc"#).unwrap();
+            assert!(
+                load_routine(session.db_ref(), RoutineKind::Function, "drop_fn")
+                    .unwrap()
+                    .is_none()
+            );
+            assert!(
+                load_routine(session.db_ref(), RoutineKind::Procedure, "drop_proc")
+                    .unwrap()
+                    .is_none()
+            );
+            execute(&mut session,profile,r#"DROP FUNCTION IF EXISTS "routine_space".drop_fn; DROP PROCEDURE IF EXISTS "routine_space".drop_proc"#).unwrap();
+        }
+    }
+
     #[test]
     fn preview_stored_functions_lower_returns_and_local_declarations() {
         let root = tempfile::tempdir().unwrap();

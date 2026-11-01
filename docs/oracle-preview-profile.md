@@ -211,6 +211,15 @@ exception or application-schema adaptations. Accepted DDL alone is not proof
 that every routine compiles and executes: migration acceptance must exercise
 each required routine and its dependencies through the application driver.
 
+Routine DROP statements use ordinary DDL processing rather than the procedural
+body lowerer. Qualified names are checked against the recorded namespace;
+removal requires native effective-role ownership or superuser authority.
+Transaction rollback and a failed DROP naming several routines restore removed
+definitions. See the [routine DDL evidence](evidence/oracle-routine-ddl-2026-11-01/README.md).
+The routine store's global normalized keys still limit namespace/overload
+isolation. Preview role-management DDL and Oracle procedure creation through the
+preview front end remain outstanding; bounded HR procedure support is separate.
+
 The [iDempiere migration tools](../examples/oracle/idempiere/README.md) keep source
 snapshots and upstream binaries outside the checkout. Tables and rows alone are
 not application acceptance. Foreign-key validation/deferment, routines, views,

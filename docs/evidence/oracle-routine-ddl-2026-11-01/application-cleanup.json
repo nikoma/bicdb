@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "probe_only": true,
+  "name": "PAYMENTTERMDUEDATE",
+  "source_definition_sha256": "f2945cb88b4e4242a218f02515455eb52a061e72d811bcacbea7159906c33008",
+  "original_source_preserved": true,
+  "success": true,
+  "application_qualified": false,
+  "runtime_binary_sha256": "7d3e8cbdfe760b56796b6cc569646a1d76543a2bdbe01c6badb951326378dda7",
+  "definitions_before": 1,
+  "definitions_after": 0,
+  "existing_getdate_and_charat_still_execute": true,
+  "verified_after_restart": true,
+  "repair_or_reinstallation": false
+}

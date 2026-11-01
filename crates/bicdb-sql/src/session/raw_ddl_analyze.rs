@@ -1004,6 +1004,15 @@ impl<'db> SqlSession<'db> {
     pub(crate) fn execute_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
         if matches!(
             statement,
+            Statement::DropFunction(_) | Statement::DropProcedure { .. }
+        ) {
+            // Routine deletion records DDL undo. Keep all names in one DROP
+            // atomic when a later lookup, owner check or dependency fails.
+            return self
+                .with_statement_transaction(|session| session.execute_statement_inner(statement));
+        }
+        if matches!(
+            statement,
             Statement::Insert(_) | Statement::Update(_) | Statement::Delete(_)
         ) {
             if let Some(rewritten) = rewrite_dml_call_forms(statement) {

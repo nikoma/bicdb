@@ -1529,6 +1529,84 @@ fn integer_range_errors_are_consistent_across_query_bind_and_copy() {
 }
 
 #[test]
+fn text_format_binds_preserve_numeric_looking_character_keys() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let dir = tempfile::tempdir().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open(
+            dir.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let serving = server.clone();
+        let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+        let mut client = TcpStream::connect(address).unwrap();
+        send_startup_version_with_options(
+            &mut client,
+            196_608,
+            true,
+            &[("options", &format!("-c bicdb.sql_profile={profile}"))],
+        );
+        read_until_ready(&mut client);
+        send_query(&mut client,
+            "CREATE TABLE dictionary_codes (reference_id SMALLINT, code VARCHAR(30));
+             CREATE UNIQUE INDEX dictionary_code_key ON dictionary_codes(reference_id, code);
+             INSERT INTO dictionary_codes VALUES (5,'1'),(5,'001'),(5,'1.0'),(5,' 1 '),(5,'1e2'),(5,'0');");
+        read_until_ready(&mut client);
+
+        // Both declared and inferred string types arrive in text format from
+        // JDBC. Their spelling must survive indexed lookup and projection.
+        for (name, oids) in [
+            ("declared_varchar", vec![21, 1043]),
+            ("declared_text", vec![21, 25]),
+            ("inferred_varchar", vec![21, 0]),
+        ] {
+            send_parse(
+                &mut client,
+                name,
+                "SELECT code FROM dictionary_codes WHERE reference_id=$1 AND code=$2",
+                &oids,
+            );
+            for value in ["1", "001", "1.0", " 1 ", "1e2", "0"] {
+                send_bind(&mut client, "", name, &["5", value]);
+                send_execute(&mut client, "");
+                send_sync(&mut client);
+                assert_eq!(
+                    read_query_rows(&mut client),
+                    vec![vec![value.to_string()]],
+                    "{profile}: {name}: {value:?}"
+                );
+            }
+        }
+        send_parse(
+            &mut client,
+            "string_values",
+            "SELECT $1, $2, $3",
+            &[25, 1043, 25],
+        );
+        send_bind(&mut client, "", "string_values", &["001", "1e2", " 1 "]);
+        send_execute(&mut client, "");
+        send_sync(&mut client);
+        assert_eq!(
+            read_query_rows(&mut client),
+            vec![vec![
+                "001".to_string(),
+                "1e2".to_string(),
+                " 1 ".to_string()
+            ]]
+        );
+        client.write_all(b"X\0\0\0\x04").unwrap();
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+    }
+}
+
+#[test]
 fn floating_point_text_and_bind_formats_match_postgresql() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

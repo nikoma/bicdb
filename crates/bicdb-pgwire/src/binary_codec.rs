@@ -1086,6 +1086,14 @@ pub(crate) fn sql_literal_for_text_parameter(value: &str, oid: i32) -> Result<St
     if let Some(element_oid) = array_element_oid(oid) {
         return sql_array_literal_for_text_parameter(value, element_oid);
     }
+    // Text wire format describes the encoding, not the SQL value's type.
+    // A resolved character parameter must retain its spelling, including
+    // leading zeroes and whitespace, just as the binary text codec does.
+    if bicdb_sql::pg_type_spec_by_oid(oid).and_then(|spec| spec.binary_codec())
+        == Some(PgBinaryCodec::TextPayload)
+    {
+        return Ok(quote_sql_string(value));
+    }
 
     match oid {
         16 => sql_bool_parameter_literal(value),

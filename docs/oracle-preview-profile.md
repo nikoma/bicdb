@@ -50,6 +50,11 @@ prepared SQL retains the namespace resolved during Parse. Schema selection does
 not grant table privileges. The bounded HR profile retains its public-namespace
 contract; native PostgreSQL relation resolution is unchanged by this front end.
 
+Text-format PostgreSQL binds retain the resolved character type. Numeric-looking
+text and varchar values such as `001`, `1e2` and ` 1 ` remain strings for indexed
+lookups and projections. Declared and inferred character types use the same rule
+in the PostgreSQL and Oracle preview profiles.
+
 An unaliased application table keeps its logical name as a visible alias when
 the storage relation is schema-qualified. This preserves `table.column` filters,
 projections, wildcard projections, joins and correlated outer references. An

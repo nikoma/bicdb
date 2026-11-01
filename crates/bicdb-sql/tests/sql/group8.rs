@@ -940,6 +940,7 @@ fn create_select_and_drop_view() {
                 ],
             ],
         )
+        .with_column_types(vec![Some("text".to_string()), Some("text".to_string())])
     );
     assert_eq!(
         session

@@ -362,7 +362,27 @@ pub(crate) fn table_constraint_row(
         (
             "nulls_distinct",
             if constraint_type == "UNIQUE" {
-                SqlValue::String("YES".into())
+                schema
+                    .constraints
+                    .iter()
+                    .find_map(|constraint| match constraint {
+                        ConstraintSchema::Unique {
+                            name: actual,
+                            columns,
+                            ..
+                        }
+                        | ConstraintSchema::UniqueWithNullPolicy {
+                            name: actual,
+                            columns,
+                            ..
+                        } if actual == name => Some(
+                            constraint
+                                .unique_null_policy()
+                                .information_schema_value(schema, columns),
+                        ),
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| SqlValue::String("YES".into()))
             } else {
                 SqlValue::Null
             },
@@ -4279,7 +4299,7 @@ pub(crate) fn pg_constraint_rows_filtered(
     let table_oids = table_oids(db);
     let schemas = load_schemas_for_relation_oid_filter(db, &table_oids, relation_oids)?;
     let mut rows =
-        pg_constraint_rows_from_schemas(&schemas, &table_oids, names, types, relation_oids);
+        pg_constraint_rows_from_schemas(db, &schemas, &table_oids, names, types, relation_oids);
     if relation_oids.is_none() {
         rows.extend(pg_domain_constraint_rows(db, names, types)?);
     }
@@ -4409,6 +4429,7 @@ pub(crate) fn load_schemas_for_relation_oid_filter(
 }
 
 pub(crate) fn pg_constraint_rows_from_schemas(
+    db: &BicDb,
     schemas: &[TableSchema],
     table_oids: &BTreeMap<String, i64>,
     names: Option<&BTreeSet<String>>,
@@ -4429,6 +4450,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                 name,
                 contype: "p",
                 conrelid: table_oid,
+                connamespace: namespace_oid(&schema.schema_name),
                 conindid: primary_index_oid(table_oid),
                 confrelid: 0,
                 confupdtype: " ",
@@ -4456,6 +4478,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                         name,
                         contype: "n",
                         conrelid: table_oid,
+                        connamespace: namespace_oid(&schema.schema_name),
                         conindid: 0,
                         confrelid: 0,
                         confupdtype: " ",
@@ -4477,6 +4500,12 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                     name,
                     columns,
                     validated,
+                }
+                | ConstraintSchema::UniqueWithNullPolicy {
+                    name,
+                    columns,
+                    validated,
+                    ..
                 } => {
                     if unique_constraint_is_primary_key(schema, name, columns) {
                         continue;
@@ -4494,7 +4523,16 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             name: name.clone(),
                             contype: "u",
                             conrelid: table_oid,
-                            conindid: 0,
+                            connamespace: namespace_oid(&schema.schema_name),
+                            conindid: if index_definitions_shared(db).iter().any(|index| {
+                                index.name == *name
+                                    && index.collection == schema.name
+                                    && index.unique
+                            }) {
+                                secondary_index_oid(&schema.schema_name, name)
+                            } else {
+                                0
+                            },
                             confrelid: 0,
                             confupdtype: " ",
                             confdeltype: " ",
@@ -4524,6 +4562,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             name: name.clone(),
                             contype: "c",
                             conrelid: table_oid,
+                            connamespace: namespace_oid(&schema.schema_name),
                             conindid: 0,
                             confrelid: 0,
                             confupdtype: " ",
@@ -4562,6 +4601,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             name: name.clone(),
                             contype: "f",
                             conrelid: table_oid,
+                            connamespace: namespace_oid(&schema.schema_name),
                             conindid: 0,
                             confrelid: *table_oids.get(foreign_table).unwrap_or(&0),
                             confupdtype: fk_action_code(*on_update),
@@ -4595,6 +4635,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             name: name.clone(),
                             contype: "x",
                             conrelid: table_oid,
+                            connamespace: namespace_oid(&schema.schema_name),
                             conindid: secondary_index_oid(&schema.schema_name, name),
                             confrelid: 0,
                             confupdtype: " ",
@@ -4639,7 +4680,7 @@ pub(crate) fn validate_constraint_catalog_oids(db: &BicDb) -> Result<()> {
         return Ok(());
     }
     let schemas = list_schemas(db)?;
-    let mut rows = pg_constraint_rows_from_schemas(&schemas, &table_oids(db), None, None, None);
+    let mut rows = pg_constraint_rows_from_schemas(db, &schemas, &table_oids(db), None, None, None);
     rows.extend(pg_domain_constraint_rows(db, None, None)?);
     let mut seen = BTreeSet::new();
     for row in rows {
@@ -4683,6 +4724,7 @@ pub(crate) struct PgConstraintRow {
     pub(crate) name: String,
     pub(crate) contype: &'static str,
     pub(crate) conrelid: i64,
+    pub(crate) connamespace: i64,
     pub(crate) conindid: i64,
     pub(crate) confrelid: i64,
     pub(crate) confupdtype: &'static str,
@@ -4697,7 +4739,7 @@ pub(crate) fn pg_constraint_row(row: PgConstraintRow) -> BTreeMap<String, SqlVal
     virtual_row([
         ("oid", SqlValue::Int(row.oid)),
         ("conname", SqlValue::String(row.name)),
-        ("connamespace", SqlValue::Int(2200)),
+        ("connamespace", SqlValue::Int(row.connamespace)),
         ("contype", SqlValue::String(row.contype.to_string())),
         ("condeferrable", SqlValue::Bool(false)),
         ("condeferred", SqlValue::Bool(false)),
@@ -5012,6 +5054,7 @@ pub(crate) fn postgres_constraints_view_rows_filtered(
         .filter_map(|schema| table_oids.get(&schema.name).map(|oid| (*oid, schema)))
         .collect::<BTreeMap<_, _>>();
     let constraint_rows = pg_constraint_rows_from_schemas(
+        db,
         &schemas,
         &table_oids,
         filters.names.as_ref(),
@@ -5107,6 +5150,7 @@ pub(crate) fn postgres_foreign_key_view_rows_filtered(
     let fk_types = BTreeSet::from(["f".to_string()]);
 
     for constraint in pg_constraint_rows_from_schemas(
+        db,
         &schemas,
         &table_oids,
         filters.names.as_ref(),
@@ -5306,7 +5350,34 @@ pub(crate) fn constraint_definition_value(
     let columns = column_names.join(", ");
     match virtual_cell(constraint, "contype").to_cell().as_str() {
         "p" => SqlValue::String(format!("PRIMARY KEY ({columns})")),
-        "u" => SqlValue::String(format!("UNIQUE ({columns})")),
+        "u" => {
+            let nulls_not_distinct = sql_value_i64(&virtual_cell(constraint, "conrelid"))
+                .and_then(|oid| schema_by_oid.get(&oid))
+                .and_then(|schema| {
+                    schema
+                        .constraints
+                        .iter()
+                        .find(|candidate| {
+                            constraint_name(candidate)
+                                == virtual_cell(constraint, "conname").to_cell()
+                        })
+                        .map(|candidate| (schema, candidate))
+                })
+                .is_some_and(|(schema, candidate)| {
+                    candidate
+                        .unique_null_policy()
+                        .index_options(schema, column_names)
+                        == (true, None)
+                });
+            SqlValue::String(format!(
+                "UNIQUE{} ({columns})",
+                if nulls_not_distinct {
+                    " NULLS NOT DISTINCT"
+                } else {
+                    ""
+                }
+            ))
+        }
         "c" => match virtual_cell(constraint, "conbin") {
             SqlValue::String(expr) => SqlValue::String(pg_check_constraint_definition(&expr)),
             _ => SqlValue::Null,
@@ -5367,9 +5438,12 @@ pub(crate) fn pg_constraint_definition_for_oid(
         .iter()
         .filter_map(|schema| table_oids.get(&schema.name).map(|oid| (*oid, schema)))
         .collect::<BTreeMap<_, _>>();
-    let Some(constraint) = pg_constraint_rows_from_schemas(&schemas, &table_oids, None, None, None)
-        .into_iter()
-        .find(|constraint| sql_value_i64(&virtual_cell(constraint, "oid")) == Some(constraint_oid))
+    let Some(constraint) =
+        pg_constraint_rows_from_schemas(db, &schemas, &table_oids, None, None, None)
+            .into_iter()
+            .find(|constraint| {
+                sql_value_i64(&virtual_cell(constraint, "oid")) == Some(constraint_oid)
+            })
     else {
         return Ok(None);
     };
@@ -6437,7 +6511,9 @@ pub(crate) fn schema_name_for_relation(schemas: &[TableSchema], relation: &str) 
 pub(crate) fn primary_key_columns_for_schema(schema: &TableSchema) -> Vec<String> {
     let primary_key_name = schema.primary_key_constraint_name();
     if let Some(columns) = schema.constraints.iter().find_map(|constraint| {
-        if let ConstraintSchema::Unique { name, columns, .. } = constraint {
+        if let ConstraintSchema::Unique { name, columns, .. }
+        | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } = constraint
+        {
             if name == &primary_key_name {
                 return Some(columns.clone());
             }
@@ -6664,7 +6740,46 @@ pub(crate) fn catalog_indexes(schemas: &[TableSchema], db: &BicDb) -> Vec<Catalo
         .collect::<BTreeMap<_, _>>();
     let mut indexes = Vec::new();
     for schema in schemas {
+        for constraint in &schema.constraints {
+            let (ConstraintSchema::Unique { name, columns, .. }
+            | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. }) = constraint
+            else {
+                continue;
+            };
+            if unique_constraint_is_primary_key(schema, name, columns) {
+                continue;
+            }
+            let Some(definition) = executable.get(name).filter(|index| {
+                index.collection == schema.name && index.unique && index.kind == IndexKind::BTree
+            }) else {
+                continue;
+            };
+            indexes.push(CatalogIndex {
+                nulls_not_distinct: definition.nulls_not_distinct,
+                name: name.clone(),
+                collection: schema.name.clone(),
+                schema_name: schema.schema_name.clone(),
+                unique: true,
+                access_method: "btree".into(),
+                expression: index_expression_for_columns(columns),
+                relnatts: columns.len() as i64,
+                indkey: constraint_attnums(schemas, &schema.name, columns),
+                collations: constraint_collation_oids(schemas, &schema.name, columns),
+                operator_classes: Vec::new(),
+                indexprs: None,
+                exclusion: false,
+                predicate: constraint
+                    .unique_null_policy()
+                    .index_predicate_sql(schema, columns),
+            });
+        }
         for index in &schema.indexes {
+            if indexes
+                .iter()
+                .any(|existing| existing.collection == schema.name && existing.name == index.name)
+            {
+                continue;
+            }
             if !index.internal_index_names.is_empty() {
                 if !index
                     .internal_index_names

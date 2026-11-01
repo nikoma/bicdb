@@ -2119,12 +2119,27 @@ pub(crate) fn alter_table_add_column(
     column.default_value = default.clone();
     let column_name = column.name.clone();
     let column_nullable = column.nullable;
+    let mut unique_definition = column_def.clone();
+    unique_definition
+        .options
+        .retain(|option| matches!(option.option, ColumnOption::Unique(_)));
+    let unique_constraints = column_constraints_from_def(
+        table,
+        &unique_definition,
+        &column,
+        oracle::default_unique_null_policy(db)?,
+    )?;
+    let added_unique = !unique_constraints.is_empty();
     let mut updated_schema = schema.clone();
     updated_schema.add_column(column);
-    if !column_nullable && default.is_none() {
+    if !column_nullable {
         for record in db.scan_collection(table)? {
             if matches!(
-                record_column_value(&record, &updated_schema, &column_name),
+                default.clone().unwrap_or_else(|| record_column_value(
+                    &record,
+                    &updated_schema,
+                    &column_name
+                )),
                 SqlValue::Null
             ) {
                 return Err(constraint_violation(
@@ -2140,6 +2155,39 @@ pub(crate) fn alter_table_add_column(
             }
         }
     }
+    if !unique_constraints.is_empty() {
+        let mut candidates = db.scan_collection(table)?;
+        if let Some(default) = default.as_ref() {
+            for record in &mut candidates {
+                set_record_column(record, Some(&updated_schema), &column_name, default.clone())?;
+            }
+        }
+        for constraint in &unique_constraints {
+            if table_constraint_name_exists(&updated_schema, constraint_name(constraint)) {
+                return Err(SqlError::duplicate_constraint(
+                    table,
+                    constraint_name(constraint),
+                ));
+            }
+            validate_constraint_columns(db, table, &updated_schema, constraint)?;
+            let (ConstraintSchema::Unique { name, columns, .. }
+            | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. }) = constraint
+            else {
+                unreachable!("unique column constraints");
+            };
+            validate_unique_key_records(
+                table,
+                &updated_schema,
+                name,
+                columns,
+                &candidates,
+                false,
+                constraint.unique_null_policy(),
+            )?;
+        }
+        updated_schema.constraints.extend(unique_constraints);
+        validate_unique_constraint_index_compatibility(db, &updated_schema)?;
+    }
     if let Some(default) = default {
         for mut record in db.scan_collection(table)? {
             set_record_column(
@@ -2150,6 +2198,9 @@ pub(crate) fn alter_table_add_column(
             )?;
             db.insert(table, record)?;
         }
+    }
+    if added_unique {
+        ensure_unique_constraint_indexes_for_schema(db, &updated_schema)?;
     }
     *schema = updated_schema;
     save_schema(db, schema)
@@ -2182,11 +2233,11 @@ pub(crate) fn alter_table_drop_column(
     let actual = schema.columns[idx].name.clone();
     schema.columns.remove(idx);
     schema.constraints.retain(|constraint| match constraint {
-        ConstraintSchema::Unique { columns, .. } | ConstraintSchema::ForeignKey { columns, .. } => {
-            !columns
-                .iter()
-                .any(|candidate| candidate.eq_ignore_ascii_case(&actual))
-        }
+        ConstraintSchema::Unique { columns, .. }
+        | ConstraintSchema::UniqueWithNullPolicy { columns, .. }
+        | ConstraintSchema::ForeignKey { columns, .. } => !columns
+            .iter()
+            .any(|candidate| candidate.eq_ignore_ascii_case(&actual)),
         ConstraintSchema::Check { expression, .. } => !expression
             .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
             .any(|token| token.eq_ignore_ascii_case(&actual)),

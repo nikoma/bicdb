@@ -1176,14 +1176,7 @@ impl<'db> SqlSession<'db> {
                     .into_iter()
                     .any(|existing| {
                         existing.name.eq_ignore_ascii_case(&definition.name)
-                            && existing
-                                .collection
-                                .eq_ignore_ascii_case(&definition.collection)
-                            && existing.unique == definition.unique
-                            && existing.kind == definition.kind
-                            && index_field_lists_match(&existing.fields, &definition.fields)
-                            && existing.predicate == definition.predicate
-                            && existing.exclusion == definition.exclusion
+                            && unique_constraint_index_definition_matches(&existing, &definition)
                     });
                 if !exists {
                     self.create_session_index(definition)?;

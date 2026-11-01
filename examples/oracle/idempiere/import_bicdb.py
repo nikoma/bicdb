@@ -76,6 +76,58 @@ def table_ddl(schema, table, columns, constraints):
     return 'CREATE TABLE ' + quote(schema) + '.' + quote(table) + '(' + ','.join(parts) + ')'
 
 
+def nullable_composite_constraints(columns, constraints):
+    nullable = {column['name']: column['nullable'] != 'N' for column in columns}
+    return [(constraint, all(nullable[name] for name in constraint['columns']))
+            for constraint in constraints
+            if constraint['kind'] == 'U' and len(constraint['columns']) > 1
+            and any(nullable[name] for name in constraint['columns'])]
+
+
+def verify_constraint_null_policies(cursor, schema, table, columns, constraints):
+    """Do not let an old import journal certify weaker NULL uniqueness rules."""
+    verified = []
+    for constraint, all_nullable in nullable_composite_constraints(columns, constraints):
+        cursor.execute('SELECT "nulls_distinct" FROM "information_schema"."table_constraints" '
+                       'WHERE "constraint_schema"=%s AND "table_name"=%s '
+                       'AND "constraint_name"=%s AND "constraint_type"=%s',
+                       (schema, table, constraint['name'], 'UNIQUE'))
+        expected = None if all_nullable else 'NO'
+        if cursor.fetchall() != [(expected,)]:
+            raise ValueError('target constraint lacks Oracle nullable-key semantics: ' + constraint['name'])
+        cursor.execute('SELECT i."indisvalid",i."indisready",i."indnullsnotdistinct",'
+                       'i."indpred" IS NOT NULL FROM "pg_catalog"."pg_constraint" c '
+                       'JOIN "pg_catalog"."pg_index" i ON i."indexrelid"=c."conindid" '
+                       'JOIN "pg_catalog"."pg_namespace" n ON n."oid"=c."connamespace" '
+                       'WHERE n."nspname"=%s AND c."conname"=%s', (schema, constraint['name']))
+        if cursor.fetchall() != [(True, True, True, all_nullable)]:
+            raise ValueError('target constraint catalog does not confirm an executable native NULL-aware index: ' + constraint['name'])
+        verified.append(constraint['name'])
+    return verified
+
+
+def probe_constraint_null_support(cursor, schema):
+    """Qualify ordinary Oracle UNIQUE syntax, including the wholly NULL exception."""
+    import uuid
+    name = 'BICDB_CONSTRAINT_PROBE_' + uuid.uuid4().hex[:12].upper()
+    table = quote(schema) + '.' + quote(name)
+    created = False
+    try:
+        cursor.execute('CREATE TABLE ' + table + '(a NUMBER,b VARCHAR2(20),'
+                       'CONSTRAINT ' + quote(name + '_UQ') + ' UNIQUE(a,b))', prepare=False)
+        created = True
+        cursor.execute('INSERT INTO ' + table + " VALUES(NULL,NULL),(NULL,NULL),(1,NULL)", prepare=False)
+        try:
+            cursor.execute('INSERT INTO ' + table + ' VALUES(1.00,NULL)', prepare=False)
+        except Exception as error:
+            if getattr(error, 'sqlstate', None) != '23505': raise
+        else:
+            raise ValueError('target accepts duplicate partially NULL Oracle unique keys')
+    finally:
+        if created:
+            cursor.execute('DROP TABLE ' + table, prepare=False)
+
+
 def decode(value):
     if not isinstance(value, dict): return value
     if set(value) == {'number'}: return decimal.Decimal(value['number'])
@@ -180,8 +232,14 @@ def main():
             with connection.cursor() as cursor:
                 if args.phase == 'tables' and not args.resume:
                     cursor.execute('CREATE SCHEMA ' + quote(schema))
+                if args.phase == 'tables':
+                    probe_constraint_null_support(cursor, schema)
+                report['verified_nullable_unique_constraints'] = []
                 for table in manifest['tables']:
                     name = table['name']
+                    if args.phase != 'tables' or name in report['completed']:
+                        report['verified_nullable_unique_constraints'].extend(verify_constraint_null_policies(
+                            cursor, schema, name, by_table[name], checks[name]))
                     if name in report['completed']:
                         cursor.execute('SELECT * FROM ' + quote(schema) + '.' + quote(name) + ' WHERE FALSE')
                         if [description.name for description in cursor.description] != table['columns']:
@@ -194,6 +252,8 @@ def main():
                     print(f"{args.phase}: {name}", flush=True)
                     if args.phase == 'tables':
                         cursor.execute(table_ddl(schema, name, by_table[name], checks[name]), prepare=False)
+                        report['verified_nullable_unique_constraints'].extend(verify_constraint_null_policies(
+                            cursor, schema, name, by_table[name], checks[name]))
                     elif args.phase == 'verify':
                         digest = verify_values(cursor, args.snapshot, schema, table)
                         report.setdefault('value_digests', {})[name] = digest

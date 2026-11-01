@@ -189,8 +189,10 @@ pub use session::*;
 mod runtime;
 pub use runtime::*;
 mod application_copy;
+mod constraint_nulls;
 mod schema_meta;
 pub use application_copy::{copy_application_tables, ApplicationCopyReport};
+pub(crate) use constraint_nulls::*;
 mod statement_cache;
 pub use schema_meta::*;
 mod catalog_memo;
@@ -3286,6 +3288,15 @@ enum ConstraintSchema {
         columns: Vec<String>,
         #[serde(default = "default_true")]
         validated: bool,
+    },
+    // A separate wire tag makes older SQL readers reject the schema rather
+    // than silently ignoring an extended uniqueness promise.
+    UniqueWithNullPolicy {
+        name: String,
+        columns: Vec<String>,
+        #[serde(default = "default_true")]
+        validated: bool,
+        null_policy: UniqueNullPolicy,
     },
     Check {
         name: String,

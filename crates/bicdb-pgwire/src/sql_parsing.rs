@@ -1439,9 +1439,10 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
                     "COPY FROM supports only STDIN".to_string(),
                 ));
             }
-            let (relation, columns) = parse_copy_table_target(target)?;
+            let (relation, columns, relation_sql) = parse_copy_table_target(target)?;
             Ok(Some(CopyStatement {
                 relation: Some(relation),
+                relation_sql: Some(relation_sql),
                 columns,
                 direction,
                 format,
@@ -1462,6 +1463,7 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
             if target.starts_with('(') && target.ends_with(')') {
                 Ok(Some(CopyStatement {
                     relation: None,
+                    relation_sql: None,
                     columns: Vec::new(),
                     direction,
                     format,
@@ -1469,9 +1471,10 @@ pub(crate) fn parse_copy_statement(sql: &str) -> Result<Option<CopyStatement>> {
                     header,
                 }))
             } else {
-                let (relation, columns) = parse_copy_table_target(target)?;
+                let (relation, columns, relation_sql) = parse_copy_table_target(target)?;
                 Ok(Some(CopyStatement {
                     relation: Some(relation),
+                    relation_sql: Some(relation_sql),
                     columns,
                     direction,
                     format,
@@ -1513,7 +1516,7 @@ pub(crate) fn split_copy_direction(body: &str) -> Result<(&str, CopyDirection, &
     ))
 }
 
-pub(crate) fn parse_copy_table_target(target: &str) -> Result<(String, Vec<String>)> {
+pub(crate) fn parse_copy_table_target(target: &str) -> Result<(String, Vec<String>, String)> {
     let target = target.trim();
     if target.is_empty() || target.starts_with('(') {
         return Err(PgWireError::Server(
@@ -1527,7 +1530,7 @@ pub(crate) fn parse_copy_table_target(target: &str) -> Result<(String, Vec<Strin
         let relation = normalize_qualified_relation_identifier(target[..open].trim());
         let columns = target[open + 1..close]
             .split(',')
-            .map(|column| normalize_identifier(column.trim()))
+            .map(|column| normalize_copy_identifier(column.trim()))
             .filter(|column| !column.is_empty())
             .collect::<Vec<_>>();
         if columns.is_empty() {
@@ -1535,9 +1538,13 @@ pub(crate) fn parse_copy_table_target(target: &str) -> Result<(String, Vec<Strin
                 "COPY column list must not be empty".to_string(),
             ));
         }
-        Ok((relation, columns))
+        Ok((relation, columns, target[..open].trim().to_string()))
     } else {
-        Ok((normalize_qualified_relation_identifier(target), Vec::new()))
+        Ok((
+            normalize_qualified_relation_identifier(target),
+            Vec::new(),
+            target.to_string(),
+        ))
     }
 }
 
@@ -1550,13 +1557,20 @@ pub(crate) fn execute_copy_query(
         query.clone()
     } else {
         let relation = copy
-            .relation
+            .relation_sql
             .as_ref()
             .ok_or_else(|| PgWireError::Server("COPY TO missing relation".to_string()))?;
         if copy.columns.is_empty() {
             format!("SELECT * FROM {relation}")
         } else {
-            format!("SELECT {} FROM {relation}", copy.columns.join(", "))
+            format!(
+                "SELECT {} FROM {relation}",
+                copy.columns
+                    .iter()
+                    .map(|column| quote_sql_identifier(column))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         }
     };
     execute_server_sql_with_options(server, state, &sql, false)
@@ -1653,7 +1667,11 @@ pub(crate) fn finish_copy_in_inner(
         .clone()
         .ok_or_else(|| PgWireError::Server("COPY FROM STDIN missing relation".to_string()))?;
     let columns = if copy.spec.columns.is_empty() {
-        let result = execute_server_sql_for_describe(server, &format!("SELECT * FROM {relation}"))?;
+        let relation_sql = copy.spec.relation_sql.as_ref().ok_or_else(|| {
+            PgWireError::Server("COPY FROM STDIN missing SQL relation".to_string())
+        })?;
+        let result =
+            execute_server_sql_for_describe(server, &format!("SELECT * FROM {relation_sql}"))?;
         result.columns
     } else {
         copy.spec.columns.clone()
@@ -2007,7 +2025,7 @@ pub(crate) fn copy_in_response(
 ) -> Result<()> {
     let column_count = if copy.columns.is_empty() {
         let relation = copy
-            .relation
+            .relation_sql
             .as_ref()
             .ok_or_else(|| PgWireError::Server("COPY FROM STDIN missing relation".to_string()))?;
         execute_server_sql_for_describe(server, &format!("SELECT * FROM {relation}"))?
@@ -2076,6 +2094,15 @@ pub(crate) fn normalize_identifier(value: &str) -> String {
     }
 }
 
+fn normalize_copy_identifier(value: &str) -> String {
+    let value = value.trim();
+    if value.starts_with('"') {
+        normalize_identifier(value)
+    } else {
+        value.to_ascii_lowercase()
+    }
+}
+
 /// Normalize each component of a possibly schema-qualified relation while
 /// KEEPING the qualifier: `Carrier_Private."Ctx" -> carrier_private.Ctx`.
 /// COPY must not collapse `schema.table` to `table` — that silently
@@ -2093,11 +2120,11 @@ pub(crate) fn normalize_qualified_relation_identifier(value: &str) -> String {
                 quoted = !quoted;
             }
         } else if ch == '.' && !quoted {
-            parts.push(normalize_identifier(value[start..idx].trim()));
+            parts.push(normalize_copy_identifier(value[start..idx].trim()));
             start = idx + 1;
         }
     }
-    parts.push(normalize_identifier(value[start..].trim()));
+    parts.push(normalize_copy_identifier(value[start..].trim()));
     parts.retain(|part| !part.is_empty());
     parts.join(".")
 }

@@ -2764,6 +2764,12 @@ impl CopyInState {
             .as_ref()
             .map(String::len)
             .unwrap_or_default()
+            + self
+                .spec
+                .relation_sql
+                .as_ref()
+                .map(String::len)
+                .unwrap_or_default()
             + self.spec.columns.iter().map(String::len).sum::<usize>()
             + self
                 .spec
@@ -2831,6 +2837,8 @@ impl Drop for CopySpillState {
 #[derive(Clone, Debug)]
 struct CopyStatement {
     relation: Option<String>,
+    // Preserve identifier quoting when constructing metadata/export SQL.
+    relation_sql: Option<String>,
     columns: Vec<String>,
     direction: CopyDirection,
     format: CopyFormat,

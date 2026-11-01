@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "isolated_database_only": true,
+  "new_runtime_sha256": "3ce817bf91ec64c7e03a7a4b82eb8662a02c557d75715e572c0642487cc4e5e9",
+  "old_runtime_sha256": "fe278255ec9bfe0e908fe2f47c01418eea912bb1f3981d0c73480ce8d0c00509",
+  "old_exit_status": 1,
+  "old_rejected_schema_tag": true,
+  "application_database_opened_with_old_reader": false,
+  "success": true
+}

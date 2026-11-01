@@ -42,6 +42,36 @@ class MigrationTests(unittest.TestCase):
         with self.assertRaises(ValueError): target.decode({'bytes': '?'})
         with self.assertRaises(TypeError): target.canonical(1.2)
 
+    def test_nullable_unique_policy_checks_completed_target_metadata(self):
+        columns = [dict(name='A', nullable='N'), dict(name='B', nullable='Y')]
+        constraint = dict(name='UQ', kind='U', columns=['A', 'B'])
+        class Cursor:
+            def __init__(self, rows):
+                self.rows = iter(rows)
+                self.calls = []
+            def execute(self, sql, values): self.calls.append((sql, values))
+            def fetchall(self): return next(self.rows)
+        valid = Cursor([[('NO',)], [(True, True, True, False)]])
+        self.assertEqual(target.verify_constraint_null_policies(valid, 'S', 'T', columns, [constraint]), ['UQ'])
+        self.assertEqual(valid.calls[0][1], ('S', 'T', 'UQ', 'UNIQUE'))
+        for bad in [[], [('YES',)], [(None,)]]:
+            with self.assertRaisesRegex(ValueError, 'nullable-key semantics'):
+                target.verify_constraint_null_policies(Cursor([bad]), 'S', 'T', columns, [constraint])
+        with self.assertRaisesRegex(ValueError, 'executable native'):
+            target.verify_constraint_null_policies(Cursor([[('NO',)], [(True, True, False, False)]]),
+                                                  'S', 'T', columns, [constraint])
+        columns[0]['nullable'] = 'Y'
+        self.assertEqual(target.verify_constraint_null_policies(
+            Cursor([[(None,)], [(True, True, True, True)]]), 'S', 'T', columns, [constraint]), ['UQ'])
+        with self.assertRaisesRegex(ValueError, 'executable native'):
+            target.verify_constraint_null_policies(Cursor([[(None,)], [(True, True, True, False)]]),
+                                                  'S', 'T', columns, [constraint])
+        # Ordinary single-column and wholly non-NULL keys need no hybrid policy.
+        columns[0]['nullable'] = 'N'
+        columns[1]['nullable'] = 'N'
+        self.assertEqual(target.nullable_composite_constraints(columns, [constraint]), [])
+        self.assertEqual(target.nullable_composite_constraints(columns, [dict(constraint, columns=['A'])]), [])
+
     def test_source_constraint_policy_is_explicit(self):
         constraint = dict(name='C', kind='R', status='ENABLED', deferrable='DEFERRABLE')
         self.assertEqual(target.table_ddl('S', 'T', [], [constraint]), 'CREATE TABLE "S"."T"()')

@@ -58,6 +58,128 @@ impl Running {
 }
 
 #[tokio::test]
+async fn nullable_unique_constraints_keep_profile_rules_across_copy_and_restart() {
+    use futures_util::{SinkExt, StreamExt};
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        for attempt in 0..2 {
+            let server = Running::with_profile(directory.path(), profile);
+            let mut config = tokio_postgres::Config::new();
+            config
+                .host("127.0.0.1")
+                .port(server.port)
+                .user("bicdb")
+                .dbname("bicdb");
+            if profile != "postgres" {
+                config.options("-c bicdb.sql_profile=oracle-preview-v1");
+            }
+            let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+            let connection = tokio::spawn(async move {
+                connection.await.unwrap();
+            });
+            if attempt == 0 {
+                client.batch_execute("CREATE TABLE nullable_keys(k INT PRIMARY KEY,a NUMERIC(10,2),b VARCHAR(20),CONSTRAINT nullable_key UNIQUE(a,b)); INSERT INTO nullable_keys VALUES(1,NULL,NULL),(2,NULL,NULL),(3,1,NULL)").await.unwrap();
+                let duplicate = client
+                    .batch_execute("INSERT INTO nullable_keys VALUES(4,1.00,NULL)")
+                    .await;
+                if profile == "postgres" {
+                    duplicate.unwrap();
+                } else {
+                    assert_eq!(
+                        duplicate.unwrap_err().as_db_error().unwrap().code(),
+                        &tokio_postgres::error::SqlState::UNIQUE_VIOLATION
+                    );
+                }
+            }
+            if attempt == 0 {
+                client.batch_execute(r#"CREATE TABLE "collision_guard"(a INT,b INT); CREATE UNIQUE INDEX "CollisionGuard" ON "collision_guard"(a,b)"#).await.unwrap();
+                assert!(client.batch_execute(r#"ALTER TABLE "collision_guard" ADD CONSTRAINT "CollisionGuard" UNIQUE NULLS NOT DISTINCT(a,b)"#).await.is_err());
+                assert_eq!(client.query_one(r#"SELECT COUNT(*) FROM "pg_catalog"."pg_constraint" WHERE "conname"='CollisionGuard'"#, &[]).await.unwrap().get::<_,i64>(0),0);
+                client
+                    .batch_execute(
+                        r#"CREATE TABLE "MiXeD"("Key" INT PRIMARY KEY,"Value" VARCHAR(10))"#,
+                    )
+                    .await
+                    .unwrap();
+                let sink = client.copy_in(r#"COPY "MiXeD" FROM STDIN"#).await.unwrap();
+                tokio::pin!(sink);
+                sink.send(b"1\thello\n".as_slice()).await.unwrap();
+                assert_eq!(sink.finish().await.unwrap(), 1);
+                let stream = client
+                    .copy_out(r#"COPY "MiXeD"("Value") TO STDOUT"#)
+                    .await
+                    .unwrap();
+                tokio::pin!(stream);
+                let mut bytes = Vec::new();
+                while let Some(chunk) = stream.next().await {
+                    bytes.extend_from_slice(&chunk.unwrap());
+                }
+                assert_eq!(bytes, b"hello\n");
+            }
+            if attempt == 0 {
+                client.batch_execute(r#"CREATE SCHEMA "ConstraintOwner"; CREATE TABLE "ConstraintOwner"."keys"(k INT NOT NULL,a INT,b INT,CONSTRAINT "owned_key" UNIQUE(a,b),CONSTRAINT "positive_key" CHECK(k>0))"#).await.unwrap();
+                let rows = client.query(r#"SELECT n."nspname",c."connamespace"=r."relnamespace" FROM "pg_catalog"."pg_constraint" c JOIN "pg_catalog"."pg_class" r ON r."oid"=c."conrelid" JOIN "pg_catalog"."pg_namespace" n ON n."oid"=c."connamespace" WHERE r."relname"='keys'"#, &[]).await.unwrap();
+                assert_eq!(rows.len(), 3);
+                for row in rows {
+                    assert_eq!(row.get::<_, String>(0), "ConstraintOwner");
+                    assert!(row.get::<_, bool>(1));
+                }
+            }
+            let all_null_id = 10 + attempt;
+            client
+                .execute(
+                    "INSERT INTO nullable_keys(k,a,b) VALUES($1,NULL,NULL)",
+                    &[&all_null_id],
+                )
+                .await
+                .unwrap();
+            if profile != "postgres" {
+                let sink = client
+                    .copy_in("COPY nullable_keys FROM STDIN")
+                    .await
+                    .unwrap();
+                tokio::pin!(sink);
+                sink.send(b"20\t2\tnew\n21\t1.00\t\\N\n".as_slice())
+                    .await
+                    .unwrap();
+                let error = sink.finish().await.unwrap_err();
+                assert_eq!(
+                    error.as_db_error().unwrap().code(),
+                    &tokio_postgres::error::SqlState::UNIQUE_VIOLATION
+                );
+                let rows = client
+                    .query_one("SELECT COUNT(*) FROM nullable_keys WHERE k=20", &[])
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    rows.get::<_, i64>(0),
+                    0,
+                    "COPY must roll back its earlier row"
+                );
+                let duplicate = client
+                    .batch_execute("UPDATE nullable_keys SET a=1 WHERE k=10")
+                    .await
+                    .unwrap_err();
+                assert_eq!(
+                    duplicate.as_db_error().unwrap().code(),
+                    &tokio_postgres::error::SqlState::UNIQUE_VIOLATION
+                );
+            }
+            let row = client
+                .query_one(
+                    "SELECT COUNT(*) FROM nullable_keys WHERE a IS NULL AND b IS NULL",
+                    &[],
+                )
+                .await
+                .unwrap();
+            assert_eq!(row.get::<_, i64>(0), 3 + i64::from(attempt));
+            drop(client);
+            connection.await.unwrap();
+        }
+    }
+}
+
+#[tokio::test]
 async fn preparing_a_typed_projection_with_from_does_not_evaluate_rows() {
     for profile in ["postgres", "oracle-preview-v1"] {
         let directory = tempfile::tempdir().unwrap();

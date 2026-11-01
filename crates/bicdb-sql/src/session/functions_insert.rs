@@ -736,10 +736,12 @@ impl<'db> SqlSession<'db> {
             || insert.on.is_some()
             || insert.returning.is_some()
             || schema.rls_enabled
-            || !schema
-                .constraints
-                .iter()
-                .all(|constraint| matches!(constraint, ConstraintSchema::Unique { .. }))
+            || !schema.constraints.iter().all(|constraint| {
+                matches!(
+                    constraint,
+                    ConstraintSchema::Unique { .. } | ConstraintSchema::UniqueWithNullPolicy { .. }
+                )
+            })
             || schema
                 .columns
                 .iter()
@@ -1507,7 +1509,7 @@ impl<'db> SqlSession<'db> {
             return non_conflicting_records_from_scan(
                 schema,
                 &UniqueConflictArbiter {
-                    nulls_not_distinct: false,
+                    null_policy: UniqueNullPolicy::Distinct,
                     name: conflict_columns.join("_"),
                     key: UniqueKey::Columns(conflict_columns.to_vec()),
                     index_name: None,
@@ -1564,10 +1566,10 @@ impl<'db> SqlSession<'db> {
         };
         let key = record_column_values(record, schema, conflict_columns);
         let arbiter = self.memoized_unique_arbiter(table, schema, conflict_columns)?;
-        if key.iter().any(|value| matches!(value, SqlValue::Null))
-            && !arbiter
-                .as_ref()
-                .is_some_and(|arbiter| arbiter.nulls_not_distinct)
+        if arbiter
+            .as_ref()
+            .map(|arbiter| arbiter.skips_null_key(&key))
+            .unwrap_or_else(|| unique_key_has_null(&key))
         {
             return Ok(None);
         }

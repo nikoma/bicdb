@@ -1,0 +1,6 @@
+{
+  "format": 1,
+  "isolated_database_only": true,
+  "weaker_index_rejected_before_constraint_publication": true,
+  "success": true
+}

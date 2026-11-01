@@ -353,7 +353,8 @@ pub(crate) fn alter_table_add_constraint(
         );
     }
 
-    let mut constraints = table_constraint_schema(table, constraint)?;
+    let mut constraints =
+        table_constraint_schema(table, constraint, oracle::default_unique_null_policy(db)?)?;
     if constraints.is_empty() {
         return Err(SqlError::Unsupported(
             "ALTER TABLE ADD PRIMARY KEY is not supported".to_string(),
@@ -363,7 +364,9 @@ pub(crate) fn alter_table_add_constraint(
         set_constraint_validated(constraint, !not_valid);
     }
     for constraint in &constraints {
-        if let ConstraintSchema::Unique { columns, .. } = constraint {
+        if let ConstraintSchema::Unique { columns, .. }
+        | ConstraintSchema::UniqueWithNullPolicy { columns, .. } = constraint
+        {
             reject_missing_default_operator_class(db, &schema.columns, columns, "btree")?;
         }
         validate_constraint_columns(db, table, schema, constraint)?;
@@ -379,7 +382,10 @@ pub(crate) fn alter_table_add_constraint(
             validate_existing_constraint(db, table, schema, constraint)?;
         }
     }
-    schema.constraints.extend(constraints);
+    let mut candidate = schema.clone();
+    candidate.constraints.extend(constraints);
+    validate_unique_constraint_index_compatibility(db, &candidate)?;
+    *schema = candidate;
     Ok(None)
 }
 
@@ -550,6 +556,9 @@ pub(crate) fn set_constraint_validated(constraint: &mut ConstraintSchema, valida
         ConstraintSchema::Unique {
             validated: value, ..
         }
+        | ConstraintSchema::UniqueWithNullPolicy {
+            validated: value, ..
+        }
         | ConstraintSchema::Check {
             validated: value, ..
         }
@@ -573,7 +582,7 @@ pub(crate) fn alter_table_drop_constraint(
     let dropped_unique = schema.constraints.iter().any(|constraint| {
         matches!(
             constraint,
-            ConstraintSchema::Unique { name, columns, .. }
+            ConstraintSchema::Unique { name, columns, .. } | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. }
                 if name == dropped_constraint
                     && !unique_constraint_is_primary_key(schema, name, columns)
         )
@@ -619,7 +628,7 @@ pub(crate) fn alter_table_rename_constraint(
     let renames_unique_index = schema.constraints.iter().any(|constraint| {
         matches!(
             constraint,
-            ConstraintSchema::Unique { name, columns, .. }
+            ConstraintSchema::Unique { name, columns, .. } | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. }
                 if name == old_name && !unique_constraint_is_primary_key(schema, name, columns)
         )
     });
@@ -652,9 +661,9 @@ pub(crate) fn validate_constraint_columns(
     constraint: &ConstraintSchema,
 ) -> Result<()> {
     let columns = match constraint {
-        ConstraintSchema::Unique { columns, .. } | ConstraintSchema::ForeignKey { columns, .. } => {
-            columns
-        }
+        ConstraintSchema::Unique { columns, .. }
+        | ConstraintSchema::UniqueWithNullPolicy { columns, .. }
+        | ConstraintSchema::ForeignKey { columns, .. } => columns,
         ConstraintSchema::Exclusion {
             access_method,
             equal_columns,
@@ -736,9 +745,18 @@ pub(crate) fn validate_existing_constraint(
     constraint: &ConstraintSchema,
 ) -> Result<()> {
     match constraint {
-        ConstraintSchema::Unique { name, columns, .. } => {
+        ConstraintSchema::Unique { name, columns, .. }
+        | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
             let records = db.scan_collection(table)?;
-            validate_unique_key_records(table, schema, name, columns, &records, false)
+            validate_unique_key_records(
+                table,
+                schema,
+                name,
+                columns,
+                &records,
+                false,
+                constraint.unique_null_policy(),
+            )
         }
         ConstraintSchema::Check {
             name, expression, ..
@@ -801,7 +819,15 @@ pub(crate) fn validate_existing_primary_key(
     columns: &[String],
 ) -> Result<()> {
     let records = db.scan_collection(table)?;
-    validate_unique_key_records(table, schema, name, columns, &records, true)
+    validate_unique_key_records(
+        table,
+        schema,
+        name,
+        columns,
+        &records,
+        true,
+        UniqueNullPolicy::Distinct,
+    )
 }
 
 pub(crate) fn validate_unique_key_records(
@@ -811,8 +837,9 @@ pub(crate) fn validate_unique_key_records(
     columns: &[String],
     records: &[Record],
     reject_nulls: bool,
+    null_policy: UniqueNullPolicy,
 ) -> Result<()> {
-    let mut seen: BTreeMap<String, String> = BTreeMap::new();
+    let mut seen: BTreeMap<Vec<String>, String> = BTreeMap::new();
     for record in records {
         let key = record_column_values(record, schema, columns);
         if let Some(null_idx) = key.iter().position(|value| matches!(value, SqlValue::Null)) {
@@ -830,13 +857,11 @@ pub(crate) fn validate_unique_key_records(
                     Some(name.to_string()),
                 ));
             }
+        }
+        if null_policy.skips_key(&key) {
             continue;
         }
-        let key = key
-            .iter()
-            .map(SqlValue::to_cell)
-            .collect::<Vec<_>>()
-            .join("\u{1f}");
+        let key = typed_column_key_label(schema, columns, &key)?;
         if seen.insert(key, record.id.clone()).is_some() {
             return Err(unique_violation(name));
         }
@@ -917,12 +942,14 @@ pub fn integrity_check(db: &mut BicDb) -> Result<SqlIntegrityReport> {
                 &primary_key_columns,
                 &records,
                 true,
+                UniqueNullPolicy::Distinct,
             );
         }
         for constraint in &schema.constraints {
             report.constraints_checked += 1;
             match constraint {
-                ConstraintSchema::Unique { name, columns, .. } => {
+                ConstraintSchema::Unique { name, columns, .. }
+                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
                     check_unique_key_integrity(
                         &mut report,
                         &schema.name,
@@ -931,6 +958,7 @@ pub fn integrity_check(db: &mut BicDb) -> Result<SqlIntegrityReport> {
                         columns,
                         &records,
                         false,
+                        constraint.unique_null_policy(),
                     );
                 }
                 ConstraintSchema::Check {
@@ -1059,8 +1087,9 @@ pub(crate) fn check_unique_key_integrity(
     columns: &[String],
     records: &[Record],
     reject_nulls: bool,
+    null_policy: UniqueNullPolicy,
 ) {
-    let mut seen: BTreeMap<String, String> = BTreeMap::new();
+    let mut seen: BTreeMap<Vec<String>, String> = BTreeMap::new();
     for record in records {
         let key = record_column_values(record, schema, columns);
         if key.iter().any(|value| matches!(value, SqlValue::Null)) {
@@ -1072,14 +1101,25 @@ pub(crate) fn check_unique_key_integrity(
                     record_id: Some(record.id.clone()),
                     message: "primary key contains null".to_string(),
                 });
+                continue;
             }
+        }
+        if null_policy.skips_key(&key) {
             continue;
         }
-        let key = key
-            .iter()
-            .map(SqlValue::to_cell)
-            .collect::<Vec<_>>()
-            .join("\u{1f}");
+        let key = match typed_column_key_label(schema, columns, &key) {
+            Ok(key) => key,
+            Err(error) => {
+                report.violations.push(SqlIntegrityViolation {
+                    check: "unique_constraint".into(),
+                    table: Some(table.into()),
+                    object: Some(name.into()),
+                    record_id: Some(record.id.clone()),
+                    message: error.to_string(),
+                });
+                continue;
+            }
+        };
         if let Some(first_id) = seen.insert(key, record.id.clone()) {
             report.violations.push(SqlIntegrityViolation {
                 check: if reject_nulls {
@@ -1099,6 +1139,7 @@ pub(crate) fn check_unique_key_integrity(
 pub(crate) fn constraint_name(constraint: &ConstraintSchema) -> &str {
     match constraint {
         ConstraintSchema::Unique { name, .. }
+        | ConstraintSchema::UniqueWithNullPolicy { name, .. }
         | ConstraintSchema::Check { name, .. }
         | ConstraintSchema::ForeignKey { name, .. }
         | ConstraintSchema::Exclusion { name, .. } => name,
@@ -1108,6 +1149,7 @@ pub(crate) fn constraint_name(constraint: &ConstraintSchema) -> &str {
 pub(crate) fn set_constraint_name(constraint: &mut ConstraintSchema, new_name: String) {
     match constraint {
         ConstraintSchema::Unique { name, .. }
+        | ConstraintSchema::UniqueWithNullPolicy { name, .. }
         | ConstraintSchema::Check { name, .. }
         | ConstraintSchema::ForeignKey { name, .. }
         | ConstraintSchema::Exclusion { name, .. } => *name = new_name,
@@ -1385,6 +1427,7 @@ pub(crate) fn rename_column_references(
     for constraint in &mut schema.constraints {
         match constraint {
             ConstraintSchema::Unique { columns, .. }
+            | ConstraintSchema::UniqueWithNullPolicy { columns, .. }
             | ConstraintSchema::ForeignKey { columns, .. } => {
                 for column in columns {
                     if column.eq_ignore_ascii_case(old_column) {
@@ -1786,19 +1829,24 @@ pub(crate) fn column_constraints_from_def(
     table: &str,
     column: &ColumnDef,
     column_schema: &ColumnSchema,
+    default_null_policy: UniqueNullPolicy,
 ) -> Result<Vec<ConstraintSchema>> {
     let mut constraints = Vec::new();
     for option in &column.options {
         match &option.option {
-            ColumnOption::Unique(_) => constraints.push(ConstraintSchema::Unique {
-                name: option
-                    .name
-                    .as_ref()
-                    .map(ident_value)
-                    .unwrap_or_else(|| format!("{}_{}_key", table, column_schema.name)),
-                columns: vec![column_schema.name.clone()],
-                validated: true,
-            }),
+            ColumnOption::Unique(unique) => {
+                reject_unsupported_constraint_characteristics(unique.characteristics.as_ref())?;
+                constraints.push(ConstraintSchema::unique(
+                    option
+                        .name
+                        .as_ref()
+                        .map(ident_value)
+                        .unwrap_or_else(|| format!("{}_{}_key", table, column_schema.name)),
+                    vec![column_schema.name.clone()],
+                    true,
+                    UniqueNullPolicy::from_sql(unique.nulls_distinct, default_null_policy),
+                ));
+            }
             ColumnOption::Check(check) => constraints.push(ConstraintSchema::Check {
                 name: option
                     .name
@@ -1845,12 +1893,13 @@ pub(crate) fn column_constraints_from_def(
 pub(crate) fn table_constraint_schema(
     table: &str,
     constraint: &TableConstraint,
+    default_null_policy: UniqueNullPolicy,
 ) -> Result<Vec<ConstraintSchema>> {
     Ok(match constraint {
         TableConstraint::Unique(unique) => {
             reject_unsupported_constraint_characteristics(unique.characteristics.as_ref())?;
-            vec![ConstraintSchema::Unique {
-                name: unique.name.as_ref().map(ident_value).unwrap_or_else(|| {
+            vec![ConstraintSchema::unique(
+                unique.name.as_ref().map(ident_value).unwrap_or_else(|| {
                     format!(
                         "{}_{}_key",
                         table,
@@ -1859,9 +1908,10 @@ pub(crate) fn table_constraint_schema(
                             .join("_")
                     )
                 }),
-                columns: simple_index_column_names(&unique.columns)?,
-                validated: true,
-            }]
+                simple_index_column_names(&unique.columns)?,
+                true,
+                UniqueNullPolicy::from_sql(unique.nulls_distinct, default_null_policy),
+            )]
         }
         TableConstraint::Check(check) => vec![ConstraintSchema::Check {
             name: check
@@ -4766,6 +4816,11 @@ pub(crate) fn conflict_target_columns(
             for constraint in &schema.constraints {
                 match constraint {
                     ConstraintSchema::Unique {
+                        name: constraint_name,
+                        columns,
+                        ..
+                    }
+                    | ConstraintSchema::UniqueWithNullPolicy {
                         name: constraint_name,
                         columns,
                         ..

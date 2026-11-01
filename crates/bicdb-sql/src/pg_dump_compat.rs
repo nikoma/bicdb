@@ -1090,7 +1090,8 @@ pub(crate) fn pg_dump_check_constraint_inventory_rows(
         let mut constraint_slot = first_table_constraint_slot(schema);
         for constraint in &schema.constraints {
             match constraint {
-                ConstraintSchema::Unique { name, columns, .. } => {
+                ConstraintSchema::Unique { name, columns, .. }
+                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
                     if !unique_constraint_is_primary_key(schema, name, columns) {
                         constraint_slot += 1;
                     }
@@ -1149,7 +1150,8 @@ pub(crate) fn pg_dump_foreign_key_constraint_inventory_rows(
         let mut constraint_slot = first_table_constraint_slot(schema);
         for constraint in &schema.constraints {
             match constraint {
-                ConstraintSchema::Unique { name, columns, .. } => {
+                ConstraintSchema::Unique { name, columns, .. }
+                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
                     if !unique_constraint_is_primary_key(schema, name, columns) {
                         constraint_slot += 1;
                     }

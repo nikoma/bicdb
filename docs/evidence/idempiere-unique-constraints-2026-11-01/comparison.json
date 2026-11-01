@@ -1,0 +1,161 @@
+{
+  "format": 1,
+  "reference_version": "23.26.3.0.0",
+  "profile": "oracle-preview-v1",
+  "synthetic_only": true,
+  "cases": [
+    {
+      "layout": "nullable_composite",
+      "case": "all-null first",
+      "values": "NULL,NULL",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "nullable_composite",
+      "case": "all-null repeated",
+      "values": "NULL,NULL",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "nullable_composite",
+      "case": "partial first",
+      "values": "1,NULL",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "nullable_composite",
+      "case": "partial numeric duplicate",
+      "values": "1.00,NULL",
+      "oracle": "duplicate",
+      "bicdb": "duplicate",
+      "match": true
+    },
+    {
+      "layout": "nullable_composite",
+      "case": "other partial",
+      "values": "2,NULL",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "nullable_composite",
+      "case": "reverse partial first",
+      "values": "NULL,'x'",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "nullable_composite",
+      "case": "reverse partial duplicate",
+      "values": "NULL,'x'",
+      "oracle": "duplicate",
+      "bicdb": "duplicate",
+      "match": true
+    },
+    {
+      "layout": "nullable_composite",
+      "case": "complete first",
+      "values": "1,'x'",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "nullable_composite",
+      "case": "complete duplicate",
+      "values": "1.00,'x'",
+      "oracle": "duplicate",
+      "bicdb": "duplicate",
+      "match": true
+    },
+    {
+      "layout": "nullable_composite",
+      "case": "empty text is null",
+      "values": "1,''",
+      "oracle": "duplicate",
+      "bicdb": "duplicate",
+      "match": true
+    },
+    {
+      "layout": "nonnull_anchor",
+      "case": "partial first",
+      "values": "1,NULL",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "nonnull_anchor",
+      "case": "partial duplicate",
+      "values": "1.00,NULL",
+      "oracle": "duplicate",
+      "bicdb": "duplicate",
+      "match": true
+    },
+    {
+      "layout": "nonnull_anchor",
+      "case": "other partial",
+      "values": "2,NULL",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "nonnull_anchor",
+      "case": "complete first",
+      "values": "1,'x'",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "nonnull_anchor",
+      "case": "complete duplicate",
+      "values": "1,'x'",
+      "oracle": "duplicate",
+      "bicdb": "duplicate",
+      "match": true
+    },
+    {
+      "layout": "single_column",
+      "case": "null first",
+      "values": "NULL",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "single_column",
+      "case": "null repeated",
+      "values": "NULL",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "single_column",
+      "case": "number first",
+      "values": "1",
+      "oracle": "accepted",
+      "bicdb": "accepted",
+      "match": true
+    },
+    {
+      "layout": "single_column",
+      "case": "number duplicate",
+      "values": "1.00",
+      "oracle": "duplicate",
+      "bicdb": "duplicate",
+      "match": true
+    }
+  ],
+  "success": true
+}

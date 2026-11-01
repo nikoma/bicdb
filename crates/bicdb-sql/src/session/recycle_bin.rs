@@ -347,7 +347,9 @@ impl<'db> SqlSession<'db> {
                     }
                 }
                 for constraint in &mut schema.constraints {
-                    if let ConstraintSchema::Unique { name: unique, .. } = constraint {
+                    if let ConstraintSchema::Unique { name: unique, .. }
+                    | ConstraintSchema::UniqueWithNullPolicy { name: unique, .. } = constraint
+                    {
                         if unique == original {
                             *unique = name.clone();
                         }

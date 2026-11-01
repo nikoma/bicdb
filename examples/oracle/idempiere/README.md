@@ -127,9 +127,14 @@ same non-NULL components. The importer models this with `NULLS NOT DISTINCT` and
 where necessary, a predicate excluding all-NULL keys. It first probes actual
 duplicate rejection; syntax acceptance alone does not qualify that behavior.
 The preview now passes this capability probe and the original snapshot's 24
-nullable composite unique indexes were installed with that policy. Existing nullable composite UNIQUE **constraints** also
-remain an outstanding migration requirement. No complete constraint equivalence
-is claimed by a successful table/data import.
+nullable composite unique indexes were installed with that policy. New preview
+UNIQUE constraints also preserve these NULL rules. The table/data importer checks
+nullable composite constraint metadata and executable backing indexes, including
+on resume. Older imports with ordinary PostgreSQL NULL semantics are rejected;
+reopening does not silently change them. The
+[constraint follow-up](../../../docs/evidence/idempiere-unique-constraints-2026-11-01/README.md)
+records explicit replacement in the development application fixture. Foreign-key
+deferment/validation and complete constraint equivalence remain unqualified.
 
 The preview's [documented mappings](../../../docs/oracle-preview-profile.md) are
 explicit adaptations. This tool is not a general-purpose Oracle migration tool,

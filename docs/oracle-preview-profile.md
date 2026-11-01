@@ -99,8 +99,30 @@ records a concurrent sequence-allocation check, not full transaction conformance
 Without that explicit option, PostgreSQL's ordinary NULLS DISTINCT behavior is
 preserved. Oracle composite uniqueness additionally permits duplicate all-NULL
 keys; the migration tool excludes those rows with a partial-index predicate when
-necessary. This index policy does not yet qualify nullable composite UNIQUE
-**table constraints** in the Oracle import.
+necessary.
+
+Ordinary UNIQUE column/table constraints created in the preview now use the same
+Oracle NULL rules. Single-column keys permit repeated NULLs. Composite keys
+reject equal partially NULL keys and omit wholly NULL keys. The persisted database
+profile selects this default; a mutable session setting cannot change it.
+PostgreSQL databases retain ordinary NULLS DISTINCT behavior. Explicit table
+`UNIQUE NULLS NOT DISTINCT (...)` and `UNIQUE NULLS DISTINCT (...)` clauses select
+their named native policy. Inline column NULLS clauses remain outside the parser
+contract.
+
+Each new non-default constraint persists a separate schema wire tag so older SQL
+readers reject its metadata. Existing constraints keep their recorded policy and
+are never silently reinterpreted on reopen. Their owning database must be upgraded
+with a compatible binary before explicitly replacing older constraints. Constraint
+backing indexes are exposed through `pg_constraint.conindid`, `pg_index` and
+`pg_indexes`. The standard `information_schema.table_constraints.nulls_distinct`
+field is NULL for an all-nullable composite Oracle key: neither YES nor NO can
+represent its all-NULL exception. Non-NULL anchors use NO. The migration importer
+checks both that policy and the executable index state on resume and before data
+import/verification. See the [constraint evidence](evidence/idempiere-unique-constraints-2026-11-01/README.md).
+
+These are immediate, non-deferrable UNIQUE rules. Deferrable constraints and
+foreign-key migration remain separate requirements.
 
 Native `UPPER` and type-preserving two-argument `COALESCE` fields provide actual
 index backfill and write enforcement. COALESCE supports compatible text/varchar,

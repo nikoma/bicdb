@@ -789,7 +789,7 @@ pub(crate) fn validate_unique_constraints(
 
 #[derive(Clone, Debug)]
 pub(crate) struct UniqueConflictArbiter {
-    pub(crate) nulls_not_distinct: bool,
+    pub(crate) null_policy: UniqueNullPolicy,
     pub(crate) name: String,
     pub(crate) key: UniqueKey,
     pub(crate) index_name: Option<String>,
@@ -799,7 +799,7 @@ pub(crate) struct UniqueConflictArbiter {
 
 impl UniqueConflictArbiter {
     pub(crate) fn skips_null_key(&self, values: &[SqlValue]) -> bool {
-        !self.nulls_not_distinct && unique_key_has_null(values)
+        self.null_policy.skips_key(values)
     }
 
     /// Whether `record` takes part in this uniqueness rule (always, unless the index is partial).
@@ -844,7 +844,7 @@ pub(crate) fn unique_arbiters_for_table_uncached(
     if !primary_key_columns.is_empty() {
         let key = UniqueKey::Columns(primary_key_columns);
         arbiters.push(UniqueConflictArbiter {
-            nulls_not_distinct: false,
+            null_policy: UniqueNullPolicy::Distinct,
             name: schema.primary_key_constraint_name(),
             index_name: unique_index_name_for_key(table, schema, &key, &executable_indexes),
             key,
@@ -856,20 +856,32 @@ pub(crate) fn unique_arbiters_for_table_uncached(
             .constraints
             .iter()
             .filter_map(|constraint| match constraint {
-                ConstraintSchema::Unique { name, columns, .. } => {
+                ConstraintSchema::Unique { name, columns, .. }
+                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
                     if unique_constraint_is_primary_key(schema, name, columns) {
                         return None;
                     }
                     let key = UniqueKey::Columns(columns.clone());
+                    let (_, expected_predicate) = constraint
+                        .unique_null_policy()
+                        .index_options(schema, columns);
+                    let index_name = executable_indexes
+                        .iter()
+                        .find(|index| {
+                            index.name == *name
+                                && index.collection.eq_ignore_ascii_case(table)
+                                && index.unique
+                                && index.predicate == expected_predicate
+                                && unique_key_matches_index(schema, &key, index)
+                        })
+                        .map(|index| index.name.clone())
+                        .or_else(|| {
+                            unique_index_name_for_key(table, schema, &key, &executable_indexes)
+                        });
                     Some(UniqueConflictArbiter {
-                        nulls_not_distinct: false,
+                        null_policy: constraint.unique_null_policy(),
                         name: name.clone(),
-                        index_name: unique_index_name_for_key(
-                            table,
-                            schema,
-                            &key,
-                            &executable_indexes,
-                        ),
+                        index_name,
                         key,
                         predicate: None,
                     })
@@ -902,8 +914,11 @@ pub(crate) fn unique_arbiters_for_table_uncached(
                 unique_index_name_for_key(table, schema, &key, &executable_indexes)
             };
             arbiters.push(UniqueConflictArbiter {
-                nulls_not_distinct: definition
-                    .is_some_and(|definition| definition.nulls_not_distinct),
+                null_policy: if definition.is_some_and(|definition| definition.nulls_not_distinct) {
+                    UniqueNullPolicy::NotDistinct
+                } else {
+                    UniqueNullPolicy::Distinct
+                },
                 name: index.name.clone(),
                 index_name,
                 key,
@@ -1339,6 +1354,7 @@ fn record_id_from_primary_key_values(
             .iter()
             .find_map(|constraint| match constraint {
                 ConstraintSchema::Unique { name, columns, .. }
+                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. }
                     if name.eq_ignore_ascii_case(&primary_key_name) =>
                 {
                     Some(columns.as_slice())

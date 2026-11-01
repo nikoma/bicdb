@@ -168,6 +168,7 @@ pub(crate) fn virtual_table_columns_for_empty_join(table: &str) -> Option<Vec<St
                     name: String::new(),
                     contype: "c",
                     conrelid: 0,
+                    connamespace: 0,
                     conindid: 0,
                     confrelid: 0,
                     confupdtype: " ",
@@ -6928,7 +6929,8 @@ pub(crate) fn information_schema_table_constraints(
         }
         for constraint in &schema.constraints {
             match constraint {
-                ConstraintSchema::Unique { name, columns, .. } => {
+                ConstraintSchema::Unique { name, columns, .. }
+                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
                     if unique_constraint_is_primary_key(&schema, name, columns) {
                         continue;
                     }
@@ -6965,7 +6967,8 @@ pub(crate) fn information_schema_key_column_usage(
         }
         for constraint in &schema.constraints {
             match constraint {
-                ConstraintSchema::Unique { name, columns, .. } => {
+                ConstraintSchema::Unique { name, columns, .. }
+                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
                     if unique_constraint_is_primary_key(&schema, name, columns) {
                         continue;
                     }
@@ -7036,7 +7039,8 @@ pub(crate) fn information_schema_constraint_column_usage(
                         rows.push(row);
                     }
                 }
-                ConstraintSchema::Unique { name, columns, .. } => {
+                ConstraintSchema::Unique { name, columns, .. }
+                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } => {
                     if unique_constraint_is_primary_key(&schema, name, columns) {
                         continue;
                     }

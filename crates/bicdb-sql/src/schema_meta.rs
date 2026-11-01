@@ -938,16 +938,7 @@ pub(crate) fn ensure_unique_constraint_indexes_for_schema(
             .into_iter()
             .find(|index| index.name.eq_ignore_ascii_case(&definition.name));
         if let Some(existing) = existing {
-            if existing
-                .collection
-                .eq_ignore_ascii_case(&definition.collection)
-                && existing.unique == definition.unique
-                && existing.nulls_not_distinct == definition.nulls_not_distinct
-                && existing.kind == definition.kind
-                && index_field_lists_match(&existing.fields, &definition.fields)
-                && existing.predicate == definition.predicate
-                && existing.exclusion == definition.exclusion
-            {
+            if unique_constraint_index_definition_matches(&existing, &definition) {
                 continue;
             }
             return Err(SqlError::InvalidSql(format!(
@@ -960,6 +951,42 @@ pub(crate) fn ensure_unique_constraint_indexes_for_schema(
     Ok(())
 }
 
+/// Compare every property that changes UNIQUE write enforcement.
+pub(crate) fn unique_constraint_index_definition_matches(
+    existing: &IndexDefinition,
+    expected: &IndexDefinition,
+) -> bool {
+    existing
+        .collection
+        .eq_ignore_ascii_case(&expected.collection)
+        && existing.unique == expected.unique
+        && existing.nulls_not_distinct == expected.nulls_not_distinct
+        && existing.kind == expected.kind
+        && index_field_lists_match(&existing.fields, &expected.fields)
+        && existing.predicate == expected.predicate
+        && existing.exclusion == expected.exclusion
+}
+
+/// Reject collisions before publishing a constraint or modifying table data.
+pub(crate) fn validate_unique_constraint_index_compatibility(
+    db: &BicDb,
+    schema: &TableSchema,
+) -> Result<()> {
+    let existing = index_definitions_shared(db);
+    for expected in unique_constraint_index_definitions_for_schema(schema) {
+        if existing.iter().any(|index| {
+            index.name.eq_ignore_ascii_case(&expected.name)
+                && !unique_constraint_index_definition_matches(index, &expected)
+        }) {
+            return Err(SqlError::InvalidSql(format!(
+                "index \"{}\" already exists with a definition that does not match UNIQUE constraint \"{}\"",
+                expected.name, expected.name
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn unique_constraint_index_definitions_for_schema(
     schema: &TableSchema,
 ) -> Vec<IndexDefinition> {
@@ -967,20 +994,25 @@ pub(crate) fn unique_constraint_index_definitions_for_schema(
         .constraints
         .iter()
         .filter_map(|constraint| {
-            let ConstraintSchema::Unique { name, columns, .. } = constraint else {
+            let (ConstraintSchema::Unique { name, columns, .. }
+            | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. }) = constraint
+            else {
                 return None;
             };
             if unique_constraint_is_primary_key(schema, name, columns) {
                 return None;
             }
+            let (nulls_not_distinct, predicate) = constraint
+                .unique_null_policy()
+                .index_options(schema, columns);
             Some(IndexDefinition {
-                nulls_not_distinct: false,
+                nulls_not_distinct,
                 name: name.clone(),
                 collection: schema.name.clone(),
                 fields: primary_key_index_fields_for_columns(columns),
                 unique: true,
                 kind: IndexKind::BTree,
-                predicate: None,
+                predicate,
                 exclusion: None,
             })
         })

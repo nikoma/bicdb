@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "source_schema": "IDEMPIERE_QUAL",
+  "completed": [
+    {
+      "table": "AD_REPLICATIONSTRATEGY",
+      "constraints": [
+        "AD_REPLICATIONSTRATEGY_VALUE"
+      ],
+      "rows": 2,
+      "value_digest_before": "c3375643b84b3d108995e2f69a8757e6fd6d443b6002fcfb926e1dce0b7c6ad2",
+      "value_digest_after": "c3375643b84b3d108995e2f69a8757e6fd6d443b6002fcfb926e1dce0b7c6ad2",
+      "source_values_match": true
+    },
+    {
+      "table": "AD_TABLEATTRIBUTE",
+      "constraints": [
+        "AD_TABLEATTRIBUTE_ATTRIBUTEKEY"
+      ],
+      "rows": 0,
+      "value_digest_before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "value_digest_after": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_values_match": true
+    },
+    {
+      "table": "U_POSTERMINAL",
+      "constraints": [
+        "U_POSTERMINAL_VALUE"
+      ],
+      "rows": 1,
+      "value_digest_before": "bc2a8fe042b051be7cafb8956b3b0513a50b74df58932a37f16f4f9d580aff77",
+      "value_digest_after": "bc2a8fe042b051be7cafb8956b3b0513a50b74df58932a37f16f4f9d580aff77",
+      "source_values_match": true
+    }
+  ],
+  "success": true,
+  "application_qualified": false,
+  "source_snapshot_preserved": true
+}

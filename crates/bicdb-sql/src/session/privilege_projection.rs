@@ -337,7 +337,12 @@ impl<'db> SqlSession<'db> {
                     }
                 });
             }
-            constraints.extend(column_constraints_from_def(&table, column, &column_schema)?);
+            constraints.extend(column_constraints_from_def(
+                &table,
+                column,
+                &column_schema,
+                oracle::default_unique_null_policy(self.db_ref())?,
+            )?);
             columns.push(column_schema);
         }
         for requested in compression {
@@ -358,7 +363,11 @@ impl<'db> SqlSession<'db> {
                     if let Some(name) = primary_key.name.as_ref().map(ident_value) {
                         primary_key_name = Some(name);
                     }
-                    constraints.extend(table_constraint_schema(&table, constraint)?);
+                    constraints.extend(table_constraint_schema(
+                        &table,
+                        constraint,
+                        oracle::default_unique_null_policy(self.db_ref())?,
+                    )?);
                     for name in simple_index_column_names(&primary_key.columns)? {
                         if let Some(column) = columns.iter_mut().find(|column| column.name == name)
                         {
@@ -368,7 +377,11 @@ impl<'db> SqlSession<'db> {
                     }
                 }
                 other => {
-                    constraints.extend(table_constraint_schema(&table, other)?);
+                    constraints.extend(table_constraint_schema(
+                        &table,
+                        other,
+                        oracle::default_unique_null_policy(self.db_ref())?,
+                    )?);
                 }
             }
         }
@@ -391,6 +404,10 @@ impl<'db> SqlSession<'db> {
         self.require_reference_privilege(&table, &constraints)?;
         for constraint in &constraints {
             if let ConstraintSchema::Unique {
+                columns: unique_columns,
+                ..
+            }
+            | ConstraintSchema::UniqueWithNullPolicy {
                 columns: unique_columns,
                 ..
             } = constraint

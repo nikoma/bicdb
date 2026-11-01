@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "negative_control": true,
+  "constraint": "AD_REPLICATIONSTRATEGY_VALUE",
+  "constraint_namespace_oid": 2200,
+  "relation_namespace_oid": 88558,
+  "index_valid": true,
+  "index_ready": true,
+  "index_nulls_not_distinct": true,
+  "index_partial": false,
+  "importer_refused_verification": true,
+  "success": true
+}

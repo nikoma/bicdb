@@ -58,6 +58,32 @@ pub fn is_known_profile(profile: &str) -> bool {
     profile == POSTGRES_PROFILE || is_oracle_profile(profile)
 }
 
+/// Constraint semantics follow the durable database profile, never a mutable
+/// connection setting. Explicit PostgreSQL NULLS clauses can select a policy.
+pub(crate) fn default_unique_null_policy(db: &BicDb) -> Result<UniqueNullPolicy> {
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Err(BicDbError::CollectionNotFound(_)) => Ok(UniqueNullPolicy::Distinct),
+        Err(error) => Err(error.into()),
+        Ok(Some(record))
+            if record.metadata
+                == serde_json::json!({"format":1,"profile":ORACLE_PREVIEW_PROFILE}) =>
+        {
+            Ok(UniqueNullPolicy::AllNullsDistinct)
+        }
+        Ok(Some(record))
+            if record.metadata == serde_json::json!({"format":1,"profile":ORACLE_HR_PROFILE}) =>
+        {
+            Ok(UniqueNullPolicy::Distinct)
+        }
+        Ok(Some(record))
+            if record.metadata == serde_json::json!({"format":1,"profile":POSTGRES_PROFILE}) =>
+        {
+            Ok(UniqueNullPolicy::Distinct)
+        }
+        _ => Err(unsupported("invalid or missing durable SQL profile marker")),
+    }
+}
+
 /// The preview profile grows independently of the bounded HR profile. Its
 /// database marker and startup opt-in prevent accidental profile switching.
 pub fn lower_profile_sql(db: &BicDb, sql: &str, profile: &str) -> Result<String> {

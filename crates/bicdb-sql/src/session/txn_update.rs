@@ -670,7 +670,8 @@ impl<'db> SqlSession<'db> {
             // Column must not participate in any constraint or index (schema
             // level or executable core index).
             if schema.constraints.iter().any(|c| match c {
-                ConstraintSchema::Unique { columns, .. } => {
+                ConstraintSchema::Unique { columns, .. }
+                | ConstraintSchema::UniqueWithNullPolicy { columns, .. } => {
                     columns.iter().any(|c| c.eq_ignore_ascii_case(&column))
                 }
                 ConstraintSchema::ForeignKey { columns, .. } => {
@@ -5014,10 +5015,12 @@ impl<'db> SqlSession<'db> {
             return Ok(None);
         };
         if schema.rls_enabled
-            || !schema
-                .constraints
-                .iter()
-                .all(|constraint| matches!(constraint, ConstraintSchema::Unique { .. }))
+            || !schema.constraints.iter().all(|constraint| {
+                matches!(
+                    constraint,
+                    ConstraintSchema::Unique { .. } | ConstraintSchema::UniqueWithNullPolicy { .. }
+                )
+            })
         {
             return Ok(None);
         }
@@ -5110,10 +5113,12 @@ impl<'db> SqlSession<'db> {
             return Ok(None);
         }
         if schema.rls_enabled
-            || !schema
-                .constraints
-                .iter()
-                .all(|constraint| matches!(constraint, ConstraintSchema::Unique { .. }))
+            || !schema.constraints.iter().all(|constraint| {
+                matches!(
+                    constraint,
+                    ConstraintSchema::Unique { .. } | ConstraintSchema::UniqueWithNullPolicy { .. }
+                )
+            })
             || schema
                 .columns
                 .iter()

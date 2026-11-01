@@ -1,4 +1,7 @@
-<section class="panel report" id="latest_report">
+<section class="panel report" id="latest_report"
+  data-report-id="<%= report&.id %>" data-report-status="<%= report&.status %>"
+  data-controller="<%= 'report-progress' if report&.queued? %>"
+  data-report-progress-url-value="<%= project_report_path(report.project_id, report) if report&.queued? %>">
   <span class="eyebrow">BACKGROUND REPORT</span>
   <% if report&.ready? %>
     <h2>The latest snapshot</h2>

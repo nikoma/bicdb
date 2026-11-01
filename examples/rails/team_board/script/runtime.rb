@@ -1,7 +1,4 @@
-require "fileutils"
 require "rbconfig"
-require "socket"
-require "timeout"
 
 module DemoRuntime
   ROOT = File.expand_path("..", __dir__)
@@ -12,6 +9,9 @@ module DemoRuntime
     bundle = [RbConfig.ruby, Gem.bin_path("bundler", "bundle", ">= 2.6")]
     system(*bundle, "check", out: File::NULL) || system(*bundle, "install", exception: true)
     require "bundler/setup"
+    require "fileutils"
+    require "socket"
+    require "timeout"
   end
 
   def self.binary!

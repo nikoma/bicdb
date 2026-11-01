@@ -53,6 +53,25 @@ class BoardTest < ActionDispatch::IntegrationTest
     assert_select ".alert", text: /Title can't be blank/
   end
 
+  test "queued report status reconciles completion and respects project access" do
+    report = @project.reports.create!
+    get project_report_path(@project, report)
+    assert_redirected_to new_session_path
+    sign_in
+    get project_report_path(@project, report)
+    assert_response :success
+    assert_select "#latest_report[data-controller='report-progress']"
+    report.update!(status: :ready, payload: { "statuses" => { "active" => 3 }, "comments" => 2 })
+    get project_report_path(@project, report)
+    assert_select "h2", "The latest snapshot"
+    assert_select "#latest_report[data-controller='report-progress']", count: 0
+    private_workspace = Workspace.create!(name: "Private", slug: "private-#{SecureRandom.hex(4)}")
+    private_project = private_workspace.projects.create!(name: "Private", slug: "private", owner: @user)
+    private_report = private_project.reports.create!
+    get project_report_path(private_project, private_report)
+    assert_response :not_found
+  end
+
   test "other workspace records are inaccessible even with a known URL" do
     other = Workspace.create!(name: "Private", slug: "private-#{SecureRandom.hex(4)}")
     hidden = other.projects.create!(name: "Private", slug: "private", owner: @user)

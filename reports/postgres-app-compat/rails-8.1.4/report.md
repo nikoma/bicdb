@@ -17,10 +17,18 @@ source revision as this report; older downloadable binaries predate these fixes.
 - Application attachments use Active Storage's disk backend; attachment metadata
   is in BicDB. This does not claim that file bytes are stored in the database.
 
-The development binary passed the complete campaign. Retained evidence:
-[report](debug-report.json), [Rails tests](debug-tests.txt),
-[HTTP and WebSocket checks](debug-http.txt). The report identifies the executable
-by SHA-256 rather than relying on a version string shared by older builds.
+The optimized Docker image passed the complete campaign: **20 tests, 100
+assertions, no failures, errors or skips**. Retained evidence:
+[report](release-report.json), [Rails tests](release-tests.txt),
+[HTTP and WebSocket checks](release-http.txt),
+[Chromium browser checks](browser-report.json), and
+[Compose container-recreation checks](compose-persistence.json). The report
+identifies the executable by SHA-256 rather than relying on a version string
+shared by older builds.
+
+An earlier development-binary campaign at `fd6ccf6` also passed, before the
+additional report-status regression: [report](debug-report.json),
+[tests](debug-tests.txt), [HTTP/WebSocket](debug-http.txt).
 
 ## Required invariants
 
@@ -28,7 +36,7 @@ by SHA-256 rather than relying on a version string shared by older builds.
 
 1. Load the checked-in schemas, repeat `db:prepare`, reverse all three application
    migrations, and reapply them. Repeat seeds without duplicates.
-2. Run the standard Rails suite in two test processes: **19 tests, 87 assertions,
+2. Run the standard Rails suite in two test processes: **20 tests, 100 assertions,
    zero failures, errors or skips**. Coverage includes constraints, associations,
    JSONB/arrays, full-text insert/update/delete, optimistic locking, transactions,
    savepoints, attachments, authentication, forms and workspace access boundaries.
@@ -71,6 +79,29 @@ The foreign-key concurrency case was independently checked with PostgreSQL 18.4:
 [previous BicDB build's 40001](fk-before-fix.txt). Its SQL shape is two transactions
 updating different child rows referencing the same parent; neither changes the
 reference. The executable regression test preserves that schedule.
+
+## Application and launcher fixes
+
+The optimized worker exposed a normal pub/sub timing race: a report could finish
+before the redirected browser page subscribed to Cable, leaving the UI showing
+"queued" despite a correctly persisted result. A standard Stimulus controller
+reconciles queued reports through an authorized Rails status endpoint until an
+update arrives. The separate WebSocket acceptance check still requires receiving
+an actual Cable message; polling cannot make that check pass by itself. Browser
+checks require a new report ID to reach the ready state, avoiding a false pass
+from an earlier report already on the page.
+
+GitHub's isolated gem installation also exposed a launcher bootstrap error:
+requiring JSON before Bundler activated Ruby's default JSON 2.9.1, conflicting
+with locked JSON 3.1.0. Launchers now establish the bundle before loading bundled
+standard-library gems. The [isolated-gem reproduction](isolated-gems-bootstrap.txt)
+shows the default version and the correctly selected locked version. The final
+full campaign ran successfully with this isolated bundle and no external network.
+This changes application startup, not Rails or its adapter.
+
+The Compose instance was recreated while retaining its two named volumes. The
+persisted issue, arrays, JSONB, full-text lookup, exact Solid Cache bytes, and
+Active Storage metadata/file bytes all passed independent readback.
 
 ## Reproduce
 

@@ -5,7 +5,7 @@ Rails.application.routes.draw do
     resources :issues, only: %i[new create show update] do
       resources :comments, only: :create
     end
-    resources :reports, only: :create
+    resources :reports, only: %i[create show]
   end
   root "projects#index"
 end

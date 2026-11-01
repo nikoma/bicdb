@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 require_relative "../script/runtime"
+invocation_directory = Dir.pwd
+DemoRuntime.dependencies!
 require "json"
 require "digest"
 require "tmpdir"
@@ -8,7 +10,7 @@ require "net/http"
 require "time"
 
 options = {}
-OptionParser.new { |parser| parser.on("--work-dir PATH") { |value| options[:directory] = File.expand_path(value) } }.parse!
+OptionParser.new { |parser| parser.on("--work-dir PATH") { |value| options[:directory] = File.expand_path(value, invocation_directory) } }.parse!
 if options[:directory]
   abort "Verification needs a new work directory" if File.exist?(options[:directory])
   directory = options[:directory]
@@ -17,7 +19,6 @@ else
   directory = Dir.mktmpdir("qualification-", File.join(DemoRuntime::ROOT, "tmp"))
 end
 ENV["RAILS_ENV"] = "development"
-DemoRuntime.dependencies!
 ENV["TEAM_BOARD_DB_PREFIX"] = "team_board_qualification"
 ENV["TEAM_BOARD_EVIDENCE_DIR"] = directory
 ENV["JOB_CONCURRENCY"] = "2"

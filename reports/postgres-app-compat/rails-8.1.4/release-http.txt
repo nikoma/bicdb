@@ -1,0 +1,2 @@
+Real HTTP login, CSRF, project board, assets, full-text search and issue creation passed.
+Solid Cable delivered the worker's Turbo update over a real WebSocket.

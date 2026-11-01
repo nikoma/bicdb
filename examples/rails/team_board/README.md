@@ -57,6 +57,10 @@ configuration publishes only the web port, bound to the host's loopback interfac
 | Active Storage | Database metadata and local attachment files |
 | Authentication | Password digests, sessions, CSRF protection and workspace-scoped access |
 
+Queued reports also recheck persisted status while waiting for their live update,
+so a job that finishes before the browser subscribes cannot leave the page stuck
+showing “queued.” This uses a normal Rails endpoint and Stimulus controller.
+
 The domain models and controllers live in `app/`, schema changes in `db/migrate/`,
 and the complete database configuration is in [`config/database.yml`](config/database.yml).
 All four logical databases—primary, queue, cache, and cable—run in one BicDB

@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "browser": "156.0.8078.4",
+  "ruby": "3.4.12",
+  "checks": [
+    "CSRF login",
+    "three seeded projects",
+    "six board issues",
+    "JavaScript search and Turbo navigation",
+    "Solid Queue report with live Turbo/Solid Cable update"
+  ],
+  "javascript_errors": [],
+  "browser_console_errors": []
+}

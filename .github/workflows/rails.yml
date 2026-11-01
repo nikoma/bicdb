@@ -41,6 +41,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: rails-demo
+          cache-on-failure: true
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4.12'

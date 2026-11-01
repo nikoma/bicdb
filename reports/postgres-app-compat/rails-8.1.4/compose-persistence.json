@@ -1,0 +1,21 @@
+{
+  "issue_id": 19,
+  "attachment_sha256": "bab72489825f424775811358f4f39adfb6cacfe24df61c072dd57064b68b1ab1",
+  "tags": [
+    "persistent",
+    "é"
+  ],
+  "metadata": {
+    "answer": 42
+  },
+  "passed": true,
+  "container_recreated": true,
+  "checks": [
+    "primary rows",
+    "arrays",
+    "JSONB",
+    "full-text index",
+    "Active Storage metadata and binary files",
+    "Solid Cache bytes"
+  ]
+}

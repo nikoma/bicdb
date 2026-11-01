@@ -1,6 +1,11 @@
 class ReportsController < ApplicationController
   before_action :load_project
 
+  def show
+    report = @project.reports.find(params[:id])
+    render partial: "projects/report", locals: { report: report }
+  end
+
   def create
     Report.transaction do
       report = @project.reports.create!

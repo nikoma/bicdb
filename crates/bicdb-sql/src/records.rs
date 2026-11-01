@@ -1751,7 +1751,9 @@ pub(crate) fn index_field_pg_type(schema: &TableSchema, field: &IndexField) -> O
         IndexField::MetadataPath(path) if path.len() == 1 => {
             schema.column(&path[0]).map(|column| column.pg_type.clone())
         }
-        IndexField::Lower(_) | IndexField::Trim(_) => Some("text".to_string()),
+        IndexField::Lower(_) | IndexField::Upper(_) | IndexField::Trim(_) => {
+            Some("text".to_string())
+        }
         IndexField::MetadataPath(_) => None,
     }
 }
@@ -1901,6 +1903,10 @@ pub(crate) fn record_index_field_sql_value(record: &Record, field: &IndexField) 
         IndexField::MetadataPath(path) => FieldRef::MetadataPath(path.clone())
             .value(record)
             .unwrap_or(SqlValue::Null),
+        IndexField::Upper(inner) => match record_index_field_sql_value(record, inner) {
+            SqlValue::Null => SqlValue::Null,
+            value => SqlValue::String(value.to_cell().to_ascii_uppercase()),
+        },
         IndexField::Lower(inner) => match record_index_field_sql_value(record, inner) {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::String(value.to_cell().to_ascii_lowercase()),

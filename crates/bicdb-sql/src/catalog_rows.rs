@@ -3919,7 +3919,8 @@ pub(crate) fn pg_index_rows_filtered(
             index_oids,
         ) {
             let definition = catalog_indexdef_string(&index);
-            rows.push(pg_index_row(
+            let executable = catalog_index_is_executable(&schemas, &index);
+            let mut row = pg_index_row(
                 index_oid,
                 table_oid,
                 false,
@@ -3931,11 +3932,27 @@ pub(crate) fn pg_index_rows_filtered(
                 index.exclusion,
                 index.predicate,
                 definition,
-            ));
+            );
+            row.insert("indisvalid".into(), SqlValue::Bool(executable));
+            row.insert("indisready".into(), SqlValue::Bool(executable));
+            rows.push(row);
         }
     }
 
     Ok(rows)
+}
+
+fn catalog_index_is_executable(schemas: &[TableSchema], index: &CatalogIndex) -> bool {
+    schemas
+        .iter()
+        .find(|schema| schema.name == index.collection)
+        .and_then(|schema| {
+            schema
+                .indexes
+                .iter()
+                .find(|candidate| candidate.name == index.name)
+        })
+        .is_none_or(|definition| !definition.metadata_only)
 }
 
 pub(crate) fn pg_index_filter_matches(
@@ -5851,7 +5868,7 @@ pub(crate) fn postgres_indexes_view_rows_filtered(
 
     for index in catalog_indexes(&schemas, db) {
         let identifier = format!("{}.{}", index.schema_name, index.name);
-        let valid = true;
+        let valid = catalog_index_is_executable(&schemas, &index);
         let exclusion = index.exclusion;
         let expression = index.indexprs.is_some();
         let partial = index.predicate.is_some();
@@ -6868,7 +6885,10 @@ pub(crate) fn index_field_attnum(
         IndexField::MetadataPath(path) if path.len() == 1 => {
             attnum_for_column(schemas, relation, &path[0])
         }
-        IndexField::MetadataPath(_) | IndexField::Lower(_) | IndexField::Trim(_) => None,
+        IndexField::MetadataPath(_)
+        | IndexField::Lower(_)
+        | IndexField::Upper(_)
+        | IndexField::Trim(_) => None,
     }
 }
 

@@ -7879,3 +7879,97 @@ fn pg_dump_nested_joins_plan_like_flat_joins() {
     let (view_rows, _) = measure(&mut session, "SELECT * FROM staff ORDER BY 1, 2");
     assert_eq!(view_rows, flat_rows);
 }
+
+#[test]
+fn upper_expression_index_backfill_mutation_uniqueness_and_reopen() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let mut db = BicDb::open(dir.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute("CREATE TABLE dictionary(k int PRIMARY KEY, owner_id int, label text)")
+            .unwrap();
+        session
+            .execute("INSERT INTO dictionary VALUES(1,7,'IsDefault'),(2,8,'Mixed'),(3,7,NULL)")
+            .unwrap();
+        session
+            .execute("CREATE UNIQUE INDEX dictionary_name ON dictionary(owner_id,upper(label))")
+            .unwrap();
+        drop(session);
+        let definition = db
+            .index_definitions()
+            .into_iter()
+            .find(|index| index.name == "dictionary_name")
+            .unwrap();
+        assert!(matches!(&definition.fields[1], IndexField::Upper(_)));
+        assert!(db.verify_index(&definition.name).unwrap().valid);
+        let mut session = SqlSession::new(&mut db);
+        assert!(session
+            .execute("INSERT INTO dictionary VALUES(4,7,'isdefault')")
+            .is_err());
+        session
+            .execute("UPDATE dictionary SET label='Changed' WHERE k=1")
+            .unwrap();
+        session
+            .execute("INSERT INTO dictionary VALUES(4,7,'isdefault'),(5,7,NULL)")
+            .unwrap();
+        assert_eq!(
+            session
+                .execute("SELECT k FROM dictionary WHERE owner_id=7 AND upper(label)='ISDEFAULT'")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(4)]]
+        );
+        assert!(session
+            .execute("UPDATE dictionary SET label='ISDEFAULT' WHERE k=3")
+            .is_err());
+        session.execute("DELETE FROM dictionary WHERE k=4").unwrap();
+        session
+            .execute("UPDATE dictionary SET label='isdefault' WHERE k=3")
+            .unwrap();
+        drop(session);
+        assert!(db.verify_index("dictionary_name").unwrap().valid);
+        db.flush().unwrap();
+    }
+    let mut db = BicDb::open(dir.path()).unwrap();
+    assert!(db.verify_index("dictionary_name").unwrap().valid);
+    let result = SqlSession::new(&mut db)
+        .execute("SELECT k FROM dictionary WHERE owner_id=7 AND upper(label)='ISDEFAULT'")
+        .unwrap();
+    assert_eq!(result.rows, vec![vec![SqlValue::Int(3)]]);
+}
+
+#[test]
+fn metadata_only_indexes_are_not_catalogued_as_ready_or_valid() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE index_status(k int PRIMARY KEY, label text)")
+        .unwrap();
+    session
+        .execute("CREATE INDEX real_upper ON index_status(upper(label))")
+        .unwrap();
+    session
+        .execute("CREATE INDEX unsupported_expression ON index_status(reverse(label))")
+        .unwrap();
+    assert!(session
+        .execute("CREATE UNIQUE INDEX unsafe_unique ON index_status(reverse(label))")
+        .is_err());
+    let rows = session.execute("SELECT c.relname,i.indisvalid,i.indisready FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid WHERE c.relname IN ('real_upper','unsupported_expression') ORDER BY c.relname").unwrap().rows;
+    assert_eq!(
+        rows,
+        vec![
+            vec![
+                SqlValue::String("real_upper".into()),
+                SqlValue::Bool(true),
+                SqlValue::Bool(true)
+            ],
+            vec![
+                SqlValue::String("unsupported_expression".into()),
+                SqlValue::Bool(false),
+                SqlValue::Bool(false)
+            ],
+        ]
+    );
+}

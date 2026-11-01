@@ -135,10 +135,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--snapshot', required=True, type=Path)
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN')
-    parser.add_argument('--phase', choices=['tables', 'data', 'verify'], required=True)
+    parser.add_argument('--phase', choices=['tables', 'data', 'verify', 'indexes'], required=True)
     parser.add_argument('--report', required=True, type=Path)
-    parser.add_argument('--resume', action='store_true', help='validate the prior journal and completed tables before resuming')
+    parser.add_argument('--resume', action='store_true', help='validate the prior journal and completed objects before resuming')
     args = parser.parse_args()
+    if args.phase == 'indexes':
+        from indexes import migrate
+        return migrate(args)
     import psycopg
     manifest_bytes = (args.snapshot / 'manifest.json').read_bytes()
     manifest = json.loads(manifest_bytes)

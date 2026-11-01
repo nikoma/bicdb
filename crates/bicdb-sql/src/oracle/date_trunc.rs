@@ -49,7 +49,7 @@ pub(super) fn rewrite(db: &BicDb, statements: &mut Vec<Statement>) -> Result<()>
     struct Resolve<'a> {
         db: &'a BicDb,
         queries: Vec<Query>,
-        update_from: Vec<Option<String>>,
+        statement_from: Vec<Option<String>>,
     }
     impl Resolve<'_> {
         fn input_type(&self, arg: &Expr) -> Option<String> {
@@ -65,7 +65,7 @@ pub(super) fn rewrite(db: &BicDb, statements: &mut Vec<Statement>) -> Result<()>
                 select.projection = vec![SelectItem::UnnamedExpr(arg.clone())];
                 query.locks.clear();
                 query.to_string()
-            } else if let Some(Some(from)) = self.update_from.last() {
+            } else if let Some(Some(from)) = self.statement_from.last() {
                 format!("SELECT {arg} FROM {from}")
             } else {
                 return direct;
@@ -100,14 +100,15 @@ pub(super) fn rewrite(db: &BicDb, statements: &mut Vec<Statement>) -> Result<()>
     impl sqlparser::ast::VisitorMut for Resolve<'_> {
         type Break = SqlError;
         fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<SqlError> {
-            self.update_from.push(match statement {
+            self.statement_from.push(match statement {
                 Statement::Update(update) => Some(update.table.to_string()),
+                Statement::CreateIndex(index) => Some(index.table_name.to_string()),
                 _ => None,
             });
             ControlFlow::Continue(())
         }
         fn post_visit_statement(&mut self, _: &mut Statement) -> ControlFlow<SqlError> {
-            self.update_from.pop();
+            self.statement_from.pop();
             ControlFlow::Continue(())
         }
         fn pre_visit_query(&mut self, query: &mut Query) -> ControlFlow<SqlError> {
@@ -138,7 +139,7 @@ pub(super) fn rewrite(db: &BicDb, statements: &mut Vec<Statement>) -> Result<()>
         &mut Resolve {
             db,
             queries: Vec::new(),
-            update_from: Vec::new(),
+            statement_from: Vec::new(),
         },
     ) {
         ControlFlow::Continue(()) => Ok(()),

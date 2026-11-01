@@ -1364,6 +1364,32 @@ mod tests {
             assert_eq!(result.column_types, vec![Some("timestamp".into())]);
             assert_eq!(result.rows[0][0].to_cell(), "2024-02-01 00:00:00");
         }
+        let index = lower_session_sql(
+            &db,
+            "CREATE INDEX event_day ON events(TRUNC(happened))",
+            ORACLE_PREVIEW_PROFILE,
+            Some("calendar"),
+            "bicdb",
+        )
+        .unwrap();
+        assert!(index.contains("bicdb_oracle_trunc_date"));
+        SqlSession::new(&mut db).execute(&index).unwrap();
+        let indexed = lower_session_sql(
+            &db,
+            "SELECT k FROM events WHERE TRUNC(happened)=TIMESTAMP '2024-02-29 00:00:00'",
+            ORACLE_PREVIEW_PROFILE,
+            Some("calendar"),
+            "bicdb",
+        )
+        .unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute(&indexed)
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
         let update = lower_session_sql(
             &db,
             "UPDATE events SET happened=TRUNC(happened)",

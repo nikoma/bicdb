@@ -4533,6 +4533,7 @@ pub enum IndexField {
     Geometry,
     MetadataPath(Vec<String>),
     Lower(Box<IndexField>),
+    Upper(Box<IndexField>),
     Trim(Box<IndexField>),
 }
 
@@ -8851,7 +8852,9 @@ impl IndexRecordMutation {
         fn base_column(field: &IndexField) -> Option<&str> {
             match field {
                 IndexField::MetadataPath(path) => path.first().map(String::as_str),
-                IndexField::Lower(inner) | IndexField::Trim(inner) => base_column(inner),
+                IndexField::Lower(inner) | IndexField::Upper(inner) | IndexField::Trim(inner) => {
+                    base_column(inner)
+                }
                 // The id cannot change here; timestamps and geometry are
                 // not top-level keys the writer accounts for.
                 IndexField::Id | IndexField::Timestamp | IndexField::Geometry => None,
@@ -21212,7 +21215,7 @@ fn validate_secure_index_field(
             }
             Ok(())
         }
-        IndexField::Lower(inner) | IndexField::Trim(inner) => {
+        IndexField::Lower(inner) | IndexField::Upper(inner) | IndexField::Trim(inner) => {
             validate_secure_index_field(collection, unique, policy, inner)
         }
     }
@@ -21221,7 +21224,9 @@ fn validate_secure_index_field(
 fn index_field_contains_geometry(field: &IndexField) -> bool {
     match field {
         IndexField::Geometry => true,
-        IndexField::Lower(inner) | IndexField::Trim(inner) => index_field_contains_geometry(inner),
+        IndexField::Lower(inner) | IndexField::Upper(inner) | IndexField::Trim(inner) => {
+            index_field_contains_geometry(inner)
+        }
         IndexField::Id | IndexField::Timestamp | IndexField::MetadataPath(_) => false,
     }
 }
@@ -21235,7 +21240,9 @@ fn validate_index_field(index: &str, field: &IndexField) -> Result<()> {
                 )));
             }
         }
-        IndexField::Lower(inner) | IndexField::Trim(inner) => validate_index_field(index, inner)?,
+        IndexField::Lower(inner) | IndexField::Upper(inner) | IndexField::Trim(inner) => {
+            validate_index_field(index, inner)?
+        }
         IndexField::Id | IndexField::Timestamp | IndexField::Geometry => {}
     }
     Ok(())
@@ -21441,6 +21448,10 @@ fn image_cells_index_key(
                 [name] => cell_index_value(base, cells, name)?,
                 _ => return None,
             },
+            IndexField::Upper(inner) => match field_value(stored, cells, inner)? {
+                IndexValue::Null => IndexValue::Null,
+                value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
+            },
             IndexField::Lower(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
                 value => IndexValue::String(index_value_text(&value).to_ascii_lowercase()),
@@ -21526,6 +21537,10 @@ fn stored_index_key(stored: &StoredRecord, fields: &[IndexField]) -> Option<Vec<
                 [name] => cell_index_value(cells, name)?,
                 _ => return None,
             },
+            IndexField::Upper(inner) => match field_value(stored, cells, inner)? {
+                IndexValue::Null => IndexValue::Null,
+                value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
+            },
             IndexField::Lower(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
                 value => IndexValue::String(index_value_text(&value).to_ascii_lowercase()),
@@ -21560,6 +21575,10 @@ fn record_index_field_json(record: &Record, field: &IndexField) -> Value {
             })
             .cloned()
             .unwrap_or(Value::Null),
+        IndexField::Upper(inner) => match record_index_field_json(record, inner) {
+            Value::Null => Value::Null,
+            value => Value::String(predicate_value_text(&value).to_ascii_uppercase()),
+        },
         IndexField::Lower(inner) => match record_index_field_json(record, inner) {
             Value::Null => Value::Null,
             value => Value::String(predicate_value_text(&value).to_ascii_lowercase()),
@@ -21947,6 +21966,10 @@ fn record_index_field_value(record: &Record, field: &IndexField) -> IndexValue {
             })
             .map(json_to_index_value)
             .unwrap_or(IndexValue::Null),
+        IndexField::Upper(inner) => match record_index_field_value(record, inner) {
+            IndexValue::Null => IndexValue::Null,
+            value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
+        },
         IndexField::Lower(inner) => match record_index_field_value(record, inner) {
             IndexValue::Null => IndexValue::Null,
             value => IndexValue::String(index_value_text(&value).to_ascii_lowercase()),
@@ -23724,6 +23747,7 @@ fn index_field_stats_name(field: &IndexField) -> String {
         IndexField::Timestamp => "timestamp".to_string(),
         IndexField::Geometry => "geometry".to_string(),
         IndexField::MetadataPath(path) => path.join("."),
+        IndexField::Upper(inner) => format!("upper({})", index_field_stats_name(inner)),
         IndexField::Lower(inner) => format!("lower({})", index_field_stats_name(inner)),
         IndexField::Trim(inner) => format!("trim({})", index_field_stats_name(inner)),
     }
@@ -24511,6 +24535,7 @@ fn spatial_field_name(field: &IndexField) -> String {
         IndexField::MetadataPath(path) => path.join("."),
         IndexField::Id => "id".to_string(),
         IndexField::Timestamp => "timestamp".to_string(),
+        IndexField::Upper(inner) => format!("upper({})", spatial_field_name(inner)),
         IndexField::Lower(inner) => format!("lower({})", spatial_field_name(inner)),
         IndexField::Trim(inner) => format!("trim({})", spatial_field_name(inner)),
     }
@@ -27793,6 +27818,7 @@ mod index_maintenance_tests {
             vec![path("missing")],
             vec![IndexField::Id, IndexField::Timestamp, path("i")],
             vec![IndexField::Lower(Box::new(path("up")))],
+            vec![IndexField::Upper(Box::new(path("up")))],
             vec![IndexField::Trim(Box::new(path("up")))],
             vec![path("i"), path("amount"), path("s")],
         ] {
@@ -27868,6 +27894,7 @@ mod index_maintenance_tests {
                 vec![path("missing")],
                 vec![IndexField::Id, IndexField::Timestamp],
                 vec![IndexField::Lower(Box::new(path("s")))],
+                vec![IndexField::Upper(Box::new(path("s")))],
                 vec![IndexField::Trim(Box::new(path("s")))],
                 vec![path("neg"), path("f")],
             ] {

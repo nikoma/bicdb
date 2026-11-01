@@ -3600,7 +3600,7 @@ pub(crate) fn collect_index_column_heads(fields: &[IndexField], out: &mut BTreeS
                     out.insert(head.to_ascii_lowercase());
                 }
             }
-            IndexField::Lower(inner) | IndexField::Trim(inner) => {
+            IndexField::Lower(inner) | IndexField::Upper(inner) | IndexField::Trim(inner) => {
                 collect_index_column_heads(std::slice::from_ref(inner), out);
             }
         }

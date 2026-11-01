@@ -10,7 +10,10 @@
 use crate::*;
 
 pub(crate) fn index_field_is_expression(field: &IndexField) -> bool {
-    matches!(field, IndexField::Lower(_) | IndexField::Trim(_))
+    matches!(
+        field,
+        IndexField::Lower(_) | IndexField::Upper(_) | IndexField::Trim(_)
+    )
 }
 
 /// Exact storage names only: encoded relations in private schemas remain user data.
@@ -2629,6 +2632,20 @@ pub(crate) fn collect_expression_metadata_paths(expr: &Expr, paths: &mut Vec<Vec
 
 pub(crate) fn index_field_from_expr(expr: &Expr) -> Result<IndexField> {
     match expr {
+        Expr::Function(function) if function_name_is(function, "upper") => {
+            let Some(args) = positional_function_args(&function.args) else {
+                return Err(SqlError::Unsupported(
+                    "upper index expression requires positional arguments".to_string(),
+                ));
+            };
+            if args.len() != 1 {
+                return Err(SqlError::Unsupported(format!(
+                    "upper index expression expects 1 argument, got {}",
+                    args.len()
+                )));
+            }
+            return Ok(IndexField::Upper(Box::new(index_field_from_expr(args[0])?)));
+        }
         Expr::Function(function) if function_name_is(function, "lower") => {
             let Some(args) = positional_function_args(&function.args) else {
                 return Err(SqlError::Unsupported(
@@ -2664,6 +2681,22 @@ pub(crate) fn index_field_from_expr_for_schema(
     expr: &Expr,
 ) -> Result<IndexField> {
     match expr {
+        Expr::Function(function) if function_name_is(function, "upper") => {
+            let Some(args) = positional_function_args(&function.args) else {
+                return Err(SqlError::Unsupported(
+                    "upper index expression requires positional arguments".to_string(),
+                ));
+            };
+            if args.len() != 1 {
+                return Err(SqlError::Unsupported(format!(
+                    "upper index expression expects 1 argument, got {}",
+                    args.len()
+                )));
+            }
+            return Ok(IndexField::Upper(Box::new(
+                index_field_from_expr_for_schema(schema, args[0])?,
+            )));
+        }
         Expr::Function(function) if function_name_is(function, "lower") => {
             let Some(args) = positional_function_args(&function.args) else {
                 return Err(SqlError::Unsupported(
@@ -3582,6 +3615,9 @@ pub(crate) fn canonical_index_field_for_schema(
             .column(&path[0])
             .map(|column| IndexField::MetadataPath(vec![column.name.clone()]))
             .unwrap_or(IndexField::MetadataPath(path)),
+        IndexField::Upper(inner) => {
+            IndexField::Upper(Box::new(canonical_index_field_for_schema(schema, *inner)))
+        }
         IndexField::Lower(inner) => {
             IndexField::Lower(Box::new(canonical_index_field_for_schema(schema, *inner)))
         }
@@ -4966,7 +5002,8 @@ pub(crate) fn index_field_matches(left: &IndexField, right: &IndexField) -> bool
         (IndexField::MetadataPath(left), IndexField::MetadataPath(right)) => {
             metadata_paths_match(left, right)
         }
-        (IndexField::Lower(left), IndexField::Lower(right))
+        (IndexField::Upper(left), IndexField::Upper(right))
+        | (IndexField::Lower(left), IndexField::Lower(right))
         | (IndexField::Trim(left), IndexField::Trim(right)) => index_field_matches(left, right),
         _ => false,
     }

@@ -19,7 +19,7 @@ These are static source leads, not a complete inventory of the seed or runtime
 workload. The migration scripts, seed catalogs and application-generated SQL
 still need assessment. No application or migration qualification is claimed.
 
-The target is **selected, not yet running on BicDB**. HR acceptance and the
+**Application qualification is incomplete.** HR acceptance and the
 existing [reference query results](../../../docs/evidence/oracle-reference-2026-11-01/README.md)
 do not establish iDempiere compatibility.
 
@@ -33,9 +33,11 @@ The external provider preparation and transport probe now implement the explicit
 PostgreSQL transport option. The preview's application-schema binding and
 Oracle column-lock translation also pass focused tests. The actual product
 serves `/webui/` over loopback HTTP, and its Oracle sequence-lock query executes
-on BicDB. Session initialization and login remain unqualified: the next observed
-startup blocker is Oracle date truncation in the session insert. A served HTML
-page does not establish a usable application.
+on BicDB. Session initialization and credential lookup now execute, and the actual UI
+accepts the public seed credentials and reaches desktop initialization. The
+observed desktop blocker is the missing `AD_UserDef_Form` table from an unapplied
+release migration. Full desktop startup and business workflows remain unqualified. A served HTML page or an
+accepted password does not establish a usable application.
 
 The pinned seed in [seed.json](seed.json) is an Oracle Data Pump export. The
 reference installation must include Data Pump; Oracle Free Lite does not. A
@@ -78,6 +80,8 @@ python3 examples/oracle/idempiere/import_bicdb.py \
   --snapshot /private/idempiere-snapshot --phase data --report /private/data.json
 python3 examples/oracle/idempiere/import_bicdb.py \
   --snapshot /private/idempiere-snapshot --phase verify --report /private/values.json
+python3 examples/oracle/idempiere/import_bicdb.py \
+  --snapshot /private/idempiere-snapshot --phase indexes --report /private/indexes.json
 ```
 
 The importer preserves logical column properties, checks and primary/unique
@@ -89,6 +93,33 @@ mechanism; it does not certify an unmodified target or make import atomic across
 all tables. Use the independent `verify` phase to compare complete row multisets,
 preserving exact decimal digits, bytes, text whitespace and duplicate rows.
 The reports always retain `application_qualified: false` at this stage.
+
+The `indexes` phase separates constraint-backed indexes from additional logical
+indexes and Oracle's internal LOB storage indexes. The measured seed has 267
+additional logical indexes and 48 LOB storage indexes. It requires a ready, valid
+native backing index before journaling completion; a metadata-only catalog entry
+is insufficient. Unsupported expressions and nullable composite uniqueness are
+reported as failures, and the phase remains incomplete while any are outstanding.
+The index journal resumes an ordered subset because independent supported indexes
+can be installed while another index is unsupported. Its format and recorded
+index definitions/states are checked on resume. A negative control first rejects
+older servers that incorrectly report placeholders as valid. The DDL-oriented
+phase disables automatic prepared-statement caching.
+
+The [measured index run](../../../docs/evidence/idempiere-indexes-2026-11-01/README.md)
+verified 237 executable indexes; 30 remain unsupported. The application dictionary
+query returned the same 49 rows as Oracle using the original composite index,
+without the temporary diagnostic lookup index.
+
+[Oracle composite unique keys](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/constraint.html)
+permit duplicate all-NULL keys but reject duplicate partially NULL keys with the
+same non-NULL components. The importer models this with `NULLS NOT DISTINCT` and,
+where necessary, a predicate excluding all-NULL keys. It first probes actual
+duplicate rejection; syntax acceptance alone does not qualify that behavior.
+The preview currently fails this capability probe, so these indexes are skipped
+with explicit failures. Existing nullable composite UNIQUE **constraints** also
+remain an outstanding migration requirement. No complete constraint equivalence
+is claimed by a successful table/data import.
 
 The preview's [documented mappings](../../../docs/oracle-preview-profile.md) are
 explicit adaptations. This tool is not a general-purpose Oracle migration tool,

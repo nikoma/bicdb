@@ -2753,6 +2753,8 @@ impl<'db> SqlSession<'db> {
             .collect::<Result<Vec<_>>>()
         {
             Ok(fields) => fields,
+            // A catalog placeholder cannot enforce a uniqueness promise.
+            Err(error) if create_index.unique => return Err(error),
             Err(_) => {
                 schema.indexes.push(IndexSchema {
                     name: index_name,

@@ -1,0 +1,37 @@
+{
+  "application": "iDempiere 13",
+  "application_source": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "profile": "oracle-preview-v1",
+  "schema_manifest_sha256": "b26d853ba81cdc10f7451fa39683ca081d2a889b2417f7537ce533990ec7775c",
+  "source_additional_logical_indexes": 267,
+  "verified_executable_indexes": 237,
+  "native_index_status_control_verified": true,
+  "nullable_composite_uniqueness_verified": false,
+  "outstanding_indexes_by_reason": {
+    "nullable_composite_uniqueness_unavailable": 24,
+    "target_sql_error": 5,
+    "expression_index_unavailable": 1
+  },
+  "index_phase_complete": false,
+  "oracle_lob_storage_indexes": 48,
+  "dictionary_query": {
+    "sha256": "6e8297aa7da67167b1ab7d178dab5d9bda840278b40a414787812e0d8d692d3f",
+    "oracle_rows": 49,
+    "bicdb_rows": 49,
+    "sorted_rows_equal": true,
+    "oracle_seconds": 0.039000327698886395,
+    "bicdb_seconds": 1.9738728678785264,
+    "diagnostic_companion_index_removed": true
+  },
+  "application_observation": "Desktop initialization reaches a missing AD_UserDef_Form table from an unapplied release migration",
+  "application_qualified": false,
+  "storage": "BicDB application development copy uses volatile storage; no durability qualification",
+  "validation": {
+    "sql_unit_passed": 336,
+    "sql_unit_ignored": 3,
+    "pgwire_protocol_passed": 165,
+    "oracle_driver_integration_passed": 9,
+    "core_cell_key_regressions_passed": 2,
+    "python_migration_policy_passed": 12
+  }
+}

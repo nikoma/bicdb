@@ -1,0 +1,61 @@
+{
+  "source_commit": "710bd648339a90305e9e05101dd09668f475c4b6",
+  "binary_sha256": "f5fa6f0288dd4e85a2b7b21ff56b51ae4ba4adf962df1b977844f273401b9b37",
+  "build_profile": "dev; debug symbols disabled",
+  "published_release": false,
+  "oracle_image": "container-registry.oracle.com/database/free@sha256:cf540c3fa190d7cffad08c491652ac07fc70314e510f6b87890449517d565e94",
+  "oracle_edition": "Free Lite",
+  "oracle": {
+    "database_version": "23.26.3.0.0",
+    "counts_after_restart": {
+      "regions": 5,
+      "countries": 25,
+      "locations": 23,
+      "departments": 27,
+      "jobs": 19,
+      "employees": 107,
+      "job_history": 10,
+      "emp_details_view": 106
+    },
+    "invalid_objects": [],
+    "restart_persistence_verified": true
+  },
+  "sql_library": {
+    "passed": 321,
+    "failed": 0,
+    "preexisting_ignored": 3
+  },
+  "sql_integration": {
+    "passed": 37,
+    "failed": 0,
+    "targets": [
+      "view_column_lineage",
+      "type_consistency",
+      "view_owner_execution_identity",
+      "platform_correctness_audit"
+    ]
+  },
+  "pgwire": {
+    "passed": 318,
+    "failed": 0,
+    "preexisting_ignored": 2
+  },
+  "python": {
+    "passed": 8,
+    "failed": 0
+  },
+  "workspace_all_targets_check": true,
+  "format_check": true,
+  "licensing_check": true,
+  "dependency_boundary_check": true,
+  "live_comparison": {
+    "total": 27,
+    "matched": 25,
+    "different": 2,
+    "exit_status": 1,
+    "remaining": [
+      "nvl2",
+      "decode-null"
+    ]
+  }
+}

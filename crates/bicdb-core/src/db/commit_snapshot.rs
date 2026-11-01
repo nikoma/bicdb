@@ -33,77 +33,6 @@ impl BicDb {
         self.tx_log.append_auxiliary(&framed)
     }
 
-    /// Undo an enqueued commit whose apply failed, so the failure neither
-    /// wedges the database nor comes back from the dead.
-    ///
-    /// By the time the apply runs, this transaction's Write+Commit frames are
-    /// already in the WAL queue — and possibly already durable, because any
-    /// CONCURRENT committer's `write_durable` drains the contiguous queue,
-    /// including our frames. So the frames cannot simply be dequeued. Two
-    /// consequences had to be prevented:
-    ///
-    /// - **Resurrection.** Recovery would replay the Commit frames and apply a
-    ///   transaction whose client was told it failed. The tx-log format
-    ///   already has the answer: a later `TxFrame::Abort` overrides an earlier
-    ///   `Commit` in recovery's state fold (`commit_seq_by_tx.remove`). One
-    ///   Abort frame, enqueued at a fresh commit_seq and written durably
-    ///   before the error returns, revokes the commit in every replay.
-    ///
-    /// - **The watermark wedge.** `applied_watermark` advances only across the
-    ///   contiguous prefix of applied seqs; a seq that never marks blocks it
-    ///   forever, leaving every LATER commit permanently invisible to new
-    ///   snapshots. Both the failed seq and the revoke seq are marked here.
-    ///
-    /// Marking the failed seq makes any PARTIALLY applied collections visible
-    /// (an apply that failed on its second collection leaves its first
-    /// applied; nothing can un-apply resident state). That is the accepted
-    /// cost: the realistic mid-batch failure is storage-level, where a loudly
-    /// reported partial beats a silently wedged database — and the revoke
-    /// frame guarantees a restart converges to "transaction absent".
-    pub(crate) fn revoke_enqueued_commit(
-        &self,
-        tx_id: TransactionId,
-        commit_seq: u64,
-        error: BicDbError,
-    ) -> BicDbError {
-        let revoke_seq = self.commit_seq.fetch_add(1, AtomicOrdering::SeqCst) + 1;
-        let framed = serde_json::to_vec(&TxFrame::Abort {
-            tx_id,
-            timestamp: unix_timestamp(),
-        })
-        .map_err(BicDbError::from)
-        .and_then(|abort_bytes| {
-            storage::encode_frames_to_bytes(
-                &self.tx_log_path(),
-                FrameKind::Transaction,
-                &[abort_bytes],
-                &CompressionConfig::disabled(),
-                &self.encryption,
-            )
-        });
-        match framed {
-            Ok(framed) => self.tx_log.enqueue(revoke_seq, framed),
-            Err(encode_error) => eprintln!(
-                "bicdb: FAILED to encode revoke frame for commit_seq {commit_seq}: \
-                 {encode_error}; a crash before compaction may replay the failed commit"
-            ),
-        }
-        self.mark_committed_seq(commit_seq);
-        self.mark_committed_seq(revoke_seq);
-        // The revoke must be durable BEFORE the caller sees the error: a crash
-        // in between would leave durable Commit frames with no Abort.
-        if let Err(flush_error) = self.tx_log_handle().write_durable(revoke_seq) {
-            eprintln!(
-                "bicdb: FAILED to flush revoke frame for commit_seq {commit_seq}: {flush_error};                  a crash before the next durable write may replay the failed commit"
-            );
-        }
-        eprintln!(
-            "bicdb: commit_seq {commit_seq} failed during apply and was revoked              (transaction {}): {error}",
-            tx_id.0
-        );
-        error
-    }
-
     /// Mark `commit_seq` as fully applied and publish the resulting contiguous
     /// visibility watermark to `last_committed_tx`. The watermark only advances
     /// across the unbroken applied prefix, so readers never observe a snapshot whose
@@ -1174,6 +1103,9 @@ impl BicDb {
         let gc_watermark = self.gc_watermark();
         let tx_log_path = self.tx_log_path();
         let mut persist_vector_dims = false;
+        // Stage every collection and native index before publishing any resident
+        // row, then commit the entire batch with a single page-WAL decision.
+        let paged_xid = self.apply_record_writes_to_paged(writes_by_collection)?;
         for (&collection, writes) in writes_by_collection {
             let index_mutations =
                 index_mutations_by_collection
@@ -1202,7 +1134,6 @@ impl BicDb {
             // A failure here fails the whole apply with the resident state
             // untouched; the commit is already durable in the core WAL either
             // way, and reopen replays it.
-            let paged_xid = self.apply_record_writes_to_paged(collection, writes)?;
             let paged_ctx = paged_xid.and_then(|xid| self.paged_apply_ctx(collection, xid));
             let outcome = if dim_changed {
                 // Rare exclusive path: a None -> Some dimension transition. Take the
@@ -2147,6 +2078,7 @@ impl BicDb {
     const MIN_COMPACT_FRAMES: u64 = 256;
 
     pub fn checkpoint_begin(&self) -> Result<CheckpointPlan> {
+        self.check_recovery_state()?;
         self.tx_log.flush_pending()?;
         let keep_from = self.wal_bytes();
         self.checkpoint_boundary_seq.store(
@@ -2439,6 +2371,7 @@ impl BicDb {
     }
 
     pub(crate) fn ensure_no_pending_transactions(&self) -> Result<()> {
+        self.check_recovery_state()?;
         let has_write_locks = !self.write_locks.is_empty();
         let has_pending = self
             .tx_states
@@ -2917,6 +2850,7 @@ impl BicDb {
         &self,
         collection: &str,
     ) -> Result<RwLockReadGuard<'_, CollectionState>> {
+        self.check_recovery_state()?;
         self.collections
             .get(collection)
             .map(|lock| lock.read())
@@ -2931,6 +2865,7 @@ impl BicDb {
         &mut self,
         collection: &str,
     ) -> Result<&mut CollectionState> {
+        self.check_recovery_state()?;
         self.collections
             .get_mut(collection)
             .map(|lock| lock.get_mut())
@@ -2945,6 +2880,7 @@ impl BicDb {
         &self,
         collection: &str,
     ) -> Result<RwLockWriteGuard<'_, CollectionState>> {
+        self.check_recovery_state()?;
         self.collections
             .get(collection)
             .map(|lock| lock.write())

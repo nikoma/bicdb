@@ -3663,6 +3663,7 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub fn execute(&self, sql: &str) -> Result<SqlResult> {
+        self.db_ref().check_recovery_state()?;
         let mut profile = SqlProfileScope::new(sql);
         let _schema_cache = SqlSchemaCacheScope::new();
         let result = self.execute_inner(sql);
@@ -4093,6 +4094,7 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
+        self.db_ref().check_recovery_state()?;
         self.subquery_memo.enter();
         let result = self.execute_query_unscoped(query);
         self.subquery_memo.leave();

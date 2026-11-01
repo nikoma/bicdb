@@ -310,6 +310,7 @@ impl BicDb {
     /// collection take the flashback clock for their whole commit and carry
     /// their history rows; all others go straight to the commit body.
     pub(crate) fn commit_transaction(&self, tx: &mut Transaction) -> Result<u64> {
+        self.check_recovery_state()?;
         if tx.state == TxState::Pending && self.ensure_writable("commit").is_err() {
             return self.commit_read_only_on_standby(tx);
         }

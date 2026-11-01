@@ -1,0 +1,10 @@
+enospc-object /root/bicdb-audit-artifacts/online-backup-qualification-release-stripped-20261101/repository/objects/.tmp-1b919124-5a1e-4b8a-a29f-bc1abdb06388
+enospc-object /root/bicdb-audit-artifacts/online-backup-qualification-release-stripped-20261101/repository/objects/.tmp-1b919124-5a1e-4b8a-a29f-bc1abdb06388
+eio-file-sync /root/bicdb-audit-artifacts/online-backup-qualification-release-stripped-20261101/repository/objects/.tmp-2a4c64f1-f639-4d18-8c5f-adb907a2389e
+eio-dir-sync /root/bicdb-audit-artifacts/online-backup-qualification-release-stripped-20261101/repository
+eio-published-dir-sync /root/bicdb-audit-artifacts/online-backup-qualification-release-stripped-20261101/repository
+eio-manifest /root/bicdb-audit-artifacts/online-backup-qualification-release-stripped-20261101/repository/eio-manifest.bicbackup
+stall-object /root/bicdb-audit-artifacts/online-backup-qualification-release-stripped-20261101/repository/objects/.tmp-0270818b-5719-4181-b944-36d5e6b2657c
+stall-manifest /root/bicdb-audit-artifacts/online-backup-qualification-release-stripped-20261101/repository/stall-manifest.bicbackup
+stall-published /root/bicdb-audit-artifacts/online-backup-qualification-release-stripped-20261101/repository/stall-published.bicbackup
+eio-source-wal /root/bicdb-audit-artifacts/online-backup-qualification-release-stripped-20261101/db/paged/store.wal

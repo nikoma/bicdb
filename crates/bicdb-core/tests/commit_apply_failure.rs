@@ -1,23 +1,8 @@
-//! A commit whose apply fails must neither wedge the database nor come back
-//! from the dead.
-//!
-//! The hazard: `commit_transaction` enqueues the WAL frames BEFORE applying.
-//! By the time the apply runs, those frames may already be durable — any
-//! concurrent committer's durable write drains the contiguous queue, including
-//! ours. So a failed apply used to leave two time bombs:
-//!
-//! - the contiguous `applied_watermark` never marked the failed seq, so it
-//!   stalled forever and every LATER commit stayed invisible to new snapshots
-//!   for the rest of the session (the wedge);
-//! - recovery replayed the durable Commit frames, applying a transaction whose
-//!   client was told it failed (the resurrection).
-//!
-//! The fix revokes the commit: an `Abort` frame at a fresh seq (recovery's
-//! state fold lets a later Abort override an earlier Commit), both seqs marked
-//! in the watermark, and the revoke made durable before the error returns.
-//!
-//! `BICDB_TEST_FAIL_COMMIT_APPLY` is the failpoint; env vars are process-global
-//! so everything here runs in ONE test, sequentially.
+//! Rejection before a durable commit decision is a definite abort. It must
+//! leave the database available, allow later commits, and stay absent after
+//! reopening. Post-decision I/O failures instead fence the handle and recover
+//! complete redo; commit_recovery_atomicity.rs covers that distinct outcome.
+//! Environment failpoints run sequentially in this integration binary.
 
 use bicdb_core::{BicDb, DbConfig, Record, StorageMode};
 use serde_json::json;
@@ -30,7 +15,7 @@ fn insert(db: &BicDb, id: &str) -> bicdb_core::Result<()> {
 }
 
 #[test]
-fn a_failed_apply_is_revoked_not_wedged_and_not_resurrected() {
+fn a_predecision_rejection_is_not_wedged_or_recovered_as_committed() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let dir = TempDir::new().unwrap();
         let config = DbConfig::default()
@@ -42,9 +27,9 @@ fn a_failed_apply_is_revoked_not_wedged_and_not_resurrected() {
 
             insert(&db, "before").expect("baseline commit");
 
-            std::env::set_var("BICDB_TEST_FAIL_COMMIT_APPLY", "1");
+            std::env::set_var("BICDB_TEST_REJECT_COMMIT_BEFORE_DECISION", "1");
             let failed = insert(&db, "failed");
-            std::env::remove_var("BICDB_TEST_FAIL_COMMIT_APPLY");
+            std::env::remove_var("BICDB_TEST_REJECT_COMMIT_BEFORE_DECISION");
             assert!(
                 failed.is_err(),
                 "[{mode}] the injected failure must surface"

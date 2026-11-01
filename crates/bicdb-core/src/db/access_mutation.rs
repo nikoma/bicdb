@@ -777,6 +777,7 @@ impl BicDb {
         min_snapshot: u64,
         before_registration: impl FnOnce(),
     ) -> Result<Transaction> {
+        self.check_recovery_state()?;
         // A standby may begin transactions to read; any write is refused when
         // it is buffered and a read-only commit takes no sequence number (see
         // `commit_transaction`).

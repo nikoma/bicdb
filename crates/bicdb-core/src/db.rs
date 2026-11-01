@@ -3583,6 +3583,9 @@ impl PagedReadAheadHandle {
 #[derive(Debug)]
 pub struct BicDb {
     path: PathBuf,
+    /// A durable decision whose materialization failed must be recovered before
+    /// serving more data or allowing a checkpoint to discard its redo.
+    recovery_required: AtomicBool,
     /// Exclusive claim on the database directory, held for as long as this
     /// handle lives and released by the kernel if the process dies.
     ///
@@ -9305,6 +9308,16 @@ impl BicDb {
         storage::initialize_backup_write_gate(&path)?;
 
         let encryption = encryption::open_runtime(&path, encryption_config, config.fsync)?;
+        if effective_mode == StorageMode::ServerPaged
+            && !path.join("paged/store.pages").try_exists()?
+            && (path.join(COMMIT_SEQ_FLOOR_FILE).try_exists()?
+                || file_len(&path.join(DEFAULT_TRANSACTION_LOG))? > 0)
+        {
+            return Err(BicDbError::Corruption {
+                path: path.join("paged/store.pages"),
+                message: "native page store is missing from an existing database; restore it instead of creating an empty store".into(),
+            });
+        }
         let paged_records = if effective_mode == StorageMode::ServerPaged {
             Some(Arc::new(crate::paged_collection::PagedRecords::open(
                 path.join(DEFAULT_PAGED_DIR),
@@ -9334,6 +9347,7 @@ impl BicDb {
             &path.join(DEFAULT_TRANSACTION_LOG),
             config.read_mode,
             &encryption,
+            effective_mode == StorageMode::ServerPaged,
         )?;
         // The log can be truncated below the newest commit (checkpoints); the
         // persisted floor keeps commit sequence numbers monotonic across
@@ -10080,6 +10094,7 @@ impl BicDb {
         )?;
         let mut db = Self {
             path,
+            recovery_required: AtomicBool::new(false),
             _directory_lock: Some(Arc::new(directory_lock)),
             config,
             ha_state,
@@ -10770,15 +10785,13 @@ impl BicDb {
         source_commit_seq.saturating_sub(self.last_applied_commit_seq())
     }
 
-    /// Replication export requires full Write frames in the retained log. A
-    /// `server_paged` database without `replication.enabled` logs materialized
-    /// commit markers instead (the page WAL carries the rows), so serving
-    /// frames from it would silently export EMPTY commits and starve standbys.
-    /// Refuse loudly: declared replication keeps full-frame logging.
+    /// Replication needs explicitly retained history and a snapshot bootstrap.
+    /// Historical paged databases may contain materialized commit markers,
+    /// while an undeclared source may already have checkpointed its history.
     fn ensure_replication_frames_retained(&self) -> Result<()> {
         if self.paged_records.is_some() && !self.config.replication.enabled {
             return Err(replication_error(
-                "this server_paged database logs materialized commit markers, not full                  frames; open it with replication.enabled=true so commits retain full                  frames, and bootstrap existing standbys from a snapshot",
+                "server_paged replication export requires replication.enabled=true and snapshot bootstrap; older histories may contain materialized commit markers",
             ));
         }
         Ok(())
@@ -18285,6 +18298,7 @@ fn recover_transaction_log(
     path: &Path,
     _read_mode: SegmentReadMode,
     encryption: &EncryptionRuntime,
+    discard_materialized_writes: bool,
 ) -> Result<TxRecovery> {
     let mut states = BTreeMap::new();
     let mut writes: BTreeMap<u64, Vec<RecoveredTxWrite>> = BTreeMap::new();
@@ -18362,6 +18376,13 @@ fn recover_transaction_log(
                 max_commit_seq = max_commit_seq.max(commit_seq);
                 states.insert(tx_id.0, TxState::Committed);
                 materialized_commits.insert(tx_id.0);
+                if discard_materialized_writes {
+                    // Native commit is durable. Discard decoded row bodies as
+                    // their streaming acknowledgement arrives; retain only the
+                    // redo of decisions that still require materialization.
+                    // Raw log bytes remain available for replication.
+                    writes.remove(&tx_id.0);
+                }
                 commit_seq_by_tx.insert(tx_id.0, commit_seq);
             }
             TxFrame::Abort { tx_id, .. } => {
@@ -28767,10 +28788,8 @@ mod index_maintenance_tests {
     }
 
     #[test]
-    // Pinned to embedded_memory: asserts Write-frame redo in the core log,
-    // which is that mode's durability contract. Paged mode deliberately logs
-    // only a CommitMaterialized marker (the page WAL carries the rows) —
-    // covered by tests/paged_concurrency.rs.
+    // Embedded-mode redo; paged_concurrency.rs also requires full row redo and
+    // reconstructs an unavailable native store from it.
     fn transaction_commit_uses_wal_redo_until_checkpoint_materialization() {
         let temp = tempfile::tempdir().unwrap();
         let tx_id;
@@ -28797,6 +28816,7 @@ mod index_maintenance_tests {
                 &db.tx_log_path(),
                 SegmentReadMode::Buffered,
                 &db.encryption,
+                false,
             )
             .unwrap();
             assert!(!pending_recovery.writes.contains_key(&tx_id.0));
@@ -28808,6 +28828,7 @@ mod index_maintenance_tests {
                 &db.tx_log_path(),
                 SegmentReadMode::Buffered,
                 &db.encryption,
+                false,
             )
             .unwrap();
             assert!(committed_recovery.is_committed(tx_id));
@@ -31415,6 +31436,9 @@ mod index_maintenance_tests {
         // its own snapshot at 3, even though the contiguous applied watermark
         // must remain at 1 until seq 2 finishes.
         assert_eq!(db.commit_seq.fetch_add(1, AtomicOrdering::SeqCst), 1);
+        // Seq 2 has reached its WAL queue slot but has not applied. Later
+        // commits now require a contiguous durable decision prefix first.
+        db.tx_log.enqueue(2, Vec::new());
         let raised_reader = db.begin_transaction_after(3).unwrap();
         assert_eq!(raised_reader.snapshot_tx.0, 3);
         assert_eq!(db.gc_watermark(), 1);

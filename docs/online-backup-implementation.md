@@ -181,3 +181,15 @@ checked/merged under the lock against the latest record. Password KDF parameters
 and test deadlines are unchanged. The seven operator API tests passed with four
 test threads constrained to two CPUs, followed by pgwire unit/protocol and
 workspace all-target checks.
+
+An external-oracle qualification campaign subsequently found a recovery
+atomicity defect under a real injected page-WAL sync error. Per-collection
+physical commits could preserve a table prefix of one failed SQL transaction.
+The corrected path retains complete logical redo before any apply, uses one
+physical transaction across all affected collections and native indexes, and
+fences the handle after a post-decision failure until recovery completes.
+Materialization acknowledgements follow successful physical/catalog/index work;
+streaming startup drops decoded bodies only after seeing those acknowledgements,
+preserving lazy paged/vector residency. Missing native primary files are refused
+rather than silently replaced with an empty store. Qualification distinguishes
+definite pre-decision rejection from an uncertain post-decision outcome.

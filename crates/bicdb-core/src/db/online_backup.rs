@@ -29,6 +29,7 @@ impl BicDb {
                     "commit admission exceeded the backup coordination budget".into(),
                 )
             })?;
+        self.check_recovery_state()?;
         let commit_seq = self.last_applied_commit_seq();
         self.tx_log_handle().write_durable(commit_seq)?;
         crate::backup::capture_online_database(

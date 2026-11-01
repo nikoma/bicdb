@@ -1,0 +1,14 @@
+{
+  "runtime_source_commit": "263ffd9e0e54dccdb2a6826068af2d1ccba320c4",
+  "runtime_tree_sha256": "634b16395fdefd9fa0731b7d429885d95c871642417a23be3ab65fc189ac4351",
+  "profile": "default Cargo release with thin LTO; debug sections removed with strip --strip-debug; executable code retained",
+  "command": "CARGO_TARGET_DIR=/root/bicdb-target-schema CARGO_BUILD_JOBS=2 cargo build -p bicdb-cli --bin bicdb --release --locked",
+  "binary": "/root/bicdb-audit-artifacts/online-backups/263ffd9-release-stripped/bicdb",
+  "binary_sha256": "907abef77481de3cd0447825c05004be7bd03611f5d789cfcb11218e0dfa1c81",
+  "bytes": 290934744,
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "version": "bicdb 1.0.438-beta",
+  "recorded_at_utc": "2026-11-01T03:04:11.401698+00:00",
+  "production_deployed": false,
+  "raw_binary_sha256": "97a011e884b3cf012ad6cc7d98512526efa0638faecc2c526a44d5bbd1ac0181"
+}

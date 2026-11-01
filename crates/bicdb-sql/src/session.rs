@@ -2747,6 +2747,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        self.db_ref().check_recovery_state()?;
         // A per-row routine call reaches raw SQL only through dynamic EXECUTE
         // fallbacks for statements sqlparser cannot represent (DDL, grants).
         if self.row_routine_call {
@@ -2813,6 +2814,7 @@ impl<'db> SqlSession<'db> {
     /// diagnostics that want to preserve normal statement semantics without
     /// measuring parser or SQL-string construction cost.
     pub fn execute_statement_ast(&mut self, statement: &Statement) -> Result<SqlResult> {
+        self.db_ref().check_recovery_state()?;
         self.with_implicit_guc_statement(|session| {
             let mut result = session.execute_statement(statement)?;
             session.apply_bytea_output(&mut result);
@@ -2823,6 +2825,7 @@ impl<'db> SqlSession<'db> {
     /// Execute a stored procedure directly from its already-typed arguments,
     /// bypassing SQL text parsing and `CALL` AST construction.
     pub fn call_procedure(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlResult> {
+        self.db_ref().check_recovery_state()?;
         self.with_implicit_guc_statement(|session| {
             let name = name.to_ascii_lowercase();
             let routine = resolve_routine_cached(session.db_ref(), RoutineKind::Procedure, &name)?
@@ -3243,6 +3246,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_parsed_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
+        self.db_ref().check_recovery_state()?;
         if self.row_routine_call && !statement_is_plain_query(statement) {
             return Err(row_routine_write_error());
         }

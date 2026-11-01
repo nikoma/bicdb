@@ -1,0 +1,30 @@
+{
+  "status": "reproduced_atomicity_failure",
+  "runtime_source_commit": "263ffd9e0e54dccdb2a6826068af2d1ccba320c4",
+  "binary_sha256": "907abef77481de3cd0447825c05004be7bd03611f5d789cfcb11218e0dfa1c81",
+  "fault": "EIO returned by page-WAL sync during multi-table COMMIT",
+  "acknowledged_workload_transactions": 2987,
+  "transaction_id": "303ff97a822ebe34cad2862521123ccd63a05eb3a9399f8af9beccd621bed91e",
+  "writer": 0,
+  "sequence": 1290,
+  "delta": 11,
+  "ledger_outcome": "transaction ID absent after restart",
+  "account_expected_if_aborted": {
+    "head": 1289,
+    "total": -2023
+  },
+  "account_actual_after_restart": {
+    "head": 1290,
+    "total": -2012
+  },
+  "interpretation": "Neither a complete commit nor an abort: account update persisted while ledger insert did not. Uncertain outcomes were reconciled by transaction ID before comparison.",
+  "raw_artifacts": "/root/bicdb-audit-artifacts/online-backup-qualification-release-stripped-20261101",
+  "file_sha256": {
+    "build.json": "2f612002a66cc6af5f480bbabbd4d39c4bde272b12d82652f0ff729e5cc347bd",
+    "transaction-intents.jsonl.gz": "a38eea61a57c2a3ebca293e2572c1fa8ef146ed77d1de62723e4477a98bfe75b",
+    "fault-trace.log": "b697e0a4dc139dc3f5f028f17b9c1d5e48a9550b840ccb7a49b491c8bba8b8b4",
+    "report.json": "0f175cc8e424224bf84f961c0f0eecef5e53d95f0bbce0f2752b17947376ad5a",
+    "backup_fault_inject.c": "4ba5e380610272e983bc17a3f7ba14fe35611bf2385adf92b3cec39c9d11b918",
+    "qualify_online_backups.py": "1d2ca4889c6d12becbc167dc9480e92dd9fca233eafced7c63fed5cc14a651be"
+  }
+}

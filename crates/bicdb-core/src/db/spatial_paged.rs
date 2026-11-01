@@ -1266,64 +1266,89 @@ impl BicDb {
     /// recovers them through the page WAL rather than the segment log.
     pub(crate) fn apply_record_writes_to_paged(
         &self,
-        collection: &str,
-        writes: &[&TxWrite],
+        writes_by_collection: &BTreeMap<&str, Vec<&TxWrite>>,
     ) -> Result<Option<bicdb_page::Xid>> {
+        if writes_by_collection.is_empty() {
+            return Ok(None);
+        }
         // B-tree index definitions on this collection: their durable entries
         // are maintained in the SAME paged transaction as the rows, which is
         // what makes the index crash-consistent by construction — recovery
         // keeps or discards row and entries together, so a restart never needs
         // a corpus-wide rebuild to trust them (Phase 4's exit gate).
-        let index_defs = self.paged_durable_index_defs(collection)?;
-        self.in_paged_transaction(|paged, xid| {
-            // Pre-image reads for index maintenance: the row state before this
-            // transaction, overlaid with earlier writes in this same batch so
-            // an upsert-then-delete of one key within a batch resolves in
-            // order.
-            let pre_snapshot = bicdb_page::Snapshot {
-                xid: 0,
-                xmax: xid,
-                in_flight: empty_in_flight(),
-            };
-            let mut batch_state: FxHashMap<&str, Option<Record>> = FxHashMap::default();
-            for write in writes {
-                let previous = match batch_state.get(write.record_id.as_str()) {
-                    Some(previous) => previous.clone(),
-                    None if index_defs.is_empty() => None,
-                    None => paged.get(&pre_snapshot, collection, &write.record_id)?,
+        // Resolve index metadata before taking the paged writer gate, preserving
+        // the existing index-before-page lock order. All collections must share
+        // ONE physical commit: per-collection commits recover a partial SQL
+        // transaction if a later write or WAL sync fails.
+        let prepared = writes_by_collection
+            .iter()
+            .map(|(&collection, writes)| {
+                Ok((
+                    collection,
+                    writes,
+                    self.paged_durable_index_defs(collection)?,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.in_paged_transaction_inner(true, |paged, xid| {
+            for (collection, writes, index_defs) in prepared {
+                // Pre-image reads for index maintenance: the row state before this
+                // transaction, overlaid with earlier writes in this same batch so
+                // an upsert-then-delete of one key within a batch resolves in
+                // order.
+                let pre_snapshot = bicdb_page::Snapshot {
+                    xid: 0,
+                    xmax: xid,
+                    in_flight: empty_in_flight(),
                 };
-                match write.op {
-                    TxWriteOp::Upsert => {
-                        let record = write.record()?.ok_or_else(|| BicDbError::Corruption {
-                            path: self.tx_log_path(),
-                            message: "transaction upsert missing record".to_string(),
-                        })?;
-                        let locator = paged.put(xid, collection, record)?;
-                        apply_paged_index_upsert(
-                            paged,
-                            xid,
-                            collection,
-                            &index_defs,
-                            previous.as_ref(),
-                            record,
-                            Some((locator, xid)),
-                        )?;
-                        batch_state.insert(write.record_id.as_str(), Some(record.as_ref().clone()));
-                    }
-                    TxWriteOp::Delete => {
-                        paged.delete(xid, collection, &write.record_id)?;
-                        if let Some(previous) = &previous {
-                            apply_paged_index_delete(
+                let mut batch_state: FxHashMap<&str, Option<Record>> = FxHashMap::default();
+                for write in writes {
+                    let previous = match batch_state.get(write.record_id.as_str()) {
+                        Some(previous) => previous.clone(),
+                        None if index_defs.is_empty() => None,
+                        None => paged.get(&pre_snapshot, collection, &write.record_id)?,
+                    };
+                    match write.op {
+                        TxWriteOp::Upsert => {
+                            let record = write.record()?.ok_or_else(|| BicDbError::Corruption {
+                                path: self.tx_log_path(),
+                                message: "transaction upsert missing record".to_string(),
+                            })?;
+                            let locator = paged.put(xid, collection, record)?;
+                            apply_paged_index_upsert(
                                 paged,
                                 xid,
                                 collection,
                                 &index_defs,
-                                previous,
-                                &write.record_id,
+                                previous.as_ref(),
+                                record,
+                                Some((locator, xid)),
                             )?;
+                            batch_state
+                                .insert(write.record_id.as_str(), Some(record.as_ref().clone()));
                         }
-                        batch_state.insert(write.record_id.as_str(), None);
+                        TxWriteOp::Delete => {
+                            paged.delete(xid, collection, &write.record_id)?;
+                            if let Some(previous) = &previous {
+                                apply_paged_index_delete(
+                                    paged,
+                                    xid,
+                                    collection,
+                                    &index_defs,
+                                    previous,
+                                    &write.record_id,
+                                )?;
+                            }
+                            batch_state.insert(write.record_id.as_str(), None);
+                        }
                     }
+                }
+                if std::env::var_os("BICDB_TEST_FAIL_PAGED_COLLECTION_APPLY")
+                    .is_some_and(|name| name == collection)
+                {
+                    return Err(BicDbError::PagedStorage(format!(
+                        "injected paged apply failure after collection {collection}"
+                    )));
                 }
             }
             Ok(())
@@ -1392,6 +1417,17 @@ impl BicDb {
     where
         F: FnOnce(&crate::paged_collection::PagedRecords, bicdb_page::Xid) -> Result<()>,
     {
+        self.in_paged_transaction_inner(false, apply)
+    }
+
+    fn in_paged_transaction_inner<F>(
+        &self,
+        durable_decision: bool,
+        apply: F,
+    ) -> Result<Option<bicdb_page::Xid>>
+    where
+        F: FnOnce(&crate::paged_collection::PagedRecords, bicdb_page::Xid) -> Result<()>,
+    {
         let Some(paged) = &self.paged_records else {
             return Ok(None);
         };
@@ -1401,14 +1437,20 @@ impl BicDb {
         // spurious conflicts, orphaned versions, and stubs pinned to
         // transactions that do not contain their own rows.
         let _guard = paged.write_guard();
+        self.check_recovery_state()?;
         let (xid, _) = paged.begin();
         match apply(paged, xid) {
             Ok(()) => {
-                paged.commit(xid)?;
+                if let Err(error) = paged.commit(xid) {
+                    self.recovery_required.store(true, AtomicOrdering::Release);
+                    return Err(error);
+                }
                 Ok(Some(xid))
             }
             Err(error) => {
-                let _ = paged.abort(xid);
+                if paged.abort(xid).is_err() || durable_decision {
+                    self.recovery_required.store(true, AtomicOrdering::Release);
+                }
                 Err(error)
             }
         }
@@ -1463,6 +1505,7 @@ impl BicDb {
     }
 
     pub fn stats(&self) -> Result<DbStats> {
+        self.check_recovery_state()?;
         let mut collections = self
             .collections
             .values()
@@ -1563,6 +1606,7 @@ impl BicDb {
     /// and the cost grows with the store.
     pub fn checkpoint_for_resume(&self) -> Result<()> {
         let _admission = self.serializable_commit_admission.write();
+        self.check_recovery_state()?;
         self.tx_log.flush_pending()?;
         if let Some(paged) = &self.paged_records {
             paged.checkpoint()?;
@@ -1748,6 +1792,7 @@ impl BicDb {
     }
 
     pub fn close(self) -> Result<()> {
+        self.check_recovery_state()?;
         self.tx_log.flush_pending()?;
         // Paged mode: bound the core transaction log at the session boundary,
         // same contract as the truncation at open (see there for why nothing
@@ -1776,7 +1821,19 @@ impl BicDb {
         format::plan_migration(path.as_ref(), true)
     }
 
+    /// Refuse use of a handle whose durable transaction needs redo. Opening a
+    /// new handle replays that decision before making the database available.
+    pub fn check_recovery_state(&self) -> Result<()> {
+        if self.recovery_required.load(AtomicOrdering::Acquire) {
+            return Err(BicDbError::PagedStorage(
+                "database requires recovery after a transaction durability/materialization failure; reopen before serving data".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub(crate) fn ensure_writable(&self, operation: &str) -> Result<()> {
+        self.check_recovery_state()?;
         if self.local_index_maintenance {
             return Ok(());
         }
@@ -2070,6 +2127,7 @@ impl BicDb {
             .then(|| self.serializable_commit_admission.read());
         let _serializable_exclusive = (tx.isolation == TransactionIsolation::Serializable)
             .then(|| self.serializable_commit_admission.write());
+        self.check_recovery_state()?;
         // CONCURRENT COMMIT (no global commit_lock). Correctness rests on four
         // independent mechanisms, each guarding exactly what it must:
         //  * same-record W-W: optimistic per-record `write_locks` (a 2nd writer of
@@ -2211,9 +2269,17 @@ impl BicDb {
         record_audit_events.extend(tx.imported_record_audit_events.iter().cloned());
         test_commit_pause_after_validate();
         timer.lap(&commit_trace::VALIDATE);
-        // Past every abort point: assign the sequence and enqueue the WAL bytes.
+        // This abortable test hook runs before the durable decision. Real
+        // storage failures after that decision have an uncertain outcome and
+        // must be recovered, never rewritten as an aborted partial apply.
+        if std::env::var_os("BICDB_TEST_REJECT_COMMIT_BEFORE_DECISION").is_some() {
+            return Err(BicDbError::PagedStorage(
+                "injected pre-decision rejection".into(),
+            ));
+        }
+        // Past validation: reserve and durably log the transaction decision.
         // A plain atomic add is monotonic; the seq-keyed writer queue tolerates
-        // out-of-order enqueue. Deferred durable write coalesces in the caller.
+        // out-of-order enqueue; the writer coalesces the contiguous prefix.
         let commit_seq = self.commit_seq.fetch_add(1, AtomicOrdering::SeqCst) + 1;
         test_commit_pause_after_seq_reserved();
         if repair_trace_filter().is_some() {
@@ -2237,27 +2303,9 @@ impl BicDb {
             }
         }
         let prepared = std::mem::take(&mut tx.prepared_wal);
-        // LOGICAL LOGGING (paged mode): the page store's own WAL carries every
-        // row durably before `paged.commit` returns — inside the apply below,
-        // BEFORE any client can be acknowledged. Writing the same records to
-        // the core log again doubled the write volume of every commit for a
-        // replay path paged recovery already covers. The core log keeps only a
-        // tiny CommitMaterialized marker: recovery still learns the seq (for
-        // `last_commit_seq` continuity) and that there is nothing to replay.
-        //
-        // The enqueue stays at THIS point — before the apply — deliberately:
-        // `write_durable` drains only the contiguous prefix, so a later
-        // enqueue would stretch the window in which a concurrent committer's
-        // durability flush cannot pass this seq. A crash after the marker is
-        // durable but before the paged apply finishes loses only a transaction
-        // no client was ever acknowledged for (acknowledgment follows the
-        // apply); a FAILED apply goes through `revoke_enqueued_commit`, whose
-        // Abort frame overrides the marker in recovery's fold exactly as it
-        // overrides a full Commit.
-        // EXCEPTION: replication standbys are fed Write frames from this very
-        // log (`replication_commits_from_retained_wal`), so a replicating
-        // primary must keep logging full records — markers would export empty
-        // commits and silently starve standbys.
+        // Keep complete logical redo in every storage mode. A page-WAL sync
+        // can fail after its commit bytes were written, and materialization can
+        // fail after some work. Marker-only logging cannot repair that outcome.
         let pending_publishes = tx.pending_broker_publishes.lock().clone();
         // The sequence above is already public, but this encoding is fallible.
         // If it fails we must still occupy the queue slot: `drain_contiguous`
@@ -2265,52 +2313,14 @@ impl BicDb {
         // would strand every later commit's durability behind a gap that never
         // fills. Nothing was applied and no client is acknowledged, so an empty
         // slot is exactly right — it carries no frames into recovery.
-        let encoded: Result<Vec<u8>> = (|| {
-            let wal_bytes = if self.paged_records.is_some() && !self.config.replication.enabled {
-                let mut payloads = pending_publishes
-                    .iter()
-                    .map(|publish| {
-                        serde_json::to_vec(&TxFrameRef::BrokerPublish {
-                            tx_id: tx.id,
-                            publish,
-                        })
-                    })
-                    .collect::<std::result::Result<Vec<_>, _>>()?;
-                payloads.extend(
-                    record_audit_events
-                        .iter()
-                        .map(|event| {
-                            serde_json::to_vec(&TxFrameRef::RecordAudit {
-                                tx_id: tx.id,
-                                event,
-                            })
-                        })
-                        .collect::<std::result::Result<Vec<_>, _>>()?,
-                );
-                payloads.push(serde_json::to_vec(&TxFrame::CommitMaterialized {
-                    tx_id: tx.id,
-                    timestamp: unix_timestamp(),
-                    commit_seq,
-                })?);
-                storage::encode_frames_to_bytes(
-                    &self.tx_log_path(),
-                    FrameKind::Transaction,
-                    &payloads,
-                    &CompressionConfig::disabled(),
-                    &self.encryption,
-                )?
-            } else {
-                self.encode_tx_commit_frames(
-                    tx.id,
-                    commit_seq,
-                    &tx.writes,
-                    &pending_publishes,
-                    &record_audit_events,
-                    prepared,
-                )?
-            };
-            Ok(wal_bytes)
-        })();
+        let encoded = self.encode_tx_commit_frames(
+            tx.id,
+            commit_seq,
+            &tx.writes,
+            &pending_publishes,
+            &record_audit_events,
+            prepared,
+        );
         let wal_bytes = match encoded {
             Ok(bytes) => bytes,
             Err(error) => {
@@ -2324,50 +2334,76 @@ impl BicDb {
             }
         };
         self.tx_log.enqueue(commit_seq, wal_bytes);
+        // A durable logical decision precedes every physical/resident apply.
+        // A failed sync may still have persisted it, so errors fence the handle
+        // and leave the complete redo intact for restart and replication.
+        if let Err(error) = self.tx_log.write_durable(commit_seq) {
+            self.recovery_required.store(true, AtomicOrdering::Release);
+            return Err(error);
+        }
         timer.lap(&commit_trace::WAL_ENCODE);
         // Record/version/vector apply: per-shard write locks under the shared
         // collection read guard, so disjoint-key commits (even within one
         // collection) apply in parallel. This allocates each brand-new record's
         // rowid (the index payload resolved next).
-        let apply_result = if std::env::var_os("BICDB_TEST_FAIL_COMMIT_APPLY").is_some() {
-            // Test failpoint: the only way to exercise the revoke path below
-            // deterministically. Checked with `var_os` (no allocation) once
-            // per commit, not per row.
-            Err(BicDbError::PagedStorage(
-                "injected commit-apply failure (BICDB_TEST_FAIL_COMMIT_APPLY)".to_string(),
-            ))
-        } else {
+        let apply_result = (|| -> Result<()> {
+            if std::env::var_os("BICDB_TEST_FAIL_COMMIT_APPLY").is_some() {
+                return Err(BicDbError::PagedStorage(
+                    "injected post-decision materialization failure".into(),
+                ));
+            }
             self.apply_committed_record_writes(
                 commit_seq,
                 &writes_by_collection,
                 &index_mutations_by_collection,
                 &dim_plan,
                 &mut timer,
-            )
-        };
-        if let Err(error) = apply_result {
-            return Err(self.revoke_enqueued_commit(tx.id, commit_seq, error));
-        }
-        // Now every record is resident: re-resolve locators (brand-new records now
-        // resolve to `Some`) and apply the index entries (Pass 2). Returns spatial
-        // audit events to append after the index locks drop.
-        self.fill_all_index_mutation_rowids(&mut index_mutations_by_collection)?;
-        let spatial_events = self.apply_index_mutations(&index_mutations_by_collection)?;
-        if !spatial_events.is_empty() {
-            let mut events = self.events.lock();
-            for event in spatial_events {
-                events.append(event)?;
+            )?;
+            // Now every record is resident: re-resolve locators (brand-new records now
+            // resolve to `Some`) and apply the index entries (Pass 2). Returns spatial
+            // audit events to append after the index locks drop.
+            self.fill_all_index_mutation_rowids(&mut index_mutations_by_collection)?;
+            let spatial_events = self.apply_index_mutations(&index_mutations_by_collection)?;
+            if !spatial_events.is_empty() {
+                let mut events = self.events.lock();
+                for event in spatial_events {
+                    events.append(event)?;
+                }
             }
+            // The record-audit outbox is part of the transaction WAL above.  Keep
+            // it on the transaction until the caller has made that WAL durable;
+            // `finalize_commit_admission` then publishes it idempotently.
+            tx.pending_record_audit_events = record_audit_events;
+            self.refresh_graph_projections()?;
+            if structural_schema_records_changed {
+                self.schema_compatibility.invalidate();
+            }
+            if self.paged_records.is_some() && !tx.writes.is_empty() {
+                // This acknowledgement is written only AFTER the entire page
+                // transaction and dependent catalog/index work succeeded. Full
+                // redo remains retained for replication, while normal startup
+                // can keep native collections lazy instead of replaying them.
+                let payload = serde_json::to_vec(&TxFrame::CommitMaterialized {
+                    tx_id: tx.id,
+                    timestamp: unix_timestamp(),
+                    commit_seq,
+                })?;
+                let framed = storage::encode_frames_to_bytes(
+                    &self.tx_log_path(),
+                    FrameKind::Transaction,
+                    &[payload],
+                    &CompressionConfig::disabled(),
+                    &self.encryption,
+                )?;
+                self.tx_log.append_auxiliary(&framed)?;
+            }
+            timer.lap(&commit_trace::GRAPH);
+            Ok(())
+        })();
+        if let Err(error) = apply_result {
+            self.recovery_required.store(true, AtomicOrdering::Release);
+            return Err(error);
         }
-        // The record-audit outbox is part of the transaction WAL above.  Keep
-        // it on the transaction until the caller has made that WAL durable;
-        // `finalize_commit_admission` then publishes it idempotently.
-        tx.pending_record_audit_events = record_audit_events;
-        self.refresh_graph_projections()?;
-        if structural_schema_records_changed {
-            self.schema_compatibility.invalidate();
-        }
-        timer.lap(&commit_trace::GRAPH);
         // Done: drop the tx_states entry rather than leaving a `Committed`
         // tombstone. Nothing reads a completed tx's state by tx_id (visibility is
         // commit_seq-based via the version chain; conflict detection never consults

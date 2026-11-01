@@ -321,16 +321,10 @@ fn commits_survive_when_the_collection_predates_the_writer_paged() {
     commits_survive_when_the_collection_predates_the_writer(StorageMode::ServerPaged);
 }
 
-/// Logical logging: in paged mode the core transaction log carries a tiny
-/// commit marker per transaction, not the records — the page store's own WAL
-/// is the durable home for rows. Before this, every commit wrote its records
-/// TWICE (core log + page WAL), doubling ingest write volume.
-///
-/// The size bound is deliberately generous (markers are ~100 bytes; records
-/// here are ~300): a regression back to full-record logging blows through it
-/// by an order of magnitude, while framing/compression changes will not.
+/// Complete logical redo repairs a failed page apply. Marker-only logging was
+/// smaller but could not repair a transaction whose physical commit failed.
 #[test]
-fn the_core_log_carries_markers_not_records_in_paged_mode() {
+fn the_core_log_retains_complete_row_redo_in_paged_mode() {
     let temp = tempfile::tempdir().unwrap();
     // fsync on: commits wait for the log writer, so the size measured below
     // reflects what was actually logged rather than an undrained buffer.
@@ -361,30 +355,29 @@ fn the_core_log_carries_markers_not_records_in_paged_mode() {
         let log_bytes = std::fs::metadata(temp.path().join("transactions.log"))
             .map(|metadata| metadata.len())
             .unwrap_or(0);
-        // 1,000 records x ~350 bytes would be ~350 KB if records were logged;
-        // 10 markers are well under 4 KB even with framing.
+        // The extra logical WAL is intentional: it is the recovery authority.
         assert!(
-            log_bytes < 16 * 1024,
-            "core transaction log is {log_bytes} bytes for 10 marker commits — \
-             records are being double-logged again"
+            log_bytes > 300 * 1024,
+            "core transaction log has only {log_bytes} bytes: complete row redo is missing"
         );
-        drop(db); // crash-shaped: recovery must come from the page WAL
+        let raw = std::fs::read(temp.path().join("transactions.log")).unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&raw).matches("\"pad\":").count(),
+            1_000
+        );
+        drop(db);
     }
 
     let db = BicDb::open_with_config(temp.path(), config(StorageMode::ServerPaged)).unwrap();
     assert_eq!(
         db.scan_collection("bulk").unwrap().len(),
         1_000,
-        "rows lost across reopen: paged recovery did not cover what the \
-         marker-only core log no longer replays"
+        "rows were lost across recovery with complete row redo retained"
     );
     assert!(db.get("bulk", "r-9-99").unwrap().is_some());
 }
 
-/// The replication exception to marker logging: standbys are fed Write frames
-/// out of the retained core log, so a REPLICATING paged primary must keep
-/// logging full records. Mutation check for the gate itself — remove the
-/// `!replication.enabled` condition and this fails.
+/// Replication also requires the complete logical records retained above.
 #[test]
 fn a_replicating_paged_primary_still_logs_full_records() {
     let temp = tempfile::tempdir().unwrap();

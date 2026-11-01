@@ -124,6 +124,76 @@ physical page write rather than falsely marking it unchanged; reopen after
 resolving the underlying I/O problem. Logs and before-image files left by killed
 uploaders are reclaimed under ownership locks.
 
+## Qualification with an external restore oracle
+
+The initial optimized campaign reproduced a real atomicity failure: after a
+page-WAL sync error, an account update survived restart while its ledger insert
+did not. The transaction's uncertain outcome had already been reconciled by ID;
+this was a partial commit, not a missing external acknowledgement. The
+[failure evidence](evidence/online-backup-qualification-failure-2026-11-01/finding.json)
+includes the original executable digest, frozen harness, fault trace and intent
+history.
+
+Transactions retain complete logical redo before changing physical or resident
+data. All tables and their native indexes share one paged transaction. A
+materialization acknowledgement is appended only after the whole apply succeeds;
+normal paged startup can then keep those collections lazy. If durability or
+materialization fails, the live handle refuses data access, checkpoints and
+backup capture until reopening completes recovery. The unacknowledged transaction
+can recover as committed; clients must reconcile by transaction ID. This restores
+the full logical WAL I/O that the earlier marker-only optimization omitted.
+
+Run the built CLI in isolated directories with sustained concurrent SQL,
+controlled process crashes, actual injected filesystem errors and artifact
+corruption:
+
+```sh
+python3 -m pip install 'psycopg[binary]>=3,<4'
+python3 scripts/platform/qualify_online_backups.py \
+  --binary /absolute/path/to/bicdb \
+  --work-dir /absolute/path/to/new-qualification-directory
+```
+
+The default workload runs eight clients for at least five minutes, alternating
+full and incremental backups. Transactions update an immutable ledger, account
+heads, deleted/reinserted indexed slots and a shared aggregate; deliberate rollbacks and
+serialization aborts are recorded separately. Each completed backup must have
+observed successful commits while its payload was copying. Separate restored
+server processes are checked row by row and through indexed predicates against
+expected values computed with SQLite, including cross-table atomicity and
+observed commit-order dependencies. The oracle does not use BicDB's own hashes
+to decide whether the restored data is correct.
+
+The two databases cannot commit atomically. The external SQLite journal syncs
+transaction IDs and intent before sending `COMMIT`, then records known
+acknowledgements separately. Unresolved outcomes are reconciled by transaction
+ID after restart; a known acknowledgement is never downgraded to an allowable
+abort. A controlled crash explicitly covers a BicDB commit whose SQLite
+acknowledgement was never written, alongside a transaction that never committed.
+Backup checks use independently observed lower/upper capture bounds rather than
+comparing an old snapshot against later source acknowledgements.
+
+A Linux-only `LD_PRELOAD` helper injects ENOSPC, file/directory sync errors and
+manifest-publication errors into the actual executable. It stalls at object
+copying, manifest publication and restore installation so the controller can
+send SIGKILL at those exact points. Every injected operation is traced; a case
+cannot pass without reaching its fault. Corruption cases mutate, truncate,
+append to and remove referenced encrypted objects, and damage manifests; verify
+and restore must reject each case before changing the destination payload.
+Core-log and page-WAL sync failures are injected separately and their uncertain
+transaction IDs are reconciled after restart before the row-level oracle runs.
+If directory fsync fails after manifest linking, publication has an uncertain
+outcome: a surviving artifact must fully verify and restore, while an absent
+artifact is also valid. The failed operation does not promise durable publication.
+
+The new work directory retains `report.json`, the external SQLite transcript,
+fault traces, repositories and process logs, including failures. The report
+binds results to the executable and harness digests. This campaign measures its
+configured workload and Linux process/I/O fault model; machine power cuts,
+storage-controller behavior and geographically distributed outages need their
+own campaigns. Increase duration, data volume and client count for qualification
+on the intended deployment hardware.
+
 ## Legacy archives and compatibility
 
 `backup create`, the older paged `backup online` base/WAL-tail interface, and

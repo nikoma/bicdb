@@ -5373,6 +5373,7 @@ impl<'db> SqlEngine<'db> {
             if replace {
                 let covered_terms = lookup_covered_terms(&prefix);
                 best = Some(PreparedDynamicRecordLookup::IndexPrefix {
+                    schema: schema.cloned(),
                     index,
                     prefix,
                     covered_terms,
@@ -5497,6 +5498,7 @@ impl<'db> SqlEngine<'db> {
                     .collect::<Vec<String>>(),
             )),
             PreparedDynamicRecordLookup::IndexPrefix {
+                schema,
                 index,
                 prefix,
                 context,
@@ -5515,9 +5517,19 @@ impl<'db> SqlEngine<'db> {
                     }
                     values.push(value);
                 }
+                // Prepared join probes need the same typed encoding as
+                // ordinary predicates and index writes. Raw numeric/date
+                // strings do not match their canonical typed index labels.
                 let prefix = values
                     .into_iter()
-                    .map(index_value_from_sql)
+                    .zip(&index.fields)
+                    .map(|(value, field)| {
+                        let value = index_value_from_sql(value)?;
+                        match schema {
+                            Some(schema) => typed_index_predicate_value(schema, field, value),
+                            None => Ok(value),
+                        }
+                    })
                     .collect::<Result<Vec<_>>>()?;
                 if sql_trace_flags().plan {
                     eprintln!(

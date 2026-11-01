@@ -1427,6 +1427,7 @@ pub(crate) enum PreparedDynamicRecordLookup {
         context: BoundRowContext,
     },
     IndexPrefix {
+        schema: Option<TableSchema>,
         index: IndexDefinition,
         prefix: Vec<PreparedDynamicBoundExpr>,
         covered_terms: BTreeSet<usize>,

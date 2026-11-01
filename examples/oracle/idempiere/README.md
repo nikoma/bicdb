@@ -31,12 +31,90 @@ URL alone is insufficient. A transport/provider integration must preserve Oracle
 SQL selection while implementing PostgreSQL binding and connection behavior.
 That integration remains outstanding.
 
-The upstream Oracle import script uses `impdp` and a Data Pump directory. The
-installed Oracle Free Lite reference does not include Data Pump. Bootstrap a
-separate full reference image or another appropriate Oracle installation before
-performing the upstream seed import. Do not reuse a Lite data volume with the
-full image. The upstream import recreates its target database user, so run it
-only in a dedicated application reference environment after reviewing it.
+The pinned seed in [seed.json](seed.json) is an Oracle Data Pump export. The
+reference installation must include Data Pump; Oracle Free Lite does not. A
+full Oracle Free reference imported the seed successfully into an isolated
+application user. Do not reuse a Lite data volume with the full image. The
+upstream import script recreates its target user and prints connection arguments;
+review it before use and keep credentials out of command lines and logs.
+
+The measured seed contains 913 tables, 160 views, 48 functions, 14 procedures and
+one type, with 185,292 table rows. All source objects were valid at export. Its
+3,811 foreign keys are initially deferred; 2,914 are enabled without validation
+of existing rows. Those states must be retained in the target. The March 2026
+seed also requires the remaining release-13 migrations for the pinned October
+application source. These counts describe this seed, not application completion.
+
+## Reproduce schema/data development
+
+Use a private working directory outside the repository. `prepare_seed.py`
+verifies pinned archive and dump lengths and SHA-256 hashes, and reuses only
+verified existing files. `export_reference.py` connects as a dedicated application
+schema owner, opens a read-only transaction, exports complete logical catalogs
+and row files, and hashes each row file. Its observed SCN is diagnostic information,
+not a CDC or cutover guarantee. No passwords are emitted in the report.
+
+The reference connection JSON contains `host`, `port`, `service_name`, `user` and
+`password_file`; the password is read from that private file. Install python-oracledb
+for export and psycopg for target import in a private Python environment.
+
+```sh
+python3 examples/oracle/idempiere/prepare_seed.py --directory /private/idempiere-seed
+# Import the verified dump into an isolated Oracle schema using Data Pump first.
+python3 examples/oracle/idempiere/export_reference.py \
+  --oracle-config /private/reference-connection.json --directory /private/idempiere-snapshot
+# Start a new BicDB database with --sql-profile oracle-preview-v1.
+export PSYCOPG_IMPL=python
+export BICDB_PG_DSN='host=127.0.0.1 port=5441 user=bicdb dbname=bicdb'
+python3 examples/oracle/idempiere/import_bicdb.py \
+  --snapshot /private/idempiere-snapshot --phase tables --report /private/tables.json
+python3 examples/oracle/idempiere/import_bicdb.py \
+  --snapshot /private/idempiere-snapshot --phase data --report /private/data.json
+python3 examples/oracle/idempiere/import_bicdb.py \
+  --snapshot /private/idempiere-snapshot --phase verify --report /private/values.json
+```
+
+The importer preserves logical column properties, checks and primary/unique
+keys. It explicitly records foreign keys, other indexes, types, routines, views
+and application execution as outstanding. COPY loads each table atomically.
+`--resume` checks the journal's manifest digest, profile, endpoint and completed
+prefix, plus completed table columns/counts. The journal is a development resume
+mechanism; it does not certify an unmodified target or make import atomic across
+all tables. Use the independent `verify` phase to compare complete row multisets,
+preserving exact decimal digits, bytes, text whitespace and duplicate rows.
+The reports always retain `application_qualified: false` at this stage.
+
+The preview's [documented mappings](../../../docs/oracle-preview-profile.md) are
+explicit adaptations. This tool is not a general-purpose Oracle migration tool,
+and the application and database still need the acceptance stages below.
+
+## Explicit JDBC transport preparation
+
+`prepare_provider.py --checkout EXTERNAL_CHECKOUT --report PRIVATE_REPORT.json`
+checks the pinned application revision and unmodified Oracle provider sources,
+then adds the explicit JVM option `-Dbicdb.pgwire=true`. Without that property,
+the original Oracle driver and URL construction remain selected. With it, the
+Oracle SQL provider uses PostgreSQL JDBC and requests `oracle-preview-v1` and the
+quoted application schema through startup parameters. The private report records
+source/output hashes. The generated application sources retain upstream licensing;
+this repository does not contain the application implementation or binaries.
+
+Rebuild the application after preparation. The resulting provider needs the
+PostgreSQL JDBC bundle as well as its existing dependencies. The local Linux
+reference build used Java 17, the pinned Maven wrapper, a Linux-only target
+configuration, and disabled only the unrelated Windows/macOS product installation
+executions. Its default upstream test-skipping configuration is not evidence that
+application tests passed. The release-13 product and adapted provider both built
+successfully, but full application startup/workflow qualification remains pending.
+
+`TransportProbe.java` is a small independent transport acceptance that must run
+against a fresh loopback BicDB preview instance. Compile it with the rebuilt
+product's `plugins/*` classpath and run with that classpath, the compiled probe,
+`-Dbicdb.pgwire=true`, and the local BicDB port as its single argument. It creates
+a dedicated schema/table; do not run it in a populated application schema. It
+checks that the Oracle provider remains selected while PostgreSQL JDBC performs
+an exact numeric prepared insert, commit and lookup. This probe passed against
+the native BicDB development server; it does not establish application acceptance.
 
 The application is maintained as an external checkout under its upstream GPL
 license. This directory contains the target definition and test plan, not the

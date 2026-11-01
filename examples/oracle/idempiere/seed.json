@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "repository": "https://github.com/idempiere/binary.file",
+  "commit": "30af25e9db302a6cdefd9e6c3846f7cedc5ce4d0",
+  "path": "database/13/Adempiere.jar",
+  "archive_bytes": 18182675,
+  "archive_sha256": "a98f32665e1926b858e8dcc10f2c535dde8a5441f9792b2b26a3124ce333234b",
+  "git_blob_sha1": "b6ef2af831d7c80e7671846e49fab047bbda9c4c",
+  "dump_name": "Adempiere.dmp",
+  "dump_bytes": 121401344,
+  "dump_sha256": "9ed4c57c1fa421ffaf7189c56b1e0882bd565e5e84dfea3814eae45337e1b27d",
+  "upstream_export_database": "Oracle Database 12c Standard Edition 12.2.0.1.0",
+  "upstream_export_date": "2026-03-09",
+  "source_schema": "REFERENCE",
+  "distribution": "external test dependency; not bundled with BicDB"
+}

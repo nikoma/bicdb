@@ -1,4 +1,4 @@
-//! Explicit, bounded Oracle HR front end. It lowers into native PostgreSQL
+//! Explicit Oracle SQL profiles. They lower into native PostgreSQL
 //! statements; the default parser, value codecs and transaction engine do not
 //! change. This profile is not a claim of general Oracle compatibility.
 use crate::*;
@@ -7,13 +7,14 @@ use sqlparser::{dialect::OracleDialect, keywords::Keyword};
 pub mod assessment;
 
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
+pub const ORACLE_PREVIEW_PROFILE: &str = "oracle-preview-v1";
 pub const POSTGRES_PROFILE: &str = "postgres";
 const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
 
 /// Persist the non-default profile with the database, including native backups.
 /// Existing PostgreSQL databases cannot be silently converted by a serve flag.
 pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
-    if !matches!(profile, POSTGRES_PROFILE | ORACLE_HR_PROFILE) {
+    if !is_known_profile(profile) {
         return Err(unsupported(format!("unknown SQL profile {profile}")));
     }
     if db
@@ -48,6 +49,30 @@ pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn is_oracle_profile(profile: &str) -> bool {
+    matches!(profile, ORACLE_HR_PROFILE | ORACLE_PREVIEW_PROFILE)
+}
+
+pub fn is_known_profile(profile: &str) -> bool {
+    profile == POSTGRES_PROFILE || is_oracle_profile(profile)
+}
+
+/// The preview profile grows independently of the bounded HR profile. Its
+/// database marker and startup opt-in prevent accidental profile switching.
+pub fn lower_profile_sql(db: &BicDb, sql: &str, profile: &str) -> Result<String> {
+    if !is_oracle_profile(profile) {
+        return Err(unsupported(
+            "Oracle front end requires an Oracle SQL profile",
+        ));
+    }
+    lower_oracle_sql(db, sql, profile == ORACLE_PREVIEW_PROFILE).map_err(|error| match error {
+        SqlError::Unsupported(message) if profile == ORACLE_PREVIEW_PROFILE => {
+            SqlError::Unsupported(message.replacen(ORACLE_HR_PROFILE, profile, 1))
+        }
+        other => other,
+    })
+}
+
 fn unsupported(message: impl Into<String>) -> SqlError {
     SqlError::Unsupported(format!("{ORACLE_HR_PROFILE}: {}", message.into()))
 }
@@ -79,9 +104,31 @@ fn join(tokens: &[Token]) -> String {
 /// Lower Oracle-profile source before pgwire parameter inference, Describe or
 /// execution. The server fixes the profile for the lifetime of the database.
 pub fn lower_hr_sql(db: &BicDb, sql: &str) -> Result<String> {
-    let source = tokens(sql)?;
+    lower_oracle_sql(db, sql, false)
+}
+
+fn lower_oracle_sql(db: &BicDb, sql: &str, preview: bool) -> Result<String> {
+    let mut source = tokens(sql)?;
     if source.is_empty() {
         return Ok(String::new());
+    }
+    // Normalize each ordinary statement independently, including physical DDL
+    // suffixes. Routine/block semicolons belong to their procedural body.
+    let block = word(&source[0], "BEGIN")
+        && (!preview || source.get(1) != Some(&Token::SemiColon))
+        && source.iter().any(|t| word(t, "END"));
+    let procedural = source
+        .iter()
+        .take(4)
+        .any(|t| word(t, "PROCEDURE") || word(t, "FUNCTION"))
+        || block;
+    if preview && !procedural && source[..source.len() - 1].contains(&Token::SemiColon) {
+        return source
+            .split(|token| *token == Token::SemiColon)
+            .filter(|statement| !statement.is_empty())
+            .map(|statement| lower_oracle_sql(db, &join(statement), preview))
+            .collect::<Result<Vec<_>>>()
+            .map(|statements| statements.join("; "));
     }
     if source
         .iter()
@@ -102,12 +149,32 @@ pub fn lower_hr_sql(db: &BicDb, sql: &str) -> Result<String> {
             "ALTER SESSION requires an explicit migration adaptation",
         ));
     }
-    let routine = source.iter().take(4).any(|t| word(t, "PROCEDURE"));
-    let block = word(&source[0], "BEGIN") && source.iter().any(|t| word(t, "END"));
-    if routine || block {
-        return lower_block(db, &source, routine);
+    if preview && word(&source[0], "CREATE") && source.iter().take(3).any(|t| word(t, "TABLE")) {
+        // Oracle's physical table cache hint does not select BicDB's storage
+        // cache. Exported logical schemas declare the adaptation explicitly.
+        if source.last() == Some(&Token::SemiColon) {
+            source.pop();
+        }
+        if source
+            .last()
+            .is_some_and(|t| word(t, "CACHE") || word(t, "NOCACHE"))
+        {
+            source.pop();
+        }
+        // Native constraints are enabled. Disabled constraints require a
+        // separate migration policy and are not accepted by this lowering.
+        if source.iter().any(|t| word(t, "DISABLE")) {
+            return Err(unsupported(
+                "disabled constraints require an explicit migration policy",
+            ));
+        }
+        source.retain(|t| !word(t, "ENABLE"));
     }
-    let mut canonical = canonical_tokens(db, &source)?;
+    let routine = source.iter().take(4).any(|t| word(t, "PROCEDURE"));
+    if routine || block {
+        return lower_block(db, &source, routine, preview);
+    }
+    let mut canonical = canonical_tokens(db, &source, preview)?;
     expand_references(db, &mut canonical)?;
     if canonical.len() > 3 && word(&canonical[0], "CREATE") && word(&canonical[1], "SEQUENCE") {
         fn rank(t: &Token) -> Option<usize> {
@@ -165,13 +232,13 @@ pub fn lower_hr_sql(db: &BicDb, sql: &str) -> Result<String> {
                 let groups = split_top_level(&canonical[add + 2..end]);
                 return groups
                     .iter()
-                    .map(|group| lower_native(&format!("{prefix} {}", join(group))))
+                    .map(|group| lower_native(&format!("{prefix} {}", join(group)), preview))
                     .collect::<Result<Vec<_>>>()
                     .map(|parts| parts.join("; "));
             }
         }
     }
-    lower_native(&join(&canonical))
+    lower_native(&join(&canonical), preview)
 }
 
 fn expand_references(db: &BicDb, source: &mut Vec<Token>) -> Result<()> {
@@ -256,7 +323,29 @@ fn split_top_level(source: &[Token]) -> Vec<&[Token]> {
     groups
 }
 
-fn syntax_word(value: &str) -> bool {
+fn syntax_word(value: &str, preview: bool) -> bool {
+    if preview
+        && matches!(
+            value,
+            "SCHEMA"
+                | "BYTEA"
+                | "COPY"
+                | "STDIN"
+                | "STDOUT"
+                | "FORMAT"
+                | "BINARY"
+                | "DELIMITER"
+                | "HEADER"
+                | "JSON"
+                | "VALUE"
+                | "SCALAR"
+                | "ARRAY"
+                | "OBJECT"
+                | "KEYS"
+        )
+    {
+        return true;
+    }
     matches!(
         value,
         "CREATE"
@@ -415,7 +504,7 @@ fn syntax_word(value: &str) -> bool {
     )
 }
 
-fn canonical_tokens(db: &BicDb, source: &[Token]) -> Result<Vec<Token>> {
+fn canonical_tokens(db: &BicDb, source: &[Token], preview: bool) -> Result<Vec<Token>> {
     let mut pieces = Vec::new();
     let mut i = 0;
     while i < source.len() {
@@ -423,6 +512,22 @@ fn canonical_tokens(db: &BicDb, source: &[Token]) -> Result<Vec<Token>> {
         if let Token::Word(w) = t {
             let upper = w.value.to_ascii_uppercase();
             if w.quote_style.is_none() {
+                if preview
+                    && matches!(upper.as_str(), "VARCHAR2" | "CHAR")
+                    && source.get(i + 1) == Some(&Token::LParen)
+                    && matches!(source.get(i + 2), Some(Token::Number(..)))
+                    && source.get(i + 3).is_some_and(|t| word(t, "CHAR"))
+                    && source.get(i + 4) == Some(&Token::RParen)
+                {
+                    let name = if upper == "VARCHAR2" {
+                        "VARCHAR"
+                    } else {
+                        "CHAR"
+                    };
+                    pieces.push(format!("{name}({})", source[i + 2]));
+                    i += 5;
+                    continue;
+                }
                 if i + 4 < source.len()
                     && source[i + 1] == Token::Period
                     && source[i + 3] == Token::Mod
@@ -463,6 +568,9 @@ fn canonical_tokens(db: &BicDb, source: &[Token]) -> Result<Vec<Token>> {
                     continue;
                 }
                 match upper.as_str() {
+                    "CLOB" if preview => pieces.push("TEXT".into()),
+                    "BLOB" if preview => pieces.push("BYTEA".into()),
+                    "OCTET_LENGTH" if preview => pieces.push("octet_length".into()),
                     "NUMBER" => pieces.push("NUMERIC".into()),
                     "VARCHAR2" => pieces.push("VARCHAR".into()),
                     "DATE" => pieces.push("TIMESTAMP(0)".into()),
@@ -508,7 +616,7 @@ fn canonical_tokens(db: &BicDb, source: &[Token]) -> Result<Vec<Token>> {
                     {
                         pieces.push(w.value.to_lowercase())
                     }
-                    _ if !syntax_word(&upper) => pieces.push(format!(
+                    _ if !syntax_word(&upper, preview) => pieces.push(format!(
                         "\"{}\"",
                         w.value.to_uppercase().replace('"', "\"\"")
                     )),
@@ -534,11 +642,11 @@ fn canonical_tokens(db: &BicDb, source: &[Token]) -> Result<Vec<Token>> {
         .map_err(|e| unsupported(e.to_string()))
 }
 
-fn lower_block(db: &BicDb, source: &[Token], routine: bool) -> Result<String> {
+fn lower_block(db: &BicDb, source: &[Token], routine: bool, preview: bool) -> Result<String> {
     if source.iter().any(|t| *t == Token::StringConcat) {
         return Err(unsupported("procedural concatenation is not yet supported"));
     }
-    let canonical = canonical_tokens(db, source)?;
+    let canonical = canonical_tokens(db, source, preview)?;
     let (header, body) = if routine {
         let boundary = canonical
             .iter()
@@ -603,7 +711,9 @@ fn expression(sql: &str) -> Result<Expr> {
     }
 }
 
-fn lower_native(sql: &str) -> Result<String> {
+fn lower_native(sql: &str, preview: bool) -> Result<String> {
+    let rewritten = preview.then(|| rewrite_is_json_predicates(sql)).flatten();
+    let sql = rewritten.as_deref().unwrap_or(sql);
     let mut statements =
         Parser::parse_sql(&PostgreSqlDialect {}, sql).map_err(|e| unsupported(e.to_string()))?;
     let result = visit_expressions_mut(&mut statements, |expr| {
@@ -725,6 +835,52 @@ fn lower_native(sql: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preview_has_a_separate_durable_profile_and_executes_logical_schema_checks() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        assert!(ensure_database_profile(&mut db, ORACLE_HR_PROFILE).is_err());
+        assert!(ensure_database_profile(&mut db, POSTGRES_PROFILE).is_err());
+        for sql in [
+            "CREATE SCHEMA app",
+            "CREATE TABLE app.docs(id NUMBER PRIMARY KEY, label VARCHAR2(2 CHAR), payload BLOB, document CLOB CHECK(document IS JSON)) CACHE",
+            r#"INSERT INTO app.docs VALUES(1, 'éé', CAST('\x00ff' AS BYTEA), '{"ok":true}')"#,
+        ] {
+            let lowered = lower_profile_sql(&db, sql, ORACLE_PREVIEW_PROFILE).unwrap();
+            SqlSession::new(&mut db).execute(&lowered).unwrap();
+        }
+        let query = lower_profile_sql(
+            &db,
+            "SELECT octet_length(label), octet_length(payload) FROM app.docs",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db).execute(&query).unwrap().rows,
+            vec![vec![SqlValue::Int(4), SqlValue::Int(2)]]
+        );
+        let invalid = lower_profile_sql(
+            &db,
+            "INSERT INTO app.docs VALUES(2, 'ok', NULL, 'invalid json')",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute(&invalid)
+                .unwrap_err()
+                .sqlstate(),
+            "23514"
+        );
+        assert!(lower_profile_sql(
+            &db,
+            "CREATE TABLE disabled_test(id NUMBER PRIMARY KEY DISABLE)",
+            ORACLE_PREVIEW_PROFILE
+        )
+        .is_err());
+    }
+
     #[test]
     fn hr_to_date_preserves_time_without_changing_postgres_to_date() {
         let root = tempfile::tempdir().unwrap();

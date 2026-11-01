@@ -457,8 +457,8 @@ enum Command {
         /// Use a PostgreSQL-shaped version() banner while retaining bicdb_version() discovery.
         #[arg(long)]
         postgres_version_banner: bool,
-        /// SQL compatibility front end; Oracle HR requires a new, dedicated database.
-        #[arg(long, default_value = "postgres", value_parser = ["postgres", "oracle-hr-v1"])]
+        /// SQL compatibility front end; Oracle profiles require a new, dedicated database.
+        #[arg(long, default_value = "postgres", value_parser = ["postgres", "oracle-hr-v1", "oracle-preview-v1"])]
         sql_profile: String,
         #[arg(long)]
         require_auth: bool,
@@ -639,8 +639,8 @@ enum Command {
         /// Use a PostgreSQL-shaped version() banner while retaining bicdb_version() discovery.
         #[arg(long)]
         postgres_version_banner: bool,
-        /// SQL compatibility front end; Oracle HR requires a new, dedicated database.
-        #[arg(long, default_value = "postgres", value_parser = ["postgres", "oracle-hr-v1"])]
+        /// SQL compatibility front end; Oracle profiles require a new, dedicated database.
+        #[arg(long, default_value = "postgres", value_parser = ["postgres", "oracle-hr-v1", "oracle-preview-v1"])]
         sql_profile: String,
         #[arg(long)]
         require_auth: bool,

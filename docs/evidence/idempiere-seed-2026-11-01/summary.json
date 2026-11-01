@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "application": "iDempiere 13",
+  "application_source_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "seed_manifest": "../../../examples/oracle/idempiere/seed.json",
+  "source_database_version": "23.26.3.0.0",
+  "source": {
+    "tables": 913,
+    "rows": 185292,
+    "columns": 30801,
+    "views": 160,
+    "routines": 62,
+    "types": 1,
+    "indexes": 2129,
+    "constraint_kinds": {
+      "R": 3811,
+      "P": 898,
+      "U": 917,
+      "C": 13070
+    },
+    "invalid_objects": 0
+  },
+  "target": {
+    "profile": "oracle-preview-v1",
+    "table_import": "passed",
+    "row_import": "passed",
+    "row_multiset_comparison": "passed",
+    "tables_compared": 913,
+    "snapshot_manifest_sha256": "b26d853ba81cdc10f7451fa39683ca081d2a889b2417f7537ce533990ec7775c",
+    "table_multiset_digest_sha256": "b95dc97bfedc989f195091e071b6cb1c761f9551787053d3cf345e550bbf3759",
+    "driver": "psycopg 3.3.6",
+    "driver_implementation": "python",
+    "application_qualified": false
+  },
+  "application_build": "Linux product and adapted Oracle provider built successfully; upstream tests skipped by default and not claimed as passed",
+  "transport_probe": "Oracle provider retained; PostgreSQL JDBC 42.7.8 exact numeric prepared insert, commit and lookup passed",
+  "outstanding": [
+    "application schema/name resolution",
+    "foreign keys preserving initially deferred and existing-row validation state",
+    "remaining secondary indexes",
+    "stored types, routines and views",
+    "remaining release-13 migrations",
+    "application startup/login and complete business workflows",
+    "workload security, concurrency, restart/recovery and cutover acceptance"
+  ]
+}

@@ -10,8 +10,11 @@ struct Running {
 }
 impl Running {
     fn new(path: &std::path::Path, oracle: bool) -> Self {
+        Self::with_profile(path, if oracle { "oracle-hr-v1" } else { "postgres" })
+    }
+    fn with_profile(path: &std::path::Path, profile: &str) -> Self {
         let config = PgWireConfig {
-            sql_profile: if oracle { "oracle-hr-v1" } else { "postgres" }.into(),
+            sql_profile: profile.into(),
             fsync: false,
             ..Default::default()
         };
@@ -52,6 +55,139 @@ impl Running {
             }),
         ))
     }
+}
+
+#[tokio::test]
+async fn postgres_extended_copy_recovers_after_constraint_error_and_copies_out() {
+    use futures_util::{SinkExt, StreamExt};
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::new(directory.path(), false);
+    let (client, connection) = server.connect(false).await.unwrap();
+    client.batch_execute("CREATE TABLE copy_guards(k numeric PRIMARY KEY, value text UNIQUE CHECK(value <> 'bad'))").await.unwrap();
+    let sink = client.copy_in("COPY copy_guards FROM STDIN").await.unwrap();
+    tokio::pin!(sink);
+    sink.send(&b"1\tgood\n"[..]).await.unwrap();
+    assert_eq!(sink.finish().await.unwrap(), 1);
+    let sink = client.copy_in("COPY copy_guards FROM STDIN").await.unwrap();
+    tokio::pin!(sink);
+    sink.send(&b"2\tvalid\n3\tbad\n"[..]).await.unwrap();
+    assert_eq!(
+        sink.finish()
+            .await
+            .unwrap_err()
+            .as_db_error()
+            .unwrap()
+            .code(),
+        &tokio_postgres::error::SqlState::CHECK_VIOLATION
+    );
+    let stream = client.copy_out("COPY copy_guards TO STDOUT").await.unwrap();
+    tokio::pin!(stream);
+    let mut data = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        data.extend_from_slice(&chunk.unwrap());
+    }
+    assert_eq!(data, b"1\tgood\n");
+    assert_eq!(
+        client
+            .query_one("SELECT count(*) FROM copy_guards", &[])
+            .await
+            .unwrap()
+            .get::<_, i64>(0),
+        1
+    );
+    drop(client);
+    connection.await.unwrap();
+}
+
+#[tokio::test]
+async fn oracle_preview_copies_qualified_lobs_and_preserves_constraints_after_restart() {
+    use futures_util::SinkExt;
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    assert!(server.connect(false).await.is_err());
+    assert!(server.connect(true).await.is_err());
+    let connect = |port| async move {
+        let (client, connection) = tokio_postgres::Config::new()
+            .host("127.0.0.1")
+            .port(port)
+            .user("bicdb")
+            .dbname("bicdb")
+            .options("-c bicdb.sql_profile=oracle-preview-v1")
+            .connect(tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        assert_eq!(
+            connection.parameter("bicdb_sql_profile"),
+            Some("oracle-preview-v1")
+        );
+        (
+            client,
+            tokio::spawn(async move {
+                connection.await.unwrap();
+            }),
+        )
+    };
+    let (client, connection) = connect(server.port).await;
+    client
+        .batch_execute(
+            r#"CREATE SCHEMA app;
+        CREATE TABLE app.docs(id NUMBER PRIMARY KEY, label VARCHAR2(2 CHAR), payload BLOB,
+          document CLOB CHECK(document IS JSON)) NOCACHE"#,
+        )
+        .await
+        .unwrap();
+    let sink = client
+        .copy_in(r#"COPY app.docs(id,label,payload,document) FROM STDIN"#)
+        .await
+        .unwrap();
+    tokio::pin!(sink);
+    sink.send(&b"1\t\xc3\xa9\xc3\xa9\t\\\\x00ff\t{\"ok\":true}\n"[..])
+        .await
+        .unwrap();
+    assert_eq!(sink.finish().await.unwrap(), 1);
+    let invalid = client
+        .copy_in("COPY app.docs(id,label,payload,document) FROM STDIN")
+        .await
+        .unwrap();
+    tokio::pin!(invalid);
+    invalid
+        .send(&b"2\tok\t\\N\tinvalid json\n"[..])
+        .await
+        .unwrap();
+    assert_eq!(
+        invalid
+            .finish()
+            .await
+            .unwrap_err()
+            .as_db_error()
+            .unwrap()
+            .code(),
+        &tokio_postgres::error::SqlState::CHECK_VIOLATION
+    );
+    drop(client);
+    connection.await.unwrap();
+    drop(server);
+    assert!(PgWireServer::open(directory.path(), PgWireConfig::default()).is_err());
+    assert!(PgWireServer::open(
+        directory.path(),
+        PgWireConfig {
+            sql_profile: "oracle-hr-v1".into(),
+            ..Default::default()
+        }
+    )
+    .is_err());
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let (client, connection) = connect(server.port).await;
+    let row = client
+        .query_one("SELECT id::text,label,payload,document FROM app.docs", &[])
+        .await
+        .unwrap();
+    assert_eq!(row.get::<_, String>(0), "1");
+    assert_eq!(row.get::<_, String>(1), "éé");
+    assert_eq!(row.get::<_, Vec<u8>>(2), vec![0, 255]);
+    assert_eq!(row.get::<_, String>(3), r#"{"ok":true}"#);
+    drop(client);
+    connection.await.unwrap();
 }
 impl Drop for Running {
     fn drop(&mut self) {

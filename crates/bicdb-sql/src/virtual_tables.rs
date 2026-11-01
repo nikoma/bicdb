@@ -2216,7 +2216,10 @@ impl FieldRef {
         let Some(head) = parts.first() else {
             return Err(SqlError::Unsupported("empty field expression".to_string()));
         };
-        match head.to_ascii_lowercase().as_str() {
+        // Identifiers have already been folded at the SQL boundary. Preserve
+        // quoted names such as "ID" and "PAYLOAD": folding them here would
+        // replace declared columns with the physical record's built-in fields.
+        match head.as_str() {
             "id" if parts.len() == 1 => Ok(Self::Id),
             "metadata" if parts.len() == 1 => Ok(Self::Metadata),
             "metadata" => Ok(Self::MetadataPath(parts[1..].to_vec())),

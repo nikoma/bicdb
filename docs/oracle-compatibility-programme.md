@@ -10,6 +10,13 @@ Unchanged Oracle drivers would require a separate protocol implementation.
 has an explicit implementation and qualification record. Default PostgreSQL
 behavior must remain covered by regression tests throughout this work.
 
+The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used
+for [iDempiere seed development](evidence/idempiere-seed-2026-11-01/README.md).
+All 913 tables and 185,292 rows loaded and passed complete value reconciliation.
+This is a data-baseline milestone; the actual application has not passed startup,
+login or business workflows. Its required foreign keys, routines, views and
+remaining migrations are still outstanding.
+
 “Partial” means a specific implementation or test exists, not that the full
 workstream is compatible. “Unqualified” means Oracle behavior or operational
 acceptance remains unproven, including when related native BicDB features exist.

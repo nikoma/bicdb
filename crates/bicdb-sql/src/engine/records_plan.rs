@@ -1044,7 +1044,7 @@ impl<'db> SqlEngine<'db> {
         for id in ids {
             // Locator planning: the ids that match resolve to rows only
             // through the policy-filtered record paths.
-            let Some(record) = self.db_ref().get_unchecked(table, &id)? else {
+            let Some(record) = self.get_raw_record_cached(table, &id)? else {
                 continue;
             };
             let values = record_column_values(&record, schema, prefix_columns);

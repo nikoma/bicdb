@@ -2076,10 +2076,8 @@ fn startup_sql_profile(params: &HashMap<String, String>) -> Result<Option<String
             part.strip_prefix("-c").unwrap_or("")
         };
         if let Some(profile) = assignment.strip_prefix("bicdb.sql_profile=") {
-            if !matches!(
-                profile,
-                bicdb_sql::oracle::POSTGRES_PROFILE | bicdb_sql::oracle::ORACLE_HR_PROFILE
-            ) || selected.as_deref().is_some_and(|old| old != profile)
+            if !bicdb_sql::oracle::is_known_profile(profile)
+                || selected.as_deref().is_some_and(|old| old != profile)
             {
                 return Err(PgWireError::Sql(bicdb_sql::SqlError::Unsupported(
                     "unknown or conflicting bicdb.sql_profile startup option".to_string(),

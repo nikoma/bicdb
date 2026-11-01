@@ -2415,6 +2415,7 @@ fn handle_frontend_message(
     payload: Vec<u8>,
 ) -> Result<bool> {
     if state.copy_in.is_some() {
+        let extended = state.copy_in.as_ref().is_some_and(|copy| copy.extended);
         match tag {
             b'd' => {
                 if let Err(error) = copy_in_data(state, &payload) {
@@ -2426,7 +2427,11 @@ fn handle_frontend_message(
                     if error.closes_connection() {
                         return Ok(false);
                     }
-                    ready_for_query_status(stream, state.transaction_status())?;
+                    if extended {
+                        state.discard_until_sync = true;
+                    } else {
+                        ready_for_query_status(stream, state.transaction_status())?;
+                    }
                 }
             }
             b'c' => match finish_copy_in(server, state).and_then(|count| {
@@ -2437,7 +2442,9 @@ fn handle_frontend_message(
             }) {
                 Ok(count) => {
                     command_complete(stream, &format!("COPY {count}"))?;
-                    ready_for_query_status(stream, state.transaction_status())?;
+                    if !extended {
+                        ready_for_query_status(stream, state.transaction_status())?;
+                    }
                 }
                 Err(error) => {
                     state.failed_queries += 1;
@@ -2447,7 +2454,11 @@ fn handle_frontend_message(
                     if error.closes_connection() {
                         return Ok(false);
                     }
-                    ready_for_query_status(stream, state.transaction_status())?;
+                    if extended {
+                        state.discard_until_sync = true;
+                    } else {
+                        ready_for_query_status(stream, state.transaction_status())?;
+                    }
                 }
             },
             b'f' => {
@@ -2457,7 +2468,19 @@ fn handle_frontend_message(
                 server.failed_queries.fetch_add(1, Ordering::SeqCst);
                 state.record_query_error();
                 error_response(stream, message)?;
-                ready_for_query_status(stream, state.transaction_status())?;
+                if extended {
+                    state.discard_until_sync = true;
+                } else {
+                    ready_for_query_status(stream, state.transaction_status())?;
+                }
+            }
+            // Drivers may pipeline Sync after Bind/Execute. PostgreSQL ignores
+            // Sync and Flush while receiving COPY data; CopyDone/CopyFail ends
+            // this mode, and the subsequent Sync supplies ReadyForQuery.
+            b'S' | b'H' => {}
+            b'X' => {
+                abort_copy_in(state);
+                return Ok(false);
             }
             _ => {
                 abort_copy_in(state);
@@ -2475,9 +2498,10 @@ fn handle_frontend_message(
         b'Q' => {
             let query = cstring_payload(&payload)?;
             let lowered;
-            let query = if server.config.sql_profile == bicdb_sql::oracle::ORACLE_HR_PROFILE {
+            let query = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
                 let result = server.read_db().and_then(|db| {
-                    bicdb_sql::oracle::lower_hr_sql(&db, query).map_err(PgWireError::from)
+                    bicdb_sql::oracle::lower_profile_sql(&db, query, &server.config.sql_profile)
+                        .map_err(PgWireError::from)
                 });
                 match result {
                     Ok(sql) => {
@@ -2564,6 +2588,30 @@ fn handle_frontend_message(
         }
         b'E' => {
             let source_sql = portal_source_sql_from_execute_payload(&payload, state);
+            if let Some((sql, _)) = portal_sql_and_formats_from_execute_payload(&payload, state) {
+                if parse_copy_statement(&sql)?.is_some() {
+                    match execute_server_query(stream, server, state, &sql) {
+                        Ok(QueryFlow::CopyInStarted) => {
+                            if let Some(copy) = state.copy_in.as_mut() {
+                                copy.extended = true;
+                            }
+                        }
+                        Ok(QueryFlow::Complete) => {}
+                        Err(error) => {
+                            state.failed_queries += 1;
+                            server.failed_queries.fetch_add(1, Ordering::SeqCst);
+                            state.record_query_error();
+                            state.discard_until_sync = true;
+                            log_failed_query(server, state, source_sql.as_deref(), &error);
+                            error_response_for_error(stream, &error)?;
+                            if error.closes_connection() {
+                                return Ok(false);
+                            }
+                        }
+                    }
+                    return Ok(true);
+                }
+            }
             // A SUBSCRIBE portal streams until the client cancels it; the
             // Describe that preceded it (if any) sent the row description.
             // The portal's SQL has the bound parameters substituted.
@@ -2695,6 +2743,7 @@ struct CopyInState {
     inserted_rows: usize,
     spill: Option<CopySpillState>,
     started_guc_transaction: bool,
+    extended: bool,
 }
 
 impl CopyInState {
@@ -3154,6 +3203,7 @@ fn execute_server_query(
                     inserted_rows: 0,
                     spill: None,
                     started_guc_transaction,
+                    extended: false,
                 });
                 if let Err(error) = enforce_persistent_connection_memory(state, &server.config) {
                     abort_copy_in(state);
@@ -3193,6 +3243,7 @@ fn execute_server_query(
                     copy_data(stream, &payload)?;
                 }
                 server.record_streamed_rows(result.rows.len() as u64, bytes_streamed);
+                write_message(stream, b'c', &[])?;
                 command_complete(stream, &format!("COPY {}", result.rows.len()))?;
                 Ok(QueryFlow::Complete)
             }

@@ -1092,6 +1092,88 @@ fn primary_key_upserts_use_record_id_lookups_without_full_scans() {
 }
 
 #[test]
+fn copy_batches_preserve_pending_numeric_and_secondary_unique_keys_and_typed_checks() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE bulk_guards(k NUMERIC PRIMARY KEY, code TEXT UNIQUE, n NUMERIC CHECK(n>0), happened TIMESTAMP CHECK(happened >= TIMESTAMP '2020-01-01')); BEGIN").unwrap();
+    let columns = vec!["k".into(), "code".into(), "n".into(), "happened".into()];
+    let row = |id: usize, code: String, n: &str| {
+        vec![
+            Some(id.to_string()),
+            Some(code),
+            Some(n.into()),
+            Some("2026-11-01 12:34:56".into()),
+        ]
+    };
+    session
+        .copy_insert_rows(
+            "bulk_guards",
+            &columns,
+            (1..=100).map(|n| row(n, format!("c{n}"), "1.25")).collect(),
+        )
+        .unwrap();
+    for invalid in [row(1, "new".into(), "2"), row(101, "c1".into(), "2")] {
+        assert_eq!(
+            session
+                .copy_insert_rows("bulk_guards", &columns, vec![invalid])
+                .unwrap_err()
+                .sqlstate(),
+            "23505"
+        );
+    }
+    assert_eq!(
+        session
+            .copy_insert_rows(
+                "bulk_guards",
+                &columns,
+                vec![row(101, "c101".into(), "2"), row(102, "c102".into(), "-1")]
+            )
+            .unwrap_err()
+            .sqlstate(),
+        "23514"
+    );
+    session
+        .execute("UPDATE bulk_guards SET code='updated' WHERE k=1")
+        .unwrap();
+    session
+        .copy_insert_rows("bulk_guards", &columns, vec![row(101, "c1".into(), "2")])
+        .unwrap();
+    session.execute("COMMIT").unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT COUNT(*) FROM bulk_guards")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(101)]]
+    );
+}
+
+#[test]
+fn quoted_builtin_column_names_preserve_logical_numeric_and_binary_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            r#"CREATE TABLE quoted_fields("ID" NUMERIC PRIMARY KEY, "PAYLOAD" BYTEA, label TEXT);
+        INSERT INTO quoted_fields VALUES(12345678901234567890, '\x00ff'::bytea, 'label')"#,
+        )
+        .unwrap();
+    let row = session
+        .execute(r#"SELECT "ID"::text,"PAYLOAD",label FROM quoted_fields"#)
+        .unwrap();
+    assert_eq!(
+        row.rows,
+        vec![vec![
+            SqlValue::String("12345678901234567890".into()),
+            SqlValue::String("\\x00ff".into()),
+            SqlValue::String("label".into())
+        ]]
+    );
+}
+
+#[test]
 fn non_primary_unique_upserts_use_index_without_full_scans_and_see_pending_writes() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();

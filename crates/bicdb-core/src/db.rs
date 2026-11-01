@@ -6084,24 +6084,30 @@ impl IndexState {
                     continue;
                 }
             }
-            if let (Some(old_matches), Some(rowid)) = (
-                mutation.old_record.matches_predicate(&self.definition)?,
-                mutation.rowid,
-            ) {
-                if old_matches {
-                    let key = mutation
+            if mutation.old_record.matches_predicate(&self.definition)? == Some(true) {
+                let key = mutation
+                    .old_record
+                    .index_key(&self.definition.fields)?
+                    .expect("pre-image present");
+                if !index_key_contains_null(&key) {
+                    let encoded = mutation
                         .old_record
-                        .index_key(&self.definition.fields)?
-                        .expect("pre-image present");
-                    if !index_key_contains_null(&key) {
-                        let encoded = mutation
-                            .old_record
-                            .encoded_index_key(&self.definition.fields)?
-                            .expect("pre-image key encodes");
+                        .encoded_index_key(&self.definition.fields)?
+                        .expect("pre-image key encodes");
+                    if let Some(rowid) = mutation.rowid {
                         touched_keys
                             .entry(Arc::clone(&encoded))
                             .or_insert_with(|| self.store.ids_at(&encoded))
                             .remove(&rowid);
+                    }
+                    // A row inserted earlier in this transaction has no
+                    // physical RowId yet. Updating or deleting it must
+                    // release its old provisional key as well, otherwise
+                    // a later insert cannot reuse that now-vacant key.
+                    if let Some(id) = mutation.old_record.id() {
+                        if let Some(pks) = touched_new_pks.get_mut(&encoded) {
+                            pks.remove(id);
+                        }
                     }
                 }
             }

@@ -2128,9 +2128,9 @@ pub(crate) fn parse_message(
     let mut idx = 0;
     let name = read_cstr(payload, &mut idx)?;
     let sql = read_cstr(payload, &mut idx)?;
-    let sql = if server.config.sql_profile == bicdb_sql::oracle::ORACLE_HR_PROFILE {
+    let sql = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
         let db = server.read_db()?;
-        bicdb_sql::oracle::lower_hr_sql(&db, &sql)?
+        bicdb_sql::oracle::lower_profile_sql(&db, &sql, &server.config.sql_profile)?
     } else {
         sql
     };
@@ -2144,7 +2144,15 @@ pub(crate) fn parse_message(
     let typed_sql = live_queries::parse_subscribe(&sql)
         .map(|subscribe| subscribe.query)
         .unwrap_or(&sql);
-    let inferred = infer_parameter_types(&db, typed_sql)?;
+    let inferred = if let Some(copy) = parse_copy_statement(typed_sql)? {
+        if let Some(query) = copy.query {
+            infer_parameter_types(&db, &query)?
+        } else {
+            Vec::new()
+        }
+    } else {
+        infer_parameter_types(&db, typed_sql)?
+    };
     param_type_oids = resolve_parameter_type_oids(&db, param_type_oids, inferred)?;
     Ok(ParsedStatementMessage {
         name,
@@ -2206,7 +2214,7 @@ pub(crate) fn bind_message(
                 "Bind parameter length exceeds payload".to_string(),
             ));
         }
-        if server.config.sql_profile == bicdb_sql::oracle::ORACLE_HR_PROFILE
+        if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
             && len == 0
             && matches!(oid, 0 | 25 | 1042 | 1043)
         {
@@ -2322,6 +2330,10 @@ pub(crate) fn describe_message(
                     state.security_context.as_ref(),
                 )?;
                 describe_result(stream, server, &result, &portal_result_formats, None)?;
+            } else if parse_copy_statement(&portal_sql)?.is_some() {
+                // COPY's stream description is sent by Execute, never by
+                // running the mutation during Describe.
+                no_data(stream)?;
             } else if let Some(result) = returning_describe_result(server, &portal_sql)? {
                 describe_result(
                     stream,

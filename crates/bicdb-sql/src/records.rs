@@ -340,8 +340,10 @@ pub(crate) fn validate_records_for_write(
     if records.is_empty() {
         return Ok(());
     }
+    let checks = prepare_check_expressions(schema)?;
     for record in records {
-        validate_record_local_constraints(table, schema, record)?;
+        validate_record_columns(table, schema, record)?;
+        validate_prepared_checks(table, schema, record, &checks)?;
         validate_foreign_keys(db, tx, table, schema, record)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
@@ -415,6 +417,11 @@ pub(crate) fn validate_record_local_constraints(
     schema: &TableSchema,
     record: &Record,
 ) -> Result<()> {
+    validate_record_columns(table, schema, record)?;
+    validate_checks(table, schema, record)
+}
+
+fn validate_record_columns(table: &str, schema: &TableSchema, record: &Record) -> Result<()> {
     // One decode per column serves both the NOT NULL and the type check
     // (each used to decode every column from storage JSON on its own); the
     // checks still run in their original order so the reported violation is
@@ -485,7 +492,7 @@ pub(crate) fn validate_record_local_constraints(
             ),
         });
     }
-    validate_checks(table, schema, record)
+    Ok(())
 }
 
 pub(crate) fn validate_not_null(table: &str, schema: &TableSchema, record: &Record) -> Result<()> {
@@ -656,18 +663,40 @@ pub(crate) fn column_value_matches_type(value: &SqlValue, column: &ColumnSchema)
 }
 
 pub(crate) fn validate_checks(table: &str, schema: &TableSchema, record: &Record) -> Result<()> {
-    for constraint in &schema.constraints {
-        let ConstraintSchema::Check {
-            name, expression, ..
-        } = constraint
-        else {
-            continue;
-        };
-        let expr = parse_check_expression(expression)?;
-        if matches!(
-            eval_schema_predicate_truth(record, schema, &expr)?,
-            Some(false)
-        ) {
+    validate_prepared_checks(table, schema, record, &prepare_check_expressions(schema)?)
+}
+
+fn prepare_check_expressions(schema: &TableSchema) -> Result<Vec<(&str, Expr)>> {
+    schema
+        .constraints
+        .iter()
+        .filter_map(|constraint| {
+            if let ConstraintSchema::Check {
+                name, expression, ..
+            } = constraint
+            {
+                Some(parse_check_expression(expression).map(|expr| (name.as_str(), expr)))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn validate_prepared_checks(
+    table: &str,
+    schema: &TableSchema,
+    record: &Record,
+    checks: &[(&str, Expr)],
+) -> Result<()> {
+    if checks.is_empty() {
+        return Ok(());
+    }
+    // A wide row used to be cloned and its typed values projected separately
+    // for every CHECK. Project it once and reuse the parsed batch expressions.
+    let projected = schema_predicate_record(record, schema);
+    for (name, expr) in checks {
+        if matches!(eval_predicate_truth(&projected, expr)?, Some(false)) {
             return Err(constraint_violation(
                 "23514",
                 format!(
@@ -676,7 +705,7 @@ pub(crate) fn validate_checks(table: &str, schema: &TableSchema, record: &Record
                 ),
                 Some(table.to_string()),
                 None,
-                Some(name.clone()),
+                Some((*name).to_string()),
             ));
         }
     }
@@ -688,6 +717,10 @@ pub(crate) fn eval_schema_predicate_truth(
     schema: &TableSchema,
     expression: &Expr,
 ) -> Result<Option<bool>> {
+    eval_predicate_truth(&schema_predicate_record(record, schema), expression)
+}
+
+fn schema_predicate_record(record: &Record, schema: &TableSchema) -> Record {
     let mut projected = record.clone();
     for column in schema.columns.iter().filter(|column| !column.hidden) {
         let Some(stored) = json_value_for_key_case_insensitive(&record.metadata, &column.name)
@@ -704,7 +737,7 @@ pub(crate) fn eval_schema_predicate_truth(
             sql_value_to_json(value),
         );
     }
-    eval_predicate_truth(&projected, expression)
+    projected
 }
 
 pub(crate) fn validate_unique_constraints_for_update(
@@ -1043,6 +1076,21 @@ pub(crate) fn validate_unique_arbiter_records(
         return Ok(());
     }
     let index_name = arbiter.index_name.as_ref().expect("checked above");
+    // Materialize the transaction's pending keys once per batch. Rebuilding
+    // pending_records and canonicalizing every pending key for each incoming
+    // row makes a large COPY quadratic in the transaction's row count.
+    let mut pending_keys = BTreeMap::<Vec<String>, Vec<String>>::new();
+    if let Some(tx) = tx {
+        for pending in tx.pending_records(table) {
+            let values = unique_key_values(&pending, schema, &arbiter.key);
+            if !unique_key_has_null(&values) && arbiter.applies_to(&pending)? {
+                pending_keys
+                    .entry(typed_unique_key_label(schema, &arbiter.key, &values)?)
+                    .or_default()
+                    .push(pending.id.clone());
+            }
+        }
+    }
 
     for record in records {
         let key_values = unique_key_values(record, schema, &arbiter.key);
@@ -1062,26 +1110,13 @@ pub(crate) fn validate_unique_arbiter_records(
         {
             return Err(unique_violation(&arbiter.name));
         }
-        // The index reflects committed state only. A row this same
-        // transaction has already written is invisible to it, which is how a
-        // duplicate key inserted twice inside one transaction passed
-        // validation and silently overwrote its predecessor. The pending set
-        // is bounded by the transaction's own size, so this stays cheap.
-        if let Some(tx) = tx {
-            for pending in tx.pending_records(table) {
-                if pending.id == record.id {
-                    continue;
-                }
-                let pending_values = unique_key_values(&pending, schema, &arbiter.key);
-                if unique_key_has_null(&pending_values) || !arbiter.applies_to(&pending)? {
-                    continue;
-                }
-                if typed_unique_key_label(schema, &arbiter.key, &pending_values)?
-                    == typed_unique_key_label(schema, &arbiter.key, &key_values)?
-                {
-                    return Err(unique_violation(&arbiter.name));
-                }
-            }
+        // Committed index entries cannot see this transaction's earlier writes.
+        let key = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
+        if pending_keys.get(&key).is_some_and(|ids| {
+            ids.iter()
+                .any(|id| !allow_existing_same_id || id != &record.id)
+        }) {
+            return Err(unique_violation(&arbiter.name));
         }
     }
     Ok(())

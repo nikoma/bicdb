@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/oracle-samples/db-sample-schemas",
+  "commit": "6660bad68c07bd143430ace58565b3f727e17263",
+  "files": {
+    "LICENSE.txt": "2da4f8e1f04662e5db9b224a20dfd13db8bc396398271d607bda0343212fbce3",
+    "hr_code.sql": "5604aae0d47585bba996a90eecc43f494d4c63de19b2b9db7afe5007d6f669f5",
+    "hr_create.sql": "19bb40fdad9ff31b66aad4bb2eff1a13b730fec2f39eb13f25bd157c980e023f",
+    "hr_populate.sql": "420375c58700178b74949ccfc1a7b22bc2fd305c486fc558fca43f8ce3ddc4df"
+  }
+}

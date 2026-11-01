@@ -1988,6 +1988,25 @@ pub(crate) fn startup(
                         return Err(error);
                     }
                 };
+                let requested_profile = match startup_sql_profile(&params) {
+                    Ok(profile) => profile,
+                    Err(error) => {
+                        error_response_for_error(stream, &error)?;
+                        return Err(error);
+                    }
+                };
+                let configured_profile = server.config.sql_profile.as_str();
+                if requested_profile
+                    .as_deref()
+                    .unwrap_or(bicdb_sql::oracle::POSTGRES_PROFILE)
+                    != configured_profile
+                {
+                    let error = PgWireError::Sql(bicdb_sql::SqlError::Unsupported(format!(
+                        "database requires SQL profile {configured_profile}; connect with options='-c bicdb.sql_profile={configured_profile}'"
+                    )));
+                    error_response_for_error(stream, &error)?;
+                    return Err(error);
+                }
                 authentication_ok(stream)?;
                 parameter_status(
                     stream,
@@ -1999,6 +2018,7 @@ pub(crate) fn startup(
                 parameter_status(stream, "DateStyle", "ISO, MDY")?;
                 parameter_status(stream, "integer_datetimes", "on")?;
                 parameter_status(stream, "standard_conforming_strings", "on")?;
+                parameter_status(stream, "bicdb_sql_profile", configured_profile)?;
                 backend_key_data(stream, process_id, secret_key)?;
                 ready_for_query(stream)?;
                 return Ok(Some(StartupState {
@@ -2040,6 +2060,35 @@ pub(crate) fn startup_session_gucs(params: &HashMap<String, String>) -> HashMap<
         }
     }
     gucs
+}
+
+fn startup_sql_profile(params: &HashMap<String, String>) -> Result<Option<String>> {
+    let mut selected = None;
+    let mut parts = params
+        .get("options")
+        .map(String::as_str)
+        .unwrap_or("")
+        .split_whitespace();
+    while let Some(part) = parts.next() {
+        let assignment = if part == "-c" {
+            parts.next().unwrap_or("")
+        } else {
+            part.strip_prefix("-c").unwrap_or("")
+        };
+        if let Some(profile) = assignment.strip_prefix("bicdb.sql_profile=") {
+            if !matches!(
+                profile,
+                bicdb_sql::oracle::POSTGRES_PROFILE | bicdb_sql::oracle::ORACLE_HR_PROFILE
+            ) || selected.as_deref().is_some_and(|old| old != profile)
+            {
+                return Err(PgWireError::Sql(bicdb_sql::SqlError::Unsupported(
+                    "unknown or conflicting bicdb.sql_profile startup option".to_string(),
+                )));
+            }
+            selected = Some(profile.to_string());
+        }
+    }
+    Ok(selected)
 }
 
 pub(crate) fn protocol_major(protocol_version: i32) -> i32 {

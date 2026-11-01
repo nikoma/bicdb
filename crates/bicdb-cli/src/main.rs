@@ -451,6 +451,9 @@ enum Command {
         /// Use a PostgreSQL-shaped version() banner while retaining bicdb_version() discovery.
         #[arg(long)]
         postgres_version_banner: bool,
+        /// SQL compatibility front end; Oracle HR requires a new, dedicated database.
+        #[arg(long, default_value = "postgres", value_parser = ["postgres", "oracle-hr-v1"])]
+        sql_profile: String,
         #[arg(long)]
         require_auth: bool,
         #[arg(long, value_enum, default_value_t = CliAuthMethod::Cleartext)]
@@ -630,6 +633,9 @@ enum Command {
         /// Use a PostgreSQL-shaped version() banner while retaining bicdb_version() discovery.
         #[arg(long)]
         postgres_version_banner: bool,
+        /// SQL compatibility front end; Oracle HR requires a new, dedicated database.
+        #[arg(long, default_value = "postgres", value_parser = ["postgres", "oracle-hr-v1"])]
+        sql_profile: String,
         #[arg(long)]
         require_auth: bool,
         #[arg(long, value_enum, default_value_t = CliAuthMethod::Cleartext)]
@@ -5684,6 +5690,7 @@ fn main() -> Result<()> {
             postgres_server_version,
             postgres_server_version_num,
             postgres_version_banner,
+            sql_profile,
             require_auth,
             auth_method,
             channel_binding,
@@ -5727,6 +5734,7 @@ fn main() -> Result<()> {
             postgres_server_version,
             postgres_server_version_num,
             postgres_version_banner,
+            sql_profile,
             require_auth,
             auth_method,
             channel_binding,
@@ -5799,6 +5807,10 @@ fn main() -> Result<()> {
                 redact_fields,
                 storage_sync,
             )?;
+            if cluster && sql_profile != "postgres" {
+                anyhow::bail!("Oracle HR SQL profile currently requires standalone serve");
+            }
+            config.sql_profile = sql_profile;
             config.log_archive = replication.log_archive_config()?;
             backup_command::configure(&mut config, &operator)?;
             config.metrics_listen = operator.metrics_listen;

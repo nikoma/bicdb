@@ -248,6 +248,11 @@ checked against a PostgreSQL 18.4 oracle. See the generated
 [compatibility report](POSTGRES_COMPATIBILITY.md) and
 [Nightmare Gauntlet](NIGHTMARE_GAUNTLET.md).
 
+An experimental [Oracle HR SQL profile](docs/oracle-hr-profile.md) runs an
+explicitly adapted Oracle sample through PostgreSQL drivers. It requires an
+opt-in database and connection profile and does not claim general Oracle
+Database compatibility.
+
 ### Native full-text search
 
 ```sql

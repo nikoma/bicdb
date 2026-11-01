@@ -797,6 +797,7 @@ impl PgWireServer {
         resource_governor: Option<ResourceGovernor>,
     ) -> Result<Arc<Self>> {
         validate_server_config(&config)?;
+        bicdb_sql::oracle::ensure_database_profile(&mut db.write(), &config.sql_profile)?;
         if config.automatic_paged_read_ahead {
             if let Some(snapshot) = db.read().paged_storage_snapshot()? {
                 config
@@ -1891,6 +1892,11 @@ impl PgWireCluster {
         config: PgWireConfig,
     ) -> Result<Arc<Self>> {
         validate_server_config(&config)?;
+        if config.sql_profile != bicdb_sql::oracle::POSTGRES_PROFILE {
+            return Err(PgWireError::Server(
+                "Oracle HR profile currently requires a standalone database".to_string(),
+            ));
+        }
         let root = root.as_ref().to_path_buf();
         fs::create_dir_all(root.join("databases"))?;
         let default_database = normalize_cluster_database_name(&default_database.into())?;

@@ -2128,6 +2128,12 @@ pub(crate) fn parse_message(
     let mut idx = 0;
     let name = read_cstr(payload, &mut idx)?;
     let sql = read_cstr(payload, &mut idx)?;
+    let sql = if server.config.sql_profile == bicdb_sql::oracle::ORACLE_HR_PROFILE {
+        let db = server.read_db()?;
+        bicdb_sql::oracle::lower_hr_sql(&db, &sql)?
+    } else {
+        sql
+    };
     let param_count = read_nonnegative_i16_count(payload, &mut idx, "parameter type")?;
     let mut param_type_oids = Vec::with_capacity(param_count);
     for _ in 0..param_count {
@@ -2199,6 +2205,13 @@ pub(crate) fn bind_message(
             return Err(PgWireError::Protocol(
                 "Bind parameter length exceeds payload".to_string(),
             ));
+        }
+        if server.config.sql_profile == bicdb_sql::oracle::ORACLE_HR_PROFILE
+            && len == 0
+            && matches!(oid, 0 | 25 | 1042 | 1043)
+        {
+            params.push("NULL".to_string());
+            continue;
         }
         params.push(decode_parameter_with_db(
             &db,

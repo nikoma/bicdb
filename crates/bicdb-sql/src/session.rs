@@ -4566,6 +4566,7 @@ impl<'db> SqlSession<'db> {
                 INITIAL_SESSION_AUTHORIZATION_GUC,
                 "server_version",
                 "server_version_num",
+                "bicdb.sql_profile",
             ];
             Arc::make_mut(&mut self.session_gucs).retain(|key, _| {
                 preserved.contains(&key.as_str())
@@ -4584,6 +4585,11 @@ impl<'db> SqlSession<'db> {
             normalize_object_name(raw)
         };
         let targets = GucAssignmentTargets::setting(&setting);
+        if setting == "bicdb.sql_profile" {
+            return Err(SqlError::Unsupported(
+                "bicdb.sql_profile is fixed at database open and connection startup".to_string(),
+            ));
+        }
         if setting == POSTGRES_VERSION_BANNER_GUC {
             return Err(protected_security_setting_error(&setting));
         }
@@ -4657,6 +4663,7 @@ impl<'db> SqlSession<'db> {
         let postgres_version_banner = self.session_gucs.get(POSTGRES_VERSION_BANNER_GUC).cloned();
         let server_version = self.session_gucs.get("server_version").cloned();
         let server_version_num = self.session_gucs.get("server_version_num").cloned();
+        let sql_profile = self.session_gucs.get("bicdb.sql_profile").cloned();
         self.settings = SqlSettings::default();
         Arc::make_mut(&mut self.session_gucs).clear();
         if let Some(database) = database {
@@ -4683,6 +4690,10 @@ impl<'db> SqlSession<'db> {
         if let Some(server_version_num) = server_version_num {
             Arc::make_mut(&mut self.session_gucs)
                 .insert("server_version_num".to_string(), server_version_num);
+        }
+        if let Some(sql_profile) = sql_profile {
+            Arc::make_mut(&mut self.session_gucs)
+                .insert("bicdb.sql_profile".to_string(), sql_profile);
         }
         self.guc_transaction_start = None;
         self.transaction_timestamp_micros = None;

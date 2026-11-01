@@ -1929,6 +1929,14 @@ pub(crate) fn self_rss_mb() -> u64 {
 }
 
 pub(crate) fn validate_server_config(config: &PgWireConfig) -> Result<()> {
+    if !matches!(
+        config.sql_profile.as_str(),
+        bicdb_sql::oracle::POSTGRES_PROFILE | bicdb_sql::oracle::ORACLE_HR_PROFILE
+    ) {
+        return Err(PgWireError::Server(
+            "unknown SQL compatibility profile".to_string(),
+        ));
+    }
     if let Some(verify) = &config.verification {
         if verify.interval.is_zero() || verify.interval > Duration::from_secs(30 * 86400) {
             return Err(PgWireError::Server(

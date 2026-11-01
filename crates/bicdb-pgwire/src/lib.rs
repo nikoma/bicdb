@@ -249,6 +249,9 @@ impl PgWireError {
 
 #[derive(Clone, Debug)]
 pub struct PgWireConfig {
+    /// Versioned SQL front end. PostgreSQL wire types and default behavior stay
+    /// native. Non-default profiles are persisted on an initially empty DB.
+    pub sql_profile: String,
     pub host: String,
     pub port: u16,
     /// PostgreSQL compatibility identity advertised to clients. This never
@@ -365,6 +368,7 @@ pub struct PgWireConfig {
 impl Default for PgWireConfig {
     fn default() -> Self {
         Self {
+            sql_profile: bicdb_sql::oracle::POSTGRES_PROFILE.to_string(),
             host: "127.0.0.1".to_string(),
             port: 5433,
             postgres_server_version: POSTGRES_COMPATIBILITY_VERSION.to_string(),
@@ -1851,6 +1855,10 @@ fn initialize_client_with_server_admitted(
         "server_version_num".to_string(),
         data_server.config.postgres_server_version_num.clone(),
     );
+    state.session_state.insert_session_guc(
+        "bicdb.sql_profile".to_string(),
+        data_server.config.sql_profile.clone(),
+    );
     if data_server.config.postgres_version_banner {
         state.session_state.insert_session_guc(
             "bicdb.postgres_version_banner".to_string(),
@@ -2466,6 +2474,26 @@ fn handle_frontend_message(
     match tag {
         b'Q' => {
             let query = cstring_payload(&payload)?;
+            let lowered;
+            let query = if server.config.sql_profile == bicdb_sql::oracle::ORACLE_HR_PROFILE {
+                let result = server.read_db().and_then(|db| {
+                    bicdb_sql::oracle::lower_hr_sql(&db, query).map_err(PgWireError::from)
+                });
+                match result {
+                    Ok(sql) => {
+                        lowered = sql;
+                        lowered.as_str()
+                    }
+                    Err(error) => {
+                        state.record_query_error();
+                        error_response_for_error(stream, &error)?;
+                        ready_for_query_status(stream, state.transaction_status())?;
+                        return Ok(true);
+                    }
+                }
+            } else {
+                query
+            };
             if sql_is_blank(query) {
                 flush_notifications(stream, server, state.connection_id)?;
                 write_message(stream, b'I', &[])?;

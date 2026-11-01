@@ -740,6 +740,11 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn apply_setting_value(&mut self, setting: String, value: SqlValue) -> Result<()> {
+        if setting == "bicdb.sql_profile" {
+            return Err(SqlError::Unsupported(
+                "bicdb.sql_profile is fixed at database open and connection startup".to_string(),
+            ));
+        }
         if setting == POSTGRES_VERSION_BANNER_GUC {
             return Err(protected_security_setting_error(&setting));
         }

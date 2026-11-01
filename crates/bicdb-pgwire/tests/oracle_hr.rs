@@ -58,6 +58,50 @@ impl Running {
 }
 
 #[tokio::test]
+async fn oracle_preview_stored_functions_execute_through_pg_driver_after_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    for attempt in 0..2 {
+        let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+        let (client, connection) = tokio_postgres::Config::new()
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb")
+            .options("-c bicdb.sql_profile=oracle-preview-v1")
+            .connect(tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        let connection = tokio::spawn(async move {
+            connection.await.unwrap();
+        });
+        if attempt == 0 {
+            for source in [
+                "CREATE OR REPLACE FUNCTION constant_time RETURN DATE AS BEGIN RETURN TIMESTAMP '2024-02-29 23:59:58'; END;",
+                "CREATE OR REPLACE FUNCTION initial_letter(p_value IN VARCHAR2, p_pos IN NUMBER) RETURN VARCHAR2 IS BEGIN RETURN SUBSTR(p_value,p_pos,1); END initial_letter;",
+            ] {
+                client.batch_execute(source).await.unwrap();
+            }
+        }
+        let statement = client
+            .prepare("SELECT constant_time(),initial_letter('Example',2) FROM DUAL")
+            .await
+            .unwrap();
+        assert_eq!(
+            *statement.columns()[0].type_(),
+            tokio_postgres::types::Type::TIMESTAMP
+        );
+        let row = client.query_one(&statement, &[]).await.unwrap();
+        assert_eq!(
+            row.get::<_, std::time::SystemTime>(0),
+            std::time::UNIX_EPOCH + std::time::Duration::from_secs(1709251198)
+        );
+        assert_eq!(row.get::<_, String>(1), "x");
+        drop(client);
+        connection.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn oracle_datetime_trunc_preserves_prepared_timestamp_metadata() {
     let directory = tempfile::tempdir().unwrap();
     let server = Running::with_profile(directory.path(), "oracle-preview-v1");

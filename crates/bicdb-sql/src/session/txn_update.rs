@@ -2514,7 +2514,10 @@ impl<'db> SqlSession<'db> {
             }
             Expr::TypedString(value) => typed_string_to_value_with_db(self.db_ref(), value),
             Expr::Identifier(ident) => {
-                if let Some(value) = routine_var_from_ident(&self.routine_vars, ident) {
+                // A procedural expression has no row-column namespace. Quoted
+                // parameters must resolve here too, including builtin arguments
+                // that use the generic evaluator instead of bound slots.
+                if let Some(value) = routine_var_from_name(&self.routine_vars, &ident.value) {
                     return Ok(value);
                 }
                 eval_constant_expr(expr)

@@ -394,7 +394,10 @@ fn lower_oracle_sql(db: &BicDb, sql: &str, preview: bool) -> Result<String> {
         }
         source.retain(|t| !word(t, "ENABLE"));
     }
-    let routine = source.iter().take(4).any(|t| word(t, "PROCEDURE"));
+    let routine = source
+        .iter()
+        .take(4)
+        .any(|t| word(t, "PROCEDURE") || (preview && word(t, "FUNCTION")));
     if routine || block {
         return lower_block(db, &source, routine, preview);
     }
@@ -870,17 +873,101 @@ fn lower_block(db: &BicDb, source: &[Token], routine: bool, preview: bool) -> Re
     if source.iter().any(|t| *t == Token::StringConcat) {
         return Err(unsupported("procedural concatenation is not yet supported"));
     }
+    // A final slash is the SQL*Plus submission delimiter, not part of PL/SQL.
+    let source = source.strip_suffix(&[Token::Div]).unwrap_or(source);
     let canonical = canonical_tokens(db, source, preview)?;
     let (header, body) = if routine {
+        let mut depth = 0;
         let boundary = canonical
             .iter()
-            .position(|t| word(t, "IS") || word(t, "AS"))
-            .ok_or_else(|| unsupported("procedure requires IS or AS"))?;
-        (Some(&canonical[..boundary]), &canonical[boundary + 1..])
+            .position(|t| {
+                match t {
+                    Token::LParen => depth += 1,
+                    Token::RParen => depth -= 1,
+                    _ => {}
+                }
+                depth == 0 && (word(t, "IS") || word(t, "AS"))
+            })
+            .ok_or_else(|| unsupported("routine requires IS or AS"))?;
+        let mut header = canonical[..boundary].to_vec();
+        if let Some(open) = header.iter().position(|t| *t == Token::LParen) {
+            let mut depth = 1;
+            let close = (open + 1..header.len())
+                .find(|i| {
+                    match header[*i] {
+                        Token::LParen => depth += 1,
+                        Token::RParen => depth -= 1,
+                        _ => {}
+                    }
+                    depth == 0
+                })
+                .ok_or_else(|| unsupported("unclosed routine argument list"))?;
+            let mut args = Vec::new();
+            for (index, group) in split_top_level(&header[open + 1..close]).iter().enumerate() {
+                if index > 0 {
+                    args.push(Token::Comma);
+                }
+                if group
+                    .get(1)
+                    .is_some_and(|t| word(t, "IN") || word(t, "OUT"))
+                {
+                    if word(&group[1], "IN") && group.get(2).is_some_and(|t| word(t, "OUT")) {
+                        args.push(Token::Word(sqlparser::tokenizer::Word {
+                            value: "INOUT".into(),
+                            quote_style: None,
+                            keyword: Keyword::INOUT,
+                        }));
+                        args.push(group[0].clone());
+                        args.extend_from_slice(&group[3..]);
+                    } else {
+                        args.extend([group[1].clone(), group[0].clone()]);
+                        args.extend_from_slice(&group[2..]);
+                    }
+                } else {
+                    args.extend_from_slice(group);
+                }
+            }
+            header.splice(open + 1..close, args);
+        }
+        if let Some(function) = header.iter().position(|t| word(t, "FUNCTION")) {
+            let returns = header
+                .iter()
+                .position(|t| word(t, "RETURN"))
+                .ok_or_else(|| unsupported("function requires a RETURN type"))?;
+            header[returns] = Token::Word(sqlparser::tokenizer::Word {
+                value: "RETURNS".into(),
+                quote_style: None,
+                keyword: Keyword::RETURNS,
+            });
+            // Oracle omits parentheses for parameterless functions; native
+            // PostgreSQL declarations require an explicit empty argument list.
+            let mut end_name = function + 2;
+            while header.get(end_name) == Some(&Token::Period) {
+                end_name += 2;
+            }
+            if end_name == returns {
+                header.splice(end_name..end_name, [Token::LParen, Token::RParen]);
+            }
+        }
+        (Some(header), &canonical[boundary + 1..])
     } else {
         (None, canonical.as_slice())
     };
     let mut body = body.to_vec();
+    if routine
+        && !body
+            .first()
+            .is_some_and(|t| word(t, "BEGIN") || word(t, "DECLARE"))
+    {
+        body.insert(
+            0,
+            Token::Word(sqlparser::tokenizer::Word {
+                value: "DECLARE".into(),
+                quote_style: None,
+                keyword: Keyword::DECLARE,
+            }),
+        );
+    }
     // Oracle permits END procedure_name; PL/pgSQL uses END; here.
     if let Some(end) = body.iter().rposition(|t| word(t, "END")) {
         if matches!(body.get(end + 1), Some(Token::Word(_)))
@@ -914,7 +1001,7 @@ fn lower_block(db: &BicDb, source: &[Token], routine: bool, preview: bool) -> Re
     Ok(match header {
         Some(header) => format!(
             "{} LANGUAGE plpgsql AS {delimiter}{body}{delimiter}",
-            join(header)
+            join(&header)
         ),
         None => format!("DO {delimiter}{body}{delimiter}"),
     })
@@ -1095,6 +1182,52 @@ fn lower_native(sql: &str, preview: bool) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preview_stored_functions_lower_returns_and_local_declarations() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        for source in [
+            "CREATE OR REPLACE FUNCTION day_now RETURN DATE AS BEGIN RETURN SYSDATE; END; /",
+            "CREATE OR REPLACE FUNCTION pick_initial(p_text VARCHAR2, p_pos NUMBER) RETURN VARCHAR2 IS BEGIN RETURN SUBSTR(p_text,p_pos,1); END pick_initial;",
+            "CREATE OR REPLACE FUNCTION numeric_shift(p_input IN NUMBER DEFAULT CAST(4 AS NUMBER)) RETURN NUMBER IS delta NUMBER := 1; BEGIN RETURN p_input+delta; END numeric_shift;",
+        ] {
+            let sql = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            SqlSession::new(&mut db).execute(&sql).unwrap();
+        }
+        for (sql, expected) in [
+            ("SELECT pick_initial('Sample',2) FROM DUAL", "a"),
+            ("SELECT numeric_shift(9) FROM DUAL", "10"),
+            ("SELECT numeric_shift() FROM DUAL", "5"),
+        ] {
+            let lowered = lower_profile_sql(&db, sql, ORACLE_PREVIEW_PROFILE).unwrap();
+            let result = SqlSession::new(&mut db).execute(&lowered).unwrap();
+            assert_eq!(result.rows[0][0].to_cell(), expected);
+        }
+        let lowered =
+            lower_profile_sql(&db, "SELECT day_now() FROM DUAL", ORACLE_PREVIEW_PROFILE).unwrap();
+        let result = SqlSession::new(&mut db).execute(&lowered).unwrap();
+        assert_eq!(result.column_types, vec![Some("timestamp".into())]);
+        assert!(!matches!(result.rows[0][0], SqlValue::Null));
+        let mut native = SqlSession::new(&mut db);
+        native.execute(r#"CREATE FUNCTION pg_quoted_arg("Arg" text) RETURNS text LANGUAGE plpgsql AS $$BEGIN RETURN substr("Arg",2,1); END$$"#).unwrap();
+        assert_eq!(
+            native
+                .execute("SELECT pg_quoted_arg('Sample')")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "a"
+        );
+        assert!(lower_profile_sql(&db,
+            "CREATE FUNCTION unsafe_id RETURN NUMBER AS PRAGMA AUTONOMOUS_TRANSACTION; BEGIN RETURN 1; END;",
+            ORACLE_PREVIEW_PROFILE).is_err());
+        assert!(lower_profile_sql(
+            &db,
+            "CREATE FUNCTION not_hr RETURN NUMBER AS BEGIN RETURN 1; END;",
+            ORACLE_HR_PROFILE
+        )
+        .is_err());
+    }
     #[test]
     fn preview_datetime_trunc_uses_column_types_and_keeps_postgres_trunc_numeric() {
         let root = tempfile::tempdir().unwrap();

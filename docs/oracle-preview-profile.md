@@ -86,6 +86,25 @@ mappings. Oracle DATE uses native timestamp(0); unconstrained NUMBER uses native
 numeric. Migration acceptance must test the actual application values and
 operations, including NULL versus empty LOBs, byte lengths and timezone values.
 
+## Stored-function declarations
+
+The preview adapts ordinary standalone Oracle function declarations to the native
+PL/pgSQL interpreter: `RETURN` result types, omitted empty parameter lists,
+parameter modes after names, local declarations before `BEGIN`, named outer
+`END` statements and a final SQL*Plus slash delimiter. Parameter defaults can
+contain nested casts. The existing procedure path also normalizes parameter
+modes and local declaration sections. PostgreSQL procedural expressions resolve
+quoted parameter names consistently in builtin arguments and direct returns.
+
+This is declaration support for the tested routine subset, not a complete
+PL/SQL compiler. Native routine execution, namespace, overload, privilege and
+error contracts still apply. Oracle AUTHID/rights semantics are not qualified.
+Packages, autonomous transactions and procedural concatenation still fail
+explicitly. Other routine bodies can require additional expression, cursor,
+exception or application-schema adaptations. Accepted DDL alone is not proof
+that every routine compiles and executes: migration acceptance must exercise
+each required routine and its dependencies through the application driver.
+
 The [iDempiere migration tools](../examples/oracle/idempiere/README.md) keep source
 snapshots and upstream binaries outside the checkout. Tables and rows alone are
 not application acceptance. Foreign-key validation/deferment, routines, views,

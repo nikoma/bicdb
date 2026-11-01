@@ -436,6 +436,33 @@ async fn oracle_preview_schema_selection_applies_to_simple_prepared_and_copy_que
     );
     drop(client);
     connection.await.unwrap();
+
+    let (client, connection) = connect("red").await;
+    client
+        .batch_execute(
+            "CREATE INDEX local_drop_idx ON entries(value);
+        CREATE SEQUENCE local_drop_seq;
+        CREATE VIEW local_drop_view AS SELECT k FROM entries;
+        DROP INDEX local_drop_idx;
+        DROP SEQUENCE local_drop_seq;
+        DROP VIEW local_drop_view;
+        DROP TABLE entries",
+        )
+        .await
+        .unwrap();
+    assert!(client
+        .simple_query("SELECT * FROM red.entries")
+        .await
+        .is_err());
+    let rows = client
+        .simple_query("SELECT COUNT(*) FROM blue.entries")
+        .await
+        .unwrap();
+    assert!(rows.iter().any(
+        |m| matches!(m, tokio_postgres::SimpleQueryMessage::Row(row) if row.get(0)==Some("2"))
+    ));
+    drop(client);
+    connection.await.unwrap();
 }
 
 #[tokio::test]

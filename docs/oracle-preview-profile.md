@@ -60,6 +60,11 @@ the storage relation is schema-qualified. This preserves `table.column` filters,
 projections, wildcard projections, joins and correlated outer references. An
 explicit SQL alias stays unchanged. UPDATE and DELETE predicates use the same
 logical binding; COPY retains its table-target binding.
+Named index, sequence and view creation and table/index/sequence/view removal
+also bind unqualified targets to that application schema. Explicit namespaces
+retain their selection. PostgreSQL driver `DEALLOCATE` commands preserve native
+prepared-statement identifiers, including quoted mixed-case names; these names
+are independent of Oracle application-name folding.
 When an ordinary column and a row alias share a name, type inference prefers
 the scalar column, matching row evaluation and preserving driver scalar types.
 PostgreSQL protocol Describe also resolves explicit, fully typed FROM

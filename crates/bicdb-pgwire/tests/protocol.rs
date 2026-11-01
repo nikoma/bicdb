@@ -1529,6 +1529,64 @@ fn integer_range_errors_are_consistent_across_query_bind_and_copy() {
 }
 
 #[test]
+fn oracle_driver_deallocate_preserves_protocol_statement_names() {
+    for profile in ["postgres", "oracle-hr-v1", "oracle-preview-v1"] {
+        let dir = tempfile::tempdir().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open(
+            dir.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let serving = server.clone();
+        let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+        let mut client = TcpStream::connect(address).unwrap();
+        send_startup_version_with_options(
+            &mut client,
+            196_608,
+            true,
+            &[("options", &format!("-c bicdb.sql_profile={profile}"))],
+        );
+        read_until_ready(&mut client);
+        for (name, deallocate) in [
+            ("jdbc_lower_42", "DEALLOCATE jdbc_lower_42"),
+            ("Jdbc_Mixed_42", "DEALLOCATE PREPARE \"Jdbc_Mixed_42\""),
+            ("jdbc_all_42", "DEALLOCATE ALL"),
+        ] {
+            send_parse(&mut client, name, "SELECT 42", &[]);
+            send_bind(&mut client, "", name, &[]);
+            send_execute(&mut client, "");
+            send_sync(&mut client);
+            assert_eq!(read_query_rows(&mut client), vec![vec!["42".to_string()]]);
+            send_query(&mut client, deallocate);
+            let (tags, _) = read_tags_until_ready(&mut client);
+            assert!(
+                tags.contains(&b'C') && !tags.contains(&b'E'),
+                "{profile}: {deallocate}: {tags:?}"
+            );
+            send_bind(&mut client, "", name, &[]);
+            send_execute(&mut client, "");
+            send_sync(&mut client);
+            let (tags, _) = read_tags_until_ready(&mut client);
+            assert!(
+                tags.contains(&b'E'),
+                "prepared statement survived {deallocate}"
+            );
+        }
+        send_query(&mut client, "SELECT 43");
+        assert_eq!(read_query_rows(&mut client), vec![vec!["43".to_string()]]);
+        client.write_all(b"X\0\0\0\x04").unwrap();
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+    }
+}
+
+#[test]
 fn text_format_binds_preserve_numeric_looking_character_keys() {
     for profile in ["postgres", "oracle-preview-v1"] {
         let dir = tempfile::tempdir().unwrap();

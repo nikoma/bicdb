@@ -118,6 +118,34 @@ pub fn lower_session_sql(
     impl sqlparser::ast::VisitorMut for Qualify {
         type Break = ();
         fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<()> {
+            match statement {
+                Statement::CreateIndex(index) => {
+                    if let Some(name) = index.name.as_mut() {
+                        self.pre_visit_relation(name)?;
+                    }
+                }
+                Statement::CreateSequence { name, .. } => self.pre_visit_relation(name)?,
+                Statement::CreateView(view) => self.pre_visit_relation(&mut view.name)?,
+                _ => {}
+            }
+            // sqlparser's relation visitor does not visit DROP's name list.
+            // Bind it to the same application schema as CREATE and queries.
+            if let Statement::Drop {
+                object_type, names, ..
+            } = statement
+            {
+                if matches!(
+                    object_type,
+                    sqlparser::ast::ObjectType::Table
+                        | sqlparser::ast::ObjectType::View
+                        | sqlparser::ast::ObjectType::Index
+                        | sqlparser::ast::ObjectType::Sequence
+                ) {
+                    for name in names {
+                        self.pre_visit_relation(name)?;
+                    }
+                }
+            }
             if let Statement::Copy {
                 source: sqlparser::ast::CopySource::Table { table_name, .. },
                 ..
@@ -380,6 +408,16 @@ fn lower_oracle_sql(db: &BicDb, sql: &str, preview: bool) -> Result<String> {
             .map(|statement| lower_oracle_sql(db, &join(statement), preview))
             .collect::<Result<Vec<_>>>()
             .map(|statements| statements.join("; "));
+    }
+    // PostgreSQL drivers issue this transport housekeeping command even when
+    // the application uses Oracle SQL. Prepared names are protocol identifiers;
+    // preserve native case rules rather than folding them as application names.
+    if word(&source[0], "DEALLOCATE") {
+        let statements = parse_statements(sql)?;
+        if let [Statement::Deallocate { .. }] = statements.as_slice() {
+            return Ok(statements[0].to_string());
+        }
+        return Err(unsupported("expected one DEALLOCATE statement"));
     }
     if source
         .iter()

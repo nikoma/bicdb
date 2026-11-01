@@ -58,6 +58,91 @@ impl Running {
 }
 
 #[tokio::test]
+async fn first_read_committed_row_lock_waits_for_a_younger_holder() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(directory.path(), profile);
+        let connect = || {
+            let mut config = tokio_postgres::Config::new();
+            config
+                .host("127.0.0.1")
+                .port(server.port)
+                .user("bicdb")
+                .dbname("bicdb");
+            if profile != "postgres" {
+                config.options("-c bicdb.sql_profile=oracle-preview-v1");
+            }
+            async move {
+                let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+                (
+                    client,
+                    tokio::spawn(async move {
+                        connection.await.unwrap();
+                    }),
+                )
+            }
+        };
+        let (older, c1) = connect().await;
+        let (younger, c2) = connect().await;
+        older
+            .batch_execute(
+                "CREATE TABLE counters(k INT PRIMARY KEY,n INT); INSERT INTO counters VALUES(1,1)",
+            )
+            .await
+            .unwrap();
+        older.batch_execute("BEGIN").await.unwrap();
+        younger.batch_execute("BEGIN").await.unwrap();
+        younger
+            .query_one("SELECT n FROM counters WHERE k=1 FOR UPDATE", &[])
+            .await
+            .unwrap();
+        let mut waiting = tokio::spawn(async move {
+            let value = older
+                .query_one("SELECT n FROM counters WHERE k=1 FOR UPDATE", &[])
+                .await;
+            if value.is_ok() {
+                older
+                    .batch_execute("UPDATE counters SET n=n+1 WHERE k=1; COMMIT")
+                    .await
+                    .unwrap();
+            } else {
+                older.batch_execute("ROLLBACK").await.unwrap();
+            }
+            value.map(|row| row.get::<_, i32>(0))
+        });
+        let early = tokio::time::timeout(std::time::Duration::from_millis(150), &mut waiting).await;
+        younger
+            .batch_execute("UPDATE counters SET n=2 WHERE k=1; COMMIT")
+            .await
+            .unwrap();
+        let (waited, value) = match early {
+            Ok(value) => (false, value.unwrap()),
+            Err(_) => (true, waiting.await.unwrap()),
+        };
+        assert!(
+            waited,
+            "{profile}: an older first-row waiter should wait for its holder"
+        );
+        assert_eq!(
+            value.unwrap(),
+            2,
+            "{profile}: locking read must refresh the committed row"
+        );
+        assert_eq!(
+            younger
+                .query_one("SELECT n FROM counters WHERE k=1", &[])
+                .await
+                .unwrap()
+                .get::<_, i32>(0),
+            3
+        );
+        drop(younger);
+        c1.await.unwrap();
+        c2.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn oracle_preview_stored_functions_execute_through_pg_driver_after_restart() {
     let directory = tempfile::tempdir().unwrap();
     for attempt in 0..2 {

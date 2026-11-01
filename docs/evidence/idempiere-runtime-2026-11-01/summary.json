@@ -1,0 +1,76 @@
+{
+  "format": 1,
+  "application_source_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "bicdb_profile": "oracle-preview-v1",
+  "application_sql_provider": "Oracle",
+  "transport": "PostgreSQL JDBC",
+  "login_form_rendered": true,
+  "authentication_qualified": false,
+  "application_qualified": false,
+  "development_storage": "volatile",
+  "stored_function_executions": [
+    {
+      "name": "GETDATE",
+      "installed": true,
+      "executed": true,
+      "source_sha256": "8e4bc3d5201a98c0fad39c248c0bc88e9f948b2a0ab936db5d2464c9f2d87f0c"
+    },
+    {
+      "name": "CHARAT",
+      "installed": true,
+      "executed": true,
+      "source_sha256": "ce24769ae0154a3c132a5674fd961b356a3da3123f95af657a7dec01941cf785"
+    }
+  ],
+  "sequence_probe_before": {
+    "workers": 5,
+    "requested": 25,
+    "committed": 20,
+    "distinct": 20,
+    "retry_errors": [
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001",
+      "40001"
+    ],
+    "seconds": 8.82,
+    "application_qualified": false
+  },
+  "sequence_probe_after": {
+    "workers": 5,
+    "requested": 25,
+    "committed": 25,
+    "distinct": 25,
+    "retry_errors": [],
+    "seconds": 9.43,
+    "application_qualified": false,
+    "source_base": "93276cf33ebe4f4b8208693510055a14155e22f4",
+    "working_tree_diff_sha256": "e6b36ec40c91b3a0cab50cd51d78afb0a71b0be04323aad1b890c2019a556883",
+    "experimental_first_lock_wait": null
+  },
+  "core_db_source_sha256": "a82046305cdc98667806715c382ffed9017605374bb3e291c3690915f42817a1",
+  "scope": "Development routine execution and bounded concurrent ID allocation; not complete application or operational qualification"
+}

@@ -60,6 +60,16 @@ conformance are not claimed. INSERT, UPDATE and COPY column names also retain
 Oracle folding when a column is named with an otherwise syntactic word such as
 VALUE.
 
+For a READ COMMITTED locking SELECT, the first row lock waits for its owner
+without an immediate transaction-age rejection. The wait remains bounded by the
+native reservation budget. After an owner commits, the locking query refreshes
+and rechecks the row before returning it. Transactions already holding row locks
+retain native deadlock-avoidance behavior; repeatable-read snapshots retain their
+existing conflict contract. Driver regression tests cover both PostgreSQL and
+Oracle-preview connections. The
+[application runtime evidence](evidence/idempiere-runtime-2026-11-01/README.md)
+records a concurrent sequence-allocation check, not full transaction conformance.
+
 ## Datetime truncation
 
 The preview resolves `TRUNC` on known date/timestamp expressions to an Oracle

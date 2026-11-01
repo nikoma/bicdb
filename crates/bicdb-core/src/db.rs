@@ -14867,7 +14867,23 @@ impl Transaction {
             )));
         }
         let db = self.db_ref();
-        db.lock_tx_record_for_read_committed_update(self.id, collection, id, &self.locked_keys)?;
+        if self.isolation == TransactionIsolation::ReadCommitted
+            && self.locked_keys.lock().len() == 0
+        {
+            // A locking SELECT with no row locks cannot form a row-lock cycle.
+            // Wait for this first row regardless of transaction age, just as a
+            // counter reservation does. An age-based immediate abort here can
+            // exhaust application retries even for an ordinary single-row
+            // SELECT ... FOR UPDATE followed by UPDATE and COMMIT.
+            db.lock_tx_first_record_for_reservation(self.id, collection, id, &self.locked_keys)?;
+        } else {
+            db.lock_tx_record_for_read_committed_update(
+                self.id,
+                collection,
+                id,
+                &self.locked_keys,
+            )?;
+        }
         if self.last_pending_write(collection, id).is_none() {
             let state = db.collection_state(collection)?;
             let shard = state.shard(id).read();

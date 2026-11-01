@@ -1,0 +1,20 @@
+{
+  "name": "number_division_remaining",
+  "oracle": {
+    "rows": [
+      [
+        "2000-01-01 00:00:01"
+      ]
+    ]
+  },
+  "bicdb": {
+    "rows": [
+      [
+        "2000-01-01 00:00:00"
+      ]
+    ]
+  },
+  "matched": false,
+  "sql": "SELECT TO_CHAR(TIMESTAMP '2000-01-01 00:00:00'+1/86400,'YYYY-MM-DD HH24:MI:SS') FROM DUAL",
+  "profile": "oracle-preview-v1"
+}

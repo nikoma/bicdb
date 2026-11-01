@@ -140,3 +140,9 @@ The preview's standalone datetime extraction fixtures use
 They check date year/month/day fields, timestamp clock fields, conditional
 aggregates and an application column named `YEAR`. These are value comparisons;
 they do not qualify all Oracle datetime types, errors, NLS rules or metadata.
+
+`date-offset-cases.json` checks known numeric day values, rounding boundaries,
+nullable operands, timestamp-to-DATE conversion and nested query metadata.
+NUMBER expression evaluation is a separate acceptance requirement; the
+[day-offset evidence](../../../docs/evidence/oracle-day-offsets-2026-11-01/README.md)
+also records a failing integer-division composition probe.

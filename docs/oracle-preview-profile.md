@@ -127,6 +127,20 @@ application column. Conditional aggregates using extracted years are covered by
 native query tests and [Oracle comparisons](evidence/oracle-extract-2026-11-01/README.md).
 This does not qualify every Oracle extraction overload or error condition.
 
+Known date/timestamp operands support numeric day addition/subtraction and
+number-plus-datetime in ordinary preview queries. Numeric timestamp arithmetic
+discards fractional seconds; day offsets round to whole seconds with exact
+decimal arithmetic. Literal offsets retain their token precision. Declared
+parameter types select the overload; undeclared day parameters infer NUMERIC.
+CTEs and derived queries retain the datetime result type. See the
+[day-offset evidence](evidence/oracle-day-offsets-2026-11-01/README.md).
+
+NUMBER expression semantics are still incomplete: `1/86400` currently uses
+native integer division, so using it as an offset does not yet match Oracle.
+Date-minus-date, time-zone overloads, NLS conversion and arithmetic inside stored
+programs need separate implementation/qualification. Default PostgreSQL
+operators and the bounded HR profile retain their existing behavior.
+
 The preview resolves `TRUNC` on known date/timestamp expressions to an Oracle
 datetime helper returning native `timestamp` (the mapping for Oracle DATE).
 Resolution uses metadata, including ordinary CTE projections, without executing

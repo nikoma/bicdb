@@ -1,0 +1,249 @@
+{
+  "format": 1,
+  "created_at": "2026-11-01T21:15:31.069237+00:00",
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "oracle_driver_version": "26.1.0",
+  "pg_driver_version": "3.3.6",
+  "fixture_sha256": "528f9190802c8699e4fee51cba2710b6c4a18dd38eebf9ca4bfec5ee91eaf990",
+  "total": 13,
+  "matched": 13,
+  "different": 0,
+  "cases": [
+    {
+      "id": "date_add_day",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2000-01-02 12:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2000-01-02 12:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "date_subtract_fraction",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "1999-12-31 18:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "1999-12-31 18:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "number_add_date",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2000-01-01 18:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2000-01-01 18:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "timestamp_number_discards_subseconds",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2000-01-02 12:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2000-01-02 12:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "date_offset_below_half_second",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2000-01-01 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2000-01-01 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "date_offset_above_half_second",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2000-01-01 00:00:01"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2000-01-01 00:00:01"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "date_offset_negative_half_second_boundary",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "1999-12-31 23:59:59"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "1999-12-31 23:59:59"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "date_offset_numeric_text",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2000-01-02 00:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2000-01-02 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "date_offset_zero_discards_subseconds",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2000-01-01 12:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2000-01-01 12:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "date_add_null",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      }
+    },
+    {
+      "id": "null_add_date",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      }
+    },
+    {
+      "id": "date_offset_derived_columns",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2000-01-01 18:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2000-01-01 18:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "date_offset_nested_cte",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "2000-01-02 18:00:00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2000-01-02 18:00:00"
+          ]
+        ]
+      }
+    }
+  ],
+  "scope": "Query values only; not type metadata, errors, transactions, or full conformance"
+}

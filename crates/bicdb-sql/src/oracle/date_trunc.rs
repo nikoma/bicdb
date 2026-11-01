@@ -1,12 +1,12 @@
-//! Resolve the datetime TRUNC overload without changing PostgreSQL trunc().
+//! Resolve preview datetime operations without changing PostgreSQL arithmetic.
 use super::*;
 
-pub(super) fn lower(db: &BicDb, sql: &str, oids: &[i32]) -> Result<String> {
-    if !sql.to_ascii_lowercase().contains("trunc") {
+pub(super) fn lower(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
+    if !sql.to_ascii_lowercase().contains("trunc") && !sql.contains(['+', '-']) {
         return Ok(sql.to_string());
     }
     let mut statements = parse_statements(sql)?;
-    if !oids.is_empty() {
+    if let Some(oids) = oids.filter(|oids| !oids.is_empty()) {
         let _ = visit_expressions_mut(&mut statements, |expr| {
             if let Expr::Value(value) = expr {
                 if let Value::Placeholder(name) = &value.value {
@@ -37,7 +37,7 @@ pub(super) fn lower(db: &BicDb, sql: &str, oids: &[i32]) -> Result<String> {
             ControlFlow::<()>::Continue(())
         });
     }
-    rewrite(db, &mut statements)?;
+    rewrite_with_parameters(db, &mut statements, oids)?;
     Ok(statements
         .iter()
         .map(ToString::to_string)
@@ -46,15 +46,44 @@ pub(super) fn lower(db: &BicDb, sql: &str, oids: &[i32]) -> Result<String> {
 }
 
 pub(super) fn rewrite(db: &BicDb, statements: &mut Vec<Statement>) -> Result<()> {
+    rewrite_with_parameters(db, statements, None)
+}
+
+fn rewrite_with_parameters(
+    db: &BicDb,
+    statements: &mut Vec<Statement>,
+    oids: Option<&[i32]>,
+) -> Result<()> {
     struct Resolve<'a> {
         db: &'a BicDb,
+        oids: Option<&'a [i32]>,
         queries: Vec<Query>,
         statement_from: Vec<Option<String>>,
     }
     impl Resolve<'_> {
         fn input_type(&self, arg: &Expr) -> Option<String> {
+            if let Expr::Nested(inner) = arg {
+                return self.input_type(inner);
+            }
+            if let Expr::Value(value) = arg {
+                if let Value::Placeholder(name) = &value.value {
+                    if let Some(oid) = name
+                        .strip_prefix('$')
+                        .and_then(|n| n.parse::<usize>().ok())
+                        .and_then(|n| n.checked_sub(1))
+                        .and_then(|n| self.oids.and_then(|oids| oids.get(n)))
+                    {
+                        if *oid != 0 {
+                            return pg_type_spec_by_oid(*oid).map(|spec| spec.name.to_string());
+                        }
+                    }
+                    // The Parse pass supplies declared parameter types later.
+                    // Do not guess a bind's overload during schema binding.
+                    return None;
+                }
+            }
             let direct = projected_expr_pg_type(arg, None);
-            if matches!(direct.as_deref(), Some("date" | "timestamp")) {
+            if direct.is_some() {
                 return direct;
             }
             let mut probe = if let Some(query) = self.queries.last() {
@@ -96,6 +125,36 @@ pub(super) fn rewrite(db: &BicDb, statements: &mut Vec<Statement>) -> Result<()>
                 .and_then(|types| types.into_iter().next().flatten())
                 .or(direct)
         }
+        fn day_operand(&self, expr: &Expr, pg_type: Option<&str>) -> bool {
+            match expr {
+                Expr::Nested(inner) => return self.day_operand(inner, pg_type),
+                Expr::Value(value)
+                    if matches!(value.value, Value::Null | Value::SingleQuotedString(_)) =>
+                {
+                    return true
+                }
+                Expr::Value(value)
+                    if matches!(value.value, Value::Placeholder(_)) && pg_type.is_none() =>
+                {
+                    return self.oids.is_some()
+                }
+                _ => {}
+            }
+            matches!(
+                pg_type,
+                Some(
+                    "int2"
+                        | "int4"
+                        | "int8"
+                        | "numeric"
+                        | "float4"
+                        | "float8"
+                        | "text"
+                        | "varchar"
+                        | "bpchar"
+                )
+            )
+        }
     }
     impl sqlparser::ast::VisitorMut for Resolve<'_> {
         type Break = SqlError;
@@ -115,11 +174,85 @@ pub(super) fn rewrite(db: &BicDb, statements: &mut Vec<Statement>) -> Result<()>
             self.queries.push(query.clone());
             ControlFlow::Continue(())
         }
-        fn post_visit_query(&mut self, _: &mut Query) -> ControlFlow<SqlError> {
-            self.queries.pop();
+        fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<SqlError> {
+            let previous = self.queries.pop().expect("query snapshot stack");
+            if let Some(parent) = self.queries.last_mut() {
+                // Outer metadata probes must see the resolved types of CTEs
+                // and derived queries after their datetime expressions change.
+                struct Refresh<'a> {
+                    previous: &'a Query,
+                    resolved: &'a Query,
+                }
+                impl sqlparser::ast::VisitorMut for Refresh<'_> {
+                    type Break = ();
+                    fn pre_visit_query(&mut self, candidate: &mut Query) -> ControlFlow<()> {
+                        if candidate == self.previous {
+                            *candidate = self.resolved.clone();
+                        }
+                        ControlFlow::Continue(())
+                    }
+                }
+                let _ = sqlparser::ast::VisitMut::visit(
+                    parent,
+                    &mut Refresh {
+                        previous: &previous,
+                        resolved: query,
+                    },
+                );
+            }
             ControlFlow::Continue(())
         }
         fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<SqlError> {
+            if let Expr::BinaryOp { left, op, right } = expr {
+                if matches!(op, BinaryOperator::Plus | BinaryOperator::Minus) {
+                    let left_type = self.input_type(left);
+                    let right_type = self.input_type(right);
+                    let direction = if *op == BinaryOperator::Minus { -1 } else { 1 };
+                    let operands = if matches!(left_type.as_deref(), Some("date" | "timestamp"))
+                        && self.day_operand(right, right_type.as_deref())
+                    {
+                        Some((left.as_ref(), right.as_ref()))
+                    } else if *op == BinaryOperator::Plus
+                        && matches!(right_type.as_deref(), Some("date" | "timestamp"))
+                        && self.day_operand(left, left_type.as_deref())
+                    {
+                        Some((right.as_ref(), left.as_ref()))
+                    } else {
+                        None
+                    };
+                    if let Some((date, days)) = operands {
+                        // Stringify literal tokens before NUMERIC conversion so
+                        // a day offset does not pass through floating point.
+                        fn exact_literal(expr: &Expr) -> String {
+                            match expr {
+                                Expr::Value(value) => match &value.value {
+                                    Value::Number(number, _) => {
+                                        format!("CAST('{}' AS NUMERIC)", number.replace('\'', "''"))
+                                    }
+                                    _ => expr.to_string(),
+                                },
+                                Expr::Nested(inner) => format!("({})", exact_literal(inner)),
+                                Expr::UnaryOp {
+                                    op: UnaryOperator::Plus,
+                                    expr,
+                                } => format!("+({})", exact_literal(expr)),
+                                Expr::UnaryOp {
+                                    op: UnaryOperator::Minus,
+                                    expr,
+                                } => format!("-({})", exact_literal(expr)),
+                                _ => expr.to_string(),
+                            }
+                        }
+                        match expression(&format!(
+                            "bicdb_oracle_date_add_days({date}, CAST({} AS NUMERIC), {direction})",
+                            exact_literal(days)
+                        )) {
+                            Ok(lowered) => *expr = lowered,
+                            Err(error) => return ControlFlow::Break(error),
+                        }
+                    }
+                }
+            }
             if let Expr::Function(function) = expr {
                 if object_name_lowercase(&function.name).is_ok_and(|n| n == "trunc") {
                     let args = function_args(function);
@@ -138,6 +271,7 @@ pub(super) fn rewrite(db: &BicDb, statements: &mut Vec<Statement>) -> Result<()>
         statements,
         &mut Resolve {
             db,
+            oids,
             queries: Vec::new(),
             statement_from: Vec::new(),
         },

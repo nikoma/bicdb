@@ -261,6 +261,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "to_date"
             | "bicdb_oracle_to_date"
             | "bicdb_oracle_trunc_date"
+            | "bicdb_oracle_date_add_days"
             | "timezone"
             | "similarity"
     );
@@ -269,6 +270,9 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
     }
     if name == "bicdb_oracle_trunc_date" {
         arity(name, args, 1..=2)?;
+    }
+    if name == "bicdb_oracle_date_add_days" {
+        arity(name, args, 3..=3)?;
     }
     // make_interval and age(ts) accept missing/NULL-free forms; everything else is strict.
     if name != "make_interval" && any_null(args) {
@@ -513,6 +517,48 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         "bicdb_oracle_to_date" => {
             arity(name, args, 2..=2)?;
             eval_to_timestamp(args)?
+        }
+        "bicdb_oracle_date_add_days" => {
+            let out_of_range = || {
+                SqlError::data_exception(
+                    "22008",
+                    "Oracle DATE arithmetic is out of range",
+                    Some("timestamp".into()),
+                )
+            };
+            let date = PgTimestamp::from_postgres_text(&text(0), false)
+                .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+            let Some(micros) = date.finite_micros() else {
+                return Err(out_of_range());
+            };
+            let mut days = parse_decimal(&text(1))?;
+            days.mantissa *= 86_400_i32;
+            let seconds = decimal_to_i64_rounded(days).map_err(|_| out_of_range())?;
+            let direction = int_arg(name, &args[2])?;
+            if !matches!(direction, -1 | 1) {
+                return Err(SqlError::invalid_parameter_value(
+                    "Oracle DATE day direction must be -1 or 1",
+                ));
+            }
+            // Oracle numeric timestamp arithmetic converts to DATE first,
+            // discarding fractional seconds. Offset rounding is exact and
+            // symmetric around zero, including sub-second day fractions.
+            let micros = micros
+                .div_euclid(1_000_000)
+                .checked_mul(1_000_000)
+                .and_then(|base| {
+                    seconds
+                        .checked_mul(direction)?
+                        .checked_mul(1_000_000)?
+                        .checked_add(base)
+                })
+                .ok_or_else(out_of_range)?;
+            let result = PgTimestamp::Finite(micros);
+            let year = result.components().ok_or_else(out_of_range)?.0;
+            if !(-4711..=9999).contains(&year) {
+                return Err(out_of_range());
+            }
+            SqlValue::String(result.to_iso_text(false))
         }
         "bicdb_oracle_trunc_date" => {
             let format = args

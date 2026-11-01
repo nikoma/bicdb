@@ -75,7 +75,7 @@ pub fn lower_profile_sql(db: &BicDb, sql: &str, profile: &str) -> Result<String>
         },
     )?;
     if profile == ORACLE_PREVIEW_PROFILE {
-        date_trunc::lower(db, &lowered, &[])
+        date_trunc::lower(db, &lowered, None)
     } else {
         Ok(lowered)
     }
@@ -89,7 +89,7 @@ pub fn lower_typed_native_sql(
     oids: &[i32],
 ) -> Result<String> {
     if profile == ORACLE_PREVIEW_PROFILE {
-        date_trunc::lower(db, sql, oids)
+        date_trunc::lower(db, sql, Some(oids))
     } else {
         Ok(sql.to_string())
     }
@@ -1389,6 +1389,86 @@ mod tests {
         )
         .is_err());
     }
+    #[test]
+    fn preview_numeric_day_offsets_round_exactly_and_leave_postgres_arithmetic_alone() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        for (source, expected) in [
+            (
+                "SELECT TIMESTAMP '2000-01-01 12:00:00.9'+1 FROM DUAL",
+                "2000-01-02 12:00:00",
+            ),
+            (
+                "SELECT 0.25+TIMESTAMP '2000-01-01 12:00:00' FROM DUAL",
+                "2000-01-01 18:00:00",
+            ),
+            (
+                "SELECT TIMESTAMP '2000-01-01 00:00:00'-0.25 FROM DUAL",
+                "1999-12-31 18:00:00",
+            ),
+            (
+                "SELECT TIMESTAMP '2000-01-01 00:00:00'+0.000005787037037037037037 FROM DUAL",
+                "2000-01-01 00:00:00",
+            ),
+            (
+                "SELECT TIMESTAMP '2000-01-01 00:00:00'+0.000005787037037037037038 FROM DUAL",
+                "2000-01-01 00:00:01",
+            ),
+            (
+                "SELECT TIMESTAMP '2000-01-01 00:00:00'-0.000005787037037037037038 FROM DUAL",
+                "1999-12-31 23:59:59",
+            ),
+            (
+                "SELECT TIMESTAMP '2000-01-01 00:00:00'+'1' FROM DUAL",
+                "2000-01-02 00:00:00",
+            ),
+        ] {
+            let sql = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            let result = SqlSession::new(&mut db)
+                .execute(&sql)
+                .unwrap_or_else(|error| panic!("{source}: {sql}: {error}"));
+            assert_eq!(result.rows[0][0].to_cell(), expected, "{source}: {sql}");
+            assert_eq!(result.column_types, vec![Some("timestamp".into())]);
+        }
+        for source in [
+            "SELECT TIMESTAMP '2000-01-01 00:00:00'+NULL FROM DUAL",
+            "SELECT NULL+TIMESTAMP '2000-01-01 00:00:00' FROM DUAL",
+        ] {
+            let sql = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            assert!(matches!(
+                SqlSession::new(&mut db).execute(&sql).unwrap().rows[0][0],
+                SqlValue::Null
+            ));
+        }
+        for source in [
+            "SELECT TIMESTAMP '9999-12-31 00:00:00'+1 FROM DUAL",
+            "SELECT TIMESTAMP '2000-01-01 00:00:00'+'invalid' FROM DUAL",
+        ] {
+            let sql = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            assert!(SqlSession::new(&mut db).execute(&sql).is_err());
+        }
+        for source in [
+            "CREATE SCHEMA offsets",
+            "CREATE TABLE offsets.events(k NUMBER PRIMARY KEY,happened DATE,days NUMBER)",
+            "INSERT INTO offsets.events VALUES(1,TIMESTAMP '2000-01-01 12:00:00',0.25)",
+        ] {
+            let sql = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            SqlSession::new(&mut db).execute(&sql).unwrap();
+        }
+        for source in ["SELECT happened+days FROM events", "WITH days AS (SELECT happened+days AS next_day FROM events) SELECT next_day+1 FROM days"] {
+            let sql=lower_session_sql(&db,source,ORACLE_PREVIEW_PROFILE,Some("offsets"),"bicdb").unwrap();
+            let value=SqlSession::new(&mut db).execute(&sql).unwrap_or_else(|error|panic!("{source}: {sql}: {error}")).rows[0][0].to_cell();
+            assert_eq!(value,if source.starts_with("WITH") {"2000-01-02 18:00:00"} else {"2000-01-01 18:00:00"},"{sql}");
+        }
+        assert!(SqlSession::new(&mut db)
+            .execute("SELECT TIMESTAMP '2000-01-01 00:00:00'+1")
+            .is_err());
+        assert_eq!(
+            SqlSession::new(&mut db).execute("SELECT 7/2").unwrap().rows[0][0].to_cell(),
+            "3"
+        );
+    }
+
     #[test]
     fn preview_extract_fields_and_case_aggregates_keep_their_grammar() {
         let root = tempfile::tempdir().unwrap();

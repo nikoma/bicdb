@@ -228,6 +228,72 @@ async fn oracle_preview_stored_functions_execute_through_pg_driver_after_restart
 }
 
 #[tokio::test]
+async fn oracle_day_offsets_keep_typed_parameters_and_timestamp_results() {
+    use tokio_postgres::types::Type;
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let (client, connection) = tokio_postgres::Config::new()
+        .host("127.0.0.1")
+        .port(server.port)
+        .user("bicdb")
+        .dbname("bicdb")
+        .options("-c bicdb.sql_profile=oracle-preview-v1")
+        .connect(tokio_postgres::NoTls)
+        .await
+        .unwrap();
+    let connection = tokio::spawn(async move {
+        connection.await.unwrap();
+    });
+    let start = std::time::UNIX_EPOCH + std::time::Duration::from_secs(946_684_800);
+    let fractional = start + std::time::Duration::from_millis(900);
+    for sql in ["SELECT $1+$2", "SELECT $2+$1"] {
+        let statement = client
+            .prepare_typed(sql, &[Type::TIMESTAMP, Type::INT4])
+            .await
+            .unwrap();
+        assert_eq!(statement.columns()[0].type_(), &Type::TIMESTAMP);
+        assert_eq!(
+            client
+                .query_one(&statement, &[&fractional, &1i32])
+                .await
+                .unwrap()
+                .get::<_, std::time::SystemTime>(0),
+            start + std::time::Duration::from_secs(86400)
+        );
+    }
+    let statement = client
+        .prepare_typed("SELECT $1-$2", &[Type::TIMESTAMP, Type::TIMESTAMP])
+        .await
+        .unwrap();
+    assert_eq!(statement.columns()[0].type_(), &Type::INTERVAL);
+    let statement = client
+        .prepare("SELECT TIMESTAMP '2000-01-01 00:00:00'+$1")
+        .await
+        .unwrap();
+    assert_eq!(statement.params(), &[Type::NUMERIC]);
+    assert_eq!(statement.columns()[0].type_(), &Type::TIMESTAMP);
+    client.batch_execute("CREATE SCHEMA offset_app; CREATE TABLE offset_app.events(k NUMBER PRIMARY KEY,happened DATE); INSERT INTO offset_app.events VALUES(1,TIMESTAMP '2000-01-01 00:00:00')").await.unwrap();
+    let statement = client
+        .prepare_typed(
+            "SELECT happened+$1 FROM offset_app.events WHERE k=1",
+            &[Type::INT4],
+        )
+        .await
+        .unwrap();
+    assert_eq!(statement.columns()[0].type_(), &Type::TIMESTAMP);
+    assert_eq!(
+        client
+            .query_one(&statement, &[&1i32])
+            .await
+            .unwrap()
+            .get::<_, std::time::SystemTime>(0),
+        start + std::time::Duration::from_secs(86400)
+    );
+    drop(client);
+    connection.await.unwrap();
+}
+
+#[tokio::test]
 async fn oracle_datetime_trunc_preserves_prepared_timestamp_metadata() {
     let directory = tempfile::tempdir().unwrap();
     let server = Running::with_profile(directory.path(), "oracle-preview-v1");

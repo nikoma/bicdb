@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "cases": [
+    {"id":"date_add_day","sql":"SELECT TO_CHAR(TO_DATE('2000-01-01 12:00:00','YYYY-MM-DD HH24:MI:SS')+1,'YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id":"date_subtract_fraction","sql":"SELECT TO_CHAR(TO_DATE('2000-01-01','YYYY-MM-DD')-0.25,'YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id":"number_add_date","sql":"SELECT TO_CHAR(0.25+TO_DATE('2000-01-01 12:00:00','YYYY-MM-DD HH24:MI:SS'),'YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id":"timestamp_number_discards_subseconds","sql":"SELECT TO_CHAR(TIMESTAMP '2000-01-01 12:00:00.9'+1,'YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id":"date_offset_below_half_second","sql":"SELECT TO_CHAR(TIMESTAMP '2000-01-01 00:00:00'+0.000005787037037037037037,'YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id":"date_offset_above_half_second","sql":"SELECT TO_CHAR(TIMESTAMP '2000-01-01 00:00:00'+0.000005787037037037037038,'YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id":"date_offset_negative_half_second_boundary","sql":"SELECT TO_CHAR(TIMESTAMP '2000-01-01 00:00:00'-0.000005787037037037037038,'YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id":"date_offset_numeric_text","sql":"SELECT TO_CHAR(TIMESTAMP '2000-01-01 00:00:00'+'1','YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id":"date_offset_zero_discards_subseconds","sql":"SELECT TO_CHAR(TIMESTAMP '2000-01-01 12:00:00.9'+0,'YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id":"date_add_null","sql":"SELECT TO_CHAR(TIMESTAMP '2000-01-01 00:00:00'+NULL,'YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id":"null_add_date","sql":"SELECT TO_CHAR(NULL+TIMESTAMP '2000-01-01 00:00:00','YYYY-MM-DD HH24:MI:SS') FROM DUAL"},
+    {"id":"date_offset_derived_columns","sql":"SELECT TO_CHAR(happened+days,'YYYY-MM-DD HH24:MI:SS') FROM (SELECT TO_DATE('2000-01-01 12:00:00','YYYY-MM-DD HH24:MI:SS') AS happened,0.25 AS days FROM DUAL) calendar"},
+    {"id":"date_offset_nested_cte","sql":"WITH day_values AS (SELECT TO_DATE('2000-01-01 12:00:00','YYYY-MM-DD HH24:MI:SS')+0.25 AS next_day FROM DUAL) SELECT TO_CHAR(next_day+1,'YYYY-MM-DD HH24:MI:SS') FROM day_values"}
+  ]
+}

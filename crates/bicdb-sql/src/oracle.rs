@@ -1390,6 +1390,68 @@ mod tests {
         .is_err());
     }
     #[test]
+    fn preview_number_division_keeps_fractional_results_and_oracle_mantissa_precision() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        for (source, expected) in [
+            ("SELECT 7/2 FROM DUAL", "3.5".to_string()),
+            ("SELECT 1/3 FROM DUAL", format!("0.{}", "3".repeat(40))),
+            ("SELECT -1/3 FROM DUAL", format!("-0.{}", "3".repeat(40))),
+            (
+                "SELECT 22/7 FROM DUAL",
+                "3.14285714285714285714285714285714285714".into(),
+            ),
+            (
+                "SELECT 111/7 FROM DUAL",
+                "15.85714285714285714285714285714285714286".into(),
+            ),
+            (
+                "SELECT CASE WHEN 1=1 THEN 7/2 ELSE 1/0 END FROM DUAL",
+                "3.5".into(),
+            ),
+        ] {
+            let sql = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            let result = SqlSession::new(&mut db)
+                .execute(&sql)
+                .unwrap_or_else(|e| panic!("{source}: {sql}: {e}"));
+            let value = result.rows[0][0].to_cell();
+            let value = if value.contains('.') {
+                value.trim_end_matches('0').trim_end_matches('.')
+            } else {
+                &value
+            };
+            assert_eq!(value, expected, "{source}");
+            assert_eq!(result.column_types, vec![Some("numeric".into())]);
+        }
+        for source in [
+            "SELECT 1/0 FROM DUAL",
+            "SELECT 1e125/0.1 FROM DUAL",
+            "SELECT 1e-130/100 FROM DUAL",
+        ] {
+            let sql = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            assert!(SqlSession::new(&mut db).execute(&sql).is_err(), "{source}");
+        }
+        let sql =
+            lower_profile_sql(&db, "SELECT NULL/0 FROM DUAL", ORACLE_PREVIEW_PROFILE).unwrap();
+        assert!(matches!(
+            SqlSession::new(&mut db).execute(&sql).unwrap().rows[0][0],
+            SqlValue::Null
+        ));
+        for (source,expected) in [
+            ("SELECT TO_CHAR(TIMESTAMP '2000-01-01 00:00:00'+1/86400,'YYYY-MM-DD HH24:MI:SS') FROM DUAL","2000-01-01 00:00:01"),
+            ("SELECT TO_CHAR(TIMESTAMP '2000-01-01 00:00:00'+0.5/86400,'YYYY-MM-DD HH24:MI:SS') FROM DUAL","2000-01-01 00:00:01"),
+            ("SELECT TO_CHAR(TIMESTAMP '2000-01-01 00:00:00'-0.5/86400,'YYYY-MM-DD HH24:MI:SS') FROM DUAL","1999-12-31 23:59:59"),
+        ] {
+            let sql=lower_profile_sql(&db,source,ORACLE_PREVIEW_PROFILE).unwrap();
+            assert_eq!(SqlSession::new(&mut db).execute(&sql).unwrap().rows[0][0].to_cell(),expected,"{source}: {sql}");
+        }
+        assert_eq!(
+            SqlSession::new(&mut db).execute("SELECT 7/2").unwrap().rows[0][0].to_cell(),
+            "3"
+        );
+    }
+
+    #[test]
     fn preview_numeric_day_offsets_round_exactly_and_leave_postgres_arithmetic_alone() {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();

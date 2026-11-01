@@ -135,11 +135,16 @@ parameter types select the overload; undeclared day parameters infer NUMERIC.
 CTEs and derived queries retain the datetime result type. See the
 [day-offset evidence](evidence/oracle-day-offsets-2026-11-01/README.md).
 
-NUMBER expression semantics are still incomplete: `1/86400` currently uses
-native integer division, so using it as an offset does not yet match Oracle.
-Date-minus-date, time-zone overloads, NLS conversion and arithmetic inside stored
-programs need separate implementation/qualification. Default PostgreSQL
-operators and the bounded HR profile retain their existing behavior.
+Preview integer/NUMERIC division now produces a decimal quotient, including an
+offset expression such as `1/86400`. Its quotient precision follows twenty
+base-100 mantissa digits. Declared parameters keep their wire types; undeclared
+quotient operands infer NUMERIC. See the [division evidence](evidence/oracle-number-division-2026-11-01/README.md).
+
+This does not complete NUMBER storage, literal conversion or other arithmetic
+operators. Date-minus-date, time-zone overloads, NLS conversion, binary-floating
+overloads and arithmetic inside stored programs need separate implementation or
+qualification. Default PostgreSQL operators and the bounded HR profile retain
+their existing behavior.
 
 The preview resolves `TRUNC` on known date/timestamp expressions to an Oracle
 datetime helper returning native `timestamp` (the mapping for Oracle DATE).

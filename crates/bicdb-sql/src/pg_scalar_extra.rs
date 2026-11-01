@@ -39,6 +39,61 @@ fn arity(name: &str, args: &[SqlValue], allowed: std::ops::RangeInclusive<usize>
     }
 }
 
+fn oracle_number_divide(left: &SqlValue, right: &SqlValue) -> Result<SqlValue> {
+    let left = parse_decimal(&left.to_cell())?;
+    let right = parse_decimal(&right.to_cell())?;
+    if right.mantissa.is_zero() {
+        return Err(division_by_zero());
+    }
+    if left.mantissa.is_zero() {
+        return Ok(SqlValue::String("0".into()));
+    }
+    let overflow =
+        || SqlError::numeric_value_out_of_range("Oracle NUMBER division is out of range");
+    let exponent = decimal_quotient_exponent(&left, &right)?;
+    if !(-130..=125).contains(&exponent) {
+        return Err(overflow());
+    }
+    // Twenty base-100 mantissa digits give 39 or 40 decimal digits,
+    // depending on the position of the leading decimal digit.
+    let scale = 38 - 2 * exponent.div_euclid(2);
+    let shift = i64::from(scale) + i64::from(right.scale) - i64::from(left.scale);
+    let (numerator, denominator) = if shift >= 0 {
+        (left.mantissa * pow10_bigint(shift as u32), right.mantissa)
+    } else {
+        (
+            left.mantissa,
+            right.mantissa * pow10_bigint((-shift) as u32),
+        )
+    };
+    let mut quotient = &numerator / &denominator;
+    let remainder = (&numerator % &denominator).abs();
+    if &remainder * 2 >= denominator.abs() {
+        quotient += if numerator.sign() == denominator.sign() {
+            1
+        } else {
+            -1
+        };
+    }
+    let value = if scale >= 0 {
+        Decimal {
+            mantissa: quotient,
+            scale: scale as u32,
+        }
+    } else {
+        Decimal {
+            mantissa: quotient * pow10_bigint((-scale) as u32),
+            scale: 0,
+        }
+    };
+    let rounded_exponent =
+        value.mantissa.abs().to_string().len() as i64 - i64::from(value.scale) - 1;
+    if rounded_exponent > 125 {
+        return Err(overflow());
+    }
+    Ok(SqlValue::String(value.format()))
+}
+
 fn pad(text: &str, length: i64, fill: &str, left: bool) -> String {
     let chars = text.chars().collect::<Vec<_>>();
     let length = length.max(0) as usize;
@@ -262,6 +317,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "bicdb_oracle_to_date"
             | "bicdb_oracle_trunc_date"
             | "bicdb_oracle_date_add_days"
+            | "bicdb_oracle_number_divide"
             | "timezone"
             | "similarity"
     );
@@ -273,6 +329,9 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
     }
     if name == "bicdb_oracle_date_add_days" {
         arity(name, args, 3..=3)?;
+    }
+    if name == "bicdb_oracle_number_divide" {
+        arity(name, args, 2..=2)?;
     }
     // make_interval and age(ts) accept missing/NULL-free forms; everything else is strict.
     if name != "make_interval" && any_null(args) {
@@ -518,6 +577,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             arity(name, args, 2..=2)?;
             eval_to_timestamp(args)?
         }
+        "bicdb_oracle_number_divide" => oracle_number_divide(&args[0], &args[1])?,
         "bicdb_oracle_date_add_days" => {
             let out_of_range = || {
                 SqlError::data_exception(

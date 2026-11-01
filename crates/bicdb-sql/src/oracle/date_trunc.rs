@@ -1,8 +1,29 @@
 //! Resolve preview datetime operations without changing PostgreSQL arithmetic.
 use super::*;
 
+fn exact_numeric_operand_sql(expr: &Expr) -> String {
+    match expr {
+        Expr::Value(value) => match &value.value {
+            Value::Number(number, _) => {
+                format!("CAST('{}' AS NUMERIC)", number.replace('\'', "''"))
+            }
+            _ => expr.to_string(),
+        },
+        Expr::Nested(inner) => format!("({})", exact_numeric_operand_sql(inner)),
+        Expr::UnaryOp {
+            op: UnaryOperator::Plus,
+            expr,
+        } => format!("+({})", exact_numeric_operand_sql(expr)),
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr,
+        } => format!("-({})", exact_numeric_operand_sql(expr)),
+        _ => expr.to_string(),
+    }
+}
+
 pub(super) fn lower(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
-    if !sql.to_ascii_lowercase().contains("trunc") && !sql.contains(['+', '-']) {
+    if !sql.to_ascii_lowercase().contains("trunc") && !sql.contains(['+', '-', '/']) {
         return Ok(sql.to_string());
     }
     let mut statements = parse_statements(sql)?;
@@ -204,6 +225,24 @@ fn rewrite_with_parameters(
         }
         fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<SqlError> {
             if let Expr::BinaryOp { left, op, right } = expr {
+                if *op == BinaryOperator::Divide {
+                    let left_type = self.input_type(left);
+                    let right_type = self.input_type(right);
+                    let number = |expr: &Expr, kind: Option<&str>| {
+                        !matches!(kind, Some("float4" | "float8")) && self.day_operand(expr, kind)
+                    };
+                    if number(left, left_type.as_deref()) && number(right, right_type.as_deref()) {
+                        match expression(&format!(
+                            "bicdb_oracle_number_divide(CAST({} AS NUMERIC),CAST({} AS NUMERIC))",
+                            exact_numeric_operand_sql(left),
+                            exact_numeric_operand_sql(right)
+                        )) {
+                            Ok(lowered) => *expr = lowered,
+                            Err(error) => return ControlFlow::Break(error),
+                        }
+                        return ControlFlow::Continue(());
+                    }
+                }
                 if matches!(op, BinaryOperator::Plus | BinaryOperator::Minus) {
                     let left_type = self.input_type(left);
                     let right_type = self.input_type(right);
@@ -223,29 +262,9 @@ fn rewrite_with_parameters(
                     if let Some((date, days)) = operands {
                         // Stringify literal tokens before NUMERIC conversion so
                         // a day offset does not pass through floating point.
-                        fn exact_literal(expr: &Expr) -> String {
-                            match expr {
-                                Expr::Value(value) => match &value.value {
-                                    Value::Number(number, _) => {
-                                        format!("CAST('{}' AS NUMERIC)", number.replace('\'', "''"))
-                                    }
-                                    _ => expr.to_string(),
-                                },
-                                Expr::Nested(inner) => format!("({})", exact_literal(inner)),
-                                Expr::UnaryOp {
-                                    op: UnaryOperator::Plus,
-                                    expr,
-                                } => format!("+({})", exact_literal(expr)),
-                                Expr::UnaryOp {
-                                    op: UnaryOperator::Minus,
-                                    expr,
-                                } => format!("-({})", exact_literal(expr)),
-                                _ => expr.to_string(),
-                            }
-                        }
                         match expression(&format!(
                             "bicdb_oracle_date_add_days({date}, CAST({} AS NUMERIC), {direction})",
-                            exact_literal(days)
+                            exact_numeric_operand_sql(days)
                         )) {
                             Ok(lowered) => *expr = lowered,
                             Err(error) => return ControlFlow::Break(error),

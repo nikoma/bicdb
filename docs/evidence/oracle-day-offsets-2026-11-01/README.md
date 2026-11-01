@@ -17,12 +17,13 @@ retains its interval overload. CTE metadata probes see resolved inner datetime
 results. The application date-filter query that previously failed on `SYSDATE-1`
 now matches the Oracle reference result. That application trace stays private.
 
-A separate [known-gap probe](known-gap.json) still fails: an offset expression
-`1/86400` evaluates with native integer division before datetime addition. Oracle
-returns one second later; BicDB currently returns the original time. The thirteen
-matching cases qualify offset values, not all NUMBER expressions. This failure
-remains an explicit compatibility task. Date-minus-date, time-zone/NLS behavior,
-stored-program arithmetic and complete application workflows are also unqualified.
+At this revision, a separate [known-gap probe](known-gap.json) failed: an offset
+expression `1/86400` evaluated with native integer division before datetime
+addition. The subsequent [division follow-up](../oracle-number-division-2026-11-01/README.md)
+resolves that composition. The original failing artifact is retained. The
+thirteen matching cases here qualify offset values, not all NUMBER expressions.
+Date-minus-date, time-zone/NLS behavior, stored-program arithmetic and complete
+application workflows remain unqualified.
 
 Validation passed: 340 SQL unit tests (three ignored), all 416 main SQL integration
 tests, eleven Oracle-profile driver tests, 167 protocol tests and five Python

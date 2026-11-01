@@ -145,4 +145,8 @@ they do not qualify all Oracle datetime types, errors, NLS rules or metadata.
 nullable operands, timestamp-to-DATE conversion and nested query metadata.
 NUMBER expression evaluation is a separate acceptance requirement; the
 [day-offset evidence](../../../docs/evidence/oracle-day-offsets-2026-11-01/README.md)
-also records a failing integer-division composition probe.
+records the initial failing integer-division composition probe. The subsequent
+division implementation is checked with `number-division-cases.json` and one
+hundred deterministic synthetic cases in `number-division-generated-cases.json`.
+Run each with the same preview profile and an explicit `--cases` path. Expected
+values come from the Oracle reference, independently of BicDB's implementation.

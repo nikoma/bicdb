@@ -228,6 +228,55 @@ async fn oracle_preview_stored_functions_execute_through_pg_driver_after_restart
 }
 
 #[tokio::test]
+async fn oracle_number_division_has_numeric_metadata_and_recovers_after_zero() {
+    use tokio_postgres::types::Type;
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let (client, connection) = tokio_postgres::Config::new()
+        .host("127.0.0.1")
+        .port(server.port)
+        .user("bicdb")
+        .dbname("bicdb")
+        .options("-c bicdb.sql_profile=oracle-preview-v1")
+        .connect(tokio_postgres::NoTls)
+        .await
+        .unwrap();
+    let connection = tokio::spawn(async move {
+        connection.await.unwrap();
+    });
+    let typed = client
+        .prepare_typed("SELECT $1/$2", &[Type::INT4, Type::INT4])
+        .await
+        .unwrap();
+    assert_eq!(typed.params(), &[Type::INT4, Type::INT4]);
+    assert_eq!(typed.columns()[0].type_(), &Type::NUMERIC);
+    client.query_one(&typed, &[&7i32, &2i32]).await.unwrap();
+    let inferred = client.prepare("SELECT $1/$2").await.unwrap();
+    assert_eq!(inferred.params(), &[Type::NUMERIC, Type::NUMERIC]);
+    let row = client
+        .query_one("SELECT CASE WHEN 7/2>3 THEN 1 ELSE 0 END FROM DUAL", &[])
+        .await
+        .unwrap();
+    assert_eq!(row.get::<_, i32>(0), 1);
+    let zero = client.prepare("SELECT 1/0 FROM DUAL").await.unwrap();
+    assert_eq!(zero.columns()[0].type_(), &Type::NUMERIC);
+    assert_eq!(
+        client
+            .query(&zero, &[])
+            .await
+            .unwrap_err()
+            .as_db_error()
+            .unwrap()
+            .code(),
+        &tokio_postgres::error::SqlState::DIVISION_BY_ZERO
+    );
+    let rows = client.simple_query("SELECT 7/2 FROM DUAL").await.unwrap();
+    assert!(rows.iter().any(|message| matches!(message,tokio_postgres::SimpleQueryMessage::Row(row) if row.get(0).is_some_and(|value|value.trim_end_matches('0').trim_end_matches('.')=="3.5"))));
+    drop(client);
+    connection.await.unwrap();
+}
+
+#[tokio::test]
 async fn oracle_day_offsets_keep_typed_parameters_and_timestamp_results() {
     use tokio_postgres::types::Type;
     let directory = tempfile::tempdir().unwrap();

@@ -180,7 +180,7 @@ send SIGKILL at those exact points. Every injected operation is traced; a case
 cannot pass without reaching its fault. Corruption cases mutate, truncate,
 append to and remove referenced encrypted objects, and damage manifests; verify
 and restore must reject each case before changing the destination payload.
-Core-log and page-WAL sync failures are injected separately and their uncertain
+Core-log durable-append and page-WAL sync failures are injected separately and their uncertain
 transaction IDs are reconciled after restart before the row-level oracle runs.
 If directory fsync fails after manifest linking, publication has an uncertain
 outcome: a surviving artifact must fully verify and restore, while an absent

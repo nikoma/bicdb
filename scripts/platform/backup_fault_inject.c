@@ -72,7 +72,9 @@ static int fd_fault(int fd, int syncing) {
         || (syncing && repository && directory && !strcmp(kind, "eio-dir-sync"))
         || (syncing && repository && directory && !strcmp(kind, "eio-published-dir-sync")
             && atomic_load_explicit(&manifest_linked, memory_order_relaxed))
-        || (syncing && source && strstr(path, "/transactions.log") && !strcmp(kind, "eio-source-wal"))
+        /* Core append descriptors use O_DSYNC: write itself is the durable
+         * operation. Explicit repair syncs must fail under the same fault. */
+        || (source && strstr(path, "/transactions.log") && !strcmp(kind, "eio-source-wal"))
         || (syncing && source && strstr(path, "/paged/store.wal") && !strcmp(kind, "eio-page-wal"));
     if (!fail) return 0;
     hit(kind, path);

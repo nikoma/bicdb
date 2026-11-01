@@ -453,6 +453,15 @@ class Campaign:
                 self.set_fault("")
             assert self.fault_hits(offset, kind), "source durability injection was not reached"
             assert rejected, "source commit acknowledged despite injected WAL sync failure"
+            # Use a fresh connection: refusal must be server-wide, not merely
+            # the failed-transaction state of the connection that ran COMMIT.
+            refusal = None
+            try:
+                with self.connect(conn.info.port) as probe:
+                    probe.execute("SELECT COUNT(*) FROM ledger")
+            except psycopg.Error as error:
+                refusal = str(error)
+            assert refusal is not None, "a fresh data query succeeded before required recovery"
             conn.close()
             self.stop_process(process, kill=True)
             process, _, conn = self.serve(self.root / "db", primary=True)
@@ -460,6 +469,7 @@ class Campaign:
             assert len(resolved) == 1 and resolved[0]["writer"] == 0 and resolved[0]["seq"] == probe_seq
             self.verify_database(conn, kind + "-restart")
             self.report["faults"].append({"kind": kind, "commit_rejected": True, "acknowledged_source_preserved": True,
+                                         "new_connection_read_refused": refusal,
                                          "resolved_transactions": resolved})
         # Stop a restore after an actual payload rename into the destination.
         target = self.root / "interrupted-restore"

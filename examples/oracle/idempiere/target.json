@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "project": "iDempiere",
+  "version_branch": "release-13",
+  "repository": "https://github.com/idempiere/idempiere",
+  "source_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "upstream_license_file": "LICENSE.md",
+  "source_distribution": "external checkout; application source and seed are not bundled",
+  "oracle_database_sql_directory": "db/oracle",
+  "oracle_provider_directory": "org.compiere.db.oracle.provider",
+  "oracle_import_script": "org.adempiere.server-feature/utils.unix/oracle/ImportIdempiere.sh",
+  "observed_oracle_database_sql_files": 59,
+  "observed_oracle_migration_sql_files": 1085,
+  "status": "selected; source inspection in progress; application not running on BicDB",
+  "qualification_route": "Oracle schema and SQL, using PostgreSQL client transport with an explicit BicDB Oracle profile",
+  "reference_seed_import_requires": "Oracle Data Pump; unavailable in the installed Free Lite reference image",
+  "qualification_evidence": []
+}

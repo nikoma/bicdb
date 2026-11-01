@@ -4,6 +4,8 @@
 use crate::*;
 use sqlparser::{dialect::OracleDialect, keywords::Keyword};
 
+pub mod assessment;
+
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
 pub const POSTGRES_PROFILE: &str = "postgres";
 const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";

@@ -1,0 +1,22 @@
+{
+  "source_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+  "sql_files": 59,
+  "complete_lexical_scans": 59,
+  "objects": 60,
+  "dependencies": 307,
+  "findings": {
+    "oracle-stored-function": 46,
+    "number-semantics": 261,
+    "date-semantics": 41,
+    "rownum": 2,
+    "supplied-package-api": 125,
+    "character-semantics": 51,
+    "dynamic-sql": 9,
+    "oracle-decode": 2,
+    "autonomous-transaction": 3,
+    "hierarchical-query": 1,
+    "anchored-row-type": 2
+  },
+  "migration_ready": false,
+  "runtime_assessment_required": true
+}

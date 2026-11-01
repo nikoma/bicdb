@@ -8,6 +8,7 @@ mod app_command;
 mod backup_command;
 use backup_command::BackupConnectionArgs;
 mod cluster_events_command;
+mod oracle_command;
 mod sync_server;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -219,6 +220,11 @@ impl std::fmt::Display for HardeningProfile {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Inventory Oracle migration source without executing SQL.
+    Oracle {
+        #[command(subcommand)]
+        command: oracle_command::OracleCommand,
+    },
     /// Operate the capability-reduced, one-cell runtime construction path.
     Cell {
         #[command(subcommand)]
@@ -3469,6 +3475,7 @@ fn main() -> Result<()> {
     };
 
     match command {
+        Command::Oracle { command } => oracle_command::run(command)?,
         Command::Cell { command } => run_cell_command(command)?,
         Command::App {
             path,

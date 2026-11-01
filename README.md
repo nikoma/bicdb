@@ -251,7 +251,8 @@ checked against a PostgreSQL 18.4 oracle. See the generated
 An experimental [Oracle HR SQL profile](docs/oracle-hr-profile.md) runs an
 explicitly adapted Oracle sample through PostgreSQL drivers. It requires an
 opt-in database and connection profile and does not claim general Oracle
-Database compatibility.
+Database compatibility. An [offline source assessment](docs/oracle-migration-assessment.md)
+inventories Oracle schema objects and migration blockers without executing SQL.
 
 ### Native full-text search
 

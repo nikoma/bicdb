@@ -92,7 +92,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4)
+        Some(2 | 3 | 4 | 5)
     ) {
         oracle::routines::bind_function_namespace(
             routine,
@@ -109,7 +109,10 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
                     "typed Oracle routine compilation requires catalog context".into(),
                 )
             })?,
-            oracle::preview_routine_language_version(&routine.language) == Some(4),
+            matches!(
+                oracle::preview_routine_language_version(&routine.language),
+                Some(4 | 5)
+            ),
             &mut params,
             &mut declarations,
             &mut statements,

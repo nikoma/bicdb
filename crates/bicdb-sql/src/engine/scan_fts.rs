@@ -3528,19 +3528,28 @@ impl<'db> SqlEngine<'db> {
         Ok(records)
     }
 
-    pub(crate) fn execute_select_without_from(&self, select: &Select) -> Result<SqlResult> {
-        if let Some(result) = self.execute_projection_array_set_functions(select)? {
+    pub(crate) fn execute_select_without_from(
+        &self,
+        select: &Select,
+        query: &Query,
+    ) -> Result<SqlResult> {
+        if let Some(mut result) = self.execute_projection_array_set_functions(select)? {
+            apply_row_limit(&mut result.rows, query)?;
             return Ok(result);
         }
-        if let Some(result) = self.execute_projection_json_set_function(select)? {
+        if let Some(mut result) = self.execute_projection_json_set_function(select)? {
+            apply_row_limit(&mut result.rows, query)?;
             return Ok(result);
         }
-        let include_row = match &select.selection {
-            Some(selection) => {
-                sql_value_truth(self.eval_select_constant_expr(selection)?)?.unwrap_or(false)
-            }
-            None => true,
-        };
+        let mut candidates = vec![()];
+        apply_row_limit(&mut candidates, query)?;
+        let include_row = !candidates.is_empty()
+            && match &select.selection {
+                Some(selection) => {
+                    sql_value_truth(self.eval_select_constant_expr(selection)?)?.unwrap_or(false)
+                }
+                None => true,
+            };
         let mut columns = Vec::new();
         let mut column_types = Vec::new();
         let mut row = Vec::new();

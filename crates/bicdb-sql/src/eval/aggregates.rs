@@ -1988,6 +1988,13 @@ fn projected_expr_pg_type_with_db_uncached(db: &BicDb, expr: &Expr) -> Option<St
     if let Some(pg_type) = projected_expr_pg_type(expr, None) {
         return Some(pg_type);
     }
+    if let Expr::Function(function) = expr {
+        let name = object_name(&function.name).ok()?;
+        return load_routine(db, RoutineKind::Function, &name)
+            .ok()
+            .flatten()
+            .map(|routine| routine.return_type);
+    }
     None
 }
 

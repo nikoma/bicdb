@@ -20,11 +20,13 @@ const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1: &str = "bicdb_oracle_preview_v1";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2: &str = "bicdb_oracle_preview_v2";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3: &str = "bicdb_oracle_preview_v3";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v4";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V4: &str = "bicdb_oracle_preview_v4";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v5";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_403;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V4_OID: i64 = 999_403;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_404;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -36,13 +38,14 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V1 => Some(1),
         PREVIEW_ROUTINE_LANGUAGE_V2 => Some(2),
         PREVIEW_ROUTINE_LANGUAGE_V3 => Some(3),
-        PREVIEW_ROUTINE_LANGUAGE => Some(4),
+        PREVIEW_ROUTINE_LANGUAGE_V4 => Some(4),
+        PREVIEW_ROUTINE_LANGUAGE => Some(5),
         _ => None,
     }
 }
 
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
-    matches!(preview_routine_language_version(language), Some(3 | 4))
+    matches!(preview_routine_language_version(language), Some(3 | 4 | 5))
 }
 
 pub(crate) fn preview_routine_language_enabled(db: &BicDb) -> Result<bool> {

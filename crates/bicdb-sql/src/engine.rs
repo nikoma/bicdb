@@ -4180,6 +4180,9 @@ impl<'db> SqlEngine<'db> {
     }
 
     fn execute_query_unscoped(&self, query: &Query) -> Result<SqlResult> {
+        if let Some(rewritten) = normalize_fetch_clause(query)? {
+            return self.execute_query(&rewritten);
+        }
         self.check_cancellation()?;
         if let Some(rewritten) = rewrite_ordinal_order_by(query, &|relation| {
             table_factor_column_names(self.db, relation)
@@ -4219,7 +4222,7 @@ impl<'db> SqlEngine<'db> {
             if has_windows {
                 return self.execute_window_query_without_from(select, query);
             }
-            return self.execute_select_without_from(select);
+            return self.execute_select_without_from(select, query);
         }
 
         if has_windows {

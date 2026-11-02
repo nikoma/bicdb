@@ -834,6 +834,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_query(&mut self, query: &Query) -> Result<SqlResult> {
+        if let Some(rewritten) = normalize_fetch_clause(query)? {
+            return self.execute_query(&rewritten);
+        }
         if let Some(rewritten) = rewrite_ordinal_order_by(query, &|relation| {
             table_factor_column_names(self.db_ref(), relation)
         }) {
@@ -938,7 +941,7 @@ impl<'db> SqlSession<'db> {
             return self.sql_engine().execute_query(query);
         }
         if select.from.is_empty() {
-            return self.execute_session_select_without_from(select);
+            return self.execute_session_select_without_from(select, query);
         }
         if let Some(result) = self.try_execute_set_function_query(query, BTreeMap::new())? {
             return Ok(result);
@@ -1115,25 +1118,32 @@ impl<'db> SqlSession<'db> {
     pub(crate) fn execute_session_select_without_from(
         &mut self,
         select: &Select,
+        query: &Query,
     ) -> Result<SqlResult> {
-        if let Some(result) = self
+        if let Some(mut result) = self
             .sql_engine()
             .execute_projection_array_set_functions(select)?
         {
+            apply_row_limit(&mut result.rows, query)?;
             return Ok(result);
         }
         if let Some(result) = self
             .sql_engine()
             .execute_projection_json_set_function(select)?
         {
+            let mut result = result;
+            apply_row_limit(&mut result.rows, query)?;
             return Ok(result);
         }
-        let include_row = match &select.selection {
-            Some(selection) => {
-                sql_value_truth(self.eval_session_expr(selection)?)?.unwrap_or(false)
-            }
-            None => true,
-        };
+        let mut candidates = vec![()];
+        apply_row_limit(&mut candidates, query)?;
+        let include_row = !candidates.is_empty()
+            && match &select.selection {
+                Some(selection) => {
+                    sql_value_truth(self.eval_session_expr(selection)?)?.unwrap_or(false)
+                }
+                None => true,
+            };
         let mut columns = Vec::new();
         let mut column_types = Vec::new();
         let mut row = Vec::new();

@@ -1328,6 +1328,45 @@ pub(crate) fn window_peer_groups(
     groups
 }
 
+/// SQL-standard FETCH ONLY shares the LIMIT/OFFSET execution path. Keep
+/// unsupported PERCENT/WITH TIES explicit instead of discarding the clause.
+pub(crate) fn normalize_fetch_clause(query: &Query) -> Result<Option<Query>> {
+    let Some(fetch) = &query.fetch else {
+        return Ok(None);
+    };
+    if fetch.percent || fetch.with_ties {
+        return Err(SqlError::Unsupported(
+            "FETCH PERCENT and WITH TIES are not implemented".into(),
+        ));
+    }
+    let quantity = fetch
+        .quantity
+        .clone()
+        .unwrap_or_else(|| Expr::Value(Value::Number("1".into(), false).into()));
+    let mut rewritten = query.clone();
+    rewritten.fetch = None;
+    match &mut rewritten.limit_clause {
+        Some(LimitClause::LimitOffset {
+            limit, limit_by, ..
+        }) if limit.is_none() && limit_by.is_empty() => {
+            *limit = Some(quantity);
+        }
+        None => {
+            rewritten.limit_clause = Some(LimitClause::LimitOffset {
+                limit: Some(quantity),
+                offset: None,
+                limit_by: Vec::new(),
+            })
+        }
+        _ => {
+            return Err(SqlError::InvalidSql(
+                "FETCH cannot be combined with LIMIT".into(),
+            ))
+        }
+    }
+    Ok(Some(rewritten))
+}
+
 pub(crate) fn apply_row_limit<T>(rows: &mut Vec<T>, query: &Query) -> Result<()> {
     let Some(limit_clause) = &query.limit_clause else {
         return Ok(());
@@ -7254,5 +7293,83 @@ impl OrderedSetAggregate {
                 SqlError::InvalidSql("percentile fraction must be numeric".to_string())
             })?),
         }
+    }
+}
+
+#[cfg(test)]
+mod scalar_fetch_tests {
+    use super::*;
+
+    #[test]
+    fn scalar_fetch_and_metadata_keep_bounds_and_declared_function_types() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            session.execute("CREATE TABLE fetch_rows(id INTEGER PRIMARY KEY); INSERT INTO fetch_rows VALUES(1),(2),(3); CREATE SEQUENCE fetch_sequence START WITH 1").unwrap();
+            session.execute("CREATE FUNCTION typed_null() RETURNS TIMESTAMP LANGUAGE plpgsql AS $$BEGIN RETURN NULL; END$$").unwrap();
+            for sql in [
+                "SELECT typed_null()",
+                "SELECT COALESCE(typed_null(),NULL)",
+                "SELECT CASE WHEN TRUE THEN typed_null() ELSE NULL END",
+            ] {
+                let result = session.execute(sql).unwrap();
+                assert_eq!(result.rows, vec![vec![SqlValue::Null]], "{sql}");
+                assert_eq!(result.column_types, vec![Some("timestamp".into())], "{sql}");
+            }
+            assert!(session
+                .execute("SELECT nextval('fetch_sequence') FETCH FIRST 0 ROWS ONLY")
+                .unwrap()
+                .rows
+                .is_empty());
+            assert_eq!(
+                session
+                    .execute("SELECT nextval('fetch_sequence')")
+                    .unwrap()
+                    .rows[0][0],
+                SqlValue::Int(1)
+            );
+        }
+        for (sql, expected) in [
+            ("SELECT 7 FETCH FIRST 0 ROWS ONLY", vec![]),
+            (
+                "SELECT 7 FETCH FIRST ROW ONLY",
+                vec![vec![SqlValue::Int(7)]],
+            ),
+            ("SELECT 7 OFFSET 1 ROWS FETCH FIRST 1 ROW ONLY", vec![]),
+            ("SELECT 7 LIMIT 0", vec![]),
+            ("SELECT 7 OFFSET 1", vec![]),
+            (
+                "SELECT id FROM fetch_rows ORDER BY id FETCH FIRST 2 ROWS ONLY",
+                vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]],
+            ),
+            (
+                "SELECT id FROM fetch_rows ORDER BY id OFFSET 1 ROWS FETCH FIRST ROW ONLY",
+                vec![vec![SqlValue::Int(2)]],
+            ),
+            (
+                "SELECT generate_series(1,3) FETCH FIRST 2 ROWS ONLY",
+                vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]],
+            ),
+        ] {
+            assert_eq!(
+                SqlSession::new(&mut db).execute(sql).unwrap().rows,
+                expected,
+                "session: {sql}"
+            );
+            assert_eq!(
+                SqlEngine::new(&db).execute(sql).unwrap().rows,
+                expected,
+                "engine: {sql}"
+            );
+        }
+        let mut session = SqlSession::new(&mut db);
+        assert_eq!(
+            session
+                .execute("SELECT id FROM fetch_rows ORDER BY id FETCH FIRST ROW WITH TIES")
+                .unwrap_err()
+                .sqlstate(),
+            "0A000"
+        );
     }
 }

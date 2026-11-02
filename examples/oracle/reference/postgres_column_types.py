@@ -32,9 +32,9 @@ def run(reference, target):
                 cursor.execute(f'ALTER TABLE {relation} ALTER COLUMN "Mixed.Stamp" TYPE TIMESTAMP(0)', prepare=False)
         queries = [
             ('values_after_copy_and_alter', f'SELECT * FROM {relation} ORDER BY k'),
-            ('date_subtraction', f'SELECT d-d FROM {relation} ORDER BY k'),
-            ('timestamp_subtraction', f'SELECT t-t0 FROM {relation} ORDER BY k'),
-            ('date_has_no_time', f"SELECT d=DATE '2024-02-29' FROM {relation} WHERE k=0"),
+            ('date_subtraction', f'SELECT d-d AS delta FROM {relation} ORDER BY k'),
+            ('timestamp_subtraction', f'SELECT t-t0 AS delta FROM {relation} ORDER BY k'),
+            ('date_has_no_time', f"SELECT d=DATE '2024-02-29' AS same_day FROM {relation} WHERE k=0"),
             ('quoted_name_survives', f'SELECT "Mixed.Stamp" FROM {relation} ORDER BY k'),
             ('metadata', f'SELECT d,t,t0,"Mixed.Stamp" FROM {relation} WHERE false'),
         ]

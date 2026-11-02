@@ -81,3 +81,23 @@ def run(reference, target):
     report['total'] = len(report['cases'])
     report['success'] = report['matched']==report['total'] and not report['cleanup_errors']
     return report
+
+
+def main():
+    import argparse
+    import os
+    from pathlib import Path
+    import psycopg
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output',required=True,type=Path)
+    args = parser.parse_args()
+    with psycopg.connect(os.environ['ORACLE_CONTROL_PG_DSN'],autocommit=True) as source:
+        with psycopg.connect(os.environ['BICDB_PG_DSN'],autocommit=True) as target:
+            report = run(source,target)
+    args.output.write_text(json.dumps(report,indent=2)+'\n')
+    print(json.dumps({k:report[k] for k in ['success','matched','total']}))
+    return 0 if report['success'] else 1
+
+
+if __name__=='__main__':
+    raise SystemExit(main())

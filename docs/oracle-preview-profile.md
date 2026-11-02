@@ -204,13 +204,13 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v11`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v12`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
 previously translated routines; recreate an Oracle-authored definition to select
 the new compiler. The compiler versions have separate `pg_language` identities,
-present only in a preview database. Versions 1 through 10 remain readable.
+present only in a preview database. Versions 1 through 11 remain readable.
 Version 5 (OID 999404) fences CASE selector dispatch. Version 6 (OID 999405)
 adds the tested Oracle statement-rollback and strict SELECT INTO contracts;
 earlier definitions retain their previous block-rollback behavior. Recreate an
@@ -338,6 +338,29 @@ settings and full Oracle optimizer/type-resolution diagnostics are unqualified.
 Versions 1–10 retain their stored NVL translations; recreate original Oracle
 source to select the version-11 compiler. An older reader rejects a version-11
 routine with 0A000. This marker adds no database storage-format transition.
+
+Version 12 (OID 999411) adds stored Oracle procedure compilation and namespace
+binding. The header parser handles CREATE OR REPLACE, quoted names, parameterless
+Oracle declarations and positional/named arguments. Procedure metadata retains
+its procedure kind. Static table references and nested CALLs bind to the
+procedure's declared schema. Earlier function compiler versions remain readable;
+new preview procedures require version 12. An older reader rejects their calls
+with 0A000, without executing the body.
+
+Shared CALL handling now excludes OUT placeholder values from input frames,
+retains IN OUT values, and copies successful nested-call outputs back to writable
+caller variables. Top-level PostgreSQL CALL returns output rows with declared
+transport types, including NULL outputs; logical Oracle DATE uses TIMESTAMP OID
+1114, while native PostgreSQL DATE uses OID 1082. Qualified calls reject the wrong
+schema. Existing raw procedure parameter-mode spellings remain accepted. These
+shared CALL corrections apply to the native interpreter as well as the preview.
+Native PostgreSQL empty strings and calendar dates retain their own behavior.
+
+This does not qualify packages, autonomous transactions, transaction control,
+dynamic SQL, all overload/type-resolution rules or the remaining application
+procedure bodies. PL/SQL constant propagation around NVL, PLS_INTEGER declarations
+and formatless TO_NUMBER still have independently observed gaps; the bounded
+NVL cases above do not establish those contracts.
 
 Version 2 binds static relation references in functions to the namespace in the
 stored function declaration. Unqualified declarations created through the

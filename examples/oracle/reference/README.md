@@ -389,3 +389,18 @@ The scope is fixed preview NLS and supported character/NUMBER/DATE/TIMESTAMP
 operands. Binary floating point, other NLS settings, full Oracle diagnostics and
 submicrosecond values are not qualified by this fixture. Existing compiled
 routines retain their earlier contract until recreated from Oracle source.
+
+
+The `routine_namespaces.py --suite procedures` fixture checks actual Oracle CALL
+effects, replacement, defaults, qualified nested calls, OUT/IN OUT copyback and
+exception state. `procedure-reference.json` freezes source values and errors;
+the runner compares them again against Oracle. Five extra driver cases compare
+Oracle output binds with PostgreSQL output rows, including DATE fractional-second
+removal and NULL output type metadata. The Oracle NUMBER outputs use text binds
+to preserve decimal values without a binary floating-point intermediary.
+
+`postgres_procedures.py --output /private/native-procedures.json` independently
+checks PostgreSQL CALL inputs, named ordering, writable outputs, metadata, defaults
+and recovery. Use `ORACLE_CONTROL_PG_DSN` and `BICDB_PG_DSN` for dedicated native
+databases. Both runners remove their uniquely named objects. Neither establishes
+full Oracle PL/SQL, complete overload resolution or application qualification.

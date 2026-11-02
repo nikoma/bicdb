@@ -1832,3 +1832,94 @@ async fn nullable_composite_unique_policy_is_enforced_over_the_pg_driver() {
         task.await.unwrap();
     }
 }
+
+#[tokio::test]
+async fn procedural_case_preserves_profile_types_errors_and_prepared_calls_after_reopen() {
+    use tokio_postgres::types::Type;
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        for attempt in 0..2 {
+            let server = Running::with_profile(directory.path(), profile);
+            let mut config = tokio_postgres::Config::new();
+            config
+                .host("127.0.0.1")
+                .port(server.port)
+                .user("bicdb")
+                .dbname("bicdb")
+                .options(&format!("-c bicdb.sql_profile={profile}"));
+            let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+            let connection = tokio::spawn(async move {
+                connection.await.unwrap();
+            });
+            if attempt == 0 {
+                let bodies = [
+                    ("case_route", "BEGIN CASE WHEN p_value=1 THEN RETURN 10; WHEN p_value=0 THEN RETURN 20; ELSE CASE p_value WHEN 2 THEN RETURN 30; ELSE RETURN 40; END CASE; END CASE; END"),
+                    ("case_missing", "BEGIN CASE WHEN p_value=1 THEN RETURN 10; END CASE; RETURN 20; END"),
+                    ("case_handled", "BEGIN CASE WHEN p_value=1 THEN RETURN 10; END CASE; RETURN 20; EXCEPTION WHEN CASE_NOT_FOUND THEN RETURN 99; END"),
+                    ("case_division", "BEGIN CASE WHEN p_value=1 THEN RETURN 10; WHEN 1/p_value>0 THEN RETURN 20; ELSE RETURN 30; END CASE; END"),
+                ];
+                for (name, body) in bodies {
+                    let sql = if profile == "postgres" {
+                        format!("CREATE FUNCTION {name}(p_value INTEGER) RETURNS INTEGER LANGUAGE plpgsql AS $${body}$$")
+                    } else {
+                        format!("CREATE FUNCTION {name}(p_value NUMBER) RETURN NUMBER IS {body};")
+                    };
+                    client.batch_execute(&sql).await.unwrap();
+                }
+            }
+            let statement = client
+                .prepare("SELECT CAST(case_route(CAST($1 AS INTEGER)) AS VARCHAR(20)) AS chosen")
+                .await
+                .unwrap();
+            assert_eq!(statement.params(), &[Type::INT4]);
+            assert_eq!(statement.columns()[0].type_(), &Type::VARCHAR);
+            for (value, expected) in [
+                (Some(1i32), "10"),
+                (Some(0), "20"),
+                (Some(2), "30"),
+                (None, "40"),
+            ] {
+                assert_eq!(
+                    client
+                        .query_one(&statement, &[&value])
+                        .await
+                        .unwrap()
+                        .get::<_, String>(0),
+                    expected
+                );
+            }
+            let row = client
+                .query_one("SELECT CAST(case_division(2) AS VARCHAR(20))", &[])
+                .await
+                .unwrap();
+            assert_eq!(
+                row.get::<_, String>(0),
+                if profile == "postgres" { "30" } else { "20" }
+            );
+            let error = client
+                .query("SELECT case_missing(0)", &[])
+                .await
+                .unwrap_err();
+            assert_eq!(error.code().unwrap().code(), "20000");
+            assert_eq!(
+                client
+                    .query_one("SELECT CAST(case_handled(0) AS VARCHAR(20))", &[])
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "99"
+            );
+            assert_eq!(
+                client
+                    .query_one(&statement, &[&Some(1i32)])
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "10"
+            );
+            drop(statement);
+            drop(client);
+            connection.await.unwrap();
+        }
+    }
+}

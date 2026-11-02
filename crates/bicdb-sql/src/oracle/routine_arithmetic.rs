@@ -541,6 +541,19 @@ fn statements(
                 statements(db, env, cursors, then_body)?;
                 statements(db, env, cursors, else_body)?;
             }
+            RoutineStmt::Case {
+                expression,
+                arms,
+                else_body,
+            } => {
+                visit(db, env, &mut expression.expr)?;
+                for arm in arms {
+                    statements(db, env, cursors, arm)?;
+                }
+                if let Some(body) = else_body {
+                    statements(db, env, cursors, body)?;
+                }
+            }
             RoutineStmt::ForLoop {
                 iterator,
                 lower,

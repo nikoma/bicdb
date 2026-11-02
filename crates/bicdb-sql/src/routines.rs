@@ -9,6 +9,8 @@
 // code compiles unchanged.
 use crate::*;
 
+mod procedural_case;
+
 pub(crate) fn routine_record_value(columns: &[String], row: &[SqlValue]) -> SqlValue {
     let values = columns
         .iter()
@@ -251,6 +253,16 @@ pub(crate) fn collect_routine_stmt_symbols(
                 collect_routine_stmt_symbols(then_body, names, seen);
                 collect_routine_stmt_symbols(else_body, names, seen);
             }
+            RoutineStmt::Case {
+                arms, else_body, ..
+            } => {
+                for arm in arms {
+                    collect_routine_stmt_symbols(arm, names, seen);
+                }
+                if let Some(body) = else_body {
+                    collect_routine_stmt_symbols(body, names, seen);
+                }
+            }
             RoutineStmt::ForLoop { iterator, body, .. } => {
                 add_routine_symbol(iterator, names, seen);
                 collect_routine_stmt_symbols(body, names, seen);
@@ -388,6 +400,19 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
                 condition.bind(scope);
                 bind_routine_statement_exprs(then_body, scope);
                 bind_routine_statement_exprs(else_body, scope);
+            }
+            RoutineStmt::Case {
+                expression,
+                arms,
+                else_body,
+            } => {
+                expression.bind(scope);
+                for arm in arms {
+                    bind_routine_statement_exprs(arm, scope);
+                }
+                if let Some(body) = else_body {
+                    bind_routine_statement_exprs(body, scope);
+                }
             }
             RoutineStmt::ForLoop {
                 lower, upper, body, ..
@@ -748,7 +773,22 @@ pub(crate) fn parse_routine_exception_handlers(sql: &str) -> Result<Vec<RoutineE
         };
         let conditions = parse_routine_exception_conditions(&after_when[..then_idx])?;
         let after_then = after_when[then_idx + "THEN".len()..].trim();
-        let next_when = find_top_level_keyword(after_then, "WHEN");
+        let mut depth = 0usize;
+        let next_when = routine_boundaries(after_then)?
+            .into_iter()
+            .find_map(|(start, _, kind)| {
+                match kind {
+                    RoutineBoundary::If | RoutineBoundary::Loop | RoutineBoundary::Case => {
+                        depth += 1
+                    }
+                    RoutineBoundary::EndIf
+                    | RoutineBoundary::EndLoop
+                    | RoutineBoundary::EndCase => depth = depth.saturating_sub(1),
+                    RoutineBoundary::When if depth == 0 => return Some(start),
+                    _ => {}
+                }
+                None
+            });
         let (handler_sql, remaining) = if let Some(idx) = next_when {
             (&after_then[..idx], &after_then[idx..])
         } else {
@@ -781,6 +821,7 @@ pub(crate) fn routine_exception_condition(condition: &str) -> Result<RoutineExce
         "deadlock_detected" => Ok(RoutineExceptionCondition::SqlState("40P01".to_string())),
         "too_many_rows" => Ok(RoutineExceptionCondition::SqlState("P0003".to_string())),
         "no_data_found" => Ok(RoutineExceptionCondition::SqlState("P0002".to_string())),
+        "case_not_found" => Ok(RoutineExceptionCondition::SqlState("20000".to_string())),
         _ => {
             if let Some(value) = strip_prefix_ci(condition, "SQLSTATE") {
                 let value = value.trim();
@@ -952,6 +993,15 @@ pub(crate) fn next_plpgsql_statement(value: &str) -> Result<(&str, usize)> {
                     .is_none_or(|ch| ch.is_whitespace() || ch == extra)
             })
     };
+    if opens("CASE", '(') {
+        let end = matching_routine_end(
+            value,
+            RoutineBoundary::Case,
+            RoutineBoundary::EndCase,
+            "CASE statement is missing END CASE",
+        )?;
+        return Ok((&original[leading_len..leading_len + end], leading_len + end));
+    }
     if opens("WHILE", '(') || opens("LOOP", ';') {
         let end = matching_end_loop(value)?;
         return Ok((&original[leading_len..leading_len + end], leading_len + end));
@@ -980,6 +1030,10 @@ enum RoutineBoundary {
     EndIf,
     Loop,
     EndLoop,
+    Case,
+    EndCase,
+    When,
+    Then,
     Else,
     Elsif,
 }
@@ -1017,20 +1071,26 @@ fn routine_boundaries(value: &str) -> Result<Vec<(usize, usize, RoutineBoundary)
     let mut start = true;
     let mut loop_header = false;
     let mut case_depth = 0usize;
+    let mut case_header = false;
     let mut index = 0;
     while index < tokens.len() {
         let current = word(index);
-        if current == "CASE" {
+        // SQL CASE expressions have a bare END. Procedural CASE starts at a
+        // statement boundary and ends with END CASE. Neither exposes its SQL
+        // WHEN/ELSE keywords as procedural branch delimiters.
+        if current == "CASE" && (case_depth > 0 || !start) {
             case_depth += 1;
-        } else if case_depth > 0 && current == "END" {
-            case_depth -= 1;
-        } else if case_depth == 0 {
+        } else if case_depth > 0 {
+            if current == "END" {
+                case_depth -= 1;
+            }
+        } else {
             let next = word(index + 1);
-            let event = if current == "END" && (next == "IF" || next == "LOOP") {
-                let kind = if next == "IF" {
-                    RoutineBoundary::EndIf
-                } else {
-                    RoutineBoundary::EndLoop
+            if current == "END" && matches!(next.as_str(), "IF" | "LOOP" | "CASE") {
+                let kind = match next.as_str() {
+                    "IF" => RoutineBoundary::EndIf,
+                    "LOOP" => RoutineBoundary::EndLoop,
+                    _ => RoutineBoundary::EndCase,
                 };
                 let begin = offset(tokens[index].span.start);
                 index += 1;
@@ -1038,13 +1098,21 @@ fn routine_boundaries(value: &str) -> Result<Vec<(usize, usize, RoutineBoundary)
                 start = false;
                 index += 1;
                 continue;
-            } else if start && current == "IF" {
+            }
+            let event = if start && current == "IF" {
                 Some(RoutineBoundary::If)
-            } else if start && (current == "FOR" || current == "FOREACH" || current == "WHILE") {
+            } else if start && current == "CASE" {
+                case_header = true;
+                Some(RoutineBoundary::Case)
+            } else if current == "WHEN" && (start || case_header) {
+                case_header = false;
+                Some(RoutineBoundary::When)
+            } else if current == "THEN" {
+                Some(RoutineBoundary::Then)
+            } else if start && matches!(current.as_str(), "FOR" | "FOREACH" | "WHILE") {
                 loop_header = true;
                 Some(RoutineBoundary::Loop)
             } else if start && current == "LOOP" {
-                // A bare `LOOP` opens the block and its body at once.
                 Some(RoutineBoundary::Loop)
             } else if start && current == "ELSIF" {
                 Some(RoutineBoundary::Elsif)
@@ -1060,9 +1128,8 @@ fn routine_boundaries(value: &str) -> Result<Vec<(usize, usize, RoutineBoundary)
                     kind,
                 ));
             }
-            let starts_body = current == "THEN"
-                || current == "ELSE"
-                || current == "BEGIN"
+            let starts_body = matches!(current.as_str(), "THEN" | "ELSE" | "BEGIN")
+                || event == Some(RoutineBoundary::Case)
                 || (current == "LOOP" && (loop_header || start));
             if current == "LOOP" && loop_header {
                 loop_header = false;
@@ -1155,6 +1222,9 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
     let statement = statement.trim();
     if statement.is_empty() {
         return Err(SqlError::InvalidSql("empty routine statement".to_string()));
+    }
+    if keyword_matches_at(statement, "CASE", 0) {
+        return procedural_case::parse(statement);
     }
     if keyword_matches_at(statement, "CONTINUE", 0) {
         let rest = statement["CONTINUE".len()..].trim();
@@ -1728,8 +1798,10 @@ pub(crate) fn find_plpgsql_if_branch(value: &str) -> Result<Option<(usize, Plpgs
     let mut depth = 0usize;
     for (start, _, kind) in routine_boundaries(value)? {
         match kind {
-            RoutineBoundary::If => depth += 1,
-            RoutineBoundary::EndIf => depth = depth.saturating_sub(1),
+            RoutineBoundary::If | RoutineBoundary::Loop | RoutineBoundary::Case => depth += 1,
+            RoutineBoundary::EndIf | RoutineBoundary::EndLoop | RoutineBoundary::EndCase => {
+                depth = depth.saturating_sub(1)
+            }
             RoutineBoundary::Else if depth == 0 => return Ok(Some((start, PlpgsqlIfBranch::Else))),
             RoutineBoundary::Elsif if depth == 0 => {
                 return Ok(Some((start, PlpgsqlIfBranch::Elsif)))
@@ -2582,6 +2654,16 @@ fn validate_routine_continue(statements: &[RoutineStmt], in_loop: bool) -> Resul
             } => {
                 validate_routine_continue(then_body, in_loop)?;
                 validate_routine_continue(else_body, in_loop)?;
+            }
+            RoutineStmt::Case {
+                arms, else_body, ..
+            } => {
+                for arm in arms {
+                    validate_routine_continue(arm, in_loop)?;
+                }
+                if let Some(body) = else_body {
+                    validate_routine_continue(body, in_loop)?;
+                }
             }
             RoutineStmt::ForLoop { body, .. }
             | RoutineStmt::ForeachLoop { body, .. }

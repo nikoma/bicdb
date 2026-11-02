@@ -55,6 +55,19 @@ fn bind_namespace_statements(statements: &mut [RoutineStmt], schema: &str) -> Re
                 bind_namespace_statements(then_body, schema)?;
                 bind_namespace_statements(else_body, schema)?;
             }
+            RoutineStmt::Case {
+                expression,
+                arms,
+                else_body,
+            } => {
+                bind_relations(&mut expression.expr, schema)?;
+                for arm in arms {
+                    bind_namespace_statements(arm, schema)?;
+                }
+                if let Some(body) = else_body {
+                    bind_namespace_statements(body, schema)?;
+                }
+            }
             RoutineStmt::ForLoop {
                 lower, upper, body, ..
             } => {
@@ -233,6 +246,19 @@ fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
                 lower_expression(&mut condition.expr, types);
                 lower_statements(then_body, types);
                 lower_statements(else_body, types);
+            }
+            RoutineStmt::Case {
+                expression,
+                arms,
+                else_body,
+            } => {
+                lower_expression(&mut expression.expr, types);
+                for arm in arms {
+                    lower_statements(arm, types);
+                }
+                if let Some(body) = else_body {
+                    lower_statements(body, types);
+                }
             }
             RoutineStmt::ForLoop {
                 lower, upper, body, ..

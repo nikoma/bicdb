@@ -1095,6 +1095,7 @@ fn routine_statement_profile_kind(statement: &RoutineStmt) -> String {
         }
         RoutineStmt::DynamicExecute(_) => "ROUTINE_DYNAMIC_EXECUTE".to_string(),
         RoutineStmt::If { .. } => "ROUTINE_IF".to_string(),
+        RoutineStmt::Case { .. } => "ROUTINE_CASE".to_string(),
         RoutineStmt::ForLoop { .. } => "ROUTINE_FOR_LOOP".to_string(),
         RoutineStmt::ForeachLoop { .. } => "ROUTINE_FOREACH_LOOP".to_string(),
         RoutineStmt::QueryForLoop { .. } => "ROUTINE_QUERY_FOR_LOOP".to_string(),
@@ -1148,6 +1149,7 @@ fn routine_statement_profile_signature(statement: &RoutineStmt) -> String {
         }
         RoutineStmt::DynamicExecute(expr) => format!("EXECUTE {expr}"),
         RoutineStmt::If { condition, .. } => format!("IF {condition}"),
+        RoutineStmt::Case { expression, .. } => format!("CASE {expression}"),
         RoutineStmt::ForLoop {
             iterator,
             lower,
@@ -4197,6 +4199,13 @@ enum RoutineStmt {
         then_body: Vec<RoutineStmt>,
         else_body: Vec<RoutineStmt>,
     },
+    /// The scalar CASE selects an arm index once, preserving lazy conditions.
+    /// An omitted ELSE raises CASE_NOT_FOUND instead of acting as SQL ELSE NULL.
+    Case {
+        expression: RoutineExpr,
+        arms: Vec<Vec<RoutineStmt>>,
+        else_body: Option<Vec<RoutineStmt>>,
+    },
     ForLoop {
         iterator: String,
         lower: RoutineExpr,
@@ -4319,6 +4328,14 @@ fn routine_statement_may_write(statement: &RoutineStmt) -> bool {
             else_body,
             ..
         } => routine_block_may_write(then_body) || routine_block_may_write(else_body),
+        RoutineStmt::Case {
+            arms, else_body, ..
+        } => {
+            arms.iter().any(|arm| routine_block_may_write(arm))
+                || else_body
+                    .as_ref()
+                    .is_some_and(|body| routine_block_may_write(body))
+        }
         RoutineStmt::ForLoop { body, .. }
         | RoutineStmt::ForeachLoop { body, .. }
         | RoutineStmt::CursorForLoop { body, .. }

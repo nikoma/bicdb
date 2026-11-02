@@ -3949,6 +3949,32 @@ impl<'db> SqlSession<'db> {
                     self.execute_routine_statements(frame, else_body)
                 }
             }
+            RoutineStmt::Case {
+                expression,
+                arms,
+                else_body,
+            } => {
+                let selected = self.eval_routine_expr(frame, expression)?;
+                let SqlValue::Int(index) = selected else {
+                    return Err(SqlError::InvalidSql(
+                        "invalid procedural CASE arm index".into(),
+                    ));
+                };
+                if let Ok(index) = usize::try_from(index) {
+                    if let Some(body) = arms.get(index) {
+                        return self.execute_routine_statements(frame, body);
+                    }
+                }
+                if let Some(body) = else_body {
+                    self.execute_routine_statements(frame, body)
+                } else {
+                    Err(SqlError::RaisedException {
+                        message: "case not found".into(),
+                        detail: None,
+                        sqlstate: "20000".into(),
+                    })
+                }
+            }
             RoutineStmt::ForLoop {
                 iterator,
                 lower,

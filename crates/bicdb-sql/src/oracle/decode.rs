@@ -345,4 +345,22 @@ mod tests {
             "miss"
         );
     }
+
+    #[test]
+    fn compiler_upgrade_preserves_every_previous_language_catalog_identity() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for version in 1..=9 {
+            let name = format!("bicdb_oracle_preview_v{version}");
+            let oid = 999399 + version;
+            assert_eq!(pg_language_oid(&name), oid);
+            session.execute(&format!("CREATE FUNCTION reader_{version}() RETURNS NUMERIC LANGUAGE {name} AS $$BEGIN RETURN 7; END$$")).unwrap();
+            let result = session.execute(&format!("SELECT l.lanname,l.oid FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_language l ON l.oid=p.prolang WHERE p.proname='reader_{version}'")).unwrap();
+            assert_eq!(result.rows.len(), 1, "version {version}");
+            assert_eq!(result.rows[0][0].to_cell(), name);
+            assert_eq!(result.rows[0][1].to_cell(), oid.to_string());
+        }
+    }
 }

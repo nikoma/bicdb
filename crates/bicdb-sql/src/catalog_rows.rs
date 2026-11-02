@@ -2839,6 +2839,8 @@ pub(crate) fn pg_language_oid(language: &str) -> i64 {
         "sql" => 14,
         "plpgsql" => PLPGSQL_LANGUAGE_OID,
         oracle::PREVIEW_ROUTINE_LANGUAGE => oracle::PREVIEW_ROUTINE_LANGUAGE_OID,
+        oracle::PREVIEW_ROUTINE_LANGUAGE_V8 => oracle::PREVIEW_ROUTINE_LANGUAGE_V8_OID,
+        oracle::PREVIEW_ROUTINE_LANGUAGE_V7 => oracle::PREVIEW_ROUTINE_LANGUAGE_V7_OID,
         oracle::PREVIEW_ROUTINE_LANGUAGE_V6 => oracle::PREVIEW_ROUTINE_LANGUAGE_V6_OID,
         oracle::PREVIEW_ROUTINE_LANGUAGE_V5 => oracle::PREVIEW_ROUTINE_LANGUAGE_V5_OID,
         oracle::PREVIEW_ROUTINE_LANGUAGE_V4 => oracle::PREVIEW_ROUTINE_LANGUAGE_V4_OID,

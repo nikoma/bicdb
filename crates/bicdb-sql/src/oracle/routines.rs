@@ -164,6 +164,15 @@ pub(crate) fn bind_function_namespace(
             bind_relations(expr, &schema)?;
         }
     }
+    bind_block_namespace(declarations, statements, handlers, &schema)
+}
+
+pub(crate) fn bind_block_namespace(
+    declarations: &mut [RoutineDecl],
+    statements: &mut [RoutineStmt],
+    handlers: &mut [RoutineExceptionHandler],
+    schema: &str,
+) -> Result<()> {
     for declaration in declarations {
         match declaration {
             RoutineDecl::Variable {

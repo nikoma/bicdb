@@ -138,10 +138,16 @@ mod tests {
             }
             let mut session = SqlSession::new(&mut db);
             session.execute("CREATE TABLE aggregate_input(k INT); INSERT INTO aggregate_input VALUES(1),(2); CREATE TABLE aggregate_result(n INT,c INT)").unwrap();
-            let body="DECLARE local_n INTEGER:=7; BEGIN INSERT INTO \"aggregate_result\" SELECT local_n,COUNT(*) FROM \"aggregate_input\"; END;";
+            let body="DECLARE local_n INTEGER:=TRUNC(7.9); BEGIN INSERT INTO \"aggregate_result\" SELECT local_n,COUNT(*) FROM \"aggregate_input\"; END;";
             let sql = if oracle {
-                oracle::lower_profile_sql(session.db_ref(), body, oracle::ORACLE_PREVIEW_PROFILE)
-                    .unwrap()
+                oracle::lower_session_sql(
+                    session.db_ref(),
+                    body,
+                    oracle::ORACLE_PREVIEW_PROFILE,
+                    None,
+                    "bicdb",
+                )
+                .unwrap()
             } else {
                 format!("DO $$ {body} $$")
             };
@@ -167,6 +173,7 @@ mod tests {
             // A real column must not become an ungrouped constant simply
             // because a routine has a same-named variable.
             session.execute("DO $$DECLARE k INT:=7; BEGIN INSERT INTO aggregate_result SELECT k,COUNT(*) FROM aggregate_input; END$$").unwrap_err();
+            assert_eq!(session.execute("DO $$DECLARE k INT:=7; n INT; BEGIN SELECT k+COUNT(*) INTO n FROM aggregate_input a CROSS JOIN aggregate_input b; END$$").unwrap_err().sqlstate(), "0A000");
         }
     }
 

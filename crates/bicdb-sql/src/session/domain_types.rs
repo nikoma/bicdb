@@ -2164,6 +2164,18 @@ impl<'db> SqlSession<'db> {
                 &mut statements,
                 &mut exception_handlers,
             )?;
+            let schema = oracle::preview_schema(
+                self.db_ref(),
+                self.session_gucs.get("search_path").map(String::as_str),
+                &session_user_from_gucs(&self.session_gucs),
+            )?
+            .unwrap_or_else(default_schema_name);
+            oracle::routines::bind_block_namespace(
+                &mut declarations,
+                &mut statements,
+                &mut exception_handlers,
+                &schema,
+            )?;
             oracle::routines::lower_datetime_trunc(
                 &mut [],
                 &mut declarations,

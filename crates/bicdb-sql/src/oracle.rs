@@ -209,6 +209,11 @@ pub fn lower_session_sql(
     }
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);
     let lowered = lower_profile_sql_in_namespace(db, sql, profile, Some(&schema))?;
+    // Anonymous blocks are raw routine source, not a sqlparser Statement.
+    // Their scoped SQL is namespace-bound by the interpreter before execution.
+    if raw_do_block_body(&lowered)?.is_some() {
+        return Ok(lowered);
+    }
     let mut statements = parse_statements(&lowered)?;
     namespaces::qualify(&mut statements, &schema);
     date_trunc::rewrite(db, &mut statements)?;
@@ -295,7 +300,7 @@ fn lower_column_locks(db: &BicDb, query: &mut Query) -> Result<()> {
     Ok(())
 }
 
-fn preview_schema(db: &BicDb, path: Option<&str>, user: &str) -> Result<Option<String>> {
+pub(crate) fn preview_schema(db: &BicDb, path: Option<&str>, user: &str) -> Result<Option<String>> {
     if let Some(path) = path {
         let mut path_tokens = Tokenizer::new(&PostgreSqlDialect {}, path)
             .tokenize()

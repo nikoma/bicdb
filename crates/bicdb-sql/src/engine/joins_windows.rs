@@ -1681,9 +1681,17 @@ impl<'db> SqlEngine<'db> {
                 };
                 // Routine variables are constant across the aggregate's rows.
                 // A real input column retains its ordinary grouping requirement.
-                if BoundExprScope::new(columns, &[])
-                    .column_id(&parts)
-                    .is_none()
+                let unqualified_input = parts.len() == 1
+                    && columns.iter().any(|column| {
+                        column
+                            .rsplit('.')
+                            .next()
+                            .is_some_and(|name| name.eq_ignore_ascii_case(&parts[0]))
+                    });
+                if !unqualified_input
+                    && BoundExprScope::new(columns, &[])
+                        .column_id(&parts)
+                        .is_none()
                 {
                     let value = match expr {
                         Expr::Identifier(id) => routine_var_from_ident(&self.routine_vars, id),

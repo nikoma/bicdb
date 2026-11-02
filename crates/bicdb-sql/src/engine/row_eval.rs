@@ -1612,7 +1612,9 @@ impl<'db> SqlEngine<'db> {
                 && cached.parent_len == parent.value_count()
                 && cached.columns.as_slice() == columns
             {
-                cached.row.refill_extension(cached.parent_len, &cached.novel, row);
+                cached
+                    .row
+                    .refill_extension(cached.parent_len, &cached.novel, row);
                 return (cached.row, Some(cached.novel));
             }
         }

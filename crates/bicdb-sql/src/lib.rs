@@ -5034,7 +5034,8 @@ mod cell_rows_tests;
 pub fn query_output_column_names(sql: &str) -> Option<Vec<String>> {
     use sqlparser::ast::{SelectItem, SetExpr, Statement};
     let statements =
-        sqlparser::parser::Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql).ok()?;
+        sqlparser::parser::Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql)
+            .ok()?;
     let [Statement::Query(query)] = statements.as_slice() else {
         return None;
     };

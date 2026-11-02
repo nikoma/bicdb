@@ -620,9 +620,14 @@ fn raise_using_constraint_reports_a_constraint_violation() {
     ] {
         session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
-    let error = session.execute("INSERT INTO nodes VALUES (3, 3)").unwrap_err();
+    let error = session
+        .execute("INSERT INTO nodes VALUES (3, 3)")
+        .unwrap_err();
     assert_eq!(error.sqlstate(), "23514", "{error}");
-    assert!(error.to_string().contains("node cannot be its own parent"), "{error}");
+    assert!(
+        error.to_string().contains("node cannot be its own parent"),
+        "{error}"
+    );
     match &error {
         bicdb_sql::SqlError::ConstraintViolation { constraint, .. } => {
             assert_eq!(constraint.as_deref(), Some("nodes_parent_not_self"))
@@ -643,7 +648,9 @@ fn set_returning_function_alias_column_is_typed() {
         "CREATE TABLE apps (id INT PRIMARY KEY, commands JSONB)",
         "INSERT INTO apps VALUES (1, '{\"items\": [{\"id\": \"a\"}]}')",
     ] {
-        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
     for sql in [
         "SELECT item AS source FROM jsonb_array_elements('[1,2]'::jsonb) AS item",
@@ -668,7 +675,9 @@ fn correlated_exists_per_array_element_on_wide_rows() {
     session
         .execute("CREATE TABLE manifests (id INT PRIMARY KEY, min_rank INT, navigation JSONB, padding JSONB)")
         .unwrap();
-    session.execute("CREATE TABLE ranks (role TEXT PRIMARY KEY, rank INT)").unwrap();
+    session
+        .execute("CREATE TABLE ranks (role TEXT PRIMARY KEY, rank INT)")
+        .unwrap();
     session
         .execute("INSERT INTO ranks VALUES ('guest', 10), ('member', 20), ('admin', 40)")
         .unwrap();
@@ -706,7 +715,15 @@ fn correlated_exists_per_array_element_on_wide_rows() {
     // min_rank 0: all 300; 15: member + admin (200); 30: admin only (100).
     assert_eq!(
         got,
-        vec![("1".into(), "300".into()), ("2".into(), "200".into()), ("3".into(), "100".into())]
+        vec![
+            ("1".into(), "300".into()),
+            ("2".into(), "200".into()),
+            ("3".into(), "100".into())
+        ]
     );
-    assert!(started.elapsed() < std::time::Duration::from_secs(30), "took {:?}", started.elapsed());
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(30),
+        "took {:?}",
+        started.elapsed()
+    );
 }

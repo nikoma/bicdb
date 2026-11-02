@@ -404,7 +404,12 @@ impl OuterSlotRow {
 
     /// Refills the slots an `extend` appended (after `parent_len`) from the
     /// current row; `novel[k]` is the current-row index of appended slot `k`.
-    pub(crate) fn refill_extension(&mut self, parent_len: usize, novel: &[usize], row: &[SqlValue]) {
+    pub(crate) fn refill_extension(
+        &mut self,
+        parent_len: usize,
+        novel: &[usize],
+        row: &[SqlValue],
+    ) {
         for (k, &index) in novel.iter().enumerate() {
             self.values[parent_len + k] = row.get(index).cloned().unwrap_or(SqlValue::Null);
         }

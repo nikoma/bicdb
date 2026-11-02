@@ -2338,6 +2338,18 @@ pub(crate) fn describe_message(
                 describe_result(stream, server, &result, &[], Some(&statement.sql))?;
             } else if let Some(result) = placeholder_cast_describe_result(&statement.sql) {
                 describe_result(stream, server, &result, &[], Some(&statement.sql))?;
+            } else if let Some(describe_sql) = mutating_with_describe_sql(&statement.sql) {
+                // `WITH x AS (INSERT/UPDATE/DELETE ... RETURNING ...) SELECT ...`:
+                // describe the read-only equivalent; the DML never runs here.
+                let null_params = vec!["NULL".to_string(); statement.param_type_oids.len()];
+                let describe_sql = substitute_parameters(&describe_sql, &null_params)?;
+                let result = execute_server_sql_for_describe_with_session(
+                    server,
+                    &describe_sql,
+                    &state.session_state,
+                    state.security_context.as_ref(),
+                )?;
+                describe_result(stream, server, &result, &[], Some(&statement.sql))?;
             } else if is_describable_query(&statement.sql) {
                 let null_params = vec!["NULL".to_string(); statement.param_type_oids.len()];
                 let describe_sql = substitute_parameters(&statement.sql, &null_params)?;
@@ -3472,5 +3484,154 @@ mod query_text_fast_path_tests {
             "select advisory_board from t"
         ));
         assert!(!contains_advisory_lock_function("call neword(1,2,3)"));
+    }
+}
+
+/// The columns of a statement whose `WITH` clause modifies data: every
+/// data-modifying CTE becomes an empty `SELECT <its RETURNING list> FROM
+/// <its target and FROM tables> LIMIT 0`, keeping its name and column names,
+/// so the final query can be described without running any DML. Returns
+/// `None` when the statement is not such a query or uses a shape this does
+/// not cover (the caller then reports no row description, as before).
+pub(crate) fn mutating_with_describe_sql(sql: &str) -> Option<String> {
+    use sqlparser::ast::{FromTable, SetExpr, Statement, TableObject, UpdateTableFromKind};
+    use sqlparser::dialect::PostgreSqlDialect;
+    use sqlparser::parser::Parser;
+
+    let normalized = normalize_executable_sql(sql);
+    if !normalized.starts_with("with ") || !is_mutating_with_sql(&normalized) {
+        return None;
+    }
+    let mut statements = Parser::parse_sql(&PostgreSqlDialect {}, sql).ok()?;
+    if statements.len() != 1 {
+        return None;
+    }
+    let Statement::Query(query) = statements.remove(0) else {
+        return None;
+    };
+    let mut query = *query;
+
+    fn join_tables(tables: &[sqlparser::ast::TableWithJoins]) -> String {
+        tables
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+    fn select_items(items: &Option<Vec<sqlparser::ast::SelectItem>>) -> Option<String> {
+        let items = items.as_ref()?;
+        if items.is_empty() {
+            return None;
+        }
+        Some(
+            items
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    }
+    // The read-only stand-in for one DML statement, or None if it cannot be
+    // expressed (for example a DML CTE without RETURNING that is referenced).
+    fn read_only(statement: &Statement) -> Option<String> {
+        match statement {
+            Statement::Insert(insert) => {
+                let TableObject::TableName(table) = &insert.table else {
+                    return None;
+                };
+                let alias = insert
+                    .table_alias
+                    .as_ref()
+                    .map(|alias| format!(" AS {}", alias.alias))
+                    .unwrap_or_default();
+                let items = select_items(&insert.returning).unwrap_or_else(|| "NULL".to_string());
+                Some(format!("SELECT {items} FROM {table}{alias} LIMIT 0"))
+            }
+            Statement::Update(update) => {
+                let mut tables = vec![update.table.clone()];
+                match &update.from {
+                    Some(UpdateTableFromKind::BeforeSet(from))
+                    | Some(UpdateTableFromKind::AfterSet(from)) => tables.extend(from.iter().cloned()),
+                    None => {}
+                }
+                let items = select_items(&update.returning).unwrap_or_else(|| "NULL".to_string());
+                Some(format!("SELECT {items} FROM {} LIMIT 0", join_tables(&tables)))
+            }
+            Statement::Delete(delete) => {
+                let mut tables = match &delete.from {
+                    FromTable::WithFromKeyword(tables) | FromTable::WithoutKeyword(tables) => tables.clone(),
+                };
+                if let Some(using) = &delete.using {
+                    tables.extend(using.iter().cloned());
+                }
+                let items = select_items(&delete.returning).unwrap_or_else(|| "NULL".to_string());
+                Some(format!("SELECT {items} FROM {} LIMIT 0", join_tables(&tables)))
+            }
+            _ => None,
+        }
+    }
+    fn dml_of(body: &SetExpr) -> Option<&Statement> {
+        match body {
+            SetExpr::Insert(statement) | SetExpr::Update(statement) | SetExpr::Delete(statement) => {
+                Some(statement)
+            }
+            _ => None,
+        }
+    }
+    let parse_query = |sql: &str| -> Option<sqlparser::ast::Query> {
+        match Parser::parse_sql(&PostgreSqlDialect {}, sql).ok()?.into_iter().next()? {
+            Statement::Query(query) => Some(*query),
+            _ => None,
+        }
+    };
+    if let Some(with) = query.with.as_mut() {
+        for cte in &mut with.cte_tables {
+            if let Some(statement) = dml_of(&cte.query.body) {
+                let replacement = parse_query(&read_only(statement)?)?;
+                *cte.query = replacement;
+            }
+        }
+    }
+    if let Some(statement) = dml_of(&query.body) {
+        let replacement = parse_query(&read_only(statement)?)?;
+        query.body = replacement.body;
+        query.limit_clause = replacement.limit_clause;
+    }
+    Some(query.to_string())
+}
+
+#[cfg(test)]
+mod mutating_with_describe_tests {
+    use super::mutating_with_describe_sql;
+
+    #[test]
+    fn data_modifying_ctes_describe_through_empty_selects() {
+        let described = mutating_with_describe_sql(
+            "WITH inserted AS (INSERT INTO act (id, org_id) VALUES ($1, $2) RETURNING id, org_id) \
+             SELECT inserted.id, u.name FROM inserted LEFT JOIN users u ON u.id = inserted.id",
+        )
+        .expect("insert CTE is described");
+        assert!(described.contains("SELECT id, org_id FROM act LIMIT 0"), "{described}");
+        assert!(!described.to_ascii_uppercase().contains("INSERT INTO"), "{described}");
+
+        let described = mutating_with_describe_sql(
+            "WITH due AS (SELECT id FROM q LIMIT 1) \
+             UPDATE q AS control SET attempts = control.attempts + 1 FROM due \
+             WHERE control.id = due.id RETURNING control.id, control.attempts",
+        )
+        .expect("trailing UPDATE is described");
+        assert!(
+            described.contains("SELECT control.id, control.attempts FROM q AS control, due LIMIT 0"),
+            "{described}"
+        );
+
+        let described = mutating_with_describe_sql(
+            "WITH gone AS (DELETE FROM sessions WHERE expires_at < now() RETURNING id) SELECT count(*) FROM gone",
+        )
+        .expect("delete CTE is described");
+        assert!(described.contains("SELECT id FROM sessions LIMIT 0"), "{described}");
+
+        // Read-only WITH queries keep their existing describe path.
+        assert!(mutating_with_describe_sql("WITH x AS (SELECT 1 AS a) SELECT a FROM x").is_none());
     }
 }

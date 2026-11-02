@@ -3611,15 +3611,19 @@ pub fn parse_database_ddl(sql: &str) -> Result<Option<DatabaseDdl>> {
             None => (false, rest),
         };
         let (name, trailing) = parse_leading_sql_identifier(rest.trim_start())?;
-        if !trailing.trim().is_empty() {
-            return Err(SqlError::Unsupported(format!(
-                "DROP DATABASE option {} is not supported",
-                trailing.trim()
-            )));
-        }
+        let force = match parse_drop_database_options(trailing.trim()) {
+            Some(force) => force,
+            None => {
+                return Err(SqlError::Unsupported(format!(
+                    "DROP DATABASE option {} is not supported",
+                    trailing.trim()
+                )))
+            }
+        };
         return Ok(Some(DatabaseDdl::Drop {
             name: normalize_database_name(&name),
             if_exists,
+            force,
         }));
     }
 
@@ -5045,4 +5049,25 @@ mod pg_type_resolution_tests {
             }
         }
     }
+}
+
+/// The option list after `DROP DATABASE name`: nothing, or PostgreSQL's
+/// `[WITH] (FORCE)`. Returns whether FORCE was given, or `None` for any
+/// other option text.
+fn parse_drop_database_options(options: &str) -> Option<bool> {
+    let options = options.trim().trim_end_matches(';').trim();
+    if options.is_empty() {
+        return Some(false);
+    }
+    let options = strip_prefix_ci(options, "WITH").map(str::trim_start).unwrap_or(options);
+    let inner = options.strip_prefix('(')?.strip_suffix(')')?;
+    let mut force = false;
+    for option in inner.split(',') {
+        if option.trim().eq_ignore_ascii_case("FORCE") {
+            force = true;
+        } else {
+            return None;
+        }
+    }
+    Some(force)
 }

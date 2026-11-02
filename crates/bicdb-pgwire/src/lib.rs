@@ -915,6 +915,10 @@ pub struct PgWireServer {
     /// Sessions connected to this database (in cluster mode they may have
     /// arrived through another database's listener).
     database_sessions: AtomicUsize,
+    /// A handle to each session's socket, so `DROP DATABASE ... WITH (FORCE)`
+    /// can terminate the database's other sessions, including idle ones
+    /// blocked in a read.
+    terminable_sessions: Mutex<HashMap<u64, TcpStream>>,
     /// Status of the connectors this server runs.
     connectors: connectors::ConnectorRegistry,
     active_connections_by_ip: Mutex<HashMap<IpAddr, usize>>,
@@ -1784,6 +1788,7 @@ fn initialize_client_with_server_admitted(
     admission: ConnectionAdmission,
 ) -> Result<InitializedClient> {
     configure_accepted_socket(&stream);
+    let terminator = stream.try_clone().ok();
     let mut stream = ClientStream::plain(stream);
     stream.set_nonblocking(false)?;
     let authentication_deadline = Instant::now() + server.config.authentication_timeout;
@@ -1890,6 +1895,7 @@ fn initialize_client_with_server_admitted(
             state.connection_id,
             process_id,
             secret_key,
+            terminator,
         );
         Ok(InitializedClient::Blocking(Box::new(
             InitializedBlockingClient {
@@ -1913,6 +1919,7 @@ fn initialize_client_with_server_admitted(
             state.connection_id,
             process_id,
             secret_key,
+            terminator,
         );
         let plain = stream.into_plain()?;
         Ok(InitializedClient::Plain(Box::new(InitializedPlainClient {
@@ -4251,13 +4258,17 @@ fn execute_server_sql_with_options_normalized(
                     template.as_deref(),
                 );
             }
-            Some(DatabaseDdl::Drop { name, if_exists }) => {
+            Some(DatabaseDdl::Drop {
+                name,
+                if_exists,
+                force,
+            }) => {
                 if state.in_transaction {
                     return Err(PgWireError::Server(
                         "DROP DATABASE cannot run inside a transaction block".to_string(),
                     ));
                 }
-                return cluster.drop_database(server, state, sql, &name, if_exists);
+                return cluster.drop_database(server, state, sql, &name, if_exists, force);
             }
             _ => {}
         }

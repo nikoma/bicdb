@@ -2740,12 +2740,21 @@ pub(crate) fn grant_targets(
             .collect(),
         GrantObjects::Tables(tables) => tables
             .iter()
-            .map(|table| {
-                let name = relation_name(table)?;
+            .filter_map(|table| {
+                let name = match relation_name(table) {
+                    Ok(name) => name,
+                    Err(error) => return Some(Err(error)),
+                };
                 if !relation_exists(db, &name) {
-                    return Err(SqlError::InvalidCollection(name));
+                    // System catalog views are readable by every role, as in
+                    // PostgreSQL where they are granted to PUBLIC; a grant on
+                    // one changes nothing and must not fail a migration.
+                    if is_virtual_table(&name) {
+                        return None;
+                    }
+                    return Some(Err(SqlError::InvalidCollection(name)));
                 }
-                Ok((PrivilegeObjectType::Table, name))
+                Some(Ok((PrivilegeObjectType::Table, name)))
             })
             .collect(),
         GrantObjects::AllTablesInSchema { schemas } => {

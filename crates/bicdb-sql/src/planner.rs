@@ -3750,6 +3750,7 @@ pub(crate) fn collect_index_column_heads(fields: &[IndexField], out: &mut BTreeS
             | IndexField::Coalesce { field: inner, .. } => {
                 collect_index_column_heads(std::slice::from_ref(inner), out);
             }
+            IndexField::FirstNonNull(fields) => collect_index_column_heads(fields, out),
         }
     }
 }

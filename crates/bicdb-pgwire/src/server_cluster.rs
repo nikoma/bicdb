@@ -884,6 +884,7 @@ impl PgWireServer {
             started_at: Instant::now(),
             active_connections: AtomicUsize::new(0),
             database_sessions: AtomicUsize::new(0),
+            terminable_sessions: Mutex::new(HashMap::new()),
             connectors: Default::default(),
             active_connections_by_ip: Mutex::new(HashMap::new()),
             rejection_drains,
@@ -2171,6 +2172,7 @@ impl PgWireCluster {
         sql: &str,
         name: &str,
         if_exists: bool,
+        force: bool,
     ) -> Result<SqlResult> {
         let name = normalize_cluster_database_name(name)?;
         let Some(entry) = self.manifest.lock().unwrap().databases.get(&name).cloned() else {
@@ -2192,9 +2194,14 @@ impl PgWireCluster {
                 ));
             }
             if open.database_sessions.load(Ordering::SeqCst) > 0 {
-                return Err(PgWireError::Server(format!(
-                    "database \"{name}\" is being accessed by other users"
-                )));
+                if !force {
+                    return Err(PgWireError::Server(format!(
+                        "database \"{name}\" is being accessed by other users"
+                    )));
+                }
+                // Ownership is checked before anyone is disconnected.
+                self.require_database_owner(source, state, &name)?;
+                terminate_database_sessions(open, &name)?;
             }
         }
         self.require_database_owner(source, state, &name)?;
@@ -2749,8 +2756,16 @@ impl ConnectionRegistration {
         connection_id: u64,
         process_id: i32,
         secret_key: i32,
+        terminator: Option<TcpStream>,
     ) -> Self {
         server.database_sessions.fetch_add(1, Ordering::SeqCst);
+        if let Some(socket) = terminator {
+            server
+                .terminable_sessions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .insert(connection_id, socket);
+        }
         Self {
             server,
             control_server,
@@ -2763,6 +2778,11 @@ impl ConnectionRegistration {
 
 impl Drop for ConnectionRegistration {
     fn drop(&mut self) {
+        self.server
+            .terminable_sessions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&self.connection_id);
         self.server.database_sessions.fetch_sub(1, Ordering::SeqCst);
         cleanup_client(
             &self.server,
@@ -3097,4 +3117,30 @@ mod branch_statement_tests {
         assert_eq!(format_unix_utc(0), "1970-01-01 00:00:00+00");
         assert_eq!(format_unix_utc(1_791_648_827), "2026-10-10 16:13:47+00");
     }
+}
+
+/// `DROP DATABASE ... WITH (FORCE)`: close every session of `server` and
+/// wait for them to unregister. Shutting the socket down wakes a session
+/// blocked in a read; its handler loop then ends and drops its registration.
+fn terminate_database_sessions(server: &Arc<PgWireServer>, name: &str) -> Result<()> {
+    let sockets = server
+        .terminable_sessions
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .values()
+        .filter_map(|socket| socket.try_clone().ok())
+        .collect::<Vec<_>>();
+    for socket in sockets {
+        let _ = socket.shutdown(std::net::Shutdown::Both);
+    }
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while server.database_sessions.load(Ordering::SeqCst) > 0 {
+        if Instant::now() >= deadline {
+            return Err(PgWireError::Server(format!(
+                "database \"{name}\" still has sessions that did not terminate"
+            )));
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    Ok(())
 }

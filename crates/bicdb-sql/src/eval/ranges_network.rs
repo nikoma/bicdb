@@ -2611,9 +2611,21 @@ pub(crate) fn eval_binary_value(
         }
         BinaryOperator::AtQuestion => eval_jsonpath_operator_value(left, right, false),
         BinaryOperator::HashMinus => eval_json_delete_path_value(left, right),
-        BinaryOperator::BitwiseAnd => match (left, right) {
+        BinaryOperator::BitwiseAnd
+        | BinaryOperator::BitwiseOr
+        | BinaryOperator::PGBitwiseXor
+        | BinaryOperator::PGBitwiseShiftLeft
+        | BinaryOperator::PGBitwiseShiftRight => match (left, right) {
             (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
-            (SqlValue::Int(left), SqlValue::Int(right)) => Ok(SqlValue::Int(left & right)),
+            (SqlValue::Int(left), SqlValue::Int(right)) => Ok(SqlValue::Int(match op {
+                BinaryOperator::BitwiseAnd => left & right,
+                BinaryOperator::BitwiseOr => left | right,
+                BinaryOperator::PGBitwiseXor => left ^ right,
+                // PostgreSQL's integer shifts use the machine shift, which
+                // takes the count modulo the width.
+                BinaryOperator::PGBitwiseShiftLeft => left.wrapping_shl(right as u32),
+                _ => left.wrapping_shr(right as u32),
+            })),
             _ => Err(SqlError::Unsupported(format!(
                 "unsupported value operator {op}"
             ))),

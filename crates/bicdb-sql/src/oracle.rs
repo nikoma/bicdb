@@ -12,6 +12,7 @@ mod date_trunc;
 mod decode;
 mod dual;
 mod namespaces;
+mod nvl;
 pub(crate) mod routine_arithmetic;
 pub(crate) mod routines;
 mod rownum;
@@ -63,7 +64,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V6: &str = "bicdb_oracle_preview_v6";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V7: &str = "bicdb_oracle_preview_v7";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V8: &str = "bicdb_oracle_preview_v8";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V9: &str = "bicdb_oracle_preview_v9";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v10";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V10: &str = "bicdb_oracle_preview_v10";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v11";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -73,7 +75,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V6_OID: i64 = 999_405;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V7_OID: i64 = 999_406;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V8_OID: i64 = 999_407;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V9_OID: i64 = 999_408;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_409;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V10_OID: i64 = 999_409;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_410;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -91,7 +94,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V7 => Some(7),
         PREVIEW_ROUTINE_LANGUAGE_V8 => Some(8),
         PREVIEW_ROUTINE_LANGUAGE_V9 => Some(9),
-        PREVIEW_ROUTINE_LANGUAGE => Some(10),
+        PREVIEW_ROUTINE_LANGUAGE_V10 => Some(10),
+        PREVIEW_ROUTINE_LANGUAGE => Some(11),
         _ => None,
     }
 }
@@ -99,7 +103,7 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
     matches!(
         preview_routine_language_version(language),
-        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10)
+        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11)
     )
 }
 
@@ -221,7 +225,8 @@ fn lower_profile_sql_in_namespace(
     )?;
     if profile == ORACLE_PREVIEW_PROFILE {
         let lowered = date_trunc::lower(db, &lowered, None)?;
-        lower_decode(db, &lowered, None)
+        let lowered = lower_decode(db, &lowered, None)?;
+        date_trunc::lower(db, &lowered, None)
     } else {
         Ok(lowered)
     }
@@ -236,7 +241,8 @@ pub fn lower_typed_native_sql(
 ) -> Result<String> {
     if profile == ORACLE_PREVIEW_PROFILE {
         let lowered = date_trunc::lower(db, sql, Some(oids))?;
-        lower_decode(db, &lowered, Some(oids))
+        let lowered = lower_decode(db, &lowered, Some(oids))?;
+        date_trunc::lower(db, &lowered, Some(oids))
     } else {
         Ok(sql.to_string())
     }
@@ -266,6 +272,7 @@ pub fn lower_session_sql(
     namespaces::qualify(&mut statements, &schema);
     date_trunc::rewrite(db, &mut statements)?;
     routine_arithmetic::lower_sql_builtins(db, &mut statements, None)?;
+    date_trunc::rewrite(db, &mut statements)?;
     struct Locks<'a>(&'a BicDb);
     impl sqlparser::ast::VisitorMut for Locks<'_> {
         type Break = SqlError;
@@ -289,7 +296,11 @@ pub fn lower_session_sql(
 }
 
 fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
-    if !sql.to_ascii_lowercase().contains("decode") || raw_do_block_body(sql)?.is_some() {
+    if !["decode", "nvl", "chr", "to_char"]
+        .iter()
+        .any(|name| sql.to_ascii_lowercase().contains(name))
+        || raw_do_block_body(sql)?.is_some()
+    {
         return Ok(sql.to_string());
     }
     let mut statements = parse_statements(sql)?;
@@ -941,16 +952,24 @@ fn canonical_tokens_with_routine_types(
     let mut pieces = Vec::new();
     let mut decode_scope = Vec::new();
     let mut in_decode = vec![false; source.len()];
+    let mut nvl_scope = Vec::new();
+    let mut in_nvl = vec![false; source.len()];
     for (index, token) in source.iter().enumerate() {
         if *token == Token::LParen {
             let opens_decode = index >= 1
-                && word(&source[index - 1], "DECODE")
+                && (word(&source[index - 1], "DECODE") || word(&source[index - 1], "NVL"))
                 && (index < 2 || source[index - 2] != Token::Period);
             decode_scope.push(opens_decode || decode_scope.last().copied().unwrap_or(false));
+            let opens_nvl = index >= 1
+                && word(&source[index - 1], "NVL")
+                && (index < 2 || source[index - 2] != Token::Period);
+            nvl_scope.push(opens_nvl || nvl_scope.last().copied().unwrap_or(false));
         }
         in_decode[index] = preview && decode_scope.last().copied().unwrap_or(false);
+        in_nvl[index] = preview && nvl_scope.last().copied().unwrap_or(false);
         if *token == Token::RParen {
             decode_scope.pop();
+            nvl_scope.pop();
         }
     }
     let mut i = 0;
@@ -1013,7 +1032,9 @@ fn canonical_tokens_with_routine_types(
                     "SYSDATE" => pieces.push(
                         "CAST(date_trunc('second', clock_timestamp()) AS TIMESTAMP(0))".into(),
                     ),
-                    "NVL" => pieces.push("coalesce".into()),
+                    "NVL" if !preview => pieces.push("coalesce".into()),
+                    "NVL" if source.get(i+1)==Some(&Token::LParen)
+                        && (i==0 || source[i-1]!=Token::Period) => pieces.push("nvl".into()),
                     "TO_DATE" if source.get(i + 1) == Some(&Token::LParen) => {
                         pieces.push("bicdb_oracle_to_date".into())
                     }
@@ -1063,7 +1084,14 @@ fn canonical_tokens_with_routine_types(
                 pieces.push(t.to_string());
             }
         } else if matches!(t,Token::SingleQuotedString(value) if value.is_empty()) {
-            pieces.push("NULL".into());
+            pieces.push(
+                if in_nvl[i] {
+                    "CAST(NULL AS VARCHAR)"
+                } else {
+                    "NULL"
+                }
+                .into(),
+            );
         } else {
             pieces.push(t.to_string());
         }

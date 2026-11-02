@@ -54,7 +54,7 @@ fn timestamp(value: &SqlValue, source: &str, date: bool) -> Result<SqlValue> {
     }
 }
 
-fn default_date_input(text: &str) -> Result<String> {
+pub(super) fn default_date_input(text: &str) -> Result<String> {
     use chrono::Datelike;
     // The preview fixes NLS_DATE_FORMAT=DD-MON-RR and NLS_DATE_LANGUAGE=AMERICAN.
     // Oracle permits punctuation substitution, omitted punctuation and a full

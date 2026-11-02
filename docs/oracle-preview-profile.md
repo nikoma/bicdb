@@ -204,13 +204,13 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v10`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v11`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
 previously translated routines; recreate an Oracle-authored definition to select
 the new compiler. The compiler versions have separate `pg_language` identities,
-present only in a preview database. Versions 1 through 9 remain readable.
+present only in a preview database. Versions 1 through 10 remain readable.
 Version 5 (OID 999404) fences CASE selector dispatch. Version 6 (OID 999405)
 adds the tested Oracle statement-rollback and strict SELECT INTO contracts;
 earlier definitions retain their previous block-rollback behavior. Recreate an
@@ -314,6 +314,30 @@ projections, record/default/update evaluation and specialized catalog evaluation
 as it already did in bound row execution. An unused failing argument is not
 executed; common-type validation still runs. This general correction applies to
 both profiles and is independent of application names or routine versions.
+
+Version 11 (OID 999410) adds eager, type-directed NVL for resolved character,
+NUMBER, logical DATE and TIMESTAMP operands. Both operands and their required
+conversions execute before selection. The first character operand selects a
+character result; an empty character literal retains that type while its value
+is NULL. The first operand's character length or NUMBER precision does not
+constrain the replacement. Incompatible numeric/datetime operands fail with
+42804. COALESCE retains its independent lazy evaluation contract.
+
+NVL preserves character padding and carries timestamp precision through base
+columns, CTEs, derived queries, cursor records, local variables and anchored
+returns. SQL timestamp literals, binds and stored function results use nine
+fractional display digits; procedural variables use their declared precision
+(six by default). An anchored TIMESTAMP return rounds to its source column's
+precision before SQL applies result formatting. DATE replacement discards
+timestamp fractional seconds. Values with nonzero fractional digits beyond
+microseconds fail explicitly instead of silently losing precision.
+
+These conversions use the preview's fixed numeric, date and timestamp NLS
+defaults. Binary floating point, national/LOB operands, intervals, other NLS
+settings and full Oracle optimizer/type-resolution diagnostics are unqualified.
+Versions 1–10 retain their stored NVL translations; recreate original Oracle
+source to select the version-11 compiler. An older reader rejects a version-11
+routine with 0A000. This marker adds no database storage-format transition.
 
 Version 2 binds static relation references in functions to the namespace in the
 stored function declaration. Unqualified declarations created through the

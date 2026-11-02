@@ -118,7 +118,7 @@ pub(super) fn lower(
     Ok(Some((data_type, used + 2)))
 }
 
-/// Encode Oracle's constrained numeric return in the stored body as an ordinary
+/// Encode Oracle's constrained scalar return in the stored body as an ordinary
 /// CAST. Existing readers already enforce that operation; character return
 /// lengths and argument modifiers retain their unconstrained signature rules.
 pub(super) fn constrain_numeric_returns(header: &[Token], body: &mut Vec<Token>) -> Result<()> {
@@ -129,19 +129,21 @@ pub(super) fn constrain_numeric_returns(header: &[Token], body: &mut Vec<Token>)
         return Ok(());
     };
     let declaration = &header[returns + 1..];
-    // Column descriptors render constrained NUMBER as numeric(p,s). Leave
+    // Column descriptors render NUMBER and TIMESTAMP precision explicitly. Leave
     // unrelated return-type syntax to the existing routine parser.
     if !declaration
         .first()
-        .is_some_and(|token| word(token, "NUMERIC"))
+        .is_some_and(|token| word(token, "NUMERIC") || word(token, "TIMESTAMP"))
         || declaration.get(1) != Some(&Token::LParen)
     {
         return Ok(());
     }
     let schema = raw_routine_type_schema(&join(declaration))?;
-    if schema.pg_type != "numeric"
-        || !matches!(schema.type_modifier, Some(PgTypeModifier::Numeric { .. }))
-    {
+    if !matches!(
+        (schema.pg_type.as_str(), &schema.type_modifier),
+        ("numeric", Some(PgTypeModifier::Numeric { .. }))
+            | ("timestamp", Some(PgTypeModifier::Temporal { .. }))
+    ) {
         return Ok(());
     }
     let data_type = schema.formatted();

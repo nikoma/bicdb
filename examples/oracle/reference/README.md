@@ -375,3 +375,17 @@ SQLSTATE 22003. This does not establish full Oracle error identity.
 checks Unicode scalar chr, NULL, SQLSTATEs and an unselected failing COALESCE
 argument against PostgreSQL. It uses `ORACLE_CONTROL_PG_DSN` and `BICDB_PG_DSN`,
 creates no objects and retains native PostgreSQL semantics.
+
+The `routine_namespaces.py --suite nvl` fixture compares eager NVL evaluation,
+first-operand type selection, empty character identity, CHAR padding, datetime
+conversion and timestamp precision in SQL and stored routines. It also binds
+typed values through both actual drivers. `nvl-reference.json` freezes source
+observations; the runner rechecks the expected values and error codes against
+Oracle. Projection metadata asserts the selected PostgreSQL transport OIDs.
+The fixture creates and drops only its uniquely named tables and routines.
+Use the private connection arguments shown for the other routine suites.
+
+The scope is fixed preview NLS and supported character/NUMBER/DATE/TIMESTAMP
+operands. Binary floating point, other NLS settings, full Oracle diagnostics and
+submicrosecond values are not qualified by this fixture. Existing compiled
+routines retain their earlier contract until recreated from Oracle source.

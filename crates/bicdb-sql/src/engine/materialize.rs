@@ -3111,7 +3111,9 @@ impl<'db> SqlEngine<'db> {
             | "lpad"
             | "rpad"
             | "bicdb_variadic_call" => Some("text".to_string()),
-            "bicdb_oracle_column_type"
+            "bicdb_oracle_nvl_text"
+            | "bicdb_oracle_nvl_convert_text"
+            | "bicdb_oracle_column_type"
             | "bicdb_oracle_chr"
             | "bicdb_oracle_decode_key"
             | "bicdb_oracle_decode_text"
@@ -3124,12 +3126,16 @@ impl<'db> SqlEngine<'db> {
             "age" | "make_interval" => Some("interval".to_string()),
             "to_date" => Some("date".to_string()),
             "trunc" if args.len() == 2 => Some("numeric".to_string()),
-            "bicdb_oracle_decode_number"
+            "bicdb_oracle_nvl_number"
+            | "bicdb_oracle_decode_number"
             | "bicdb_oracle_number_divide"
             | "bicdb_oracle_number_arithmetic"
             | "bicdb_oracle_date_subtract"
             | "bicdb_oracle_number_trunc" => Some("numeric".to_string()),
             "bicdb_oracle_decode_date"
+            | "bicdb_oracle_nvl_timestamp"
+            | "bicdb_oracle_nvl_convert_timestamp"
+            | "bicdb_oracle_nvl_date"
             | "bicdb_oracle_decode_timestamp"
             | "bicdb_oracle_date_coerce"
             | "bicdb_oracle_add_months"

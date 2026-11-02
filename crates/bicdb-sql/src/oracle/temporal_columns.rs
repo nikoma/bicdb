@@ -172,11 +172,32 @@ pub(super) fn lower_date_expression(expr: &mut Expr) -> Result<()> {
 
 /// Trace a temporal projection to its declared source type. Unknown lineage
 /// remains unknown; physical timestamp precision never implies Oracle DATE.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct LogicalTemporal {
+    pub source: Source,
+    pub precision: Option<u8>,
+}
+impl LogicalTemporal {
+    fn date() -> Self {
+        Self {
+            source: Source::Date,
+            precision: Some(0),
+        }
+    }
+    fn timestamp(precision: Option<u8>) -> Self {
+        Self {
+            source: Source::Timestamp,
+            precision,
+        }
+    }
+}
 pub(super) fn in_query(db: &BicDb, query: &Query, expr: &Expr) -> Option<Source> {
+    logical_in_query(db, query, expr).map(|value| value.source)
+}
+pub(super) fn logical_in_query(db: &BicDb, query: &Query, expr: &Expr) -> Option<LogicalTemporal> {
     projected(db, query, expr, 0)
 }
-
-fn projected(db: &BicDb, query: &Query, expr: &Expr, depth: usize) -> Option<Source> {
+fn projected(db: &BicDb, query: &Query, expr: &Expr, depth: usize) -> Option<LogicalTemporal> {
     if depth > 16 {
         return None;
     }
@@ -185,24 +206,30 @@ fn projected(db: &BicDb, query: &Query, expr: &Expr, depth: usize) -> Option<Sou
         Expr::Cast {
             data_type: DataType::Date,
             ..
-        } => return Some(Source::Date),
+        } => return Some(LogicalTemporal::date()),
         Expr::Cast {
             data_type:
                 DataType::Timestamp(
-                    _,
+                    precision,
                     sqlparser::ast::TimezoneInfo::None
                     | sqlparser::ast::TimezoneInfo::WithoutTimeZone,
                 ),
             ..
-        } => return Some(Source::Timestamp),
+        } => {
+            return Some(LogicalTemporal::timestamp(Some(
+                precision.unwrap_or(6) as u8
+            )))
+        }
         Expr::TypedString(value) => {
             return match value.data_type {
-                DataType::Date => Some(Source::Date),
+                DataType::Date => Some(LogicalTemporal::date()),
                 DataType::Timestamp(
-                    _,
+                    precision,
                     sqlparser::ast::TimezoneInfo::None
                     | sqlparser::ast::TimezoneInfo::WithoutTimeZone,
-                ) => Some(Source::Timestamp),
+                ) => Some(LogicalTemporal::timestamp(Some(
+                    precision.unwrap_or(9) as u8
+                ))),
                 _ => None,
             }
         }
@@ -215,8 +242,19 @@ fn projected(db: &BicDb, query: &Query, expr: &Expr, depth: usize) -> Option<Sou
                 | "bicdb_oracle_trunc_date"
                 | "bicdb_oracle_plsql_trunc_date"
                 | "bicdb_oracle_add_months"
-                | "bicdb_oracle_decode_date" => return Some(Source::Date),
-                "bicdb_oracle_decode_timestamp" => return Some(Source::Timestamp),
+                | "bicdb_oracle_decode_date"
+                | "bicdb_oracle_nvl_date" => return Some(LogicalTemporal::date()),
+                "bicdb_oracle_decode_timestamp" => return Some(LogicalTemporal::timestamp(None)),
+                "bicdb_oracle_nvl_timestamp" => {
+                    let precision = function_args(function).get(2).and_then(|expr| match expr {
+                        Expr::Value(value) => match &value.value {
+                            Value::Number(n, _) => n.parse::<u8>().ok(),
+                            _ => None,
+                        },
+                        _ => None,
+                    });
+                    return Some(LogicalTemporal::timestamp(precision));
+                }
                 _ => {}
             }
             let routine = load_routine(
@@ -227,10 +265,13 @@ fn projected(db: &BicDb, query: &Query, expr: &Expr, depth: usize) -> Option<Sou
             .ok()??;
             if typed_preview_routine_language(&routine.language) {
                 if routine_arithmetic::returns_date(&routine).ok()? {
-                    return Some(Source::Date);
+                    return Some(LogicalTemporal::date());
                 }
                 if routine.return_type == "timestamp" {
-                    return Some(Source::Timestamp);
+                    // Oracle SQL exposes unconstrained stored TIMESTAMP
+                    // results with nine digits, even when the return value
+                    // was rounded by its anchored declaration.
+                    return Some(LogicalTemporal::timestamp(Some(9)));
                 }
             }
             return None;
@@ -279,7 +320,7 @@ fn relation_column(
     qualifier: Option<&Ident>,
     column: &Ident,
     depth: usize,
-) -> Option<Option<Source>> {
+) -> Option<Option<LogicalTemporal>> {
     if depth > 16 {
         return None;
     }
@@ -316,7 +357,15 @@ fn relation_column(
             if fields.next().is_some() {
                 return Some(None);
             }
-            Some(source(field))
+            Some(match field.type_modifier {
+                Some(PgTypeModifier::OracleTemporalV1 { source, precision }) => {
+                    Some(LogicalTemporal {
+                        source,
+                        precision: Some(precision),
+                    })
+                }
+                _ => None,
+            })
         }
         TableFactor::Derived {
             subquery,
@@ -341,7 +390,7 @@ fn projection_column(
     query: &Query,
     column: &Ident,
     depth: usize,
-) -> Option<Option<Source>> {
+) -> Option<Option<LogicalTemporal>> {
     if depth > 16 {
         return None;
     }

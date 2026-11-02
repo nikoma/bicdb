@@ -8,6 +8,7 @@ use regex::RegexBuilder;
 mod oracle_chr;
 mod oracle_concat;
 mod oracle_decode;
+mod oracle_nvl;
 
 fn any_null(args: &[SqlValue]) -> bool {
     args.iter().any(|value| matches!(value, SqlValue::Null))
@@ -550,6 +551,9 @@ fn trigram_set(text: &str) -> Result<std::collections::BTreeSet<String>> {
 }
 
 pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Option<SqlValue>> {
+    if name.starts_with("bicdb_oracle_nvl_") {
+        return oracle_nvl::evaluate(name, args).map(Some);
+    }
     if name == "bicdb_oracle_chr" {
         return oracle_chr::evaluate(args).map(Some);
     }

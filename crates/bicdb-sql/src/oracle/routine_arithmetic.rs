@@ -84,7 +84,7 @@ pub(crate) fn prepare_local_declarations(declarations: &mut [RoutineDecl]) -> Re
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Kind {
     Date,
-    Timestamp,
+    Timestamp(Option<u8>),
     TemporalUnknown,
     Number,
     Text,
@@ -94,6 +94,13 @@ pub(super) enum Kind {
     Unknown,
 }
 
+fn temporal_precision(modifier: Option<&PgTypeModifier>) -> Option<u8> {
+    Some(match modifier {
+        Some(PgTypeModifier::Temporal { precision })
+        | Some(PgTypeModifier::OracleTemporalV1 { precision, .. }) => *precision,
+        _ => 6,
+    })
+}
 fn pg_kind(kind: &str) -> Kind {
     match kind {
         "date" => Kind::Date,
@@ -106,8 +113,21 @@ fn pg_kind(kind: &str) -> Kind {
 }
 
 impl Kind {
+    fn common(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Null, kind) | (kind, Self::Null) => kind,
+            (Self::Timestamp(a), Self::Timestamp(b)) => {
+                Self::Timestamp(a.zip(b).map(|(a, b)| a.max(b)))
+            }
+            (a, b) if a == b => a,
+            _ => Self::Unknown,
+        }
+    }
     fn temporal(self) -> bool {
-        matches!(self, Self::Date | Self::Timestamp | Self::TemporalUnknown)
+        matches!(
+            self,
+            Self::Date | Self::Timestamp(_) | Self::TemporalUnknown
+        )
     }
     fn day_operand(self) -> bool {
         matches!(self, Self::Number | Self::Text | Self::Null)
@@ -121,6 +141,7 @@ struct Environment {
     number_arithmetic: bool,
     decode: bool,
     character_conversion: bool,
+    nvl: bool,
     sql_builtins_only: bool,
     defer_bind_types: bool,
     variables: BTreeMap<String, Kind>,
@@ -136,15 +157,22 @@ struct Resolve<'a> {
 }
 
 impl Resolve<'_> {
+    fn variable_kind(&self, kind: Kind) -> Kind {
+        if matches!(kind, Kind::Timestamp(_)) && (self.sql_depth > 0 || !self.queries.is_empty()) {
+            Kind::Timestamp(Some(9))
+        } else {
+            kind
+        }
+    }
     fn query_kind(&self, expr: &Expr) -> Option<Kind> {
         if let Some(source) = self
             .queries
             .last()
-            .and_then(|query| temporal_columns::in_query(self.db, query, expr))
+            .and_then(|query| temporal_columns::logical_in_query(self.db, query, expr))
         {
-            return Some(match source {
+            return Some(match source.source {
                 temporal_columns::Source::Date => Kind::Date,
-                temporal_columns::Source::Timestamp => Kind::Timestamp,
+                temporal_columns::Source::Timestamp => Kind::Timestamp(source.precision),
                 temporal_columns::Source::TimestampWithTimeZone => Kind::Other,
             });
         }
@@ -179,6 +207,7 @@ impl Resolve<'_> {
                         .variables
                         .get(&normalize_object_name(&ident.value))
                         .copied()
+                        .map(|kind| self.variable_kind(kind))
                 })
                 .unwrap_or(Kind::Unknown),
             Expr::CompoundIdentifier(parts) => self
@@ -192,6 +221,7 @@ impl Resolve<'_> {
                         .get(&normalize_object_name(&record.value))?
                         .get(&field.value.to_ascii_lowercase())
                         .copied()
+                        .map(|kind| self.variable_kind(kind))
                 })
                 .unwrap_or(Kind::Unknown),
             Expr::Value(value) => match &value.value {
@@ -203,6 +233,7 @@ impl Resolve<'_> {
                     .variables
                     .get(&normalize_object_name(name))
                     .copied()
+                    .map(|kind| self.variable_kind(kind))
                     .unwrap_or(Kind::Unknown),
                 _ => Kind::Other,
             },
@@ -213,22 +244,22 @@ impl Resolve<'_> {
             Expr::Cast {
                 data_type:
                     DataType::Timestamp(
-                        _,
+                        precision,
                         sqlparser::ast::TimezoneInfo::None
                         | sqlparser::ast::TimezoneInfo::WithoutTimeZone,
                     ),
                 ..
-            } => Kind::Timestamp,
+            } => Kind::Timestamp(Some(precision.unwrap_or(6) as u8)),
             Expr::Cast { data_type, .. } => routine_type_schema(data_type)
                 .ok()
                 .map_or(Kind::Unknown, |kind| pg_kind(&kind.pg_type)),
             Expr::TypedString(value) => match &value.data_type {
                 DataType::Date => Kind::Date,
                 DataType::Timestamp(
-                    _,
+                    precision,
                     sqlparser::ast::TimezoneInfo::None
                     | sqlparser::ast::TimezoneInfo::WithoutTimeZone,
-                ) => Kind::Timestamp,
+                ) => Kind::Timestamp(Some(precision.unwrap_or(9) as u8)),
                 _ => Kind::Other,
             },
             Expr::UnaryOp { expr, .. } => self.kind(expr),
@@ -243,11 +274,7 @@ impl Resolve<'_> {
                     .chain(else_result.iter().map(|value| self.kind(value)))
                     .filter(|kind| *kind != Kind::Null);
                 let first = kinds.next().unwrap_or(Kind::Null);
-                if kinds.all(|kind| kind == first) {
-                    first
-                } else {
-                    Kind::Unknown
-                }
+                kinds.fold(first, Kind::common)
             }
             Expr::Function(function) => {
                 let name = object_name_lowercase(&function.name).ok();
@@ -277,7 +304,23 @@ impl Resolve<'_> {
                         | "bicdb_oracle_plsql_trunc_date"
                         | "bicdb_oracle_add_months",
                     ) => return Kind::Date,
-                    Some("bicdb_oracle_decode_timestamp") => return Kind::Timestamp,
+                    Some("bicdb_oracle_decode_timestamp") => return Kind::Timestamp(None),
+                    Some("bicdb_oracle_nvl_timestamp") => {
+                        return Kind::Timestamp(function_args(function).get(2).and_then(|value| {
+                            match value {
+                                Expr::Value(value) => match &value.value {
+                                    Value::Number(n, _) => n.parse().ok(),
+                                    _ => None,
+                                },
+                                _ => None,
+                            }
+                        }))
+                    }
+                    Some("bicdb_oracle_nvl_date") => return Kind::Date,
+                    Some("bicdb_oracle_nvl_number") => return Kind::Number,
+                    Some("bicdb_oracle_nvl_text" | "bicdb_oracle_nvl_convert_text") => {
+                        return Kind::Text
+                    }
                     Some(
                         "bicdb_oracle_decode_number"
                         | "bicdb_oracle_date_subtract"
@@ -304,11 +347,8 @@ impl Resolve<'_> {
                             .map(|arg| self.kind(arg))
                             .filter(|kind| *kind != Kind::Null)
                             .collect::<Vec<_>>();
-                        if let Some(kind) = kinds
-                            .first()
-                            .filter(|kind| kinds.iter().all(|candidate| candidate == *kind))
-                        {
-                            return *kind;
+                        if let Some(kind) = kinds.into_iter().reduce(Kind::common) {
+                            return kind;
                         }
                     }
                     _ => {}
@@ -320,7 +360,13 @@ impl Resolve<'_> {
                                 return Kind::Date;
                             }
                             if routine.return_type == "timestamp" {
-                                return Kind::Timestamp;
+                                return Kind::Timestamp(
+                                    if self.sql_depth > 0 || !self.queries.is_empty() {
+                                        Some(9)
+                                    } else {
+                                        temporal_precision(routine.return_type_modifier.as_ref())
+                                    },
+                                );
                             }
                         }
                         return pg_kind(&routine.return_type);
@@ -343,8 +389,8 @@ impl Resolve<'_> {
                         return Kind::Number;
                     }
                     if *op == BinaryOperator::Minus
-                        && matches!(left, Kind::Date | Kind::Timestamp)
-                        && matches!(right, Kind::Date | Kind::Timestamp)
+                        && matches!(left, Kind::Date | Kind::Timestamp(_))
+                        && matches!(right, Kind::Date | Kind::Timestamp(_))
                     {
                         return Kind::Interval;
                     }
@@ -364,12 +410,35 @@ impl Resolve<'_> {
     }
 
     fn rewrite(&self, expr: &mut Expr) -> Result<()> {
+        if let Expr::TypedString(value) = expr {
+            if self.env.nvl && matches!(value.data_type, DataType::Timestamp(..)) {
+                if let Value::SingleQuotedString(text) = &value.value.value {
+                    if text.split_once('.').is_some_and(|(_, fraction)| {
+                        let digits = fraction
+                            .chars()
+                            .take_while(|ch| ch.is_ascii_digit())
+                            .collect::<String>();
+                        digits.len() > 6 && digits[6..].bytes().any(|byte| byte != b'0')
+                    }) {
+                        return Err(SqlError::Unsupported("Oracle timestamps with more than six fractional digits are not supported".into()));
+                    }
+                }
+            }
+        }
         if self.env.character_conversion {
             if let Expr::Function(function) = expr {
                 if object_name_lowercase(&function.name).is_ok_and(|name| name == "chr") {
                     function.name = ObjectName::from(vec![Ident::new("bicdb_oracle_chr")]);
                 }
             }
+        }
+        if self.env.nvl {
+            super::nvl::lower_call(
+                expr,
+                |value| self.kind(value),
+                self.sql_depth > 0 || !self.queries.is_empty(),
+                self.env.defer_bind_types,
+            )?;
         }
         if self.env.decode {
             super::decode::lower_call(
@@ -455,19 +524,6 @@ impl Resolve<'_> {
             return Ok(());
         }
         if let Expr::TypedString(value) = expr {
-            if matches!(value.data_type, DataType::Timestamp(..)) {
-                if let Value::SingleQuotedString(text) = &value.value.value {
-                    if text.split_once('.').is_some_and(|(_, fraction)| {
-                        fraction
-                            .chars()
-                            .take_while(|character| character.is_ascii_digit())
-                            .count()
-                            > 6
-                    }) {
-                        return Err(SqlError::Unsupported("Oracle timestamps with more than six fractional digits are not supported".into()));
-                    }
-                }
-            }
             if matches!(value.data_type, DataType::Date) {
                 *expr = expression(&format!("bicdb_oracle_date_coerce({})", value.value))?;
                 return Ok(());
@@ -540,8 +596,8 @@ impl Resolve<'_> {
                 return Ok(());
             }
             if *op == BinaryOperator::Minus
-                && matches!(left_kind, Kind::Date | Kind::Timestamp)
-                && matches!(right_kind, Kind::Date | Kind::Timestamp)
+                && matches!(left_kind, Kind::Date | Kind::Timestamp(_))
+                && matches!(right_kind, Kind::Date | Kind::Timestamp(_))
             {
                 *expr = expression(&format!(
                     "CAST({left} AS TIMESTAMP)-CAST({right} AS TIMESTAMP)"
@@ -611,6 +667,7 @@ pub(super) fn lower_sql_builtins(
     let mut env = Environment {
         decode: true,
         character_conversion: true,
+        nvl: true,
         sql_builtins_only: true,
         defer_bind_types: oids.is_none(),
         ..Environment::default()
@@ -630,7 +687,7 @@ pub(super) fn lower_sql_builtins(
                         .and_then(|oid| pg_type_spec_by_oid(*oid))
                         .map_or(Kind::Text, |spec| {
                             if spec.name == "timestamp" {
-                                Kind::Timestamp
+                                Kind::Timestamp(Some(6))
                             } else {
                                 pg_kind(spec.name)
                             }
@@ -738,10 +795,10 @@ fn record_types(db: &BicDb, env: &Environment, query: &Query) -> BTreeMap<String
         };
         for (name, kind) in &mut fields {
             let expr = Expr::Identifier(Ident::new(name.as_str()));
-            if let Some(source) = temporal_columns::in_query(db, query, &expr) {
-                *kind = match source {
+            if let Some(source) = temporal_columns::logical_in_query(db, query, &expr) {
+                *kind = match source.source {
                     temporal_columns::Source::Date => Kind::Date,
-                    temporal_columns::Source::Timestamp => Kind::Timestamp,
+                    temporal_columns::Source::Timestamp => Kind::Timestamp(source.precision),
                     temporal_columns::Source::TimestampWithTimeZone => Kind::Other,
                 };
             }
@@ -812,12 +869,13 @@ fn statements(
                             name,
                             pg_type,
                             oracle_date,
+                            type_modifier,
                             ..
                         } => {
                             let kind = if *oracle_date {
                                 Kind::Date
                             } else if pg_type.as_deref() == Some("timestamp") {
-                                Kind::Timestamp
+                                Kind::Timestamp(temporal_precision(type_modifier.as_ref()))
                             } else {
                                 pg_type.as_deref().map_or(Kind::Unknown, pg_kind)
                             };
@@ -979,6 +1037,7 @@ pub(crate) fn lower(
     number_arithmetic: bool,
     decode: bool,
     character_conversion: bool,
+    nvl: bool,
     params: &mut [RoutineParam],
     declarations: &mut [RoutineDecl],
     body: &mut [RoutineStmt],
@@ -990,6 +1049,7 @@ pub(crate) fn lower(
         number_arithmetic,
         decode,
         character_conversion,
+        nvl,
         ..Environment::default()
     };
     for param in params.iter() {
@@ -998,7 +1058,7 @@ pub(crate) fn lower(
         } else {
             param.type_schema.as_ref().map_or(Kind::Unknown, |schema| {
                 if schema.pg_type == "timestamp" {
-                    Kind::Timestamp
+                    Kind::Timestamp(temporal_precision(schema.type_modifier.as_ref()))
                 } else {
                     pg_kind(&schema.pg_type)
                 }
@@ -1015,12 +1075,13 @@ pub(crate) fn lower(
                 name,
                 pg_type,
                 oracle_date,
+                type_modifier,
                 ..
             } => {
                 let kind = if *oracle_date {
                     Kind::Date
                 } else if pg_type.as_deref() == Some("timestamp") {
-                    Kind::Timestamp
+                    Kind::Timestamp(temporal_precision(type_modifier.as_ref()))
                 } else {
                     pg_type.as_deref().map_or(Kind::Unknown, pg_kind)
                 };

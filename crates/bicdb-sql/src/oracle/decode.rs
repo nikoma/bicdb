@@ -9,7 +9,7 @@ fn kind_name(kind: Kind) -> Result<&'static str> {
         Kind::Null | Kind::Text => Ok("text"),
         Kind::Number => Ok("number"),
         Kind::Date => Ok("date"),
-        Kind::Timestamp => Ok("timestamp"),
+        Kind::Timestamp(_) => Ok("timestamp"),
         _ => Err(unsupported(
             "Oracle DECODE requires resolved character, NUMBER, DATE or TIMESTAMP operands",
         )),
@@ -24,7 +24,7 @@ pub(super) fn is_decode(function: &Function) -> bool {
         && object_name_lowercase(&function.name).is_ok_and(|name| name == "decode")
 }
 
-fn physical_dates(expr: &mut Expr) -> Result<()> {
+pub(super) fn physical_dates(expr: &mut Expr) -> Result<()> {
     match visit_expressions_mut(expr, |expr| {
         let sql = match expr {
             Expr::Cast {
@@ -93,7 +93,7 @@ pub(super) fn lower_call(
     let comparison = kind_name(kinds[1])?;
     let result = kind_name(kinds[2])?;
     let incompatible = |source: Kind, target: &str| {
-        matches!(source, Kind::Date | Kind::Timestamp) && target == "number"
+        matches!(source, Kind::Date | Kind::Timestamp(_)) && target == "number"
             || source == Kind::Number && matches!(target, "date" | "timestamp")
     };
     for (index, source) in kinds.iter().copied().enumerate() {
@@ -352,7 +352,7 @@ mod tests {
         let mut db = BicDb::open(root.path()).unwrap();
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
         let mut session = SqlSession::new(&mut db);
-        for version in 1..=10 {
+        for version in 1..=11 {
             let name = format!("bicdb_oracle_preview_v{version}");
             let oid = 999399 + version;
             assert_eq!(pg_language_oid(&name), oid);

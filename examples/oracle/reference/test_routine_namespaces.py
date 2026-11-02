@@ -27,6 +27,23 @@ class Connection:
 
 
 class RoutineNamespaceTests(unittest.TestCase):
+    def test_nvl_source_expectations_cover_eager_errors_and_timestamp_contexts(self):
+        from routine_nvl import fixture as nvl_fixture
+        plan = nvl_fixture('owner', 'BICDB_TEST')
+        cases = {case['id']: case for case in plan['cases']}
+        self.assertEqual(len(cases), len(plan['cases']))
+        self.assertTrue(all(('expected' in row) != ('expected_error' in row)
+                            for row in cases.values()))
+        self.assertEqual(cases['unused_division']['expected_error'],
+                         dict(oracle='ORA-01476', bicdb='22012'))
+        self.assertEqual(cases['coalesce_lazy']['expected'], [['A']])
+        self.assertEqual(cases['pl_stamp']['expected'],
+                         [['29-FEB-24 12.34.56.123456 PM']])
+        self.assertEqual(cases['sql_stamp']['expected'],
+                         [['29-FEB-24 12.34.56.123456000 PM']])
+        self.assertEqual(cases['column_char_1']['expected'], [['A  ']])
+        self.assertEqual(cases['column_char_2']['expected'], [['longer']])
+
     def test_identifiers_quote_contents_and_reject_nul(self):
         self.assertEqual(identifier('Quoted.Schema"Name'), '"Quoted.Schema""Name"')
         for value in ('', 'a\x00b', None):

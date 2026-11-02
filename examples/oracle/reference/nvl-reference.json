@@ -1,0 +1,713 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "nls": {
+    "NLS_NUMERIC_CHARACTERS": ".,",
+    "NLS_CALENDAR": "GREGORIAN",
+    "NLS_DATE_FORMAT": "DD-MON-RR",
+    "NLS_DATE_LANGUAGE": "AMERICAN",
+    "NLS_TIMESTAMP_FORMAT": "DD-MON-RR HH.MI.SSXFF AM"
+  },
+  "cases": [
+    {
+      "first": "NULL",
+      "second": "7",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "type": "DB_TYPE_NUMBER"
+    },
+    {
+      "first": "''",
+      "second": "7",
+      "oracle": {
+        "rows": [
+          [
+            "7"
+          ]
+        ]
+      },
+      "type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "first": "NULL",
+      "second": "DATE '2024-02-29'",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "type": "DB_TYPE_DATE"
+    },
+    {
+      "first": "''",
+      "second": "DATE '2024-02-29'",
+      "oracle": {
+        "rows": [
+          [
+            "29-FEB-24"
+          ]
+        ]
+      },
+      "type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "first": "'A'",
+      "second": "7",
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "first": "1",
+      "second": "'bad'",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01722"
+      }
+    },
+    {
+      "first": "1",
+      "second": "'2'",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "type": "DB_TYPE_NUMBER"
+    },
+    {
+      "first": "CAST(NULL AS NUMBER)",
+      "second": "'2'",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "type": "DB_TYPE_NUMBER"
+    },
+    {
+      "first": "CAST(NULL AS VARCHAR2(10))",
+      "second": "7",
+      "oracle": {
+        "rows": [
+          [
+            "7"
+          ]
+        ]
+      },
+      "type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "first": "'A'",
+      "second": "DATE '2024-02-29'",
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "first": "'A'",
+      "second": "TIMESTAMP '2024-02-29 12:34:56.123456'",
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "first": "DATE '2024-02-29'",
+      "second": "'bad'",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01858"
+      }
+    },
+    {
+      "first": "DATE '2024-02-29'",
+      "second": "'01-MAR-24'",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "type": "DB_TYPE_DATE"
+    },
+    {
+      "first": "CAST(NULL AS DATE)",
+      "second": "TIMESTAMP '2024-02-29 12:34:56.123456'",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            }
+          ]
+        ]
+      },
+      "type": "DB_TYPE_DATE"
+    },
+    {
+      "first": "CAST(NULL AS TIMESTAMP)",
+      "second": "DATE '2024-02-29'",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "type": "DB_TYPE_TIMESTAMP"
+    },
+    {
+      "first": "TIMESTAMP '2024-02-29 12:34:56.123456'",
+      "second": "'bad'",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-00932"
+      }
+    },
+    {
+      "first": "NULL",
+      "second": "CAST(NULL AS NUMBER)",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "type": "DB_TYPE_NUMBER"
+    },
+    {
+      "first": "NULL",
+      "second": "NULL",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "first": "CAST(NULL AS NUMBER)",
+      "second": "DATE '2024-02-29'",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-00932"
+      }
+    },
+    {
+      "first": "DATE '2024-02-29'",
+      "second": "1",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-00932"
+      }
+    },
+    {
+      "first": "1",
+      "second": "DATE '2024-02-29'",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-00932"
+      }
+    },
+    {
+      "first": "CAST('A ' AS CHAR(3))",
+      "second": "'B'",
+      "oracle": {
+        "rows": [
+          [
+            "A  "
+          ]
+        ]
+      },
+      "type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "first": "CAST(NULL AS CHAR(3))",
+      "second": "'longer'",
+      "oracle": {
+        "rows": [
+          [
+            "longer"
+          ]
+        ]
+      },
+      "type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "first": "NVL(NULL,1)",
+      "second": "'bad'",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01722"
+      }
+    }
+  ],
+  "fixture_expectations": {
+    "unused_division": {
+      "expected_error": {
+        "oracle": "ORA-01476",
+        "bicdb": "22012"
+      }
+    },
+    "unused_character_error": {
+      "expected_error": {
+        "oracle": "ORA-01426",
+        "bicdb": "22003"
+      }
+    },
+    "coalesce_lazy": {
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    "nested_coalesce": {
+      "expected": [
+        [
+          "x"
+        ]
+      ]
+    },
+    "nested_nvl": {
+      "expected": [
+        [
+          "7"
+        ]
+      ]
+    },
+    "char_padding": {
+      "expected": [
+        [
+          "A  "
+        ]
+      ]
+    },
+    "char_null": {
+      "expected": [
+        [
+          "longer"
+        ]
+      ]
+    },
+    "number_scale": {
+      "expected": [
+        [
+          {
+            "number": "12.3456"
+          }
+        ]
+      ]
+    },
+    "timestamp_literal": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123456000 PM"
+        ]
+      ]
+    },
+    "timestamp_precision0": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56 PM"
+        ]
+      ]
+    },
+    "timestamp_precision3": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123 PM"
+        ]
+      ]
+    },
+    "timestamp_null": {
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    "timestamp_text": {
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.123456"
+          }
+        ]
+      ]
+    },
+    "timestamp_constant_text": {
+      "expected_error": {
+        "oracle": "ORA-00932",
+        "bicdb": "42804"
+      }
+    },
+    "timestamp_bad_literal": {
+      "expected_error": {
+        "oracle": "ORA-01858",
+        "bicdb": "22007"
+      }
+    },
+    "timestamp_bad_typed": {
+      "expected_error": {
+        "oracle": "ORA-01858",
+        "bicdb": "22007"
+      }
+    },
+    "date_fraction": {
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ]
+    },
+    "stamp_date_first": {
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    "stamp_max_precision": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123456000 PM"
+        ]
+      ]
+    },
+    "pl_number_value": {
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ]
+    },
+    "pl_number_bad": {
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22P02"
+      }
+    },
+    "pl_number_null": {
+      "expected": [
+        [
+          {
+            "number": "2"
+          }
+        ]
+      ]
+    },
+    "pl_text_value": {
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    "pl_text_null": {
+      "expected": [
+        [
+          "7"
+        ]
+      ]
+    },
+    "pl_date": {
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ]
+    },
+    "pl_stamp": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123456 PM"
+        ]
+      ]
+    },
+    "sql_stamp": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123456000 PM"
+        ]
+      ]
+    },
+    "pl_local_stamp": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123 PM"
+        ]
+      ]
+    },
+    "pl_record_stamp": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123 PM"
+        ]
+      ]
+    },
+    "sql_record_stamp": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123000000 PM"
+        ]
+      ]
+    },
+    "anchored_stamp": {
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.123000"
+          }
+        ]
+      ]
+    },
+    "sql_return_stamp": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123000000 PM"
+        ]
+      ]
+    },
+    "pl_return_stamp": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123 PM"
+        ]
+      ]
+    },
+    "pl_eager": {
+      "expected_error": {
+        "oracle": "ORA-01476",
+        "bicdb": "22012"
+      }
+    },
+    "pl_char": {
+      "expected": [
+        [
+          "A  "
+        ]
+      ]
+    },
+    "pl_char_null": {
+      "expected": [
+        [
+          "longer"
+        ]
+      ]
+    },
+    "pl_number_context": {
+      "expected": [
+        [
+          "12345678901234567890123456789012345678900000000000000000000000000000000000000000"
+        ]
+      ]
+    },
+    "column_stamp0_1": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56 PM"
+        ]
+      ]
+    },
+    "column_stamp0_2": {
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    "column_stamp3_1": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123 PM"
+        ]
+      ]
+    },
+    "column_stamp3_2": {
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    "column_stamp_text_1": {
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.123000"
+          }
+        ]
+      ]
+    },
+    "column_stamp_text_2": {
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.123456"
+          }
+        ]
+      ]
+    },
+    "column_date_1": {
+      "expected": [
+        [
+          "29-FEB-24"
+        ]
+      ]
+    },
+    "column_date_2": {
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    "column_number_1": {
+      "expected": [
+        [
+          "12.34"
+        ]
+      ]
+    },
+    "column_number_2": {
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    "column_char_1": {
+      "expected": [
+        [
+          "A  "
+        ]
+      ]
+    },
+    "column_char_2": {
+      "expected": [
+        [
+          "longer"
+        ]
+      ]
+    },
+    "column_numeric_1": {
+      "expected": [
+        [
+          {
+            "number": "12.34"
+          }
+        ]
+      ]
+    },
+    "column_numeric_2": {
+      "expected": [
+        [
+          {
+            "number": "123.456"
+          }
+        ]
+      ]
+    },
+    "column_date_delta_1": {
+      "expected": [
+        [
+          {
+            "number": "1.52425925925925925925925925925925925926"
+          }
+        ]
+      ]
+    },
+    "column_date_delta_2": {
+      "expected": [
+        [
+          {
+            "number": "-58"
+          }
+        ]
+      ]
+    },
+    "column_date_trunc_1": {
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    "column_date_trunc_2": {
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    "cte_stamp": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123 PM"
+        ]
+      ]
+    },
+    "derived_stamp": {
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123 PM"
+        ]
+      ]
+    }
+  }
+}

@@ -55,6 +55,9 @@ def fixture(schema, prefix):
     ]):
         cases.append(dict(id=f'nesting_{index}',sql=f'SELECT {expression} FROM DUAL',expected=[[expected]]))
     cases.append(dict(id='procedural_short_circuit',sql=f'SELECT {q("SHORT")}(\'prefix\') FROM DUAL',expected=[['prefix']]))
-    cases.append(dict(id='procedural_selected_error',sql=f'SELECT {q("SHORT")}(NULL) FROM DUAL',expected_error=dict(oracle='ORA-01426',bicdb='22003')))
+    # The reference wraps procedural CHR numeric overflow in VALUE_ERROR,
+    # whereas the same call inside SQL reports ORA-01426. The preview exposes
+    # numeric overflow as SQLSTATE 22003 through the PostgreSQL transport.
+    cases.append(dict(id='procedural_selected_error',sql=f'SELECT {q("SHORT")}(NULL) FROM DUAL',expected_error=dict(oracle='ORA-06502',bicdb='22003')))
     return dict(setup=setup,cases=cases,compiler_probe=(prefix + '_VALUE').lower(),
                 scope='Fixed AL32UTF8 complete characters, truncating numeric input, error codes, nested default TO_CHAR and stored routines. NUL transport, indeterminate invalid code points, NCHAR_CS and other database character sets remain unsupported/unqualified.')

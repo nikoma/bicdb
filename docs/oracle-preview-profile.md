@@ -204,13 +204,13 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v12`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v13`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
 previously translated routines; recreate an Oracle-authored definition to select
 the new compiler. The compiler versions have separate `pg_language` identities,
-present only in a preview database. Versions 1 through 11 remain readable.
+present only in a preview database. Versions 1 through 12 remain readable.
 Version 5 (OID 999404) fences CASE selector dispatch. Version 6 (OID 999405)
 adds the tested Oracle statement-rollback and strict SELECT INTO contracts;
 earlier definitions retain their previous block-rollback behavior. Recreate an
@@ -349,6 +349,27 @@ its procedure kind. Static table references and nested CALLs bind to the
 procedure's declared schema. Earlier function compiler versions remain readable;
 new preview procedures require version 12. An older reader rejects their calls
 with 0A000, without executing the body.
+
+Version 13 (OID 999412) adds scoped parsing of Oracle `(+)` predicates in static
+queries and cursor declarations, and column-owner binding for multi-column
+`FOR UPDATE OF` lists inside stored routines. Conjunctive predicates are lowered
+to explicit LEFT JOINs: marked optional-side filters stay in ON, unmarked
+filters stay in WHERE, dependency order is preserved, and plain `*` retains the
+original FROM-list column order. Mixed ANSI/legacy join blocks, cyclic
+dependencies, ambiguous column ownership, markers outside supported WHERE
+predicates and marked OR/IN expressions fail explicitly. This is a bounded
+grammar implementation, not full Oracle join syntax or diagnostics.
+
+Oracle preview DELETE statements may omit FROM. Shared procedural parsing now
+accepts mixed-case FOR keywords and whitespace or comments between END and LOOP.
+Shared SQL parsing accepts native PostgreSQL FOR UPDATE/SHARE target lists without
+changing their relation-target meaning; Oracle OF items select columns whose
+owning tables are resolved using the catalog. NOWAIT/SKIP LOCKED modifiers are
+preserved. Existing row-locking restrictions, including the primary-key
+requirement, still apply. Recreate original Oracle definitions to select the new
+compiler; native PostgreSQL routines do not inherit the Oracle grammar scope.
+An older reader rejects version-13 calls with 0A000. No storage-format transition
+is introduced by this compiler marker.
 
 Shared CALL handling now excludes OUT placeholder values from input frames,
 retains IN OUT values, and copies successful nested-call outputs back to writable

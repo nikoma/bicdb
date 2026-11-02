@@ -13,11 +13,13 @@ mod decode;
 mod dual;
 mod namespaces;
 mod nvl;
+mod outer_joins;
 pub(crate) mod procedures;
 pub(crate) mod routine_arithmetic;
 pub(crate) mod routines;
 mod rownum;
 mod source_tokens;
+pub(crate) mod syntax;
 pub(crate) mod temporal_columns;
 
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
@@ -67,7 +69,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V8: &str = "bicdb_oracle_preview_v8";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V9: &str = "bicdb_oracle_preview_v9";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V10: &str = "bicdb_oracle_preview_v10";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V11: &str = "bicdb_oracle_preview_v11";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v12";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V12: &str = "bicdb_oracle_preview_v12";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v13";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -79,7 +82,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V8_OID: i64 = 999_407;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V9_OID: i64 = 999_408;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V10_OID: i64 = 999_409;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V11_OID: i64 = 999_410;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_411;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V12_OID: i64 = 999_411;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_412;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -99,7 +103,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V9 => Some(9),
         PREVIEW_ROUTINE_LANGUAGE_V10 => Some(10),
         PREVIEW_ROUTINE_LANGUAGE_V11 => Some(11),
-        PREVIEW_ROUTINE_LANGUAGE => Some(12),
+        PREVIEW_ROUTINE_LANGUAGE_V12 => Some(12),
+        PREVIEW_ROUTINE_LANGUAGE => Some(13),
         _ => None,
     }
 }
@@ -107,7 +112,7 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
     matches!(
         preview_routine_language_version(language),
-        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12)
+        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13)
     )
 }
 
@@ -285,21 +290,7 @@ pub fn lower_session_sql(
     date_trunc::rewrite(db, &mut statements)?;
     routine_arithmetic::lower_sql_builtins(db, &mut statements, None)?;
     date_trunc::rewrite(db, &mut statements)?;
-    struct Locks<'a>(&'a BicDb);
-    impl sqlparser::ast::VisitorMut for Locks<'_> {
-        type Break = SqlError;
-        fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<SqlError> {
-            match lower_column_locks(self.0, query) {
-                Ok(()) => ControlFlow::Continue(()),
-                Err(error) => ControlFlow::Break(error),
-            }
-        }
-    }
-    if let ControlFlow::Break(error) =
-        sqlparser::ast::VisitMut::visit(&mut statements, &mut Locks(db))
-    {
-        return Err(error);
-    }
+    lower_query_locks(db, &mut statements)?;
     Ok(statements
         .iter()
         .map(ToString::to_string)
@@ -327,6 +318,26 @@ fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join("; "))
+}
+
+pub(super) fn lower_query_locks<T: sqlparser::ast::VisitMut>(
+    db: &BicDb,
+    node: &mut T,
+) -> Result<()> {
+    struct Locks<'a>(&'a BicDb);
+    impl sqlparser::ast::VisitorMut for Locks<'_> {
+        type Break = SqlError;
+        fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<SqlError> {
+            match lower_column_locks(self.0, query) {
+                Ok(()) => ControlFlow::Continue(()),
+                Err(error) => ControlFlow::Break(error),
+            }
+        }
+    }
+    if let ControlFlow::Break(error) = sqlparser::ast::VisitMut::visit(node, &mut Locks(db)) {
+        return Err(error);
+    }
+    Ok(())
 }
 
 fn lower_column_locks(db: &BicDb, query: &mut Query) -> Result<()> {
@@ -364,7 +375,17 @@ fn lower_column_locks(db: &BicDb, query: &mut Query) -> Result<()> {
         let Some(of) = lock.of.as_ref() else {
             continue;
         };
-        let parts = object_name_parts(of);
+        let parts =
+            of.0.iter()
+                .filter_map(|part| part.as_ident())
+                .map(|id| {
+                    if id.quote_style.is_some() {
+                        id.value.clone()
+                    } else {
+                        id.value.to_uppercase()
+                    }
+                })
+                .collect::<Vec<_>>();
         let Some((column, qualifier)) = parts.split_last() else {
             return Err(unsupported("empty FOR UPDATE OF column"));
         };
@@ -573,6 +594,7 @@ fn lower_oracle_sql(
                 ));
             }
             return lower_native(
+                db,
                 &format!(
                     "{} ALTER COLUMN {} TYPE {}",
                     join(&prefix),
@@ -580,6 +602,7 @@ fn lower_oracle_sql(
                     column.data_type
                 ),
                 true,
+                namespace,
             );
         }
     }
@@ -676,13 +699,15 @@ fn lower_oracle_sql(
                 let groups = split_top_level(&canonical[add + 2..end]);
                 return groups
                     .iter()
-                    .map(|group| lower_native(&format!("{prefix} {}", join(group)), preview))
+                    .map(|group| {
+                        lower_native(db, &format!("{prefix} {}", join(group)), preview, namespace)
+                    })
                     .collect::<Result<Vec<_>>>()
                     .map(|parts| parts.join("; "));
             }
         }
     }
-    lower_native(&join(&canonical), preview)
+    lower_native(db, &join(&canonical), preview, namespace)
 }
 
 fn expand_references(db: &BicDb, source: &mut Vec<Token>) -> Result<()> {
@@ -1053,6 +1078,10 @@ fn canonical_tokens_with_routine_types(
                     "TO_DATE" if source.get(i + 1) == Some(&Token::LParen) => {
                         pieces.push("bicdb_oracle_to_date".into())
                     }
+                    "DELETE" if preview && !source.get(i+1).is_some_and(|t|word(t,"FROM"))
+                        && (i==0 || source[i-1]==Token::SemiColon || ["BEGIN","THEN","ELSE","LOOP"].iter().any(|kw|word(&source[i-1],kw))) => {
+                        pieces.push("DELETE FROM".into());
+                    }
                     "EXTRACT" if preview && source.get(i + 1) == Some(&Token::LParen) => {
                         pieces.push("extract".into())
                     }
@@ -1353,11 +1382,14 @@ fn expression(sql: &str) -> Result<Expr> {
     }
 }
 
-fn lower_native(sql: &str, preview: bool) -> Result<String> {
+fn lower_native(db: &BicDb, sql: &str, preview: bool, namespace: Option<&str>) -> Result<String> {
     let rewritten = preview.then(|| rewrite_is_json_predicates(sql)).flatten();
     let sql = rewritten.as_deref().unwrap_or(sql);
-    let mut statements =
-        Parser::parse_sql(&PostgreSqlDialect {}, sql).map_err(|e| unsupported(e.to_string()))?;
+    let _grammar = syntax::Scope::new(preview);
+    let mut statements = parse_statements(sql)?;
+    if preview {
+        syntax::rewrite(db, &mut statements, namespace)?;
+    }
     if preview {
         struct Aliases;
         impl sqlparser::ast::VisitorMut for Aliases {

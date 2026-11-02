@@ -2184,6 +2184,9 @@ impl<'db> SqlSession<'db> {
                 "DO language {language} is not supported"
             )));
         }
+        let _grammar = oracle::syntax::Scope::new(
+            oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 13),
+        );
         let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
         routines::parameterized_cursors::validate_capabilities(
             &language,
@@ -2204,6 +2207,7 @@ impl<'db> SqlSession<'db> {
             )?
             .unwrap_or_else(default_schema_name);
             oracle::routines::bind_block_namespace(
+                Some(self.db_ref()),
                 &mut declarations,
                 &mut statements,
                 &mut exception_handlers,

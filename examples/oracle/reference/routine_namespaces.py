@@ -71,7 +71,9 @@ def fixture(schema, prefix):
 
 
 def run(oracle, bicdb, schema, prefix, suite='namespaces'):
-    if suite == 'procedures':
+    if suite == 'grammar':
+        from routine_grammar import fixture as make_fixture
+    elif suite == 'procedures':
         from routine_procedures import fixture as make_fixture
     elif suite == 'nvl':
         from routine_nvl import fixture as make_fixture
@@ -194,6 +196,11 @@ def run(oracle, bicdb, schema, prefix, suite='namespaces'):
                 bindings = compare_bindings(oracle, bicdb, schema, prefix)
                 report['cases'].extend(bindings)
                 report['total'] += len(bindings)
+            if suite == 'grammar':
+                from routine_grammar import compare_bindings
+                bindings = compare_bindings(oracle, bicdb, schema, prefix)
+                report['cases'].extend(bindings)
+                report['total'] += len(bindings)
             report['matched'] = sum(result['matched'] for result in report['cases'])
         except Exception as error:
             report['setup_error'] = error_summary(error)
@@ -216,7 +223,7 @@ def main():
     parser.add_argument('--oracle-config', required=True, type=Path)
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN')
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--suite', choices=('namespaces', 'temporal', 'calendar', 'week', 'anchors', 'case', 'concat', 'cursors', 'numberops', 'decode', 'columns', 'characters', 'nvl', 'procedures'), default='namespaces')
+    parser.add_argument('--suite', choices=('namespaces', 'temporal', 'calendar', 'week', 'anchors', 'case', 'concat', 'cursors', 'numberops', 'decode', 'columns', 'characters', 'nvl', 'procedures', 'grammar'), default='namespaces')
     args = parser.parse_args()
     report = dict(format=1, success=False)
     try:

@@ -104,8 +104,26 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     reject_deep_parse_nesting(sql_for_parse)?;
-    let mut statements = Parser::parse_sql(&dialect, sql_for_parse)
-        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    let mut statements = match Parser::parse_sql(&dialect, sql_for_parse) {
+        Ok(statements) => statements,
+        Err(original) => {
+            let rewritten = crate::lock_lists::rewrite(sql_for_parse)?;
+            let candidate = rewritten.as_deref().unwrap_or(sql_for_parse);
+            reject_oversized_sql(candidate)?;
+            let parsed = if rewritten.is_some() {
+                Parser::parse_sql(&dialect, candidate)
+            } else {
+                Err(original)
+            };
+            match parsed {
+                Ok(statements) => statements,
+                Err(error) => match oracle::syntax::fallback(candidate)? {
+                    Some(statements) => statements,
+                    None => return Err(SqlError::InvalidSql(error.to_string())),
+                },
+            }
+        }
+    };
     // Refuse a pathologically deep expression before ANY recursive pass touches
     // it — the precedence visitor below, the evaluator, and even Drop all
     // overflow the stack (aborting the process) on a hostile AST.

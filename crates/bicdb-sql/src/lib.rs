@@ -190,6 +190,7 @@ mod runtime;
 pub use runtime::*;
 mod application_copy;
 mod constraint_nulls;
+mod lock_lists;
 mod schema_meta;
 pub use application_copy::{copy_application_tables, ApplicationCopyReport};
 pub(crate) use constraint_nulls::*;

@@ -40,6 +40,9 @@ pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
 }
 
 fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) -> Result<RoutineIR> {
+    let _grammar = oracle::syntax::Scope::new(
+        oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 13),
+    );
     if routine
         .language
         .trim()
@@ -102,9 +105,10 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12)
+        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13)
     ) {
         oracle::routines::bind_function_namespace(
+            db,
             routine,
             &mut params,
             &mut declarations,
@@ -121,7 +125,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             })?,
             matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12)
+                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13)
             ),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 7),
@@ -1804,10 +1808,7 @@ pub(crate) fn format_routine_raise_message(template: &str, arguments: &[SqlValue
 }
 
 pub(crate) fn parse_routine_for_loop(statement: &str) -> Result<RoutineStmt> {
-    let inner = statement
-        .trim()
-        .strip_prefix("FOR")
-        .or_else(|| statement.trim().strip_prefix("for"))
+    let inner = strip_prefix_ci(statement.trim(), "FOR")
         .ok_or_else(|| SqlError::InvalidSql("FOR loop expected".to_string()))?
         .trim();
     let Some(in_idx) = find_top_level_keyword(inner, "IN") else {
@@ -1829,17 +1830,7 @@ pub(crate) fn parse_routine_for_loop(statement: &str) -> Result<RoutineStmt> {
             "REVERSE FOR loops are not implemented".to_string(),
         ));
     }
-    let body = after_in[loop_idx + "LOOP".len()..]
-        .trim()
-        .strip_suffix("END LOOP")
-        .or_else(|| {
-            after_in[loop_idx + "LOOP".len()..]
-                .trim()
-                .strip_suffix("end loop")
-        })
-        .ok_or_else(|| SqlError::InvalidSql("FOR loop requires END LOOP".to_string()))?
-        .trim();
-    let body = parse_routine_statements(body)?;
+    let body = routine_loop_body(&after_in[loop_idx + "LOOP".len()..])?;
     if let Some(range_idx) = find_top_level_operator(range_sql, "..") {
         let lower = parse_routine_expr(range_sql[..range_idx].trim())?;
         let upper = parse_routine_expr(range_sql[range_idx + 2..].trim())?;
@@ -1918,32 +1909,31 @@ pub(crate) fn parse_routine_foreach_loop(statement: &str) -> Result<RoutineStmt>
         ));
     };
     let array = parse_routine_expr(after_array[..loop_idx].trim())?;
-    let body = after_array[loop_idx + "LOOP".len()..]
-        .trim()
-        .strip_suffix("END LOOP")
-        .or_else(|| {
-            after_array[loop_idx + "LOOP".len()..]
-                .trim()
-                .strip_suffix("end loop")
-        })
-        .ok_or_else(|| SqlError::InvalidSql("FOREACH loop requires END LOOP".to_string()))?
-        .trim();
+    let body = routine_loop_body(&after_array[loop_idx + "LOOP".len()..])?;
     Ok(RoutineStmt::ForeachLoop {
         target,
         slice,
         array: RoutineExpr::unbound(array),
-        body: parse_routine_statements(body)?,
+        body,
     })
 }
 
 /// The statements between a loop's `LOOP` keyword and its closing `END LOOP`.
 fn routine_loop_body(after_loop: &str) -> Result<Vec<RoutineStmt>> {
     let body = after_loop.trim().trim_end_matches(';').trim_end();
-    let lower = body.to_ascii_lowercase();
-    let Some(end) = lower.strip_suffix("end loop").map(str::len) else {
-        return Err(SqlError::InvalidSql("LOOP requires END LOOP".to_string()));
+    let boundaries = routine_boundaries(body)?;
+    let Some((start, end, RoutineBoundary::EndLoop)) = boundaries.last() else {
+        return Err(SqlError::InvalidSql("LOOP requires END LOOP".into()));
     };
-    parse_routine_statements(body[..end].trim())
+    let tail = Tokenizer::new(&PostgreSqlDialect {}, &body[*end..])
+        .tokenize()
+        .map_err(|e| SqlError::InvalidSql(e.to_string()))?;
+    if tail.iter().any(|t| !matches!(t, Token::Whitespace(_))) {
+        return Err(SqlError::UnsupportedPlpgsqlFeature(
+            "loop end labels are not implemented".into(),
+        ));
+    }
+    parse_routine_statements(body[..*start].trim())
 }
 
 pub(crate) fn parse_routine_plain_loop(statement: &str) -> Result<RoutineStmt> {

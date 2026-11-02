@@ -35,6 +35,10 @@ routine failures are retained as migration blockers. Two additional unchanged
 views match repeated typed-row comparisons after manual dependency refresh,
 raising cumulative strict non-clock seed-view matches to 92. Automatic view
 dependency refresh remains outstanding.
+The [procedural CASE qualification](evidence/oracle-procedural-case-2026-11-02/README.md)
+adds general statement semantics with independent PostgreSQL regressions and
+34 live Oracle comparisons. The selected original-routine recheck now matches
+12 of 13 cases; nested exception blocks and ROWNUM still block GET_SYSCONFIG.
 Required foreign keys, complete routine/view behavior and remaining application
 behavior are still outstanding.
 These are development data baselines, not full schema/application acceptance. The
@@ -56,7 +60,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL, date formats and Gregorian ADD_MONTHS; NVL2/DECODE and broader semantics outstanding |
 | 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL and pgwire parameters; other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |
 | 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: application-schema selection, versioned static function relation binding and documented heap adaptation; general resolution and synonyms outstanding |
-| 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Unqualified: HR currently uses BicDB's PostgreSQL-shaped transaction contract |
+| 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Unqualified in BicDB; [independent nested-block contracts](evidence/oracle-nested-block-contracts-2026-11-02/README.md) establish the Oracle/PostgreSQL rollback difference and implementation dependencies |
 | 9. DDL lifecycle | Oracle implicit commits, replacement, dependency invalidation, invalid-object catalogs and recompilation | Outstanding; native transactional DDL is not an Oracle equivalent |
 | 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: bounded procedures/blocks, standalone functions, unparameterized bound cursor loops, declared-type procedural TRUNC and versioned logical DATE arithmetic; full language and application routines outstanding |
 | 11. Packages | Specs/bodies, visibility, overloads, initialization, session variables and invalidation with pool/session isolation | Outstanding |

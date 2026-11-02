@@ -203,14 +203,16 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v4`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v5`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
 previously translated routines; recreate an Oracle-authored definition to select
 the new compiler. The compiler versions have separate `pg_language` identities,
-present only in a preview database. Versions 1, 2 and 3 remain supported with their original
-behavior.
+present only in a preview database. Versions 1 through 4 remain readable.
+Version 5 (OID 999404) fences new definitions from older runtimes whose CASE
+lowering can evaluate a simple selector repeatedly. The database storage format
+is unchanged; this is a stored-routine capability marker.
 
 Version 2 binds static relation references in functions to the namespace in the
 stored function declaration. Unqualified declarations created through the
@@ -299,6 +301,25 @@ BYTE versus CHAR behavior, user-defined Oracle types and cross-schema privilege
 qualification remain outstanding.
 The [column-anchor evidence](evidence/oracle-column-anchors-2026-11-02/README.md)
 records reference comparisons, original routine retries and remaining blockers.
+
+Procedural simple and searched CASE statements use the shared routine
+interpreter. The scalar selector is evaluated once; conditions stop at the
+first match, and only that branch's statements execute. NULL does not match
+NULL in simple CASE. An omitted ELSE with no matching branch raises SQLSTATE
+20000 (CASE_NOT_FOUND), independently of scalar SQL CASE's implicit NULL
+result. Named CASE_NOT_FOUND handlers, nesting, query statements, RETURN,
+CONTINUE and EXIT retain their ordinary routine behavior. Definition namespace
+binding and declared-type arithmetic recurse through every arm. The adaptive
+compiler uses the interpreter for these blocks.
+
+The [generated CASE fixture](../examples/oracle/reference/routine_case.py) has
+34 independently checked Oracle expectations. Native PostgreSQL regressions
+retain integer division, which differs from Oracle NUMBER division in a CASE
+condition. PostgreSQL comma-separated simple-case alternatives remain supported; their
+Oracle grammar/behavior is not qualified. Labels, newer selector predicates and
+full Oracle conversion semantics remain unqualified.
+Native routine definitions currently compile on invocation; Oracle-compatible
+DDL validation and invalidation remain separate outstanding work.
 
 This is declaration support for the tested routine subset, not a complete
 PL/SQL compiler. Native routine execution, namespace, overload, privilege and

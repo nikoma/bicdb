@@ -1,0 +1,192 @@
+{
+  "format": 1,
+  "reference_only": true,
+  "bicdb_executed": false,
+  "success": true,
+  "oracle": {
+    "format": 1,
+    "backend": "oracle",
+    "reference_only": true,
+    "application_qualified": false,
+    "cases": [
+      {
+        "id": "handled_assignment",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "failed_statement_atomicity",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "handler_propagation",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      }
+    ],
+    "cleanup_errors": [],
+    "success": true,
+    "scope": "Synthetic nested-block write rollback, local values and handler propagation; BicDB not executed",
+    "database_version": "23.26.3.0.0"
+  },
+  "postgres": {
+    "format": 1,
+    "backend": "postgres",
+    "reference_only": true,
+    "application_qualified": false,
+    "cases": [
+      {
+        "id": "handled_assignment",
+        "expected": {
+          "value": {
+            "number": "10"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "10"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "failed_statement_atomicity",
+        "expected": {
+          "value": {
+            "number": "10"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "10"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "handler_propagation",
+        "expected": {
+          "value": {
+            "number": "10"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "10"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      }
+    ],
+    "cleanup_errors": [],
+    "success": true,
+    "scope": "Synthetic nested-block write rollback, local values and handler propagation; BicDB not executed",
+    "database_version": 180004
+  }
+}

@@ -1,0 +1,928 @@
+{
+  "format": 1,
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "fixture_prefix": "BICDB_RF_0C4A3A0D4A",
+  "fixture_sha256": "135925b38bf8d2aa7b99ca851a18c9a78c8247c51993c5b3b7d7c33201de63b5",
+  "total": 34,
+  "matched": 29,
+  "cases": [
+    {
+      "id": "search_neg1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "11"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "11"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "11"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "search_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "20"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "search_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "30"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "search_NULL",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "30"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "lazy_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "10"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "lazy_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "20"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "lazy_neg1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "30"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "lazy_NULL",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "30"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "lazy_0",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01476"
+      },
+      "bicdb": {
+        "error": "DivisionByZero",
+        "code": "22012"
+      },
+      "expected_error": {
+        "oracle": "ORA-01476",
+        "bicdb": "22012"
+      }
+    },
+    {
+      "id": "noelse_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "10"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "noelse_0",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06592"
+      },
+      "bicdb": {
+        "error": "CaseNotFound",
+        "code": "20000"
+      },
+      "expected_error": {
+        "oracle": "ORA-06592",
+        "bicdb": "20000"
+      }
+    },
+    {
+      "id": "noelse_NULL",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06592"
+      },
+      "bicdb": {
+        "error": "CaseNotFound",
+        "code": "20000"
+      },
+      "expected_error": {
+        "oracle": "ORA-06592",
+        "bicdb": "20000"
+      }
+    },
+    {
+      "id": "handled_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "10"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "handled_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "99"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "99"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "99"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "handled_NULL",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "99"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "99"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "99"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "nested_1",
+      "matched": false,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "error": "SyntaxError",
+        "code": "42601"
+      },
+      "expected": [
+        [
+          {
+            "number": "12"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "nested_neg1",
+      "matched": false,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "22"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "error": "SyntaxError",
+        "code": "42601"
+      },
+      "expected": [
+        [
+          {
+            "number": "22"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "nested_0",
+      "matched": false,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "220"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "error": "SyntaxError",
+        "code": "42601"
+      },
+      "expected": [
+        [
+          {
+            "number": "220"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "nested_NULL",
+      "matched": false,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "error": "SyntaxError",
+        "code": "42601"
+      },
+      "expected": [
+        [
+          {
+            "number": "30"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "expr_neg1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "10"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "expr_neg2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "20"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "expr_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "30"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "expr_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "50"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "50"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "50"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "expr_NULL",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "50"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "50"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "50"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "simple_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "10"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "simple_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "20"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "simple_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "40"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "40"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "40"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "simple_NULL",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "40"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "40"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "40"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "once_",
+      "matched": false,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      },
+      "expected": [
+        [
+          {
+            "number": "10"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "h_body_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "41"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "41"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "41"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "h_body_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "42"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "42"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "42"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "sqlnull_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "11"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "11"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "11"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "sqlnull_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "sqlnull_NULL",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    }
+  ],
+  "cleanup_errors": [],
+  "success": false,
+  "scope": "Simple and searched procedural CASE, lazy conditions, nested statements, errors and selector evaluated once; not labels, general coercion or full PL/SQL",
+  "routine_compiler": "bicdb_oracle_preview_v4",
+  "oracle_driver_version": "26.1.0",
+  "pg_driver_version": "3.3.6",
+  "created_at": "2026-11-02T11:05:44.695500+00:00"
+}

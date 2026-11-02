@@ -1,0 +1,105 @@
+{
+  "format": 1,
+  "source_commit": "ec880d2bac3e3fe2aadfb2abc6a4bb7e47175597",
+  "previous_main_commit": "4bde8ba",
+  "binary_target": "debug/examples/oracle_server",
+  "binary_sha256": "54179155d9b026dae1dbeb93efc5f77c69b2714da9437b133f1ae667660422b0",
+  "routine_compiler": "bicdb_oracle_preview_v5",
+  "routine_language_oid": 999404,
+  "suites": {
+    "pgwire_unit": 119,
+    "oracle_driver": 22,
+    "protocol": 168,
+    "sql_unit": 382,
+    "integrated_application": 16,
+    "cell_rows": 17,
+    "sql_integration": 417
+  },
+  "rust_tests_passed": 1141,
+  "existing_sql_unit_ignores": 3,
+  "reference_harness_tests_passed": 19,
+  "public_reference_rechecks": {
+    "case": {
+      "assertions": 34,
+      "success": true,
+      "report_sha256": "d4c463baf73dbd32667b4150d07aeb41568f787cc4e68fe588b5f8bbdf12af44"
+    },
+    "anchors": {
+      "assertions": 41,
+      "success": true,
+      "report_sha256": "c4decf46e8bafe7fca8d1c753a5740f1a00ef0b1d51a5686a1b7f1b029ec7713"
+    },
+    "week": {
+      "assertions": 102,
+      "success": true,
+      "report_sha256": "d5fff1d97e70b3a134ec1a103fb297a9f5fa4fe9ced5770c4fcda324b2d07026"
+    },
+    "calendar": {
+      "assertions": 36,
+      "success": true,
+      "report_sha256": "596259f5a8dee1ca0992ab6300cac522f5ea9d277db4f3292ec66d53ada50079"
+    },
+    "temporal": {
+      "assertions": 29,
+      "success": true,
+      "report_sha256": "7a11a7563147fe2968457aef4bc916690bbc6ac66ce54a2a1865faa8716ff294"
+    },
+    "namespaces": {
+      "assertions": 24,
+      "success": true,
+      "report_sha256": "71ac66f17007b55436e18db9373683d055644a6c305822cecce1fa2b9ff9d1dd"
+    }
+  },
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "application_qualified": false,
+  "published_release": false,
+  "production_deployment": false,
+  "validation_note": "The initial combined run stopped on an incorrect native NULL-error assertion. PostgreSQL 18.4 established NULL propagation; the corrected cell-row suite retains real division-error parity. Production engine source did not change between passed suites and the corrected-test commit.",
+  "memory": {
+    "combined": {
+      "status": "command_failed",
+      "peak_group_rss_bytes": 3425644544,
+      "minimum_observed_available_bytes": 16918859776,
+      "minimum_available_gib": 8,
+      "returncode": 101
+    },
+    "corrected_cell_rows": {
+      "status": "completed",
+      "peak_group_rss_bytes": 3296591872,
+      "minimum_observed_available_bytes": 11034148864,
+      "minimum_available_gib": 8,
+      "returncode": 0
+    },
+    "remaining_suites": {
+      "status": "completed",
+      "peak_group_rss_bytes": 1035493376,
+      "minimum_observed_available_bytes": 12788318208,
+      "minimum_available_gib": 8,
+      "returncode": 0
+    },
+    "server_build": {
+      "status": "completed",
+      "peak_group_rss_bytes": 1618759680,
+      "minimum_observed_available_bytes": 13585424384,
+      "minimum_available_gib": 8,
+      "returncode": 0
+    }
+  },
+  "memory_note": "Overall observed minima can include startup waiting; builds used one job, disabled incremental compilation, and an owned-process monitor stopping below eight GiB available RAM.",
+  "initial_combined_run": {
+    "status": "failed",
+    "failing_target": "cell_rows",
+    "failing_assertion": "NULL was incorrectly expected to raise an error",
+    "resolution": "Assert NULL propagation and retain SQLSTATE 22012 arithmetic-error parity; all seventeen cell-row tests pass"
+  },
+  "public_reference_assertions_passed": 266,
+  "ci_status": "Not inspected; reported validation is local",
+  "application_recheck_summary": "application-recheck-summary.json",
+  "selected_original_routine_rechecks": {
+    "matched": 12,
+    "total": 13,
+    "report": "original-routine-rechecks.json"
+  }
+}

@@ -1,0 +1,433 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "id": "search_neg1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "11"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "search_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "search_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "search_NULL",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "lazy_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "lazy_2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "lazy_neg1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "lazy_NULL",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "lazy_0",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01476"
+      },
+      "match": true
+    },
+    {
+      "id": "noelse_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "noelse_0",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06592"
+      },
+      "match": true
+    },
+    {
+      "id": "noelse_NULL",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06592"
+      },
+      "match": true
+    },
+    {
+      "id": "handled_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "handled_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "99"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "handled_NULL",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "99"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "nested_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "nested_neg1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "22"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "nested_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "220"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "nested_NULL",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "expr_neg1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "expr_neg2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "expr_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "expr_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "50"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "expr_NULL",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "50"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "simple_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "simple_2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "simple_3",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "40"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "simple_NULL",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "40"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "once_",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "h_body_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "41"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "h_body_2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "42"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "sqlnull_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "11"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "sqlnull_0",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "sqlnull_NULL",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "oracle_version": "23.26.3.0.0",
+  "matched": 34
+}

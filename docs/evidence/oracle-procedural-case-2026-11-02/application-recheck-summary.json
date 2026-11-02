@@ -1,0 +1,99 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "rechecks": {
+    "date_routines": {
+      "success": true,
+      "report_sha256": "8774a91f0321f5b2c793ddd2b442591324506ef0696c8ffd801dc7c76a91aac6",
+      "runtime_binary_sha256": "54179155d9b026dae1dbeb93efc5f77c69b2714da9437b133f1ae667660422b0",
+      "routines": [
+        {
+          "name": "ADDDAYS",
+          "matched": 5,
+          "total": 5
+        },
+        {
+          "name": "DAYSBETWEEN",
+          "matched": 4,
+          "total": 4
+        },
+        {
+          "name": "FIRSTOF",
+          "matched": 14,
+          "total": 14
+        }
+      ]
+    },
+    "payment_term_arithmetic": {
+      "success": true,
+      "report_sha256": "9c03f4f0327063c619f6c1addc788a645af0e4389e0a5c42e46df3e85916fe1a",
+      "runtime_binary_sha256": "54179155d9b026dae1dbeb93efc5f77c69b2714da9437b133f1ae667660422b0",
+      "matched": 6,
+      "total": 6
+    },
+    "payment_term_fixed_branch": {
+      "success": true,
+      "report_sha256": "7e290ade87b656e6931d4a756e830f357ad94b06d52b75bddd9eae069a7bdef0",
+      "runtime_binary_sha256": "54179155d9b026dae1dbeb93efc5f77c69b2714da9437b133f1ae667660422b0",
+      "matched": 2,
+      "total": 2,
+      "data_changes_rolled_back": true
+    },
+    "constraint_policies": {
+      "success": true,
+      "report_sha256": "fa2e3b83e6cc117c91dddbfc651f7cee1dad1793b0b74475823bd6ee1e3d2aa8",
+      "constraints_checked": 3
+    },
+    "refreshed_views": {
+      "success": true,
+      "report_sha256": "af0453add753085f2476821cc6e0d26ce56215a0a15331e1f9b19946f67ffef2",
+      "runtime_binary_sha256": "54179155d9b026dae1dbeb93efc5f77c69b2714da9437b133f1ae667660422b0",
+      "views": [
+        {
+          "name": "C_PAYSELECTION_CHECK_VT",
+          "repeated_rows_match": true,
+          "checks": [
+            {
+              "repeat": 0,
+              "rows_match": true,
+              "oracle_rows": 1,
+              "bicdb_rows": 1,
+              "oracle_row_multiset_sha256": "28695b93a773dd6cb47b410b42ddb7dd44c43e8cc9a57a72fed6e12770fd27bd",
+              "bicdb_row_multiset_sha256": "28695b93a773dd6cb47b410b42ddb7dd44c43e8cc9a57a72fed6e12770fd27bd"
+            },
+            {
+              "repeat": 1,
+              "rows_match": true,
+              "oracle_rows": 1,
+              "bicdb_rows": 1,
+              "oracle_row_multiset_sha256": "28695b93a773dd6cb47b410b42ddb7dd44c43e8cc9a57a72fed6e12770fd27bd",
+              "bicdb_row_multiset_sha256": "28695b93a773dd6cb47b410b42ddb7dd44c43e8cc9a57a72fed6e12770fd27bd"
+            }
+          ]
+        },
+        {
+          "name": "RV_PAYMENT",
+          "repeated_rows_match": true,
+          "checks": [
+            {
+              "repeat": 0,
+              "rows_match": true,
+              "oracle_rows": 2,
+              "bicdb_rows": 2,
+              "oracle_row_multiset_sha256": "3b12bbbf606c8034d4ebcc361d0ed59efd24b1f0a4d0be3762871fdde86c1ecc",
+              "bicdb_row_multiset_sha256": "3b12bbbf606c8034d4ebcc361d0ed59efd24b1f0a4d0be3762871fdde86c1ecc"
+            },
+            {
+              "repeat": 1,
+              "rows_match": true,
+              "oracle_rows": 2,
+              "bicdb_rows": 2,
+              "oracle_row_multiset_sha256": "3b12bbbf606c8034d4ebcc361d0ed59efd24b1f0a4d0be3762871fdde86c1ecc",
+              "bicdb_row_multiset_sha256": "3b12bbbf606c8034d4ebcc361d0ed59efd24b1f0a4d0be3762871fdde86c1ecc"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

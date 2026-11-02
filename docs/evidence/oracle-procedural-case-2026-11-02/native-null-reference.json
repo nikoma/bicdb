@@ -1,0 +1,12 @@
+{
+  "server_version_num": 180004,
+  "fast_null": true,
+  "slow_null": true,
+  "numeric_trunc_null": true,
+  "fast_division_sqlstate": "22012",
+  "slow_division_sqlstate": "22012",
+  "format": 1,
+  "source_only": true,
+  "synthetic_data_only": true,
+  "success": true
+}

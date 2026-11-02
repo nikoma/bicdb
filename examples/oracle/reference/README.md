@@ -253,3 +253,33 @@ function signatures, as specified by [CREATE FUNCTION](https://www.postgresql.or
 These profiles have separate regressions. Full dependency invalidation after
 DDL, temporal type provenance, BYTE length semantics and cross-schema Oracle
 privileges remain outside this fixture's acceptance.
+
+## Generated procedural CASE statements
+
+Pass `--suite case` to `routine_namespaces.py` for 34 assertions covering
+simple and searched CASE, sequential and lazy conditions, NULLs, nested CASE
+and IF/loop bodies, scalar SQL CASE expressions, handler bodies and a sequence
+selector evaluated once. Three error assertions check ORA-06592 against
+SQLSTATE 20000 and ORA-01476 against SQLSTATE 22012. An omitted ELSE raises an
+error for a statement and yields NULL for the scalar expression form.
+
+These expectations are independently exercised on Oracle before comparing
+BicDB. PostgreSQL has separate engine and prepared-driver regressions, including
+its integer division behavior. The fixture creates and removes its own
+functions and sequence in dedicated test databases. It does not qualify
+labels, Oracle qualification of comma-separated selector alternatives, arbitrary type conversions,
+DDL validation timing or full PL/SQL.
+
+## Independent nested exception-block contracts
+
+`nested_blocks.py` checks three synthetic write/handler scenarios separately on
+Oracle and PostgreSQL. Its expectations intentionally differ: a successful
+UPDATE before a handled error survives the Oracle block and is undone by the
+PostgreSQL exception block. Local variables retain their values in both.
+The runner also checks failing-statement atomicity, handler propagation and
+rollback, using fresh dedicated connections and cleaning up its tables.
+
+Supply `--oracle-config`, `--output` and a dedicated PostgreSQL connection in
+`ORACLE_CONTROL_PG_DSN`. This is reference-only evidence; it does not execute or
+qualify BicDB. [Measured contracts and implementation dependencies](../../../docs/evidence/oracle-nested-block-contracts-2026-11-02/README.md)
+remain separate from the generated routine comparisons.

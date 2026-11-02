@@ -203,13 +203,13 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v7`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v8`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
 previously translated routines; recreate an Oracle-authored definition to select
 the new compiler. The compiler versions have separate `pg_language` identities,
-present only in a preview database. Versions 1 through 6 remain readable.
+present only in a preview database. Versions 1 through 7 remain readable.
 Version 5 (OID 999404) fences CASE selector dispatch. Version 6 (OID 999405)
 adds the tested Oracle statement-rollback and strict SELECT INTO contracts;
 earlier definitions retain their previous block-rollback behavior. Recreate an
@@ -239,6 +239,35 @@ recreated to select version 7. Broader standalone SQL implicit conversions and
 all Oracle length/type combinations are not qualified by the routine compiler.
 The [concatenation evidence](evidence/oracle-routine-concatenation-2026-11-02/README.md)
 records reference limits, error cases, source routines and PostgreSQL controls.
+
+Version 8 (OID 999407) adds typed bound-cursor parameters for positional,
+named and mixed calls, explicit OPEN/FETCH/CLOSE and cursor FOR loops. Oracle
+formal defaults are evaluated at OPEN, only when omitted. Actual expressions
+are evaluated once before query-local bindings replace enclosing values. Formal
+values and types are restored before the loop body and after query errors;
+nested declarations retain their own cursor state. Logical DATE formals discard
+fractional seconds. Oracle table columns take precedence over same-named cursor
+parameters; native PostgreSQL cursor formals report ambiguous column references.
+Native cursor formal defaults remain rejected. Versions 1–7 reject the new
+Oracle parameterized declarations. Refcursors, scrolling, complete cursor
+attributes, portal/streaming behavior and full compile-time diagnostics remain
+outside this bounded contract.
+
+Version 8 also rounds resolved NUMBER arithmetic to the measured twenty-base-100
+mantissa digits, instead of leaving unlimited native decimal intermediates. It
+keeps DATE day-fraction arithmetic consistent when a result is multiplied back
+into seconds. SQL and procedural arithmetic carry separate execution contexts:
+the tested SQL overflow raises 22003, while the procedural path can produce
+NUMBER infinity. Infinity uses native PostgreSQL NUMERIC transport, including
+`Infinity` and `-Infinity`, and default Oracle character conversion emits `~`
+and `-~`. Oracle NUMBER infinity operations have independently measured behavior
+that differs from IEEE arithmetic. Native PostgreSQL and versions 1–7 retain
+their arithmetic contracts. General NUMBER input/column constraints, integer
+literal/PLS_INTEGER overflow semantics, all conversions and other Oracle versions
+are not established by these tests.
+The [cursor and arithmetic qualification](evidence/oracle-parameterized-cursors-2026-11-02/README.md)
+records the source comparisons, transport policy, older-reader fence and remaining
+application failures.
 
 Version 2 binds static relation references in functions to the namespace in the
 stored function declaration. Unqualified declarations created through the

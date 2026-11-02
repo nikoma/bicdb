@@ -1,0 +1,139 @@
+{
+  "format": 1,
+  "source_commit": "ef829a16a1d0ebcd228cd6fef020654aadea853a",
+  "full_rust_validation_source_commit": "abd58a03ce0c1811a203bc8677453df7ac601ee4",
+  "latest_integrated_main_commit": "92c53dd",
+  "binary_target": "debug/examples/oracle_server",
+  "binary_sha256": "a8a7f801cc5c850d5b59ae52b608ec15213dc3190708f061afe5e319d15915fe",
+  "routine_compiler": "bicdb_oracle_preview_v8",
+  "routine_language_oid": 999407,
+  "full_rust_validation": {
+    "passed": 1229,
+    "existing_ignores": 3,
+    "suites": {
+      "pgwire_unit": 119,
+      "oracle_driver": 22,
+      "protocol": 168,
+      "sql_unit": 397,
+      "binary_storage": 7,
+      "carrier_hub": 20,
+      "cell_rows": 17,
+      "native_compat": 60,
+      "sql_integration": 419
+    }
+  },
+  "merged_source_followup": {
+    "carrier_hub_passed": 21
+  },
+  "python_tests": {
+    "reference": 22,
+    "migration": 14,
+    "hr": 3
+  },
+  "new_oracle_cursor_cases": 34,
+  "new_oracle_number_cases": 218,
+  "prior_oracle_cases": 342,
+  "native_cursor_cases": 28,
+  "prior_native_cases": 62,
+  "previous_original_cases": 58,
+  "new_original_execution_probe": {
+    "matched": 1,
+    "total": 3,
+    "success": false,
+    "remaining_blocker": "Oracle DECODE semantics"
+  },
+  "accepted_original_definitions": {
+    "accepted": 43,
+    "total": 62
+  },
+  "application_qualified": false,
+  "formatting_passed": true,
+  "licensing_invariants_passed": true,
+  "license_dependency_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "published_release": false,
+  "production_deployment": false,
+  "ci_status": "Local checks recorded here; exact merged-main CI is available only after push.",
+  "memory": {
+    "full_validation": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 3695497216,
+      "minimum_observed_available_bytes": 21721227264,
+      "minimum_available_gib": 8,
+      "minimum_observed_disk_available_bytes": 28913127424,
+      "minimum_disk_available_gib": 2
+    },
+    "merged_carrier": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 3605057536,
+      "minimum_observed_available_bytes": 19622617088,
+      "minimum_available_gib": 8,
+      "minimum_observed_disk_available_bytes": 30148030464,
+      "minimum_disk_available_gib": 2
+    },
+    "final_server": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 3498745856,
+      "minimum_observed_available_bytes": 19389255680,
+      "minimum_available_gib": 8,
+      "minimum_observed_disk_available_bytes": 29997441024,
+      "minimum_disk_available_gib": 2
+    }
+  },
+  "cleanup": {
+    "final_test_artifacts": {
+      "format": 1,
+      "removed_files": 9,
+      "reclaimed_bytes": 2526366712,
+      "by_category": {
+        "completed_test_executable": {
+          "files": 9,
+          "bytes": 2526366712
+        }
+      },
+      "current_example_binary_preserved": true
+    },
+    "superseded_binary_copies": {
+      "removed_files": 9,
+      "reclaimed_bytes": 2237519712
+    },
+    "disk_cache_size_gib": 5.065,
+    "ram_offload_removed": true,
+    "merged_carrier_artifacts": {
+      "format": 1,
+      "removed_files": 1,
+      "reclaimed_bytes": 258020456,
+      "by_category": {
+        "completed_test_executable": {
+          "files": 1,
+          "bytes": 258020456
+        }
+      },
+      "current_example_binary_preserved": true
+    }
+  },
+  "earlier_attempts": [
+    {
+      "kind": "test_failure",
+      "test": "preview_cursor_declarations_and_named_for_loops_execute",
+      "reason": "Old test expected the newly supported parameterized declaration to fail; now verifies named execution and missing arguments."
+    },
+    {
+      "kind": "test_failure",
+      "test": "rls_policies_preserve_the_session_runtime_and_transaction",
+      "reason": "Policy init-plan folding lost a declared JSONB type; catalog-aware typing fixes the original regression."
+    },
+    {
+      "kind": "resource_interruption",
+      "reason": "Stopped only the owned process group when shared disk filled; completed test binaries and unneeded old copies were cleaned."
+    },
+    {
+      "kind": "resource_interruption",
+      "reason": "RAM build relocation exposed a cache-cleaner traversal bug and removed reusable archives. Fixed traversal, restored all remaining files with SHA-256 verification, rebuilt and reran final checks. No source or database data was removed."
+    }
+  ],
+  "scope": "Bound parameterized cursors and contextual NUMBER arithmetic only; full Oracle migration and complete application remain unqualified."
+}

@@ -1,0 +1,481 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "id": "positional_0",
+      "expected": [
+        [
+          {
+            "number": "470"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "470"
+      },
+      "matched": true
+    },
+    {
+      "id": "positional_1",
+      "expected": [
+        [
+          {
+            "number": "870"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "870"
+      },
+      "matched": true
+    },
+    {
+      "id": "positional_2",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "actual": null,
+      "matched": true
+    },
+    {
+      "id": "named_0",
+      "expected": [
+        [
+          {
+            "number": "470"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "470"
+      },
+      "matched": true
+    },
+    {
+      "id": "named_1",
+      "expected": [
+        [
+          {
+            "number": "870"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "870"
+      },
+      "matched": true
+    },
+    {
+      "id": "named_2",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "actual": null,
+      "matched": true
+    },
+    {
+      "id": "mixed_0",
+      "expected": [
+        [
+          {
+            "number": "470"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "470"
+      },
+      "matched": true
+    },
+    {
+      "id": "mixed_1",
+      "expected": [
+        [
+          {
+            "number": "870"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "870"
+      },
+      "matched": true
+    },
+    {
+      "id": "mixed_2",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "actual": null,
+      "matched": true
+    },
+    {
+      "id": "actual_scope_0",
+      "expected": [
+        [
+          {
+            "number": "14370"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "14370"
+      },
+      "matched": true
+    },
+    {
+      "id": "reopen_0",
+      "expected": [
+        [
+          {
+            "number": "102"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "102"
+      },
+      "matched": true
+    },
+    {
+      "id": "reopen_1",
+      "expected": [
+        [
+          {
+            "number": "304"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "304"
+      },
+      "matched": true
+    },
+    {
+      "id": "snapshot_0",
+      "expected": [
+        [
+          {
+            "number": "111"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "111"
+      },
+      "matched": true
+    },
+    {
+      "id": "snapshot_1",
+      "expected": [
+        [
+          {
+            "number": "313"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "313"
+      },
+      "matched": true
+    },
+    {
+      "id": "body_scope_0",
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "1"
+      },
+      "matched": true
+    },
+    {
+      "id": "body_scope_1",
+      "expected": [
+        [
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "3"
+      },
+      "matched": true
+    },
+    {
+      "id": "qualified_0",
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "1"
+      },
+      "matched": true
+    },
+    {
+      "id": "qualified_1",
+      "expected": [
+        [
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "3"
+      },
+      "matched": true
+    },
+    {
+      "id": "column_0",
+      "expected": [
+        [
+          {
+            "number": "12"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "12"
+      },
+      "matched": true
+    },
+    {
+      "id": "column_1",
+      "expected": [
+        [
+          {
+            "number": "12"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "12"
+      },
+      "matched": true
+    },
+    {
+      "id": "nested_0",
+      "expected": [
+        [
+          {
+            "number": "2"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "2"
+      },
+      "matched": true
+    },
+    {
+      "id": "nested_1",
+      "expected": [
+        [
+          {
+            "number": "4"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "4"
+      },
+      "matched": true
+    },
+    {
+      "id": "error_scope_0",
+      "expected": [
+        [
+          {
+            "number": "4"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "4"
+      },
+      "matched": true
+    },
+    {
+      "id": "error_scope_1",
+      "expected": [
+        [
+          {
+            "number": "4"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "4"
+      },
+      "matched": true
+    },
+    {
+      "id": "prior_open_0",
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "1"
+      },
+      "matched": true
+    },
+    {
+      "id": "prior_open_1",
+      "expected": [
+        [
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "3"
+      },
+      "matched": true
+    },
+    {
+      "id": "once_0",
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "1"
+      },
+      "matched": true
+    },
+    {
+      "id": "once_1",
+      "expected": [
+        [
+          {
+            "number": "2"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "2"
+      },
+      "matched": true
+    },
+    {
+      "id": "default_scope_0",
+      "expected": [
+        [
+          {
+            "number": "72"
+          }
+        ]
+      ],
+      "error": {
+        "error": "DatabaseError",
+        "code": "ORA-06575"
+      },
+      "matched": false
+    },
+    {
+      "id": "default_open_0",
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "7"
+      },
+      "matched": true
+    },
+    {
+      "id": "default_open_1",
+      "expected": [
+        [
+          {
+            "number": "11"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "11"
+      },
+      "matched": true
+    },
+    {
+      "id": "default_skip_0",
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "1"
+      },
+      "matched": true
+    },
+    {
+      "id": "default_skip_1",
+      "expected": [
+        [
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "3"
+      },
+      "matched": true
+    },
+    {
+      "id": "date_0",
+      "expected": [
+        [
+          {
+            "number": "45296"
+          }
+        ]
+      ],
+      "actual": {
+        "number": "45296"
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": false,
+  "oracle_version": "23.26.3.0.0",
+  "nls": {
+    "NLS_NUMERIC_CHARACTERS": ".,",
+    "NLS_DATE_FORMAT": "DD-MON-RR",
+    "NLS_DATE_LANGUAGE": "AMERICAN",
+    "NLS_LENGTH_SEMANTICS": "BYTE"
+  },
+  "matched": 33
+}

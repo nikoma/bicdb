@@ -1,0 +1,54 @@
+{
+  "format": 1,
+  "isolated_database_only": true,
+  "application_database_opened_with_old_reader": false,
+  "new_runtime_sha256": "a8a7f801cc5c850d5b59ae52b608ec15213dc3190708f061afe5e319d15915fe",
+  "old_runtime_sha256": "5bbf2a158084f7f1ffb26a778e71c94c6229c87e1b88a565f10c5bbe74e041ce",
+  "readers": [
+    {
+      "label": "new",
+      "calls": [
+        {
+          "sql": "SELECT cursor_reader(4) FROM DUAL",
+          "value": "5"
+        },
+        {
+          "sql": "SELECT concat_reader_text(NULL,'x') FROM DUAL",
+          "value": "x"
+        },
+        {
+          "sql": "SELECT concat_reader_text('y',NULL) FROM DUAL",
+          "value": "y"
+        },
+        {
+          "sql": "SELECT concat_reader_num(0.5) FROM DUAL",
+          "value": "[.5]"
+        }
+      ],
+      "recovery": true
+    },
+    {
+      "label": "old",
+      "calls": [
+        {
+          "sql": "SELECT cursor_reader(4) FROM DUAL",
+          "sqlstate": "0A000"
+        },
+        {
+          "sql": "SELECT concat_reader_text(NULL,'x') FROM DUAL",
+          "sqlstate": "0A000"
+        },
+        {
+          "sql": "SELECT concat_reader_text('y',NULL) FROM DUAL",
+          "sqlstate": "0A000"
+        },
+        {
+          "sql": "SELECT concat_reader_num(0.5) FROM DUAL",
+          "sqlstate": "0A000"
+        }
+      ],
+      "recovery": true
+    }
+  ],
+  "success": true
+}

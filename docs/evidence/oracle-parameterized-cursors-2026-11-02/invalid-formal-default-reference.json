@@ -1,0 +1,19 @@
+{
+  "format": 1,
+  "source_only": true,
+  "oracle_version": "23.26.3.0.0",
+  "scenario": "cursor formal referenced in another formal default despite enclosing variable with same name",
+  "errors": [
+    {
+      "line": 1,
+      "position": 108,
+      "text": "PLS-00227: subprogram 'in' formal X is not yet denotable"
+    },
+    {
+      "line": 0,
+      "position": 0,
+      "text": "PL/SQL: Compilation unit analysis terminated"
+    }
+  ],
+  "function_valid": false
+}

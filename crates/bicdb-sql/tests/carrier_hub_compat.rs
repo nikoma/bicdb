@@ -930,7 +930,9 @@ fn has_table_privilege_accepts_relation_oids() {
         "CREATE TABLE items (id INT PRIMARY KEY)",
         "GRANT INSERT ON items TO writer",
     ] {
-        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
     let row = session_rows(
         &mut session,
@@ -941,6 +943,11 @@ fn has_table_privilege_accepts_relation_oids() {
     );
     assert_eq!(
         row[0],
-        vec![SqlValue::Bool(true), SqlValue::Bool(true), SqlValue::Bool(true), SqlValue::Bool(false)]
+        vec![
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+            SqlValue::Bool(true),
+            SqlValue::Bool(false)
+        ]
     );
 }

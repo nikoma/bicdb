@@ -321,3 +321,32 @@ boundary, and removes its temporary sequence. Both runners exit nonzero for a
 difference or cleanup error. See the
 [qualification record](../../../docs/evidence/oracle-routine-concatenation-2026-11-02/README.md)
 for the measured scope and remaining gaps.
+
+## Parameterized cursors and NUMBER arithmetic
+
+The `cursors` suite checks 34 Oracle cases: positional/named/mixed arguments,
+OPEN-time values, repeated calls, query/outer scopes, defaults, error cleanup and
+logical DATE formals. The `numberops` suite checks 218 NUMBER cases, including
+finite mantissa precision, SQL/procedural overflow and infinity operations:
+
+```sh
+python3 examples/oracle/reference/routine_namespaces.py --suite cursors \
+  --oracle-config oracle-reference.json --output routine-cursors.json
+python3 examples/oracle/reference/routine_namespaces.py --suite numberops \
+  --oracle-config oracle-reference.json --output routine-numbers.json
+python3 examples/oracle/reference/postgres_cursors.py --output native-cursors.json
+```
+
+The native runner uses `ORACLE_CONTROL_PG_DSN` and `BICDB_PG_DSN` as described
+above. Its 28 cases compare values, type OIDs and SQLSTATEs independently against
+PostgreSQL, retaining its ambiguity error where Oracle gives a column precedence.
+All synthetic objects are uniquely named and removed after the comparison.
+
+`compare.py` explicitly normalizes the Oracle reference driver's NUMBER infinity
+sentinels, +/-1e126, to numeric `Infinity`/`-Infinity`. This policy applies only to
+the Oracle reference side. Native PostgreSQL permits finite values at those
+magnitudes, which retain their exact value. A DUMP/TO_CHAR reference probe and
+unit regressions distinguish the representations. These tests do not qualify
+NUMBER infinity export/import for arbitrary application datasets. See the
+[qualification record](../../../docs/evidence/oracle-parameterized-cursors-2026-11-02/README.md)
+for measured behavior and remaining gaps.

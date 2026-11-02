@@ -52,6 +52,14 @@ Oracle comparisons cover bounded conversion, NULL and caller-length contracts;
 comparisons. Definition acceptance does not establish execution of every routine
 or branch. Required foreign keys, complete routine/view behavior and remaining
 application behavior are still outstanding.
+The [parameterized-cursor qualification](evidence/oracle-parameterized-cursors-2026-11-02/README.md)
+raises accepted original definitions to 43 of 62. Its 34 cursor and 218 NUMBER
+arithmetic cases match Oracle; the previous 342 generated Oracle cases and 58
+selected original calls still match. The newly accepted NEXTBUSINESSDAY source
+matches only one of three execution probes: weekday/weekend calls still hit the
+unimplemented Oracle DECODE semantics. Its NULL result is not DECODE qualification.
+The remaining 19 definitions, foreign keys and full application workflows remain
+migration blockers.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source
@@ -67,13 +75,13 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 1. Versioned profiles | Durable profile identity, explicit startup selection, incompatible-open rejection, upgrade rules and PostgreSQL isolation | Partial: bounded HR and separate preview profiles, durable identity and versioned preview routine compiler; general upgrade qualification outstanding |
 | 2. Migration assessment | Inventory source and runtime dependencies; report object locations, dynamic SQL, wrapped code, blockers and manual changes | Partial: [offline lexical inventory](oracle-migration-assessment.md); semantic/catalog/runtime assessment and dependency resolution outstanding |
 | 3. SQL value semantics | Differential null/empty-string, concatenation, padding, comparison, coercion, uniqueness and composite-key tests | Partial: HR lowering and version-7 typed routine concatenation with NULL/padding/caller-length reference cases; general SQL coercion and padding qualification outstanding |
-| 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings used by HR; full Oracle rules unqualified |
+| 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings used by HR and version-8 bounded NUMBER arithmetic/reference infinity transport; full Oracle input, storage, type and conversion rules unqualified |
 | 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL, date formats and Gregorian ADD_MONTHS; NVL2/DECODE and broader semantics outstanding |
 | 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL, pgwire parameters and literal-integer ROWNUM prefix predicates in plain blocks; other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |
 | 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: application-schema selection, versioned static function relation binding and documented heap adaptation; general resolution and synonyms outstanding |
 | 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Partial: [nested-block contracts](evidence/oracle-nested-block-contracts-2026-11-02/README.md) distinguish new Oracle routine statement rollback from native PostgreSQL block rollback; general transactions, DDL commits and locking qualification outstanding |
 | 9. DDL lifecycle | Oracle implicit commits, replacement, dependency invalidation, invalid-object catalogs and recompilation | Outstanding; native transactional DDL is not an Oracle equivalent |
-| 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: scoped blocks/declarations and nested handlers, standalone functions, unparameterized bound cursor loops, declared-type procedural TRUNC and versioned logical DATE arithmetic; full language and application routines outstanding |
+| 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: scoped blocks/declarations and nested handlers, standalone functions, version-8 parameterized bound cursors with query-local formals/defaults and independent native scope checks, declared-type procedural TRUNC and versioned logical DATE arithmetic; full language and application routines outstanding |
 | 11. Packages | Specs/bodies, visibility, overloads, initialization, session variables and invalidation with pool/session isolation | Outstanding |
 | 12. Autonomous transactions | Independent commit/rollback and lock behavior, nested calls, exceptions and restart tests | Outstanding |
 | 13. Supplied package APIs | Qualify used DBMS/UTL APIs, including LOB, SQL, OUTPUT, UTILITY, APPLICATION_INFO, RANDOM, LOCK and SCHEDULER; file/network ACL enforcement | Outstanding |

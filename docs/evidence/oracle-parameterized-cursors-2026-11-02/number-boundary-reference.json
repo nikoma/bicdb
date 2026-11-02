@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "expression": "product(9e125,2)",
+      "value": "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "expression": "TO_CHAR(product(9e125,2))",
+      "value": "~"
+    },
+    {
+      "expression": "DUMP(product(9e125,2))",
+      "value": "Typ=2 Len=2: 255,101"
+    },
+    {
+      "expression": "product(-9e125,2)",
+      "value": "-1E+126"
+    },
+    {
+      "expression": "TO_CHAR(product(-9e125,2))",
+      "value": "-~"
+    },
+    {
+      "expression": "DUMP(product(-9e125,2))",
+      "value": "Typ=2 Len=1: 0"
+    },
+    {
+      "expression": "product(1e125,10)",
+      "value": "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "expression": "TO_CHAR(product(1e125,10))",
+      "value": "~"
+    },
+    {
+      "expression": "DUMP(product(1e125,10))",
+      "value": "Typ=2 Len=2: 255,101"
+    },
+    {
+      "expression": "product(1e100,1e100)",
+      "value": "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "expression": "TO_CHAR(product(1e100,1e100))",
+      "value": "~"
+    },
+    {
+      "expression": "DUMP(product(1e100,1e100))",
+      "value": "Typ=2 Len=2: 255,101"
+    },
+    {
+      "expression": "product(1e-130,0.1)",
+      "value": "0"
+    },
+    {
+      "expression": "TO_CHAR(product(1e-130,0.1))",
+      "value": "0"
+    },
+    {
+      "expression": "DUMP(product(1e-130,0.1))",
+      "value": "Typ=2 Len=1: 128"
+    }
+  ],
+  "oracle_version": "23.26.3.0.0"
+}

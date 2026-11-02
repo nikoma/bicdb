@@ -2218,6 +2218,9 @@ pub(crate) fn validate_foreign_keys(
     schema: &TableSchema,
     record: &Record,
 ) -> Result<()> {
+    if schema.referential_checks_disabled {
+        return Ok(());
+    }
     for constraint in &schema.constraints {
         validate_foreign_key_constraint(db, tx, table, schema, record, constraint)?;
     }

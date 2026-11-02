@@ -2787,6 +2787,13 @@ struct TableSchema {
     rls_enabled: bool,
     #[serde(default)]
     rls_forced: bool,
+    /// Set by a superuser's `ALTER TABLE ... DISABLE TRIGGER ALL`: as in
+    /// PostgreSQL, that also disables the table's foreign-key (RI) triggers,
+    /// so rows written to it are not checked against referenced tables until
+    /// `ENABLE TRIGGER ALL`. This is how `pg_restore --disable-triggers` loads
+    /// data with circular references.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    referential_checks_disabled: bool,
     #[serde(default)]
     policies: Vec<PolicySchema>,
     // Owning role; None on schemas persisted before ownership tracking, which
@@ -4735,6 +4742,7 @@ pub fn ensure_embedded_table_schema(
         constraints: Vec::new(),
         rls_enabled: false,
         rls_forced: false,
+        referential_checks_disabled: false,
         policies: Vec::new(),
         owner: Some(current_role_name()),
         partitioning: None,

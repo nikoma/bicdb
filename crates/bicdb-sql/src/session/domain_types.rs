@@ -1773,6 +1773,17 @@ impl<'db> SqlSession<'db> {
                 trigger.set_enabled_mode(mode);
                 self.save_session_trigger(&trigger)?;
             }
+            // `ALL` also covers the internal foreign-key triggers, which only
+            // a superuser may disable (PostgreSQL's rule); `USER` never does.
+            if trigger_name.eq_ignore_ascii_case("all") && self.current_user_is_superuser()? {
+                let disabled = mode == TriggerEnabledMode::Disabled;
+                if let Some(mut schema) = load_schema(self.db_ref(), table)? {
+                    if schema.referential_checks_disabled != disabled {
+                        schema.referential_checks_disabled = disabled;
+                        save_schema(self.db_mut()?, &schema)?;
+                    }
+                }
+            }
             return Ok(());
         }
 

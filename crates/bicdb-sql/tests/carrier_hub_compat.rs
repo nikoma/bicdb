@@ -210,3 +210,30 @@ fn unique_index_on_multi_column_coalesce_keys_on_the_first_non_null_column() {
         .execute("CREATE UNIQUE INDEX mixed_key ON mixed (COALESCE(a, b))")
         .is_err());
 }
+
+#[test]
+fn disable_trigger_all_suspends_foreign_keys_for_a_data_load() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE definitions (id INT PRIMARY KEY, current_version_id INT)",
+        "CREATE TABLE versions (id INT PRIMARY KEY, definition_id INT NOT NULL REFERENCES definitions(id))",
+        "ALTER TABLE definitions ADD CONSTRAINT definitions_current_version FOREIGN KEY (current_version_id) REFERENCES versions(id)",
+        // pg_restore --disable-triggers: a circular pair loads in any order.
+        "ALTER TABLE definitions DISABLE TRIGGER ALL",
+        "ALTER TABLE versions DISABLE TRIGGER ALL",
+        "INSERT INTO definitions VALUES (1, 10)",
+        "INSERT INTO versions VALUES (10, 1)",
+        "ALTER TABLE definitions ENABLE TRIGGER ALL",
+        "ALTER TABLE versions ENABLE TRIGGER ALL",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    // Checks are back on once the triggers are enabled again.
+    assert!(session.execute("INSERT INTO versions VALUES (11, 99)").is_err());
+    assert!(session.execute("INSERT INTO definitions VALUES (2, 99)").is_err());
+    // DISABLE TRIGGER USER leaves foreign keys enforced.
+    session.execute("ALTER TABLE versions DISABLE TRIGGER USER").unwrap();
+    assert!(session.execute("INSERT INTO versions VALUES (12, 98)").is_err());
+}

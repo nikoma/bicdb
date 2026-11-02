@@ -479,6 +479,7 @@ impl<'db> SqlSession<'db> {
             constraints,
             rls_enabled: false,
             rls_forced: false,
+            referential_checks_disabled: false,
             policies: Vec::new(),
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             partitioning,

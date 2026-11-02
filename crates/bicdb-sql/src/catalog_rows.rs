@@ -6506,6 +6506,7 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         constraints: Vec::new(),
         rls_enabled: false,
         rls_forced: false,
+        referential_checks_disabled: false,
         policies: Vec::new(),
         owner: view.owner,
         partitioning: None,

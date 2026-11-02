@@ -1,0 +1,103 @@
+[
+  {
+    "id": "equals_first",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM=1",
+    "expected_values": [
+      3
+    ]
+  },
+  {
+    "id": "equals_second",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM=2",
+    "expected_values": []
+  },
+  {
+    "id": "upper_inclusive",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<=2",
+    "expected_values": [
+      3,
+      2
+    ]
+  },
+  {
+    "id": "upper_exclusive",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<3",
+    "expected_values": [
+      3,
+      2
+    ]
+  },
+  {
+    "id": "lower_exclusive",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM>1",
+    "expected_values": []
+  },
+  {
+    "id": "lower_inclusive",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM>=2",
+    "expected_values": []
+  },
+  {
+    "id": "starts_one",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM>=1",
+    "expected_values": [
+      3,
+      2,
+      1
+    ]
+  },
+  {
+    "id": "positive",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM>0",
+    "expected_values": [
+      3,
+      2,
+      1
+    ]
+  },
+  {
+    "id": "not_second",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<>2",
+    "expected_values": [
+      3
+    ]
+  },
+  {
+    "id": "not_first",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<>1",
+    "expected_values": []
+  },
+  {
+    "id": "zero",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<=0",
+    "expected_values": []
+  },
+  {
+    "id": "negative",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<=-1",
+    "expected_values": []
+  },
+  {
+    "id": "reversed",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE 2>=ROWNUM",
+    "expected_values": [
+      3,
+      2
+    ]
+  },
+  {
+    "id": "filter_before_prefix",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE v<>3 AND ROWNUM<=1",
+    "expected_values": [
+      2
+    ]
+  },
+  {
+    "id": "combined",
+    "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM>=1 AND ROWNUM<3",
+    "expected_values": [
+      3,
+      2
+    ]
+  }
+]

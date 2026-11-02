@@ -20,7 +20,7 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
                 == preview_routine_language_version(&routine.language)
                 && matches!(
                     preview_routine_language_version(&routine.language),
-                    Some(2 | 3 | 4 | 5)
+                    Some(2 | 3 | 4 | 5 | 6)
                 )
         })
     {
@@ -32,6 +32,7 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
 }
 
 fn bind_relations<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str) -> Result<()> {
+    super::rownum::lower(node)?;
     super::dual::lower(node, false)?;
     namespaces::qualify(node, schema);
     Ok(())
@@ -40,6 +41,26 @@ fn bind_relations<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str) -> Re
 fn bind_namespace_statements(statements: &mut [RoutineStmt], schema: &str) -> Result<()> {
     for statement in statements {
         match statement {
+            RoutineStmt::Block {
+                declarations,
+                body,
+                handlers,
+            } => {
+                for declaration in declarations {
+                    match declaration {
+                        RoutineDecl::Variable {
+                            default_expr: Some(expr),
+                            ..
+                        } => bind_relations(&mut expr.expr, schema)?,
+                        RoutineDecl::Cursor { query, .. } => bind_relations(query, schema)?,
+                        _ => {}
+                    }
+                }
+                bind_namespace_statements(body, schema)?;
+                for handler in handlers {
+                    bind_namespace_statements(&mut handler.statements, schema)?;
+                }
+            }
             RoutineStmt::Assignment { target, expr } => {
                 if let RoutineAssignmentTarget::ArrayElement { index, .. } = target {
                     bind_relations(&mut index.expr, schema)?;
@@ -232,6 +253,43 @@ fn lower_expression(expr: &mut Expr, types: &Types) {
 fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
     for statement in statements {
         match statement {
+            RoutineStmt::Block {
+                declarations,
+                body,
+                handlers,
+            } => {
+                let mut local_types = types.clone();
+                for decl in declarations.iter() {
+                    match decl {
+                        RoutineDecl::Variable {
+                            name,
+                            pg_type: Some(kind),
+                            ..
+                        } => {
+                            local_types.insert(normalize_object_name(name), kind.clone());
+                        }
+                        RoutineDecl::Alias { name, position } => {
+                            if let Some(kind) = types.get(&format!("${position}")) {
+                                local_types.insert(normalize_object_name(name), kind.clone());
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                for decl in declarations {
+                    if let RoutineDecl::Variable {
+                        default_expr: Some(expr),
+                        ..
+                    } = decl
+                    {
+                        lower_expression(&mut expr.expr, &local_types);
+                    }
+                }
+                lower_statements(body, &local_types);
+                for handler in handlers {
+                    lower_statements(&mut handler.statements, &local_types);
+                }
+            }
             RoutineStmt::Assignment { target, expr } => {
                 if let RoutineAssignmentTarget::ArrayElement { index, .. } = target {
                     lower_expression(&mut index.expr, types);

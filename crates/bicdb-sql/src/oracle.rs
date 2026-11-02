@@ -11,6 +11,7 @@ mod dual;
 mod namespaces;
 pub(crate) mod routine_arithmetic;
 pub(crate) mod routines;
+mod rownum;
 mod source_tokens;
 
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
@@ -21,12 +22,14 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1: &str = "bicdb_oracle_preview_v1";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2: &str = "bicdb_oracle_preview_v2";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3: &str = "bicdb_oracle_preview_v3";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V4: &str = "bicdb_oracle_preview_v4";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v5";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V5: &str = "bicdb_oracle_preview_v5";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v6";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V4_OID: i64 = 999_403;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_404;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V5_OID: i64 = 999_404;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_405;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -39,13 +42,17 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V2 => Some(2),
         PREVIEW_ROUTINE_LANGUAGE_V3 => Some(3),
         PREVIEW_ROUTINE_LANGUAGE_V4 => Some(4),
-        PREVIEW_ROUTINE_LANGUAGE => Some(5),
+        PREVIEW_ROUTINE_LANGUAGE_V5 => Some(5),
+        PREVIEW_ROUTINE_LANGUAGE => Some(6),
         _ => None,
     }
 }
 
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
-    matches!(preview_routine_language_version(language), Some(3 | 4 | 5))
+    matches!(
+        preview_routine_language_version(language),
+        Some(3 | 4 | 5 | 6)
+    )
 }
 
 pub(crate) fn preview_routine_language_enabled(db: &BicDb) -> Result<bool> {
@@ -1080,6 +1087,7 @@ fn lower_block(
             "{} LANGUAGE {language} AS {delimiter}{body}{delimiter}",
             join(&header)
         ),
+        None if preview => format!("DO {delimiter}{body}{delimiter} LANGUAGE {language}"),
         None => format!("DO {delimiter}{body}{delimiter}"),
     })
 }
@@ -1155,6 +1163,7 @@ fn lower_native(sql: &str, preview: bool) -> Result<String> {
     if let ControlFlow::Break(e) = result {
         return Err(e);
     }
+    rownum::lower(&mut statements)?;
     dual::lower(&mut statements, true)?;
     Ok(statements
         .iter()

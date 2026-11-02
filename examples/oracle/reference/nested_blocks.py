@@ -3,7 +3,7 @@
 
 Use fresh connections to dedicated test databases. Only synthetic tables with
 unique names are created; writes are rolled back and the tables are removed.
-This reference-only runner does not qualify BicDB's implementation.
+Optional BicDB connections execute the same contracts with each SQL profile.
 """
 import argparse
 import json
@@ -57,20 +57,20 @@ def fixture(table, results, backend):
     return plan
 
 
-def run_reference(connection, backend, schema=None):
+def run_reference(connection, backend, schema=None, *, bicdb=False):
     if backend not in ('oracle', 'postgres'):
         raise ValueError('expected an Oracle or PostgreSQL reference')
-    if backend == 'oracle' and (not schema or schema.upper() in ('SYS', 'SYSTEM')):
+    if backend == 'oracle' and not bicdb and (not schema or schema.upper() in ('SYS', 'SYSTEM')):
         raise ValueError('a dedicated non-administrative Oracle schema is required')
     prefix = 'BICDB_NEST_' + uuid.uuid4().hex[:10].upper()
     names = [identifier(prefix + suffix) for suffix in ('_DATA', '_RESULTS')]
-    if backend == 'oracle':
+    if backend == 'oracle' and schema:
         names = [identifier(schema) + '.' + name for name in names]
     table, results = names
-    report = dict(format=1, backend=backend, reference_only=True,
+    report = dict(format=1, backend=('bicdb_' if bicdb else '') + backend, reference_only=not bicdb,
                   application_qualified=False, cases=[], cleanup_errors=[], success=False,
-                  scope='Synthetic nested-block write rollback, local values and handler propagation; BicDB not executed')
-    report['database_version'] = (connection.version if backend == 'oracle'
+                  scope='Synthetic nested-block write rollback, local values and handler propagation')
+    report['database_version'] = (connection.version if backend == 'oracle' and not bicdb
                                   else connection.info.server_version)
     previous_autocommit = connection.autocommit
     created = []
@@ -88,7 +88,7 @@ def run_reference(connection, backend, schema=None):
             row = dict(id=case['id'], expected=case['expected'], matched=False)
             try:
                 with connection.cursor() as cursor:
-                    cursor.execute(case['sql'])
+                    cursor.execute(case['sql'], **({'prepare': False} if bicdb else {}))
                     cursor.execute(f'SELECT value,local_value,row_count FROM {results}')
                     values = cursor.fetchall()
                     if len(values) != 1:
@@ -113,7 +113,7 @@ def run_reference(connection, backend, schema=None):
         with connection.cursor() as cursor:
             for name in reversed(created):
                 try:
-                    cursor.execute('DROP TABLE ' + name + (' PURGE' if backend == 'oracle' else ''))
+                    cursor.execute('DROP TABLE ' + name + (' PURGE' if backend == 'oracle' and not bicdb else ''))
                 except Exception as error:
                     report['cleanup_errors'].append(error_summary(error))
         connection.autocommit = previous_autocommit
@@ -127,6 +127,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--oracle-config', type=Path, required=True)
     parser.add_argument('--postgres-dsn-env', default='ORACLE_CONTROL_PG_DSN')
+    parser.add_argument('--bicdb-oracle-dsn-env', help='Environment variable containing a dedicated preview-profile DSN')
+    parser.add_argument('--bicdb-postgres-dsn-env', help='Environment variable containing a dedicated native-profile DSN')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     import oracledb
@@ -147,6 +149,16 @@ def main():
                              options='-c statement_timeout=15000', connect_timeout=10) as postgres:
             report['postgres'] = run_reference(postgres, 'postgres')
         report['success'] = report['oracle']['success'] and report['postgres']['success']
+        for backend in ('oracle', 'postgres'):
+            variable = getattr(args, 'bicdb_' + backend + '_dsn_env')
+            if variable:
+                profile = 'oracle-preview-v1' if backend == 'oracle' else 'postgres'
+                with psycopg.connect(os.environ[variable], autocommit=True, connect_timeout=10,
+                                     options='-c bicdb.sql_profile=' + profile) as bicdb:
+                    report['bicdb_' + backend] = run_reference(bicdb, backend, bicdb=True)
+                report['reference_only'] = False
+                report['bicdb_executed'] = True
+                report['success'] &= report['bicdb_' + backend]['success']
     except Exception as error:
         report['error'] = error_summary(error)
     args.output.write_text(json.dumps(report, indent=2) + '\n')

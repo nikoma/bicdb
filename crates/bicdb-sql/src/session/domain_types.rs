@@ -2148,11 +2148,41 @@ impl<'db> SqlSession<'db> {
         let Some(body) = raw_do_block_body(sql)? else {
             return Ok(None);
         };
+        let language = raw_do_block_language(sql)?.unwrap_or_else(|| "plpgsql".into());
+        oracle::validate_routine_language(self.db_ref(), &language)?;
+        let oracle_block =
+            oracle::preview_routine_language_version(&language).is_some_and(|version| version >= 6);
+        if language != "plpgsql" && !oracle_block {
+            return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
+                "DO language {language} is not supported"
+            )));
+        }
         let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
+        if oracle_block {
+            oracle::routine_arithmetic::prepare_local_declarations(&mut declarations)?;
+            routines::nested_blocks::prepare_declared_types(
+                &mut statements,
+                &mut exception_handlers,
+            )?;
+            oracle::routines::lower_datetime_trunc(
+                &mut [],
+                &mut declarations,
+                &mut statements,
+                &mut exception_handlers,
+            );
+            oracle::routine_arithmetic::lower(
+                self.db_ref(),
+                true,
+                &mut [],
+                &mut declarations,
+                &mut statements,
+                &mut exception_handlers,
+            )?;
+        }
         let symbols = routine_symbol_names(&[], &declarations, &statements, &exception_handlers);
         bind_routine_expressions(
             &[],
-            true,
+            !oracle_block,
             &symbols,
             &mut declarations,
             &mut statements,
@@ -2171,6 +2201,11 @@ impl<'db> SqlSession<'db> {
         let previous_owned = std::mem::replace(&mut self.ir_owned_statement, false);
         let result = (|| {
             let mut frame = RoutineFrame::new_with_symbols(&[], &[], &symbols)?;
+            frame.oracle_statement_rollback = oracle_block;
+            let template =
+                RoutineFrameTemplate::build_with_declarations(&[], &symbols, &declarations);
+            frame.assignment_types = template.assignment_types;
+            frame.oracle_dates = template.oracle_dates;
             self.initialize_routine_frame(&mut frame, &declarations)?;
             self.execute_routine_block(&mut frame, &statements, &exception_handlers)?;
             if owns_transaction {

@@ -3531,7 +3531,9 @@ impl<'db> SqlSession<'db> {
             memo.insert(key, std::rc::Rc::clone(&built));
             built
         });
-        RoutineFrame::from_template(&template, args)
+        let mut frame = RoutineFrame::from_template(&template, args)?;
+        frame.oracle_statement_rollback = ir.oracle_statement_rollback;
+        Ok(frame)
     }
 
     /// One generation read per routine call covers both catalogs whose
@@ -3678,6 +3680,14 @@ impl<'db> SqlSession<'db> {
         // PostgreSQL initializes FOUND to false on entry to every plpgsql
         // block; each SELECT INTO / PERFORM / DML statement then overwrites it.
         frame.set(ROUTINE_FOUND_VAR, SqlValue::Bool(false));
+        self.initialize_routine_declarations(frame, declarations)
+    }
+
+    pub(crate) fn initialize_routine_declarations(
+        &mut self,
+        frame: &mut RoutineFrame,
+        declarations: &[RoutineDecl],
+    ) -> Result<()> {
         for declaration in declarations {
             match declaration {
                 RoutineDecl::Alias { name, position } => {
@@ -3766,15 +3776,21 @@ impl<'db> SqlSession<'db> {
         } else {
             0
         };
-        if let (Some(tx), Some(transaction)) = (self.tx.as_mut(), transaction) {
-            tx.rollback_to_mark(transaction)?;
+        if !frame.oracle_statement_rollback {
+            if let (Some(tx), Some(transaction)) = (self.tx.as_mut(), transaction) {
+                tx.rollback_to_mark(transaction)?;
+            }
+            self.rollback_ddl_to_len(ddl_undo_len)?;
+            self.savepoints.truncate(savepoint_len);
         }
-        self.rollback_ddl_to_len(ddl_undo_len)?;
-        self.savepoints.truncate(savepoint_len);
         if let Some(started) = rollback_started {
             crate::routine_outcome::record_routine_rollback(
                 &sqlstate,
-                discarded_writes,
+                if frame.oracle_statement_rollback {
+                    0
+                } else {
+                    discarded_writes
+                },
                 started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64,
             );
         }
@@ -3802,7 +3818,36 @@ impl<'db> SqlSession<'db> {
         statement: &RoutineStmt,
     ) -> Result<RoutineControl> {
         let mut profile = SqlProfileScope::new_routine_statement(statement);
+        // A failed SQL/expression statement is atomic in Oracle. Structural
+        // statements must not undo successful statements in their nested body.
+        let atomic = frame.oracle_statement_rollback
+            && !matches!(
+                statement,
+                RoutineStmt::Block { .. }
+                    | RoutineStmt::If { .. }
+                    | RoutineStmt::Case { .. }
+                    | RoutineStmt::ForLoop { .. }
+                    | RoutineStmt::ForeachLoop { .. }
+                    | RoutineStmt::QueryForLoop { .. }
+                    | RoutineStmt::CursorForLoop { .. }
+                    | RoutineStmt::Loop { .. }
+                    | RoutineStmt::WhileLoop { .. }
+            );
+        let transaction = if atomic {
+            self.tx.as_ref().map(Transaction::rollback_mark)
+        } else {
+            None
+        };
+        let ddl_undo_len = self.ddl_undo.len();
+        let savepoint_len = self.savepoints.len();
         let result = self.execute_routine_statement_inner(frame, statement);
+        if atomic && result.is_err() {
+            if let (Some(tx), Some(mark)) = (self.tx.as_mut(), transaction) {
+                tx.rollback_to_mark(mark)?;
+            }
+            self.rollback_ddl_to_len(ddl_undo_len)?;
+            self.savepoints.truncate(savepoint_len);
+        }
         profile.finish_control(&result);
         result
     }
@@ -3813,6 +3858,11 @@ impl<'db> SqlSession<'db> {
         statement: &RoutineStmt,
     ) -> Result<RoutineControl> {
         match statement {
+            RoutineStmt::Block {
+                declarations,
+                body,
+                handlers,
+            } => self.execute_nested_routine_block(frame, declarations, body, handlers),
             RoutineStmt::ContinueLoop => Ok(RoutineControl::NextIteration),
             RoutineStmt::ExitLoop => Ok(RoutineControl::ExitLoop),
             RoutineStmt::Loop { body } => loop {
@@ -3848,7 +3898,7 @@ impl<'db> SqlSession<'db> {
                 strict,
             } => {
                 let result = self.execute_routine_query(frame, query)?;
-                if *strict {
+                if *strict || frame.oracle_statement_rollback {
                     if result.rows.is_empty() {
                         return Err(SqlError::NoDataFound);
                     }

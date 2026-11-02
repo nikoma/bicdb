@@ -253,7 +253,8 @@ fn lower_stmt(stmt: &RoutineStmt, ctx: &mut LowerCtx) -> Option<ProcStmt> {
                 body: loop_out,
             })
         }
-        RoutineStmt::Case { .. }
+        RoutineStmt::Block { .. }
+        | RoutineStmt::Case { .. }
         | RoutineStmt::ForeachLoop { .. }
         | RoutineStmt::Loop { .. }
         | RoutineStmt::WhileLoop { .. }

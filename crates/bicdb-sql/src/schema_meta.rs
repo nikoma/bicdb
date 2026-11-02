@@ -4061,6 +4061,7 @@ pub(crate) fn resolve_routine_cached(
     name: &str,
 ) -> Result<Option<CachedRoutine>> {
     let generation = db.collection_generation(ROUTINE_COLLECTION);
+    let database_id = db.instance_id();
     // Borrow-key lookup: the cache is keyed by the lowercase name alone (one
     // entry holding both kinds), so the hot miss/hit path allocates nothing —
     // the old `(kind, name.to_ascii_lowercase())` tuple key paid a String per
@@ -4073,7 +4074,7 @@ pub(crate) fn resolve_routine_cached(
     };
     if let Some(cached) = ROUTINE_CACHE.with(|cache| {
         cache.borrow().get(lowered.as_ref()).and_then(|entry| {
-            if entry.generation != generation {
+            if entry.generation != generation || entry.database_id != database_id {
                 return None;
             }
             let cached = match kind {
@@ -4120,11 +4121,13 @@ pub(crate) fn resolve_routine_cached(
             .entry(lowered.into_owned())
             .or_insert_with(|| RoutineCacheEntry {
                 generation,
+                database_id,
                 function: None,
                 procedure: None,
             });
-        if entry.generation != generation {
+        if entry.generation != generation || entry.database_id != database_id {
             entry.generation = generation;
+            entry.database_id = database_id;
             entry.function = None;
             entry.procedure = None;
         }
@@ -4141,6 +4144,7 @@ pub(crate) fn resolve_routine_cached(
 /// routine does not exist — negative results are cached too).
 pub(crate) struct RoutineCacheEntry {
     pub(crate) generation: u64,
+    pub(crate) database_id: u64,
     pub(crate) function: Option<Option<CachedRoutine>>,
     pub(crate) procedure: Option<Option<CachedRoutine>>,
 }
@@ -4168,6 +4172,7 @@ impl RoutineFrame {
     ) -> Result<Self> {
         let slot_count = template.slot_names.len();
         let mut frame = Self {
+            oracle_statement_rollback: false,
             assignment_types: Arc::clone(&template.assignment_types),
             oracle_dates: template.oracle_dates.clone(),
             values: Arc::new(BTreeMap::new()),

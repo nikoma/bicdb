@@ -9,6 +9,7 @@
 // code compiles unchanged.
 use crate::*;
 
+pub(crate) mod nested_blocks;
 mod procedural_case;
 
 pub(crate) fn routine_record_value(columns: &[String], row: &[SqlValue]) -> SqlValue {
@@ -58,6 +59,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             statements,
             exception_handlers: Vec::new(),
             oracle_date_return: false,
+            oracle_statement_rollback: false,
         });
     }
     if !routine_language_is_plpgsql(routine) {
@@ -78,6 +80,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     let body = plpgsql_body_from_definition(&routine.definition)?;
     let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
     let oracle_date_return = if oracle::typed_preview_routine_language(&routine.language) {
+        nested_blocks::prepare_declared_types(&mut statements, &mut exception_handlers)?;
         oracle::routine_arithmetic::prepare_declared_types(routine, &mut params, &mut declarations)?
     } else {
         false
@@ -92,7 +95,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4 | 5)
+        Some(2 | 3 | 4 | 5 | 6)
     ) {
         oracle::routines::bind_function_namespace(
             routine,
@@ -111,7 +114,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             })?,
             matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(4 | 5)
+                Some(4 | 5 | 6)
             ),
             &mut params,
             &mut declarations,
@@ -136,6 +139,8 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
         statements,
         exception_handlers,
         oracle_date_return,
+        oracle_statement_rollback: oracle::preview_routine_language_version(&routine.language)
+            .is_some_and(|version| version >= 6),
     })
 }
 
@@ -239,6 +244,19 @@ pub(crate) fn collect_routine_stmt_symbols(
 ) {
     for statement in statements {
         match statement {
+            RoutineStmt::Block {
+                declarations,
+                body,
+                handlers,
+            } => {
+                for declaration in declarations {
+                    collect_routine_decl_symbols(declaration, names, seen);
+                }
+                collect_routine_stmt_symbols(body, names, seen);
+                for handler in handlers {
+                    collect_routine_stmt_symbols(&handler.statements, names, seen);
+                }
+            }
             RoutineStmt::Assignment { target, .. } => {
                 collect_routine_assignment_target_symbol(target, names, seen);
             }
@@ -391,6 +409,63 @@ pub(crate) fn bind_routine_expressions(
 pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope: &BoundExprScope) {
     for statement in statements {
         match statement {
+            RoutineStmt::Block {
+                declarations,
+                body,
+                handlers,
+            } => {
+                let types = declarations
+                    .iter()
+                    .filter_map(|decl| match decl {
+                        RoutineDecl::Variable {
+                            name,
+                            pg_type: Some(kind),
+                            ..
+                        } => Some((name.clone(), kind.clone())),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                let mut local_scope = scope.clone().with_var_types(&types);
+                for declaration in declarations.iter() {
+                    let (name, kind) = match declaration {
+                        RoutineDecl::Variable { name, pg_type, .. } => (name, pg_type.clone()),
+                        RoutineDecl::Alias { name, position } => {
+                            let kind = scope
+                                .exact_vars
+                                .get(&format!("${position}"))
+                                .and_then(|id| scope.var_types.as_ref()?.get(id))
+                                .cloned();
+                            (name, kind)
+                        }
+                        RoutineDecl::Cursor { .. } => continue,
+                    };
+                    if let Some(id) = local_scope.exact_vars.get(name).copied() {
+                        Arc::make_mut(&mut local_scope.array_vars).remove(&id);
+                        if let Some(kind) = kind {
+                            if kind.ends_with("[]") {
+                                Arc::make_mut(&mut local_scope.array_vars).insert(id);
+                            }
+                            let types = local_scope
+                                .var_types
+                                .get_or_insert_with(|| Arc::new(FxHashMap::default()));
+                            Arc::make_mut(types).insert(id, kind);
+                        }
+                    }
+                }
+                for declaration in declarations {
+                    if let RoutineDecl::Variable {
+                        default_expr: Some(expr),
+                        ..
+                    } = declaration
+                    {
+                        expr.bind(&local_scope);
+                    }
+                }
+                bind_routine_statement_exprs(body, &local_scope);
+                for handler in handlers {
+                    bind_routine_statement_exprs(&mut handler.statements, &local_scope);
+                }
+            }
             RoutineStmt::Assignment { target, expr } => {
                 bind_routine_assignment_target_exprs(target, scope);
                 expr.bind(scope);
@@ -697,6 +772,21 @@ pub(crate) fn parse_plpgsql_body(
     Vec<RoutineStmt>,
     Vec<RoutineExceptionHandler>,
 )> {
+    let (declarations, statements, exception_handlers) = parse_plpgsql_block(body)?;
+    validate_routine_continue(&statements, false)?;
+    for handler in &exception_handlers {
+        validate_routine_continue(&handler.statements, false)?;
+    }
+    Ok((declarations, statements, exception_handlers))
+}
+
+fn parse_plpgsql_block(
+    body: &str,
+) -> Result<(
+    Vec<RoutineDecl>,
+    Vec<RoutineStmt>,
+    Vec<RoutineExceptionHandler>,
+)> {
     let body = trim_sql_statement(body);
     let Some(begin_idx) = find_top_level_keyword(body, "BEGIN") else {
         return Err(SqlError::UnsupportedPlpgsqlFeature(
@@ -717,10 +807,6 @@ pub(crate) fn parse_plpgsql_body(
         .map(|decl| parse_routine_decl(&decl))
         .collect::<Result<Vec<_>>>()?;
     let statements = parse_routine_statements(block_sql)?;
-    validate_routine_continue(&statements, false)?;
-    for handler in &exception_handlers {
-        validate_routine_continue(&handler.statements, false)?;
-    }
     Ok((declarations, statements, exception_handlers))
 }
 
@@ -747,15 +833,20 @@ pub(crate) fn split_plpgsql_exception_block(
 }
 
 pub(crate) fn find_plpgsql_exception_clause(block_sql: &str) -> Option<usize> {
-    let mut search_start = 0usize;
-    while search_start < block_sql.len() {
-        let relative = find_top_level_keyword(&block_sql[search_start..], "EXCEPTION")?;
-        let exception_idx = search_start + relative;
-        let after_exception = &block_sql[exception_idx + "EXCEPTION".len()..];
-        if strip_prefix_ci(after_exception.trim_start(), "WHEN").is_some() {
-            return Some(exception_idx);
+    let mut depth = 0usize;
+    for (start, _, event) in routine_boundaries(block_sql).ok()? {
+        match event {
+            RoutineBoundary::Begin
+            | RoutineBoundary::If
+            | RoutineBoundary::Loop
+            | RoutineBoundary::Case => depth += 1,
+            RoutineBoundary::End
+            | RoutineBoundary::EndIf
+            | RoutineBoundary::EndLoop
+            | RoutineBoundary::EndCase => depth = depth.saturating_sub(1),
+            RoutineBoundary::Exception if depth == 0 => return Some(start),
+            _ => {}
         }
-        search_start = exception_idx + "EXCEPTION".len();
     }
     None
 }
@@ -781,10 +872,12 @@ pub(crate) fn parse_routine_exception_handlers(sql: &str) -> Result<Vec<RoutineE
             .into_iter()
             .find_map(|(start, _, kind)| {
                 match kind {
-                    RoutineBoundary::If | RoutineBoundary::Loop | RoutineBoundary::Case => {
-                        depth += 1
-                    }
-                    RoutineBoundary::EndIf
+                    RoutineBoundary::Begin
+                    | RoutineBoundary::If
+                    | RoutineBoundary::Loop
+                    | RoutineBoundary::Case => depth += 1,
+                    RoutineBoundary::End
+                    | RoutineBoundary::EndIf
                     | RoutineBoundary::EndLoop
                     | RoutineBoundary::EndCase => depth = depth.saturating_sub(1),
                     RoutineBoundary::When if depth == 0 => return Some(start),
@@ -825,6 +918,12 @@ pub(crate) fn routine_exception_condition(condition: &str) -> Result<RoutineExce
         "too_many_rows" => Ok(RoutineExceptionCondition::SqlState("P0003".to_string())),
         "no_data_found" => Ok(RoutineExceptionCondition::SqlState("P0002".to_string())),
         "case_not_found" => Ok(RoutineExceptionCondition::SqlState("20000".to_string())),
+        "division_by_zero" | "zero_divide" => {
+            Ok(RoutineExceptionCondition::SqlState("22012".into()))
+        }
+        "unique_violation" | "dup_val_on_index" => {
+            Ok(RoutineExceptionCondition::SqlState("23505".into()))
+        }
         _ => {
             if let Some(value) = strip_prefix_ci(condition, "SQLSTATE") {
                 let value = value.trim();
@@ -961,6 +1060,15 @@ pub(crate) fn next_plpgsql_statement(value: &str) -> Result<(&str, usize)> {
     if value.is_empty() {
         return Ok(("", original.len()));
     }
+    if starts_with_plpgsql_word(value, "BEGIN") || starts_with_plpgsql_word(value, "DECLARE") {
+        let end = matching_routine_end(
+            value,
+            RoutineBoundary::Begin,
+            RoutineBoundary::End,
+            "block is missing END",
+        )?;
+        return Ok((&original[leading_len..leading_len + end], leading_len + end));
+    }
     if value
         .get(..2)
         .is_some_and(|prefix| prefix.eq_ignore_ascii_case("IF"))
@@ -1024,6 +1132,9 @@ pub(crate) fn next_plpgsql_statement(value: &str) -> Result<(&str, usize)> {
 // IF [NOT] EXISTS and SELECT ... FOR UPDATE are not nested PL/pgSQL blocks.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RoutineBoundary {
+    Begin,
+    End,
+    Exception,
     If,
     EndIf,
     Loop,
@@ -1097,7 +1208,13 @@ fn routine_boundaries(value: &str) -> Result<Vec<(usize, usize, RoutineBoundary)
                 index += 1;
                 continue;
             }
-            let event = if start && current == "IF" {
+            let event = if start && current == "BEGIN" {
+                Some(RoutineBoundary::Begin)
+            } else if current == "END" {
+                Some(RoutineBoundary::End)
+            } else if start && current == "EXCEPTION" {
+                Some(RoutineBoundary::Exception)
+            } else if start && current == "IF" {
                 Some(RoutineBoundary::If)
             } else if start && current == "CASE" {
                 case_header = true;
@@ -1126,7 +1243,7 @@ fn routine_boundaries(value: &str) -> Result<Vec<(usize, usize, RoutineBoundary)
                     kind,
                 ));
             }
-            let starts_body = matches!(current.as_str(), "THEN" | "ELSE" | "BEGIN")
+            let starts_body = matches!(current.as_str(), "THEN" | "ELSE" | "BEGIN" | "EXCEPTION")
                 || event == Some(RoutineBoundary::Case)
                 || (current == "LOOP" && (loop_header || start));
             if current == "LOOP" && loop_header {
@@ -1220,6 +1337,16 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
     let statement = statement.trim();
     if statement.is_empty() {
         return Err(SqlError::InvalidSql("empty routine statement".to_string()));
+    }
+    if starts_with_plpgsql_word(statement, "BEGIN")
+        || starts_with_plpgsql_word(statement, "DECLARE")
+    {
+        let (declarations, body, handlers) = parse_plpgsql_block(statement)?;
+        return Ok(RoutineStmt::Block {
+            declarations,
+            body,
+            handlers,
+        });
     }
     if keyword_matches_at(statement, "CASE", 0) {
         return procedural_case::parse(statement);
@@ -1399,6 +1526,19 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
 }
 
 pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
+    if !starts_with_plpgsql_word(statement, "EXCEPTION") {
+        if let Ok(RoutineExceptionCondition::SqlState(sqlstate)) =
+            routine_exception_condition(statement)
+        {
+            return Ok(RoutineStmt::RaiseException {
+                message: normalize_object_name(statement),
+                arguments: Vec::new(),
+                detail: None,
+                sqlstate,
+                error_fields: Box::default(),
+            });
+        }
+    }
     let Some(rest) = strip_prefix_ci(statement, "EXCEPTION") else {
         return Err(SqlError::UnsupportedPlpgsqlFeature(
             "only RAISE EXCEPTION is implemented".to_string(),
@@ -1804,10 +1944,14 @@ pub(crate) fn find_plpgsql_if_branch(value: &str) -> Result<Option<(usize, Plpgs
     let mut depth = 0usize;
     for (start, _, kind) in routine_boundaries(value)? {
         match kind {
-            RoutineBoundary::If | RoutineBoundary::Loop | RoutineBoundary::Case => depth += 1,
-            RoutineBoundary::EndIf | RoutineBoundary::EndLoop | RoutineBoundary::EndCase => {
-                depth = depth.saturating_sub(1)
-            }
+            RoutineBoundary::Begin
+            | RoutineBoundary::If
+            | RoutineBoundary::Loop
+            | RoutineBoundary::Case => depth += 1,
+            RoutineBoundary::End
+            | RoutineBoundary::EndIf
+            | RoutineBoundary::EndLoop
+            | RoutineBoundary::EndCase => depth = depth.saturating_sub(1),
             RoutineBoundary::Else if depth == 0 => return Ok(Some((start, PlpgsqlIfBranch::Else))),
             RoutineBoundary::Elsif if depth == 0 => {
                 return Ok(Some((start, PlpgsqlIfBranch::Elsif)))
@@ -2643,6 +2787,12 @@ pub(crate) fn restore_table_state(
 fn validate_routine_continue(statements: &[RoutineStmt], in_loop: bool) -> Result<()> {
     for statement in statements {
         match statement {
+            RoutineStmt::Block { body, handlers, .. } => {
+                validate_routine_continue(body, in_loop)?;
+                for handler in handlers {
+                    validate_routine_continue(&handler.statements, in_loop)?;
+                }
+            }
             RoutineStmt::ContinueLoop if !in_loop => {
                 return Err(SqlError::InvalidSql(
                     "CONTINUE cannot be used outside a loop".into(),

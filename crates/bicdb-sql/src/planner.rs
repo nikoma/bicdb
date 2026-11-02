@@ -1555,12 +1555,14 @@ impl BoundExprScope {
     }
 
     pub(crate) fn with_var_types(mut self, types: &[(String, String)]) -> Self {
-        let types: FxHashMap<_, _> = types
-            .iter()
-            .filter_map(|(name, kind)| self.var_id(name).map(|id| (id, kind.clone())))
-            .collect();
-        if !types.is_empty() {
-            self.var_types = Some(Arc::new(types));
+        let mut merged = self.var_types.as_deref().cloned().unwrap_or_default();
+        merged.extend(
+            types
+                .iter()
+                .filter_map(|(name, kind)| self.var_id(name).map(|id| (id, kind.clone()))),
+        );
+        if !merged.is_empty() {
+            self.var_types = Some(Arc::new(merged));
         }
         self
     }

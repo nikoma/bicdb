@@ -4721,6 +4721,37 @@ pub(crate) fn raw_do_block_body(sql: &str) -> Result<Option<String>> {
     ))
 }
 
+pub(crate) fn raw_do_block_language(sql: &str) -> Result<Option<String>> {
+    let trimmed = trim_sql_statement(sql);
+    let (trimmed, _) = trim_leading_sql_comments_with_offset(trimmed);
+    let Some(rest) = strip_prefix_ci(trimmed, "DO ") else {
+        return Ok(None);
+    };
+    let rest = rest.trim_start();
+    let Some(after_dollar) = rest.strip_prefix('$') else {
+        return Ok(None);
+    };
+    let Some(tag_end) = after_dollar.find('$') else {
+        return Ok(None);
+    };
+    let delimiter = &rest[..tag_end + 2];
+    let Some(end) = rest[delimiter.len()..].rfind(delimiter) else {
+        return Ok(None);
+    };
+    let tail = rest[delimiter.len() + end + delimiter.len()..].trim();
+    if tail.is_empty() {
+        return Ok(Some("plpgsql".into()));
+    }
+    let language = strip_prefix_ci(tail, "LANGUAGE")
+        .ok_or_else(|| SqlError::InvalidSql("unexpected text after DO block".into()))?
+        .trim();
+    let names = split_sql_words(language);
+    let [name] = names.as_slice() else {
+        return Err(SqlError::InvalidSql("DO requires one language name".into()));
+    };
+    Ok(Some(normalize_object_name(&unquote_identifier_word(name))))
+}
+
 pub(crate) fn parse_raw_do_if_exists_ddl(sql: &str) -> Result<Option<DoIfExistsDdl>> {
     let trimmed = trim_sql_statement(sql);
     let (trimmed, _) = trim_leading_sql_comments_with_offset(trimmed);

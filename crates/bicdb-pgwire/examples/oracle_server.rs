@@ -9,8 +9,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = PathBuf::from(args.next().ok_or("expected database directory")?);
     let port: u16 = args.next().ok_or("expected localhost port")?.parse()?;
     let profile = args.next().unwrap_or_else(|| "oracle-preview-v1".into());
-    if args.next().is_some() || !bicdb_sql::oracle::is_oracle_profile(&profile) {
-        return Err("expected: oracle_server PATH PORT [oracle-preview-v1|oracle-hr-v1]".into());
+    if args.next().is_some()
+        || (profile != bicdb_sql::oracle::POSTGRES_PROFILE
+            && !bicdb_sql::oracle::is_oracle_profile(&profile))
+    {
+        return Err(
+            "expected: oracle_server PATH PORT [oracle-preview-v1|oracle-hr-v1|postgres]".into(),
+        );
     }
     let server = PgWireServer::open(
         path,

@@ -1082,6 +1082,7 @@ fn sql_profile_statement_kind(sql: &str) -> String {
 
 fn routine_statement_profile_kind(statement: &RoutineStmt) -> String {
     match statement {
+        RoutineStmt::Block { .. } => "ROUTINE_BLOCK".into(),
         RoutineStmt::ContinueLoop => "ROUTINE_CONTINUE".to_string(),
         RoutineStmt::Null => "ROUTINE_NULL".to_string(),
         RoutineStmt::Assignment { .. } => "ROUTINE_ASSIGNMENT".to_string(),
@@ -1114,6 +1115,7 @@ fn routine_statement_profile_kind(statement: &RoutineStmt) -> String {
 
 fn routine_statement_profile_signature(statement: &RoutineStmt) -> String {
     match statement {
+        RoutineStmt::Block { .. } => "BEGIN BLOCK".into(),
         RoutineStmt::ContinueLoop => "CONTINUE".to_string(),
         RoutineStmt::Null => "NULL".to_string(),
         RoutineStmt::Assignment { target, expr } => {
@@ -4178,6 +4180,11 @@ pub(crate) struct RaiseErrorFields {
 
 #[derive(Clone, Debug)]
 enum RoutineStmt {
+    Block {
+        declarations: Vec<RoutineDecl>,
+        body: Vec<RoutineStmt>,
+        handlers: Vec<RoutineExceptionHandler>,
+    },
     ContinueLoop,
     Null,
     Assignment {
@@ -4303,6 +4310,7 @@ struct RoutineIR {
     statements: Vec<RoutineStmt>,
     exception_handlers: Vec<RoutineExceptionHandler>,
     oracle_date_return: bool,
+    oracle_statement_rollback: bool,
 }
 
 fn routine_block_may_write(statements: &[RoutineStmt]) -> bool {
@@ -4324,6 +4332,15 @@ fn routine_declarations_may_write(declarations: &[RoutineDecl]) -> bool {
 
 fn routine_statement_may_write(statement: &RoutineStmt) -> bool {
     match statement {
+        RoutineStmt::Block {
+            declarations,
+            body,
+            handlers,
+        } => {
+            routine_declarations_may_write(declarations)
+                || routine_block_may_write(body)
+                || routine_handlers_may_write(handlers)
+        }
         RoutineStmt::Sql(statement) | RoutineStmt::SqlInto { statement, .. } => {
             statement_may_write(statement)
         }
@@ -4431,6 +4448,8 @@ fn set_expr_may_write(expr: &SetExpr) -> bool {
 
 #[derive(Clone, Debug)]
 struct RoutineFrame {
+    // Derived from the stored routine language, never from its caller's profile.
+    oracle_statement_rollback: bool,
     assignment_types: Arc<FxHashMap<String, RoutineTypeSchema>>,
     oracle_dates: Option<Arc<FxHashSet<String>>>,
     values: Arc<BTreeMap<String, SqlValue>>,

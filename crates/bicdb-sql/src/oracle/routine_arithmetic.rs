@@ -50,6 +50,11 @@ pub(crate) fn prepare_declared_types(
             param.type_schema = Some(raw_routine_type_schema("timestamp")?);
         }
     }
+    prepare_local_declarations(declarations)?;
+    returns_date(routine)
+}
+
+pub(crate) fn prepare_local_declarations(declarations: &mut [RoutineDecl]) -> Result<()> {
     for declaration in declarations {
         if let RoutineDecl::Variable {
             declared_date,
@@ -70,7 +75,7 @@ pub(crate) fn prepare_declared_types(
             }
         }
     }
-    returns_date(routine)
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -526,6 +531,60 @@ fn statements(
 ) -> Result<()> {
     for statement in body {
         match statement {
+            RoutineStmt::Block {
+                declarations,
+                body,
+                handlers,
+            } => {
+                let mut local_env = env.clone();
+                let mut local_cursors = cursors.clone();
+                for declaration in declarations.iter() {
+                    match declaration {
+                        RoutineDecl::Variable {
+                            name,
+                            pg_type,
+                            oracle_date,
+                            ..
+                        } => {
+                            let kind = if *oracle_date {
+                                Kind::Date
+                            } else if pg_type.as_deref() == Some("timestamp") {
+                                Kind::Timestamp
+                            } else {
+                                pg_type.as_deref().map_or(Kind::Unknown, pg_kind)
+                            };
+                            local_env
+                                .variables
+                                .insert(normalize_object_name(name), kind);
+                        }
+                        RoutineDecl::Alias { name, position } => {
+                            if let Some(kind) = env.variables.get(&format!("${position}")) {
+                                local_env
+                                    .variables
+                                    .insert(normalize_object_name(name), *kind);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                for declaration in declarations {
+                    match declaration {
+                        RoutineDecl::Variable {
+                            default_expr: Some(expr),
+                            ..
+                        } => visit(db, &local_env, &mut expr.expr)?,
+                        RoutineDecl::Cursor { name, query } => {
+                            visit(db, &local_env, query)?;
+                            local_cursors.insert(normalize_object_name(name), query.clone());
+                        }
+                        _ => {}
+                    }
+                }
+                statements(db, &local_env, &local_cursors, body)?;
+                for handler in handlers {
+                    statements(db, &local_env, &local_cursors, &mut handler.statements)?;
+                }
+            }
             RoutineStmt::Assignment { target, expr } => {
                 if let RoutineAssignmentTarget::ArrayElement { index, .. } = target {
                     visit(db, env, &mut index.expr)?;

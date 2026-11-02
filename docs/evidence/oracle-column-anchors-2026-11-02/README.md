@@ -110,3 +110,20 @@ provenance, general BYTE semantics, user-defined Oracle types and cross-schema
 privileges remain outstanding. The application copy has earlier test writes;
 row differences require input reconciliation before being attributed to engine
 semantics. Foreign keys and complete business workflows remain unqualified.
+
+After integrating subsequent main changes, the [combined regression run](integrated-validation.json)
+passed 1,108 Rust tests, including eight application compatibility tests. The
+other suite counts and three existing ignores are unchanged. Formatting,
+licensing, dependency-boundary and nineteen reference-harness checks passed.
+The integrated development binary SHA-256 is
+`96e8c31601515fef0b85ade400b9baf7ed209eb9dd9713c3efbaff31fbef7109`.
+This later validation does not replace the earlier source/binary attribution
+or imply a published release or complete application qualification.
+
+The integrated binary also passed all 232 public reference assertions, the
+original 23 date assertions, six payment-term cases, two fixed-month branches,
+three constraint-policy checks and both refreshed-view comparisons. Fixed-month
+input changes were rolled back and verified. The original anchor-routine retry
+still matches ten of thirteen cases; the same three execution failures remain
+explicit in the integrated report. Cleanup reclaimed 1.53 GiB of completed test
+executables while retaining runnable binaries and dependency archives.

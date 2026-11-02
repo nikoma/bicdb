@@ -1,0 +1,108 @@
+{
+  "format": 1,
+  "source_commit": "9d8196d1de6b84d4afb402ed2558621e5319e678",
+  "integrated_main_commit": "87dd3012e4e5ee7ff8ec1e1ef7dfc6e3ee231634",
+  "binary_sha256": "96e8c31601515fef0b85ade400b9baf7ed209eb9dd9713c3efbaff31fbef7109",
+  "suites": {
+    "pgwire_unit": 118,
+    "oracle_driver": 21,
+    "protocol": 168,
+    "sql_unit": 376,
+    "integrated_application": 8,
+    "sql_integration": 417
+  },
+  "rust_tests_passed": 1108,
+  "existing_sql_unit_ignores": 3,
+  "reference_harness_tests_passed": 19,
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "memory": {
+    "tests_and_build": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 3378761728,
+      "minimum_observed_available_bytes": 13503143936,
+      "minimum_available_gib": 8
+    },
+    "server_build": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 2271272960,
+      "minimum_observed_available_bytes": 16569221120,
+      "minimum_available_gib": 8
+    }
+  },
+  "published_release": false,
+  "production_deployment": false,
+  "application_qualified": false,
+  "live_public_reference_rechecks": {
+    "anchors": {
+      "success": true,
+      "assertions": 41,
+      "report_sha256": "669eac8a80c14016afc9adc5536279ec1346273d5d322883288042ad885ef882"
+    },
+    "week": {
+      "success": true,
+      "assertions": 102,
+      "report_sha256": "f5ccb8a4745b477fd23cbdedd21ea2891522c5e1515b1aec67305de62ae34d56"
+    },
+    "calendar": {
+      "success": true,
+      "assertions": 36,
+      "report_sha256": "c95f5cd76072a10201437fa7dca70606c7835721e775a7f0dd102d1941b2913f"
+    },
+    "temporal": {
+      "success": true,
+      "assertions": 29,
+      "report_sha256": "0428e9aceb55211cb1c8b022ae33043e30dc5be305ea3a99fecc8646e54ab16d"
+    },
+    "namespaces": {
+      "success": true,
+      "assertions": 24,
+      "report_sha256": "a35b93ad89f55b298faa3426e130072611155dc9667c9a048317d4e13093c2fc"
+    }
+  },
+  "original_routine_rechecks": {
+    "dates": {
+      "success": true,
+      "report_sha256": "078029c8cdb000daaa52a69cc22492b6437805ff218f6650150a6dbf48eee3ec"
+    },
+    "payment_terms": {
+      "success": true,
+      "report_sha256": "355aa2155cf435ba08e6ecad0c2e18b57542d5c55f8a1f3e5a6d0e4ea733fc4b"
+    },
+    "fixed_month": {
+      "success": true,
+      "report_sha256": "49961cc9813d8dffa90bae074722d26765868fca7f5dbcb56e29cefae11b35f5"
+    },
+    "constraint_policies": {
+      "success": true,
+      "report_sha256": "fa2e3b83e6cc117c91dddbfc651f7cee1dad1793b0b74475823bd6ee1e3d2aa8"
+    },
+    "refreshed_views": {
+      "success": true,
+      "report_sha256": "091ef3f7e707e3414931d570cbdaeb015eb0b9db3cd962e0053f699c8f2c18f2"
+    }
+  },
+  "original_anchor_routine_calls": {
+    "matched": 10,
+    "total": 13,
+    "unresolved": [
+      {
+        "id": "document_all_seed",
+        "bicdb_code": "0A000"
+      },
+      {
+        "id": "document_zero",
+        "bicdb_code": "0A000"
+      },
+      {
+        "id": "configuration_missing_default",
+        "bicdb_code": "42601"
+      }
+    ],
+    "same_matching_cases_as_before": true,
+    "report_sha256": "502712f849d3b210c61025e8f51aadf26b9124c5480058337942dab875e30096"
+  }
+}

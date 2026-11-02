@@ -71,7 +71,9 @@ def fixture(schema, prefix):
 
 
 def run(oracle, bicdb, schema, prefix, suite='namespaces'):
-    if suite == 'decode':
+    if suite == 'columns':
+        from routine_column_types import fixture as make_fixture
+    elif suite == 'decode':
         from routine_decode import fixture as make_fixture
     elif suite == 'numberops':
         from routine_number_arithmetic import fixture as make_fixture
@@ -132,10 +134,43 @@ def run(oracle, bicdb, schema, prefix, suite='namespaces'):
                 created.append(obj)
                 for sql in obj['inserts']:
                     cursor.execute(sql)
+                if 'copy_rows' in obj:
+                    if obj['backend'] != 1:
+                        raise ValueError('COPY fixture requires PostgreSQL transport')
+                    def copy_value(value):
+                        if isinstance(value, dict) and set(value) == {'timestamp'}:
+                            return datetime.datetime.fromisoformat(value['timestamp'])
+                        if isinstance(value, dict) and set(value) == {'number'}:
+                            return decimal.Decimal(value['number'])
+                        return value
+                    with cursor.copy('COPY ' + obj['name'] + ' FROM STDIN') as copy:
+                        for row in obj['copy_rows']:
+                            copy.write_row([copy_value(value) for value in row])
             target.execute('''SELECT l."lanname" FROM "pg_catalog"."pg_proc" p
                 JOIN "pg_catalog"."pg_language" l ON p."prolang"=l."oid"
                 WHERE p."proname"=%s''', (plan['compiler_probe'],))
             report['routine_compiler'] = target.fetchone()[0]
+            if 'temporal_metadata' in plan:
+                metadata = plan['temporal_metadata']
+                source.execute('SELECT COLUMN_NAME,DATA_TYPE FROM ALL_TAB_COLUMNS WHERE OWNER=:owner AND TABLE_NAME=:table_name',
+                               dict(owner=metadata['owner'], table_name=metadata['table']))
+                reference_types = dict(source.fetchall())
+                report['temporal_column_metadata'] = []
+                for column, expected in metadata['expected'].items():
+                    target.execute('SELECT bicdb_oracle_column_type(%s,%s)', (metadata['relation'], column))
+                    actual = target.fetchone()[0]
+                    matched = reference_types.get(column) == actual == expected
+                    report['temporal_column_metadata'].append(dict(column=column, oracle=reference_types.get(column), bicdb=actual, expected=expected, matched=matched))
+                if not all(row['matched'] for row in report['temporal_column_metadata']):
+                    raise ValueError('logical temporal column metadata differs from Oracle')
+            if 'projection_types' in plan:
+                projection = plan['projection_types']
+                source.execute(projection['sql'])
+                target.execute(projection['sql'])
+                report['oracle_projection_types'] = [column.type_code.name for column in source.description]
+                report['bicdb_projection_types'] = [column.type_code for column in target.description]
+                if report['oracle_projection_types'] != projection['oracle'] or report['bicdb_projection_types'] != projection['bicdb']:
+                    raise ValueError('temporal projection metadata differs from its declared transport contract')
             report['cases'] = compare_cases(oracle, bicdb, plan['cases'])
             for case, result in zip(plan['cases'], report['cases']):
                 if 'expected_error' in case:
@@ -165,7 +200,7 @@ def main():
     parser.add_argument('--oracle-config', required=True, type=Path)
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN')
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--suite', choices=('namespaces', 'temporal', 'calendar', 'week', 'anchors', 'case', 'concat', 'cursors', 'numberops', 'decode'), default='namespaces')
+    parser.add_argument('--suite', choices=('namespaces', 'temporal', 'calendar', 'week', 'anchors', 'case', 'concat', 'cursors', 'numberops', 'decode', 'columns'), default='namespaces')
     args = parser.parse_args()
     report = dict(format=1, success=False)
     try:

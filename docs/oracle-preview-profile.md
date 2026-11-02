@@ -188,7 +188,8 @@ The [reference evidence](evidence/oracle-datetime-2026-11-01/README.md) records
 Oracle LOB APIs, full LAX JSON rules, character padding/encoding equivalence,
 Oracle catalogs, PL/SQL packages, autonomous transactions, Oracle transaction
 semantics and general application compatibility are not established by these
-mappings. Oracle DATE uses native timestamp(0); unconstrained NUMBER uses native
+mappings. Oracle DATE uses native timestamp(0) transport and storage, with
+source metadata selecting whole-second truncation; unconstrained NUMBER uses native
 numeric. Migration acceptance must test the actual application values and
 operations, including NULL versus empty LOBs, byte lengths and timezone values.
 
@@ -226,7 +227,7 @@ scientific formatting when required. Default DATE text uses English
 `DD-MON-RR` with the Gregorian calendar. The preview does not implement mutable
 NLS settings. Binary floating, national-character, LOB, BC date and unresolved
 implicit operand types remain outside this contract and need explicit, supported
-conversion. Source column DATE provenance remains a separate migration gap.
+conversion. Legacy temporal columns require source-driven provenance backfill.
 
 The tested character concatenation limits are 4,000 bytes for SQL expressions
 and 32,767 bytes for procedural expressions. A character-valued Oracle function
@@ -277,7 +278,7 @@ comparison and lazy searches/results. The selector is evaluated once. Direct
 procedural DECODE requires an embedded SQL statement. Versions 1–8 retain their
 earlier compiler behavior; explicitly recreate source definitions to select
 version 9. Mutable NLS, implicit character-to-TIMESTAMP, binary floating point,
-national/LOB types, source DATE column provenance and broader conversion rules
+national/LOB types, unmarked legacy temporal columns and broader conversion rules
 remain unqualified. Native PostgreSQL binary decode is independent. The
 [DECODE evidence](evidence/oracle-decode-2026-11-02/README.md) records values,
 metadata, typed binds, native controls, cursor type-cache recovery and the
@@ -364,12 +365,44 @@ expressions without evaluating unselected branches.
 Anchors are materialized when a source definition is created or replaced.
 Automatic Oracle dependency invalidation and recompilation after column DDL
 remain outstanding; recreate the source definition to refresh its mapped type.
-Temporal anchors still require durable source logical-type provenance rather
-than guessing DATE from a physical timestamp. Variable/record anchors, general
+Temporal anchors require durable source logical-type provenance rather
+than guessing DATE from a physical timestamp. New temporal columns retain that
+provenance; legacy columns require an explicit source declaration. Variable/record anchors, general
 BYTE versus CHAR behavior, user-defined Oracle types and cross-schema privilege
 qualification remain outstanding.
 The [column-anchor evidence](evidence/oracle-column-anchors-2026-11-02/README.md)
 records reference comparisons, original routine retries and remaining blockers.
+
+## Durable temporal column declarations
+
+In a durably provisioned preview database, new DATE and TIMESTAMP columns retain
+their Oracle logical declaration separately from their native PostgreSQL type.
+DATE assignments, including COPY, discard fractional seconds. TIMESTAMP(n)
+assignments round to n digits; omitted precision means six. DATE and timestamp
+columns use PostgreSQL timestamp OID 1114, and TIMESTAMP WITH TIME ZONE uses OID
+1184. Native PostgreSQL databases retain calendar DATE and native rounding.
+
+The read-only `bicdb_oracle_column_type(relation_text,column_text)` accessor
+returns the source declaration or NULL for absent or unmarked columns. Pass
+quoted, qualified relation text and the exact column name. Temporal `%TYPE`
+anchors resolve marked columns, including quoted names. Query arithmetic traces
+base columns through aliases, CTEs, derived tables and cursor records; unknown
+lineage remains unsupported when DATE identity is required. This does not add
+automatic routine dependency recompilation or qualify timezone region behavior.
+
+Persisting these modifiers promotes the preview profile metadata to format 2
+with feature `oracle_temporal_columns_v1`. Composite attributes use the same
+reader fence. Older binaries reject that profile rather than reinterpret DATE
+as a rounding timestamp. The promotion is conservative and may remain after a
+transaction rolls back its DDL. Keep a pre-upgrade backup for binary rollback;
+native backup/restore preserves the logical metadata.
+
+For legacy imported columns, single-column `ALTER TABLE ... MODIFY (column
+DATE)` or `... MODIFY (column TIMESTAMP(n))` supplies the source declaration.
+Physical timestamp precision alone never establishes DATE identity. The normal
+row, default, constraint and index checks still apply. Reconciling an unmarked
+column with identical physical storage can preserve dependent views; changing
+an already declared logical type retains the ordinary dependency guard.
 
 Procedural simple and searched CASE statements use the shared routine
 interpreter. The scalar selector is evaluated once; conditions stop at the

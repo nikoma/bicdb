@@ -14,11 +14,44 @@ pub(crate) mod routine_arithmetic;
 pub(crate) mod routines;
 mod rownum;
 mod source_tokens;
+pub(crate) mod temporal_columns;
 
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
 pub const ORACLE_PREVIEW_PROFILE: &str = "oracle-preview-v1";
 pub const POSTGRES_PROFILE: &str = "postgres";
 const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
+
+fn metadata_v2() -> JsonValue {
+    serde_json::json!({"format":2,"profile":ORACLE_PREVIEW_PROFILE,"features":["oracle_temporal_columns_v1"]})
+}
+
+fn matches_profile(metadata: &JsonValue, profile: &str) -> bool {
+    *metadata == serde_json::json!({"format":1,"profile":profile})
+        || profile == ORACLE_PREVIEW_PROFILE && *metadata == metadata_v2()
+}
+
+fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Ok(Some(record)) => Ok(record.metadata == metadata_v2()),
+        Ok(None) | Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn enable_metadata_v2(db: &mut BicDb) -> Result<()> {
+    if !preview_routine_language_enabled(db)? {
+        return Err(unsupported(
+            "Oracle temporal columns require the durable preview profile",
+        ));
+    }
+    if !metadata_v2_enabled(db)? {
+        db.insert(
+            PROFILE_COLLECTION,
+            Record::new("profile").with_metadata(metadata_v2()),
+        )?;
+    }
+    Ok(())
+}
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1: &str = "bicdb_oracle_preview_v1";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2: &str = "bicdb_oracle_preview_v2";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3: &str = "bicdb_oracle_preview_v3";
@@ -69,9 +102,10 @@ pub(crate) fn preview_routine_language_enabled(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
         Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
-        Ok(record) => Ok(record.is_some_and(|record| {
-            record.metadata == serde_json::json!({"format":1,"profile":ORACLE_PREVIEW_PROFILE})
-        })),
+        Ok(record) => {
+            Ok(record
+                .is_some_and(|record| matches_profile(&record.metadata, ORACLE_PREVIEW_PROFILE)))
+        }
     }
 }
 
@@ -100,7 +134,7 @@ pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
         let marker = db
             .get(PROFILE_COLLECTION, "profile")?
             .ok_or_else(|| unsupported("SQL profile marker is missing"))?;
-        if marker.metadata != serde_json::json!({"format":1,"profile":profile}) {
+        if !matches_profile(&marker.metadata, profile) {
             return Err(unsupported(
                 "database SQL profile does not match server configuration",
             ));
@@ -138,10 +172,7 @@ pub(crate) fn default_unique_null_policy(db: &BicDb) -> Result<UniqueNullPolicy>
     match db.get(PROFILE_COLLECTION, "profile") {
         Err(BicDbError::CollectionNotFound(_)) => Ok(UniqueNullPolicy::Distinct),
         Err(error) => Err(error.into()),
-        Ok(Some(record))
-            if record.metadata
-                == serde_json::json!({"format":1,"profile":ORACLE_PREVIEW_PROFILE}) =>
-        {
+        Ok(Some(record)) if matches_profile(&record.metadata, ORACLE_PREVIEW_PROFILE) => {
             Ok(UniqueNullPolicy::AllNullsDistinct)
         }
         Ok(Some(record))
@@ -460,6 +491,67 @@ fn lower_oracle_sql(
             "ALTER SESSION requires an explicit migration adaptation",
         ));
     }
+    if preview
+        && word(&source[0], "ALTER")
+        && source.get(1).is_some_and(|token| word(token, "TABLE"))
+    {
+        if let Some(modify) = source.iter().position(|token| word(token, "MODIFY")) {
+            let preserve_date = preview_routine_language_enabled(db)?;
+            let prefix = canonical_tokens_with_routine_types(
+                db,
+                &source[..modify],
+                true,
+                preserve_date,
+                namespace,
+            )?;
+            let tail = source[modify + 1..]
+                .strip_suffix(&[Token::SemiColon])
+                .unwrap_or(&source[modify + 1..]);
+            let tail =
+                if tail.first() == Some(&Token::LParen) && tail.last() == Some(&Token::RParen) {
+                    &tail[1..tail.len() - 1]
+                } else {
+                    tail
+                };
+            let groups = split_top_level(tail);
+            if groups.len() != 1 {
+                return Err(unsupported(
+                    "multi-column MODIFY requires atomic conversion support",
+                ));
+            }
+            let canonical = canonical_tokens_with_routine_types(
+                db,
+                &groups[0],
+                true,
+                preserve_date,
+                namespace,
+            )?;
+            let definitions = parse_statements(&format!(
+                "CREATE TABLE source_type_probe ({})",
+                join(&canonical)
+            ))?;
+            let [Statement::CreateTable(table)] = definitions.as_slice() else {
+                return Err(unsupported("invalid MODIFY declaration"));
+            };
+            let [column] = table.columns.as_slice() else {
+                return Err(unsupported("MODIFY requires one column declaration"));
+            };
+            if !column.options.is_empty() || !table.constraints.is_empty() {
+                return Err(unsupported(
+                    "MODIFY defaults and constraints require an explicit ALTER operation",
+                ));
+            }
+            return lower_native(
+                &format!(
+                    "{} ALTER COLUMN {} TYPE {}",
+                    join(&prefix),
+                    column.name,
+                    column.data_type
+                ),
+                true,
+            );
+        }
+    }
     if preview && word(&source[0], "CREATE") && source.iter().take(3).any(|t| word(t, "TABLE")) {
         // Oracle's physical table cache hint does not select BicDB's storage
         // cache. Exported logical schemas declare the adaptation explicitly.
@@ -489,8 +581,13 @@ fn lower_oracle_sql(
     if routine || block {
         return lower_block(db, &source, routine, preview, namespace);
     }
-    let mut canonical =
-        canonical_tokens_with_routine_types(db, &source, preview, false, namespace)?;
+    let mut canonical = canonical_tokens_with_routine_types(
+        db,
+        &source,
+        preview,
+        preview && preview_routine_language_enabled(db)?,
+        namespace,
+    )?;
     expand_references(db, &mut canonical)?;
     if canonical.len() > 3 && word(&canonical[0], "CREATE") && word(&canonical[1], "SEQUENCE") {
         fn rank(t: &Token) -> Option<usize> {
@@ -994,7 +1091,7 @@ fn lower_block(
         db,
         source,
         preview,
-        preview && routine,
+        preview && (routine || preview_routine_language_enabled(db)?),
         definition_namespace.as_deref(),
     )?;
     let (header, body) = if routine {
@@ -1203,7 +1300,33 @@ fn lower_native(sql: &str, preview: bool) -> Result<String> {
     let sql = rewritten.as_deref().unwrap_or(sql);
     let mut statements =
         Parser::parse_sql(&PostgreSqlDialect {}, sql).map_err(|e| unsupported(e.to_string()))?;
+    if preview {
+        struct Aliases;
+        impl sqlparser::ast::VisitorMut for Aliases {
+            type Break = ();
+            fn pre_visit_query(&mut self, query: &mut Query) -> ControlFlow<()> {
+                if let SetExpr::Select(select) = query.body.as_mut() {
+                    for item in &mut select.projection {
+                        if let SelectItem::ExprWithAlias { alias, .. } = item {
+                            // Words retained as grammar tokens (VALUE, DAY,
+                            // YEAR, ...) are identifiers in this position.
+                            if alias.quote_style.is_none() {
+                                *alias = Ident::with_quote('"', alias.value.to_ascii_uppercase());
+                            }
+                        }
+                    }
+                }
+                ControlFlow::Continue(())
+            }
+        }
+        let _ = sqlparser::ast::VisitMut::visit(&mut statements, &mut Aliases);
+    }
     let result = visit_expressions_mut(&mut statements, |expr| {
+        if preview {
+            if let Err(error) = temporal_columns::lower_date_expression(expr) {
+                return ControlFlow::Break(error);
+            }
+        }
         if let Expr::BinaryOp {
             left,
             op: BinaryOperator::StringConcat,
@@ -2170,6 +2293,15 @@ mod tests {
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
         let mut session = SqlSession::new(&mut db);
         for source in ["CREATE TABLE temporal_rows(k NUMBER,happened DATE)","CREATE FUNCTION unresolved_delta(p_date DATE) RETURN NUMBER IS result NUMBER:=0; CURSOR c IS SELECT happened FROM temporal_rows; BEGIN FOR r IN c LOOP result:=p_date-r.happened; END LOOP; RETURN result; END;","CREATE FUNCTION overprecise_stamp RETURN TIMESTAMP IS BEGIN RETURN TIMESTAMP '2024-01-01 23:59:59.9999999'; END;"] {let sql=lower_profile_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE).unwrap();session.execute(&sql).unwrap();}
+        let table = relation_name_from_parts(&["public".into(), "TEMPORAL_ROWS".into()]).unwrap();
+        let mut schema = load_schema(session.db_ref(), &table).unwrap().unwrap();
+        schema
+            .columns
+            .iter_mut()
+            .find(|column| column.name == "HAPPENED")
+            .unwrap()
+            .type_modifier = Some(PgTypeModifier::Temporal { precision: 0 });
+        save_schema(session.db_mut().unwrap(), &schema).unwrap();
         for source in [
             "SELECT unresolved_delta(TIMESTAMP '2024-01-01 00:00:00') FROM DUAL",
             "SELECT overprecise_stamp() FROM DUAL",

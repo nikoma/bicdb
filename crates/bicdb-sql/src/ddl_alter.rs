@@ -1492,15 +1492,15 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
             Some(pg_type),
         ));
     }
-    let (pg_type, vector_dim, user_type) = if let Some(serial_type) = serial_type(&column.data_type)
-    {
-        (serial_type.to_string(), None, None)
-    } else if let Some(user_type) = user_type_column_from_data_type(db, &column.data_type)? {
-        (user_type.formatted_name(), None, Some(user_type))
-    } else {
-        let (pg_type, vector_dim) = pg_type_from_data_type(&column.data_type)?;
-        (pg_type, vector_dim, None)
-    };
+    let (mut pg_type, vector_dim, user_type) =
+        if let Some(serial_type) = serial_type(&column.data_type) {
+            (serial_type.to_string(), None, None)
+        } else if let Some(user_type) = user_type_column_from_data_type(db, &column.data_type)? {
+            (user_type.formatted_name(), None, Some(user_type))
+        } else {
+            let (pg_type, vector_dim) = pg_type_from_data_type(&column.data_type)?;
+            (pg_type, vector_dim, None)
+        };
     let primary_key = column
         .options
         .iter()
@@ -1539,12 +1539,17 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
             } => Some(expr.to_string()),
             _ => None,
         });
+    let mut type_modifier = pg_type_modifier_from_data_type(&column.data_type)?;
+    if let Some(source) = oracle::temporal_columns::modifier(db, &column.data_type)? {
+        pg_type = oracle::temporal_columns::physical_type(&source).into();
+        type_modifier = Some(source);
+    }
     Ok(ColumnSchema {
         name: ident_value(&column.name),
         pg_type,
         user_type,
         collation,
-        type_modifier: pg_type_modifier_from_data_type(&column.data_type)?,
+        type_modifier,
         array_ndims: array_ndims_from_data_type(&column.data_type),
         compression: None,
         primary_key,

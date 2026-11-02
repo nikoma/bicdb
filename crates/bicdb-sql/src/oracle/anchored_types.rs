@@ -97,9 +97,18 @@ pub(super) fn lower(
         .find(|column| column.name == column_name)
         .ok_or_else(|| unsupported(format!("unknown %TYPE column {column_name}")))?;
     if preserve_date && matches!(column.pg_type.as_str(), "timestamp" | "timestamptz") {
-        return Err(unsupported(
-            "temporal %TYPE requires source logical type provenance",
-        ));
+        match temporal_columns::source(column) {
+            Some(temporal_columns::Source::Date) => return Ok(Some(("DATE".into(), used + 2))),
+            Some(
+                temporal_columns::Source::Timestamp
+                | temporal_columns::Source::TimestampWithTimeZone,
+            ) => {}
+            None => {
+                return Err(unsupported(
+                    "temporal %TYPE requires source logical type provenance",
+                ))
+            }
+        }
     }
     let data_type = if preserve_modifiers {
         column.formatted_pg_type()
@@ -272,6 +281,12 @@ mod tests {
         let mut db = database(root.path());
         execute(&mut db, "CREATE SCHEMA empty_owner");
         execute(&mut db, "CREATE TABLE red.time_rows(value DATE)");
+        // Legacy imports have only a physical timestamp descriptor. Keep that
+        // ambiguity distinct from newly persisted Oracle DATE provenance.
+        let table = relation_name_from_parts(&["RED".into(), "TIME_ROWS".into()]).unwrap();
+        let mut schema = load_schema(&db, &table).unwrap().unwrap();
+        schema.columns[0].type_modifier = Some(PgTypeModifier::Temporal { precision: 0 });
+        save_schema(&mut db, &schema).unwrap();
         for (sql,reason) in [
             ("CREATE FUNCTION empty_owner.missing_anchor RETURN NUMBER IS result anchor_rows.value%TYPE; BEGIN RETURN result; END;","unknown %TYPE table EMPTY_OWNER.ANCHOR_ROWS"),
             ("CREATE FUNCTION red.missing_column RETURN NUMBER IS result anchor_rows.absent%TYPE; BEGIN RETURN result; END;","unknown %TYPE column ABSENT"),

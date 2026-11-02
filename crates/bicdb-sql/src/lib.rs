@@ -2916,6 +2916,13 @@ struct ColumnSchema {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum PgTypeModifier {
+    /// Versioned Oracle source provenance with a native timestamp codec. An
+    /// older schema reader rejects this variant instead of erasing DATE's
+    /// assignment semantics. The durable preview marker fences server startup.
+    OracleTemporalV1 {
+        source: oracle::temporal_columns::Source,
+        precision: u8,
+    },
     Numeric {
         precision: u16,
         scale: i16,
@@ -2947,7 +2954,9 @@ impl PgTypeModifier {
             }
             Self::Character { length } => i64::from(*length) + 4,
             Self::Bit { length } => i64::from(*length),
-            Self::Temporal { precision } => i64::from(*precision),
+            Self::Temporal { precision } | Self::OracleTemporalV1 { precision, .. } => {
+                i64::from(*precision)
+            }
             Self::Interval { fields, precision } => {
                 let range = fields.as_deref().map(interval_field_mask).unwrap_or(0x7fff);
                 let precision = precision.map(u32::from).unwrap_or(0xffff);

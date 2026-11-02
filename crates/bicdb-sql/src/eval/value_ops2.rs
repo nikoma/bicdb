@@ -2451,6 +2451,19 @@ pub(crate) fn apply_pg_type_modifier_with_context(
     if matches!(value, SqlValue::Null) {
         return Ok(value);
     }
+    if let Some(PgTypeModifier::OracleTemporalV1 { source, precision }) = modifier {
+        if *source == oracle::temporal_columns::Source::Date {
+            return pg_scalar_extra::oracle_date_coerce(value);
+        }
+        return apply_pg_type_modifier_with_context(
+            value,
+            pg_type,
+            Some(&PgTypeModifier::Temporal {
+                precision: *precision,
+            }),
+            explicit_cast,
+        );
+    }
     if modifier.is_some() {
         if let Some(element_type) = pg_type.strip_suffix("[]") {
             if let SqlValue::Json(mut array) = value {

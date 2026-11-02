@@ -126,6 +126,20 @@ fn rewrite_with_parameters(
             if let Expr::Nested(inner) = arg {
                 return self.input_type(inner);
             }
+            if let Some(source) = self
+                .queries
+                .last()
+                .and_then(|query| temporal_columns::in_query(self.db, query, arg))
+            {
+                return Some(
+                    match source {
+                        temporal_columns::Source::Date => "date",
+                        temporal_columns::Source::Timestamp => "timestamp",
+                        temporal_columns::Source::TimestampWithTimeZone => "timestamptz",
+                    }
+                    .into(),
+                );
+            }
             if let Expr::Value(value) = arg {
                 if let Value::Placeholder(name) = &value.value {
                     if let Some(oid) = name
@@ -289,6 +303,31 @@ fn rewrite_with_parameters(
                 if matches!(op, BinaryOperator::Plus | BinaryOperator::Minus) {
                     let left_type = self.input_type(left);
                     let right_type = self.input_type(right);
+                    let metadata_fenced = match metadata_v2_enabled(self.db) {
+                        Ok(enabled) => enabled,
+                        Err(error) => return ControlFlow::Break(error),
+                    };
+                    if *op == BinaryOperator::Minus
+                        && metadata_fenced
+                        && matches!(left_type.as_deref(), Some("date" | "timestamp"))
+                        && matches!(right_type.as_deref(), Some("date" | "timestamp"))
+                        && self.queries.last().is_some_and(|query| {
+                            temporal_columns::in_query(self.db, query, left).is_none()
+                                || temporal_columns::in_query(self.db, query, right).is_none()
+                        })
+                    {
+                        return ControlFlow::Break(unsupported("temporal subtraction requires source logical type provenance; use an explicit DATE or TIMESTAMP conversion"));
+                    }
+                    if *op == BinaryOperator::Minus
+                        && left_type.as_deref() == Some("date")
+                        && right_type.as_deref() == Some("date")
+                    {
+                        match expression(&format!("bicdb_oracle_date_subtract({left},{right})")) {
+                            Ok(lowered) => *expr = lowered,
+                            Err(error) => return ControlFlow::Break(error),
+                        }
+                        return ControlFlow::Continue(());
+                    }
                     let direction = if *op == BinaryOperator::Minus { -1 } else { 1 };
                     let operands = if matches!(left_type.as_deref(), Some("date" | "timestamp"))
                         && self.day_operand(right, right_type.as_deref())

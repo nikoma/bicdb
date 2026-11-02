@@ -1239,15 +1239,28 @@ impl<'db> SqlSession<'db> {
             )));
         }
         self.ensure_table_row_type_change_allowed(schema)?;
-        self.ensure_column_type_view_dependencies_allow_change(table, column_name)?;
 
         let previous_column = schema.columns[column_index].clone();
         let synthetic = ColumnDef {
-            name: Ident::new(previous_column.name.clone()),
+            // The stored spelling is already resolved. Reconstructing an
+            // unquoted identifier would rename a quoted column during TYPE.
+            name: Ident::with_quote('"', previous_column.name.clone()),
             data_type: data_type.clone(),
             options: Vec::new(),
         };
         let mut updated_column = column_schema_from_def(self.db_ref(), &synthetic)?;
+        let source_metadata_only = using.is_none()
+            && oracle::temporal_columns::source(&updated_column).is_some()
+            && oracle::temporal_columns::source(&previous_column).is_none_or(|source| {
+                Some(source) == oracle::temporal_columns::source(&updated_column)
+            })
+            && previous_column.user_type.is_none()
+            && updated_column.user_type.is_none()
+            && previous_column.pg_type == updated_column.pg_type
+            && previous_column.catalog_typmod() == updated_column.catalog_typmod();
+        if !source_metadata_only {
+            self.ensure_column_type_view_dependencies_allow_change(table, column_name)?;
+        }
         self.ensure_user_type_usage(updated_column.user_type.as_ref())?;
         updated_column.primary_key = previous_column.primary_key;
         updated_column.hidden = previous_column.hidden;
@@ -1323,11 +1336,14 @@ impl<'db> SqlSession<'db> {
                 &updated_parent.columns[column_index],
             );
         let mut planned = Vec::with_capacity(changes.len());
+        let mut unchanged_source_tables = BTreeSet::new();
         for (previous, updated) in changes {
             let mut records = self.db_ref().scan_collection(&previous.name)?;
+            let mut unchanged_source = source_metadata_only;
             if rewrite {
                 for record in &mut records {
                     let current = record_column_value(record, &previous, column_name);
+                    let original = source_metadata_only.then(|| current.clone());
                     let value = if let Some(expr) = using {
                         self.eval_target_record_expr(
                             &previous.name,
@@ -1351,6 +1367,10 @@ impl<'db> SqlSession<'db> {
                     } else {
                         cast_value_to_column_type(value, &updated.columns[column_index])?
                     };
+                    if original.as_ref() == Some(&value) {
+                        continue;
+                    }
+                    unchanged_source = false;
                     if previous.columns[column_index].primary_key {
                         let mut fields = record_fields_for_schema(record, &previous);
                         fields.insert(column_name.to_string(), value);
@@ -1366,6 +1386,9 @@ impl<'db> SqlSession<'db> {
                 }
             }
             self.validate_planned_alter_record_constraints(&updated, &records)?;
+            if unchanged_source {
+                unchanged_source_tables.insert(previous.name.clone());
+            }
             planned.push((previous, updated, records));
         }
         self.validate_planned_alter_foreign_keys(&planned)?;
@@ -1385,6 +1408,10 @@ impl<'db> SqlSession<'db> {
             .collect::<Result<Vec<_>>>()?;
         let apply_result = (|| -> Result<()> {
             for (previous, updated, records) in &planned {
+                if unchanged_source_tables.contains(&previous.name) {
+                    save_schema(self.db_mut()?, updated)?;
+                    continue;
+                }
                 let updated_ids = records
                     .iter()
                     .map(|record| record.id.clone())

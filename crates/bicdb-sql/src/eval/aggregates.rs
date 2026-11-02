@@ -1647,7 +1647,8 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         // Result types of the scalar functions in pg_scalar_extra.rs.
         match unqualified_name {
             "nextval" | "currval" | "setval" => return Some("int8".to_string()),
-            "bicdb_oracle_decode_key"
+            "bicdb_oracle_column_type"
+            | "bicdb_oracle_decode_key"
             | "bicdb_oracle_decode_text"
             | "bicdb_oracle_concat"
             | "bicdb_oracle_default_to_char"

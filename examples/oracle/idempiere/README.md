@@ -101,6 +101,23 @@ all tables. Use the independent `verify` phase to compare complete row multisets
 preserving exact decimal digits, bytes, text whitespace and duplicate rows.
 The reports always retain `application_qualified: false` at this stage.
 
+For a legacy import made before durable temporal provenance, take a stopped-writer
+backup before upgrading the server, then reconcile explicit source declarations:
+
+```sh
+python3 examples/oracle/idempiere/import_bicdb.py \
+  --snapshot /private/idempiere-snapshot --phase types --report /private/types.json
+python3 examples/oracle/idempiere/import_bicdb.py \
+  --snapshot /private/idempiere-snapshot --phase verify --report /private/values-after-types.json
+```
+
+The `types` phase filters the source catalog to exported base tables, validates
+physical storage and row counts, and journals each reconciled DATE/TIMESTAMP
+column. `--resume` verifies its source snapshot fingerprint and completed logical
+declarations. It does not infer DATE from timestamp(0), rewrite view projections,
+or replace the full value comparison. This phase activates profile metadata
+format 2; the pre-upgrade backup is needed to return to an older binary.
+
 The `indexes` phase separates constraint-backed indexes from additional logical
 indexes and Oracle's internal LOB storage indexes. The measured seed has 267
 additional logical indexes and 48 LOB storage indexes. It requires a ready, valid

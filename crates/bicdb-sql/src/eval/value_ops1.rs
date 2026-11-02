@@ -1120,6 +1120,7 @@ pub(crate) fn eval_db_catalog_function_value(
         "pg_get_serial_sequence" | "pg_catalog.pg_get_serial_sequence" => {
             Ok(Some(pg_get_serial_sequence(db, args)?))
         }
+        "bicdb_oracle_column_type" => oracle::temporal_columns::catalog_type(db, args).map(Some),
         "pg_get_partkeydef" | "pg_catalog.pg_get_partkeydef" => {
             Ok(Some(pg_get_partkeydef(db, args)?))
         }

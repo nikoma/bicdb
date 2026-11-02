@@ -187,10 +187,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--snapshot', required=True, type=Path)
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN')
-    parser.add_argument('--phase', choices=['tables', 'data', 'verify', 'indexes'], required=True)
+    parser.add_argument('--phase', choices=['tables', 'data', 'verify', 'indexes', 'types'], required=True)
     parser.add_argument('--report', required=True, type=Path)
     parser.add_argument('--resume', action='store_true', help='validate the prior journal and completed objects before resuming')
     args = parser.parse_args()
+    if args.phase == 'types':
+        from temporal_types import migrate
+        return migrate(args)
     if args.phase == 'indexes':
         from indexes import migrate
         return migrate(args)

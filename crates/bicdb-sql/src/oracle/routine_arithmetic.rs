@@ -1,7 +1,7 @@
 //! Logical DATE provenance and typed operations for the version-3 compiler.
 use super::*;
 
-fn returns_date(routine: &RoutineSchema) -> Result<bool> {
+pub(super) fn returns_date(routine: &RoutineSchema) -> Result<bool> {
     let statements = Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition)
         .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
     let [Statement::CreateFunction(function)] = statements.as_slice() else {
@@ -136,6 +136,17 @@ struct Resolve<'a> {
 
 impl Resolve<'_> {
     fn query_kind(&self, expr: &Expr) -> Option<Kind> {
+        if let Some(source) = self
+            .queries
+            .last()
+            .and_then(|query| temporal_columns::in_query(self.db, query, expr))
+        {
+            return Some(match source {
+                temporal_columns::Source::Date => Kind::Date,
+                temporal_columns::Source::Timestamp => Kind::Timestamp,
+                temporal_columns::Source::TimestampWithTimeZone => Kind::Other,
+            });
+        }
         let sql = if let Some(query) = self.queries.last() {
             let mut probe = query.clone();
             let SetExpr::Select(select) = probe.body.as_mut() else {
@@ -708,6 +719,16 @@ fn record_types(db: &BicDb, env: &Environment, query: &Query) -> BTreeMap<String
             sql_depth: 1,
             statement_from: Vec::new(),
         };
+        for (name, kind) in &mut fields {
+            let expr = Expr::Identifier(Ident::new(name.as_str()));
+            if let Some(source) = temporal_columns::in_query(db, query, &expr) {
+                *kind = match source {
+                    temporal_columns::Source::Date => Kind::Date,
+                    temporal_columns::Source::Timestamp => Kind::Timestamp,
+                    temporal_columns::Source::TimestampWithTimeZone => Kind::Other,
+                };
+            }
+        }
         for item in &select.projection {
             let (expr, name) = match item {
                 SelectItem::ExprWithAlias { expr, alias } => (expr, alias.value.clone()),

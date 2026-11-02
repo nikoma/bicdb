@@ -802,9 +802,9 @@ pub(crate) fn load_schema_raw_shared(
                 0
             };
             sql_profile_schema_load(bytes);
-            Some(std::sync::Arc::new(serde_json::from_value::<TableSchema>(
-                record.metadata.clone(),
-            )?))
+            let schema = serde_json::from_value::<TableSchema>(record.metadata.clone())?;
+            oracle::temporal_columns::validate(db, &schema)?;
+            Some(std::sync::Arc::new(schema))
         }
         Ok(None) => {
             sql_profile_schema_load(0);
@@ -1202,6 +1202,7 @@ pub(crate) fn merge_inherited_constraints(
 
 pub(crate) fn save_schema(db: &mut BicDb, schema: &TableSchema) -> Result<()> {
     require_user_relation_name(&schema.name)?;
+    oracle::temporal_columns::prepare_save(db, schema)?;
     ensure_schema_collection(db)?;
     let metadata = serde_json::to_value(schema)?;
     if sql_profile_active() {
@@ -1887,6 +1888,7 @@ pub fn pg_user_range_values(
 }
 
 pub(crate) fn save_user_type(db: &mut BicDb, user_type: &UserTypeSchema) -> Result<()> {
+    oracle::temporal_columns::prepare_user_type_save(db, user_type)?;
     ensure_user_type_collection(db)?;
     db.insert(
         USER_TYPE_COLLECTION,

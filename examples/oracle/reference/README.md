@@ -350,3 +350,15 @@ unit regressions distinguish the representations. These tests do not qualify
 NUMBER infinity export/import for arbitrary application datasets. See the
 [qualification record](../../../docs/evidence/oracle-parameterized-cursors-2026-11-02/README.md)
 for measured behavior and remaining gaps.
+
+The `routine_namespaces.py --suite columns` fixture compares Oracle DATE and
+TIMESTAMP storage and `%TYPE` anchors with frozen source observations. BicDB
+receives values through PostgreSQL COPY, while Oracle uses typed SQL literals.
+It checks quoted names, logical source metadata and the intentionally native
+PostgreSQL transport OIDs. Its timezone case covers declaration and NULL metadata
+only. Use the same private connection arguments as the other routine suites.
+
+`postgres_column_types.py --output /private/native-columns.json` independently
+compares native PostgreSQL DATE assignment, COPY, timestamp rounding and quoted
+ALTER TYPE with a native BicDB database. Set `ORACLE_CONTROL_PG_DSN` and
+`BICDB_PG_DSN` as above. The runner removes its uniquely named tables.

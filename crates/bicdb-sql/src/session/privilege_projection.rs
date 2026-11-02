@@ -730,9 +730,16 @@ impl<'db> SqlSession<'db> {
                     let user_type =
                         user_type_column_from_data_type(self.db_ref(), &attribute.data_type)?;
                     self.ensure_user_type_usage(user_type.as_ref())?;
+                    let oracle_modifier =
+                        oracle::temporal_columns::modifier(self.db_ref(), &attribute.data_type)?;
                     let pg_type = match &user_type {
                         Some(user_type) => user_type.formatted_name(),
-                        None => pg_type_from_data_type(&attribute.data_type)?.0,
+                        None => match &oracle_modifier {
+                            Some(modifier) => {
+                                oracle::temporal_columns::physical_type(modifier).into()
+                            }
+                            None => pg_type_from_data_type(&attribute.data_type)?.0,
+                        },
                     };
                     let collation = attribute
                         .collation
@@ -744,7 +751,8 @@ impl<'db> SqlSession<'db> {
                         pg_type,
                         user_type,
                         collation,
-                        type_modifier: pg_type_modifier_from_data_type(&attribute.data_type)?,
+                        type_modifier: oracle_modifier
+                            .or(pg_type_modifier_from_data_type(&attribute.data_type)?),
                         array_ndims: array_ndims_from_data_type(&attribute.data_type),
                         dropped: false,
                     });

@@ -29,7 +29,7 @@ def run(reference, target):
         ('declared_bigint_output',f'CALL {q("wide")}(1,NULL)',[[2]],[20],None),
         ('date_and_empty_text',f'CALL {q("types")}(NULL,NULL)',None,[1082,25],None),
         ('wrong_schema',f'CALL pg_catalog.{identifier(prefix+"_p")}(3,NULL,4)',None,None,'42883'),
-        ('missing_out_slot',f'CALL {q("p")}(3,4)',None,None,'42883'),
+        ('extra_argument',f'CALL {q("p")}(3,NULL,4,5)',None,None,'42883'),
         ('unknown_named',f'CALL {q("p")}(missing=>3,doubled=>NULL,total=>4)',None,None,'42883'),
         ('recovery',f'CALL {q("p")}(2,NULL,5)',[[4,9]],[1700,1700],None),
     ]
@@ -66,6 +66,21 @@ def run(reference, target):
                 row['expected'] = dict(rows=expected_rows,type_oids=oids)
                 row['matched'] &= row['postgres']==row['expected']
             report['cases'].append(row)
+        # BicDB's existing native interface also accepts an input-only compact
+        # CALL. Record that extension separately from PostgreSQL equivalence.
+        extension = dict(matches_postgres=False)
+        for label,connection in [('postgres',reference),('bicdb',target)]:
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(f'CALL {q("p")}(3,4)',prepare=False)
+                    extension[label] = dict(rows=[[canonical(v) for v in values]
+                                                  for values in cursor.fetchall()],
+                                            type_oids=[column.type_code for column in cursor.description])
+            except Exception as error:
+                extension[label] = dict(sqlstate=getattr(error,'sqlstate',None))
+        extension['verified'] = (extension['postgres']==dict(sqlstate='42883')
+                                and extension['bicdb']==dict(rows=[[canonical(6),canonical(10)]],type_oids=[1700,1700]))
+        report['legacy_compact_call_extension'] = extension
     finally:
         for backend,kind,name in reversed(created):
             try:
@@ -79,7 +94,8 @@ def run(reference, target):
                     error=type(error).__name__,sqlstate=getattr(error,'sqlstate',None)))
     report['matched'] = sum(row['matched'] for row in report['cases'])
     report['total'] = len(report['cases'])
-    report['success'] = report['matched']==report['total'] and not report['cleanup_errors']
+    report['success'] = (report['matched']==report['total'] and not report['cleanup_errors']
+                         and report.get('legacy_compact_call_extension',{}).get('verified',False))
     return report
 
 

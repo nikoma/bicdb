@@ -128,6 +128,7 @@ mod tests {
         )
         .unwrap();
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let path = "\"proc_app\"";
         {
             let mut session = SqlSession::new(&mut db);
             session.execute("CREATE SCHEMA proc_app; CREATE TABLE public.ledger(k INTEGER,v INTEGER); INSERT INTO public.ledger VALUES(1,-999)").unwrap();
@@ -136,13 +137,13 @@ mod tests {
                 "INSERT INTO ledger VALUES(1,0,NULL)",
                 "CREATE OR REPLACE PROCEDURE bump(p_delta IN NUMBER,p_day IN DATE) IS BEGIN UPDATE ledger SET v=v+NVL(p_delta,0),d=p_day WHERE k=1; END bump;",
                 "CALL bump(2,TIMESTAMP '2024-02-29 12:34:56.999999')",
-            ] { run(&mut session,sql,"proc_app").unwrap(); }
-            let result = run(&mut session, "SELECT v,d FROM ledger", "proc_app").unwrap();
+            ] { run(&mut session,sql,path).unwrap(); }
+            let result = run(&mut session, "SELECT v,d FROM ledger", path).unwrap();
             assert_eq!(result.rows[0][0].to_cell(), "2");
             assert_eq!(result.rows[0][1].to_cell(), "2024-02-29 12:34:56");
-            run(&mut session,"CREATE OR REPLACE PROCEDURE bump(p_delta NUMBER,p_day DATE) IS BEGIN UPDATE ledger SET v=v+2*p_delta,d=p_day WHERE k=1; END;","proc_app").unwrap();
-            run(&mut session,r#"CREATE PROCEDURE parent(p_delta NUMBER) IS BEGIN IF p_delta>=0 THEN "proc_app".bump(p_delta,DATE '2024-03-01'); ELSE "proc_app".bump(0,DATE '2024-03-01'); END IF; END;"#,"proc_app").unwrap();
-            run(&mut session, "CALL parent(3)", "proc_app").unwrap();
+            run(&mut session,"CREATE OR REPLACE PROCEDURE bump(p_delta NUMBER,p_day DATE) IS BEGIN UPDATE ledger SET v=v+2*p_delta,d=p_day WHERE k=1; END;",path).unwrap();
+            run(&mut session,r#"CREATE PROCEDURE parent(p_delta NUMBER) IS BEGIN IF p_delta>=0 THEN "proc_app".bump(p_delta,DATE '2024-03-01'); ELSE "proc_app".bump(0,DATE '2024-03-01'); END IF; END;"#,path).unwrap();
+            run(&mut session, "CALL parent(3)", path).unwrap();
             assert_eq!(
                 session.execute("SELECT v FROM public.ledger").unwrap().rows[0][0].to_cell(),
                 "-999"
@@ -151,9 +152,9 @@ mod tests {
         drop(db);
         let mut db = BicDb::open(root.path()).unwrap();
         let mut session = SqlSession::new(&mut db);
-        run(&mut session, "CALL parent(1)", "proc_app").unwrap();
+        run(&mut session, "CALL parent(1)", path).unwrap();
         assert_eq!(
-            run(&mut session, "SELECT v FROM ledger", "proc_app")
+            run(&mut session, "SELECT v FROM ledger", path)
                 .unwrap()
                 .rows[0][0]
                 .to_cell(),
@@ -306,7 +307,7 @@ mod tests {
         );
         assert_eq!(
             session
-                .execute("CALL native_proc.p(3,4)")
+                .execute("CALL native_proc.p(3,NULL,4,5)")
                 .unwrap_err()
                 .sqlstate(),
             "42883"

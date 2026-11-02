@@ -596,6 +596,7 @@ pub(crate) fn parse_routine_params(args: &[String]) -> Result<Vec<RoutineParam>>
 pub(crate) fn procedure_actual_arguments<'a>(
     function: &'a Function,
     params: &[RoutineParam],
+    legacy_compact: bool,
 ) -> Result<Vec<Option<&'a Expr>>> {
     let FunctionArguments::List(list) = &function.args else {
         return Err(SqlError::InvalidSql(
@@ -613,6 +614,31 @@ pub(crate) fn procedure_actual_arguments<'a>(
         return Err(invalid());
     }
     let mut actuals = vec![None; params.len()];
+    let input_count = params
+        .iter()
+        .filter(|p| p.mode != RoutineArgMode::Out)
+        .count();
+    let compact = legacy_compact
+        && input_count < params.len()
+        && list.args.len() <= input_count
+        && list
+            .args
+            .iter()
+            .all(|arg| matches!(arg, FunctionArg::Unnamed(FunctionArgExpr::Expr(_))));
+    if compact {
+        let mut supplied = list.args.iter();
+        for (param, actual) in params.iter().zip(&mut actuals) {
+            if param.mode == RoutineArgMode::Out {
+                continue;
+            }
+            *actual = match supplied.next() {
+                Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) => Some(expr),
+                None if param.default_expr.is_some() => None,
+                _ => return Err(invalid()),
+            };
+        }
+        return Ok(actuals);
+    }
     let mut positional = 0;
     let mut named = false;
     for arg in &list.args {

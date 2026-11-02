@@ -354,7 +354,11 @@ transport types, including NULL outputs; logical Oracle DATE uses TIMESTAMP OID
 1114, while native PostgreSQL DATE uses OID 1082. Qualified calls reject the wrong
 schema. Existing raw procedure parameter-mode spellings remain accepted. These
 shared CALL corrections apply to the native interpreter as well as the preview.
-Native PostgreSQL empty strings and calendar dates retain their own behavior.
+Native PostgreSQL empty strings and calendar dates retain their own behavior. Native
+BicDB procedures also retain the existing compact CALL extension, which omits
+pure OUT slots from positional calls. This extension differs from PostgreSQL's
+arity rules and is recorded separately from PostgreSQL-equivalent cases. New
+Oracle-authored procedures require all declared output argument slots.
 
 This does not qualify packages, autonomous transactions, transaction control,
 dynamic SQL, all overload/type-resolution rules or the remaining application

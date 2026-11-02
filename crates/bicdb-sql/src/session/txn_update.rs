@@ -4613,10 +4613,20 @@ impl<'db> SqlSession<'db> {
             let name = object_name(&function.name)?;
             let routine = resolve_routine_cached(self.db_ref(), RoutineKind::Procedure, &name)?
                 .ok_or_else(|| SqlError::InvalidSql(format!("procedure {name} does not exist")))?;
-            let actuals = procedure_actual_arguments(function, &routine.ir.params)?;
+            let actuals = procedure_actual_arguments(
+                function,
+                &routine.ir.params,
+                oracle::preview_routine_language_version(&routine.schema.language).is_none(),
+            )?;
             let mut outputs = Vec::new();
             for (param, actual) in routine.ir.params.iter().zip(actuals) {
                 if param.mode == RoutineArgMode::In {
+                    continue;
+                }
+                if actual.is_none()
+                    && oracle::preview_routine_language_version(&routine.schema.language).is_none()
+                {
+                    outputs.push(None);
                     continue;
                 }
                 let expr = actual.ok_or_else(|| {
@@ -4645,13 +4655,13 @@ impl<'db> SqlSession<'db> {
                         None,
                     ));
                 }
-                outputs.push(RoutineAssignmentTarget::Variable(
+                outputs.push(Some(RoutineAssignmentTarget::Variable(
                     parts
                         .iter()
                         .map(|p| normalize_object_name(&p.value))
                         .collect::<Vec<_>>()
                         .join("."),
-                ));
+                )));
             }
             outputs
         } else {
@@ -4673,7 +4683,9 @@ impl<'db> SqlSession<'db> {
                 ));
             }
             for (target, value) in outputs.iter().zip(row) {
-                self.assign_routine_value(frame, target, value.clone())?;
+                if let Some(target) = target {
+                    self.assign_routine_value(frame, target, value.clone())?;
+                }
             }
         }
         Ok(result)

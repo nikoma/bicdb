@@ -294,7 +294,11 @@ impl<'db> SqlSession<'db> {
             let named = !matches!(&function.args, FunctionArguments::List(list)
                 if list.args.iter().all(|arg| matches!(arg,FunctionArg::Unnamed(FunctionArgExpr::Expr(_)))));
             if has_outputs || named {
-                let actuals = procedure_actual_arguments(function, &routine.ir.params)?;
+                let actuals = procedure_actual_arguments(
+                    function,
+                    &routine.ir.params,
+                    oracle::preview_routine_language_version(&routine.schema.language).is_none(),
+                )?;
                 routine
                     .ir
                     .params

@@ -111,6 +111,7 @@ def fixture(schema, prefix):
         ('timestamp_null', "NVL('',CAST(NULL AS TIMESTAMP(3)))"),
         ('timestamp_text', "NVL(CAST(NULL AS TIMESTAMP),'29-FEB-24 12.34.56.123456 PM')"),
         ('timestamp_constant_text', "NVL(TIMESTAMP '2024-02-29 12:34:56.123456','29-FEB-24 12.34.56.123456 PM')"),
+        ('timestamp_date_only', "NVL(CAST(NULL AS TIMESTAMP),'29-FEB-24')"),
         ('timestamp_bad_literal', "NVL(CAST(NULL AS TIMESTAMP),'invalid')"),
         ('timestamp_bad_typed', "NVL(CAST(NULL AS TIMESTAMP),CAST('invalid' AS VARCHAR2(100)))"),
         ('date_fraction', "NVL(CAST(NULL AS DATE),TIMESTAMP '2024-02-29 12:34:56.999999')"),

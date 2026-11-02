@@ -78,6 +78,16 @@ mod tests {
                 SqlValue::Null
             );
         }
+        assert_eq!(
+            run(
+                &mut db,
+                "SELECT NVL(CAST(NULL AS TIMESTAMP),'29-FEB-24') FROM DUAL"
+            )
+            .unwrap()
+            .rows[0][0]
+                .to_cell(),
+            "2024-02-29 00:00:00"
+        );
         for expression in ["NVL(1,DATE '2024-02-29')", "NVL(DATE '2024-02-29',1)"] {
             assert_eq!(
                 run(&mut db, &format!("SELECT {expression} FROM DUAL"))

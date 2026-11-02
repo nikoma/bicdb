@@ -63,7 +63,13 @@ fn timestamp_input(value: &SqlValue, source: &str) -> Result<SqlValue> {
         regex::Regex::new(r"(?i)^\s*(.+?)\s+([0-9]{1,2})[.:]([0-9]{1,2})[.:]([0-9]{1,2})(?:[.,]([0-9]{1,9}))?\s+(AM|PM)\s*$").expect("default timestamp pattern")
     });
     let text = value.to_cell();
-    let captures = FORMAT.captures(&text).ok_or_else(invalid)?;
+    let Some(captures) = FORMAT.captures(&text) else {
+        // Oracle's fixed default timestamp input also accepts a date with the
+        // time omitted. The omitted fields are midnight, not the current time.
+        return oracle_decode::default_date_input(&text)
+            .map(SqlValue::String)
+            .map_err(|_| invalid());
+    };
     let date = oracle_decode::default_date_input(&captures[1]).map_err(|_| invalid())?;
     let mut hour = captures[2].parse::<u8>().map_err(|_| invalid())?;
     let minute = captures[3].parse::<u8>().map_err(|_| invalid())?;

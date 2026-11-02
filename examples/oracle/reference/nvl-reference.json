@@ -384,6 +384,15 @@
         "bicdb": "42804"
       }
     },
+    "timestamp_date_only": {
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ]
+    },
     "timestamp_bad_literal": {
       "expected_error": {
         "oracle": "ORA-01858",

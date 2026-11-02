@@ -917,6 +917,9 @@ pub struct SqlSession<'db> {
     /// Such a session never begins or owns a transaction and refuses
     /// data-modifying statements.
     pub(crate) row_routine_call: bool,
+    /// PL/SQL expression calls have different character-result boundaries
+    /// from calls made by SQL, including SQL inside a routine.
+    pub(crate) in_routine_expression: bool,
     /// For that child session, the caller's transaction (if any), read through
     /// `read_tx`.
     pub(crate) parent_tx: Option<&'db Transaction>,
@@ -2188,6 +2191,7 @@ impl<'db> SqlSession<'db> {
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             tx: None,
             row_routine_call: false,
+            in_routine_expression: false,
             parent_tx: None,
             savepoints: Vec::new(),
             ddl_undo: Vec::new(),
@@ -3250,6 +3254,13 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_parsed_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let previous = std::mem::replace(&mut self.in_routine_expression, false);
+        let result = self.execute_parsed_statement_in_sql(statement);
+        self.in_routine_expression = previous;
+        result
+    }
+
+    fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
         // Earlier statements in a batch can change temporal output settings.
         let _temporal_scope = self.temporal_scope();
         self.db_ref().check_recovery_state()?;

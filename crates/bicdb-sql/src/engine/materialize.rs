@@ -3084,6 +3084,7 @@ impl<'db> SqlEngine<'db> {
             | "lpad"
             | "rpad"
             | "bicdb_variadic_call" => Some("text".to_string()),
+            "bicdb_oracle_concat" => Some("text".to_string()),
             "starts_with" => Some("bool".to_string()),
             "pow" | "cbrt" | "exp" | "ln" | "log" => Some("float8".to_string()),
             "similarity" => Some("float4".to_string()),

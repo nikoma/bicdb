@@ -3203,14 +3203,33 @@ impl<'db> SqlSession<'db> {
         if let Some(value) = self.eval_inline_return_function(&routine, args)? {
             return Ok(Some(value));
         }
-        self.execute_with_routine_security(&routine.schema, |session| {
+        let sql_boundary = !self.in_routine_expression;
+        let value = self.execute_with_routine_security(&routine.schema, |session| {
             if routine.schema.language.eq_ignore_ascii_case("sql") {
                 session.execute_sql_function_value(&routine.schema, &routine.ir, args)
             } else {
                 session.execute_plpgsql_function_value(&routine.schema, &routine.ir, args)
             }
-        })
-        .map(Some)
+        })?;
+        if oracle::preview_routine_language_version(&routine.schema.language)
+            .is_some_and(|version| version >= 7)
+            && matches!(
+                routine.schema.return_type.as_str(),
+                "varchar" | "bpchar" | "char"
+            )
+        {
+            if let SqlValue::String(text) = &value {
+                let limit = if sql_boundary { 4000 } else { 32767 };
+                if text.len() > limit {
+                    return Err(SqlError::data_exception(
+                        "22001",
+                        "Oracle character function result exceeds the preview caller's byte limit",
+                        Some("text".into()),
+                    ));
+                }
+            }
+        }
+        Ok(Some(value))
     }
 
     /// `RETURN <expr>`-only functions evaluate the bound body directly over
@@ -4409,6 +4428,17 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn eval_routine_expr(
+        &mut self,
+        frame: &mut RoutineFrame,
+        expr: &RoutineExpr,
+    ) -> Result<SqlValue> {
+        let previous = std::mem::replace(&mut self.in_routine_expression, true);
+        let result = self.eval_routine_expr_inner(frame, expr);
+        self.in_routine_expression = previous;
+        result
+    }
+
+    fn eval_routine_expr_inner(
         &mut self,
         frame: &mut RoutineFrame,
         expr: &RoutineExpr,

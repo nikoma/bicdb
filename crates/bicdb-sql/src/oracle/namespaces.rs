@@ -21,7 +21,7 @@ pub(super) fn qualify<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str) {
                     if function.language.as_ref().is_some_and(|language| {
                         matches!(
                             preview_routine_language_version(&ident_value(language)),
-                            Some(2 | 3 | 4 | 5 | 6)
+                            Some(2 | 3 | 4 | 5 | 6 | 7)
                         )
                     }) =>
                 {

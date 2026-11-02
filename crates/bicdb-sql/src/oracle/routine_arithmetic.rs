@@ -114,6 +114,7 @@ impl Kind {
 #[derive(Clone, Default)]
 struct Environment {
     v4_semantics: bool,
+    concatenation: bool,
     variables: BTreeMap<String, Kind>,
     records: BTreeMap<String, BTreeMap<String, Kind>>,
 }
@@ -299,6 +300,34 @@ impl Resolve<'_> {
     }
 
     fn rewrite(&self, expr: &mut Expr) -> Result<()> {
+        if self.env.concatenation {
+            if let Expr::BinaryOp {
+                left,
+                op: BinaryOperator::StringConcat,
+                right,
+            } = expr
+            {
+                let kind = |operand: &Expr| -> Result<&str> {
+                    match self.kind(operand) {
+                        Kind::Text | Kind::Null => Ok("text"),
+                        Kind::Number => Ok("number"),
+                        Kind::Date => Ok("date"),
+                        _ => Err(SqlError::Unsupported("Oracle concatenation requires resolved character, NUMBER or logical DATE operands; use an explicit conversion for other types".into())),
+                    }
+                };
+                let context = if self.sql_depth > 0 || !self.queries.is_empty() {
+                    "sql"
+                } else {
+                    "plsql"
+                };
+                *expr = expression(&format!(
+                    "bicdb_oracle_concat({left},{right},'{}','{}','{context}')",
+                    kind(left)?,
+                    kind(right)?
+                ))?;
+                return Ok(());
+            }
+        }
         date_trunc::lower_calendar_call(expr)?;
         if self.env.v4_semantics && self.sql_depth == 0 && self.queries.is_empty() {
             if let Expr::Function(function) = expr {
@@ -695,6 +724,7 @@ fn statements(
 pub(crate) fn lower(
     db: &BicDb,
     v4_semantics: bool,
+    concatenation: bool,
     params: &mut [RoutineParam],
     declarations: &mut [RoutineDecl],
     body: &mut [RoutineStmt],
@@ -702,6 +732,7 @@ pub(crate) fn lower(
 ) -> Result<()> {
     let mut env = Environment {
         v4_semantics,
+        concatenation,
         ..Environment::default()
     };
     for param in params.iter() {

@@ -2185,6 +2185,8 @@ impl<'db> SqlSession<'db> {
             oracle::routine_arithmetic::lower(
                 self.db_ref(),
                 true,
+                oracle::preview_routine_language_version(&language)
+                    .is_some_and(|version| version >= 7),
                 &mut [],
                 &mut declarations,
                 &mut statements,

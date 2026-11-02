@@ -834,6 +834,13 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_query(&mut self, query: &Query) -> Result<SqlResult> {
+        let previous = std::mem::replace(&mut self.in_routine_expression, false);
+        let result = self.execute_query_in_sql(query);
+        self.in_routine_expression = previous;
+        result
+    }
+
+    fn execute_query_in_sql(&mut self, query: &Query) -> Result<SqlResult> {
         if let Some(rewritten) = normalize_fetch_clause(query)? {
             return self.execute_query(&rewritten);
         }

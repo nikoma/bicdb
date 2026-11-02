@@ -5,6 +5,7 @@
 //! `date_bin`, `to_date`, `timezone`) and `similarity` (pg_trgm). Semantics follow PostgreSQL 16-18.
 use crate::*;
 use regex::RegexBuilder;
+mod oracle_concat;
 
 fn any_null(args: &[SqlValue]) -> bool {
     args.iter().any(|value| matches!(value, SqlValue::Null))
@@ -402,6 +403,10 @@ fn trigram_set(text: &str) -> Result<std::collections::BTreeSet<String>> {
 }
 
 pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Option<SqlValue>> {
+    if name == "bicdb_oracle_concat" {
+        // Unlike ordinary strict scalar functions, NULL is an empty operand.
+        return oracle_concat::evaluate(args).map(Some);
+    }
     let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
     let known = matches!(
         name,

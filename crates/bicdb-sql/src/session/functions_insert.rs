@@ -29,6 +29,7 @@ impl<'db> SqlSession<'db> {
             "sql"
             | "plpgsql"
             | oracle::PREVIEW_ROUTINE_LANGUAGE
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V2
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V1 => {}
             other => {
                 return Err(SqlError::Unsupported(format!(
@@ -201,6 +202,7 @@ impl<'db> SqlSession<'db> {
             "sql"
             | "plpgsql"
             | oracle::PREVIEW_ROUTINE_LANGUAGE
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V2
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V1 => {}
             other => {
                 return Err(SqlError::Unsupported(format!(
@@ -449,7 +451,10 @@ impl<'db> SqlSession<'db> {
     ) -> Result<Option<RoutineSchema>> {
         let (schema, name) = routine_schema_and_name(&object_name(name_ast)?);
         let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
-            let schema = if oracle::preview_routine_language_version(&routine.language) == Some(2) {
+            let schema = if matches!(
+                oracle::preview_routine_language_version(&routine.language),
+                Some(2 | 3)
+            ) {
                 relation_schema_name(name_ast)
             } else {
                 schema.clone()

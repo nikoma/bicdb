@@ -784,12 +784,19 @@ pub(crate) fn procedure_argument_type_schemas(
 }
 
 pub(crate) fn raw_routine_type_schema(declaration: &str) -> Result<RoutineTypeSchema> {
+    Ok(raw_routine_type_details(declaration)?.0)
+}
+
+pub(crate) fn raw_routine_type_details(declaration: &str) -> Result<(RoutineTypeSchema, bool)> {
     let normalized = collapse_sql_whitespace(declaration.trim());
     if matches!(normalized.as_str(), "record" | "void" | "trigger") {
-        return Ok(RoutineTypeSchema {
-            pg_type: normalized,
-            type_modifier: None,
-        });
+        return Ok((
+            RoutineTypeSchema {
+                pg_type: normalized,
+                type_modifier: None,
+            },
+            false,
+        ));
     }
     let sql = format!("CREATE TABLE __bicdb_type_probe(value {normalized})");
     let mut statements = Parser::parse_sql(&PostgreSqlDialect {}, &sql)
@@ -804,7 +811,10 @@ pub(crate) fn raw_routine_type_schema(declaration: &str) -> Result<RoutineTypeSc
         .first()
         .ok_or_else(|| SqlError::InvalidSql(format!("empty routine type {declaration}")))?
         .data_type;
-    routine_type_schema(data_type)
+    Ok((
+        routine_type_schema(data_type)?,
+        matches!(data_type, DataType::Date),
+    ))
 }
 
 pub(crate) fn raw_routine_argument_type_schemas(args: &[String]) -> Result<Vec<RoutineTypeSchema>> {
@@ -814,6 +824,10 @@ pub(crate) fn raw_routine_argument_type_schemas(args: &[String]) -> Result<Vec<R
 }
 
 pub(crate) fn raw_routine_argument_type_schema(arg: &str) -> Result<RoutineTypeSchema> {
+    Ok(raw_routine_argument_type_details(arg)?.0)
+}
+
+pub(crate) fn raw_routine_argument_type_details(arg: &str) -> Result<(RoutineTypeSchema, bool)> {
     let arg = routine_arg_without_default(arg);
     let words = split_sql_words(&arg);
     if words.is_empty() {
@@ -855,7 +869,7 @@ pub(crate) fn raw_routine_argument_type_schema(arg: &str) -> Result<RoutineTypeS
             "routine argument {arg} is missing a type"
         )));
     }
-    raw_routine_type_schema(&declaration)
+    raw_routine_type_details(&declaration)
 }
 
 pub(crate) fn routine_data_type(data_type: &DataType) -> Result<String> {

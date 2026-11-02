@@ -176,3 +176,20 @@ list. This qualifies those static relation lookups, not full PL/SQL or Oracle
 AUTHID rights. The ordinary `compare.py` command remains a read-only query runner.
 Run each with the same preview profile and an explicit `--cases` path. Expected
 values come from the Oracle reference, independently of BicDB's implementation.
+
+## Generated routine temporal semantics
+
+Pass `--suite temporal` to the same `routine_namespaces.py` runner to compare
+logical DATE declarations, numeric day offsets, exact NUMBER date differences,
+TIMESTAMP intervals, fractional-second coercion, casts, literals and cursor
+numeric fields. This suite uses the version-3 preview routine compiler and
+checks both backends against explicit typed expectations. Its 29 cases run
+through ordinary text driver decoding, including PostgreSQL interval values.
+It does not qualify timezones, source column temporal provenance, timestamps
+beyond six fractional digits or the full PL/SQL language.
+
+```bash
+python3 examples/oracle/reference/routine_namespaces.py --suite temporal \
+  --oracle-config "$HOME/.local/state/bicdb/oracle-reference/hr-connection.json" \
+  --output /tmp/bicdb-routine-temporal.json
+```

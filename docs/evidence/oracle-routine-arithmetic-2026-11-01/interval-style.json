@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "both_status_and_text_values": true,
+  "runtime_binary_sha256": "ba8f21e172d3229821327be7f6d476de102488871ffb96083383f152db46bb16",
+  "cases": [
+    {
+      "style": "iso_8601",
+      "status": "iso_8601",
+      "text": "PT1S",
+      "expected": "PT1S",
+      "match": true
+    },
+    {
+      "style": "sql_standard",
+      "status": "sql_standard",
+      "text": "0:00:01",
+      "expected": "0:00:01",
+      "match": true
+    },
+    {
+      "style": "postgres",
+      "status": "postgres",
+      "text": "00:00:01",
+      "expected": "00:00:01",
+      "match": true
+    }
+  ],
+  "startup_interval_style": "postgres",
+  "success": true
+}

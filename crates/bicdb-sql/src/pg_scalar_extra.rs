@@ -10,6 +10,36 @@ fn any_null(args: &[SqlValue]) -> bool {
     args.iter().any(|value| matches!(value, SqlValue::Null))
 }
 
+pub(crate) fn oracle_date_coerce(value: SqlValue) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) {
+        return Ok(value);
+    }
+    let timestamp = PgTimestamp::from_postgres_text(&value.to_cell(), false)
+        .map_err(|error| postgres_timestamp_input_error(&value.to_cell(), error))?;
+    let micros = timestamp.finite_micros().ok_or_else(|| {
+        SqlError::invalid_parameter_value("Oracle DATE requires a finite datetime")
+    })?;
+    let timestamp = PgTimestamp::Finite(micros.div_euclid(1_000_000) * 1_000_000);
+    let year = timestamp
+        .components()
+        .ok_or_else(|| {
+            SqlError::data_exception(
+                "22008",
+                "Oracle DATE is out of range",
+                Some("timestamp".into()),
+            )
+        })?
+        .0;
+    if !(-4711..=9999).contains(&year) {
+        return Err(SqlError::data_exception(
+            "22008",
+            "Oracle DATE is out of range",
+            Some("timestamp".into()),
+        ));
+    }
+    Ok(SqlValue::String(timestamp.to_iso_text(false)))
+}
+
 fn int_arg(name: &str, value: &SqlValue) -> Result<i64> {
     match value {
         SqlValue::Int(number) => Ok(*number),
@@ -318,6 +348,8 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "bicdb_oracle_trunc_date"
             | "bicdb_oracle_date_add_days"
             | "bicdb_oracle_number_divide"
+            | "bicdb_oracle_date_coerce"
+            | "bicdb_oracle_date_subtract"
             | "timezone"
             | "similarity"
     );
@@ -331,6 +363,12 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         arity(name, args, 3..=3)?;
     }
     if name == "bicdb_oracle_number_divide" {
+        arity(name, args, 2..=2)?;
+    }
+    if name == "bicdb_oracle_date_coerce" {
+        arity(name, args, 1..=1)?;
+    }
+    if name == "bicdb_oracle_date_subtract" {
         arity(name, args, 2..=2)?;
     }
     // make_interval and age(ts) accept missing/NULL-free forms; everything else is strict.
@@ -576,6 +614,26 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         "bicdb_oracle_to_date" => {
             arity(name, args, 2..=2)?;
             eval_to_timestamp(args)?
+        }
+        "bicdb_oracle_date_coerce" => oracle_date_coerce(args[0].clone())?,
+        "bicdb_oracle_date_subtract" => {
+            let left = oracle_date_coerce(args[0].clone())?;
+            let right = oracle_date_coerce(args[1].clone())?;
+            let left = PgTimestamp::from_postgres_text(&left.to_cell(), false)
+                .map_err(|error| postgres_timestamp_input_error(&left.to_cell(), error))?
+                .finite_micros()
+                .expect("coerced DATE");
+            let right = PgTimestamp::from_postgres_text(&right.to_cell(), false)
+                .map_err(|error| postgres_timestamp_input_error(&right.to_cell(), error))?
+                .finite_micros()
+                .expect("coerced DATE");
+            let seconds = left.checked_sub(right).ok_or_else(|| {
+                SqlError::data_exception("22008", "Oracle DATE subtraction is out of range", None)
+            })? / 1_000_000;
+            oracle_number_divide(
+                &SqlValue::String(seconds.to_string()),
+                &SqlValue::Int(86_400),
+            )?
         }
         "bicdb_oracle_number_divide" => oracle_number_divide(&args[0], &args[1])?,
         "bicdb_oracle_date_add_days" => {

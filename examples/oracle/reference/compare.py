@@ -34,6 +34,9 @@ def canonical(value):
         return {'timestamp': value.isoformat(timespec='microseconds')}
     if isinstance(value, datetime.date):
         return {'date': value.isoformat()}
+    if isinstance(value, datetime.timedelta):
+        return {'interval': {'days': value.days, 'seconds': value.seconds,
+                             'microseconds': value.microseconds}}
     if isinstance(value, bytes):
         return {'bytes': value.hex()}
     raise TypeError(f'unsupported result type: {type(value).__name__}')

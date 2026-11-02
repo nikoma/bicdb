@@ -19,7 +19,10 @@ pub(super) fn qualify<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str) {
                 Statement::CreateView(view) => self.pre_visit_relation(&mut view.name)?,
                 Statement::CreateFunction(function)
                     if function.language.as_ref().is_some_and(|language| {
-                        preview_routine_language_version(&ident_value(language)) == Some(2)
+                        matches!(
+                            preview_routine_language_version(&ident_value(language)),
+                            Some(2 | 3)
+                        )
                     }) =>
                 {
                     self.pre_visit_relation(&mut function.name)?

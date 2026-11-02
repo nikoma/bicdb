@@ -234,6 +234,7 @@ fn inline_return_slots(
     arg_count: usize,
 ) -> Option<Vec<Option<usize>>> {
     if !crate::routines::routine_language_is_plpgsql(schema)
+        || oracle::preview_routine_language_version(&schema.language) == Some(3)
         || schema.returns_set
         || schema.security_definer
         || !ir.exception_handlers.is_empty()
@@ -3589,6 +3590,11 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }?;
+        let value = if ir.oracle_date_return {
+            crate::pg_scalar_extra::oracle_date_coerce(value)?
+        } else {
+            value
+        };
         cast_routine_return_value(value, routine)
     }
 

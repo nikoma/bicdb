@@ -37,6 +37,12 @@ class ComparisonTests(unittest.TestCase):
         date = datetime.date(2020, 2, 29)
         self.assertNotEqual(canonical(date), canonical(datetime.datetime(2020, 2, 29)))
 
+    def test_day_second_intervals_preserve_microseconds_and_sign(self):
+        self.assertEqual(canonical(datetime.timedelta(microseconds=1_000_001)),
+                         {'interval': {'days': 0, 'seconds': 1, 'microseconds': 1}})
+        self.assertEqual(canonical(datetime.timedelta(microseconds=-1)),
+                         {'interval': {'days': -1, 'seconds': 86399, 'microseconds': 999999}})
+
     def test_matching_errors_are_failures_and_do_not_leak_messages(self):
         failing = Connection(error=RuntimeError('private connection information'))
         result = compare_cases(failing, failing, [{'id': 'a', 'sql': 'SELECT 1'}])[0]

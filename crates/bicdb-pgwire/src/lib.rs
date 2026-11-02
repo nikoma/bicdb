@@ -2544,6 +2544,7 @@ fn handle_frontend_message(
             let _ = bicdb_core::take_thread_commit_seq();
             match execute_server_query(stream, server, state, query) {
                 Ok(QueryFlow::Complete) => {
+                    write_interval_style_status(stream, state)?;
                     flush_notifications(stream, server, state.connection_id)?;
                     ready_for_query_status(stream, state.transaction_status())?;
                 }
@@ -2554,6 +2555,7 @@ fn handle_frontend_message(
                     state.record_query_error();
                     log_failed_query(server, state, Some(query), &error);
                     error_response_for_error(stream, &error)?;
+                    write_interval_style_status(stream, state)?;
                     if error.closes_connection() {
                         return Ok(false);
                     }
@@ -2660,6 +2662,7 @@ fn handle_frontend_message(
             });
             match executed {
                 Ok(executed) => {
+                    write_interval_style_status(stream, state)?;
                     let stats = write_query_result(
                         stream,
                         server,
@@ -2698,6 +2701,7 @@ fn handle_frontend_message(
                     error_response_for_error(stream, &error)?;
                 }
             }
+            write_interval_style_status(stream, state)?;
             ready_for_query_status(stream, state.transaction_status())?;
         }
         b'C' => match close_message_with_server(&payload, server, state) {
@@ -2894,6 +2898,7 @@ struct ConnectionState {
     prepared: FxHashMap<String, PreparedStatement>,
     portals: FxHashMap<String, Portal>,
     session_state: SqlSessionGucState,
+    reported_interval_style: String,
     catalog_cache: SqlSessionCatalogCache,
     copy_in: Option<CopyInState>,
     cancel_token: Arc<AtomicBool>,
@@ -3012,6 +3017,7 @@ impl ConnectionState {
             prepared: FxHashMap::default(),
             portals: FxHashMap::default(),
             session_state: SqlSessionGucState::from_session_gucs(session_gucs),
+            reported_interval_style: "postgres".into(),
             catalog_cache: SqlSessionCatalogCache::default(),
             copy_in: None,
             cancel_token: Arc::new(AtomicBool::new(false)),
@@ -3271,6 +3277,7 @@ fn execute_server_query(
         let normalized = normalize_executable_sql(sql);
         if let Some(result) = execute_sql_prepared_statement_query(server, state, sql, &normalized)?
         {
+            write_interval_style_status(stream, state)?;
             write_query_result(
                 stream,
                 server,
@@ -3283,6 +3290,7 @@ fn execute_server_query(
         } else {
             let result =
                 execute_server_sql_with_options_normalized(server, state, sql, &normalized, true)?;
+            write_interval_style_status(stream, state)?;
             let source_sql = normalized.starts_with("select ").then_some(sql);
             write_query_result(stream, server, &result, &[], source_sql, true, true)?;
         }
@@ -3293,6 +3301,23 @@ fn execute_server_query(
 struct SqlPreparedStatementResult {
     result: SqlResult,
     source_sql: Option<String>,
+}
+
+fn write_interval_style_status(
+    stream: &mut ClientStream,
+    state: &mut ConnectionState,
+) -> Result<()> {
+    let style = state
+        .session_state
+        .session_gucs()
+        .get("intervalstyle")
+        .map(String::as_str)
+        .unwrap_or("postgres");
+    if style != state.reported_interval_style {
+        parameter_status(stream, "IntervalStyle", style)?;
+        state.reported_interval_style = style.to_string();
+    }
+    Ok(())
 }
 
 fn execute_sql_prepared_statement_query(

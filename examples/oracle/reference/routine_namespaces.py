@@ -67,17 +67,21 @@ def fixture(schema, prefix):
             cases.append(dict(id=f'{suffix}_{index}',
                               sql=f'SELECT {name}({bucket}) FROM DUAL',
                               expected=[[canonical(None if expected is None else decimal.Decimal(expected))]]))
-    return dict(setup=setup, cases=cases)
+    return dict(setup=setup, cases=cases, compiler_probe=(prefix + '_CURSOR').lower())
 
 
-def run(oracle, bicdb, schema, prefix):
-    plan = fixture(schema, prefix)
+def run(oracle, bicdb, schema, prefix, suite='namespaces'):
+    if suite == 'temporal':
+        from routine_temporal import fixture as make_fixture
+    else:
+        make_fixture = fixture
+    plan = make_fixture(schema, prefix)
     report = dict(format=1, oracle_database_version=oracle.version,
-                  bicdb_profile='oracle-preview-v1', routine_compiler='bicdb_oracle_preview_v2',
+                  bicdb_profile='oracle-preview-v1',
                   fixture_prefix=prefix,
                   fixture_sha256=hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest(),
                   total=len(plan['cases']), matched=0, cases=[], cleanup_errors=[], success=False,
-                  scope='Generated static routine namespace values; not full PL/SQL or AUTHID semantics')
+                  scope=plan.get('scope', 'Generated static routine namespace values; not full PL/SQL or AUTHID semantics'))
     created = []
     with oracle.cursor() as source, bicdb.cursor() as target:
         cursors = (source, target)
@@ -88,6 +92,10 @@ def run(oracle, bicdb, schema, prefix):
                 created.append(obj)
                 for sql in obj['inserts']:
                     cursor.execute(sql)
+            target.execute('''SELECT l."lanname" FROM "pg_catalog"."pg_proc" p
+                JOIN "pg_catalog"."pg_language" l ON p."prolang"=l."oid"
+                WHERE p."proname"=%s''', (plan['compiler_probe'],))
+            report['routine_compiler'] = target.fetchone()[0]
             report['cases'] = compare_cases(oracle, bicdb, plan['cases'])
             for case, result in zip(plan['cases'], report['cases']):
                 result['expected'] = case['expected']
@@ -114,6 +122,7 @@ def main():
     parser.add_argument('--oracle-config', required=True, type=Path)
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN')
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--suite', choices=('namespaces', 'temporal'), default='namespaces')
     args = parser.parse_args()
     report = dict(format=1, success=False)
     try:
@@ -138,14 +147,14 @@ def main():
                                  options='-c bicdb.sql_profile=oracle-preview-v1', connect_timeout=10) as bicdb:
                 if bicdb.info.parameter_status('bicdb_sql_profile') != 'oracle-preview-v1':
                     raise RuntimeError('server did not confirm the requested SQL profile')
-                report = run(oracle, bicdb, schema, 'BICDB_NS_' + uuid.uuid4().hex[:10].upper())
+                report = run(oracle, bicdb, schema, 'BICDB_RF_' + uuid.uuid4().hex[:10].upper(), args.suite)
                 report.update(oracle_driver_version=oracledb.__version__, pg_driver_version=psycopg.__version__)
     except Exception as error:
         report['error'] = error_summary(error)
         report['success'] = False
     report['created_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     args.output.write_text(json.dumps(report, indent=2) + '\n')
-    print(f'{report.get("matched", 0)}/{report.get("total", 24)} routine results match; success={report["success"]}')
+    print(f'{report.get("matched", 0)}/{report.get("total", "?")} routine results match; success={report["success"]}')
     return 0 if report['success'] else 1
 
 

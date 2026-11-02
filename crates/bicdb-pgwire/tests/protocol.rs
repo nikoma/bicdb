@@ -439,6 +439,85 @@ fn cluster_shares_transactional_roles_but_isolates_user_types() {
 }
 
 #[test]
+fn interval_style_status_tracks_session_and_transaction_changes_before_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(dir.path(), PgWireConfig::default()).unwrap();
+    let server_for_thread = server.clone();
+    let server_thread =
+        thread::spawn(move || bicdb_pgwire::serve_existing_listener(server_for_thread, listener));
+    let mut client = TcpStream::connect(address).unwrap();
+    send_startup(&mut client, "bicdb");
+    let parameters = read_startup_parameters_until_ready(&mut client);
+    assert_eq!(
+        parameters.get("IntervalStyle").map(String::as_str),
+        Some("postgres")
+    );
+
+    // Check the status notification, including its position before any DataRow.
+    let read_style = |client: &mut TcpStream, expected: Option<&str>| {
+        let mut style = None;
+        loop {
+            let (tag, payload) = read_message(client);
+            match tag {
+                b'S' if payload.starts_with(b"IntervalStyle\0") => {
+                    style =
+                        Some(String::from_utf8(payload[14..payload.len() - 1].to_vec()).unwrap());
+                }
+                b'D' => {
+                    assert_eq!(style.as_deref(), expected);
+                    if let Some("iso_8601") = expected {
+                        assert_eq!(parse_data_row(&payload), vec!["PT1S"]);
+                    }
+                }
+                b'E' => panic!("server error: {}", String::from_utf8_lossy(&payload)),
+                b'Z' => {
+                    assert_eq!(style.as_deref(), expected);
+                    break;
+                }
+                _ => {}
+            }
+        }
+    };
+    for (sql, expected) in [
+        (
+            "SET intervalstyle = 'iso_8601'; SELECT INTERVAL '1 second';",
+            Some("iso_8601"),
+        ),
+        (
+            "BEGIN; SET LOCAL intervalstyle = 'sql_standard'; SELECT INTERVAL '1 second';",
+            Some("sql_standard"),
+        ),
+        ("ROLLBACK; SELECT INTERVAL '1 second';", Some("iso_8601")),
+        ("RESET intervalstyle;", Some("postgres")),
+    ] {
+        send_query(&mut client, sql);
+        read_style(&mut client, expected);
+    }
+    send_query(&mut client, "SELECT INTERVAL '1 second';");
+    read_style(&mut client, None);
+    // Extended protocol must notify before the result, too.
+    for (sql, expected) in [
+        (
+            "SET intervalstyle = 'postgres_verbose'",
+            Some("postgres_verbose"),
+        ),
+        ("SELECT INTERVAL '1 second'", None),
+        ("RESET ALL", Some("postgres")),
+    ] {
+        send_parse(&mut client, "", sql, &[]);
+        send_bind(&mut client, "", "", &[]);
+        send_execute(&mut client, "");
+        send_sync(&mut client);
+        read_style(&mut client, expected);
+    }
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.request_shutdown();
+    server_thread.join().unwrap().unwrap();
+}
+
+#[test]
 fn protocol_3_0_startup_is_accepted() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

@@ -158,8 +158,14 @@ impl<'db> SqlSession<'db> {
         or_replace: bool,
     ) -> Result<()> {
         oracle::validate_routine_language(self.db_ref(), &routine.language)?;
-        if oracle::preview_routine_language_version(&routine.language) == Some(2) {
+        if matches!(
+            oracle::preview_routine_language_version(&routine.language),
+            Some(2 | 3)
+        ) {
             routine.schema = oracle::routines::function_namespace(&routine)?;
+        }
+        if oracle::preview_routine_language_version(&routine.language) == Some(3) {
+            oracle::routine_arithmetic::prepare_physical_metadata(&mut routine)?;
         }
         self.require_schema_create_privilege(&routine.schema)?;
         if load_routine(self.db_ref(), routine.kind, &routine.name)?.is_some() {

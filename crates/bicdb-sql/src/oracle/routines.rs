@@ -4,7 +4,7 @@ use super::*;
 pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
     if routine.kind != RoutineKind::Function {
         return Err(SqlError::Unsupported(
-            "Oracle preview routine v2 currently supports function definitions".into(),
+            "Oracle preview static routine compiler currently supports function definitions".into(),
         ));
     }
     let statements = Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition)
@@ -16,7 +16,12 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
     };
     if normalize_object_name(&object_name(&function.name)?) != routine.name
         || !function.language.as_ref().is_some_and(|language| {
-            preview_routine_language_version(&ident_value(language)) == Some(2)
+            preview_routine_language_version(&ident_value(language))
+                == preview_routine_language_version(&routine.language)
+                && matches!(
+                    preview_routine_language_version(&routine.language),
+                    Some(2 | 3)
+                )
         })
     {
         return Err(SqlError::InvalidSql(

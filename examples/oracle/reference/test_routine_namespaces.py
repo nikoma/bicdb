@@ -68,6 +68,17 @@ class RoutineNamespaceTests(unittest.TestCase):
         self.assertEqual(len(report['cleanup_errors']), 1)
         self.assertNotIn('private cleanup details', str(report))
 
+    def test_temporal_fixture_distinguishes_number_interval_and_datetime_results(self):
+        from routine_temporal import fixture as temporal_fixture
+        plan = temporal_fixture('owner', 'BICDB_TEST')
+        cases = {case['id']: case for case in plan['cases']}
+        self.assertEqual(len(cases), 29)
+        self.assertIn('number', cases['delta_0']['expected'][0][0])
+        self.assertIn('interval', cases['stamp_delta_0']['expected'][0][0])
+        self.assertIn('timestamp', cases['cast_date_0']['expected'][0][0])
+        literals = [obj for obj in plan['setup'] if obj['name'].endswith('_LITERAL"')]
+        self.assertTrue(all('() RETURN' not in obj['sql'] for obj in literals))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,7 +1,7 @@
 //! Resolve preview datetime operations without changing PostgreSQL arithmetic.
 use super::*;
 
-fn exact_numeric_operand_sql(expr: &Expr) -> String {
+pub(super) fn exact_numeric_operand_sql(expr: &Expr) -> String {
     match expr {
         Expr::Value(value) => match &value.value {
             Value::Number(number, _) => {

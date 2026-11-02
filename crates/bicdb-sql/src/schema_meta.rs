@@ -4027,6 +4027,7 @@ pub(crate) fn load_routine(
 pub(crate) struct CachedRoutine {
     pub(crate) schema: Arc<RoutineSchema>,
     pub(crate) ir: Arc<RoutineIR>,
+    pub(crate) compilation_scope: Option<RoutineCompilationScope>,
 }
 
 thread_local! {
@@ -4066,10 +4067,22 @@ pub(crate) fn resolve_routine_cached(
             if entry.generation != generation {
                 return None;
             }
-            match kind {
+            let cached = match kind {
                 RoutineKind::Function => entry.function.clone(),
                 RoutineKind::Procedure => entry.procedure.clone(),
+            };
+            if cached
+                .as_ref()
+                .and_then(|cached| cached.as_ref())
+                .is_some_and(|routine| {
+                    routine
+                        .compilation_scope
+                        .is_some_and(|scope| scope != routine_compilation_scope(db))
+                })
+            {
+                return None;
             }
+            cached
         })
     }) {
         if let Some(routine) = &cached {
@@ -4081,8 +4094,15 @@ pub(crate) fn resolve_routine_cached(
         Some(schema) => {
             oracle::validate_routine_language(db, &schema.language)?;
             let schema = Arc::new(schema);
-            let ir = compile_cached_routine_ir(&schema)?;
-            Some(CachedRoutine { schema, ir })
+            let ir = compile_cached_routine_ir_in_catalog(&schema, Some(db))?;
+            let compilation_scope = (oracle::preview_routine_language_version(&schema.language)
+                == Some(3))
+            .then(|| routine_compilation_scope(db));
+            Some(CachedRoutine {
+                schema,
+                ir,
+                compilation_scope,
+            })
         }
         None => None,
     };
@@ -4141,6 +4161,7 @@ impl RoutineFrame {
         let slot_count = template.slot_names.len();
         let mut frame = Self {
             assignment_types: Arc::clone(&template.assignment_types),
+            oracle_dates: template.oracle_dates.clone(),
             values: Arc::new(BTreeMap::new()),
             slot_values: std::rc::Rc::new(vec![SqlValue::Null; slot_count]),
             slot_names: Arc::clone(&template.slot_names),
@@ -4176,6 +4197,19 @@ impl RoutineFrame {
                     value
                 }
                 RoutineArgMode::Out => SqlValue::Null,
+            };
+            let value = if frame
+                .oracle_dates
+                .as_ref()
+                .is_some_and(|dates| dates.contains(&param.positional_key))
+            {
+                let value = crate::pg_scalar_extra::oracle_date_coerce(value)?;
+                if matches!(param.mode, RoutineArgMode::In | RoutineArgMode::InOut) {
+                    frame.positional[input_idx - 1] = value.clone();
+                }
+                value
+            } else {
+                value
             };
             match &param.name {
                 Some(name) => {
@@ -4225,6 +4259,15 @@ impl RoutineFrame {
             }
         }
         let key = normalized_object_name_ref(name);
+        let value = if self
+            .oracle_dates
+            .as_ref()
+            .is_some_and(|dates| dates.contains(key.as_ref()))
+        {
+            crate::pg_scalar_extra::oracle_date_coerce(value)?
+        } else {
+            value
+        };
         let value = match self.assignment_types.get(key.as_ref()) {
             Some(schema) => coerce_routine_assignment(value, schema)?,
             None => value,
@@ -4404,11 +4447,18 @@ impl RoutineFrameTemplate {
         declarations: &[RoutineDecl],
     ) -> Self {
         let mut assignment_types = FxHashMap::default();
+        let mut oracle_dates = FxHashSet::default();
         for param in params {
             if let Some(schema) = &param.type_schema {
                 assignment_types.insert(format!("${}", param.index + 1), schema.clone());
                 if let Some(name) = &param.name {
                     assignment_types.insert(normalize_object_name(name), schema.clone());
+                }
+            }
+            if param.oracle_date {
+                oracle_dates.insert(format!("${}", param.index + 1));
+                if let Some(name) = &param.name {
+                    oracle_dates.insert(normalize_object_name(name));
                 }
             }
         }
@@ -4418,6 +4468,7 @@ impl RoutineFrameTemplate {
                     name,
                     pg_type: Some(pg_type),
                     type_modifier,
+                    oracle_date,
                     ..
                 } => {
                     assignment_types.insert(
@@ -4427,10 +4478,16 @@ impl RoutineFrameTemplate {
                             type_modifier: type_modifier.clone(),
                         },
                     );
+                    if *oracle_date {
+                        oracle_dates.insert(normalize_object_name(name));
+                    }
                 }
                 RoutineDecl::Alias { name, position } => {
                     if let Some(schema) = assignment_types.get(&format!("${position}")).cloned() {
                         assignment_types.insert(normalize_object_name(name), schema);
+                    }
+                    if oracle_dates.contains(&format!("${position}")) {
+                        oracle_dates.insert(normalize_object_name(name));
                     }
                 }
                 _ => {}
@@ -4469,6 +4526,11 @@ impl RoutineFrameTemplate {
         }
         Self {
             assignment_types: Arc::new(assignment_types),
+            oracle_dates: if oracle_dates.is_empty() {
+                None
+            } else {
+                Some(Arc::new(oracle_dates))
+            },
             slot_names: Arc::new(slot_names),
             slot_ids: Arc::new(slot_ids),
             params: template_params,

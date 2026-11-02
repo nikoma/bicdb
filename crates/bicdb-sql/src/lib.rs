@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::Ordering;
@@ -4063,7 +4063,10 @@ struct RoutineIrCacheKey {
     returns_set: bool,
     language: String,
     definition: String,
+    catalog_scope: Option<RoutineCompilationScope>,
 }
+
+type RoutineCompilationScope = (u64, u64, u64, u64, u64, u64);
 
 thread_local! {
     static ROUTINE_IR_CACHE: RefCell<FxHashMap<RoutineIrCacheKey, Arc<RoutineIR>>> = RefCell::new(FxHashMap::default());
@@ -4083,6 +4086,8 @@ struct RoutineParam {
     mode: RoutineArgMode,
     index: usize,
     default_expr: Option<Expr>,
+    declared_date: bool,
+    oracle_date: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -4134,6 +4139,8 @@ enum RoutineDecl {
         pg_type: Option<String>,
         type_modifier: Option<PgTypeModifier>,
         default_expr: Option<RoutineExpr>,
+        declared_date: bool,
+        oracle_date: bool,
     },
     Cursor {
         name: String,
@@ -4266,6 +4273,7 @@ struct RoutineIR {
     declarations: Vec<RoutineDecl>,
     statements: Vec<RoutineStmt>,
     exception_handlers: Vec<RoutineExceptionHandler>,
+    oracle_date_return: bool,
 }
 
 fn routine_block_may_write(statements: &[RoutineStmt]) -> bool {
@@ -4387,6 +4395,7 @@ fn set_expr_may_write(expr: &SetExpr) -> bool {
 #[derive(Clone, Debug)]
 struct RoutineFrame {
     assignment_types: Arc<FxHashMap<String, RoutineTypeSchema>>,
+    oracle_dates: Option<Arc<FxHashSet<String>>>,
     values: Arc<BTreeMap<String, SqlValue>>,
     // Shared with the engine while an embedded statement runs (see
     // `RoutineSlotBinding`): the statement's bound expressions read the slots
@@ -4417,6 +4426,7 @@ struct RoutineFrame {
 #[derive(Clone, Debug)]
 pub(crate) struct RoutineFrameTemplate {
     assignment_types: Arc<FxHashMap<String, RoutineTypeSchema>>,
+    oracle_dates: Option<Arc<FxHashSet<String>>>,
     slot_names: Arc<Vec<String>>,
     slot_ids: Arc<FxHashMap<String, VarId>>,
     params: Vec<RoutineFrameTemplateParam>,

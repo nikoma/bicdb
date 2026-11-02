@@ -58,6 +58,138 @@ impl Running {
 }
 
 #[tokio::test]
+async fn interval_text_settings_apply_within_batches_in_both_profiles() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(directory.path(), profile);
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb");
+        if profile != "postgres" {
+            config.options("-c bicdb.sql_profile=oracle-preview-v1");
+        }
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        assert_eq!(connection.parameter("IntervalStyle"), Some("postgres"));
+        let connection = tokio::spawn(async move {
+            connection.await.unwrap();
+        });
+        for (sql, expected) in [
+            (
+                "SET intervalstyle = 'iso_8601'; SELECT INTERVAL '1 second'",
+                "PT1S",
+            ),
+            (
+                "SET intervalstyle = 'sql_standard'; SELECT INTERVAL '1 second'",
+                "0:00:01",
+            ),
+            (
+                "RESET intervalstyle; SELECT INTERVAL '1 second'",
+                "00:00:01",
+            ),
+        ] {
+            let messages = client.simple_query(sql).await.unwrap();
+            let values: Vec<_> = messages
+                .iter()
+                .filter_map(|message| {
+                    if let tokio_postgres::SimpleQueryMessage::Row(row) = message {
+                        row.get(0)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert_eq!(values, vec![expected], "{profile}: {sql}");
+        }
+        drop(client);
+        connection.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn date_cast_semantics_and_metadata_are_profile_specific_after_reopen() {
+    use tokio_postgres::types::Type;
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        for attempt in 0..2 {
+            let server = Running::with_profile(directory.path(), profile);
+            let mut config = tokio_postgres::Config::new();
+            config
+                .host("127.0.0.1")
+                .port(server.port)
+                .user("bicdb")
+                .dbname("bicdb");
+            if profile != "postgres" {
+                config.options("-c bicdb.sql_profile=oracle-preview-v1");
+            }
+            let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+            assert_eq!(connection.parameter("IntervalStyle"), Some("postgres"));
+            let connection = tokio::spawn(async move {
+                connection.await.unwrap();
+            });
+            if attempt == 0 {
+                let source = if profile == "postgres" {
+                    "CREATE FUNCTION cast_date_value(p_stamp TIMESTAMP) RETURNS DATE LANGUAGE plpgsql AS $$BEGIN RETURN CAST(p_stamp AS DATE); END$$"
+                } else {
+                    "CREATE FUNCTION cast_date_value(p_stamp TIMESTAMP) RETURN DATE IS BEGIN RETURN CAST(p_stamp AS DATE); END;"
+                };
+                client.batch_execute(source).await.unwrap();
+            }
+            let query = if profile == "postgres" {
+                "SELECT cast_date_value($1)"
+            } else {
+                "SELECT cast_date_value($1) FROM DUAL"
+            };
+            let description = client
+                .prepare_typed(query, &[Type::TIMESTAMP])
+                .await
+                .unwrap();
+            assert_eq!(
+                *description.columns()[0].type_(),
+                if profile == "postgres" {
+                    Type::DATE
+                } else {
+                    Type::TIMESTAMP
+                }
+            );
+            let query = if profile == "postgres" {
+                "SELECT CAST(cast_date_value($1) AS VARCHAR(40))"
+            } else {
+                "SELECT CAST(cast_date_value($1) AS VARCHAR2(40)) FROM DUAL"
+            };
+            let query = client
+                .prepare_typed(query, &[Type::TIMESTAMP])
+                .await
+                .unwrap();
+            for (seconds, expected) in [
+                (1709251199, "2024-02-29 23:59:59"),
+                (1709251200, "2024-03-01 00:00:00"),
+                (1709251199, "2024-02-29 23:59:59"),
+            ] {
+                let value = std::time::UNIX_EPOCH + std::time::Duration::new(seconds, 900_000_000);
+                let actual = client
+                    .query_one(&query, &[&value])
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0);
+                assert_eq!(
+                    actual,
+                    if profile == "postgres" {
+                        &expected[..10]
+                    } else {
+                        expected
+                    }
+                );
+            }
+            drop(client);
+            connection.await.unwrap();
+        }
+    }
+}
+
+#[tokio::test]
 async fn oracle_routine_namespace_survives_reopen_and_public_shadow_tables() {
     use tokio_postgres::types::Type;
     let directory = tempfile::tempdir().unwrap();

@@ -32,6 +32,10 @@ pub(crate) fn routine_language_is_plpgsql(routine: &RoutineSchema) -> bool {
 }
 
 pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
+    compile_routine_ir_in_catalog(routine, None)
+}
+
+fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) -> Result<RoutineIR> {
     if routine
         .language
         .trim()
@@ -51,6 +55,7 @@ pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
             declarations: Vec::new(),
             statements,
             exception_handlers: Vec::new(),
+            oracle_date_return: false,
         });
     }
     if !routine_language_is_plpgsql(routine) {
@@ -70,6 +75,13 @@ pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
     }
     let body = plpgsql_body_from_definition(&routine.definition)?;
     let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
+    let oracle_date_return = if oracle::preview_routine_language_version(&routine.language)
+        == Some(3)
+    {
+        oracle::routine_arithmetic::prepare_declared_types(routine, &mut params, &mut declarations)?
+    } else {
+        false
+    };
     if oracle::preview_routine_language_version(&routine.language).is_some() {
         oracle::routines::lower_datetime_trunc(
             &mut params,
@@ -78,9 +90,25 @@ pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
             &mut exception_handlers,
         );
     }
-    if oracle::preview_routine_language_version(&routine.language) == Some(2) {
+    if matches!(
+        oracle::preview_routine_language_version(&routine.language),
+        Some(2 | 3)
+    ) {
         oracle::routines::bind_function_namespace(
             routine,
+            &mut params,
+            &mut declarations,
+            &mut statements,
+            &mut exception_handlers,
+        )?;
+    }
+    if oracle::preview_routine_language_version(&routine.language) == Some(3) {
+        oracle::routine_arithmetic::lower(
+            db.ok_or_else(|| {
+                SqlError::Unsupported(
+                    "typed Oracle routine compilation requires catalog context".into(),
+                )
+            })?,
             &mut params,
             &mut declarations,
             &mut statements,
@@ -101,15 +129,41 @@ pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
         declarations,
         statements,
         exception_handlers,
+        oracle_date_return,
     })
 }
 
 pub(crate) fn compile_cached_routine_ir(routine: &RoutineSchema) -> Result<Arc<RoutineIR>> {
-    let key = routine_ir_cache_key(routine);
+    compile_cached_routine_ir_in_catalog(routine, None)
+}
+
+pub(crate) fn routine_compilation_scope(db: &BicDb) -> RoutineCompilationScope {
+    (
+        db.instance_id(),
+        db.collection_generation(ROUTINE_COLLECTION),
+        db.collection_generation(SCHEMA_COLLECTION),
+        db.collection_generation(VIEW_COLLECTION),
+        db.collection_generation(USER_TYPE_COLLECTION),
+        db.index_generation(),
+    )
+}
+
+pub(crate) fn compile_cached_routine_ir_in_catalog(
+    routine: &RoutineSchema,
+    db: Option<&BicDb>,
+) -> Result<Arc<RoutineIR>> {
+    let mut key = routine_ir_cache_key(routine);
+    if oracle::preview_routine_language_version(&routine.language) == Some(3) {
+        key.catalog_scope = Some(routine_compilation_scope(db.ok_or_else(|| {
+            SqlError::Unsupported(
+                "typed Oracle routine compilation requires catalog context".into(),
+            )
+        })?));
+    }
     if let Some(cached) = ROUTINE_IR_CACHE.with(|cache| cache.borrow().get(&key).cloned()) {
         return Ok(cached);
     }
-    let ir = Arc::new(compile_routine_ir(routine)?);
+    let ir = Arc::new(compile_routine_ir_in_catalog(routine, db)?);
     ROUTINE_IR_CACHE.with(|cache| {
         cache.borrow_mut().insert(key, ir.clone());
     });
@@ -125,6 +179,7 @@ pub(crate) fn routine_ir_cache_key(routine: &RoutineSchema) -> RoutineIrCacheKey
         returns_set: routine.returns_set,
         language: routine.language.to_ascii_lowercase(),
         definition: routine.definition.clone(),
+        catalog_scope: None,
     }
 }
 
@@ -411,19 +466,21 @@ pub(crate) fn parse_routine_param(arg: &str, index: usize) -> Result<RoutinePara
     } else if words.len() >= 2 && !is_likely_type_word(&words[0]) {
         name = Some(unquote_identifier_word(&words[0]));
     }
-    let type_schema = raw_routine_argument_type_schema(&arg)
-        .ok()
-        .map(|mut schema| {
-            // PostgreSQL routine argument signatures discard type modifiers.
-            schema.type_modifier = None;
-            schema
-        });
+    let details = raw_routine_argument_type_details(&arg).ok();
+    let declared_date = details.as_ref().is_some_and(|(_, date)| *date);
+    let type_schema = details.map(|(schema, _)| schema).map(|mut schema| {
+        // PostgreSQL routine argument signatures discard type modifiers.
+        schema.type_modifier = None;
+        schema
+    });
     Ok(RoutineParam {
         type_schema,
         name,
         mode,
         index,
         default_expr,
+        declared_date,
+        oracle_date: false,
     })
 }
 
@@ -740,7 +797,9 @@ pub(crate) fn parse_routine_decl(declaration: &str) -> Result<RoutineDecl> {
         (left, right) => left.or(right),
     };
     let type_declaration = rest[..initializer.map_or(rest.len(), |(start, _)| start)].trim();
-    let type_schema = raw_routine_type_schema(type_declaration).ok();
+    let details = raw_routine_type_details(type_declaration).ok();
+    let declared_date = details.as_ref().is_some_and(|(_, date)| *date);
+    let type_schema = details.map(|(schema, _)| schema);
     let pg_type = type_schema.as_ref().map(|schema| schema.pg_type.clone());
     let type_modifier = type_schema.and_then(|schema| schema.type_modifier);
     let default_expr = initializer
@@ -753,6 +812,8 @@ pub(crate) fn parse_routine_decl(declaration: &str) -> Result<RoutineDecl> {
         pg_type,
         type_modifier,
         default_expr,
+        declared_date,
+        oracle_date: false,
     })
 }
 

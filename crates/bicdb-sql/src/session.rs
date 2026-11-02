@@ -2499,6 +2499,19 @@ impl<'db> SqlSession<'db> {
         if started_guc_transaction {
             self.begin_guc_transaction();
         }
+        let _temporal_scope = self.temporal_scope();
+        let result = execute(self);
+        if started_guc_transaction {
+            match &result {
+                Ok(_) if self.tx.is_none() => self.commit_guc_transaction(),
+                Ok(_) => {}
+                Err(_) => self.rollback_guc_transaction(),
+            }
+        }
+        result
+    }
+
+    fn temporal_scope(&self) -> SqlTemporalScope {
         let transaction_timestamp_micros = self
             .transaction_timestamp_micros
             .unwrap_or_else(unix_now_micros);
@@ -2516,17 +2529,7 @@ impl<'db> SqlSession<'db> {
             .or_else(|| default_session_guc("intervalstyle"))
             .unwrap_or("postgres")
             .to_string();
-        let _temporal_scope =
-            SqlTemporalScope::new(transaction_timestamp_micros, timezone, interval_style);
-        let result = execute(self);
-        if started_guc_transaction {
-            match &result {
-                Ok(_) if self.tx.is_none() => self.commit_guc_transaction(),
-                Ok(_) => {}
-                Err(_) => self.rollback_guc_transaction(),
-            }
-        }
-        result
+        SqlTemporalScope::new(transaction_timestamp_micros, timezone, interval_style)
     }
 
     fn commit_guc_transaction(&mut self) {
@@ -3246,6 +3249,8 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_parsed_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
+        // Earlier statements in a batch can change temporal output settings.
+        let _temporal_scope = self.temporal_scope();
         self.db_ref().check_recovery_state()?;
         if self.row_routine_call && !statement_is_plain_query(statement) {
             return Err(row_routine_write_error());
@@ -3287,6 +3292,9 @@ impl<'db> SqlSession<'db> {
             Statement::Savepoint { name } => self.create_savepoint(name),
             Statement::ReleaseSavepoint { name } => self.release_savepoint(name),
             Statement::Set(set) => self.execute_set(set),
+            Statement::Reset(_) => self
+                .execute_raw_reset(&statement.to_string())?
+                .ok_or_else(|| SqlError::InvalidSql("invalid RESET statement".into())),
             statement => self.execute_statement(statement),
         }
     }

@@ -3071,10 +3071,13 @@ impl<'db> SqlEngine<'db> {
             "similarity" => Some("float4".to_string()),
             "age" | "make_interval" => Some("interval".to_string()),
             "to_date" => Some("date".to_string()),
-            "bicdb_oracle_number_divide" => Some("numeric".to_string()),
-            "bicdb_oracle_to_date" | "bicdb_oracle_trunc_date" | "bicdb_oracle_date_add_days" => {
-                Some("timestamp".to_string())
+            "bicdb_oracle_number_divide" | "bicdb_oracle_date_subtract" => {
+                Some("numeric".to_string())
             }
+            "bicdb_oracle_date_coerce"
+            | "bicdb_oracle_to_date"
+            | "bicdb_oracle_trunc_date"
+            | "bicdb_oracle_date_add_days" => Some("timestamp".to_string()),
             "regexp_match" | "regexp_split_to_array" => Some("text[]".to_string()),
             "substr" | "substring" => match self.infer_env_expr_type(args.first()?, env).as_deref()
             {

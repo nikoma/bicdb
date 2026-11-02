@@ -203,14 +203,14 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v2`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v3`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
 previously translated routines; recreate an Oracle-authored definition to select
 the new compiler. The compiler versions have separate `pg_language` identities,
-present only in a preview database. Version 1 remains supported with its original
-lookup behavior.
+present only in a preview database. Versions 1 and 2 remain supported with their original
+behavior.
 
 Version 2 binds static relation references in functions to the namespace in the
 stored function declaration. Unqualified declarations created through the
@@ -218,21 +218,33 @@ preview session front end use its selected application schema. Quoted namespace
 spelling is retained in routine metadata and qualified DROP checks. The common
 relation visitor preserves CTE names, explicit qualifications and visible table
 aliases. Native table privileges still apply; Oracle AUTHID rights are not
-established. Dynamic SQL namespace binding and version-2 procedures are explicitly
+established. Dynamic SQL namespace binding and version-2/3 procedures are explicitly
 unsupported. Routine names still use global normalized keys: this does not
 provide schema-isolated overloads or full qualified routine-call resolution.
 
-This compiler resolves procedural `TRUNC` calls from declared DATE/timestamp
-parameters and locals, including local initializers, assignments, conditions
-and returns. Numeric TRUNC remains numeric. It does not infer procedural types
-for columns inside embedded SQL or scalar subqueries; those have their own row
-namespaces. General routine SQL overload resolution, record-field types, Oracle
-date arithmetic and source DATE/TIMESTAMP provenance still require further work.
+Version 3 retains source DATE declarations separately from their physical
+PostgreSQL timestamp representation. DATE parameters, assignments, casts and
+returns discard fractional seconds; a declared TIMESTAMP(0) still rounds.
+DATE plus/minus NUMBER returns DATE, DATE minus DATE returns exact NUMBER day
+fractions, and explicit TIMESTAMP differences return intervals. Numeric
+expressions use the preview's exact NUMBER division. Declared numeric fields
+from cursor query metadata participate in arithmetic. Metadata inference does
+not execute queries; schema changes invalidate the typed routine cache.
+
+Procedural `TRUNC` resolves declared DATE/timestamp parameters and locals,
+including initializers, assignments, conditions and returns. Numeric TRUNC
+remains numeric. Physical timestamp columns and temporal `%TYPE` anchors do not
+establish their original Oracle DATE/TIMESTAMP identity; arithmetic requiring
+that identity fails explicitly. Timezone arithmetic, timestamps beyond six
+fractional digits, general SQL overload resolution and full record typing are
+not qualified. ADD_MONTHS and related calendar functions remain separate work.
+
 The [routine datetime evidence](evidence/oracle-routine-datetime-2026-11-01/README.md)
-records version-1 reference values, older-reader execution rejection and its
-original application namespace failure. The [static namespace evidence](evidence/oracle-routine-namespaces-2026-11-01/README.md)
-records version-2 comparisons, PostgreSQL isolation regressions and the next
-application arithmetic gap.
+records version-1 values and its original application namespace failure. The
+[static namespace evidence](evidence/oracle-routine-namespaces-2026-11-01/README.md)
+records version-2 comparisons and the original arithmetic gap. The
+[typed arithmetic evidence](evidence/oracle-routine-arithmetic-2026-11-01/README.md)
+records version-3 reference comparisons, PostgreSQL isolation and limitations.
 
 This is declaration support for the tested routine subset, not a complete
 PL/SQL compiler. Native routine execution, namespace, overload, privilege and

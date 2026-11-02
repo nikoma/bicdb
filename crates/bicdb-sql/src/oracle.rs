@@ -7,6 +7,7 @@ use sqlparser::{dialect::OracleDialect, keywords::Keyword};
 pub mod assessment;
 mod date_trunc;
 mod namespaces;
+pub(crate) mod routine_arithmetic;
 pub(crate) mod routines;
 
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
@@ -14,9 +15,11 @@ pub const ORACLE_PREVIEW_PROFILE: &str = "oracle-preview-v1";
 pub const POSTGRES_PROFILE: &str = "postgres";
 const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1: &str = "bicdb_oracle_preview_v1";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v2";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2: &str = "bicdb_oracle_preview_v2";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v3";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_401;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_402;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -26,7 +29,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         .as_str()
     {
         PREVIEW_ROUTINE_LANGUAGE_V1 => Some(1),
-        PREVIEW_ROUTINE_LANGUAGE => Some(2),
+        PREVIEW_ROUTINE_LANGUAGE_V2 => Some(2),
+        PREVIEW_ROUTINE_LANGUAGE => Some(3),
         _ => None,
     }
 }
@@ -593,6 +597,12 @@ fn syntax_word(value: &str, preview: bool) -> bool {
                 | "CURSOR"
                 | "OPEN"
                 | "CLOSE"
+                | "DAY"
+                | "HOUR"
+                | "MINUTE"
+                | "SECOND"
+                | "YEAR"
+                | "MONTH"
         )
     {
         return true;
@@ -756,6 +766,15 @@ fn syntax_word(value: &str, preview: bool) -> bool {
 }
 
 fn canonical_tokens(db: &BicDb, source: &[Token], preview: bool) -> Result<Vec<Token>> {
+    canonical_tokens_with_routine_types(db, source, preview, false)
+}
+
+fn canonical_tokens_with_routine_types(
+    db: &BicDb,
+    source: &[Token],
+    preview: bool,
+    preserve_date: bool,
+) -> Result<Vec<Token>> {
     let mut pieces = Vec::new();
     let mut i = 0;
     while i < source.len() {
@@ -809,6 +828,11 @@ fn canonical_tokens(db: &BicDb, source: &[Token], preview: bool) -> Result<Vec<T
                         .find(|c| c.name == column)
                         .map(|c| c.pg_type.clone())
                         .ok_or_else(|| unsupported(format!("unknown %TYPE column {column}")))?;
+                    if preserve_date && matches!(ty.as_str(), "timestamp" | "timestamptz") {
+                        return Err(unsupported(
+                            "temporal %TYPE requires source logical type provenance",
+                        ));
+                    }
                     pieces.push(ty);
                     i += 5;
                     continue;
@@ -836,9 +860,11 @@ fn canonical_tokens(db: &BicDb, source: &[Token], preview: bool) -> Result<Vec<T
                     "OCTET_LENGTH" if preview => pieces.push("octet_length".into()),
                     "NUMBER" => pieces.push("NUMERIC".into()),
                     "VARCHAR2" => pieces.push("VARCHAR".into()),
+                    "DATE" if preserve_date => pieces.push("DATE".into()),
                     "DATE" => pieces.push("TIMESTAMP(0)".into()),
                     "NOCACHE" => pieces.push("CACHE 1".into()),
                     "NOCYCLE" => pieces.push("NO CYCLE".into()),
+                    "SYSDATE" if preserve_date => pieces.push("bicdb_oracle_date_coerce(CAST(date_trunc('second', clock_timestamp()) AS TIMESTAMP))".into()),
                     "SYSDATE" => pieces.push(
                         "CAST(date_trunc('second', clock_timestamp()) AS TIMESTAMP(0))".into(),
                     ),
@@ -914,7 +940,7 @@ fn lower_block(db: &BicDb, source: &[Token], routine: bool, preview: bool) -> Re
     }
     // A final slash is the SQL*Plus submission delimiter, not part of PL/SQL.
     let source = source.strip_suffix(&[Token::Div]).unwrap_or(source);
-    let canonical = canonical_tokens(db, source, preview)?;
+    let canonical = canonical_tokens_with_routine_types(db, source, preview, preview && routine)?;
     let (header, body) = if routine {
         let mut depth = 0;
         let boundary = canonical
@@ -1745,6 +1771,7 @@ mod tests {
         for (name, language, expected) in [
             ("native_value", "plpgsql", 99),
             ("legacy_value", PREVIEW_ROUTINE_LANGUAGE_V1, 99),
+            ("previous_bound_value", PREVIEW_ROUTINE_LANGUAGE_V2, 2),
             ("bound_value", PREVIEW_ROUTINE_LANGUAGE, 2),
         ] {
             session.execute(&format!(r#"CREATE FUNCTION "Bound".{name}() RETURNS INT LANGUAGE {language} AS $$DECLARE result INT; BEGIN SELECT v INTO result FROM numbers; RETURN result; END$$"#)).unwrap();
@@ -1840,6 +1867,137 @@ mod tests {
             SqlValue::Int(99)
         );
         assert!(!preview_routine_language_enabled(session.db_ref()).unwrap());
+    }
+
+    #[test]
+    fn preview_routine_arithmetic_preserves_date_timestamp_distinctions() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for source in [
+            "CREATE FUNCTION date_shift(p_date DATE,p_days NUMBER) RETURN DATE IS BEGIN RETURN p_date+p_days; END;",
+            "CREATE FUNCTION date_delta(p_left DATE,p_right DATE) RETURN NUMBER IS BEGIN RETURN p_left-p_right; END;",
+            "CREATE FUNCTION stamp_delta(p_left TIMESTAMP,p_right TIMESTAMP) RETURN INTERVAL DAY TO SECOND IS BEGIN RETURN p_left-p_right; END;",
+            "CREATE FUNCTION date_cast(p_stamp TIMESTAMP) RETURN DATE IS BEGIN RETURN CAST(p_stamp AS DATE); END;",
+            "CREATE FUNCTION stamp_round(p_stamp TIMESTAMP) RETURN TIMESTAMP IS result TIMESTAMP(0):=p_stamp; BEGIN RETURN result; END;",
+            "CREATE FUNCTION date_literal RETURN DATE IS BEGIN RETURN DATE '2024-02-29'+1; END;",
+        ] {let sql=lower_session_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE,None,"bicdb").unwrap();session.execute(&sql).unwrap();}
+        for (source,expected) in [
+            ("SELECT date_shift(TIMESTAMP '2024-02-29 23:59:59.9',0) FROM DUAL","2024-02-29 23:59:59"),
+            ("SELECT date_shift(TIMESTAMP '2024-02-29 23:59:59.9',0.25) FROM DUAL","2024-03-01 05:59:59"),
+            ("SELECT date_shift(TIMESTAMP '2024-03-01 12:00:00',-1) FROM DUAL","2024-02-29 12:00:00"),
+            ("SELECT date_cast(TIMESTAMP '2024-02-29 23:59:59.9') FROM DUAL","2024-02-29 23:59:59"),
+            ("SELECT stamp_round(TIMESTAMP '2024-02-29 23:59:59.9') FROM DUAL","2024-03-01 00:00:00"),
+            ("SELECT date_literal() FROM DUAL","2024-03-01 00:00:00"),
+            ("SELECT date_delta(TIMESTAMP '2024-03-01 00:00:01',TIMESTAMP '2024-03-01 00:00:00') FROM DUAL","0.00001157407407407407407407407407407407407407"),
+        ] {let sql=lower_profile_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE).unwrap();assert_eq!(session.execute(&sql).unwrap().rows[0][0].to_cell(),expected,"{source}");}
+        let sql=lower_profile_sql(session.db_ref(),"SELECT stamp_delta(TIMESTAMP '2024-03-01 00:00:01.123456',TIMESTAMP '2024-03-01 00:00:00.123455') FROM DUAL",ORACLE_PREVIEW_PROFILE).unwrap();
+        let result = session.execute(&sql).unwrap();
+        assert_eq!(
+            infer_query_result_types(session.db_ref(), &sql).unwrap(),
+            Some(vec![Some("interval".into())])
+        );
+        assert_eq!(
+            PgInterval::from_postgres_text(&result.rows[0][0].to_cell()).unwrap(),
+            PgInterval {
+                months: 0,
+                days: 0,
+                micros: 1_000_001
+            }
+        );
+        for source in [
+            "SELECT date_shift(NULL,1) FROM DUAL",
+            "SELECT date_shift(TIMESTAMP '2024-03-01 00:00:00',NULL) FROM DUAL",
+            "SELECT date_delta(NULL,NULL) FROM DUAL",
+        ] {
+            let sql = lower_profile_sql(session.db_ref(), source, ORACLE_PREVIEW_PROFILE).unwrap();
+            assert_eq!(session.execute(&sql).unwrap().rows[0][0], SqlValue::Null);
+        }
+    }
+
+    #[test]
+    fn preview_routine_cursor_operand_types_recompile_after_schema_changes() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for source in ["CREATE TABLE offsets(k NUMBER,days NUMBER)","INSERT INTO offsets VALUES(1,2)","CREATE FUNCTION row_shift(p_date DATE,p_key NUMBER) RETURN DATE IS result DATE:=p_date; CURSOR c IS SELECT * FROM offsets WHERE k=p_key; BEGIN FOR r IN c LOOP result:=result+r.days; END LOOP; RETURN result; END;"] {let sql=lower_session_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE,None,"bicdb").unwrap();session.execute(&sql).unwrap();}
+        let call = lower_profile_sql(
+            session.db_ref(),
+            "SELECT row_shift(TIMESTAMP '2024-02-28 12:34:56',1) FROM DUAL",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        assert_eq!(
+            session.execute(&call).unwrap().rows[0][0].to_cell(),
+            "2024-03-01 12:34:56"
+        );
+        let sql = lower_profile_sql(
+            session.db_ref(),
+            "ALTER TABLE offsets RENAME COLUMN days TO other_days",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        session.execute(&sql).unwrap();
+        assert_eq!(session.execute(&call).unwrap_err().sqlstate(), "0A000");
+    }
+
+    #[test]
+    fn typed_routines_reject_unresolved_temporal_provenance_and_precision() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for source in ["CREATE TABLE temporal_rows(k NUMBER,happened DATE)","CREATE FUNCTION unresolved_delta(p_date DATE) RETURN NUMBER IS result NUMBER:=0; CURSOR c IS SELECT happened FROM temporal_rows; BEGIN FOR r IN c LOOP result:=p_date-r.happened; END LOOP; RETURN result; END;","CREATE FUNCTION overprecise_stamp RETURN TIMESTAMP IS BEGIN RETURN TIMESTAMP '2024-01-01 23:59:59.9999999'; END;"] {let sql=lower_profile_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE).unwrap();session.execute(&sql).unwrap();}
+        for source in [
+            "SELECT unresolved_delta(TIMESTAMP '2024-01-01 00:00:00') FROM DUAL",
+            "SELECT overprecise_stamp() FROM DUAL",
+        ] {
+            let sql = lower_profile_sql(session.db_ref(), source, ORACLE_PREVIEW_PROFILE).unwrap();
+            assert_eq!(session.execute(&sql).unwrap_err().sqlstate(), "0A000");
+        }
+    }
+
+    #[test]
+    fn postgres_date_casts_and_timestamp_arithmetic_remain_native() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE FUNCTION native_date_cast(p_stamp TIMESTAMP) RETURNS DATE LANGUAGE plpgsql AS $$BEGIN RETURN CAST(p_stamp AS DATE); END$$").unwrap();
+        let result = session
+            .execute("SELECT native_date_cast(TIMESTAMP '2024-02-29 23:59:59.9')")
+            .unwrap();
+        assert_eq!(
+            infer_query_result_types(
+                session.db_ref(),
+                "SELECT native_date_cast(TIMESTAMP '2024-02-29 23:59:59.9')"
+            )
+            .unwrap(),
+            Some(vec![Some("date".into())])
+        );
+        assert_eq!(result.rows[0][0].to_cell(), "2024-02-29");
+        assert_eq!(
+            session
+                .execute("SELECT CAST(TIMESTAMP '2024-02-29 23:59:59.9' AS TIMESTAMP(0))")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "2024-03-01 00:00:00"
+        );
+        assert!(session
+            .execute("SELECT TIMESTAMP '2024-03-01 00:00:00'+1")
+            .is_err());
+        let result=session.execute("SELECT TIMESTAMP '2024-03-01 00:00:01.123456'-TIMESTAMP '2024-03-01 00:00:00.123455'").unwrap();
+        assert_eq!(infer_query_result_types(session.db_ref(),"SELECT TIMESTAMP '2024-03-01 00:00:01.123456'-TIMESTAMP '2024-03-01 00:00:00.123455'").unwrap(),Some(vec![Some("interval".into())]));
+        assert_eq!(
+            PgInterval::from_postgres_text(&result.rows[0][0].to_cell()).unwrap(),
+            PgInterval {
+                months: 0,
+                days: 0,
+                micros: 1_000_001
+            }
+        );
     }
     #[test]
     fn preview_number_division_keeps_fractional_results_and_oracle_mantissa_precision() {

@@ -1,0 +1,63 @@
+{
+  "format": 1,
+  "synthetic_only": true,
+  "cases": [
+    {
+      "id": "date_cast_truncates",
+      "sql": "SELECT CAST(TIMESTAMP '2024-02-29 23:59:59.9' AS DATE) FROM DUAL",
+      "value": "2024-02-29 23:59:59",
+      "python_type": "datetime",
+      "oracle_type": "DB_TYPE_DATE"
+    },
+    {
+      "id": "timestamp_zero_rounds",
+      "sql": "SELECT CAST(TIMESTAMP '2024-02-29 23:59:59.9' AS TIMESTAMP(0)) FROM DUAL",
+      "value": "2024-03-01 00:00:00",
+      "python_type": "datetime",
+      "oracle_type": "DB_TYPE_TIMESTAMP"
+    },
+    {
+      "id": "date_difference",
+      "sql": "SELECT TO_DATE('2024-03-01 00:00:01','YYYY-MM-DD HH24:MI:SS')-TO_DATE('2024-03-01 00:00:00','YYYY-MM-DD HH24:MI:SS') FROM DUAL",
+      "value": "0.00001157407407407407407407407407407407407407",
+      "python_type": "Decimal",
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "timestamp_difference",
+      "sql": "SELECT TIMESTAMP '2024-03-01 00:00:01.123456'-TIMESTAMP '2024-03-01 00:00:00.123455' FROM DUAL",
+      "value": "0:00:01.000001",
+      "python_type": "timedelta",
+      "oracle_type": "DB_TYPE_INTERVAL_DS"
+    },
+    {
+      "id": "date_minus_timestamp",
+      "sql": "SELECT TO_DATE('2024-03-01 00:00:01','YYYY-MM-DD HH24:MI:SS')-TIMESTAMP '2024-03-01 00:00:00.5' FROM DUAL",
+      "value": "0:00:00.500000",
+      "python_type": "timedelta",
+      "oracle_type": "DB_TYPE_INTERVAL_DS"
+    },
+    {
+      "id": "timestamp_minus_date",
+      "sql": "SELECT TIMESTAMP '2024-03-01 00:00:01.5'-TO_DATE('2024-03-01 00:00:00','YYYY-MM-DD HH24:MI:SS') FROM DUAL",
+      "value": "0:00:01.500000",
+      "python_type": "timedelta",
+      "oracle_type": "DB_TYPE_INTERVAL_DS"
+    },
+    {
+      "id": "timestamp_number_result",
+      "sql": "SELECT TIMESTAMP '2024-02-29 23:59:59.9'+0 FROM DUAL",
+      "value": "2024-02-29 23:59:59",
+      "python_type": "datetime",
+      "oracle_type": "DB_TYPE_DATE"
+    },
+    {
+      "id": "date_minus_null",
+      "sql": "SELECT TO_DATE('2024-03-01','YYYY-MM-DD')-NULL FROM DUAL",
+      "value": "None",
+      "python_type": "NoneType",
+      "oracle_type": "DB_TYPE_DATE"
+    }
+  ],
+  "reference_version": "23.26.3.0.0"
+}

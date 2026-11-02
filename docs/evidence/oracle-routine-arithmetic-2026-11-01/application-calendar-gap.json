@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "synthetic_input_to_original_routine": true,
+  "original_routine_source_unchanged": true,
+  "data_changes_rolled_back": true,
+  "runtime_binary_sha256": "ba8f21e172d3229821327be7f6d476de102488871ffb96083383f152db46bb16",
+  "cases": [
+    {
+      "date": "2026-11-01 12:34:56",
+      "oracle": "2026-12-15 00:00:00",
+      "error": "unsupported SQL: unsupported constant expression \"DUEDATE\"",
+      "sqlstate": "0A000",
+      "match": false
+    }
+  ],
+  "success": false,
+  "application_qualified": false
+}

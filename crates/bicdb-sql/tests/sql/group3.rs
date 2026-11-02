@@ -624,6 +624,28 @@ fn postgres_intervalstyle_set_is_accepted() {
 }
 
 #[test]
+fn temporal_output_settings_take_effect_within_a_statement_batch() {
+    let (_dir, mut db) = empty_test_db();
+    let mut session = SqlSession::new(&mut db);
+    for (sql, expected) in [
+        (
+            "SET intervalstyle = iso_8601; SELECT INTERVAL '1 second'",
+            "PT1S",
+        ),
+        (
+            "SET intervalstyle = sql_standard; SELECT INTERVAL '1 second'",
+            "0:00:01",
+        ),
+        (
+            "RESET intervalstyle; SELECT INTERVAL '1 second'",
+            "00:00:01",
+        ),
+    ] {
+        assert_eq!(session.execute(sql).unwrap().rows[0][0].to_cell(), expected);
+    }
+}
+
+#[test]
 fn postgres_datestyle_set_is_accepted() {
     let (_dir, mut db) = empty_test_db();
     let mut session = SqlSession::new(&mut db);

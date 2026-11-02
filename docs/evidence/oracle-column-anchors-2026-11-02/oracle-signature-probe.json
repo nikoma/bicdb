@@ -1,0 +1,121 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "context": "argument",
+      "input": "12.345",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.345"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "context": "argument",
+      "input": "1000.123",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1000.123"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "context": "argument",
+      "input": "999.995",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "999.995"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "context": "argument",
+      "input": "NULL",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      }
+    },
+    {
+      "context": "return",
+      "input": "12.345",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "context": "return",
+      "input": "-12.345",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-12.35"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "context": "return",
+      "input": "1000.123",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      }
+    },
+    {
+      "context": "return",
+      "input": "999.995",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      }
+    },
+    {
+      "context": "return",
+      "input": "NULL",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      }
+    },
+    {
+      "context": "text_return",
+      "input": "abcdef",
+      "oracle": {
+        "rows": [
+          [
+            "abcdef"
+          ]
+        ]
+      }
+    }
+  ],
+  "oracle_version": "23.26.3.0.0"
+}

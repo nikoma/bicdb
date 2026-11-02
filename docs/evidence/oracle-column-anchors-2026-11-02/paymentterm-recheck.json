@@ -1,0 +1,50 @@
+{
+  "format": 1,
+  "name": "PAYMENTTERMDUEDATE",
+  "source_sha256": "f2945cb88b4e4242a218f02515455eb52a061e72d811bcacbea7159906c33008",
+  "only_adaptation": "explicit destination namespace",
+  "application_qualified": false,
+  "runtime_binary_sha256": "119164c75fb75ee7fafb1cfa8922baf257c43f651e490e0da3555e17b96ce8ab",
+  "cases": [
+    {
+      "payment_term_id": 100,
+      "oracle": "2026-12-01 00:00:00",
+      "bicdb": "2026-12-01 00:00:00",
+      "match": true
+    },
+    {
+      "payment_term_id": 105,
+      "oracle": "2026-11-01 00:00:00",
+      "bicdb": "2026-11-01 00:00:00",
+      "match": true
+    },
+    {
+      "payment_term_id": 106,
+      "oracle": "2026-12-01 00:00:00",
+      "bicdb": "2026-12-01 00:00:00",
+      "match": true
+    },
+    {
+      "payment_term_id": 107,
+      "oracle": "2026-12-01 00:00:00",
+      "bicdb": "2026-12-01 00:00:00",
+      "match": true
+    },
+    {
+      "payment_term_id": 108,
+      "oracle": "2026-11-01 00:00:00",
+      "bicdb": "2026-11-01 00:00:00",
+      "match": true
+    },
+    {
+      "payment_term_id": -1,
+      "oracle": "2026-11-01 00:00:00",
+      "bicdb": "2026-11-01 00:00:00",
+      "match": true
+    }
+  ],
+  "installed_original_definition_reused": true,
+  "scope": "Existing seeded terms selected with a ten-row limit plus absent id; fixed-month branch separately tested, not fully qualified",
+  "existing_getdate_and_charat_still_execute": true,
+  "success": true
+}

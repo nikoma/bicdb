@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "isolated_database_only": true,
+  "application_database_opened_with_old_reader": false,
+  "new_runtime_sha256": "119164c75fb75ee7fafb1cfa8922baf257c43f651e490e0da3555e17b96ce8ab",
+  "old_runtime_sha256": "77942c5fde7c9e8486324649279e2dda1c7cde469e3613b1b586cda3decd1a6e",
+  "readers": [
+    {
+      "label": "new",
+      "rounded": "12.35",
+      "null": true,
+      "overflow_sqlstate": "22003",
+      "case_result": "12.35"
+    },
+    {
+      "label": "old",
+      "rounded": "12.35",
+      "null": true,
+      "overflow_sqlstate": "22003",
+      "case_sqlstate": "0A000"
+    }
+  ],
+  "success": true
+}

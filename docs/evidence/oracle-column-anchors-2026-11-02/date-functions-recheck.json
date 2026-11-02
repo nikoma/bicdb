@@ -1,0 +1,513 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "119164c75fb75ee7fafb1cfa8922baf257c43f651e490e0da3555e17b96ce8ab",
+  "original_source_bodies_unchanged": true,
+  "routines": [
+    {
+      "name": "ADDDAYS",
+      "source_sha256": "7612048fabd96dd041ef92fa4bcbb9582faeb35d9c03eac6d9589657b7398e1a",
+      "total": 5,
+      "matched": 5,
+      "cases": [
+        {
+          "id": "0",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-03-01T12:34:56.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-03-01T12:34:56.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "1",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T00:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T00:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "2",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T18:34:56.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T18:34:56.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "3",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                null
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                null
+              ]
+            ]
+          }
+        },
+        {
+          "id": "4",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                null
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                null
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "DAYSBETWEEN",
+      "source_sha256": "0dd53651e5b9f43b2e490ae8f78b7b2ed1eaada33ff382cc337b6dd74954adc5",
+      "total": 4,
+      "matched": 4,
+      "cases": [
+        {
+          "id": "0",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "number": "1"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "number": "1"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "1",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "number": "-1"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "number": "-1"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "2",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "3",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                null
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                null
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "FIRSTOF",
+      "source_sha256": "c2213a5a625c01041352773b0374ee457f4f695d10b2a4f901557be585dd2664",
+      "total": 14,
+      "matched": 14,
+      "cases": [
+        {
+          "id": "0",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T00:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T00:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "1",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-01T00:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-01T00:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "2",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-01-01T00:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-01-01T00:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "3",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-01-01T00:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-01-01T00:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "4",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-26T00:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-26T00:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "5",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T12:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T12:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "6",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T12:34:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T12:34:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "7",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2001-01-01T00:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2001-01-01T00:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "8",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T00:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-29T00:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "9",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-26T00:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-26T00:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "10",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-25T00:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-25T00:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "11",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-25T00:00:00.000000"
+                }
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                {
+                  "timestamp": "2024-02-25T00:00:00.000000"
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "id": "12",
+          "matched": true,
+          "oracle": {
+            "rows": [
+              [
+                null
+              ]
+            ]
+          },
+          "bicdb": {
+            "rows": [
+              [
+                null
+              ]
+            ]
+          }
+        },
+        {
+          "id": "null_format_error",
+          "matched": true,
+          "oracle": {
+            "error": "DatabaseError",
+            "code": "ORA-01899"
+          },
+          "bicdb": {
+            "error": "InvalidParameterValue",
+            "code": "22023"
+          }
+        }
+      ]
+    }
+  ],
+  "application_qualified": false,
+  "success": true
+}

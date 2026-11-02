@@ -1,0 +1,225 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "119164c75fb75ee7fafb1cfa8922baf257c43f651e490e0da3555e17b96ce8ab",
+  "application_qualified": false,
+  "source_bodies_unchanged": true,
+  "only_adaptation": "explicit destination namespace",
+  "routines": [
+    {
+      "name": "ACCTBALANCE",
+      "source_sha256": "6bf1b0f0186862ef904d32d867c4910231cf05f6bb31be71c3a0bdc1c1e98bcc",
+      "source_body_unchanged": true,
+      "definition_accepted": true
+    },
+    {
+      "name": "BPARTNERREMITLOCATION",
+      "source_sha256": "b677895ea1fec90fae2338a0405293a1a10a452eaefa07982670ba47cc4d3295",
+      "source_body_unchanged": true,
+      "definition_accepted": true
+    },
+    {
+      "name": "DOCUMENTNO",
+      "source_sha256": "83356452277d18f855c676daaa36d82b668cd96d9cf5445b6f591b0834365cb2",
+      "source_body_unchanged": true,
+      "definition_accepted": true
+    },
+    {
+      "name": "GET_SYSCONFIG",
+      "source_sha256": "371a77923a465ddf5eb64ab6297bb3e3fb4d93bc860af41f3f0ea340f66504fc",
+      "source_body_unchanged": true,
+      "definition_accepted": true
+    },
+    {
+      "name": "NEXTBUSINESSDAY",
+      "source_sha256": "6821542374142064c32818ba48a4acc8176d1f398bbc7e82e9a2b52128c78350",
+      "source_body_unchanged": true,
+      "definition_accepted": false,
+      "sqlstate": "0A000",
+      "diagnostic": "unsupported SQL: oracle-preview-v1: parameterized cursor declarations are not implemented"
+    },
+    {
+      "name": "PAYMENTAVAILABLE",
+      "source_sha256": "111b5d1f5d7847e4b3c4a3f622ac504549920dc23d290a3311de056348e7ab10",
+      "source_body_unchanged": true,
+      "definition_accepted": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "acct_all_seed_0",
+      "matched": true,
+      "oracle": {
+        "rows": 379,
+        "row_values_sha256": "32e7ed41c6b74d069d8458ffbf6e8a9f3d4ead37ff7c66fa6c9c538cedab303d"
+      },
+      "bicdb": {
+        "rows": 379,
+        "row_values_sha256": "32e7ed41c6b74d069d8458ffbf6e8a9f3d4ead37ff7c66fa6c9c538cedab303d"
+      },
+      "sql": "SELECT C_ElementValue_ID,\"IDEMPIERE_QUAL\".\"ACCTBALANCE\"(C_ElementValue_ID,CAST('11.125' AS NUMBER),CAST('3.25' AS NUMBER)) FROM \"IDEMPIERE_QUAL\".\"C_ELEMENTVALUE\" ORDER BY C_ElementValue_ID FETCH FIRST 5001 ROWS ONLY"
+    },
+    {
+      "id": "acct_all_seed_1",
+      "matched": true,
+      "oracle": {
+        "rows": 379,
+        "row_values_sha256": "dcd602da0618125a432738a5c4ec201323387785592d07c9037adb8b87ced3a1"
+      },
+      "bicdb": {
+        "rows": 379,
+        "row_values_sha256": "dcd602da0618125a432738a5c4ec201323387785592d07c9037adb8b87ced3a1"
+      },
+      "sql": "SELECT C_ElementValue_ID,\"IDEMPIERE_QUAL\".\"ACCTBALANCE\"(C_ElementValue_ID,CAST('3.25' AS NUMBER),CAST('11.125' AS NUMBER)) FROM \"IDEMPIERE_QUAL\".\"C_ELEMENTVALUE\" ORDER BY C_ElementValue_ID FETCH FIRST 5001 ROWS ONLY"
+    },
+    {
+      "id": "acct_absent_0",
+      "matched": true,
+      "oracle": {
+        "rows": 1,
+        "row_values_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      },
+      "bicdb": {
+        "rows": 1,
+        "row_values_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      },
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"ACCTBALANCE\"(0,11.125,3.25) FROM DUAL"
+    },
+    {
+      "id": "acct_absent_1",
+      "matched": true,
+      "oracle": {
+        "rows": 1,
+        "row_values_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      },
+      "bicdb": {
+        "rows": 1,
+        "row_values_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      },
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"ACCTBALANCE\"(999999999,11.125,3.25) FROM DUAL"
+    },
+    {
+      "id": "acct_absent_2",
+      "matched": true,
+      "oracle": {
+        "rows": 1,
+        "row_values_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      },
+      "bicdb": {
+        "rows": 1,
+        "row_values_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      },
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"ACCTBALANCE\"(NULL,11.125,3.25) FROM DUAL"
+    },
+    {
+      "id": "partner_all_seed",
+      "matched": true,
+      "oracle": {
+        "rows": 18,
+        "row_values_sha256": "8de24b54a867f0a38555d7072bc74b08e7b689c2675d5d365ed65c0a75516716"
+      },
+      "bicdb": {
+        "rows": 18,
+        "row_values_sha256": "8de24b54a867f0a38555d7072bc74b08e7b689c2675d5d365ed65c0a75516716"
+      },
+      "sql": "SELECT C_BPartner_ID,\"IDEMPIERE_QUAL\".\"BPARTNERREMITLOCATION\"(C_BPartner_ID) FROM \"IDEMPIERE_QUAL\".\"C_BPARTNER\" ORDER BY C_BPartner_ID FETCH FIRST 5001 ROWS ONLY"
+    },
+    {
+      "id": "partner_absent_0",
+      "matched": true,
+      "oracle": {
+        "rows": 1,
+        "row_values_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "rows": 1,
+        "row_values_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BPARTNERREMITLOCATION\"(0) FROM DUAL"
+    },
+    {
+      "id": "partner_absent_1",
+      "matched": true,
+      "oracle": {
+        "rows": 1,
+        "row_values_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "rows": 1,
+        "row_values_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BPARTNERREMITLOCATION\"(NULL) FROM DUAL"
+    },
+    {
+      "id": "document_all_seed",
+      "matched": false,
+      "oracle": {
+        "rows": 56,
+        "row_values_sha256": "56b88e1d74cec641ea9db9cc3f60bf47003179465c0e40d072dceb13dc719623"
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      },
+      "sql": "SELECT PP_MRP_ID,\"IDEMPIERE_QUAL\".\"DOCUMENTNO\"(PP_MRP_ID) FROM \"IDEMPIERE_QUAL\".\"PP_MRP\" ORDER BY PP_MRP_ID FETCH FIRST 5001 ROWS ONLY"
+    },
+    {
+      "id": "document_zero",
+      "matched": false,
+      "oracle": {
+        "rows": 1,
+        "row_values_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      },
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"DOCUMENTNO\"(0) FROM DUAL"
+    },
+    {
+      "id": "configuration_missing_default",
+      "matched": false,
+      "oracle": {
+        "rows": 1,
+        "row_values_sha256": "ed6ff83c95f97f39502188c2157fd1b00acd3fd8b3f210eeb498b9ce464f96f6"
+      },
+      "bicdb": {
+        "error": "SyntaxError",
+        "code": "42601"
+      },
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"GET_SYSCONFIG\"('BICDB_QUALIFICATION_MISSING_KEY','fallback',0,0) FROM DUAL"
+    },
+    {
+      "id": "payment_all_seed",
+      "matched": true,
+      "oracle": {
+        "rows": 2,
+        "row_values_sha256": "98f0c00caa55203b3d34a7d50cd471b218190eb4fa6e1ae77acf6e01ba0999c7"
+      },
+      "bicdb": {
+        "rows": 2,
+        "row_values_sha256": "98f0c00caa55203b3d34a7d50cd471b218190eb4fa6e1ae77acf6e01ba0999c7"
+      },
+      "sql": "SELECT C_Payment_ID,\"IDEMPIERE_QUAL\".\"PAYMENTAVAILABLE\"(C_Payment_ID) FROM \"IDEMPIERE_QUAL\".\"C_PAYMENT\" ORDER BY C_Payment_ID FETCH FIRST 5001 ROWS ONLY"
+    },
+    {
+      "id": "payment_absent_error_contract",
+      "matched": true,
+      "oracle": {
+        "rows": 1,
+        "row_values_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "rows": 1,
+        "row_values_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"PAYMENTAVAILABLE\"(999999999) FROM DUAL"
+    }
+  ],
+  "oracle_database_version": "23.26.3.0.0",
+  "definition_accepted": 5,
+  "matched": 10,
+  "total_cases": 13,
+  "all_selected_cases_match": false,
+  "definition_count_before": 30,
+  "definition_count_after": 35
+}

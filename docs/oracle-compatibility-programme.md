@@ -28,6 +28,13 @@ Startup and business workflows are not qualified. The later
 [object inventory](evidence/idempiere-object-coverage-2026-11-01/README.md) records
 30 accepted routine definitions and 90 repeated non-clock seed-view matches;
 catalog acceptance and bounded seed results are not full execution acceptance.
+The subsequent [column-anchor checks](evidence/oracle-column-anchors-2026-11-02/README.md)
+raise accepted original routine definitions to 35 of 62 and exercise selected
+account-balance, remittance-location and payment-availability calls. Remaining
+routine failures are retained as migration blockers. Two additional unchanged
+views match repeated typed-row comparisons after manual dependency refresh,
+raising cumulative strict non-clock seed-view matches to 92. Automatic view
+dependency refresh remains outstanding.
 Required foreign keys, complete routine/view behavior and remaining application
 behavior are still outstanding.
 These are development data baselines, not full schema/application acceptance. The

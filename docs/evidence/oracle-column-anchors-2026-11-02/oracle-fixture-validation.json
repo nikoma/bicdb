@@ -1,0 +1,485 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "id": "num_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "num_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-12.35"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "num_2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "999.99"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "num_3",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-999.99"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "num_4",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0.01"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "num_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "num_overflow",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "match": true
+    },
+    {
+      "id": "qualified_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "qualified_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-12.35"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "qualified_2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "999.99"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "qualified_3",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-999.99"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "qualified_4",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0.01"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "qualified_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "qualified_overflow",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "match": true
+    },
+    {
+      "id": "text_0",
+      "oracle": {
+        "rows": [
+          [
+            "abc"
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "text_1",
+      "oracle": {
+        "rows": [
+          [
+            "a  "
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "text_2",
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9\u00e9\u00e9"
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "text_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "text_overflow",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "match": true
+    },
+    {
+      "id": "text_unicode_overflow",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "match": true
+    },
+    {
+      "id": "not_null_and_default_not_inherited",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "argument_size_not_inherited",
+      "oracle": {
+        "rows": [
+          [
+            "abcdef"
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "argument_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "return_text_size_not_inherited",
+      "oracle": {
+        "rows": [
+          [
+            "abcdef"
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "return_text_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "return_numeric_overflow",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "match": true
+    },
+    {
+      "id": "return_numeric_rounding",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "return_numeric_negative_rounding",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-12.35"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "return_numeric_rounding_overflow",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "match": true
+    },
+    {
+      "id": "case_negative_return",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "case_positive_return",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "case_null_return",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "numeric_return_handler_rounding",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "numeric_return_handler_overflow",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "numeric_literal_return",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123456789012345678901234.57"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "return_numeric_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "recovery_after_errors",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "number_argument_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.345"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "number_argument_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1000.123"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "number_argument_2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "999.995"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "number_argument_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "oracle_version": "23.26.3.0.0",
+  "matched": 41
+}

@@ -297,6 +297,8 @@ Temporal anchors still require durable source logical-type provenance rather
 than guessing DATE from a physical timestamp. Variable/record anchors, general
 BYTE versus CHAR behavior, user-defined Oracle types and cross-schema privilege
 qualification remain outstanding.
+The [column-anchor evidence](evidence/oracle-column-anchors-2026-11-02/README.md)
+records reference comparisons, original routine retries and remaining blockers.
 
 This is declaration support for the tested routine subset, not a complete
 PL/SQL compiler. Native routine execution, namespace, overload, privilege and

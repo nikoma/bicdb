@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "119164c75fb75ee7fafb1cfa8922baf257c43f651e490e0da3555e17b96ce8ab",
+  "application_qualified": false,
+  "automatic_dependency_recompilation": false,
+  "definitions": [
+    {
+      "name": "C_PAYSELECTION_CHECK_VT",
+      "source_query_sha256": "2555e19d632f3606cbc3f58da10329adbbdd612a8c976ed32a34aff83e1e024b",
+      "source_query_unchanged": true,
+      "definition_refreshed": true
+    },
+    {
+      "name": "RV_PAYMENT",
+      "source_query_sha256": "0b4d972a0d2d0e80e9aa10013aedf18e16362a70f9bfddd94c280949cf08c1b1",
+      "source_query_unchanged": true,
+      "definition_refreshed": true
+    }
+  ]
+}

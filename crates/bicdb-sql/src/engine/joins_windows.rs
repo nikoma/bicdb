@@ -1671,10 +1671,32 @@ impl<'db> SqlEngine<'db> {
                     None,
                 )
             }
-            Expr::Identifier(_) | Expr::CompoundIdentifier(_) => Err(SqlError::Unsupported(
-                "aggregate SELECT cannot mix raw fields and aggregates without GROUP BY"
-                    .to_string(),
-            )),
+            Expr::Identifier(_) | Expr::CompoundIdentifier(_) => {
+                let parts = match expr {
+                    Expr::Identifier(id) => vec![id.value.clone()],
+                    Expr::CompoundIdentifier(ids) => {
+                        ids.iter().map(|id| id.value.clone()).collect()
+                    }
+                    _ => unreachable!(),
+                };
+                // Routine variables are constant across the aggregate's rows.
+                // A real input column retains its ordinary grouping requirement.
+                if BoundExprScope::new(columns, &[])
+                    .column_id(&parts)
+                    .is_none()
+                {
+                    let value = match expr {
+                        Expr::Identifier(id) => routine_var_from_ident(&self.routine_vars, id),
+                        _ => routine_var_from_parts(&self.routine_vars, &parts)?,
+                    };
+                    if let Some(value) = value {
+                        return Ok(value);
+                    }
+                }
+                Err(SqlError::Unsupported(
+                    "aggregate SELECT cannot mix raw fields and aggregates without GROUP BY".into(),
+                ))
+            }
             other => Err(SqlError::Unsupported(format!(
                 "unsupported aggregate expression {other}"
             ))),

@@ -129,6 +129,48 @@ mod tests {
     use super::*;
 
     #[test]
+    fn anonymous_declared_blocks_bind_constants_in_aggregate_queries() {
+        for oracle in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open(root.path()).unwrap();
+            if oracle {
+                oracle::ensure_database_profile(&mut db, oracle::ORACLE_PREVIEW_PROFILE).unwrap();
+            }
+            let mut session = SqlSession::new(&mut db);
+            session.execute("CREATE TABLE aggregate_input(k INT); INSERT INTO aggregate_input VALUES(1),(2); CREATE TABLE aggregate_result(n INT,c INT)").unwrap();
+            let body="DECLARE local_n INTEGER:=7; BEGIN INSERT INTO \"aggregate_result\" SELECT local_n,COUNT(*) FROM \"aggregate_input\"; END;";
+            let sql = if oracle {
+                oracle::lower_profile_sql(session.db_ref(), body, oracle::ORACLE_PREVIEW_PROFILE)
+                    .unwrap()
+            } else {
+                format!("DO $$ {body} $$")
+            };
+            session.execute(&sql).unwrap();
+            assert_eq!(
+                session
+                    .execute("SELECT n,c FROM aggregate_result")
+                    .unwrap()
+                    .rows[0],
+                vec![SqlValue::Int(7), SqlValue::Int(2)]
+            );
+            session
+                .execute("DELETE FROM aggregate_input; DELETE FROM aggregate_result")
+                .unwrap();
+            session.execute(&sql).unwrap();
+            assert_eq!(
+                session
+                    .execute("SELECT n,c FROM aggregate_result")
+                    .unwrap()
+                    .rows[0],
+                vec![SqlValue::Int(7), SqlValue::Int(0)]
+            );
+            // A real column must not become an ungrouped constant simply
+            // because a routine has a same-named variable.
+            session.execute("DO $$DECLARE k INT:=7; BEGIN INSERT INTO aggregate_result SELECT k,COUNT(*) FROM aggregate_input; END$$").unwrap_err();
+        }
+    }
+
+    #[test]
     fn routine_cache_isolates_databases_with_equal_generations_and_negative_entries() {
         let roots = [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()];
         let mut first = BicDb::open(roots[0].path()).unwrap();

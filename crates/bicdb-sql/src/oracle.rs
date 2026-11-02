@@ -380,8 +380,9 @@ fn lower_oracle_sql(
     }
     // Normalize each ordinary statement independently, including physical DDL
     // suffixes. Routine/block semicolons belong to their procedural body.
-    let block = word(&source[0], "BEGIN")
+    let block = (word(&source[0], "BEGIN")
         && (!preview || source.get(1) != Some(&Token::SemiColon))
+        || word(&source[0], "DECLARE") && source.iter().any(|t| word(t, "BEGIN")))
         && source.iter().any(|t| word(t, "END"));
     let routine_declaration = word(&source[0], "CREATE")
         && source

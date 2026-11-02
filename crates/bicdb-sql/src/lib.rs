@@ -770,6 +770,7 @@ impl SqlSchemaCacheScope {
                         .borrow_mut()
                         .push(SqlIndexDefinitionsCacheMap::default());
                 });
+                records::policy_init_plans_begin_statement();
                 true
             } else {
                 false
@@ -848,6 +849,7 @@ impl Drop for SqlSchemaCacheScope {
             SQL_INDEX_DEFINITIONS_CACHE_STACK.with(|stack| {
                 stack.borrow_mut().pop();
             });
+            records::policy_init_plans_end_statement();
         }
     }
 }

@@ -1292,7 +1292,11 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         }
         if matches!(
             unqualified_name,
-            "now" | "current_timestamp" | "transaction_timestamp" | "clock_timestamp"
+            "now"
+                | "current_timestamp"
+                | "transaction_timestamp"
+                | "statement_timestamp"
+                | "clock_timestamp"
         ) && function_args(function).is_empty()
         {
             return Some("timestamptz".to_string());

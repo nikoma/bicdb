@@ -442,12 +442,81 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = rewrite_weak_lock_strengths(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = rewrite_locking_clause_before_limit(&rewritten) {
         rewritten = next;
         changed = true;
     }
 
     changed.then_some(rewritten)
+}
+
+/// `FOR KEY SHARE` and `FOR NO KEY UPDATE` are PostgreSQL's weaker row lock
+/// strengths, which sqlparser does not parse. They become the next stronger
+/// strength it does parse (`FOR SHARE`, `FOR UPDATE`): every conflict the
+/// weak lock would take is still taken, so correctness is unchanged and only
+/// concurrency can be lower. Works on tokens, so strings, dollar-quoted bodies
+/// and comments are left alone.
+pub(crate) fn rewrite_weak_lock_strengths(input: &str) -> Option<String> {
+    let lower = input.to_ascii_lowercase();
+    if !lower.contains("key") || !lower.contains("for") {
+        return None;
+    }
+    let tokens = Tokenizer::new(&PostgreSqlDialect {}, input)
+        .tokenize()
+        .ok()?;
+    let word = |token: &Token| -> Option<String> {
+        match token {
+            Token::Word(word) if word.quote_style.is_none() => {
+                Some(word.value.to_ascii_uppercase())
+            }
+            _ => None,
+        }
+    };
+    let next_word = |from: usize| -> Option<(usize, String)> {
+        let mut index = from;
+        while let Some(token) = tokens.get(index) {
+            if matches!(token, Token::Whitespace(_)) {
+                index += 1;
+                continue;
+            }
+            return word(token).map(|value| (index, value));
+        }
+        None
+    };
+    let mut out = String::with_capacity(input.len());
+    let mut changed = false;
+    let mut index = 0;
+    while index < tokens.len() {
+        if word(&tokens[index]).as_deref() == Some("FOR") {
+            if let Some((key_index, first)) = next_word(index + 1) {
+                let replacement = match first.as_str() {
+                    "KEY" => next_word(key_index + 1)
+                        .filter(|(_, value)| value == "SHARE")
+                        .map(|(end, _)| ("FOR SHARE", end)),
+                    "NO" => next_word(key_index + 1)
+                        .filter(|(_, value)| value == "KEY")
+                        .and_then(|(key, _)| next_word(key + 1))
+                        .filter(|(_, value)| value == "UPDATE")
+                        .map(|(end, _)| ("FOR UPDATE", end)),
+                    _ => None,
+                };
+                if let Some((text, end)) = replacement {
+                    out.push_str(text);
+                    index = end + 1;
+                    changed = true;
+                    continue;
+                }
+            }
+        }
+        out.push_str(&tokens[index].to_string());
+        index += 1;
+    }
+    changed.then_some(out)
 }
 
 /// PostgreSQL accepts a locking clause (`FOR UPDATE [OF ...] [NOWAIT | SKIP

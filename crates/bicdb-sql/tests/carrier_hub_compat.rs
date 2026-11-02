@@ -727,3 +727,130 @@ fn correlated_exists_per_array_element_on_wide_rows() {
         started.elapsed()
     );
 }
+
+/// The Hub's board row hierarchy trigger reads the parent row
+/// `... INTO parent_archived_at FROM board_rows ... FOR KEY SHARE`.
+#[test]
+fn weak_row_lock_strengths_parse_in_queries_and_routines() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE parents (id INT PRIMARY KEY, archived BOOLEAN, note TEXT)",
+        "INSERT INTO parents VALUES (1, false, 'for key share stays text')",
+        "CREATE TABLE children (id INT PRIMARY KEY, parent_id INT)",
+        "CREATE FUNCTION children_guard() RETURNS trigger LANGUAGE plpgsql AS $f$
+         DECLARE parent_archived BOOLEAN;
+         BEGIN
+           SELECT p.archived INTO parent_archived FROM parents AS p WHERE p.id = NEW.parent_id FOR KEY SHARE;
+           IF NOT FOUND THEN
+             RAISE EXCEPTION 'missing parent' USING ERRCODE = '23503', CONSTRAINT = 'children_parent';
+           END IF;
+           RETURN NEW;
+         END
+         $f$",
+        "CREATE TRIGGER children_guard BEFORE INSERT ON children FOR EACH ROW EXECUTE FUNCTION children_guard()",
+        "INSERT INTO children VALUES (10, 1)",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    assert_eq!(
+        session
+            .execute("INSERT INTO children VALUES (11, 99)")
+            .unwrap_err()
+            .sqlstate(),
+        "23503"
+    );
+    for sql in [
+        "SELECT id FROM parents WHERE id = 1 FOR KEY SHARE",
+        "SELECT id FROM parents WHERE id = 1 FOR NO KEY UPDATE",
+        "SELECT id FROM parents WHERE id = 1 FOR NO KEY UPDATE SKIP LOCKED",
+    ] {
+        assert_eq!(session_rows(&mut session, sql).len(), 1, "{sql}");
+    }
+    let note = session_rows(&mut session, "SELECT note FROM parents WHERE id = 1");
+    assert_eq!(note[0][0].to_cell(), "for key share stays text");
+}
+
+/// The Hub's document reference compatibility report selects
+/// statement_timestamp() next to aggregates.
+#[test]
+fn statement_timestamp_is_a_timestamptz_in_scalar_and_aggregate_selects() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE refs (id INT PRIMARY KEY)")
+        .unwrap();
+    session.execute("INSERT INTO refs VALUES (1), (2)").unwrap();
+    for sql in [
+        "SELECT statement_timestamp() AS at",
+        "SELECT count(*) AS n, statement_timestamp() AS at FROM refs",
+        "SELECT statement_timestamp() = now() AS same",
+    ] {
+        let result = session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
+        assert_eq!(result.rows.len(), 1, "{sql}");
+    }
+    let typed = session
+        .execute("SELECT count(*) AS n, statement_timestamp() AS at FROM refs")
+        .unwrap();
+    assert_eq!(
+        typed.column_types.get(1).cloned().flatten().as_deref(),
+        Some("timestamptz")
+    );
+    assert_eq!(
+        session_rows(&mut session, "SELECT statement_timestamp() = now()")[0][0],
+        SqlValue::Bool(true)
+    );
+}
+
+/// The Hub's row security policies read `(SELECT current_tenant())` and
+/// `(SELECT current_roles()) ?| ARRAY[...]`. These uncorrelated subqueries are
+/// evaluated once per statement (as PostgreSQL's InitPlans are); the answers
+/// must follow the session's settings between and within statements.
+#[test]
+fn row_security_policy_subqueries_follow_the_session() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    {
+        let mut admin = SqlSession::new(&mut db);
+        for sql in [
+            "CREATE ROLE app LOGIN",
+            "CREATE TABLE notes (id INT PRIMARY KEY, org_id TEXT NOT NULL, body TEXT)",
+            "INSERT INTO notes VALUES (1, 'org-a', 'a1'), (2, 'org-a', 'a2'), (3, 'org-b', 'b1')",
+            "CREATE FUNCTION probe_tenant() RETURNS TEXT LANGUAGE sql STABLE AS $f$ SELECT current_setting('probe.tenant', true) $f$",
+            "CREATE FUNCTION probe_roles() RETURNS JSONB LANGUAGE sql STABLE AS $f$ SELECT COALESCE(current_setting('probe.roles', true), '[]')::jsonb $f$",
+            "ALTER TABLE notes ENABLE ROW LEVEL SECURITY",
+            "CREATE POLICY notes_select ON notes FOR SELECT USING (org_id = NULLIF((SELECT probe_tenant()), '') AND ((SELECT probe_roles()) ?| ARRAY['member', 'admin']::TEXT[]))",
+            "GRANT SELECT ON notes TO app",
+            "GRANT EXECUTE ON FUNCTION probe_tenant() TO app",
+            "GRANT EXECUTE ON FUNCTION probe_roles() TO app",
+        ] {
+            admin.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        }
+    }
+    let mut session = SqlSession::new_unprivileged(&mut db, "app");
+    let ids = |session: &mut SqlSession<'_>| -> Vec<String> {
+        session_rows(session, "SELECT id FROM notes ORDER BY id").into_iter().map(|row| row[0].to_cell()).collect()
+    };
+    assert!(ids(&mut session).is_empty(), "no tenant: nothing visible");
+    session.execute("SELECT set_config('probe.tenant', 'org-a', false)").unwrap();
+    assert!(ids(&mut session).is_empty(), "tenant but no role: nothing visible");
+    session.execute("SELECT set_config('probe.roles', '[\"member\"]', false)").unwrap();
+    assert_eq!(ids(&mut session), vec!["1", "2"]);
+    session.execute("SELECT set_config('probe.tenant', 'org-b', false)").unwrap();
+    assert_eq!(ids(&mut session), vec!["3"]);
+    session.execute("SELECT set_config('probe.roles', '[\"guest\"]', false)").unwrap();
+    assert!(ids(&mut session).is_empty(), "role no longer admitted");
+    // Within one statement: a function switching the tenant before reading.
+    session.execute("SELECT set_config('probe.roles', '[\"admin\"]', false)").unwrap();
+    let rows = session_rows(
+        &mut session,
+        "SELECT (SELECT count(*) FROM notes)::bigint AS before_switch, \
+                set_config('probe.tenant', 'org-a', false) AS switched",
+    );
+    assert_eq!(rows[0][0].to_cell(), "1");
+    assert_eq!(ids(&mut session), vec!["1", "2"], "the next statement sees the new tenant");
+}

@@ -2563,9 +2563,11 @@ impl RlsFilter {
         record: &Record,
     ) -> Result<RlsRowVerdict> {
         let row = row_from_record(&self.table, &self.table, Some(schema), record)?;
+        let context = policy_context_hash(engine);
         let mut admitted = false;
         for (_, expr) in &self.permissive {
-            if engine.eval_row_predicate(&row, expr)? {
+            let expr = fold_policy_init_plans(engine, expr, context)?;
+            if engine.eval_row_predicate(&row, &expr)? {
                 admitted = true;
                 break;
             }
@@ -2574,7 +2576,8 @@ impl RlsFilter {
             return Ok(RlsRowVerdict::Denied(None));
         }
         for (name, expr) in &self.restrictive {
-            if !engine.eval_row_predicate(&row, expr)? {
+            let expr = fold_policy_init_plans(engine, expr, context)?;
+            if !engine.eval_row_predicate(&row, &expr)? {
                 return Ok(RlsRowVerdict::Denied(Some(name.clone())));
             }
         }
@@ -2913,7 +2916,34 @@ pub(crate) fn rls_using_denied(table: &str) -> SqlError {
     )))
 }
 
+thread_local! {
+    // Parsed CHECK / policy expressions by their text. RLS policies were
+    // re-parsed for every record a policy check looked at (the WalkNorth
+    // Hub's entity search spent half its time here).
+    static CHECK_EXPRESSION_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<String, Expr>> =
+        std::cell::RefCell::new(rustc_hash::FxHashMap::default());
+}
+
+const CHECK_EXPRESSION_MEMO_MAX: usize = 4096;
+
+/// Parses a CHECK constraint or policy expression; successful parses are
+/// memoized by text (the parse depends only on the text).
 pub(crate) fn parse_check_expression(expression: &str) -> Result<Expr> {
+    if let Some(expr) = CHECK_EXPRESSION_MEMO.with(|memo| memo.borrow().get(expression).cloned()) {
+        return Ok(expr);
+    }
+    let expr = parse_check_expression_uncached(expression)?;
+    CHECK_EXPRESSION_MEMO.with(|memo| {
+        let mut memo = memo.borrow_mut();
+        if memo.len() >= CHECK_EXPRESSION_MEMO_MAX {
+            memo.clear();
+        }
+        memo.insert(expression.to_string(), expr.clone());
+    });
+    Ok(expr)
+}
+
+fn parse_check_expression_uncached(expression: &str) -> Result<Expr> {
     let sql = format!("SELECT 1 WHERE {expression}");
     let mut statements = parse_statements(&sql)?;
     let Some(Statement::Query(query)) = statements.pop() else {
@@ -5535,4 +5565,164 @@ pub fn plain_primary_key_column(db: &BicDb, collection: &str) -> Result<Option<(
         return Ok(None);
     };
     Ok(Some((column.clone(), column_schema.pg_type.clone())))
+}
+
+// ---------------------------------------------------------------------------
+// Policy init plans. PostgreSQL runs an uncorrelated scalar subquery once per
+// statement (an InitPlan), whatever the volatility of what it calls. Row
+// security policies are commonly written that way —
+// `org_id = (SELECT current_tenant()) AND (SELECT current_roles()) ?| ...` —
+// and were evaluated again for every record a policy check looked at. Within
+// a statement, each such subquery is now evaluated once per session/security
+// context and replaced by a typed literal.
+
+type PolicyInitPlanKey = (u64, String);
+type PolicyInitPlans = rustc_hash::FxHashMap<PolicyInitPlanKey, (SqlValue, Option<String>)>;
+
+thread_local! {
+    static POLICY_INIT_PLANS: std::cell::RefCell<Vec<PolicyInitPlans>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+pub(crate) fn policy_init_plans_begin_statement() {
+    POLICY_INIT_PLANS.with(|stack| stack.borrow_mut().push(PolicyInitPlans::default()));
+}
+
+pub(crate) fn policy_init_plans_end_statement() {
+    POLICY_INIT_PLANS.with(|stack| {
+        stack.borrow_mut().pop();
+    });
+}
+
+/// Identifies the session settings and security context a policy subquery
+/// is evaluated under (a set_config or role switch gives a new value).
+fn policy_context_hash(engine: &SqlEngine) -> u64 {
+    use std::hash::{Hash, Hasher};
+    // Order-independent over the settings map.
+    let mut settings = 0u64;
+    for (key, value) in engine.session_gucs.iter() {
+        let mut hasher = rustc_hash::FxHasher::default();
+        key.hash(&mut hasher);
+        value.hash(&mut hasher);
+        settings = settings.wrapping_add(hasher.finish());
+    }
+    let mut hasher = rustc_hash::FxHasher::default();
+    settings.hash(&mut hasher);
+    engine.session_gucs.len().hash(&mut hasher);
+    format!("{:?}", engine.security_context).hash(&mut hasher);
+    hasher.finish()
+}
+
+/// A FROM-less scalar subquery whose select list names no column, e.g.
+/// `(SELECT carrier_private.current_roles())`: it cannot read the row.
+fn is_policy_init_plan(query: &Query) -> bool {
+    use sqlparser::ast::{Visit, Visitor};
+    use std::ops::ControlFlow;
+    if query.with.is_some() || query.order_by.is_some() || query.limit_clause.is_some() {
+        return false;
+    }
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return false;
+    };
+    if !select.from.is_empty()
+        || select.selection.is_some()
+        || select.having.is_some()
+        || select.projection.len() != 1
+    {
+        return false;
+    }
+    let expr = match &select.projection[0] {
+        SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => expr,
+        _ => return false,
+    };
+    struct ReadsRow;
+    impl Visitor for ReadsRow {
+        type Break = ();
+        fn pre_visit_expr(&mut self, expr: &Expr) -> ControlFlow<()> {
+            if matches!(
+                expr,
+                Expr::Identifier(_)
+                    | Expr::CompoundIdentifier(_)
+                    | Expr::CompoundFieldAccess { .. }
+                    | Expr::Subquery(_)
+                    | Expr::Exists { .. }
+                    | Expr::InSubquery { .. }
+            ) {
+                return ControlFlow::Break(());
+            }
+            ControlFlow::Continue(())
+        }
+    }
+    !expr.visit(&mut ReadsRow).is_break()
+}
+
+fn fold_policy_init_plans<'e>(
+    engine: &SqlEngine,
+    expr: &'e Expr,
+    context: u64,
+) -> Result<std::borrow::Cow<'e, Expr>> {
+    use sqlparser::ast::{visit_expressions, visit_expressions_mut, CastKind, DataType, Ident, ObjectName};
+    use std::ops::ControlFlow;
+    let has_candidate = visit_expressions(expr, |inner| match inner {
+        Expr::Subquery(query) if is_policy_init_plan(query) => ControlFlow::Break(()),
+        _ => ControlFlow::Continue(()),
+    })
+    .is_break();
+    if !has_candidate || POLICY_INIT_PLANS.with(|stack| stack.borrow().is_empty()) {
+        return Ok(std::borrow::Cow::Borrowed(expr));
+    }
+    let mut folded = expr.clone();
+    let mut failure = None;
+    let _ = visit_expressions_mut(&mut folded, |inner| {
+        let Expr::Subquery(query) = inner else {
+            return ControlFlow::Continue(());
+        };
+        if !is_policy_init_plan(query) {
+            return ControlFlow::Continue(());
+        }
+        let key = (context, query.to_string());
+        let cached = POLICY_INIT_PLANS
+            .with(|stack| stack.borrow().last().and_then(|plans| plans.get(&key).cloned()));
+        let (value, pg_type) = match cached {
+            Some(cached) => cached,
+            None => {
+                let evaluated = engine.execute_query(query).and_then(|result| {
+                    let pg_type = result.column_types.first().cloned().flatten();
+                    scalar_subquery_value(result).map(|value| (value, pg_type))
+                });
+                match evaluated {
+                    Ok(evaluated) => {
+                        POLICY_INIT_PLANS.with(|stack| {
+                            if let Some(plans) = stack.borrow_mut().last_mut() {
+                                if plans.len() < 1024 {
+                                    plans.insert(key, evaluated.clone());
+                                }
+                            }
+                        });
+                        evaluated
+                    }
+                    Err(error) => {
+                        failure = Some(error);
+                        return ControlFlow::Break(());
+                    }
+                }
+            }
+        };
+        let literal = sql_value_to_literal_expr(&value);
+        *inner = match (&value, pg_type) {
+            (SqlValue::Null, _) | (_, None) => literal,
+            (_, Some(pg_type)) => Expr::Cast {
+                kind: CastKind::DoubleColon,
+                expr: Box::new(literal),
+                data_type: DataType::Custom(ObjectName::from(vec![Ident::new(pg_type)]), vec![]),
+                array: false,
+                format: None,
+            },
+        };
+        ControlFlow::Continue(())
+    });
+    if let Some(error) = failure {
+        return Err(error);
+    }
+    Ok(std::borrow::Cow::Owned(folded))
 }

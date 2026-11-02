@@ -1693,7 +1693,12 @@ pub(crate) fn eval_catalog_function_value(name: &str, args: &[SqlValue]) -> Opti
         | "current_timestamp"
         | "pg_catalog.current_timestamp"
         | "transaction_timestamp"
-        | "pg_catalog.transaction_timestamp" => {
+        | "pg_catalog.transaction_timestamp"
+        // Stable within a statement like now(); BicDB fixes the timestamp per
+        // transaction, so inside a multi-statement transaction this is the
+        // transaction's start rather than the statement's.
+        | "statement_timestamp"
+        | "pg_catalog.statement_timestamp" => {
             Some(SqlValue::String(transaction_timestamp_string()))
         }
         "clock_timestamp" | "pg_catalog.clock_timestamp" => {

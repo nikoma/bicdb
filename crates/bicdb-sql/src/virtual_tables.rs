@@ -1499,12 +1499,15 @@ pub(crate) fn execute_builtin_function(
             vec![vec![SqlValue::String(unix_now_date_string())]],
         )
         .with_column_types(vec![Some("date".to_string())])),
-        "now" | "pg_catalog.now" | "current_timestamp" | "pg_catalog.current_timestamp" => {
-            Ok(SqlResult::new(
-                vec![name.replace("pg_catalog.", "")],
-                vec![vec![SqlValue::String(transaction_timestamp_string())]],
-            ))
-        }
+        "now"
+        | "pg_catalog.now"
+        | "current_timestamp"
+        | "pg_catalog.current_timestamp"
+        | "statement_timestamp"
+        | "pg_catalog.statement_timestamp" => Ok(SqlResult::new(
+            vec![name.replace("pg_catalog.", "")],
+            vec![vec![SqlValue::String(transaction_timestamp_string())]],
+        )),
         "clock_timestamp" | "pg_catalog.clock_timestamp" => Ok(SqlResult::new(
             vec![name.replace("pg_catalog.", "")],
             vec![vec![SqlValue::String(unix_now_timestamp_string())]],

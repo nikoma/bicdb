@@ -1692,6 +1692,8 @@ pub(crate) fn expr_contains_volatile_function(expr: &Expr) -> bool {
                     | "pg_catalog.now"
                     | "current_timestamp"
                     | "pg_catalog.current_timestamp"
+                    | "statement_timestamp"
+                    | "pg_catalog.statement_timestamp"
                     | "clock_timestamp"
                     | "pg_catalog.clock_timestamp"
                     | "gen_random_uuid"

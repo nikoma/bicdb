@@ -24,6 +24,11 @@ def fixture(schema, prefix):
         ('NESTSQL', '(p_left VARCHAR2,p_right VARCHAR2) RETURN NUMBER IS result VARCHAR2(32767); BEGIN SELECT ' + q('TEXT') + '(p_left,p_right) INTO result FROM DUAL; RETURN LENGTH(result); END;'),
         ('OVER', '(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result VARCHAR2(32767); BEGIN result:=RPAD(\'x\',p_left,\'x\')||RPAD(\'y\',p_right,\'y\'); RETURN LENGTH(result); END;'),
     ])
+    definitions.extend([
+        ('TOCHAR', '(p_value NUMBER) RETURN VARCHAR2 IS BEGIN RETURN TO_CHAR(p_value); END;'),
+        ('TOSQL', '(p_value NUMBER) RETURN VARCHAR2 IS result VARCHAR2(32767); BEGIN SELECT TO_CHAR(p_value) INTO result FROM DUAL; RETURN result; END;'),
+        ('TODATE', '(p_value DATE) RETURN VARCHAR2 IS BEGIN RETURN TO_CHAR(p_value); END;'),
+    ])
     cases = []
     def case(name, args, expected=None, error=None):
         row = dict(id=name.lower() + '_' + str(len(cases)), sql='SELECT ' + q(name) + '(' + args + ') FROM DUAL')
@@ -58,6 +63,13 @@ def fixture(schema, prefix):
             case(name, value, '[' + expected + ']')
     for value, expected in [("DATE '2024-02-29'", '[29-FEB-24]'), ("DATE '2000-01-01'", '[01-JAN-00]'), ('NULL', '[]')]:
         case('DATE', value, expected)
+    for value in ['0.5', '-0.5', '12.500', '1e40', '1e-100', 'NULL']:
+        for name, probe in [('TOCHAR', 'NUMBER'), ('TOSQL', 'NUMSQL')]:
+            prior = next(row for row in cases if row['sql'] == 'SELECT ' + q(probe) + '(' + value + ') FROM DUAL')
+            enclosed = prior['expected'][0][0]
+            case(name, value, None if value == 'NULL' else enclosed[1:-1])
+    for value, expected in [("DATE '2024-02-29'", '29-FEB-24'), ("DATE '2000-01-01'", '01-JAN-00'), ('NULL', None)]:
+        case('TODATE', value, expected)
     case('ONCE', '', '[1]')
     case('TEXT', "RPAD('x',3000,'x'),RPAD('y',2000,'y')", error='ORA-06502')
     case('LEN', "RPAD('x',3000,'x'),RPAD('y',2000,'y')", dict(number='5000'))

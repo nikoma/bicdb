@@ -209,6 +209,16 @@ impl Resolve<'_> {
                 let name = object_name_lowercase(&function.name).ok();
                 match name.as_deref() {
                     Some(
+                        "substr" | "substring" | "trim" | "btrim" | "ltrim" | "rtrim" | "reverse",
+                    ) if self.env.concatenation => {
+                        if function_args(function)
+                            .first()
+                            .is_some_and(|arg| self.kind(arg) == Kind::Text)
+                        {
+                            return Kind::Text;
+                        }
+                    }
+                    Some(
                         "bicdb_oracle_date_coerce"
                         | "bicdb_oracle_date_add_days"
                         | "bicdb_oracle_to_date"
@@ -301,6 +311,26 @@ impl Resolve<'_> {
 
     fn rewrite(&self, expr: &mut Expr) -> Result<()> {
         if self.env.concatenation {
+            if let Expr::Function(function) = expr {
+                if object_name_lowercase(&function.name).is_ok_and(|name| name == "to_char") {
+                    let args = function_args(function);
+                    if let [arg] = args.as_slice() {
+                        let kind=match self.kind(arg) {
+                            Kind::Number=>"number",Kind::Date=>"date",Kind::Text|Kind::Null=>"text",
+                            _=>return Err(SqlError::Unsupported("default Oracle TO_CHAR requires resolved character, NUMBER or logical DATE input".into())),
+                        };
+                        let context = if self.sql_depth > 0 || !self.queries.is_empty() {
+                            "sql"
+                        } else {
+                            "plsql"
+                        };
+                        *expr = expression(&format!(
+                            "bicdb_oracle_default_to_char({arg},'{kind}','{context}')"
+                        ))?;
+                        return Ok(());
+                    }
+                }
+            }
             if let Expr::BinaryOp {
                 left,
                 op: BinaryOperator::StringConcat,

@@ -1642,7 +1642,10 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         }
         // Result types of the scalar functions in pg_scalar_extra.rs.
         match unqualified_name {
-            "bicdb_oracle_concat" => return Some("text".to_string()),
+            "nextval" | "currval" | "setval" => return Some("int8".to_string()),
+            "bicdb_oracle_concat" | "bicdb_oracle_default_to_char" | "to_char" => {
+                return Some("text".to_string())
+            }
             "strpos" => return Some("int4".to_string()),
             // reverse/btrim/ltrim/rtrim keep their bytea-aware typing below.
             "lpad" | "rpad" | "repeat" => return Some("text".to_string()),
@@ -1696,6 +1699,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
                 Some("bit" | "varbit") if matches!(unqualified_name, "substr" | "substring") => {
                     Some("bit".to_string())
                 }
+                Some("text" | "varchar" | "bpchar" | "char" | "name") => Some("text".to_string()),
                 _ => None,
             };
         }

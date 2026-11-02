@@ -136,9 +136,64 @@ pub(super) fn evaluate(args: &[SqlValue]) -> Result<SqlValue> {
     })
 }
 
+pub(super) fn default_to_char(args: &[SqlValue]) -> Result<SqlValue> {
+    arity("bicdb_oracle_default_to_char", args, 3..=3)?;
+    if matches!(args[0], SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let width = match args[2].to_cell().as_str() {
+        "plsql" => 100,
+        "sql" => 40,
+        _ => {
+            return Err(SqlError::Unsupported(
+                "unknown Oracle character conversion context".into(),
+            ))
+        }
+    };
+    let text = operand(&args[0], &args[1].to_cell(), width)?;
+    Ok(if text.is_empty() {
+        SqlValue::Null
+    } else {
+        SqlValue::String(text)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sequence_result_types_are_known_and_concatenation_evaluates_operands_once() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        oracle::ensure_database_profile(&mut db, oracle::ORACLE_PREVIEW_PROFILE).unwrap();
+        for source in ["CREATE SEQUENCE concat_seq START WITH 1", "CREATE FUNCTION concat_seq_once RETURN VARCHAR2 IS BEGIN RETURN '['||concat_seq.NEXTVAL||']'; END;"] {
+            let sql=oracle::lower_profile_sql(&db,source,oracle::ORACLE_PREVIEW_PROFILE).unwrap();
+            SqlSession::new(&mut db).execute(&sql).unwrap();
+        }
+        for query in [
+            r#"SELECT nextval('"public"."CONCAT_SEQ"')"#,
+            r#"SELECT currval('"public"."CONCAT_SEQ"')"#,
+            r#"SELECT setval('"public"."CONCAT_SEQ"',1)"#,
+        ] {
+            assert_eq!(
+                infer_query_result_types(&db, query).unwrap().unwrap(),
+                vec![Some("int8".into())]
+            );
+        }
+        let mut session = SqlSession::new(&mut db);
+        assert_eq!(
+            session.execute("SELECT concat_seq_once()").unwrap().rows[0][0].to_cell(),
+            "[1]"
+        );
+        assert_eq!(
+            session
+                .execute(r#"SELECT currval('"public"."CONCAT_SEQ"')"#)
+                .unwrap()
+                .rows[0][0],
+            SqlValue::Int(1)
+        );
+    }
 
     #[test]
     fn oracle_function_character_limits_follow_sql_and_procedural_callers() {

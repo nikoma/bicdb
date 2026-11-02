@@ -551,3 +551,68 @@ fn plpgsql_case_statement_forms() {
     let error = session.execute("SELECT classify('zzz', 5)").unwrap_err().to_string();
     assert!(error.contains("case not found"), "{error}");
 }
+
+/// The Hub's board row hierarchy guard raises with USING ERRCODE and
+/// CONSTRAINT; the routine must compile, and the raised error is reported as a
+/// constraint violation naming that constraint.
+#[test]
+fn raise_using_constraint_reports_a_constraint_violation() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE nodes (id INT PRIMARY KEY, parent_id INT)",
+        "CREATE FUNCTION nodes_guard() RETURNS trigger LANGUAGE plpgsql AS $f$
+         BEGIN
+           IF NEW.parent_id IS NULL THEN
+             RETURN NEW;
+           END IF;
+           IF NEW.parent_id = NEW.id THEN
+             RAISE EXCEPTION 'node cannot be its own parent'
+               USING ERRCODE = '23514',
+                     CONSTRAINT = 'nodes_parent_not_self';
+           END IF;
+           RETURN NEW;
+         END
+         $f$",
+        "CREATE TRIGGER nodes_guard BEFORE INSERT OR UPDATE ON nodes FOR EACH ROW EXECUTE FUNCTION nodes_guard()",
+        "INSERT INTO nodes VALUES (1, NULL), (2, 1)",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let error = session.execute("INSERT INTO nodes VALUES (3, 3)").unwrap_err();
+    assert_eq!(error.sqlstate(), "23514", "{error}");
+    assert!(error.to_string().contains("node cannot be its own parent"), "{error}");
+    match &error {
+        bicdb_sql::SqlError::ConstraintViolation { constraint, .. } => {
+            assert_eq!(constraint.as_deref(), Some("nodes_parent_not_self"))
+        }
+        other => panic!("expected a constraint violation, got {other:?}"),
+    }
+}
+
+/// The Hub's AI capability discovery selects `command_item AS source` from
+/// `CROSS JOIN LATERAL jsonb_array_elements(...) AS command_item`; the column
+/// is jsonb (also when no row matches, which is what Describe sees).
+#[test]
+fn set_returning_function_alias_column_is_typed() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE apps (id INT PRIMARY KEY, commands JSONB)",
+        "INSERT INTO apps VALUES (1, '{\"items\": [{\"id\": \"a\"}]}')",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    for sql in [
+        "SELECT item AS source FROM jsonb_array_elements('[1,2]'::jsonb) AS item",
+        "SELECT item AS source FROM apps app CROSS JOIN LATERAL \
+         jsonb_array_elements(COALESCE(app.commands->'items', '[]'::jsonb)) AS item",
+        "SELECT item AS source FROM apps app CROSS JOIN LATERAL \
+         jsonb_array_elements(COALESCE(app.commands->'items', '[]'::jsonb)) AS item WHERE app.id = NULL",
+    ] {
+        let result = session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        assert_eq!(result.column_types, vec![Some("jsonb".to_string())], "{sql}");
+    }
+}

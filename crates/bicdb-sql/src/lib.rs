@@ -4167,6 +4167,13 @@ enum RoutineAssignmentTarget {
     },
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct RaiseErrorFields {
+    pub(crate) constraint: Option<String>,
+    pub(crate) table: Option<String>,
+    pub(crate) column: Option<String>,
+}
+
 #[derive(Clone, Debug)]
 enum RoutineStmt {
     ContinueLoop,
@@ -4245,6 +4252,9 @@ enum RoutineStmt {
         arguments: Vec<RoutineExpr>,
         detail: Option<RoutineExpr>,
         sqlstate: String,
+        /// RAISE ... USING CONSTRAINT / TABLE / COLUMN, reported like a
+        /// constraint violation's fields.
+        error_fields: Box<RaiseErrorFields>,
     },
     ReturnQuery(Query),
     Return(Option<RoutineExpr>),
@@ -5000,3 +5010,35 @@ mod tests;
 
 #[cfg(test)]
 mod cell_rows_tests;
+
+/// Output column names of a SELECT (PostgreSQL naming: alias, else the
+/// column or function name, else ?column?). `None` when the SQL does not
+/// parse as one query or its select list has a wildcard.
+pub fn query_output_column_names(sql: &str) -> Option<Vec<String>> {
+    use sqlparser::ast::{SelectItem, SetExpr, Statement};
+    let statements =
+        sqlparser::parser::Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql).ok()?;
+    let [Statement::Query(query)] = statements.as_slice() else {
+        return None;
+    };
+    let mut body = query.body.as_ref();
+    loop {
+        match body {
+            SetExpr::SetOperation { left, .. } => body = left.as_ref(),
+            SetExpr::Query(inner) => body = inner.body.as_ref(),
+            _ => break,
+        }
+    }
+    let SetExpr::Select(select) = body else {
+        return None;
+    };
+    select
+        .projection
+        .iter()
+        .map(|item| match item {
+            SelectItem::ExprWithAlias { alias, .. } => Some(alias.value.clone()),
+            SelectItem::UnnamedExpr(expr) => Some(select_expr_column_name(expr)),
+            _ => None,
+        })
+        .collect()
+}

@@ -2948,6 +2948,20 @@ pub(crate) fn constraint_violation(
     }
 }
 
+/// The integrity-constraint SQLSTATEs (class 23) as static codes.
+pub(crate) fn integrity_sqlstate(code: &str) -> Option<&'static str> {
+    Some(match code {
+        "23000" => "23000",
+        "23001" => "23001",
+        "23502" => "23502",
+        "23503" => "23503",
+        "23505" => "23505",
+        "23514" => "23514",
+        "23P01" => "23P01",
+        _ => return None,
+    })
+}
+
 pub(crate) fn unique_violation(name: &str) -> SqlError {
     constraint_violation(
         "23505",

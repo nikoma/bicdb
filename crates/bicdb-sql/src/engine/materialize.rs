@@ -2027,11 +2027,29 @@ impl<'db> SqlEngine<'db> {
         if let Some(call) = json_set_returning_call(factor).ok().flatten() {
             let (alias, columns) = json_set_function_columns(&call).ok()?;
             let output_types = json_set_function_output_pg_types(&call).ok()?;
-            let columns = columns
+            let mut columns = columns
                 .into_iter()
                 .zip(output_types)
                 .map(|(column, pg_type)| (column.to_ascii_lowercase(), Some(pg_type)))
                 .collect::<Vec<_>>();
+            // `jsonb_array_elements(x) AS item` (no column list): the single
+            // output column is also reachable as `item`, typed like the
+            // function's result (as in the parameter-typing pass).
+            if call
+                .alias
+                .as_ref()
+                .is_some_and(|alias| alias.columns.is_empty())
+                && call.function.projection_supported()
+                && call.function.output_pg_types().len() == 1
+                && !columns
+                    .iter()
+                    .any(|(column, _)| column == &alias.to_ascii_lowercase())
+            {
+                columns.push((
+                    alias.to_ascii_lowercase(),
+                    Some(call.function.pg_type().to_string()),
+                ));
+            }
             env.push(RelationColumns {
                 alias: alias.to_ascii_lowercase(),
                 row_type: None,

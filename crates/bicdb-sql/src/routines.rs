@@ -1372,6 +1372,7 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
         .collect::<Result<Vec<_>>>()?;
     let mut sqlstate = "P0001".to_string();
     let mut detail = None;
+    let mut error_fields = RaiseErrorFields::default();
     let mut seen = std::collections::HashSet::new();
     if let Some(options) = using_options {
         for option in split_top_level_commas_nested(options) {
@@ -1415,6 +1416,12 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
                     }
                     sqlstate = parsed.to_ascii_uppercase();
                 }
+                "constraint" => error_fields.constraint = Some(parsed),
+                "table" => error_fields.table = Some(parsed),
+                "column" => error_fields.column = Some(parsed),
+                // Reported by PostgreSQL only as diagnostic fields BicDB does
+                // not send; accepted so the routine compiles.
+                "schema" | "datatype" | "hint" => {}
                 _ => {
                     return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                         "RAISE EXCEPTION USING {name} is not implemented"
@@ -1430,6 +1437,7 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
         arguments,
         detail,
         sqlstate,
+        error_fields: Box::new(error_fields),
     })
 }
 

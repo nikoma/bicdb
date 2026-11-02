@@ -51,6 +51,33 @@ pub(crate) fn header(sql: &str) -> Result<Option<sqlparser::ast::CreateFunction>
             depth == 0
         })
         .ok_or_else(|| SqlError::InvalidSql("unclosed procedure arguments".into()))?;
+    // The raw procedure interpreter has always accepted modes after a name as
+    // well as PostgreSQL's mode-first form. Normalize only the parsing proxy;
+    // keep the stored declaration and its original parameter modes unchanged.
+    let mut arguments = Vec::new();
+    for (index, group) in split_top_level(&source[end + 1..close]).iter().enumerate() {
+        if index > 0 {
+            arguments.push(Token::Comma);
+        }
+        if group
+            .get(1)
+            .is_some_and(|token| ["IN", "OUT", "INOUT"].iter().any(|mode| word(token, mode)))
+        {
+            if word(&group[1], "IN") && group.get(2).is_some_and(|token| word(token, "OUT")) {
+                arguments.extend(tokens("INOUT")?);
+                arguments.push(group[0].clone());
+                arguments.extend_from_slice(&group[3..]);
+            } else {
+                arguments.extend([group[1].clone(), group[0].clone()]);
+                arguments.extend_from_slice(&group[2..]);
+            }
+        } else {
+            arguments.extend_from_slice(group);
+        }
+    }
+    let old_len = close - end - 1;
+    let close = close + arguments.len() - old_len;
+    source.splice(end + 1..end + 1 + old_len, arguments);
     source[position] = tokens("FUNCTION")?.remove(0);
     source.splice(close + 1..close + 1, tokens("RETURNS void")?);
     let mut statements = parse_statements(&join(&source))?;
@@ -243,6 +270,15 @@ mod tests {
         .unwrap();
         let mut session = SqlSession::new(&mut db);
         session.execute("CREATE SCHEMA native_proc").unwrap();
+        session.execute("CREATE PROCEDURE native_proc.legacy(amount IN INTEGER,total INOUT INTEGER) AS $$BEGIN total:=total+amount;END$$ LANGUAGE 'plpgsql'").unwrap();
+        assert_eq!(
+            session
+                .execute("CALL native_proc.legacy(2,4)")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "6"
+        );
         session.execute("CREATE OR REPLACE PROCEDURE native_proc.p(IN amount NUMERIC,OUT doubled NUMERIC,INOUT total NUMERIC) LANGUAGE plpgsql AS $$BEGIN doubled:=amount*2; total:=total+doubled; END$$").unwrap();
         let row = session.execute("CALL native_proc.p(3,1/0,4)").unwrap();
         assert_eq!(

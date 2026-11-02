@@ -5661,7 +5661,9 @@ fn fold_policy_init_plans<'e>(
     expr: &'e Expr,
     context: u64,
 ) -> Result<std::borrow::Cow<'e, Expr>> {
-    use sqlparser::ast::{visit_expressions, visit_expressions_mut, CastKind, DataType, Ident, ObjectName};
+    use sqlparser::ast::{
+        visit_expressions, visit_expressions_mut, CastKind, DataType, Ident, ObjectName,
+    };
     use std::ops::ControlFlow;
     let has_candidate = visit_expressions(expr, |inner| match inner {
         Expr::Subquery(query) if is_policy_init_plan(query) => ControlFlow::Break(()),
@@ -5681,8 +5683,12 @@ fn fold_policy_init_plans<'e>(
             return ControlFlow::Continue(());
         }
         let key = (context, query.to_string());
-        let cached = POLICY_INIT_PLANS
-            .with(|stack| stack.borrow().last().and_then(|plans| plans.get(&key).cloned()));
+        let cached = POLICY_INIT_PLANS.with(|stack| {
+            stack
+                .borrow()
+                .last()
+                .and_then(|plans| plans.get(&key).cloned())
+        });
         let (value, pg_type) = match cached {
             Some(cached) => cached,
             None => {

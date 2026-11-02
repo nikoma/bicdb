@@ -833,24 +833,44 @@ fn row_security_policy_subqueries_follow_the_session() {
     }
     let mut session = SqlSession::new_unprivileged(&mut db, "app");
     let ids = |session: &mut SqlSession<'_>| -> Vec<String> {
-        session_rows(session, "SELECT id FROM notes ORDER BY id").into_iter().map(|row| row[0].to_cell()).collect()
+        session_rows(session, "SELECT id FROM notes ORDER BY id")
+            .into_iter()
+            .map(|row| row[0].to_cell())
+            .collect()
     };
     assert!(ids(&mut session).is_empty(), "no tenant: nothing visible");
-    session.execute("SELECT set_config('probe.tenant', 'org-a', false)").unwrap();
-    assert!(ids(&mut session).is_empty(), "tenant but no role: nothing visible");
-    session.execute("SELECT set_config('probe.roles', '[\"member\"]', false)").unwrap();
+    session
+        .execute("SELECT set_config('probe.tenant', 'org-a', false)")
+        .unwrap();
+    assert!(
+        ids(&mut session).is_empty(),
+        "tenant but no role: nothing visible"
+    );
+    session
+        .execute("SELECT set_config('probe.roles', '[\"member\"]', false)")
+        .unwrap();
     assert_eq!(ids(&mut session), vec!["1", "2"]);
-    session.execute("SELECT set_config('probe.tenant', 'org-b', false)").unwrap();
+    session
+        .execute("SELECT set_config('probe.tenant', 'org-b', false)")
+        .unwrap();
     assert_eq!(ids(&mut session), vec!["3"]);
-    session.execute("SELECT set_config('probe.roles', '[\"guest\"]', false)").unwrap();
+    session
+        .execute("SELECT set_config('probe.roles', '[\"guest\"]', false)")
+        .unwrap();
     assert!(ids(&mut session).is_empty(), "role no longer admitted");
     // Within one statement: a function switching the tenant before reading.
-    session.execute("SELECT set_config('probe.roles', '[\"admin\"]', false)").unwrap();
+    session
+        .execute("SELECT set_config('probe.roles', '[\"admin\"]', false)")
+        .unwrap();
     let rows = session_rows(
         &mut session,
         "SELECT (SELECT count(*) FROM notes)::bigint AS before_switch, \
                 set_config('probe.tenant', 'org-a', false) AS switched",
     );
     assert_eq!(rows[0][0].to_cell(), "1");
-    assert_eq!(ids(&mut session), vec!["1", "2"], "the next statement sees the new tenant");
+    assert_eq!(
+        ids(&mut session),
+        vec!["1", "2"],
+        "the next statement sees the new tenant"
+    );
 }

@@ -36,16 +36,44 @@ class TemporalTypesTests(unittest.TestCase):
             target.temporal_columns(dict(tables=[dict(name='T', columns=['OTHER'])], columns=[column]))
 
     def test_physical_type_check_rejects_ambiguous_or_different_storage(self):
+        for columns in [{}, {('T','D'): (1082, 0)}, {('T','D'): (1114, 6)}]:
+            with self.assertRaisesRegex(ValueError, 'physical temporal type'):
+                target.check_physical_type(columns, 'T', 'D', 1114, {0})
+        target.check_physical_type({('T','D'): (1114,0)}, 'T', 'D', 1114, {0})
+
+    def test_catalog_inventory_filters_other_schemas_and_rejects_duplicates(self):
+        class Cursor:
+            def __init__(self, attributes):
+                self.results = iter([[(99,)], [(1,'T')], attributes])
+            def execute(self, *args): pass
+            def fetchall(self): return next(self.results)
+        cursor = Cursor([(1,'D',1114,0), (2,'D',1082,-1)])
+        self.assertEqual(target.physical_columns(cursor, 'S'), {('T','D'): (1114,0)})
+        with self.assertRaisesRegex(ValueError, 'ambiguous'):
+            target.physical_columns(Cursor([(1,'D',1114,0), (1,'D',1114,0)]), 'S')
+        self.assertEqual(target.physical_columns(
+            Cursor([(1,'D',1114,0), (1,'OTHER',23,-1), (1,'OTHER',23,-1)]),
+            'S', {('T','D')}), {('T','D'): (1114,0)})
+
+    def test_target_fingerprints_preserve_duplicates_nulls_and_whitespace(self):
         class Cursor:
             def __init__(self, rows): self.rows = rows
+            def execute(self, *args, **kwargs): pass
+            def __iter__(self): return iter(self.rows)
+        table = dict(name='T', columns=['D'])
+        fingerprint = lambda rows: target.table_fingerprint(Cursor(rows), 'S', table)
+        self.assertEqual(fingerprint([(None,), ('x ',)]), fingerprint([('x ',), (None,)]))
+        self.assertNotEqual(fingerprint([('x ',)]), fingerprint([('x',)]))
+        self.assertNotEqual(fingerprint([('x',)]), fingerprint([('x',), ('x',)]))
+
+    def test_batched_logical_metadata_preserves_quoted_names(self):
+        class Cursor:
             def execute(self, sql, args): self.args = args
-            def fetchall(self): return self.rows
-        for rows in [[], [(1082, 0)], [(1114, 6)], [(1114, 0), (1114, 0)]]:
-            with self.assertRaisesRegex(ValueError, 'physical temporal type'):
-                target.check_physical_type(Cursor(rows), 'S', 'T', 'D', 1114, {0})
-        cursor = Cursor([(1114, 0)])
-        target.check_physical_type(cursor, 'S', 'T', 'D', 1114, {0})
-        self.assertEqual(cursor.args, ('S', 'T', 'D'))
+            def fetchone(self): return ('DATE', None)
+        cursor = Cursor()
+        self.assertEqual(target.column_types(cursor, 'A"B', 'T', [{'name':'D'}, {'name':'Quoted.Date'}]),
+                         {'D':'DATE', 'Quoted.Date':None})
+        self.assertEqual(cursor.args, ['"A""B"."T"','D','"A""B"."T"','Quoted.Date'])
 
 
 if __name__ == '__main__':

@@ -112,10 +112,15 @@ python3 examples/oracle/idempiere/import_bicdb.py \
 ```
 
 The `types` phase filters the source catalog to exported base tables, validates
-physical storage and row counts, and journals each reconciled DATE/TIMESTAMP
+physical storage and complete target row multisets before and after conversion,
+and journals each reconciled DATE/TIMESTAMP
 column. `--resume` verifies its source snapshot fingerprint and completed logical
 declarations. It does not infer DATE from timestamp(0), rewrite view projections,
-or replace the full value comparison. This phase activates profile metadata
+or replace the full source value comparison. Target row-count differences from
+the source export are reported separately; this phase can reconcile an existing
+application database after application writes without discarding its data. Run
+it without concurrent target DML or DDL. Resume also rejects changes to a
+previously fingerprinted table. This phase activates profile metadata
 format 2; the pre-upgrade backup is needed to return to an older binary.
 
 The `indexes` phase separates constraint-backed indexes from additional logical

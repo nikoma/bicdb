@@ -4,6 +4,7 @@ Only explicit source declarations can distinguish a legacy DATE column from a
 physical timestamp(0). Each ALTER uses normal ownership, row, constraint and
 index validation. The journal records no connection information or row values.
 """
+import collections
 import hashlib
 import json
 import os
@@ -11,7 +12,7 @@ from pathlib import Path
 import re
 import uuid
 
-from import_bicdb import quote, save_report
+from import_bicdb import quote, row_hash, save_report
 
 
 def declaration(column):
@@ -55,15 +56,58 @@ def current_type(cursor, schema, table, column):
     return row[0]
 
 
-def check_physical_type(cursor, schema, table, column, expected_oid, expected_modifiers):
-    cursor.execute('SELECT a."atttypid",a."atttypmod" FROM "pg_catalog"."pg_attribute" a '
-                   'JOIN "pg_catalog"."pg_class" c ON c."oid"=a."attrelid" '
-                   'JOIN "pg_catalog"."pg_namespace" n ON n."oid"=c."relnamespace" '
-                   'WHERE n."nspname"=%s AND c."relname"=%s AND a."attname"=%s '
-                   'AND NOT a."attisdropped"', (schema, table, column))
-    rows = cursor.fetchall()
-    if len(rows) != 1 or rows[0][0] != expected_oid or rows[0][1] not in expected_modifiers:
+def column_types(cursor, schema, table, columns):
+    relation = quote(schema) + '.' + quote(table)
+    names = [column['name'] for column in columns]
+    expressions = ','.join('bicdb_oracle_column_type(%s,%s)' for _ in names)
+    arguments = [value for name in names for value in (relation, name)]
+    cursor.execute('SELECT ' + expressions, arguments)
+    row = cursor.fetchone()
+    if row is None or len(row) != len(names):
+        raise ValueError('missing target temporal metadata results')
+    return dict(zip(names, row))
+
+
+def physical_columns(cursor, schema, expected_columns=None):
+    # Inventory each catalog once. Repeating a three-way catalog join for every
+    # column makes reconciliation unnecessarily expensive on large schemas.
+    # Run against a dedicated migration target without concurrent schema DDL.
+    cursor.execute('SELECT "oid" FROM "pg_catalog"."pg_namespace" WHERE "nspname"=%s', (schema,))
+    namespaces = cursor.fetchall()
+    if len(namespaces) != 1:
+        raise ValueError('target namespace is missing or ambiguous')
+    cursor.execute('SELECT "oid","relname" FROM "pg_catalog"."pg_class" WHERE "relnamespace"=%s', (namespaces[0][0],))
+    relations = dict(cursor.fetchall())
+    cursor.execute('SELECT "attrelid","attname","atttypid","atttypmod" '
+                   'FROM "pg_catalog"."pg_attribute" WHERE NOT "attisdropped"')
+    result = {}
+    for relation, column, oid, modifier in cursor.fetchall():
+        if relation not in relations:
+            continue
+        key = (relations[relation], column)
+        if expected_columns is not None and key not in expected_columns:
+            continue
+        if key in result:
+            raise ValueError('target physical temporal column is ambiguous')
+        result[key] = (oid, modifier)
+    return result
+
+
+def check_physical_type(columns, table, column, expected_oid, expected_modifiers):
+    actual = columns.get((table, column))
+    if actual is None or actual[0] != expected_oid or actual[1] not in expected_modifiers:
         raise ValueError('target physical temporal type differs from the source declaration')
+
+
+def table_fingerprint(cursor, schema, table):
+    columns = ','.join(quote(column) for column in table['columns'])
+    cursor.execute('SELECT ' + columns + ' FROM ' + quote(schema) + '.' + quote(table['name']), prepare=False)
+    rows = collections.Counter(row_hash(row) for row in cursor)
+    digest = hashlib.sha256()
+    for value, count in sorted(rows.items()):
+        digest.update(value)
+        digest.update(str(count).encode('ascii') + b'\n')
+    return dict(rows=sum(rows.values()), multiset_sha256=digest.hexdigest())
 
 
 def probe_support(cursor, schema):
@@ -103,7 +147,8 @@ def migrate(args):
     expected = {(column['table'], column['name']): declaration(column)[0] for column in columns}
     report = dict(format=1, phase='types', source_schema=schema, manifest_sha256=fingerprint,
                   completed=[], success=False, application_qualified=False,
-                  source_temporal_columns=len(columns), validated_tables=0)
+                  source_temporal_columns=len(columns), validated_tables=0,
+                  table_fingerprints={}, source_row_count_differences=[])
     if args.resume and args.report.exists():
         previous = json.loads(args.report.read_text())
         if any(previous.get(key) != report[key] for key in ['format','phase','source_schema','manifest_sha256']):
@@ -113,6 +158,7 @@ def migrate(args):
                 raise ValueError('temporal journal contains an unexpected declaration')
         report = previous
         report['success'] = False
+        report.setdefault('table_fingerprints', {})
     completed = {(row['table'],row['column']) for row in report['completed']}
     by_table = {}
     for column in columns:
@@ -124,34 +170,48 @@ def migrate(args):
                 raise ValueError('target did not confirm the durable preview profile')
             with connection.cursor() as cursor:
                 probe_support(cursor, schema)
+                physical = physical_columns(cursor, schema, expected)
                 report['validated_tables'] = 0
+                report['source_row_count_differences'] = []
                 for table in manifest['tables']:
                     if table['name'] not in by_table:
                         continue
                     relation = quote(schema) + '.' + quote(table['name'])
-                    cursor.execute('SELECT COUNT(*) FROM ' + relation, prepare=False)
-                    if int(cursor.fetchone()[0]) != table['rows']:
-                        raise ValueError('target row count differs from the source snapshot')
+                    before = table_fingerprint(cursor, schema, table)
+                    prior = report['table_fingerprints'].get(table['name'])
+                    if prior is not None and prior['before'] != before:
+                        raise ValueError('target values changed since temporal reconciliation began')
+                    report['table_fingerprints'][table['name']] = dict(before=before)
+                    if before['rows'] != table['rows']:
+                        report['source_row_count_differences'].append(dict(
+                            table=table['name'], source_rows=table['rows'], target_rows=before['rows']))
+                    save_report(args.report, report)
+                    actual_types = column_types(cursor, schema, table['name'], by_table[table['name']])
                     for column in by_table[table['name']]:
                         key = (table['name'], column['name'])
                         source, oid, modifiers = declaration(column)
-                        actual = current_type(cursor, schema, *key)
+                        actual = actual_types[column['name']]
                         if key in completed and actual != source:
                             raise ValueError('completed temporal declaration is missing or changed')
                         if actual is not None and actual != source:
                             raise ValueError('target has a different logical temporal declaration')
-                        check_physical_type(cursor, schema, *key, oid, modifiers)
+                        check_physical_type(physical, *key, oid, modifiers)
                         if actual is None:
                             cursor.execute('ALTER TABLE ' + relation + ' MODIFY (' + quote(column['name']) + ' ' + source + ')', prepare=False)
-                            if current_type(cursor, schema, *key) != source:
-                                raise ValueError('target did not retain the source temporal declaration')
+                    actual_types = column_types(cursor, schema, table['name'], by_table[table['name']])
+                    for column in by_table[table['name']]:
+                        key = (table['name'], column['name'])
+                        source = expected[key]
+                        if actual_types[column['name']] != source:
+                            raise ValueError('target did not retain the source temporal declaration')
                         if key not in completed:
                             report['completed'].append(dict(table=key[0],column=key[1],declaration=source))
                             completed.add(key)
                             save_report(args.report, report)
-                    cursor.execute('SELECT COUNT(*) FROM ' + relation, prepare=False)
-                    if int(cursor.fetchone()[0]) != table['rows']:
-                        raise ValueError('row count changed during temporal reconciliation')
+                    after = table_fingerprint(cursor, schema, table)
+                    if before != after:
+                        raise ValueError('target values changed during temporal reconciliation')
+                    report['table_fingerprints'][table['name']]['after'] = after
                     report['validated_tables'] += 1
                     print(f'types: {table["name"]} ({len(completed)}/{len(columns)})', flush=True)
                     save_report(args.report, report)

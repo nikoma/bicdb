@@ -1,0 +1,40 @@
+{
+  "format": 1,
+  "success": true,
+  "matched": 145,
+  "total": 145,
+  "runtime_binary_sha256": "8469fe1b9721fb5cccf666f9c44205dff23913ef97f847cc54adb3de6c55cfbc",
+  "suites": [
+    {
+      "suite": "decode",
+      "matched": 12,
+      "total": 12
+    },
+    {
+      "suite": "cursors",
+      "matched": 30,
+      "total": 30
+    },
+    {
+      "suite": "concat",
+      "matched": 62,
+      "total": 62
+    },
+    {
+      "suite": "columns",
+      "matched": 6,
+      "total": 6
+    },
+    {
+      "suite": "characters",
+      "matched": 22,
+      "total": 22
+    },
+    {
+      "suite": "procedures",
+      "matched": 13,
+      "total": 13
+    }
+  ],
+  "compact_native_extension_counted_as_postgres_equivalence": false
+}

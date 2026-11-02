@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "engine_source_commit": "d888859bd7e24620068a0a4894ab46cf0a9e1cc5",
+  "runtime_binary_sha256": "8469fe1b9721fb5cccf666f9c44205dff23913ef97f847cc54adb3de6c55cfbc",
+  "rust_passed": 1259,
+  "rust_ignored": 3,
+  "python_reference_passed": 25,
+  "python_migration_passed": 22,
+  "new_oracle_procedure_cases": 26,
+  "retained_oracle_cases": 938,
+  "total_passing_generated_oracle_cases": 964,
+  "native_postgres_cases": 145,
+  "adaptive_flag_replay_cases": 13,
+  "known_semantic_gap_observations": 7,
+  "known_semantic_gap_mismatches": 5,
+  "known_semantic_gaps_also_present_on_previous_runtime": true,
+  "earlier_validation_failures_corrected": [
+    "legacy procedure parameter-mode spelling",
+    "legacy compact native CALL signatures",
+    "quoted schema selection in new fixture"
+  ],
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "resources": {
+    "peak_owned_group_rss_bytes": 3697889280,
+    "minimum_observed_available_bytes": 20751589376
+  },
+  "cleanup_reclaimed_bytes": 2561080976,
+  "application_qualified": false
+}

@@ -321,7 +321,10 @@ conversions execute before selection. The first character operand selects a
 character result; an empty character literal retains that type while its value
 is NULL. The first operand's character length or NUMBER precision does not
 constrain the replacement. Incompatible numeric/datetime operands fail with
-42804. COALESCE retains its independent lazy evaluation contract.
+42804. COALESCE retains its independent lazy evaluation contract. These
+conversion checks cover runtime typed operands. Oracle's PL/SQL constant
+propagation can elide an otherwise unused conversion and remains a separate
+unimplemented contract, recorded with the version-12 observations.
 
 NVL preserves character padding and carries timestamp precision through base
 columns, CTEs, derived queries, cursor records, local variables and anchored

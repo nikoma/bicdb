@@ -1,0 +1,102 @@
+{
+  "format": 1,
+  "success": true,
+  "matched": 938,
+  "total": 938,
+  "suites": [
+    {
+      "suite": "case",
+      "matched": 34,
+      "total": 34,
+      "compiler": "bicdb_oracle_preview_v12",
+      "fixture_sha256": "31c25d09680484ad7079023ca30f4f9b6bfaa144ee13ace1dd462423cd9d281e"
+    },
+    {
+      "suite": "anchors",
+      "matched": 41,
+      "total": 41,
+      "compiler": "bicdb_oracle_preview_v12",
+      "fixture_sha256": "fb6a335587b6e8692b11200f2ce57c78bbe0fb247b7906a0d10b213b4c8a2d12"
+    },
+    {
+      "suite": "week",
+      "matched": 102,
+      "total": 102,
+      "compiler": "bicdb_oracle_preview_v12",
+      "fixture_sha256": "88d099e03c8dfda5b1e2f88504292305990bcc3bbc1b0dec7304c7d854511c0a"
+    },
+    {
+      "suite": "calendar",
+      "matched": 36,
+      "total": 36,
+      "compiler": "bicdb_oracle_preview_v12",
+      "fixture_sha256": "af3771ff576f48ddf53cde365a4e2df8d2f2edb6496b5d785699957a8986bbd9"
+    },
+    {
+      "suite": "temporal",
+      "matched": 29,
+      "total": 29,
+      "compiler": "bicdb_oracle_preview_v12",
+      "fixture_sha256": "5b36efd136dce184dac3200413fdf7c6a5ca35520b6177aede15eae4a8813f7b"
+    },
+    {
+      "suite": "namespaces",
+      "matched": 24,
+      "total": 24,
+      "compiler": "bicdb_oracle_preview_v12",
+      "fixture_sha256": "15cfbedad6970a4049c4e0067d4eab62bcbf935655adae70560928738b50eb26"
+    },
+    {
+      "suite": "concat",
+      "matched": 76,
+      "total": 76,
+      "compiler": "bicdb_oracle_preview_v12",
+      "fixture_sha256": "cae5733e3595283b01357a383d8fad42229c8849de9fd1b1bbd7e70349cbea9d"
+    },
+    {
+      "suite": "cursors",
+      "matched": 36,
+      "total": 36,
+      "compiler": "bicdb_oracle_preview_v12",
+      "fixture_sha256": "41c548fe2d09df1ee8331c3a50e5ba91902aac23ac688d7da2cddbf1e00c9130"
+    },
+    {
+      "suite": "numberops",
+      "matched": 218,
+      "total": 218,
+      "compiler": "bicdb_oracle_preview_v12",
+      "fixture_sha256": "98e8a565a92a64caf4bb19aff961225c4a9da5b649d7eef2a658f003d639fce3"
+    },
+    {
+      "suite": "decode",
+      "matched": 57,
+      "total": 57,
+      "compiler": "bicdb_oracle_preview_v12",
+      "fixture_sha256": "9385a2bb4f6b1d7cf598ccb9ca31a3065302b13af8c95f35d700037641c1fc11"
+    },
+    {
+      "suite": "columns",
+      "matched": 21,
+      "total": 21,
+      "compiler": "bicdb_oracle_preview_v12",
+      "fixture_sha256": "7bad6e0ddfd92487f3f652bd7a63637fd2ff8a84dbf310e919d498ae791f616d"
+    },
+    {
+      "suite": "decode_sql",
+      "matched": 52,
+      "total": 52
+    },
+    {
+      "suite": "characters",
+      "matched": 119,
+      "total": 119,
+      "fixture_sha256": "93476b1fb76f0fa6d25f424d70d9c776d83091193fe6d4c042cbebc22510bb84"
+    },
+    {
+      "suite": "nvl",
+      "matched": 93,
+      "total": 93,
+      "fixture_sha256": "192bdf64aa4839155c840d43e89aa0c1ca0eec653e58e039f0a0907a6089c38b"
+    }
+  ]
+}

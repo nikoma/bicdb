@@ -1,0 +1,517 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "native_bicdb": true,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "out_not_evaluated",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "10"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "10"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      },
+      "matched": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "10"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      }
+    },
+    {
+      "id": "named_order",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "10"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "10"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      },
+      "matched": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "10"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      }
+    },
+    {
+      "id": "null_outputs_typed",
+      "postgres": {
+        "rows": [
+          [
+            null,
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null,
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      },
+      "matched": true,
+      "expected": {
+        "rows": [
+          [
+            null,
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      }
+    },
+    {
+      "id": "nested_copyback",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1006"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1006"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "matched": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "1006"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      }
+    },
+    {
+      "id": "record_copyback",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1006"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1006"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "matched": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "1006"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      }
+    },
+    {
+      "id": "default_inout",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "matched": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      }
+    },
+    {
+      "id": "explicit_inout",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "9"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "9"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "matched": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "9"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      }
+    },
+    {
+      "id": "declared_bigint_output",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "matched": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      }
+    },
+    {
+      "id": "date_and_empty_text",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "date": "2024-02-29"
+            },
+            ""
+          ]
+        ],
+        "type_oids": [
+          1082,
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "date": "2024-02-29"
+            },
+            ""
+          ]
+        ],
+        "type_oids": [
+          1082,
+          25
+        ]
+      },
+      "matched": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "date": "2024-02-29"
+            },
+            ""
+          ]
+        ],
+        "type_oids": [
+          1082,
+          25
+        ]
+      }
+    },
+    {
+      "id": "wrong_schema",
+      "postgres": {
+        "sqlstate": "42883"
+      },
+      "bicdb": {
+        "sqlstate": "42883"
+      },
+      "matched": true,
+      "expected_error": "42883"
+    },
+    {
+      "id": "extra_argument",
+      "postgres": {
+        "sqlstate": "42883"
+      },
+      "bicdb": {
+        "sqlstate": "42883"
+      },
+      "matched": true,
+      "expected_error": "42883"
+    },
+    {
+      "id": "unknown_named",
+      "postgres": {
+        "sqlstate": "42883"
+      },
+      "bicdb": {
+        "sqlstate": "42883"
+      },
+      "matched": true,
+      "expected_error": "42883"
+    },
+    {
+      "id": "recovery",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "9"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "9"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      },
+      "matched": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "9"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700,
+          1700
+        ]
+      }
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "legacy_compact_call_extension": {
+    "matches_postgres": false,
+    "postgres": {
+      "sqlstate": "42883"
+    },
+    "bicdb": {
+      "rows": [
+        [
+          {
+            "number": "6"
+          },
+          {
+            "number": "10"
+          }
+        ]
+      ],
+      "type_oids": [
+        1700,
+        1700
+      ]
+    },
+    "verified": true
+  },
+  "matched": 13,
+  "total": 13,
+  "runtime_binary_sha256": "8469fe1b9721fb5cccf666f9c44205dff23913ef97f847cc54adb3de6c55cfbc"
+}

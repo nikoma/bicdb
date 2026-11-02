@@ -220,6 +220,19 @@ The routine store's global normalized keys still limit namespace/overload
 isolation. Preview role-management DDL and Oracle procedure creation through the
 preview front end remain outstanding; bounded HR procedure support is separate.
 
+The preview also lowers unparameterized `CURSOR name IS SELECT ...`
+declarations to native bound cursors. `FOR row IN cursor_name LOOP` opens the
+cursor with the current parameter/local values, assigns a record for each row
+and closes it on completion, EXIT, RETURN or an error. Nested bound cursor loops
+and CONTINUE use the same interpreter. Embedded SQL resolves quoted routine
+parameters after row columns, consistently with bound procedural expressions.
+Parameterized cursor declarations, REF CURSOR APIs, cursor attributes, bulk
+operations and full Oracle cursor/error semantics remain outstanding. This
+subset materializes query results on open; it does not provide streaming cursor
+execution or qualify all cursor repositioning behavior.
+See the [bound cursor evidence](evidence/oracle-bound-cursors-2026-11-01/README.md)
+for twenty Oracle comparisons and the remaining original application failure.
+
 The [iDempiere migration tools](../examples/oracle/idempiere/README.md) keep source
 snapshots and upstream binaries outside the checkout. Tables and rows alone are
 not application acceptance. Foreign-key validation/deferment, routines, views,

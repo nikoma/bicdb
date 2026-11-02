@@ -433,9 +433,9 @@ pub(crate) fn routine_var_from_ident(
     vars: &BTreeMap<String, SqlValue>,
     ident: &Ident,
 ) -> Option<SqlValue> {
-    if ident.quote_style.is_some() {
-        return None;
-    }
+    // Quoting a parameter/local does not turn it into a column. Callers resolve
+    // actual row columns first; use the frame's existing name normalization for
+    // the remaining identifier, just as the bound-expression evaluator does.
     routine_var_from_name(vars, &ident.value)
 }
 

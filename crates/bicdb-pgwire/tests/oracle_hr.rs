@@ -58,6 +58,65 @@ impl Running {
 }
 
 #[tokio::test]
+async fn bound_cursor_loops_rebind_driver_parameters_after_restart() {
+    use tokio_postgres::types::Type;
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        for attempt in 0..2 {
+            let server = Running::with_profile(directory.path(), profile);
+            let mut config = tokio_postgres::Config::new();
+            config
+                .host("127.0.0.1")
+                .port(server.port)
+                .user("bicdb")
+                .dbname("bicdb");
+            if profile != "postgres" {
+                config.options("-c bicdb.sql_profile=oracle-preview-v1");
+            }
+            let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+            let connection = tokio::spawn(async move {
+                connection.await.unwrap();
+            });
+            if attempt == 0 {
+                client
+                    .batch_execute("CREATE TABLE cursor_input(k INT,bucket INT,v INT)")
+                    .await
+                    .unwrap();
+                client
+                    .batch_execute("INSERT INTO cursor_input VALUES(1,7,11),(2,7,22),(3,8,44)")
+                    .await
+                    .unwrap();
+                let source = if profile == "postgres" {
+                    "CREATE FUNCTION cursor_total(p_bucket INT) RETURNS INT LANGUAGE plpgsql AS $$DECLARE total INT:=0; c CURSOR FOR SELECT v FROM cursor_input WHERE bucket=p_bucket ORDER BY k; BEGIN FOR r IN c LOOP total:=total+r.v; END LOOP; RETURN total; END$$"
+                } else {
+                    "CREATE FUNCTION cursor_total(p_bucket IN NUMBER) RETURN NUMBER IS total NUMBER:=0; CURSOR c IS SELECT v FROM cursor_input WHERE bucket=p_bucket ORDER BY k; BEGIN FOR r IN c LOOP total:=total+r.v; END LOOP; RETURN total; END;"
+                };
+                client.batch_execute(source).await.unwrap();
+            }
+            let query = if profile == "postgres" {
+                "SELECT CAST(cursor_total($1) AS VARCHAR(20))"
+            } else {
+                "SELECT CAST(cursor_total($1) AS VARCHAR2(20)) FROM DUAL"
+            };
+            let statement = client.prepare_typed(query, &[Type::INT4]).await.unwrap();
+            for (bucket, expected) in [(7i32, "33"), (8, "44"), (9, "0"), (7, "33")] {
+                assert_eq!(
+                    client
+                        .query_one(&statement, &[&bucket])
+                        .await
+                        .unwrap()
+                        .get::<_, String>(0),
+                    expected,
+                    "{profile}: {attempt}"
+                );
+            }
+            drop(client);
+            connection.await.unwrap();
+        }
+    }
+}
+
+#[tokio::test]
 async fn routine_drop_preserves_owner_checks_and_rollback_over_the_driver() {
     for profile in ["postgres", "oracle-preview-v1"] {
         let directory = tempfile::tempdir().unwrap();

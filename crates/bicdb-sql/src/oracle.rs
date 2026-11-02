@@ -662,6 +662,9 @@ fn syntax_word(value: &str, preview: bool) -> bool {
                 | "ARRAY"
                 | "OBJECT"
                 | "KEYS"
+                | "CURSOR"
+                | "OPEN"
+                | "CLOSE"
         )
     {
         return true;
@@ -1076,6 +1079,9 @@ fn lower_block(db: &BicDb, source: &[Token], routine: bool, preview: bool) -> Re
             }),
         );
     }
+    if preview {
+        lower_cursor_declarations(&mut body)?;
+    }
     // Oracle permits END procedure_name; PL/pgSQL uses END; here.
     if let Some(end) = body.iter().rposition(|t| word(t, "END")) {
         if matches!(body.get(end + 1), Some(Token::Word(_)))
@@ -1113,6 +1119,40 @@ fn lower_block(db: &BicDb, source: &[Token], routine: bool, preview: bool) -> Re
         ),
         None => format!("DO {delimiter}{body}{delimiter}"),
     })
+}
+
+fn lower_cursor_declarations(body: &mut [Token]) -> Result<()> {
+    let declarations_end = body
+        .iter()
+        .position(|token| word(token, "BEGIN"))
+        .unwrap_or(body.len());
+    for index in 0..declarations_end {
+        let declaration_start =
+            index == 0 || word(&body[index - 1], "DECLARE") || body[index - 1] == Token::SemiColon;
+        if !declaration_start || !word(&body[index], "CURSOR") {
+            continue;
+        }
+        if !matches!(body.get(index + 1), Some(Token::Word(_))) {
+            return Err(unsupported("cursor declaration requires an identifier"));
+        }
+        if body.get(index + 2) == Some(&Token::LParen) {
+            return Err(unsupported(
+                "parameterized cursor declarations are not implemented",
+            ));
+        }
+        if !body.get(index + 2).is_some_and(|token| word(token, "IS")) {
+            return Err(unsupported(
+                "Oracle cursor declarations require IS followed by a query",
+            ));
+        }
+        body.swap(index, index + 1);
+        body[index + 2] = Token::Word(sqlparser::tokenizer::Word {
+            value: "FOR".into(),
+            quote_style: None,
+            keyword: Keyword::FOR,
+        });
+    }
+    Ok(())
 }
 
 fn expression(sql: &str) -> Result<Expr> {
@@ -1371,6 +1411,37 @@ mod tests {
         assert_eq!(result.column_types, vec![Some("varchar".into())]);
         assert_eq!(result.rows[0][0].to_cell(), "value");
     }
+    #[test]
+    fn preview_cursor_declarations_and_named_for_loops_execute() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for source in [
+            "CREATE TABLE cursor_input(k NUMBER,bucket NUMBER,v NUMBER)",
+            "INSERT INTO cursor_input VALUES(1,7,11),(2,7,22),(3,8,44)",
+            "CREATE FUNCTION cursor_total(p_bucket IN NUMBER) RETURN NUMBER IS total NUMBER:=0; CURSOR c IS SELECT v FROM cursor_input WHERE bucket=p_bucket ORDER BY k; BEGIN FOR r IN c LOOP total:=total+r.v; END LOOP; RETURN total; END;"
+        ] {
+            let lowered=lower_session_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE,None,"bicdb").unwrap();
+            session.execute(&lowered).unwrap();
+        }
+        for (bucket, expected) in [(7, "33"), (8, "44"), (9, "0"), (7, "33")] {
+            let lowered = lower_session_sql(
+                session.db_ref(),
+                &format!("SELECT cursor_total({bucket}) FROM DUAL"),
+                ORACLE_PREVIEW_PROFILE,
+                None,
+                "bicdb",
+            )
+            .unwrap();
+            assert_eq!(
+                session.execute(&lowered).unwrap().rows[0][0].to_cell(),
+                expected
+            );
+        }
+        assert!(lower_profile_sql(session.db_ref(),"CREATE FUNCTION cursor_args RETURN NUMBER IS CURSOR c(p NUMBER) IS SELECT p FROM DUAL; BEGIN RETURN 1; END;",ORACLE_PREVIEW_PROFILE).is_err());
+    }
+
     #[test]
     fn oracle_procedure_drop_does_not_enter_the_declaration_lowerer() {
         for profile in [ORACLE_HR_PROFILE] {

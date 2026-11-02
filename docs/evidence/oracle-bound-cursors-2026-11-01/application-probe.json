@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "name": "PAYMENTTERMDUEDATE",
+  "source_sha256": "f2945cb88b4e4242a218f02515455eb52a061e72d811bcacbea7159906c33008",
+  "only_adaptation": "explicit destination namespace",
+  "success": false,
+  "created": true,
+  "application_qualified": false,
+  "runtime_binary_sha256": "d38720f73e2c38abdb6a84268ce6bd7bcca1ccdda39242ea8d72c208d59b07a5",
+  "cases": [],
+  "error": "invalid SQL: trunc expects numeric, got 2026-11-01 12:34:56",
+  "sqlstate": "42601",
+  "unqualified_probe_function_removed": true,
+  "failed_probe_absence_verified": true,
+  "existing_getdate_and_charat_still_execute": true
+}

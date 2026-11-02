@@ -1098,6 +1098,7 @@ fn routine_statement_profile_kind(statement: &RoutineStmt) -> String {
         RoutineStmt::ForLoop { .. } => "ROUTINE_FOR_LOOP".to_string(),
         RoutineStmt::ForeachLoop { .. } => "ROUTINE_FOREACH_LOOP".to_string(),
         RoutineStmt::QueryForLoop { .. } => "ROUTINE_QUERY_FOR_LOOP".to_string(),
+        RoutineStmt::CursorForLoop { .. } => "ROUTINE_CURSOR_FOR_LOOP".to_string(),
         RoutineStmt::Loop { .. } => "ROUTINE_LOOP".to_string(),
         RoutineStmt::WhileLoop { .. } => "ROUTINE_WHILE_LOOP".to_string(),
         RoutineStmt::ExitLoop => "ROUTINE_EXIT".to_string(),
@@ -1160,6 +1161,7 @@ fn routine_statement_profile_signature(statement: &RoutineStmt) -> String {
             ..
         } => format!("FOREACH {target} SLICE {slice} IN ARRAY {array}"),
         RoutineStmt::QueryForLoop { target, query, .. } => format!("FOR {target} IN {query}"),
+        RoutineStmt::CursorForLoop { target, cursor, .. } => format!("FOR {target} IN {cursor}"),
         RoutineStmt::Loop { .. } => "LOOP".to_string(),
         RoutineStmt::WhileLoop { condition, .. } => format!("WHILE {condition}"),
         RoutineStmt::ExitLoop => "EXIT".to_string(),
@@ -4195,6 +4197,11 @@ enum RoutineStmt {
         query: Query,
         body: Vec<RoutineStmt>,
     },
+    CursorForLoop {
+        target: String,
+        cursor: String,
+        body: Vec<RoutineStmt>,
+    },
     /// `LOOP ... END LOOP`: repeats until EXIT or RETURN.
     Loop {
         body: Vec<RoutineStmt>,
@@ -4296,6 +4303,7 @@ fn routine_statement_may_write(statement: &RoutineStmt) -> bool {
         } => routine_block_may_write(then_body) || routine_block_may_write(else_body),
         RoutineStmt::ForLoop { body, .. }
         | RoutineStmt::ForeachLoop { body, .. }
+        | RoutineStmt::CursorForLoop { body, .. }
         | RoutineStmt::Loop { body }
         | RoutineStmt::WhileLoop { body, .. } => routine_block_may_write(body),
         RoutineStmt::ContinueLoop
@@ -4426,6 +4434,8 @@ struct RoutineFrameTemplateParam {
 #[derive(Clone, Debug)]
 struct RoutineCursor {
     query: Query,
+    columns: Vec<String>,
+    column_types: Vec<Option<String>>,
     rows: Vec<Vec<SqlValue>>,
     position: usize,
     open: bool,

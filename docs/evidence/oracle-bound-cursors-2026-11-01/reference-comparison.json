@@ -1,0 +1,170 @@
+{
+  "format": 1,
+  "reference_version": "23.26.3.0.0",
+  "profile": "oracle-preview-v1",
+  "synthetic_only": true,
+  "cases": [
+    {
+      "routine": "sum",
+      "bucket": 7,
+      "oracle": "33",
+      "bicdb": "33",
+      "expected": "33",
+      "match": true
+    },
+    {
+      "routine": "sum",
+      "bucket": 8,
+      "oracle": "44",
+      "bicdb": "44",
+      "expected": "44",
+      "match": true
+    },
+    {
+      "routine": "sum",
+      "bucket": 9,
+      "oracle": "0",
+      "bicdb": "0",
+      "expected": "0",
+      "match": true
+    },
+    {
+      "routine": "sum",
+      "bucket": 7,
+      "oracle": "33",
+      "bicdb": "33",
+      "expected": "33",
+      "match": true
+    },
+    {
+      "routine": "control",
+      "bucket": 7,
+      "oracle": "11",
+      "bicdb": "11",
+      "expected": "11",
+      "match": true
+    },
+    {
+      "routine": "control",
+      "bucket": 8,
+      "oracle": "44",
+      "bicdb": "44",
+      "expected": "44",
+      "match": true
+    },
+    {
+      "routine": "control",
+      "bucket": 9,
+      "oracle": "0",
+      "bicdb": "0",
+      "expected": "0",
+      "match": true
+    },
+    {
+      "routine": "control",
+      "bucket": 7,
+      "oracle": "11",
+      "bicdb": "11",
+      "expected": "11",
+      "match": true
+    },
+    {
+      "routine": "return",
+      "bucket": 7,
+      "oracle": "11",
+      "bicdb": "11",
+      "expected": "11",
+      "match": true
+    },
+    {
+      "routine": "return",
+      "bucket": 8,
+      "oracle": "44",
+      "bicdb": "44",
+      "expected": "44",
+      "match": true
+    },
+    {
+      "routine": "return",
+      "bucket": 9,
+      "oracle": "-1",
+      "bicdb": "-1",
+      "expected": "-1",
+      "match": true
+    },
+    {
+      "routine": "return",
+      "bucket": 7,
+      "oracle": "11",
+      "bicdb": "11",
+      "expected": "11",
+      "match": true
+    },
+    {
+      "routine": "local",
+      "bucket": 7,
+      "oracle": "33",
+      "bicdb": "33",
+      "expected": "33",
+      "match": true
+    },
+    {
+      "routine": "local",
+      "bucket": 8,
+      "oracle": "44",
+      "bicdb": "44",
+      "expected": "44",
+      "match": true
+    },
+    {
+      "routine": "local",
+      "bucket": 9,
+      "oracle": "0",
+      "bicdb": "0",
+      "expected": "0",
+      "match": true
+    },
+    {
+      "routine": "local",
+      "bucket": 7,
+      "oracle": "33",
+      "bicdb": "33",
+      "expected": "33",
+      "match": true
+    },
+    {
+      "routine": "nested",
+      "bucket": 7,
+      "oracle": "231",
+      "bicdb": "231",
+      "expected": "231",
+      "match": true
+    },
+    {
+      "routine": "nested",
+      "bucket": 8,
+      "oracle": "583",
+      "bicdb": "583",
+      "expected": "583",
+      "match": true
+    },
+    {
+      "routine": "nested",
+      "bucket": 6,
+      "oracle": "0",
+      "bicdb": "0",
+      "expected": "0",
+      "match": true
+    },
+    {
+      "routine": "nested",
+      "bucket": 8,
+      "oracle": "583",
+      "bicdb": "583",
+      "expected": "583",
+      "match": true
+    }
+  ],
+  "success": true,
+  "runtime_binary_sha256": "d38720f73e2c38abdb6a84268ce6bd7bcca1ccdda39242ea8d72c208d59b07a5"
+}

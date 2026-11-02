@@ -3655,6 +3655,8 @@ impl<'db> SqlSession<'db> {
                         normalize_object_name(name),
                         RoutineCursor {
                             query: query.clone(),
+                            columns: Vec::new(),
+                            column_types: Vec::new(),
                             rows: Vec::new(),
                             position: 0,
                             open: false,
@@ -3917,6 +3919,11 @@ impl<'db> SqlSession<'db> {
                 query,
                 body,
             } => self.execute_routine_query_for_loop(frame, target, query, body),
+            RoutineStmt::CursorForLoop {
+                target,
+                cursor,
+                body,
+            } => self.execute_routine_cursor_for_loop(frame, target, cursor, body),
             RoutineStmt::OpenCursor { name } => {
                 self.open_routine_cursor(frame, name)?;
                 Ok(RoutineControl::Continue)
@@ -4092,6 +4099,84 @@ impl<'db> SqlSession<'db> {
         Ok(RoutineControl::Continue)
     }
 
+    pub(crate) fn execute_routine_cursor_for_loop(
+        &mut self,
+        frame: &mut RoutineFrame,
+        target: &str,
+        name: &str,
+        body: &[RoutineStmt],
+    ) -> Result<RoutineControl> {
+        // A failed open must leave a caller's already-open cursor intact.
+        self.open_routine_cursor(frame, name)?;
+        let key = normalize_object_name(name);
+        let columns = frame.cursors[&key].columns.clone();
+        let types = frame.cursors[&key].column_types.clone();
+        let reg_columns = types
+            .iter()
+            .enumerate()
+            .filter_map(|(index, kind)| {
+                kind.as_deref()
+                    .filter(|kind| matches!(*kind, "regclass" | "regproc" | "regprocedure"))
+                    .map(|_| index)
+            })
+            .collect::<Vec<_>>();
+        let mut visited = false;
+        let result = (|| {
+            loop {
+                self.cancellation.check()?;
+                let cursor = frame.cursors.get_mut(&key).ok_or_else(|| {
+                    SqlError::data_exception(
+                        "34000",
+                        format!("cursor \"{name}\" does not exist"),
+                        None,
+                    )
+                })?;
+                if !cursor.open {
+                    return Err(SqlError::data_exception(
+                        "24000",
+                        format!("cursor \"{name}\" is not open"),
+                        None,
+                    ));
+                }
+                let Some(mut row) = cursor.rows.get(cursor.position).cloned() else {
+                    break;
+                };
+                cursor.position += 1;
+                visited = true;
+                // Keep record display semantics consistent with query FOR loops.
+                for &index in &reg_columns {
+                    if let Some(value @ SqlValue::Int(_)) = row.get(index) {
+                        row[index] = SqlValue::String(render_oid_alias_value(
+                            self.db_ref(),
+                            types[index].as_deref().unwrap(),
+                            value,
+                        )?);
+                    }
+                }
+                frame.set(target, routine_record_value(&columns, &row));
+                match self.execute_routine_statements(frame, body)? {
+                    RoutineControl::Continue | RoutineControl::NextIteration => {}
+                    RoutineControl::ExitLoop => break,
+                    returned => return Ok(returned),
+                }
+            }
+            Ok(RoutineControl::Continue)
+        })();
+        // Close on completion, EXIT, RETURN, cancellation and body errors. Do
+        // not replace the original error if the body closed the cursor itself.
+        if let Some(cursor) = frame.cursors.get_mut(&key) {
+            cursor.open = false;
+            cursor.position = 0;
+            cursor.rows.clear();
+            cursor.columns.clear();
+            cursor.column_types.clear();
+        }
+        if result.is_ok() {
+            frame.set(ROUTINE_FOUND_VAR, SqlValue::Bool(visited));
+        }
+        result
+    }
+
     pub(crate) fn execute_routine_foreach_loop(
         &mut self,
         frame: &mut RoutineFrame,
@@ -4119,17 +4204,25 @@ impl<'db> SqlSession<'db> {
         name: &str,
     ) -> Result<()> {
         let key = normalize_object_name(name);
-        let query = frame
-            .cursors
-            .get(&key)
-            .map(|cursor| cursor.query.clone())
-            .ok_or_else(|| SqlError::InvalidSql(format!("cursor \"{name}\" does not exist")))?;
+        let cursor = frame.cursors.get(&key).ok_or_else(|| {
+            SqlError::data_exception("34000", format!("cursor \"{name}\" does not exist"), None)
+        })?;
+        if cursor.open {
+            return Err(SqlError::data_exception(
+                "42P03",
+                format!("cursor \"{name}\" is already open"),
+                None,
+            ));
+        }
+        let query = cursor.query.clone();
         let result = self.execute_routine_query_unowned(frame, &query)?;
         let cursor = frame
             .cursors
             .get_mut(&key)
             .ok_or_else(|| SqlError::InvalidSql(format!("cursor \"{name}\" does not exist")))?;
         cursor.rows = result.rows;
+        cursor.columns = result.columns;
+        cursor.column_types = result.column_types;
         cursor.position = 0;
         cursor.open = true;
         Ok(())
@@ -4170,6 +4263,8 @@ impl<'db> SqlSession<'db> {
             .get_mut(&key)
             .ok_or_else(|| SqlError::InvalidSql(format!("cursor \"{name}\" does not exist")))?;
         cursor.rows.clear();
+        cursor.columns.clear();
+        cursor.column_types.clear();
         cursor.position = 0;
         cursor.open = false;
         Ok(())

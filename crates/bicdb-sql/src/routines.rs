@@ -188,7 +188,8 @@ pub(crate) fn collect_routine_stmt_symbols(
                 add_routine_symbol(target, names, seen);
                 collect_routine_stmt_symbols(body, names, seen);
             }
-            RoutineStmt::QueryForLoop { target, body, .. } => {
+            RoutineStmt::QueryForLoop { target, body, .. }
+            | RoutineStmt::CursorForLoop { target, body, .. } => {
                 add_routine_symbol(target, names, seen);
                 collect_routine_stmt_symbols(body, names, seen);
             }
@@ -296,7 +297,9 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
                 array.bind(scope);
                 bind_routine_statement_exprs(body, scope);
             }
-            RoutineStmt::QueryForLoop { body, .. } | RoutineStmt::Loop { body } => {
+            RoutineStmt::QueryForLoop { body, .. }
+            | RoutineStmt::CursorForLoop { body, .. }
+            | RoutineStmt::Loop { body } => {
                 bind_routine_statement_exprs(body, scope);
             }
             RoutineStmt::WhileLoop { condition, body } => {
@@ -1385,6 +1388,19 @@ pub(crate) fn parse_routine_for_loop(statement: &str) -> Result<RoutineStmt> {
             body,
         })
     } else {
+        let tokens = Tokenizer::new(&PostgreSqlDialect {}, range_sql)
+            .tokenize()
+            .map_err(|error| SqlError::InvalidSql(error.to_string()))?
+            .into_iter()
+            .filter(|token| !matches!(token, Token::Whitespace(_)))
+            .collect::<Vec<_>>();
+        if let [Token::Word(cursor)] = tokens.as_slice() {
+            return Ok(RoutineStmt::CursorForLoop {
+                target: iterator,
+                cursor: normalize_object_name(&cursor.value),
+                body,
+            });
+        }
         Ok(RoutineStmt::QueryForLoop {
             target: iterator,
             query: parse_single_query(range_sql)?,
@@ -2461,10 +2477,162 @@ fn validate_routine_continue(statements: &[RoutineStmt], in_loop: bool) -> Resul
             RoutineStmt::ForLoop { body, .. }
             | RoutineStmt::ForeachLoop { body, .. }
             | RoutineStmt::QueryForLoop { body, .. }
+            | RoutineStmt::CursorForLoop { body, .. }
             | RoutineStmt::Loop { body }
             | RoutineStmt::WhileLoop { body, .. } => validate_routine_continue(body, true)?,
             _ => {}
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod cursor_loop_tests {
+    use super::*;
+
+    #[test]
+    fn bound_cursor_loops_rebind_parameters_close_and_support_loop_control() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE TABLE cursor_values(k INT PRIMARY KEY,bucket INT,n INT); INSERT INTO cursor_values VALUES(1,1,1),(2,1,2),(3,1,3),(4,1,4),(5,2,8)").unwrap();
+        session
+            .execute(
+                r#"CREATE FUNCTION cursor_control(p_bucket INT) RETURNS INT LANGUAGE plpgsql AS $$
+            DECLARE c CURSOR FOR SELECT n FROM cursor_values WHERE bucket=p_bucket ORDER BY k;
+                    total INT := 0; first_value INT;
+            BEGIN
+                FOR r IN c LOOP
+                    IF r.n=2 THEN CONTINUE; END IF;
+                    total:=total+r.n;
+                    EXIT WHEN r.n>=3;
+                END LOOP;
+                OPEN c; FETCH c INTO first_value; CLOSE c;
+                RETURN total*10+coalesce(first_value,0);
+            END$$"#,
+            )
+            .unwrap();
+        for (bucket, expected) in [(1, 41), (2, 88), (3, 0), (1, 41)] {
+            let rows = session
+                .execute(&format!("SELECT cursor_control({bucket})"))
+                .unwrap();
+            assert_eq!(rows.rows[0][0], SqlValue::Int(expected));
+        }
+        session
+            .execute(
+                r#"CREATE FUNCTION cursor_found(p_bucket INT) RETURNS BOOLEAN LANGUAGE plpgsql AS $$
+            DECLARE c CURSOR FOR SELECT n FROM cursor_values WHERE bucket=p_bucket;
+            BEGIN FOR r IN c LOOP NULL; END LOOP; RETURN found; END$$"#,
+            )
+            .unwrap();
+        for (bucket, expected) in [(1, true), (3, false), (2, true)] {
+            assert_eq!(
+                session
+                    .execute(&format!("SELECT cursor_found({bucket})"))
+                    .unwrap()
+                    .rows[0][0],
+                SqlValue::Bool(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn cursor_loop_errors_close_owned_cursors_and_preserve_prior_opens() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute("CREATE TABLE cursor_values(n INT); INSERT INTO cursor_values VALUES(7),(9)")
+            .unwrap();
+        session
+            .execute(
+                r#"CREATE FUNCTION cursor_error_recovery() RETURNS INT LANGUAGE plpgsql AS $$
+            DECLARE c CURSOR FOR SELECT n FROM cursor_values ORDER BY n; v INT; z INT;
+            BEGIN
+                FOR r IN c LOOP z:=1/(r.n-r.n); END LOOP;
+                RETURN 0;
+            EXCEPTION WHEN SQLSTATE '22012' THEN
+                OPEN c; FETCH c INTO v; CLOSE c; RETURN v;
+            END$$"#,
+            )
+            .unwrap();
+        session
+            .execute(
+                r#"CREATE FUNCTION cursor_prior_open() RETURNS INT LANGUAGE plpgsql AS $$
+            DECLARE c CURSOR FOR SELECT n FROM cursor_values ORDER BY n; v INT;
+            BEGIN OPEN c; FOR r IN c LOOP NULL; END LOOP; RETURN 0;
+            EXCEPTION WHEN SQLSTATE '42P03' THEN FETCH c INTO v; CLOSE c; RETURN v;
+            END$$"#,
+            )
+            .unwrap();
+        for function in ["cursor_error_recovery", "cursor_prior_open"] {
+            for _ in 0..2 {
+                assert_eq!(
+                    session
+                        .execute(&format!("SELECT {function}()"))
+                        .unwrap()
+                        .rows[0][0],
+                    SqlValue::Int(7)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn nested_bound_cursors_resolve_outer_record_parameters() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE TABLE cursor_values(bucket INT,n INT); INSERT INTO cursor_values VALUES(1,2),(1,3),(2,5)").unwrap();
+        session.execute(r#"CREATE FUNCTION nested_cursors() RETURNS INT LANGUAGE plpgsql AS $$
+            DECLARE parents CURSOR FOR SELECT DISTINCT bucket FROM cursor_values ORDER BY bucket;
+                    children CURSOR FOR SELECT n FROM cursor_values WHERE bucket=r.bucket ORDER BY n;
+                    total INT:=0;
+            BEGIN
+                FOR r IN parents LOOP
+                    FOR child IN children LOOP total:=total+r.bucket*child.n; END LOOP;
+                END LOOP;
+                RETURN total;
+            END$$"#).unwrap();
+        for _ in 0..2 {
+            assert_eq!(
+                session.execute("SELECT nested_cursors()").unwrap().rows[0][0],
+                SqlValue::Int(15)
+            );
+        }
+    }
+
+    #[test]
+    fn quoted_cursor_parameters_resolve_after_row_columns() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE TABLE cursor_values(bucket INT,n INT); INSERT INTO cursor_values VALUES(1,5),(2,9)").unwrap();
+        session
+            .execute(
+                r#"CREATE FUNCTION quoted_cursor("P_BUCKET" INT) RETURNS INT LANGUAGE plpgsql AS $$
+            DECLARE c CURSOR FOR SELECT n FROM cursor_values WHERE bucket="P_BUCKET";
+                    total INT:=0;
+            BEGIN FOR r IN c LOOP total:=total+r.n; END LOOP; RETURN total; END$$"#,
+            )
+            .unwrap();
+        session
+            .execute(
+                r#"CREATE FUNCTION quoted_column("BUCKET" INT) RETURNS INT LANGUAGE plpgsql AS $$
+            DECLARE c CURSOR FOR SELECT n FROM cursor_values WHERE "bucket"=1;
+                    total INT:=0;
+            BEGIN FOR r IN c LOOP total:=total+r.n; END LOOP; RETURN total; END$$"#,
+            )
+            .unwrap();
+        for (query, expected) in [
+            ("SELECT quoted_cursor(1)", 5),
+            ("SELECT quoted_cursor(2)", 9),
+            ("SELECT quoted_column(2)", 5),
+        ] {
+            assert_eq!(
+                session.execute(query).unwrap().rows[0][0],
+                SqlValue::Int(expected)
+            );
+        }
+    }
 }

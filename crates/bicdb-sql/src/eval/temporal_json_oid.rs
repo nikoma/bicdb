@@ -3526,29 +3526,36 @@ pub(crate) fn eval_unary_minus_expr_value(
     schema: Option<&TableSchema>,
 ) -> Result<SqlValue> {
     let pg_type = projected_expr_pg_type(expr, schema);
-    if matches!(pg_type.as_deref(), Some("money")) {
+    eval_unary_minus_typed_value(value, pg_type.as_deref())
+}
+
+pub(crate) fn eval_unary_minus_typed_value(
+    value: SqlValue,
+    pg_type: Option<&str>,
+) -> Result<SqlValue> {
+    if matches!(pg_type, Some("money")) {
         return Err(SqlError::undefined_function(
             "operator does not exist: - money",
         ));
     }
-    if matches!(pg_type.as_deref(), Some("interval")) {
-        if matches!(value, SqlValue::Null) {
-            return Ok(SqlValue::Null);
-        }
+    if matches!(value, SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    if matches!(pg_type, Some("interval")) {
         let text = value.to_cell();
         return PgInterval::from_postgres_text(&text)
             .and_then(PgInterval::checked_neg)
             .map(|interval| SqlValue::String(render_interval(interval)))
             .map_err(|error| postgres_interval_input_error(&text, error));
     }
-    if matches!(pg_type.as_deref(), Some("numeric")) {
+    if matches!(pg_type, Some("numeric")) {
         return pg_numeric_from_sql_value(value)
             .map(negate_pg_numeric)
             .map(|value| SqlValue::String(value.to_decimal_text()));
     }
-    let value = negate_numeric_value(value)
-        .map_err(|error| remap_integer_overflow(error, pg_type.as_deref()))?;
-    enforce_integer_value_type(value, pg_type.as_deref())
+    let value =
+        negate_numeric_value(value).map_err(|error| remap_integer_overflow(error, pg_type))?;
+    enforce_integer_value_type(value, pg_type)
 }
 
 pub(crate) fn eval_unary_plus_expr_value(
@@ -3556,10 +3563,15 @@ pub(crate) fn eval_unary_plus_expr_value(
     value: SqlValue,
     schema: Option<&TableSchema>,
 ) -> Result<SqlValue> {
-    if matches!(
-        projected_expr_pg_type(expr, schema).as_deref(),
-        Some("money")
-    ) {
+    let pg_type = projected_expr_pg_type(expr, schema);
+    eval_unary_plus_typed_value(value, pg_type.as_deref())
+}
+
+pub(crate) fn eval_unary_plus_typed_value(
+    value: SqlValue,
+    pg_type: Option<&str>,
+) -> Result<SqlValue> {
+    if matches!(pg_type, Some("money")) {
         return Err(SqlError::undefined_function(
             "operator does not exist: + money",
         ));

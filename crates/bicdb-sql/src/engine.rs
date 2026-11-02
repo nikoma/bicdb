@@ -3321,6 +3321,7 @@ impl RecordLocators {
 pub(crate) struct RoutineSlotBinding {
     pub(crate) ids: Arc<FxHashMap<String, VarId>>,
     pub(crate) values: Rc<Vec<SqlValue>>,
+    pub(crate) types: Arc<FxHashMap<String, RoutineTypeSchema>>,
 }
 
 /// One `bound_row_context` build per column layout, reusable while the

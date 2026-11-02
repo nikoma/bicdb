@@ -1,0 +1,14 @@
+{
+  "total": 3826,
+  "states": {
+    "ENABLED | NOT VALIDATED | DEFERRABLE | DEFERRED": 2914,
+    "ENABLED | VALIDATED | DEFERRABLE | DEFERRED": 912
+  },
+  "delete_rules": {
+    "CASCADE": 447,
+    "NO ACTION": 3209,
+    "SET NULL": 170
+  },
+  "parent_resolved": 3826,
+  "multi_column": 1
+}

@@ -109,13 +109,69 @@ pub(super) fn lower(
     Ok(Some((data_type, used + 2)))
 }
 
+/// Encode Oracle's constrained numeric return in the stored body as an ordinary
+/// CAST. Existing readers already enforce that operation; character return
+/// lengths and argument modifiers retain their unconstrained signature rules.
+pub(super) fn constrain_numeric_returns(header: &[Token], body: &mut Vec<Token>) -> Result<()> {
+    if !header.iter().any(|token| word(token, "FUNCTION")) {
+        return Ok(());
+    }
+    let Some(returns) = header.iter().position(|token| word(token, "RETURNS")) else {
+        return Ok(());
+    };
+    let declaration = &header[returns + 1..];
+    // Column descriptors render constrained NUMBER as numeric(p,s). Leave
+    // unrelated return-type syntax to the existing routine parser.
+    if !declaration
+        .first()
+        .is_some_and(|token| word(token, "NUMERIC"))
+        || declaration.get(1) != Some(&Token::LParen)
+    {
+        return Ok(());
+    }
+    let schema = raw_routine_type_schema(&join(declaration))?;
+    if schema.pg_type != "numeric"
+        || !matches!(schema.type_modifier, Some(PgTypeModifier::Numeric { .. }))
+    {
+        return Ok(());
+    }
+    let data_type = schema.formatted();
+    let mut lowered = Vec::with_capacity(body.len());
+    let mut index = 0;
+    while index < body.len() {
+        lowered.push(body[index].clone());
+        index += 1;
+        if !word(lowered.last().expect("return token"), "RETURN") {
+            continue;
+        }
+        let end = (index..body.len())
+            .find(|position| body[*position] == Token::SemiColon)
+            .ok_or_else(|| {
+                unsupported("numeric function RETURN requires a terminating semicolon")
+            })?;
+        if end == index || word(&body[index], "QUERY") {
+            return Err(unsupported(
+                "numeric function RETURN requires a scalar expression",
+            ));
+        }
+        let value = expression(&join(&body[index..end]))?;
+        let value = date_trunc::exact_numeric_operand_sql(&value);
+        lowered.extend(tokens(&format!("CAST({value} AS {data_type})"))?);
+        index = end;
+    }
+    *body = lowered;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn execute(db: &mut BicDb, sql: &str) -> SqlResult {
         let lowered = lower_profile_sql(db, sql, ORACLE_PREVIEW_PROFILE).unwrap();
-        SqlSession::new(db).execute(&lowered).unwrap()
+        SqlSession::new(db)
+            .execute(&lowered)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"))
     }
 
     fn database(path: &std::path::Path) -> BicDb {
@@ -141,11 +197,22 @@ mod tests {
             "CREATE FUNCTION red.text_anchor(p_value VARCHAR2) RETURN VARCHAR2 IS result anchor_rows.value%TYPE; BEGIN result := p_value; RETURN result; END;",
             "CREATE FUNCTION red.numeric_anchor(p_value NUMBER) RETURN NUMBER IS result blue.anchor_rows.value%TYPE; BEGIN result := p_value; RETURN result; END;",
             "CREATE FUNCTION red.null_anchor RETURN VARCHAR2 IS result anchor_rows.value%TYPE; BEGIN RETURN result; END;",
+            "CREATE FUNCTION red.numeric_return(p_value NUMBER) RETURN blue.anchor_rows.value%TYPE IS BEGIN IF p_value IS NULL THEN RETURN NULL; END IF; RETURN p_value; END;",
+            "CREATE FUNCTION red.numeric_argument(p_value blue.anchor_rows.value%TYPE) RETURN NUMBER IS BEGIN RETURN p_value; END;",
+            "CREATE FUNCTION red.text_return(p_value VARCHAR2) RETURN anchor_rows.value%TYPE IS BEGIN RETURN p_value; END;",
+            "CREATE FUNCTION red.positive_return(p_value NUMBER) RETURN blue.anchor_rows.value%TYPE IS BEGIN RETURN CASE WHEN p_value<0 THEN -p_value ELSE p_value END; END;",
         ] { execute(&mut db, sql); }
         for (sql, expected) in [
             ("SELECT red.text_anchor('abc') FROM DUAL", "abc"),
             ("SELECT red.numeric_anchor(12.345) FROM DUAL", "12.35"),
             ("SELECT red.numeric_anchor(-12.345) FROM DUAL", "-12.35"),
+            ("SELECT red.numeric_return(12.345) FROM DUAL", "12.35"),
+            (
+                "SELECT red.numeric_argument(1000.123) FROM DUAL",
+                "1000.123",
+            ),
+            ("SELECT red.text_return('abcdef') FROM DUAL", "abcdef"),
+            ("SELECT red.positive_return(-12.345) FROM DUAL", "12.35"),
         ] {
             assert_eq!(
                 execute(&mut db, sql).rows[0][0].to_cell(),
@@ -160,6 +227,7 @@ mod tests {
         for sql in [
             "SELECT red.text_anchor('abcd') FROM DUAL",
             "SELECT red.numeric_anchor(1000) FROM DUAL",
+            "SELECT red.numeric_return(1000) FROM DUAL",
         ] {
             let lowered = lower_profile_sql(&db, sql, ORACLE_PREVIEW_PROFILE).unwrap();
             assert!(SqlSession::new(&mut db).execute(&lowered).is_err(), "{sql}");
@@ -212,6 +280,62 @@ mod tests {
             let error=lower_profile_sql(&db,sql,ORACLE_PREVIEW_PROFILE).unwrap_err();
             assert_eq!(error.sqlstate(),"0A000");assert!(error.to_string().contains(reason),"{error}");
         }
+    }
+
+    #[test]
+    fn postgres_procedural_unary_fallback_uses_live_values_and_declared_types() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for sql in [
+            "CREATE FUNCTION fallback_numeric(p_value NUMERIC,p_negative BOOLEAN) RETURNS TEXT LANGUAGE plpgsql AS $$BEGIN RETURN CAST(CASE WHEN p_negative THEN -p_value ELSE +p_value END AS VARCHAR(80)); END$$",
+            "CREATE FUNCTION fallback_integer(p_value INTEGER) RETURNS BIGINT LANGUAGE plpgsql AS $$BEGIN RETURN CASE WHEN TRUE THEN -p_value ELSE 0 END; END$$",
+            "CREATE FUNCTION fallback_skip(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$BEGIN RETURN CASE WHEN TRUE THEN p_value ELSE -CAST(1 AS INT)/0 END; END$$",
+        ] {session.execute(sql).unwrap();}
+        for (sql, expected) in [
+            (
+                "SELECT fallback_numeric(CAST('123456789012345678901234.56789' AS NUMERIC),TRUE)",
+                "-123456789012345678901234.56789",
+            ),
+            (
+                "SELECT fallback_numeric(CAST('123456789012345678901234.56789' AS NUMERIC),FALSE)",
+                "123456789012345678901234.56789",
+            ),
+            (
+                "SELECT fallback_numeric(CAST('NaN' AS NUMERIC),TRUE)",
+                "NaN",
+            ),
+            (
+                "SELECT fallback_numeric(CAST('Infinity' AS NUMERIC),TRUE)",
+                "-Infinity",
+            ),
+            ("SELECT fallback_integer(12)", "-12"),
+            ("SELECT fallback_skip(12.345)", "12.345"),
+        ] {
+            assert_eq!(
+                session
+                    .execute(sql)
+                    .unwrap_or_else(|error| panic!("{sql}: {error}"))
+                    .rows[0][0]
+                    .to_cell(),
+                expected,
+                "{sql}"
+            );
+        }
+        assert_eq!(
+            session
+                .execute("SELECT fallback_numeric(NULL,TRUE)")
+                .unwrap()
+                .rows[0][0],
+            SqlValue::Null
+        );
+        assert_eq!(
+            session
+                .execute("SELECT fallback_integer(CAST('-2147483648' AS INTEGER))")
+                .unwrap_err()
+                .sqlstate(),
+            "22003"
+        );
     }
 
     #[test]

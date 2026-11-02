@@ -271,6 +271,33 @@ lowering, with explicit aliases and CTE shadowing retained.
 The [week and procedural-format evidence](evidence/oracle-week-truncation-2026-11-01/README.md)
 records the reference assertions and remaining limits.
 
+Table-column `%TYPE` anchors resolve in the routine definition's namespace.
+An explicit `[schema.]table.column%TYPE` retains quoted identifier case and uses
+the same physical relation encoding as ordinary SQL. Session schema selection
+is applied before resolving anchors for an unqualified definition. A missing
+owner table does not fall back to a same-named public table.
+
+For the tested mapped NUMBER and VARCHAR2 CHAR types, local variables inherit
+precision/scale and character length, while defaults and column NOT NULL do not
+transfer. Argument modifiers remain unconstrained. Character return lengths are
+unconstrained, but a constrained numeric return rounds and range-checks before
+returning; its own exception handler can catch a conversion error. The compiler
+encodes that numeric conversion as an explicit CAST in the stored body, including
+exact literal operands. Default PostgreSQL declarations retain their native
+signature-modifier behavior.
+Procedural fallback evaluation also resolves unary operands from the live frame
+and uses declared types for numeric, integer and interval negation. This retains
+NULL propagation, exact numeric values and integer range checks in CASE
+expressions without evaluating unselected branches.
+
+Anchors are materialized when a source definition is created or replaced.
+Automatic Oracle dependency invalidation and recompilation after column DDL
+remain outstanding; recreate the source definition to refresh its mapped type.
+Temporal anchors still require durable source logical-type provenance rather
+than guessing DATE from a physical timestamp. Variable/record anchors, general
+BYTE versus CHAR behavior, user-defined Oracle types and cross-schema privilege
+qualification remain outstanding.
+
 This is declaration support for the tested routine subset, not a complete
 PL/SQL compiler. Native routine execution, namespace, overload, privilege and
 error contracts still apply. Oracle AUTHID/rights semantics are not qualified.

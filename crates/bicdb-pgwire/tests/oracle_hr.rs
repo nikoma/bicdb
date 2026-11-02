@@ -99,6 +99,12 @@ async fn anchored_types_keep_owner_precision_and_driver_types_after_reopen() {
                     r#"CREATE FUNCTION "left_scope".owner_anchor(p_value NUMBER) RETURN NUMBER IS result "anchor_rows"."value"%TYPE; BEGIN result:=p_value; RETURN result; END;"#
                 };
                 client.batch_execute(owned).await.unwrap();
+                let returned = if profile == "postgres" {
+                    r#"CREATE FUNCTION "left_scope".return_anchor(p_value NUMERIC) RETURNS NUMERIC(5,2) LANGUAGE plpgsql AS $$BEGIN RETURN p_value; END$$"#
+                } else {
+                    r#"CREATE FUNCTION "left_scope".return_anchor(p_value NUMBER) RETURN "anchor_rows"."value"%TYPE IS BEGIN RETURN p_value; END;"#
+                };
+                client.batch_execute(returned).await.unwrap();
             }
             client
                 .batch_execute(r#"SET search_path='"right_scope"'"#)
@@ -109,7 +115,8 @@ async fn anchored_types_keep_owner_precision_and_driver_types_after_reopen() {
             } else {
                 " FROM DUAL"
             };
-            for name in ["selected_anchor", "owner_anchor"] {
+            for name in ["selected_anchor", "owner_anchor", "return_anchor"] {
+                let native_unconstrained_return = profile == "postgres" && name == "return_anchor";
                 let sql = format!(
                     r#"SELECT CAST("left_scope".{name}(CAST(CAST($1 AS VARCHAR) AS NUMERIC)) AS VARCHAR(40)){suffix}"#
                 );
@@ -121,7 +128,11 @@ async fn anchored_types_keep_owner_precision_and_driver_types_after_reopen() {
                         .await
                         .unwrap()
                         .get::<_, String>(0),
-                    "12.35"
+                    if native_unconstrained_return {
+                        "12.345"
+                    } else {
+                        "12.35"
+                    }
                 );
                 let null: Option<String> = None;
                 assert!(client
@@ -130,12 +141,34 @@ async fn anchored_types_keep_owner_precision_and_driver_types_after_reopen() {
                     .unwrap()
                     .get::<_, Option<String>>(0)
                     .is_none());
-                let error = client.query_one(&statement, &[&"1000"]).await.unwrap_err();
+                if native_unconstrained_return {
+                    assert_eq!(
+                        client
+                            .query_one(&statement, &[&"1000.123"])
+                            .await
+                            .unwrap()
+                            .get::<_, String>(0),
+                        "1000.123"
+                    );
+                } else {
+                    let error = client.query_one(&statement, &[&"1000"]).await.unwrap_err();
+                    assert_eq!(
+                        error.code(),
+                        Some(&tokio_postgres::error::SqlState::NUMERIC_VALUE_OUT_OF_RANGE)
+                    );
+                }
                 assert_eq!(
-                    error.code(),
-                    Some(&tokio_postgres::error::SqlState::NUMERIC_VALUE_OUT_OF_RANGE)
+                    client
+                        .query_one(&statement, &[&"-12.345"])
+                        .await
+                        .unwrap()
+                        .get::<_, String>(0),
+                    if native_unconstrained_return {
+                        "-12.345"
+                    } else {
+                        "-12.35"
+                    }
                 );
-                assert!(client.query_one(&statement, &[&"-12.345"]).await.is_ok());
             }
             drop(client);
             connection.await.unwrap();

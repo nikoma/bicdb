@@ -1056,6 +1056,9 @@ fn lower_block(
     }
     if preview {
         lower_cursor_declarations(&mut body)?;
+        if let Some(header) = &header {
+            anchored_types::constrain_numeric_returns(header, &mut body)?;
+        }
     }
     // Oracle permits END procedure_name; PL/pgSQL uses END; here.
     if let Some(end) = body.iter().rposition(|t| word(t, "END")) {

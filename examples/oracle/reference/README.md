@@ -229,3 +229,27 @@ retain their earlier procedural-format behavior until recreated from source.
 SQL truncates fractional numeric precision toward zero. Procedural expressions
 convert that precision to an integer by rounding halfway away from zero. The
 fixture checks both contracts, including positive and negative midpoints.
+
+## Generated table-column anchors
+
+Pass `--suite anchors` to `routine_namespaces.py` for 41 assertions covering
+quoted table/column names, NUMBER(5,2) local variables and numeric returns,
+VARCHAR2(3 CHAR) local lengths, NULLs, argument and character-return sizing,
+exact numeric literals, overflow errors and function exception handling. The
+reference session must use dot-decimal `NLS_NUMERIC_CHARACTERS='.,'`; a different
+setting is rejected before DDL. Objects are generated and removed in the
+reference schema and matching target namespace.
+
+Six explicit error assertions require ORA-06502 from Oracle and either SQLSTATE
+22003 (numeric overflow) or 22001 (character length) from BicDB's PostgreSQL
+transport. They do not qualify a general ORA error mapping. Source-only checks
+establish the expectations independently of BicDB. Engine and driver tests also
+cover definition-owner selection against conflicting namespaces, missing-table
+rejection, native PostgreSQL behavior and database reopen.
+
+A constrained numeric return differs from an unconstrained argument and from a
+character return length. PostgreSQL discards declaration modifiers from its
+function signatures, as specified by [CREATE FUNCTION](https://www.postgresql.org/docs/18/sql-createfunction.html).
+These profiles have separate regressions. Full dependency invalidation after
+DDL, temporal type provenance, BYTE length semantics and cross-schema Oracle
+privileges remain outside this fixture's acceptance.

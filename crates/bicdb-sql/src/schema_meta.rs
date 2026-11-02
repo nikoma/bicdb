@@ -4344,6 +4344,7 @@ impl RoutineFrame {
         crate::engine::RoutineSlotBinding {
             ids: Arc::clone(&self.slot_ids),
             values: std::rc::Rc::clone(&self.slot_values),
+            types: Arc::clone(&self.assignment_types),
         }
     }
 

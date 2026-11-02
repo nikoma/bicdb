@@ -31,3 +31,14 @@ Retain reusable dependency artifacts to keep subsequent checks efficient. Use
 bounded build concurrency and disable incremental compilation for large engine
 builds when it would accumulate obsolete generations. Report reclaimed space
 and remaining build-cache size when cleanup is substantial.
+
+## Monitor memory during builds
+
+Watch available RAM, swap and memory pressure throughout long builds, rather
+than checking only at startup. Limit concurrent memory-heavy compilation and
+leave headroom for the other services on shared hosts. Use an active monitor
+with a host-appropriate minimum headroom; stop only your own build process group
+if memory becomes scarce, then resume validation when sufficient memory returns.
+Preserve other agents' and services' processes. Keep the goal active while
+handling resource pressure, and report an interrupted validation separately
+from a completed test run.

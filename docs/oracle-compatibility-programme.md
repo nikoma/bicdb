@@ -30,7 +30,11 @@ Startup and business workflows are not qualified. The later
 catalog acceptance and bounded seed results are not full execution acceptance.
 Required foreign keys, complete routine/view behavior and remaining application
 behavior are still outstanding.
-These are development data baselines, not full schema/application acceptance.
+These are development data baselines, not full schema/application acceptance. The
+[foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
+records all 3,826 relationships as initially deferred; 2,914 have source
+NOT VALIDATED state. Preserving that timing and validation contract is required
+before the foreign-key migration can be qualified.
 
 “Partial” means a specific implementation or test exists, not that the full
 workstream is compatible. “Unqualified” means Oracle behavior or operational

@@ -2512,6 +2512,28 @@ impl<'db> SqlSession<'db> {
         Ok(expr.clone())
     }
 
+    fn routine_unary_operand_type(&self, expr: &Expr) -> Option<String> {
+        let name = match expr {
+            Expr::Identifier(ident) => Some(ident.value.as_str()),
+            Expr::Value(value) => match &value.value {
+                Value::Placeholder(name) => Some(name.as_str()),
+                _ => None,
+            },
+            Expr::Nested(inner) | Expr::Collate { expr: inner, .. } => {
+                return self.routine_unary_operand_type(inner);
+            }
+            _ => None,
+        };
+        name.and_then(|name| {
+            self.routine_slots
+                .as_ref()?
+                .types
+                .get(normalized_object_name_ref(name).as_ref())
+                .map(|schema| schema.pg_type.clone())
+        })
+        .or_else(|| projected_expr_pg_type_with_db(self.db_ref(), expr))
+    }
+
     pub(crate) fn eval_session_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
         match expr {
             Expr::Value(value) => {
@@ -2885,6 +2907,22 @@ impl<'db> SqlSession<'db> {
                 Ok(sql_not(sql_value_truth(self.eval_session_expr(expr)?)?)
                     .map(SqlValue::Bool)
                     .unwrap_or(SqlValue::Null))
+            }
+            Expr::UnaryOp {
+                op: UnaryOperator::Minus,
+                expr,
+            } => {
+                let value = self.eval_session_expr(expr)?;
+                let kind = self.routine_unary_operand_type(expr);
+                eval_unary_minus_typed_value(value, kind.as_deref())
+            }
+            Expr::UnaryOp {
+                op: UnaryOperator::Plus,
+                expr,
+            } => {
+                let value = self.eval_session_expr(expr)?;
+                let kind = self.routine_unary_operand_type(expr);
+                eval_unary_plus_typed_value(value, kind.as_deref())
             }
             Expr::UnaryOp { op, expr }
                 if matches!(

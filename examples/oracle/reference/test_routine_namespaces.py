@@ -98,10 +98,10 @@ class RoutineNamespaceTests(unittest.TestCase):
     def test_anchor_fixture_keeps_sizes_nulls_and_explicit_error_contracts(self):
         from routine_anchors import fixture as anchor_fixture
         plan = anchor_fixture('owner', 'BICDB_TEST')
-        self.assertEqual(len(plan['cases']), 24)
-        self.assertEqual(len({case['id'] for case in plan['cases']}), 24)
+        self.assertEqual(len(plan['cases']), 41)
+        self.assertEqual(len({case['id'] for case in plan['cases']}), 41)
         errors = [case for case in plan['cases'] if 'expected_error' in case]
-        self.assertEqual(len(errors), 4)
+        self.assertEqual(len(errors), 6)
         self.assertEqual({case['expected_error']['oracle'] for case in errors}, {'ORA-06502'})
         cases = {case['id']: case for case in plan['cases']}
         self.assertEqual(cases['argument_size_not_inherited']['expected'], [['abcdef']])

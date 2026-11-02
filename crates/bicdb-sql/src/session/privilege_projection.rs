@@ -160,11 +160,11 @@ impl<'db> SqlSession<'db> {
         oracle::validate_routine_language(self.db_ref(), &routine.language)?;
         if matches!(
             oracle::preview_routine_language_version(&routine.language),
-            Some(2 | 3)
+            Some(2 | 3 | 4)
         ) {
             routine.schema = oracle::routines::function_namespace(&routine)?;
         }
-        if oracle::preview_routine_language_version(&routine.language) == Some(3) {
+        if oracle::typed_preview_routine_language(&routine.language) {
             oracle::routine_arithmetic::prepare_physical_metadata(&mut routine)?;
         }
         self.require_schema_create_privilege(&routine.schema)?;

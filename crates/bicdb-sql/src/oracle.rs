@@ -6,6 +6,7 @@ use sqlparser::{dialect::OracleDialect, keywords::Keyword};
 
 pub mod assessment;
 mod date_trunc;
+mod dual;
 mod namespaces;
 pub(crate) mod routine_arithmetic;
 pub(crate) mod routines;
@@ -16,10 +17,12 @@ pub const POSTGRES_PROFILE: &str = "postgres";
 const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1: &str = "bicdb_oracle_preview_v1";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2: &str = "bicdb_oracle_preview_v2";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v3";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3: &str = "bicdb_oracle_preview_v3";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v4";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_402;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_403;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -30,9 +33,14 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     {
         PREVIEW_ROUTINE_LANGUAGE_V1 => Some(1),
         PREVIEW_ROUTINE_LANGUAGE_V2 => Some(2),
-        PREVIEW_ROUTINE_LANGUAGE => Some(3),
+        PREVIEW_ROUTINE_LANGUAGE_V3 => Some(3),
+        PREVIEW_ROUTINE_LANGUAGE => Some(4),
         _ => None,
     }
+}
+
+pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
+    matches!(preview_routine_language_version(language), Some(3 | 4))
 }
 
 pub(crate) fn preview_routine_language_enabled(db: &BicDb) -> Result<bool> {
@@ -1151,134 +1159,7 @@ fn lower_native(sql: &str, preview: bool) -> Result<String> {
     if let ControlFlow::Break(e) = result {
         return Err(e);
     }
-    struct Dual;
-    impl sqlparser::ast::VisitorMut for Dual {
-        type Break = SqlError;
-        fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<Self::Break> {
-            for lock in &mut query.locks {
-                if let Some(of) = &mut lock.of {
-                    fold_name(of);
-                }
-            }
-            ControlFlow::Continue(())
-        }
-        fn pre_visit_select(&mut self, select: &mut Select) -> ControlFlow<Self::Break> {
-            let only_dual = select.from.len() == 1
-                && select.from[0].joins.is_empty()
-                && matches!(&select.from[0].relation,TableFactor::Table{name,..} if name.to_string()=="\"DUAL\"");
-            if only_dual {
-                let mut sequence = false;
-                let mut references_row = false;
-                let _ = sqlparser::ast::visit_expressions(select, |expr| {
-                    match expr {
-                        Expr::Function(function)
-                            if matches!(
-                                function.name.to_string().as_str(),
-                                "nextval" | "currval"
-                            ) =>
-                        {
-                            sequence = true
-                        }
-                        Expr::Identifier(_)
-                        | Expr::CompoundIdentifier(_)
-                        | Expr::Wildcard(_)
-                        | Expr::QualifiedWildcard(..) => references_row = true,
-                        _ => {}
-                    }
-                    ControlFlow::<()>::Continue(())
-                });
-                if sequence {
-                    if references_row {
-                        return ControlFlow::Break(unsupported(
-                            "sequence projections from DUAL cannot also reference its row",
-                        ));
-                    }
-                    // Stateful sequence evaluation belongs to SqlSession's
-                    // scalar SELECT path, rather than a read-only derived row.
-                    select.from.clear();
-                }
-            }
-            ControlFlow::Continue(())
-        }
-        fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<Self::Break> {
-            match expr {
-                Expr::Identifier(ident) => fold(ident),
-                Expr::CompoundIdentifier(idents) => idents.iter_mut().for_each(fold),
-                _ => {}
-            }
-            ControlFlow::Continue(())
-        }
-        fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<Self::Break> {
-            if let Statement::CreateTable(table) = statement {
-                for column in &mut table.columns {
-                    fold(&mut column.name);
-                }
-            }
-            if let Statement::Copy {
-                source: sqlparser::ast::CopySource::Table { columns, .. },
-                ..
-            } = statement
-            {
-                columns.iter_mut().for_each(fold);
-            }
-            if let Statement::Insert(insert) = statement {
-                insert.columns.iter_mut().for_each(fold_name);
-            }
-            if let Statement::Update(update) = statement {
-                for assignment in &mut update.assignments {
-                    let names = match &mut assignment.target {
-                        sqlparser::ast::AssignmentTarget::ColumnName(name) => {
-                            std::slice::from_mut(name)
-                        }
-                        sqlparser::ast::AssignmentTarget::Tuple(names) => names.as_mut_slice(),
-                    };
-                    names.iter_mut().for_each(fold_name);
-                }
-            }
-            ControlFlow::Continue(())
-        }
-        fn post_visit_table_factor(&mut self, table: &mut TableFactor) -> ControlFlow<Self::Break> {
-            if let TableFactor::Table { name, alias, .. } = table {
-                if name.to_string() == "\"DUAL\"" {
-                    let mut parsed = Parser::parse_sql(
-                        &PostgreSqlDialect {},
-                        "SELECT * FROM (SELECT 'X' AS \"DUMMY\") AS \"DUAL\"",
-                    )
-                    .unwrap();
-                    if let Statement::Query(query) = parsed.remove(0) {
-                        if let SetExpr::Select(mut select) = *query.body {
-                            let mut replacement = select.from.remove(0).relation;
-                            if let TableFactor::Derived {
-                                alias: new_alias, ..
-                            } = &mut replacement
-                            {
-                                if alias.is_some() {
-                                    *new_alias = alias.clone();
-                                }
-                            }
-                            *table = replacement;
-                        }
-                    }
-                }
-            }
-            ControlFlow::Continue(())
-        }
-    }
-    fn fold(ident: &mut Ident) {
-        if ident.quote_style.is_none() {
-            *ident = Ident::with_quote('"', ident.value.to_uppercase());
-        }
-    }
-    fn fold_name(name: &mut ObjectName) {
-        for part in &mut name.0 {
-            if let sqlparser::ast::ObjectNamePart::Identifier(ident) = part {
-                fold(ident);
-            }
-        }
-    }
-    if let ControlFlow::Break(error) = sqlparser::ast::VisitMut::visit(&mut statements, &mut Dual) {
-        return Err(error);
-    }
+    dual::lower(&mut statements, true)?;
     Ok(statements
         .iter()
         .map(ToString::to_string)
@@ -1867,6 +1748,169 @@ mod tests {
             SqlValue::Int(99)
         );
         assert!(!preview_routine_language_enabled(session.db_ref()).unwrap());
+    }
+
+    #[test]
+    fn preview_week_numeric_truncation_is_exact_and_dual_keeps_cte_scope() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for source in ["CREATE TABLE one_row(dummy VARCHAR2(1))","INSERT INTO one_row VALUES('Y')","CREATE FUNCTION dummy_value RETURN VARCHAR2 IS result VARCHAR2(1); BEGIN SELECT DUMMY INTO result FROM DUAL; RETURN result; END;","CREATE FUNCTION cte_dummy RETURN VARCHAR2 IS result VARCHAR2(1); BEGIN WITH DUAL AS (SELECT dummy FROM one_row) SELECT dummy INTO result FROM DUAL; RETURN result; END;","CREATE FUNCTION numeric_clip(p_value NUMBER,p_scale NUMBER) RETURN NUMBER IS BEGIN RETURN TRUNC(p_value,p_scale); END;","CREATE FUNCTION sql_numeric_clip(p_value NUMBER,p_scale NUMBER) RETURN NUMBER IS result NUMBER; BEGIN SELECT TRUNC(p_value,p_scale) INTO result FROM DUAL; RETURN result; END;"] {
+            let sql=lower_profile_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE).unwrap();session.execute(&sql).unwrap();
+        }
+        for (source, expected) in [
+            ("SELECT dummy_value() FROM DUAL", "X"),
+            ("SELECT cte_dummy() FROM DUAL", "Y"),
+            (
+                "WITH DUAL AS (SELECT dummy FROM one_row) SELECT dummy FROM DUAL",
+                "Y",
+            ),
+            (
+                "SELECT TRUNC(CAST('123456789012345678901234.56789' AS NUMBER),2) FROM DUAL",
+                "123456789012345678901234.56",
+            ),
+            (
+                "SELECT TRUNC(CAST('123456789012345678901234.56789' AS NUMBER)) FROM DUAL",
+                "123456789012345678901234",
+            ),
+            ("SELECT numeric_clip(123.456,1.9) FROM DUAL", "123.45"),
+            ("SELECT numeric_clip(123.456,-1.9) FROM DUAL", "100"),
+            ("SELECT numeric_clip(123.456,0.5) FROM DUAL", "123.4"),
+            ("SELECT numeric_clip(123.456,-0.5) FROM DUAL", "120"),
+            ("SELECT sql_numeric_clip(123.456,1.9) FROM DUAL", "123.4"),
+            ("SELECT TRUNC(123.456,1.9) FROM DUAL", "123.4"),
+            ("SELECT TRUNC(123.456,-1.9) FROM DUAL", "120"),
+        ] {
+            let sql = lower_profile_sql(session.db_ref(), source, ORACLE_PREVIEW_PROFILE).unwrap();
+            assert_eq!(
+                session.execute(&sql).unwrap().rows[0][0].to_cell(),
+                expected,
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn postgres_week_scaled_numeric_truncation_preserves_precision_and_scale() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for (sql, expected) in [
+            (
+                "SELECT trunc(CAST('123456789012345678901234.56789' AS NUMERIC),2)",
+                "123456789012345678901234.56",
+            ),
+            ("SELECT trunc(-123.456,2)", "-123.45"),
+            ("SELECT trunc(123.456,-2)", "100"),
+            ("SELECT trunc(1.2,4)", "1.2000"),
+            ("SELECT trunc(0.001,2)", "0.00"),
+            ("SELECT trunc(123.456,-2147483648)", "0"),
+            ("SELECT trunc(CAST('NaN' AS NUMERIC),2)", "NaN"),
+        ] {
+            assert_eq!(
+                session.execute(sql).unwrap().rows[0][0].to_cell(),
+                expected,
+                "{sql}"
+            );
+            assert_eq!(
+                infer_query_result_types(session.db_ref(), sql).unwrap(),
+                Some(vec![Some("numeric".into())])
+            );
+        }
+        assert!(session.execute("SELECT trunc(123.456,1.9)").is_err());
+        assert!(session
+            .execute("SELECT trunc(CAST(123.456 AS DOUBLE PRECISION),2)")
+            .is_err());
+    }
+
+    #[test]
+    fn preview_week_truncation_and_procedural_null_formats_are_distinct() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for source in [
+            "CREATE FUNCTION week_clip(p_date DATE,p_fmt VARCHAR2) RETURN DATE IS BEGIN RETURN TRUNC(p_date,p_fmt); END;",
+            "CREATE FUNCTION sql_clip(p_date DATE,p_fmt VARCHAR2) RETURN DATE IS result DATE; BEGIN SELECT TRUNC(p_date,p_fmt) INTO result FROM DUAL; RETURN result; END;",
+            "CREATE FUNCTION number_clip(p_value NUMBER,p_scale NUMBER) RETURN NUMBER IS BEGIN RETURN TRUNC(p_value,p_scale); END;",
+        ] {let sql=lower_profile_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE).unwrap();session.execute(&sql).unwrap();}
+        for (date, format, expected) in [
+            ("2024-02-29 12:34:56.9", "W", "2024-02-29 00:00:00"),
+            ("2024-02-29 12:34:56.9", "WW", "2024-02-26 00:00:00"),
+            ("2024-02-29 12:34:56.9", "D", "2024-02-25 00:00:00"),
+            ("2024-02-29 12:34:56.9", "DY", "2024-02-25 00:00:00"),
+            ("2024-02-29 12:34:56.9", "DAY", "2024-02-25 00:00:00"),
+            ("2023-01-01 12:34:56", "WW", "2023-01-01 00:00:00"),
+            ("2023-01-01 12:34:56", "IW", "2022-12-26 00:00:00"),
+            ("2021-01-01 12:34:56", "IYYY", "2019-12-30 00:00:00"),
+            ("2023-01-01 12:34:56", "IY", "2022-01-03 00:00:00"),
+        ] {
+            for name in ["TRUNC", "week_clip", "sql_clip"] {
+                let sql = lower_profile_sql(
+                    session.db_ref(),
+                    &format!("SELECT {name}(TIMESTAMP '{date}','{format}') FROM DUAL"),
+                    ORACLE_PREVIEW_PROFILE,
+                )
+                .unwrap();
+                assert_eq!(
+                    session.execute(&sql).unwrap().rows[0][0].to_cell(),
+                    expected,
+                    "{sql}"
+                );
+            }
+        }
+        for source in [
+            "SELECT TRUNC(TIMESTAMP '2024-02-29 12:34:56',NULL) FROM DUAL",
+            "SELECT sql_clip(TIMESTAMP '2024-02-29 12:34:56',NULL) FROM DUAL",
+            "SELECT week_clip(NULL,NULL) FROM DUAL",
+            "SELECT number_clip(123.456,NULL) FROM DUAL",
+        ] {
+            let sql = lower_profile_sql(session.db_ref(), source, ORACLE_PREVIEW_PROFILE).unwrap();
+            assert_eq!(
+                session.execute(&sql).unwrap().rows[0][0],
+                SqlValue::Null,
+                "{source}"
+            );
+        }
+        let sql = lower_profile_sql(
+            session.db_ref(),
+            "SELECT week_clip(TIMESTAMP '2024-02-29 12:34:56',NULL) FROM DUAL",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        assert_eq!(session.execute(&sql).unwrap_err().sqlstate(), "22023");
+        session.execute(&format!("CREATE FUNCTION legacy_clip(p_date DATE,p_fmt VARCHAR) RETURNS DATE LANGUAGE {PREVIEW_ROUTINE_LANGUAGE_V3} AS $$BEGIN RETURN TRUNC(p_date,p_fmt); END$$")).unwrap();
+        assert_eq!(
+            session
+                .execute("SELECT legacy_clip(TIMESTAMP '2024-02-29 12:34:56',NULL)")
+                .unwrap()
+                .rows[0][0],
+            SqlValue::Null
+        );
+    }
+
+    #[test]
+    fn postgres_week_and_null_format_semantics_remain_native() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE FUNCTION native_clip(p_date TIMESTAMP,p_fmt TEXT) RETURNS TIMESTAMP LANGUAGE plpgsql AS $$BEGIN RETURN date_trunc(p_fmt,p_date); END$$").unwrap();
+        assert_eq!(
+            session
+                .execute("SELECT native_clip(TIMESTAMP '2024-02-29 12:34:56.9','week')")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "2024-02-26 00:00:00"
+        );
+        for sql in [
+            "SELECT date_trunc(NULL,TIMESTAMP '2024-02-29 12:34:56.9')",
+            "SELECT native_clip(TIMESTAMP '2024-02-29 12:34:56.9',NULL)",
+            "SELECT trunc(123.456,CAST(NULL AS INT))",
+        ] {
+            assert_eq!(session.execute(sql).unwrap().rows[0][0], SqlValue::Null);
+        }
     }
 
     #[test]

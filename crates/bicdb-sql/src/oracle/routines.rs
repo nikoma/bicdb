@@ -20,7 +20,7 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
                 == preview_routine_language_version(&routine.language)
                 && matches!(
                     preview_routine_language_version(&routine.language),
-                    Some(2 | 3)
+                    Some(2 | 3 | 4)
                 )
         })
     {
@@ -31,41 +31,47 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
     Ok(relation_schema_name(&function.name))
 }
 
+fn bind_relations<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str) -> Result<()> {
+    super::dual::lower(node, false)?;
+    namespaces::qualify(node, schema);
+    Ok(())
+}
+
 fn bind_namespace_statements(statements: &mut [RoutineStmt], schema: &str) -> Result<()> {
     for statement in statements {
         match statement {
             RoutineStmt::Assignment { target, expr } => {
                 if let RoutineAssignmentTarget::ArrayElement { index, .. } = target {
-                    namespaces::qualify(&mut index.expr, schema);
+                    bind_relations(&mut index.expr, schema)?;
                 }
-                namespaces::qualify(&mut expr.expr, schema);
+                bind_relations(&mut expr.expr, schema)?;
             }
             RoutineStmt::If {
                 condition,
                 then_body,
                 else_body,
             } => {
-                namespaces::qualify(&mut condition.expr, schema);
+                bind_relations(&mut condition.expr, schema)?;
                 bind_namespace_statements(then_body, schema)?;
                 bind_namespace_statements(else_body, schema)?;
             }
             RoutineStmt::ForLoop {
                 lower, upper, body, ..
             } => {
-                namespaces::qualify(&mut lower.expr, schema);
-                namespaces::qualify(&mut upper.expr, schema);
+                bind_relations(&mut lower.expr, schema)?;
+                bind_relations(&mut upper.expr, schema)?;
                 bind_namespace_statements(body, schema)?;
             }
             RoutineStmt::ForeachLoop { array, body, .. } => {
-                namespaces::qualify(&mut array.expr, schema);
+                bind_relations(&mut array.expr, schema)?;
                 bind_namespace_statements(body, schema)?;
             }
             RoutineStmt::WhileLoop { condition, body } => {
-                namespaces::qualify(&mut condition.expr, schema);
+                bind_relations(&mut condition.expr, schema)?;
                 bind_namespace_statements(body, schema)?;
             }
             RoutineStmt::QueryForLoop { query, body, .. } => {
-                namespaces::qualify(query, schema);
+                bind_relations(query, schema)?;
                 bind_namespace_statements(body, schema)?;
             }
             RoutineStmt::CursorForLoop { body, .. } | RoutineStmt::Loop { body } => {
@@ -73,19 +79,19 @@ fn bind_namespace_statements(statements: &mut [RoutineStmt], schema: &str) -> Re
             }
             RoutineStmt::SelectInto { query, .. }
             | RoutineStmt::Perform { query }
-            | RoutineStmt::ReturnQuery(query) => namespaces::qualify(query, schema),
+            | RoutineStmt::ReturnQuery(query) => bind_relations(query, schema)?,
             RoutineStmt::Sql(statement) | RoutineStmt::SqlInto { statement, .. } => {
-                namespaces::qualify(statement, schema)
+                bind_relations(statement, schema)?
             }
-            RoutineStmt::Return(Some(expr)) => namespaces::qualify(&mut expr.expr, schema),
+            RoutineStmt::Return(Some(expr)) => bind_relations(&mut expr.expr, schema)?,
             RoutineStmt::RaiseException {
                 arguments, detail, ..
             } => {
                 for arg in arguments {
-                    namespaces::qualify(&mut arg.expr, schema);
+                    bind_relations(&mut arg.expr, schema)?;
                 }
                 if let Some(detail) = detail {
-                    namespaces::qualify(&mut detail.expr, schema);
+                    bind_relations(&mut detail.expr, schema)?;
                 }
             }
             RoutineStmt::DynamicExecute(_) => {
@@ -121,7 +127,7 @@ pub(crate) fn bind_function_namespace(
     }
     for param in params {
         if let Some(expr) = &mut param.default_expr {
-            namespaces::qualify(expr, &schema);
+            bind_relations(expr, &schema)?;
         }
     }
     for declaration in declarations {
@@ -129,8 +135,8 @@ pub(crate) fn bind_function_namespace(
             RoutineDecl::Variable {
                 default_expr: Some(expr),
                 ..
-            } => namespaces::qualify(&mut expr.expr, &schema),
-            RoutineDecl::Cursor { query, .. } => namespaces::qualify(query, &schema),
+            } => bind_relations(&mut expr.expr, &schema)?,
+            RoutineDecl::Cursor { query, .. } => bind_relations(query, &schema)?,
             _ => {}
         }
     }

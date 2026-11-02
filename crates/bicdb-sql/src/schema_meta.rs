@@ -4095,9 +4095,8 @@ pub(crate) fn resolve_routine_cached(
             oracle::validate_routine_language(db, &schema.language)?;
             let schema = Arc::new(schema);
             let ir = compile_cached_routine_ir_in_catalog(&schema, Some(db))?;
-            let compilation_scope = (oracle::preview_routine_language_version(&schema.language)
-                == Some(3))
-            .then(|| routine_compilation_scope(db));
+            let compilation_scope = (oracle::typed_preview_routine_language(&schema.language))
+                .then(|| routine_compilation_scope(db));
             Some(CachedRoutine {
                 schema,
                 ir,

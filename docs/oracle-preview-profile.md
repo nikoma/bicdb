@@ -203,13 +203,13 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v3`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v4`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
 previously translated routines; recreate an Oracle-authored definition to select
 the new compiler. The compiler versions have separate `pg_language` identities,
-present only in a preview database. Versions 1 and 2 remain supported with their original
+present only in a preview database. Versions 1, 2 and 3 remain supported with their original
 behavior.
 
 Version 2 binds static relation references in functions to the namespace in the
@@ -250,6 +250,24 @@ records version-1 values and its original application namespace failure. The
 records version-2 comparisons and the original arithmetic gap. The
 [typed arithmetic evidence](evidence/oracle-routine-arithmetic-2026-11-01/README.md)
 records version-3 reference comparisons, PostgreSQL isolation and limitations.
+
+Version 4 distinguishes procedural date-format validation from embedded SQL.
+SQL TRUNC(date, NULL) returns NULL. A procedural expression raises an error for
+a non-NULL datetime and NULL format (SQLSTATE 22023 over the PostgreSQL
+transport); a NULL datetime still returns NULL. Numeric TRUNC retains NULL
+propagation. Stored version-3 definitions retain their earlier NULL-format
+behavior until recreated from source. Numeric NUMBER truncation in the new
+compiler uses exact decimal coefficients. SQL truncates a fractional precision
+toward zero; procedural calls round precision halfway away from zero to satisfy
+the builtin integer parameter. The native two-argument numeric overload takes integer precision
+and preserves its decimal display scale.
+
+The preview supports W (weeks from the month's first day), WW (weeks from the
+year's first day), ISO weeks/year starts, and D/DY/DAY with its AMERICA default
+(Sunday). Gregorian/AMERICA reference settings are required for the generated
+week suite. Alternate NLS territories and general NLS session configuration
+remain unsupported. Stored SQL and top-level SQL share the one-row DUAL
+lowering, with explicit aliases and CTE shadowing retained.
 
 This is declaration support for the tested routine subset, not a complete
 PL/SQL compiler. Native routine execution, namespace, overload, privilege and

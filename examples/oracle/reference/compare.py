@@ -3,7 +3,8 @@
 
 Connections come from local configuration, never from the result artifact. A
 matching result only qualifies that case on the recorded database versions.
-Differences and execution errors both make the command fail.
+Unexpected differences and execution errors make the command fail. Explicit
+error assertions require the exact declared code from each backend.
 """
 import argparse
 import datetime
@@ -64,6 +65,13 @@ def compare_cases(oracle, bicdb, cases):
         reference = outcome(oracle, case['sql'])
         actual = outcome(bicdb, case['sql'])
         matched = 'rows' in reference and 'rows' in actual and reference == actual
+        if 'expected_error' in case:
+            expected = case['expected_error']
+            if not isinstance(expected, dict) or set(expected) != {'oracle', 'bicdb'} or not all(isinstance(code, str) and code for code in expected.values()):
+                raise ValueError('expected_error must specify nonempty Oracle and BicDB codes')
+            matched = ('error' in reference and 'error' in actual
+                       and reference.get('code') == expected['oracle']
+                       and actual.get('code') == expected['bicdb'])
         results.append(dict(id=case['id'], matched=matched, oracle=reference, bicdb=actual))
     return results
 

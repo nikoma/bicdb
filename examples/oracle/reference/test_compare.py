@@ -49,6 +49,26 @@ class ComparisonTests(unittest.TestCase):
         self.assertFalse(result['matched'])
         self.assertNotIn('private', str(result))
 
+    def test_expected_errors_require_both_exact_backend_codes(self):
+        class CodedError(Exception):
+            def __init__(self, code):
+                self.sqlstate = code
+                super().__init__('private details')
+        case = dict(id='format', sql='SELECT 1', expected_error=dict(oracle='ORA-01899', bicdb='22023'))
+        source = Connection(error=CodedError('ORA-01899'))
+        target = Connection(error=CodedError('22023'))
+        self.assertTrue(compare_cases(source, target, [case])[0]['matched'])
+        self.assertFalse(compare_cases(source, Connection(error=CodedError('0A000')), [case])[0]['matched'])
+        self.assertFalse(compare_cases(source, Connection(rows=[(None,)]), [case])[0]['matched'])
+        self.assertFalse(compare_cases(Connection(rows=[(None,)]), target, [case])[0]['matched'])
+        self.assertNotIn('private', str(compare_cases(source, target, [case])))
+
+    def test_expected_error_contract_rejects_missing_or_empty_codes(self):
+        for expected in [dict(oracle='ORA-01899'), dict(oracle=None, bicdb='22023'), dict(oracle='ORA-01899', bicdb='')]:
+            with self.assertRaises(ValueError):
+                compare_cases(Connection(rows=[]), Connection(rows=[]),
+                              [dict(id='bad', sql='SELECT 1', expected_error=expected)])
+
     def test_row_bound_and_order_are_enforced(self):
         self.assertIn('error', outcome(Connection(rows=[(1,), (2,)]), 'SELECT 1', max_rows=1))
         result = compare_cases(Connection(rows=[(1,), (2,)]), Connection(rows=[(2,), (1,)]),

@@ -3229,6 +3229,23 @@ pub(crate) fn eval_compatibility_function_value(
             Ok(Some(SqlValue::Float(sql_random_value())))
         }
         "trunc" | "pg_catalog.trunc" => {
+            if args.len() == 2 {
+                if args.iter().any(|arg| matches!(arg, SqlValue::Null)) {
+                    return Ok(Some(SqlValue::Null));
+                }
+                if matches!(args[0], SqlValue::Float(_)) {
+                    return Err(SqlError::Unsupported(
+                        "two-argument trunc requires numeric input".into(),
+                    ));
+                }
+                let scale = sql_value_i64(&args[1]).ok_or_else(|| {
+                    SqlError::invalid_parameter_value("trunc requires an integer scale")
+                })?;
+                let scale = i32::try_from(scale).map_err(|_| {
+                    SqlError::numeric_value_out_of_range("trunc scale is out of range")
+                })?;
+                return truncate_numeric_value(&args[0], i64::from(scale), true).map(Some);
+            }
             require_arg_count("trunc", args, 1)?;
             if matches!(args[0], SqlValue::Null) {
                 return Ok(Some(SqlValue::Null));

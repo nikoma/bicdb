@@ -58,6 +58,123 @@ impl Running {
 }
 
 #[tokio::test]
+async fn week_and_null_formats_keep_profile_semantics_after_reopen() {
+    use tokio_postgres::types::Type;
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        for attempt in 0..2 {
+            let server = Running::with_profile(directory.path(), profile);
+            let mut config = tokio_postgres::Config::new();
+            config
+                .host("127.0.0.1")
+                .port(server.port)
+                .user("bicdb")
+                .dbname("bicdb");
+            if profile != "postgres" {
+                config.options("-c bicdb.sql_profile=oracle-preview-v1");
+            }
+            let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+            let connection = tokio::spawn(async move {
+                connection.await.unwrap();
+            });
+            if attempt == 0 {
+                let ddl = if profile == "postgres" {
+                    "CREATE FUNCTION week_clip(p_date TIMESTAMP,p_fmt TEXT) RETURNS TIMESTAMP LANGUAGE plpgsql AS $$BEGIN RETURN date_trunc(p_fmt,p_date); END$$"
+                } else {
+                    "CREATE FUNCTION week_clip(p_date DATE,p_fmt VARCHAR2) RETURN DATE IS BEGIN RETURN TRUNC(p_date,p_fmt); END;"
+                };
+                client.batch_execute(ddl).await.unwrap();
+                if profile != "postgres" {
+                    client.batch_execute("CREATE FUNCTION sql_clip(p_date DATE,p_fmt VARCHAR2) RETURN DATE IS result DATE; BEGIN SELECT TRUNC(p_date,p_fmt) INTO result FROM DUAL; RETURN result; END;").await.unwrap();
+                }
+            }
+            let suffix = if profile == "postgres" {
+                ""
+            } else {
+                " FROM DUAL"
+            };
+            let query =
+                format!("SELECT week_clip(CAST(CAST($1 AS VARCHAR) AS TIMESTAMP),$2){suffix}");
+            let statement = client.prepare(&query).await.unwrap();
+            assert_eq!(statement.columns()[0].type_(), &Type::TIMESTAMP);
+            let date = Some("2024-02-29 12:34:56.9".to_string());
+            let format = Some(if profile == "postgres" {
+                "week".to_string()
+            } else {
+                "D".to_string()
+            });
+            let row = client
+                .query_one(&statement, &[&date, &format])
+                .await
+                .unwrap();
+            let seconds = if profile == "postgres" {
+                1_708_905_600
+            } else {
+                1_708_819_200
+            };
+            assert_eq!(
+                row.get::<_, std::time::SystemTime>(0),
+                std::time::UNIX_EPOCH + std::time::Duration::from_secs(seconds)
+            );
+            let null: Option<String> = None;
+            if profile == "postgres" {
+                assert!(client
+                    .query_one(&statement, &[&date, &null])
+                    .await
+                    .unwrap()
+                    .get::<_, Option<std::time::SystemTime>>(0)
+                    .is_none());
+            } else {
+                let error = client
+                    .query_one(&statement, &[&date, &null])
+                    .await
+                    .unwrap_err();
+                assert_eq!(
+                    error.code(),
+                    Some(&tokio_postgres::error::SqlState::INVALID_PARAMETER_VALUE)
+                );
+                let sql = client
+                    .prepare(&format!(
+                        "SELECT sql_clip(CAST(CAST($1 AS VARCHAR) AS TIMESTAMP),$2){suffix}"
+                    ))
+                    .await
+                    .unwrap();
+                assert!(client
+                    .query_one(&sql, &[&date, &null])
+                    .await
+                    .unwrap()
+                    .get::<_, Option<std::time::SystemTime>>(0)
+                    .is_none());
+                let scalar = client
+                    .prepare(&format!(
+                        "SELECT TRUNC(CAST(CAST($1 AS VARCHAR) AS TIMESTAMP),$2){suffix}"
+                    ))
+                    .await
+                    .unwrap();
+                assert!(client
+                    .query_one(&scalar, &[&date, &null])
+                    .await
+                    .unwrap()
+                    .get::<_, Option<std::time::SystemTime>>(0)
+                    .is_none());
+            }
+            assert!(client
+                .query_one(&statement, &[&null, &null])
+                .await
+                .unwrap()
+                .get::<_, Option<std::time::SystemTime>>(0)
+                .is_none());
+            assert!(client
+                .query_one(&statement, &[&date, &format])
+                .await
+                .is_ok());
+            drop(client);
+            connection.await.unwrap();
+        }
+    }
+}
+
+#[tokio::test]
 async fn calendar_routines_keep_profile_semantics_in_prepared_calls_after_reopen() {
     use tokio_postgres::types::Type;
     for profile in ["postgres", "oracle-preview-v1"] {

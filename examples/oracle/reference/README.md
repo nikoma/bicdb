@@ -5,7 +5,10 @@ database and BicDB's `oracle-hr-v1` profile. The comparison checks query values,
 including nulls, character padding, exact numbers and time components. It does
 not qualify type metadata, error semantics, transactions or general Oracle
 compatibility. There is no allowlist of ignored differences: any difference or
-execution error makes `compare.py` exit with status 1, after writing its report.
+unexpected execution error makes `compare.py` exit with status 1, after writing
+its report. A fixture may explicitly assert an error with `expected_error`,
+which must name and match both Oracle and BicDB codes; returned rows or any
+other error fail that assertion.
 
 ## Local reference database
 
@@ -204,3 +207,25 @@ the reference connection's Gregorian NLS calendar; a different calendar fails
 before creating objects. PostgreSQL has separate native interval-arithmetic and
 user-function regressions. Alternate calendars, timezone conversions, BC date
 boundaries and Oracle-specific error codes are outside this suite's acceptance.
+
+## Generated week truncation and procedural formats
+
+Pass `--suite week` to `routine_namespaces.py` for 102 assertions covering W, WW,
+D/DY/DAY, IW and ISO-year truncation, scalar SQL, stored expressions and embedded
+SELECT statements, plus exact numeric truncation with integer and fractional
+precision arguments. The reference session must use the Gregorian calendar and
+AMERICA territory; the runner records and checks both before creating objects.
+D/DY/DAY follow the preview's AMERICA default, with Sunday as the first day.
+Alternate NLS territories remain unsupported by the preview session contract.
+
+Oracle SQL returns NULL for a NULL datetime format. A PL/SQL expression raises
+ORA-01899 when the datetime is non-NULL; BicDB reports SQLSTATE 22023 over its
+PostgreSQL transport. A NULL datetime and numeric TRUNC retain NULL propagation.
+The two expected-error cases assert both codes explicitly. They do not ignore
+an execution difference. A final valid call checks recovery after those errors.
+New preview definitions use compiler version 4; existing version-3 definitions
+retain their earlier procedural-format behavior until recreated from source.
+
+SQL truncates fractional numeric precision toward zero. Procedural expressions
+convert that precision to an integer by rounding halfway away from zero. The
+fixture checks both contracts, including positive and negative midpoints.

@@ -1229,9 +1229,64 @@ impl Decimal {
     }
 }
 
-/// Rounds a decimal to `scale` fractional digits, half away from zero —
-/// PostgreSQL's `round(numeric, int)`. A negative scale rounds left of the
-/// decimal point (`round(1234, -2)` = 1200).
+/// Truncates an exact numeric toward zero; pad_scale preserves the native
+/// PostgreSQL display scale instead of Oracle NUMBER's unpadded representation.
+pub(crate) fn truncate_numeric_value(
+    value: &SqlValue,
+    scale: i64,
+    pad_scale: bool,
+) -> Result<SqlValue> {
+    let number = pg_numeric_from_sql_value(value.clone())?;
+    if !matches!(number, PgNumeric::Finite { .. }) {
+        return Ok(SqlValue::String(number.to_decimal_text()));
+    }
+    let value = decimal_from_pg_numeric(number)?;
+    // PostgreSQL caps a requested display scale at NUMERIC_DSCALE_MAX (14 bits).
+    let target = scale.min(16_383);
+    let current = i64::from(value.scale);
+    let mut result = if target >= current {
+        if pad_scale {
+            Decimal {
+                mantissa: value.mantissa * pow10_bigint((target - current) as u32),
+                scale: target as u32,
+            }
+        } else {
+            value
+        }
+    } else {
+        let drop = current - target;
+        let digits = value.mantissa.abs().to_str_radix(10).len() as i64;
+        let coefficient = if drop >= digits {
+            BigInt::ZERO
+        } else {
+            value.mantissa / pow10_bigint(drop as u32)
+        };
+        if target >= 0 {
+            Decimal {
+                mantissa: coefficient,
+                scale: target as u32,
+            }
+        } else {
+            Decimal {
+                mantissa: if coefficient.is_zero() {
+                    coefficient
+                } else {
+                    coefficient * pow10_bigint((-target) as u32)
+                },
+                scale: 0,
+            }
+        }
+    }
+    .format();
+    if !pad_scale && result.contains('.') {
+        result = result
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string();
+    }
+    Ok(SqlValue::String(result))
+}
+
 pub(crate) fn round_decimal_half_away(value: Decimal, scale: i64) -> String {
     let target = scale.clamp(-1000, 1000);
     let current = i64::from(value.scale);

@@ -75,9 +75,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     let body = plpgsql_body_from_definition(&routine.definition)?;
     let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
-    let oracle_date_return = if oracle::preview_routine_language_version(&routine.language)
-        == Some(3)
-    {
+    let oracle_date_return = if oracle::typed_preview_routine_language(&routine.language) {
         oracle::routine_arithmetic::prepare_declared_types(routine, &mut params, &mut declarations)?
     } else {
         false
@@ -92,7 +90,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3)
+        Some(2 | 3 | 4)
     ) {
         oracle::routines::bind_function_namespace(
             routine,
@@ -102,13 +100,14 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             &mut exception_handlers,
         )?;
     }
-    if oracle::preview_routine_language_version(&routine.language) == Some(3) {
+    if oracle::typed_preview_routine_language(&routine.language) {
         oracle::routine_arithmetic::lower(
             db.ok_or_else(|| {
                 SqlError::Unsupported(
                     "typed Oracle routine compilation requires catalog context".into(),
                 )
             })?,
+            oracle::preview_routine_language_version(&routine.language) == Some(4),
             &mut params,
             &mut declarations,
             &mut statements,
@@ -155,7 +154,7 @@ pub(crate) fn compile_cached_routine_ir_in_catalog(
     db: Option<&BicDb>,
 ) -> Result<Arc<RoutineIR>> {
     let mut key = routine_ir_cache_key(routine);
-    if oracle::preview_routine_language_version(&routine.language) == Some(3) {
+    if oracle::typed_preview_routine_language(&routine.language) {
         key.catalog_scope = Some(routine_compilation_scope(db.ok_or_else(|| {
             SqlError::Unsupported(
                 "typed Oracle routine compilation requires catalog context".into(),

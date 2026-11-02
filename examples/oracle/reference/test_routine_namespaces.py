@@ -71,6 +71,30 @@ class RoutineNamespaceTests(unittest.TestCase):
         self.assertFalse(any(sql.startswith('CREATE ') for sql in source.statements))
         self.assertEqual(report['cleanup_errors'], [])
 
+    def test_week_fixture_asserts_values_and_errors_separately(self):
+        from routine_week import fixture as week_fixture
+        plan = week_fixture('owner', 'BICDB_TEST')
+        self.assertEqual(len(plan['cases']), 102)
+        self.assertEqual(len({case['id'] for case in plan['cases']}), 102)
+        errors = [case for case in plan['cases'] if 'expected_error' in case]
+        self.assertEqual(len(errors), 2)
+        self.assertTrue(all(case['expected_error'] == dict(oracle='ORA-01899', bicdb='22023') for case in errors))
+        self.assertTrue(all('procedure_null_format' in case['id'] for case in errors))
+        self.assertEqual(plan['cases'][-1]['id'], 'recovery_after_errors')
+
+    def test_week_suite_rejects_unqualified_reference_territory_before_ddl(self):
+        class TerritoryCursor(Cursor):
+            def fetchone(self):
+                return ('UNITED KINGDOM' if 'NLS_TERRITORY' in self.connection.statements[-1] else 'GREGORIAN',)
+        class TerritoryConnection(Connection):
+            def cursor(self): return TerritoryCursor(self)
+        source, target = TerritoryConnection('never matched'), Connection('never matched')
+        report = run(source, target, 'owner', 'BICDB_TEST', suite='week')
+        self.assertFalse(report['success'])
+        self.assertEqual(report['oracle_nls_territory'], 'UNITED KINGDOM')
+        self.assertFalse(any(sql.startswith('CREATE ') for sql in source.statements))
+        self.assertEqual(target.statements, [])
+
     def test_setup_failure_drops_only_successfully_created_objects_and_redacts_errors(self):
         source = Connection('CREATE TABLE "owner"."BICDB_TEST_A"')
         target = Connection('never matched')

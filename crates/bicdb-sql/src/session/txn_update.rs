@@ -234,7 +234,7 @@ fn inline_return_slots(
     arg_count: usize,
 ) -> Option<Vec<Option<usize>>> {
     if !crate::routines::routine_language_is_plpgsql(schema)
-        || oracle::preview_routine_language_version(&schema.language) == Some(3)
+        || oracle::typed_preview_routine_language(&schema.language)
         || schema.returns_set
         || schema.security_definer
         || !ir.exception_handlers.is_empty()

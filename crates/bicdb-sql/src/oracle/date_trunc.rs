@@ -46,6 +46,16 @@ pub(super) fn lower_calendar_call(expr: &mut Expr) -> Result<()> {
     Ok(())
 }
 
+pub(super) fn numeric_trunc_expr(args: &[Expr]) -> Result<Expr> {
+    expression(&format!(
+        "bicdb_oracle_number_trunc({})",
+        args.iter()
+            .map(|arg| format!("CAST({} AS NUMERIC)", exact_numeric_operand_sql(arg)))
+            .collect::<Vec<_>>()
+            .join(",")
+    ))
+}
+
 pub(super) fn lower(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
     if !sql.to_ascii_lowercase().contains("trunc")
         && !sql.to_ascii_lowercase().contains("add_months")
@@ -309,6 +319,24 @@ fn rewrite_with_parameters(
                         if matches!(self.input_type(arg).as_deref(), Some("date" | "timestamp")) {
                             function.name =
                                 ObjectName::from(vec![Ident::new("bicdb_oracle_trunc_date")]);
+                        } else if matches!(
+                            self.input_type(arg).as_deref(),
+                            Some(
+                                "numeric"
+                                    | "int2"
+                                    | "int4"
+                                    | "int8"
+                                    | "text"
+                                    | "varchar"
+                                    | "bpchar"
+                            )
+                        ) || args.len() == 2
+                            && matches!(self.input_type(arg).as_deref(), Some("float4" | "float8"))
+                        {
+                            match numeric_trunc_expr(&args) {
+                                Ok(lowered) => *expr = lowered,
+                                Err(error) => return ControlFlow::Break(error),
+                            }
                         }
                     }
                 }

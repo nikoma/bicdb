@@ -40,6 +40,49 @@ pub(crate) fn oracle_date_coerce(value: SqlValue) -> Result<SqlValue> {
     Ok(SqlValue::String(timestamp.to_iso_text(false)))
 }
 
+fn oracle_week_trunc(value: &SqlValue, format: &str) -> Result<SqlValue> {
+    use chrono::Datelike;
+    let value = oracle_date_coerce(value.clone())?;
+    let source = PgTimestamp::from_postgres_text(&value.to_cell(), false)
+        .map_err(|error| postgres_timestamp_input_error(&value.to_cell(), error))?;
+    let (year, month, day, ..) = source.components().expect("finite coerced DATE");
+    let epoch_day = days_from_civil(year, month, day);
+    let offset = match format {
+        "W" => i64::from((day - 1) % 7),
+        "WW" => (epoch_day - days_from_civil(year, 1, 1)).rem_euclid(7),
+        // The preview's default territory is AMERICA; other NLS territories
+        // require an explicit future session contract.
+        "D" | "DY" | "DAY" => (epoch_day + 4).rem_euclid(7),
+        "I" | "IY" | "IYY" | "IYYY" => {
+            let iso_year = chrono::NaiveDate::from_ymd_opt(year, month, day)
+                .expect("valid DATE")
+                .iso_week()
+                .year();
+            let january_fourth = days_from_civil(iso_year, 1, 4);
+            let start = january_fourth - (january_fourth + 3).rem_euclid(7);
+            epoch_day - start
+        }
+        _ => unreachable!("selected week format"),
+    };
+    let midnight = source
+        .truncate("day")
+        .map_err(|error| postgres_timestamp_input_error(&value.to_cell(), error))?;
+    let result = midnight
+        .checked_sub_interval(PgInterval {
+            months: 0,
+            days: offset as i32,
+            micros: 0,
+        })
+        .map_err(|_| {
+            SqlError::data_exception(
+                "22008",
+                "Oracle datetime TRUNC result is out of range",
+                None,
+            )
+        })?;
+    oracle_date_coerce(SqlValue::String(result.to_iso_text(false)))
+}
+
 fn oracle_add_months(date: &SqlValue, months: &SqlValue) -> Result<SqlValue> {
     let range = || {
         SqlError::data_exception(
@@ -389,8 +432,11 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "to_date"
             | "bicdb_oracle_to_date"
             | "bicdb_oracle_trunc_date"
+            | "bicdb_oracle_plsql_trunc_date"
             | "bicdb_oracle_date_add_days"
             | "bicdb_oracle_number_divide"
+            | "bicdb_oracle_number_trunc"
+            | "bicdb_oracle_plsql_number_trunc"
             | "bicdb_oracle_date_coerce"
             | "bicdb_oracle_date_subtract"
             | "bicdb_oracle_add_months"
@@ -400,11 +446,20 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
     if !known {
         return Ok(None);
     }
-    if name == "bicdb_oracle_trunc_date" {
+    if matches!(
+        name,
+        "bicdb_oracle_trunc_date" | "bicdb_oracle_plsql_trunc_date"
+    ) {
         arity(name, args, 1..=2)?;
     }
     if name == "bicdb_oracle_date_add_days" {
         arity(name, args, 3..=3)?;
+    }
+    if matches!(
+        name,
+        "bicdb_oracle_number_trunc" | "bicdb_oracle_plsql_number_trunc"
+    ) {
+        arity(name, args, 1..=2)?;
     }
     if name == "bicdb_oracle_number_divide" {
         arity(name, args, 2..=2)?;
@@ -417,6 +472,16 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         "bicdb_oracle_date_subtract" | "bicdb_oracle_add_months"
     ) {
         arity(name, args, 2..=2)?;
+    }
+    // PL/SQL validates a supplied NULL date format after the date argument;
+    // SQL TRUNC and numeric TRUNC retain their ordinary strict NULL behavior.
+    if name == "bicdb_oracle_plsql_trunc_date"
+        && !matches!(args[0], SqlValue::Null)
+        && args.get(1).is_some_and(|arg| matches!(arg, SqlValue::Null))
+    {
+        return Err(SqlError::invalid_parameter_value(
+            "Oracle procedural datetime TRUNC requires a non-NULL precision specifier",
+        ));
     }
     // make_interval and age(ts) accept missing/NULL-free forms; everything else is strict.
     if name != "make_interval" && any_null(args) {
@@ -684,6 +749,24 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             )?
         }
         "bicdb_oracle_number_divide" => oracle_number_divide(&args[0], &args[1])?,
+        "bicdb_oracle_number_trunc" | "bicdb_oracle_plsql_number_trunc" => {
+            let scale = if let Some(value) = args.get(1) {
+                let value = parse_decimal(&value.to_cell())?;
+                let integer = if name == "bicdb_oracle_plsql_number_trunc" {
+                    // PL/SQL's builtin precision parameter is an integer;
+                    // conversion rounds halfway away from zero, unlike SQL.
+                    round_decimal_half_away(value, 0).parse::<i32>().ok()
+                } else {
+                    (value.mantissa / pow10_bigint(value.scale)).to_i32()
+                };
+                integer.ok_or_else(|| {
+                    SqlError::numeric_value_out_of_range("Oracle TRUNC precision is out of range")
+                })?
+            } else {
+                0
+            };
+            truncate_numeric_value(&args[0], i64::from(scale), false)?
+        }
         "bicdb_oracle_date_add_days" => {
             let out_of_range = || {
                 SqlError::data_exception(
@@ -726,12 +809,18 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             }
             SqlValue::String(result.to_iso_text(false))
         }
-        "bicdb_oracle_trunc_date" => {
+        "bicdb_oracle_trunc_date" | "bicdb_oracle_plsql_trunc_date" => {
             let format = args
                 .get(1)
                 .map(SqlValue::to_cell)
                 .unwrap_or_else(|| "DD".into())
                 .to_ascii_uppercase();
+            if matches!(
+                format.as_str(),
+                "W" | "WW" | "D" | "DY" | "DAY" | "I" | "IY" | "IYY" | "IYYY"
+            ) {
+                return oracle_week_trunc(&args[0], &format).map(Some);
+            }
             let field = match format.as_str() {
                 "DD" | "DDD" | "J" => "day",
                 "MM" | "MON" | "MONTH" | "RM" => "month",

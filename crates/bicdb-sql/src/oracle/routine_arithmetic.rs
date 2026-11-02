@@ -108,6 +108,7 @@ impl Kind {
 
 #[derive(Clone, Default)]
 struct Environment {
+    v4_semantics: bool,
     variables: BTreeMap<String, Kind>,
     records: BTreeMap<String, BTreeMap<String, Kind>>,
 }
@@ -116,6 +117,7 @@ struct Resolve<'a> {
     db: &'a BicDb,
     env: &'a Environment,
     queries: Vec<Query>,
+    sql_depth: usize,
 }
 
 impl Resolve<'_> {
@@ -205,11 +207,15 @@ impl Resolve<'_> {
                         | "bicdb_oracle_date_add_days"
                         | "bicdb_oracle_to_date"
                         | "bicdb_oracle_trunc_date"
+                        | "bicdb_oracle_plsql_trunc_date"
                         | "bicdb_oracle_add_months",
                     ) => return Kind::Date,
-                    Some("bicdb_oracle_date_subtract" | "bicdb_oracle_number_divide") => {
-                        return Kind::Number
-                    }
+                    Some(
+                        "bicdb_oracle_date_subtract"
+                        | "bicdb_oracle_number_divide"
+                        | "bicdb_oracle_number_trunc"
+                        | "bicdb_oracle_plsql_number_trunc",
+                    ) => return Kind::Number,
                     Some("trunc") => {
                         return function_args(function)
                             .first()
@@ -239,7 +245,7 @@ impl Resolve<'_> {
                 }
                 if let Ok(name) = object_name(&function.name) {
                     if let Ok(Some(routine)) = load_routine(self.db, RoutineKind::Function, &name) {
-                        if preview_routine_language_version(&routine.language) == Some(3) {
+                        if typed_preview_routine_language(&routine.language) {
                             if returns_date(&routine).unwrap_or(false) {
                                 return Kind::Date;
                             }
@@ -289,6 +295,16 @@ impl Resolve<'_> {
 
     fn rewrite(&self, expr: &mut Expr) -> Result<()> {
         date_trunc::lower_calendar_call(expr)?;
+        if self.env.v4_semantics && self.sql_depth == 0 && self.queries.is_empty() {
+            if let Expr::Function(function) = expr {
+                if object_name_lowercase(&function.name)
+                    .is_ok_and(|name| name == "bicdb_oracle_trunc_date")
+                {
+                    function.name =
+                        ObjectName::from(vec![Ident::new("bicdb_oracle_plsql_trunc_date")]);
+                }
+            }
+        }
         if let Expr::Cast {
             expr: input,
             data_type: DataType::Date,
@@ -323,7 +339,33 @@ impl Resolve<'_> {
                     .first()
                     .is_some_and(|arg| self.kind(arg).temporal())
             {
-                function.name = ObjectName::from(vec![Ident::new("bicdb_oracle_trunc_date")]);
+                function.name = ObjectName::from(vec![Ident::new(
+                    if self.env.v4_semantics && self.sql_depth == 0 && self.queries.is_empty() {
+                        "bicdb_oracle_plsql_trunc_date"
+                    } else {
+                        "bicdb_oracle_trunc_date"
+                    },
+                )]);
+            }
+        }
+        if self.env.v4_semantics {
+            if let Expr::Function(function) = expr {
+                if object_name_lowercase(&function.name).is_ok_and(|name| name == "trunc") {
+                    let args = function_args(function);
+                    if matches!(
+                        args.first().map(|arg| self.kind(arg)),
+                        Some(Kind::Number | Kind::Text)
+                    ) {
+                        *expr = date_trunc::numeric_trunc_expr(&args)?;
+                        if self.sql_depth == 0 && self.queries.is_empty() {
+                            if let Expr::Function(function) = expr {
+                                function.name = ObjectName::from(vec![Ident::new(
+                                    "bicdb_oracle_plsql_number_trunc",
+                                )]);
+                            }
+                        }
+                    }
+                }
             }
         }
         let Expr::BinaryOp { left, op, right } = expr else {
@@ -403,6 +445,14 @@ impl Resolve<'_> {
 
 impl sqlparser::ast::VisitorMut for Resolve<'_> {
     type Break = SqlError;
+    fn pre_visit_statement(&mut self, _: &mut Statement) -> ControlFlow<SqlError> {
+        self.sql_depth += 1;
+        ControlFlow::Continue(())
+    }
+    fn post_visit_statement(&mut self, _: &mut Statement) -> ControlFlow<SqlError> {
+        self.sql_depth -= 1;
+        ControlFlow::Continue(())
+    }
     fn pre_visit_query(&mut self, query: &mut Query) -> ControlFlow<SqlError> {
         self.queries.push(query.clone());
         ControlFlow::Continue(())
@@ -446,6 +496,7 @@ fn visit<T: sqlparser::ast::VisitMut>(db: &BicDb, env: &Environment, node: &mut 
         db,
         env,
         queries: Vec::new(),
+        sql_depth: 0,
     }) {
         ControlFlow::Continue(()) => Ok(()),
         ControlFlow::Break(error) => Err(error),
@@ -571,12 +622,16 @@ fn statements(
 
 pub(crate) fn lower(
     db: &BicDb,
+    v4_semantics: bool,
     params: &mut [RoutineParam],
     declarations: &mut [RoutineDecl],
     body: &mut [RoutineStmt],
     handlers: &mut [RoutineExceptionHandler],
 ) -> Result<()> {
-    let mut env = Environment::default();
+    let mut env = Environment {
+        v4_semantics,
+        ..Environment::default()
+    };
     for param in params.iter() {
         let kind = if param.oracle_date {
             Kind::Date

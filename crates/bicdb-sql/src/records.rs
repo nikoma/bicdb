@@ -5730,6 +5730,13 @@ fn fold_policy_init_plans<'e>(
             }
         };
         let literal = sql_value_to_literal_expr(&value);
+        // Without a reported column type, keep the value's own JSON type so
+        // jsonb operators (?, ?|, ->) still apply to the folded literal.
+        let pg_type = pg_type.or_else(|| match &value {
+            SqlValue::Json(_) => Some("jsonb".to_string()),
+            SqlValue::JsonText(_) => Some("json".to_string()),
+            _ => None,
+        });
         *inner = match (&value, pg_type) {
             (SqlValue::Null, _) | (_, None) => literal,
             (_, Some(pg_type)) => Expr::Cast {

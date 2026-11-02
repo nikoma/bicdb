@@ -3626,6 +3626,62 @@ pub(crate) fn apply_carrier_function_dependency_grants(
         }
     }
 
+    // Writes evaluate CHECK constraints, column defaults and generated
+    // columns as the caller (PostgreSQL checks EXECUTE on the functions they
+    // call). Mirrors Carrier's "writable relation" roots: for every table the
+    // runtime role may INSERT or UPDATE, grant the routines those expressions
+    // call and follow their own dependencies.
+    for schema in &schemas {
+        let writable = ["INSERT", "UPDATE"]
+            .into_iter()
+            .map(|privilege| role_has_table_privilege(db, &runtime_role, &schema.name, privilege))
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .any(|allowed| allowed);
+        if !writable {
+            continue;
+        }
+        let mut sources = schema
+            .constraints
+            .iter()
+            .filter_map(|constraint| match constraint {
+                ConstraintSchema::Check { expression, .. } => Some(expression.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        sources.extend(schema.columns.iter().flat_map(|column| {
+            [column.default_expr.clone(), column.generated_expr.clone()]
+                .into_iter()
+                .flatten()
+        }));
+        for source in &sources {
+            for routine in &routines {
+                if sql_mentions_routine(&mut patterns, source, &routine.name)? {
+                    save_runtime_privilege(
+                        db,
+                        PrivilegeObjectType::Schema,
+                        routine_schema_name(routine),
+                        &runtime_role,
+                        "USAGE",
+                    )?;
+                    save_runtime_privilege(
+                        db,
+                        PrivilegeObjectType::Function,
+                        &routine.name,
+                        &runtime_role,
+                        "EXECUTE",
+                    )?;
+                    enqueue_function_dependency(
+                        &mut function_work,
+                        &mut function_seen,
+                        &routine.name,
+                        &runtime_role,
+                    );
+                }
+            }
+        }
+    }
+
     let mut relation_work = Vec::<(String, String, String)>::new();
     let mut relation_seen = BTreeSet::<(String, String, String)>::new();
     for view in &views {

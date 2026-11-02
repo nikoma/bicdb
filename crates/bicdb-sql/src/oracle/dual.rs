@@ -17,6 +17,7 @@ pub(super) fn lower<T: sqlparser::ast::VisitMut>(
     struct Dual {
         fold_identifiers: bool,
         ctes: Vec<BTreeSet<String>>,
+        scalar_queries: Vec<bool>,
     }
     impl sqlparser::ast::VisitorMut for Dual {
         type Break = SqlError;
@@ -32,11 +33,24 @@ pub(super) fn lower<T: sqlparser::ast::VisitMut>(
                     });
                 }
             }
+            let plain = query.with.is_none()
+                && query.order_by.is_none()
+                && query.limit_clause.is_none()
+                && query.fetch.is_none()
+                && query.locks.is_empty()
+                && query.for_clause.is_none()
+                && matches!(query.body.as_ref(), SetExpr::Select(select)
+                    if matches!(&select.group_by, GroupByExpr::Expressions(exprs, _) if exprs.is_empty())
+                        && select.having.is_none() && select.qualify.is_none()
+                        && select.distinct.is_none() && select.top.is_none()
+                        && select.prewhere.is_none() && select.named_window.is_empty());
+            self.scalar_queries.push(plain);
             self.ctes.push(names);
             ControlFlow::Continue(())
         }
         fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<Self::Break> {
             self.ctes.pop();
+            self.scalar_queries.pop();
             if !self.fold_identifiers {
                 return ControlFlow::Continue(());
             }
@@ -55,6 +69,7 @@ pub(super) fn lower<T: sqlparser::ast::VisitMut>(
             if only_dual {
                 let mut sequence = false;
                 let mut references_row = false;
+                let mut row_context = false;
                 let _ = sqlparser::ast::visit_expressions(select, |expr| {
                     match expr {
                         Expr::Function(function)
@@ -64,6 +79,14 @@ pub(super) fn lower<T: sqlparser::ast::VisitMut>(
                             ) =>
                         {
                             sequence = true
+                        }
+                        Expr::Function(function)
+                            if function.over.is_some() || is_aggregate_function(function) =>
+                        {
+                            row_context = true
+                        }
+                        Expr::Subquery(_) | Expr::Exists { .. } | Expr::InSubquery { .. } => {
+                            row_context = true
                         }
                         Expr::Identifier(_)
                         | Expr::CompoundIdentifier(_)
@@ -81,6 +104,14 @@ pub(super) fn lower<T: sqlparser::ast::VisitMut>(
                     }
                     // Stateful sequence evaluation belongs to SqlSession's
                     // scalar SELECT path, rather than a read-only derived row.
+                    select.from.clear();
+                } else if self.scalar_queries.last() == Some(&true)
+                    && !references_row
+                    && !row_context
+                {
+                    // DUAL contributes exactly one constant row. A row-independent
+                    // scalar expression belongs to the caller's session, including
+                    // stored functions that use session-local sequence state.
                     select.from.clear();
                 }
             }
@@ -173,9 +204,45 @@ pub(super) fn lower<T: sqlparser::ast::VisitMut>(
         &mut Dual {
             fold_identifiers,
             ctes: Vec::new(),
+            scalar_queries: Vec::new(),
         },
     ) {
         return Err(error);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod scalar_session_tests {
+    use super::*;
+
+    #[test]
+    fn scalar_dual_elision_preserves_aggregates_limits_aliases_and_cte_shadows() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        for (source, expected) in [
+            ("SELECT 7 FROM DUAL", vec![vec!["7"]]),
+            ("SELECT COUNT(1) FROM DUAL", vec![vec!["1"]]),
+            ("SELECT SUM(1) FROM DUAL WHERE 1=0", vec![vec![""]]),
+            ("SELECT DUMMY FROM DUAL", vec![vec!["X"]]),
+            ("SELECT d.DUMMY FROM DUAL d", vec![vec!["X"]]),
+            ("SELECT 7 FROM DUAL FETCH FIRST 0 ROWS ONLY", vec![]),
+            (
+                "WITH DUAL AS (SELECT 42 AS DUMMY) SELECT DUMMY FROM DUAL",
+                vec![vec!["42"]],
+            ),
+        ] {
+            let sql = lower_profile_sql(&db, source, ORACLE_PREVIEW_PROFILE).unwrap();
+            let rows = SqlSession::new(&mut db)
+                .execute(&sql)
+                .unwrap_or_else(|error| panic!("{source}: {error}"));
+            let cells = rows
+                .rows
+                .iter()
+                .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                .collect::<Vec<_>>();
+            assert_eq!(cells, expected, "{source}");
+        }
+    }
 }

@@ -11,6 +11,7 @@ mod dual;
 mod namespaces;
 pub(crate) mod routine_arithmetic;
 pub(crate) mod routines;
+mod source_tokens;
 
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
 pub const ORACLE_PREVIEW_PROFILE: &str = "oracle-preview-v1";
@@ -338,13 +339,8 @@ fn word(token: &Token, value: &str) -> bool {
 
 fn tokens(sql: &str) -> Result<Vec<Token>> {
     Tokenizer::new(&OracleDialect {}, sql)
-        .tokenize()
-        .map(|tokens| {
-            tokens
-                .into_iter()
-                .filter(|t| !matches!(t, Token::Whitespace(_)))
-                .collect()
-        })
+        .tokenize_with_location()
+        .map(source_tokens::ranges)
         .map_err(|e| unsupported(e.to_string()))
 }
 
@@ -449,7 +445,8 @@ fn lower_oracle_sql(
     if routine || block {
         return lower_block(db, &source, routine, preview, namespace);
     }
-    let mut canonical = canonical_tokens(db, &source, preview)?;
+    let mut canonical =
+        canonical_tokens_with_routine_types(db, &source, preview, false, namespace)?;
     expand_references(db, &mut canonical)?;
     if canonical.len() > 3 && word(&canonical[0], "CREATE") && word(&canonical[1], "SEQUENCE") {
         fn rank(t: &Token) -> Option<usize> {
@@ -788,10 +785,6 @@ fn syntax_word(value: &str, preview: bool) -> bool {
     )
 }
 
-fn canonical_tokens(db: &BicDb, source: &[Token], preview: bool) -> Result<Vec<Token>> {
-    canonical_tokens_with_routine_types(db, source, preview, false, None)
-}
-
 fn canonical_tokens_with_routine_types(
     db: &BicDb,
     source: &[Token],
@@ -803,6 +796,11 @@ fn canonical_tokens_with_routine_types(
     let mut i = 0;
     while i < source.len() {
         let t = &source[i];
+        if let Some((reference, consumed)) = source_tokens::sequence(&source[i..], namespace)? {
+            pieces.push(reference);
+            i += consumed;
+            continue;
+        }
         if let Some((data_type, consumed)) =
             anchored_types::lower(db, &source[i..], namespace, preview, preserve_date)?
         {
@@ -839,23 +837,6 @@ fn canonical_tokens_with_routine_types(
                     };
                     pieces.push(format!("{name}({})", source[i + 2]));
                     i += 5;
-                    continue;
-                }
-                if source.get(i + 1) == Some(&Token::Period)
-                    && source
-                        .get(i + 2)
-                        .is_some_and(|t| word(t, "NEXTVAL") || word(t, "CURRVAL"))
-                {
-                    let function = if word(&source[i + 2], "NEXTVAL") {
-                        "nextval"
-                    } else {
-                        "currval"
-                    };
-                    pieces.push(format!(
-                        "{function}('\"{}\"')",
-                        w.value.to_uppercase().replace('\'', "''")
-                    ));
-                    i += 3;
                     continue;
                 }
                 match upper.as_str() {
@@ -929,12 +910,8 @@ fn canonical_tokens_with_routine_types(
         i += 1;
     }
     Tokenizer::new(&PostgreSqlDialect {}, &pieces.join(" "))
-        .tokenize()
-        .map(|t| {
-            t.into_iter()
-                .filter(|t| !matches!(t, Token::Whitespace(_)))
-                .collect()
-        })
+        .tokenize_with_location()
+        .map(source_tokens::ranges)
         .map_err(|e| unsupported(e.to_string()))
 }
 

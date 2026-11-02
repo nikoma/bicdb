@@ -2859,9 +2859,8 @@ pub(crate) fn index_field_from_expr_for_schema(
 ) -> Result<IndexField> {
     match expr {
         Expr::Function(function) if function_name_is(function, "coalesce") => {
-            return coalesce_index_field(expr, function, Some(schema)).or_else(|error| {
-                first_non_null_index_field(schema, function).ok_or(error)
-            })
+            return coalesce_index_field(expr, function, Some(schema))
+                .or_else(|error| first_non_null_index_field(schema, function).ok_or(error))
         }
         Expr::Function(function) if function_name_is(function, "upper") => {
             let Some(args) = positional_function_args(&function.args) else {

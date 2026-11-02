@@ -5059,7 +5059,9 @@ fn parse_drop_database_options(options: &str) -> Option<bool> {
     if options.is_empty() {
         return Some(false);
     }
-    let options = strip_prefix_ci(options, "WITH").map(str::trim_start).unwrap_or(options);
+    let options = strip_prefix_ci(options, "WITH")
+        .map(str::trim_start)
+        .unwrap_or(options);
     let inner = options.strip_prefix('(')?.strip_suffix(')')?;
     let mut force = false;
     for option in inner.split(',') {

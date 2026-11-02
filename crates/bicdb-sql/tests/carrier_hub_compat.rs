@@ -41,8 +41,14 @@ fn partial_unique_index_on_jsonb_text_field_constrains_only_matching_rows() {
         )
         .expect_err("a second rebuild request for document 7 must violate the partial unique index");
     assert!(
-        duplicate.to_string().to_ascii_lowercase().contains("unique")
-            || duplicate.to_string().to_ascii_lowercase().contains("duplicate"),
+        duplicate
+            .to_string()
+            .to_ascii_lowercase()
+            .contains("unique")
+            || duplicate
+                .to_string()
+                .to_ascii_lowercase()
+                .contains("duplicate"),
         "{duplicate}"
     );
     // Moving a row out of the predicate frees its slot.
@@ -70,7 +76,9 @@ fn grants_on_system_catalog_views_are_accepted() {
         "GRANT SELECT ON TABLE notes, pg_timezone_names TO catalog_reader",
         "REVOKE SELECT ON TABLE pg_timezone_names FROM catalog_reader",
     ] {
-        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
     // A missing user table is still an error.
     assert!(session
@@ -147,8 +155,13 @@ fn locking_clause_may_precede_limit_in_queue_claims() {
     );
     // Quoted text that merely looks like the clause is left alone.
     assert_eq!(
-        session_rows(&mut session, "SELECT 'FOR UPDATE SKIP LOCKED LIMIT 1' AS text LIMIT 1"),
-        vec![vec![SqlValue::String("FOR UPDATE SKIP LOCKED LIMIT 1".to_string())]]
+        session_rows(
+            &mut session,
+            "SELECT 'FOR UPDATE SKIP LOCKED LIMIT 1' AS text LIMIT 1"
+        ),
+        vec![vec![SqlValue::String(
+            "FOR UPDATE SKIP LOCKED LIMIT 1".to_string()
+        )]]
     );
 }
 

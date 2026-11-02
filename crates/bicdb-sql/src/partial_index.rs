@@ -9,7 +9,9 @@
 //! `IS [NOT] NULL` works on every column. Anything else is reported as unsupported rather than
 //! silently indexing every row, which would make a partial UNIQUE index reject valid rows.
 use crate::*;
-use bicdb_core::{IndexField, IndexPredicate, IndexPredicateBinaryOperator, IndexPredicateValueType};
+use bicdb_core::{
+    IndexField, IndexPredicate, IndexPredicateBinaryOperator, IndexPredicateValueType,
+};
 
 pub(crate) fn partial_index_predicate(
     schema: &TableSchema,
@@ -112,13 +114,17 @@ fn json_text_field_ref(schema: &TableSchema, expr: &Expr) -> Option<ColumnRef> {
         _ => return None,
     };
     let column = schema.column(&name)?;
-    if !matches!(column.pg_type.to_ascii_lowercase().as_str(), "json" | "jsonb") {
+    if !matches!(
+        column.pg_type.to_ascii_lowercase().as_str(),
+        "json" | "jsonb"
+    ) {
         return None;
     }
     let SqlValue::String(key) = eval_constant_expr(strip(right)).ok()? else {
         return None;
     };
-    let IndexField::MetadataPath(mut path) = index_field_from_expr_for_schema(schema, strip(left)).ok()?
+    let IndexField::MetadataPath(mut path) =
+        index_field_from_expr_for_schema(schema, strip(left)).ok()?
     else {
         return None;
     };
@@ -391,8 +397,7 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
                 return Err(unsupported(predicate));
             };
             let operator = operator.ok_or_else(|| unsupported(predicate))?;
-            let value_type =
-                column.value_type.ok_or_else(|| unsupported(predicate))?;
+            let value_type = column.value_type.ok_or_else(|| unsupported(predicate))?;
             if matches!(
                 value_type,
                 IndexPredicateValueType::Bool | IndexPredicateValueType::String

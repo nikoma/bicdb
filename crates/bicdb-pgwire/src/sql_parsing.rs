@@ -3551,35 +3551,49 @@ pub(crate) fn mutating_with_describe_sql(sql: &str) -> Option<String> {
                 let mut tables = vec![update.table.clone()];
                 match &update.from {
                     Some(UpdateTableFromKind::BeforeSet(from))
-                    | Some(UpdateTableFromKind::AfterSet(from)) => tables.extend(from.iter().cloned()),
+                    | Some(UpdateTableFromKind::AfterSet(from)) => {
+                        tables.extend(from.iter().cloned())
+                    }
                     None => {}
                 }
                 let items = select_items(&update.returning).unwrap_or_else(|| "NULL".to_string());
-                Some(format!("SELECT {items} FROM {} LIMIT 0", join_tables(&tables)))
+                Some(format!(
+                    "SELECT {items} FROM {} LIMIT 0",
+                    join_tables(&tables)
+                ))
             }
             Statement::Delete(delete) => {
                 let mut tables = match &delete.from {
-                    FromTable::WithFromKeyword(tables) | FromTable::WithoutKeyword(tables) => tables.clone(),
+                    FromTable::WithFromKeyword(tables) | FromTable::WithoutKeyword(tables) => {
+                        tables.clone()
+                    }
                 };
                 if let Some(using) = &delete.using {
                     tables.extend(using.iter().cloned());
                 }
                 let items = select_items(&delete.returning).unwrap_or_else(|| "NULL".to_string());
-                Some(format!("SELECT {items} FROM {} LIMIT 0", join_tables(&tables)))
+                Some(format!(
+                    "SELECT {items} FROM {} LIMIT 0",
+                    join_tables(&tables)
+                ))
             }
             _ => None,
         }
     }
     fn dml_of(body: &SetExpr) -> Option<&Statement> {
         match body {
-            SetExpr::Insert(statement) | SetExpr::Update(statement) | SetExpr::Delete(statement) => {
-                Some(statement)
-            }
+            SetExpr::Insert(statement)
+            | SetExpr::Update(statement)
+            | SetExpr::Delete(statement) => Some(statement),
             _ => None,
         }
     }
     let parse_query = |sql: &str| -> Option<sqlparser::ast::Query> {
-        match Parser::parse_sql(&PostgreSqlDialect {}, sql).ok()?.into_iter().next()? {
+        match Parser::parse_sql(&PostgreSqlDialect {}, sql)
+            .ok()?
+            .into_iter()
+            .next()?
+        {
             Statement::Query(query) => Some(*query),
             _ => None,
         }
@@ -3611,8 +3625,14 @@ mod mutating_with_describe_tests {
              SELECT inserted.id, u.name FROM inserted LEFT JOIN users u ON u.id = inserted.id",
         )
         .expect("insert CTE is described");
-        assert!(described.contains("SELECT id, org_id FROM act LIMIT 0"), "{described}");
-        assert!(!described.to_ascii_uppercase().contains("INSERT INTO"), "{described}");
+        assert!(
+            described.contains("SELECT id, org_id FROM act LIMIT 0"),
+            "{described}"
+        );
+        assert!(
+            !described.to_ascii_uppercase().contains("INSERT INTO"),
+            "{described}"
+        );
 
         let described = mutating_with_describe_sql(
             "WITH due AS (SELECT id FROM q LIMIT 1) \
@@ -3621,7 +3641,8 @@ mod mutating_with_describe_tests {
         )
         .expect("trailing UPDATE is described");
         assert!(
-            described.contains("SELECT control.id, control.attempts FROM q AS control, due LIMIT 0"),
+            described
+                .contains("SELECT control.id, control.attempts FROM q AS control, due LIMIT 0"),
             "{described}"
         );
 
@@ -3629,7 +3650,10 @@ mod mutating_with_describe_tests {
             "WITH gone AS (DELETE FROM sessions WHERE expires_at < now() RETURNING id) SELECT count(*) FROM gone",
         )
         .expect("delete CTE is described");
-        assert!(described.contains("SELECT id FROM sessions LIMIT 0"), "{described}");
+        assert!(
+            described.contains("SELECT id FROM sessions LIMIT 0"),
+            "{described}"
+        );
 
         // Read-only WITH queries keep their existing describe path.
         assert!(mutating_with_describe_sql("WITH x AS (SELECT 1 AS a) SELECT a FROM x").is_none());

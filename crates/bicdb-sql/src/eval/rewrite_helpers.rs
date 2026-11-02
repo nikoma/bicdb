@@ -459,7 +459,9 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
 /// runs when that exact ordering is present.
 pub(crate) fn rewrite_locking_clause_before_limit(input: &str) -> Option<String> {
     let lower = input.to_ascii_lowercase();
-    if !lower.contains("for") || !(lower.contains("limit") || lower.contains("offset") || lower.contains("fetch")) {
+    if !lower.contains("for")
+        || !(lower.contains("limit") || lower.contains("offset") || lower.contains("fetch"))
+    {
         return None;
     }
     let tokens = Tokenizer::new(&PostgreSqlDialect {}, input)
@@ -467,7 +469,9 @@ pub(crate) fn rewrite_locking_clause_before_limit(input: &str) -> Option<String>
         .ok()?;
     let word = |token: &Token| -> Option<String> {
         match token {
-            Token::Word(word) if word.quote_style.is_none() => Some(word.value.to_ascii_uppercase()),
+            Token::Word(word) if word.quote_style.is_none() => {
+                Some(word.value.to_ascii_uppercase())
+            }
             _ => None,
         }
     };
@@ -504,9 +508,9 @@ pub(crate) fn rewrite_locking_clause_before_limit(input: &str) -> Option<String>
                 }
                 Token::SemiColon if depth == 0 => break,
                 token if depth == 0 => {
-                    if word(token)
-                        .is_some_and(|keyword| matches!(keyword.as_str(), "LIMIT" | "OFFSET" | "FETCH"))
-                    {
+                    if word(token).is_some_and(|keyword| {
+                        matches!(keyword.as_str(), "LIMIT" | "OFFSET" | "FETCH")
+                    }) {
                         limit_start = Some(cursor);
                         break;
                     }

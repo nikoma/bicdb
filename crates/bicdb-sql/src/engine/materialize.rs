@@ -246,6 +246,21 @@ impl<'db> SqlEngine<'db> {
             }
             Expr::Function(function) => {
                 let name = object_name(&function.name)?.to_ascii_lowercase();
+                if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
+                    let arguments = function_arg_list(function);
+                    let types = arguments
+                        .iter()
+                        .map(|arg| projected_expr_pg_type_with_db(self.db_ref(), arg))
+                        .collect::<Vec<_>>();
+                    select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
+                    for argument in arguments.iter() {
+                        let value = self.eval_select_constant_expr(argument)?;
+                        if !matches!(value, SqlValue::Null) {
+                            return Ok(value);
+                        }
+                    }
+                    return Ok(SqlValue::Null);
+                }
                 let arg_exprs = function_args(function);
                 let arg_types = arg_exprs
                     .iter()

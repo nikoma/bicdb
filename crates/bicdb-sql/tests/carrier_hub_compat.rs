@@ -245,3 +245,83 @@ fn disable_trigger_all_suspends_foreign_keys_for_a_data_load() {
         .execute("INSERT INTO versions VALUES (12, 98)")
         .is_err());
 }
+
+/// Board fields carry CHECK (NOT (options_json ? 'options') OR ...): the jsonb
+/// key-existence operators must work in CHECK constraints and WHERE clauses,
+/// not only in SELECT lists.
+#[test]
+fn jsonb_existence_operators_work_in_check_constraints_and_where() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE fields (id INT PRIMARY KEY, options_json JSONB NOT NULL, \
+         CHECK (NOT (options_json ? 'options') OR jsonb_typeof(options_json->'options') = 'array'))",
+        "INSERT INTO fields VALUES (1, '{\"options\": []}')",
+        "INSERT INTO fields VALUES (2, '{\"schemaVersion\": \"1\"}')",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    assert!(
+        session.execute("INSERT INTO fields VALUES (3, '{\"options\": 5}')").is_err(),
+        "the CHECK constraint must reject a non-array options value"
+    );
+    let ids = |session: &mut SqlSession<'_>, sql: &str| -> Vec<SqlValue> {
+        session_rows(session, sql).into_iter().map(|row| row[0].clone()).collect()
+    };
+    assert_eq!(
+        ids(&mut session, "SELECT id FROM fields WHERE options_json ? 'options' ORDER BY id"),
+        vec![SqlValue::Int(1)]
+    );
+    assert_eq!(
+        ids(&mut session, "SELECT id FROM fields WHERE options_json ?| array['options', 'schemaVersion'] ORDER BY id"),
+        vec![SqlValue::Int(1), SqlValue::Int(2)]
+    );
+    assert_eq!(
+        ids(&mut session, "SELECT id FROM fields WHERE NOT (options_json ?& array['options', 'schemaVersion']) ORDER BY id"),
+        vec![SqlValue::Int(1), SqlValue::Int(2)]
+    );
+}
+
+/// The Hub's role SQL compares trigger functions with constant
+/// 'schema.f(args)'::regprocedure casts inside correlated subqueries. pg_proc is
+/// cached for those lookups; the cache must follow routines created, replaced
+/// and dropped, also inside an open transaction.
+#[test]
+fn regprocedure_casts_follow_routine_changes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let resolves = |session: &mut SqlSession<'_>, signature: &str| -> bool {
+        let sql = format!("SELECT to_regprocedure('{signature}') IS NOT NULL");
+        session_rows(session, &sql)[0][0] == SqlValue::Bool(true)
+    };
+    session
+        .execute("CREATE FUNCTION guard_one() RETURNS integer LANGUAGE sql AS 'SELECT 1'")
+        .unwrap();
+    assert!(resolves(&mut session, "guard_one()"));
+    assert!(!resolves(&mut session, "guard_two(integer)"));
+    session.execute("BEGIN").unwrap();
+    session
+        .execute("CREATE FUNCTION guard_two(value integer) RETURNS integer LANGUAGE sql AS 'SELECT value'")
+        .unwrap();
+    assert!(resolves(&mut session, "guard_two(integer)"), "a routine created in the open transaction resolves");
+    session.execute("DROP FUNCTION guard_one()").unwrap();
+    assert!(!resolves(&mut session, "guard_one()"), "a routine dropped in the open transaction no longer resolves");
+    session.execute("ROLLBACK").unwrap();
+    assert!(resolves(&mut session, "guard_one()"), "rollback restores the dropped routine");
+    assert!(!resolves(&mut session, "guard_two(integer)"), "rollback removes the created routine");
+    // A constant cast evaluated once per outer row of a correlated subquery.
+    for sql in [
+        "CREATE TABLE things (id INT PRIMARY KEY)",
+        "INSERT INTO things SELECT generate_series(1, 200)",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let rows = session_rows(
+        &mut session,
+        "SELECT count(*) FROM things AS outer_thing WHERE EXISTS (SELECT 1 FROM pg_catalog.pg_proc AS p \
+         WHERE p.oid = 'guard_one()'::regprocedure AND outer_thing.id > 0)",
+    );
+    assert_eq!(rows[0][0], SqlValue::Int(200));
+}

@@ -2421,6 +2421,19 @@ fn handle_frontend_message(
     tag: u8,
     payload: Vec<u8>,
 ) -> Result<bool> {
+    if state.copy_in_discarding {
+        match tag {
+            // The error was already reported; drop the rest of the data.
+            b'd' | b'S' | b'H' => return Ok(true),
+            b'c' | b'f' => {
+                state.copy_in_discarding = false;
+                ready_for_query_status(stream, state.transaction_status())?;
+                return Ok(true);
+            }
+            b'X' => return Ok(false),
+            _ => state.copy_in_discarding = false,
+        }
+    }
     if state.copy_in.is_some() {
         let extended = state.copy_in.as_ref().is_some_and(|copy| copy.extended);
         match tag {
@@ -2437,7 +2450,8 @@ fn handle_frontend_message(
                     if extended {
                         state.discard_until_sync = true;
                     } else {
-                        ready_for_query_status(stream, state.transaction_status())?;
+                        // ReadyForQuery follows the client's CopyDone or CopyFail.
+                        state.copy_in_discarding = true;
                     }
                 }
             }
@@ -2759,6 +2773,9 @@ struct CopyInState {
     spec: CopyStatement,
     rows: Vec<Vec<Option<String>>>,
     pending: String,
+    /// Bytes of a UTF-8 character split across CopyData messages: clients
+    /// chunk COPY data by size (psql uses 8 KiB), not by character.
+    pending_bytes: Vec<u8>,
     header_seen: bool,
     resolved_columns: Option<Vec<String>>,
     inserted_rows: usize,
@@ -2908,6 +2925,10 @@ struct ConnectionState {
     reported_interval_style: String,
     catalog_cache: SqlSessionCatalogCache,
     copy_in: Option<CopyInState>,
+    /// A COPY FROM STDIN failed: PostgreSQL discards the client's remaining
+    /// CopyData until CopyDone or CopyFail instead of treating it as new
+    /// protocol messages.
+    copy_in_discarding: bool,
     cancel_token: Arc<AtomicBool>,
     // Highest commit_seq this connection has committed. Used as the snapshot
     // floor for subsequent transactions so the connection reads — and does not
@@ -3027,6 +3048,7 @@ impl ConnectionState {
             reported_interval_style: "postgres".into(),
             catalog_cache: SqlSessionCatalogCache::default(),
             copy_in: None,
+            copy_in_discarding: false,
             cancel_token: Arc::new(AtomicBool::new(false)),
             last_commit_seq: 0,
         }
@@ -3229,6 +3251,7 @@ fn execute_server_query(
                     spec: copy,
                     rows: Vec::new(),
                     pending: String::new(),
+                    pending_bytes: Vec::new(),
                     header_seen: false,
                     resolved_columns: None,
                     inserted_rows: 0,

@@ -5984,9 +5984,17 @@ pub(crate) fn eval_predicate_truth(record: &Record, expr: &Expr) -> Result<Optio
                 let right = eval_value(record, right)?;
                 eval_containment_truth(left, op, right)
             }
-            _ => Err(SqlError::Unsupported(format!(
-                "unsupported WHERE operator {op}"
-            ))),
+            // Every other operator (jsonb ? ?| ?& @?, array and range
+            // operators, ...) is evaluated as a value; a boolean or NULL
+            // result is its truth. CHECK constraints are evaluated here, so
+            // they accept the same operators as SELECT lists.
+            _ => match eval_value(record, expr)? {
+                SqlValue::Bool(value) => Ok(Some(value)),
+                SqlValue::Null => Ok(None),
+                _ => Err(SqlError::Unsupported(format!(
+                    "unsupported WHERE operator {op}"
+                ))),
+            },
         },
         Expr::InList {
             expr,

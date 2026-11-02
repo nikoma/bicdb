@@ -347,3 +347,95 @@ fn regprocedure_casts_follow_routine_changes() {
     );
     assert_eq!(rows[0][0], SqlValue::Int(200));
 }
+
+/// Board rows carry CHECK (carrier_board_payload_within_limits(payload_json)), a
+/// SQL function with a subquery; document sync tickets compare timestamps with
+/// timestamp + interval. CHECK constraints are evaluated on the typed row by
+/// the SQL engine, on every write path.
+#[test]
+fn check_constraints_call_user_functions_and_use_typed_arithmetic() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE FUNCTION payload_within_limits(payload JSONB) RETURNS BOOLEAN LANGUAGE sql IMMUTABLE AS $f$
+           SELECT payload IS NULL OR (
+             jsonb_typeof(payload) = 'object'
+             AND NOT EXISTS (
+               SELECT 1 FROM jsonb_each(payload) item(key, value)
+               WHERE jsonb_typeof(item.value) = 'string' AND octet_length(item.value #>> '{}') > 8
+             )
+           )
+         $f$",
+        "CREATE TABLE rows_with_payload (id INT PRIMARY KEY, payload_json JSONB, \
+         CONSTRAINT payload_capacity CHECK (payload_within_limits(payload_json)))",
+        "CREATE TABLE tickets (id INT PRIMARY KEY, issued_at TIMESTAMPTZ NOT NULL, expires_at TIMESTAMPTZ NOT NULL, \
+         CONSTRAINT ticket_window CHECK (expires_at >= issued_at + INTERVAL '30 seconds' \
+           AND expires_at <= issued_at + INTERVAL '5 minutes'))",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    // User function: single-row insert, multi-row insert, NULL, update.
+    session.execute("INSERT INTO rows_with_payload VALUES (1, '{\"a\": \"short\"}')").unwrap();
+    session
+        .execute("INSERT INTO rows_with_payload VALUES (2, '{\"b\": 1}'), (3, NULL)")
+        .unwrap();
+    assert!(session
+        .execute("INSERT INTO rows_with_payload VALUES (4, '{\"a\": \"much too long\"}')")
+        .is_err());
+    assert!(session
+        .execute("INSERT INTO rows_with_payload VALUES (5, '{\"a\": \"ok\"}'), (6, '[1]')")
+        .is_err());
+    assert!(session
+        .execute("UPDATE rows_with_payload SET payload_json = '{\"a\": \"much too long\"}' WHERE id = 1")
+        .is_err());
+    session
+        .execute("UPDATE rows_with_payload SET payload_json = '{\"a\": \"fine\"}' WHERE id = 1")
+        .unwrap();
+    // Timestamp + interval, including both boundaries and sub-second values.
+    for sql in [
+        "INSERT INTO tickets VALUES (1, '2026-07-12 09:00:21.483573+00', '2026-07-12 09:05:21.483573+00')",
+        "INSERT INTO tickets VALUES (2, '2026-07-12 09:00:21+00', '2026-07-12 09:00:51+00')",
+        "INSERT INTO tickets VALUES (3, '2026-07-12 09:00:21.483573+00', '2026-07-12 09:05:21+00')",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    for sql in [
+        "INSERT INTO tickets VALUES (4, '2026-07-12 09:00:21.483573+00', '2026-07-12 09:05:21.483574+00')",
+        "INSERT INTO tickets VALUES (5, '2026-07-12 09:00:21+00', '2026-07-12 09:00:50+00')",
+    ] {
+        assert!(session.execute(sql).is_err(), "{sql} must violate the ticket window");
+    }
+    let count = session_rows(&mut session, "SELECT count(*) FROM tickets");
+    assert_eq!(count[0][0], SqlValue::Int(3));
+}
+
+/// `column + interval` keeps microseconds and the time zone and supports day
+/// and month intervals, like the same expression on a typed literal.
+#[test]
+fn timestamp_column_interval_arithmetic_is_exact() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "SET TIME ZONE 'UTC'",
+        "CREATE TABLE stamps (id INT PRIMARY KEY, at TIMESTAMPTZ, local_at TIMESTAMP)",
+        "INSERT INTO stamps VALUES (1, '2026-07-12 09:00:21.483573+00', '2026-07-12 09:00:21.483573')",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let cell = |session: &mut SqlSession<'_>, expr: &str| -> String {
+        session_rows(session, &format!("SELECT ({expr})::text FROM stamps"))[0][0].to_cell()
+    };
+    assert_eq!(cell(&mut session, "at + INTERVAL '5 minutes'"), "2026-07-12 09:05:21.483573+00");
+    assert_eq!(cell(&mut session, "INTERVAL '5 minutes' + at"), "2026-07-12 09:05:21.483573+00");
+    assert_eq!(cell(&mut session, "at - INTERVAL '30 seconds'"), "2026-07-12 08:59:51.483573+00");
+    assert_eq!(cell(&mut session, "at + INTERVAL '1 day 2 hours'"), "2026-07-13 11:00:21.483573+00");
+    assert_eq!(cell(&mut session, "at + INTERVAL '1 month'"), "2026-08-12 09:00:21.483573+00");
+    assert_eq!(cell(&mut session, "local_at + INTERVAL '5 minutes'"), "2026-07-12 09:05:21.483573");
+    let rows = session_rows(
+        &mut session,
+        "SELECT id FROM stamps WHERE at + INTERVAL '5 minutes' >= '2026-07-12 09:05:21.483573+00'",
+    );
+    assert_eq!(rows.len(), 1);
+}

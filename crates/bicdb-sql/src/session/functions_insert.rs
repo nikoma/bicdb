@@ -732,8 +732,9 @@ impl<'db> SqlSession<'db> {
                 .filter(|(_, cells)| cells.len() == records.len())
             {
                 Some((template, cells)) => {
+                    let check_engine = self.sql_engine();
                     for (record, cells) in records.iter().zip(cells) {
-                        template.check_row(&table, record, cells)?;
+                        template.check_row(&table, record, cells, Some(&check_engine))?;
                     }
                     validate_records_for_write_prechecked(
                         self.db_ref(),
@@ -751,6 +752,7 @@ impl<'db> SqlSession<'db> {
                     schema,
                     &records,
                     false,
+                    Some(&self.sql_engine()),
                 )?,
             }
         }
@@ -1425,6 +1427,7 @@ impl<'db> SqlSession<'db> {
                             schema,
                             &[updated.clone()],
                             true,
+                            Some(&self.sql_engine()),
                         )?;
                         self.enforce_rls_check(table, PolicyAction::Update, &updated)?;
                         self.update_session_record(table, updated.clone())?;
@@ -1449,6 +1452,7 @@ impl<'db> SqlSession<'db> {
                     schema,
                     std::slice::from_ref(&record),
                     false,
+                    Some(&self.sql_engine()),
                 )?;
             }
             self.enforce_rls_checks(
@@ -1490,6 +1494,7 @@ impl<'db> SqlSession<'db> {
                 schema,
                 &inserted_records,
                 false,
+                Some(&self.sql_engine()),
             )?;
         }
         self.enforce_rls_checks(table, schema, PolicyAction::Insert, &inserted_records)?;
@@ -1521,6 +1526,7 @@ impl<'db> SqlSession<'db> {
                 schema,
                 &inserted_records,
                 false,
+                Some(&self.sql_engine()),
             )?;
         }
         self.enforce_rls_checks(table, schema, PolicyAction::Insert, &inserted_records)?;

@@ -960,7 +960,20 @@ impl<'db> SqlEngine<'db> {
                 )? {
                     Ok(value)
                 } else {
-                    eval_binary_expr_value(left, op, right, left_value, right_value, None)
+                    // The row knows its column types; without them
+                    // `timestamptz_column + interval` fell back to untyped
+                    // whole-second arithmetic and lost sub-second precision and
+                    // the time zone.
+                    let mut types = binary_expr_types(left, op, right, None);
+                    if left_type.is_some() {
+                        types.left = left_type.clone();
+                    }
+                    if right_type.is_some() {
+                        types.right = right_type.clone();
+                    }
+                    eval_binary_expr_value_typed(
+                        left, op, right, left_value, right_value, None, &types,
+                    )
                 }
             }
             Expr::JsonAccess { value, path } => {
@@ -2413,7 +2426,20 @@ impl<'db> SqlEngine<'db> {
                 )? {
                     Ok(value)
                 } else {
-                    eval_binary_expr_value(left, op, right, left_value, right_value, None)
+                    // The row knows its column types; without them
+                    // `timestamptz_column + interval` fell back to untyped
+                    // whole-second arithmetic and lost sub-second precision and
+                    // the time zone.
+                    let mut types = binary_expr_types(left, op, right, None);
+                    if left_type.is_some() {
+                        types.left = left_type.clone();
+                    }
+                    if right_type.is_some() {
+                        types.right = right_type.clone();
+                    }
+                    eval_binary_expr_value_typed(
+                        left, op, right, left_value, right_value, None, &types,
+                    )
                 }
             }
             Expr::JsonAccess { value, path } => {

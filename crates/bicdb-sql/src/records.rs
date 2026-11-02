@@ -336,6 +336,7 @@ pub(crate) fn validate_records_for_write(
     schema: &TableSchema,
     records: &[Record],
     allow_existing_same_id: bool,
+    check_engine: Option<&SqlEngine<'_>>,
 ) -> Result<()> {
     if records.is_empty() {
         return Ok(());
@@ -343,7 +344,7 @@ pub(crate) fn validate_records_for_write(
     let checks = prepare_check_expressions(schema)?;
     for record in records {
         validate_record_columns(table, schema, record)?;
-        validate_prepared_checks(table, schema, record, &checks)?;
+        validate_prepared_checks(table, schema, record, &checks, check_engine)?;
         validate_foreign_keys(db, tx, table, schema, record)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
@@ -382,6 +383,7 @@ pub(crate) fn validate_updated_records(
     schema: &TableSchema,
     after_records: &[Record],
     before_after_records: &[(Record, Record)],
+    check_engine: Option<&SqlEngine<'_>>,
 ) -> Result<()> {
     if after_records.is_empty() {
         return Ok(());
@@ -391,7 +393,7 @@ pub(crate) fn validate_updated_records(
         .map(|(before, after)| (after.id.as_str(), before))
         .collect::<BTreeMap<_, _>>();
     for record in after_records {
-        validate_record_local_constraints(table, schema, record)?;
+        validate_record_local_constraints(table, schema, record, check_engine)?;
         let before = before_by_id.get(record.id.as_str()).copied();
         for constraint in &schema.constraints {
             if let (Some(before), ConstraintSchema::ForeignKey { columns, .. }) =
@@ -416,9 +418,10 @@ pub(crate) fn validate_record_local_constraints(
     table: &str,
     schema: &TableSchema,
     record: &Record,
+    check_engine: Option<&SqlEngine<'_>>,
 ) -> Result<()> {
     validate_record_columns(table, schema, record)?;
-    validate_checks(table, schema, record)
+    validate_checks(table, schema, record, check_engine)
 }
 
 fn validate_record_columns(table: &str, schema: &TableSchema, record: &Record) -> Result<()> {
@@ -662,8 +665,19 @@ pub(crate) fn column_value_matches_type(value: &SqlValue, column: &ColumnSchema)
     }
 }
 
-pub(crate) fn validate_checks(table: &str, schema: &TableSchema, record: &Record) -> Result<()> {
-    validate_prepared_checks(table, schema, record, &prepare_check_expressions(schema)?)
+pub(crate) fn validate_checks(
+    table: &str,
+    schema: &TableSchema,
+    record: &Record,
+    check_engine: Option<&SqlEngine<'_>>,
+) -> Result<()> {
+    validate_prepared_checks(
+        table,
+        schema,
+        record,
+        &prepare_check_expressions(schema)?,
+        check_engine,
+    )
 }
 
 fn prepare_check_expressions(schema: &TableSchema) -> Result<Vec<(&str, Expr)>> {
@@ -683,20 +697,38 @@ fn prepare_check_expressions(schema: &TableSchema) -> Result<Vec<(&str, Expr)>> 
         .collect()
 }
 
+/// Evaluates a table's CHECK constraints for one row. With an SQL engine (every
+/// session write path passes one) the row is typed by the table schema and the
+/// expression may call user-defined functions, as in PostgreSQL; without one
+/// the untyped record evaluator is used.
 fn validate_prepared_checks(
     table: &str,
     schema: &TableSchema,
     record: &Record,
     checks: &[(&str, Expr)],
+    check_engine: Option<&SqlEngine<'_>>,
 ) -> Result<()> {
     if checks.is_empty() {
         return Ok(());
     }
-    // A wide row used to be cloned and its typed values projected separately
-    // for every CHECK. Project it once and reuse the parsed batch expressions.
-    let projected = schema_predicate_record(record, schema);
+    enum CheckRow {
+        Typed(SqlRow),
+        // A wide row used to be cloned and its typed values projected
+        // separately for every CHECK. Project it once and reuse the parsed
+        // batch expressions.
+        Untyped(Record),
+    }
+    let row = match check_engine {
+        Some(_) => CheckRow::Typed(row_from_record(table, table, Some(schema), record)?),
+        None => CheckRow::Untyped(schema_predicate_record(record, schema)),
+    };
     for (name, expr) in checks {
-        if matches!(eval_predicate_truth(&projected, expr)?, Some(false)) {
+        let truth = match (&row, check_engine) {
+            (CheckRow::Typed(row), Some(engine)) => engine.eval_row_truth(row, expr)?,
+            (CheckRow::Untyped(projected), _) => eval_predicate_truth(projected, expr)?,
+            (CheckRow::Typed(_), None) => unreachable!("a typed check row needs an engine"),
+        };
+        if matches!(truth, Some(false)) {
             return Err(constraint_violation(
                 "23514",
                 format!(

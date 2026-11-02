@@ -1355,6 +1355,7 @@ impl<'db> SqlSession<'db> {
                 schema,
                 &updated_records,
                 &before_after_records,
+                Some(&self.sql_engine()),
             )?;
         }
         self.enforce_rls_checks(
@@ -4880,6 +4881,7 @@ impl<'db> SqlSession<'db> {
             schema,
             std::slice::from_ref(&after),
             true,
+            Some(&self.sql_engine()),
         )?;
         self.update_session_record(table, after.clone())?;
         self.apply_foreign_key_parent_update_inner(

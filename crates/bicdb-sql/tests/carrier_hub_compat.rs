@@ -854,3 +854,40 @@ fn row_security_policy_subqueries_follow_the_session() {
     assert_eq!(rows[0][0].to_cell(), "1");
     assert_eq!(ids(&mut session), vec!["1", "2"], "the next statement sees the new tenant");
 }
+
+/// The Hub's role SQL grants carrier_app EXECUTE on functions that CHECK
+/// constraints and policies call by following pg_depend from pg_constraint /
+/// pg_policy to pg_proc; without those rows board row writes were denied.
+#[test]
+fn pg_depend_links_check_constraints_and_policies_to_called_functions() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE FUNCTION payload_ok(payload JSONB) RETURNS BOOLEAN LANGUAGE sql IMMUTABLE AS $f$ SELECT payload IS NULL OR jsonb_typeof(payload) = 'object' $f$",
+        "CREATE FUNCTION tenant_now() RETURNS TEXT LANGUAGE sql STABLE AS $f$ SELECT current_setting('probe.tenant', true) $f$",
+        "CREATE TABLE rows_t (id INT PRIMARY KEY, org_id TEXT, payload JSONB, CONSTRAINT rows_payload CHECK (payload_ok(payload)))",
+        "ALTER TABLE rows_t ENABLE ROW LEVEL SECURITY",
+        "CREATE POLICY rows_tenant ON rows_t FOR SELECT USING (org_id = (SELECT tenant_now()))",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let constraint_deps = session_rows(
+        &mut session,
+        "SELECT p.proname FROM pg_catalog.pg_constraint AS c \
+         JOIN pg_catalog.pg_depend AS d ON d.classid = 'pg_catalog.pg_constraint'::regclass AND d.objid = c.oid \
+          AND d.refclassid = 'pg_catalog.pg_proc'::regclass \
+         JOIN pg_catalog.pg_proc AS p ON p.oid = d.refobjid \
+         WHERE c.conname = 'rows_payload'",
+    );
+    assert_eq!(constraint_deps, vec![vec![SqlValue::String("payload_ok".into())]]);
+    let policy_deps = session_rows(
+        &mut session,
+        "SELECT p.proname FROM pg_catalog.pg_policy AS pol \
+         JOIN pg_catalog.pg_depend AS d ON d.classid = 'pg_catalog.pg_policy'::regclass AND d.objid = pol.oid \
+          AND d.refclassid = 'pg_catalog.pg_proc'::regclass \
+         JOIN pg_catalog.pg_proc AS p ON p.oid = d.refobjid \
+         WHERE pol.polname = 'rows_tenant'",
+    );
+    assert_eq!(policy_deps, vec![vec![SqlValue::String("tenant_now".into())]]);
+}

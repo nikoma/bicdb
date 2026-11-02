@@ -1923,3 +1923,117 @@ async fn procedural_case_preserves_profile_types_errors_and_prepared_calls_after
         }
     }
 }
+
+#[tokio::test]
+async fn character_functions_preserve_prepared_pg_transport_and_reopen_contracts() {
+    use tokio_postgres::types::Type;
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        for attempt in 0..2 {
+            let server = Running::with_profile(directory.path(), profile);
+            let mut config = tokio_postgres::Config::new();
+            config
+                .host("127.0.0.1")
+                .port(server.port)
+                .user("bicdb")
+                .dbname("bicdb")
+                .options(&format!("-c bicdb.sql_profile={profile}"));
+            let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+            let connection = tokio::spawn(async move {
+                connection.await.unwrap();
+            });
+            let statement = client
+                .prepare_typed("SELECT chr($1) AS value", &[Type::INT4])
+                .await
+                .unwrap();
+            assert_eq!(statement.params(), &[Type::INT4]);
+            assert_eq!(statement.columns()[0].type_(), &Type::TEXT);
+            for (number, expected) in [
+                (Some(65i32), Some("A".to_string())),
+                (
+                    Some(49835),
+                    Some(if profile == "postgres" {
+                        char::from_u32(49835).unwrap().to_string()
+                    } else {
+                        "«".into()
+                    }),
+                ),
+                (None, None),
+                (Some(65), Some("A".into())),
+            ] {
+                let row = client.query_one(&statement, &[&number]).await.unwrap();
+                assert_eq!(row.get::<_, Option<String>>(0), expected);
+            }
+            let error = client.query(&statement, &[&Some(0i32)]).await.unwrap_err();
+            assert_eq!(
+                error.code().unwrap().code(),
+                if profile == "postgres" {
+                    "54000"
+                } else {
+                    "0A000"
+                }
+            );
+            assert_eq!(
+                client
+                    .query_one(&statement, &[&Some(65i32)])
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "A"
+            );
+            if profile == "oracle-preview-v1" {
+                if attempt == 0 {
+                    client.batch_execute("CREATE FUNCTION character_echo(n NUMBER) RETURN VARCHAR2 IS BEGIN RETURN TO_CHAR(CHR(n)); END;").await.unwrap();
+                }
+                let text = client
+                    .prepare_typed("SELECT TO_CHAR(CHR($1)) AS value", &[Type::TEXT])
+                    .await
+                    .unwrap();
+                assert_eq!(text.params(), &[Type::TEXT]);
+                assert_eq!(text.columns()[0].type_(), &Type::TEXT);
+                assert_eq!(
+                    client
+                        .query_one(&text, &[&"49835.9"])
+                        .await
+                        .unwrap()
+                        .get::<_, String>(0),
+                    "«"
+                );
+                assert_eq!(
+                    client
+                        .query(&text, &[&"invalid"])
+                        .await
+                        .unwrap_err()
+                        .code()
+                        .unwrap()
+                        .code(),
+                    "22P02"
+                );
+                assert_eq!(
+                    client
+                        .query_one(&text, &[&"65"])
+                        .await
+                        .unwrap()
+                        .get::<_, String>(0),
+                    "A"
+                );
+                let function = client
+                    .prepare_typed("SELECT character_echo(CAST($1 AS NUMERIC))", &[Type::INT4])
+                    .await
+                    .unwrap();
+                assert_eq!(function.columns()[0].type_(), &Type::VARCHAR);
+                assert_eq!(
+                    client
+                        .query_one(&function, &[&49835i32])
+                        .await
+                        .unwrap()
+                        .get::<_, String>(0),
+                    "«"
+                );
+            }
+            drop(statement);
+            drop(client);
+            connection.await.unwrap();
+        }
+    }
+}

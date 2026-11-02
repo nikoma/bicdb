@@ -40,6 +40,49 @@ pub(crate) fn oracle_date_coerce(value: SqlValue) -> Result<SqlValue> {
     Ok(SqlValue::String(timestamp.to_iso_text(false)))
 }
 
+fn oracle_add_months(date: &SqlValue, months: &SqlValue) -> Result<SqlValue> {
+    let range = || {
+        SqlError::data_exception(
+            "22008",
+            "Oracle ADD_MONTHS result is out of range",
+            Some("timestamp".into()),
+        )
+    };
+    let date = oracle_date_coerce(date.clone())?;
+    let timestamp = PgTimestamp::from_postgres_text(&date.to_cell(), false)
+        .map_err(|error| postgres_timestamp_input_error(&date.to_cell(), error))?;
+    let (year, month, day, ..) = timestamp.components().ok_or_else(range)?;
+    let count = parse_decimal(&months.to_cell())?;
+    // Oracle truncates the month count toward zero, without float conversion.
+    let months = (count.mantissa / pow10_bigint(count.scale))
+        .to_i32()
+        .ok_or_else(range)?;
+    let mut shifted = timestamp
+        .checked_add_interval(PgInterval {
+            months,
+            days: 0,
+            micros: 0,
+        })
+        .map_err(|_| range())?;
+    let (target_year, target_month, target_day, ..) = shifted.components().ok_or_else(range)?;
+    if !(-4711..=9999).contains(&target_year) {
+        return Err(range());
+    }
+    // A source month end always maps to the target month end. PostgreSQL's
+    // ordinary interval addition only clamps a day that exceeds the target.
+    if i64::from(day) == days_in_month(year, month) {
+        let days = (days_in_month(target_year, target_month) - i64::from(target_day)) as i32;
+        shifted = shifted
+            .checked_add_interval(PgInterval {
+                months: 0,
+                days,
+                micros: 0,
+            })
+            .map_err(|_| range())?;
+    }
+    oracle_date_coerce(SqlValue::String(shifted.to_iso_text(false)))
+}
+
 fn int_arg(name: &str, value: &SqlValue) -> Result<i64> {
     match value {
         SqlValue::Int(number) => Ok(*number),
@@ -350,6 +393,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "bicdb_oracle_number_divide"
             | "bicdb_oracle_date_coerce"
             | "bicdb_oracle_date_subtract"
+            | "bicdb_oracle_add_months"
             | "timezone"
             | "similarity"
     );
@@ -368,7 +412,10 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
     if name == "bicdb_oracle_date_coerce" {
         arity(name, args, 1..=1)?;
     }
-    if name == "bicdb_oracle_date_subtract" {
+    if matches!(
+        name,
+        "bicdb_oracle_date_subtract" | "bicdb_oracle_add_months"
+    ) {
         arity(name, args, 2..=2)?;
     }
     // make_interval and age(ts) accept missing/NULL-free forms; everything else is strict.
@@ -616,6 +663,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             eval_to_timestamp(args)?
         }
         "bicdb_oracle_date_coerce" => oracle_date_coerce(args[0].clone())?,
+        "bicdb_oracle_add_months" => oracle_add_months(&args[0], &args[1])?,
         "bicdb_oracle_date_subtract" => {
             let left = oracle_date_coerce(args[0].clone())?;
             let right = oracle_date_coerce(args[1].clone())?;

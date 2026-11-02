@@ -22,8 +22,35 @@ pub(super) fn exact_numeric_operand_sql(expr: &Expr) -> String {
     }
 }
 
+/// Preserve exact month-count literals before the native numeric evaluator.
+pub(super) fn lower_calendar_call(expr: &mut Expr) -> Result<()> {
+    if let Expr::Function(function) = expr {
+        if function.name.0.len() == 1
+            && function.name.0[0]
+                .as_ident()
+                .is_some_and(|ident| ident.value == "ADD_MONTHS")
+        {
+            function.name = ObjectName::from(vec![Ident::new("bicdb_oracle_add_months")]);
+        }
+        if object_name_lowercase(&function.name).is_ok_and(|name| name == "bicdb_oracle_add_months")
+        {
+            let args = function_args(function);
+            if let [date, months] = args.as_slice() {
+                *expr = expression(&format!(
+                    "bicdb_oracle_add_months({date}, CAST({} AS NUMERIC))",
+                    exact_numeric_operand_sql(months)
+                ))?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn lower(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
-    if !sql.to_ascii_lowercase().contains("trunc") && !sql.contains(['+', '-', '/']) {
+    if !sql.to_ascii_lowercase().contains("trunc")
+        && !sql.to_ascii_lowercase().contains("add_months")
+        && !sql.contains(['+', '-', '/'])
+    {
         return Ok(sql.to_string());
     }
     let mut statements = parse_statements(sql)?;
@@ -224,6 +251,9 @@ fn rewrite_with_parameters(
             ControlFlow::Continue(())
         }
         fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<SqlError> {
+            if let Err(error) = lower_calendar_call(expr) {
+                return ControlFlow::Break(error);
+            }
             if let Expr::BinaryOp { left, op, right } = expr {
                 if *op == BinaryOperator::Divide {
                     let left_type = self.input_type(left);

@@ -73,6 +73,8 @@ def fixture(schema, prefix):
 def run(oracle, bicdb, schema, prefix, suite='namespaces'):
     if suite == 'temporal':
         from routine_temporal import fixture as make_fixture
+    elif suite == 'calendar':
+        from routine_calendar import fixture as make_fixture
     else:
         make_fixture = fixture
     plan = make_fixture(schema, prefix)
@@ -86,6 +88,11 @@ def run(oracle, bicdb, schema, prefix, suite='namespaces'):
     with oracle.cursor() as source, bicdb.cursor() as target:
         cursors = (source, target)
         try:
+            if suite == 'calendar':
+                source.execute("SELECT VALUE FROM NLS_SESSION_PARAMETERS WHERE PARAMETER='NLS_CALENDAR'")
+                report['oracle_nls_calendar'] = source.fetchone()[0]
+                if report['oracle_nls_calendar'] != 'GREGORIAN':
+                    raise ValueError('calendar fixture requires the Gregorian reference calendar')
             for obj in plan['setup']:
                 cursor = cursors[obj['backend']]
                 cursor.execute(obj['sql'])
@@ -122,7 +129,7 @@ def main():
     parser.add_argument('--oracle-config', required=True, type=Path)
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN')
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--suite', choices=('namespaces', 'temporal'), default='namespaces')
+    parser.add_argument('--suite', choices=('namespaces', 'temporal', 'calendar'), default='namespaces')
     args = parser.parse_args()
     report = dict(format=1, success=False)
     try:

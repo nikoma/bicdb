@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "after_restart": true,
+  "repair_or_reinstallation": false,
+  "completed": [
+    {
+      "table": "AD_REPLICATIONSTRATEGY",
+      "constraint": "AD_REPLICATIONSTRATEGY_VALUE",
+      "index_valid": true,
+      "index_ready": true,
+      "index_nulls_not_distinct": true,
+      "index_partial": false,
+      "catalog_namespace_matches_relation": true,
+      "namespace": "IDEMPIERE_QUAL",
+      "source_values_match": true,
+      "value_digest": "c3375643b84b3d108995e2f69a8757e6fd6d443b6002fcfb926e1dce0b7c6ad2"
+    },
+    {
+      "table": "AD_TABLEATTRIBUTE",
+      "constraint": "AD_TABLEATTRIBUTE_ATTRIBUTEKEY",
+      "index_valid": true,
+      "index_ready": true,
+      "index_nulls_not_distinct": true,
+      "index_partial": true,
+      "catalog_namespace_matches_relation": true,
+      "namespace": "IDEMPIERE_QUAL",
+      "source_values_match": true,
+      "value_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "table": "U_POSTERMINAL",
+      "constraint": "U_POSTERMINAL_VALUE",
+      "index_valid": true,
+      "index_ready": true,
+      "index_nulls_not_distinct": true,
+      "index_partial": false,
+      "catalog_namespace_matches_relation": true,
+      "namespace": "IDEMPIERE_QUAL",
+      "source_values_match": true,
+      "value_digest": "bc2a8fe042b051be7cafb8956b3b0513a50b74df58932a37f16f4f9d580aff77"
+    }
+  ],
+  "success": true,
+  "application_qualified": false
+}

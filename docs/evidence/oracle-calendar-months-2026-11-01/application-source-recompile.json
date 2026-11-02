@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "name": "PAYMENTTERMDUEDATE",
+  "source_sha256": "f2945cb88b4e4242a218f02515455eb52a061e72d811bcacbea7159906c33008",
+  "source_body_unchanged": true,
+  "only_adaptation": "explicit destination namespace; original CREATE OR REPLACE used to recompile through current frontend",
+  "runtime_binary_sha256": "3dc32c8ef3f99208106bade7a3dba914829d79f0c363e70263d48d019788c341",
+  "success": true,
+  "application_qualified": false
+}

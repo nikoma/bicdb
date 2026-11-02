@@ -20,3 +20,14 @@ again. A commit, feature branch, draft PR, or built binary alone is not completi
   the exact blocker and remaining action; do not describe the task as complete.
   Report unavailable CI separately from tests that actually ran and failed.
 
+
+## Keep build artifacts bounded
+
+Clean up artifacts produced by your work after validation batches. Remove
+superseded test executables, interrupted compiler objects, and orphaned
+task-owned caches. Preserve the current runnable binary, files used by active
+processes, required compatibility-test binaries, and other worktrees' outputs.
+Retain reusable dependency artifacts to keep subsequent checks efficient. Use
+bounded build concurrency and disable incremental compilation for large engine
+builds when it would accumulate obsolete generations. Report reclaimed space
+and remaining build-cache size when cleanup is substantial.

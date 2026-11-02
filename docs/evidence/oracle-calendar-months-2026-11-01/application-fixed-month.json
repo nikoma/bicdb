@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "synthetic_input_to_original_routine": true,
+  "original_routine_source_unchanged": true,
+  "data_changes_rolled_back": true,
+  "runtime_binary_sha256": "3dc32c8ef3f99208106bade7a3dba914829d79f0c363e70263d48d019788c341",
+  "cases": [
+    {
+      "date": "2026-11-01 12:34:56",
+      "oracle": "2026-12-15 00:00:00",
+      "bicdb": "2026-12-15 00:00:00",
+      "match": true
+    },
+    {
+      "date": "2026-11-20 12:34:56",
+      "oracle": "2027-01-15 00:00:00",
+      "bicdb": "2027-01-15 00:00:00",
+      "match": true
+    }
+  ],
+  "success": true,
+  "application_qualified": false
+}

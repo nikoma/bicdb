@@ -237,7 +237,12 @@ remains numeric. Physical timestamp columns and temporal `%TYPE` anchors do not
 establish their original Oracle DATE/TIMESTAMP identity; arithmetic requiring
 that identity fails explicitly. Timezone arithmetic, timestamps beyond six
 fractional digits, general SQL overload resolution and full record typing are
-not qualified. ADD_MONTHS and related calendar functions remain separate work.
+not qualified. The preview implements Gregorian ADD_MONTHS for scalar and
+version-3 routine expressions: month-end carry, exact truncated month counts,
+whole-second DATE results and NULLs. Native PostgreSQL interval addition and
+qualified user functions retain their existing behavior. Alternate NLS calendars,
+timezone conversion, BC boundary conformance and Oracle-specific error codes
+remain unqualified; other calendar functions remain separate work.
 
 The [routine datetime evidence](evidence/oracle-routine-datetime-2026-11-01/README.md)
 records version-1 values and its original application namespace failure. The

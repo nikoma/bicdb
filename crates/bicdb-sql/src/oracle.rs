@@ -1870,6 +1870,101 @@ mod tests {
     }
 
     #[test]
+    fn preview_add_months_uses_oracle_month_ends_and_exact_month_counts() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let sql = lower_session_sql(session.db_ref(), "CREATE FUNCTION calendar_shift(p_date DATE,p_months NUMBER) RETURN DATE IS BEGIN RETURN ADD_MONTHS(p_date,p_months)+1; END;", ORACLE_PREVIEW_PROFILE,None,"bicdb").unwrap();
+        session.execute(&sql).unwrap();
+        for (source,expected) in [
+            ("SELECT ADD_MONTHS(TIMESTAMP '2024-01-31 12:34:56.9',1) FROM DUAL", "2024-02-29 12:34:56"),
+            ("SELECT ADD_MONTHS(TIMESTAMP '2024-02-29 12:34:56',1) FROM DUAL", "2024-03-31 12:34:56"),
+            ("SELECT ADD_MONTHS(TIMESTAMP '2024-02-28 12:34:56',1) FROM DUAL", "2024-03-28 12:34:56"),
+            ("SELECT ADD_MONTHS(TIMESTAMP '1900-02-28 12:34:56',1) FROM DUAL", "1900-03-31 12:34:56"),
+            ("SELECT ADD_MONTHS(TIMESTAMP '2000-02-29 12:34:56',-12) FROM DUAL", "1999-02-28 12:34:56"),
+            ("SELECT ADD_MONTHS(TIMESTAMP '2024-03-31 12:34:56',-1.9) FROM DUAL", "2024-02-29 12:34:56"),
+            ("SELECT ADD_MONTHS(TIMESTAMP '2024-01-15 12:34:56',1.999999999999999999999) FROM DUAL", "2024-02-15 12:34:56"),
+            ("SELECT ADD_MONTHS(TIMESTAMP '2024-01-15 12:34:56',-0.999999999999999999999) FROM DUAL", "2024-01-15 12:34:56"),
+            ("SELECT ADD_MONTHS(TIMESTAMP '2024-01-15 12:34:56','1.9') FROM DUAL", "2024-02-15 12:34:56"),
+            ("SELECT calendar_shift(TIMESTAMP '2024-02-29 12:34:56',1) FROM DUAL", "2024-04-01 12:34:56"),
+        ] {
+            let sql = lower_profile_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE).unwrap();
+            assert_eq!(session.execute(&sql).unwrap().rows[0][0].to_cell(),expected,"{source}");
+            assert_eq!(infer_query_result_types(session.db_ref(),&sql).unwrap(),Some(vec![Some("timestamp".into())]));
+        }
+        for source in [
+            "SELECT ADD_MONTHS(NULL,1) FROM DUAL",
+            "SELECT ADD_MONTHS(TIMESTAMP '2024-01-01 00:00:00',NULL) FROM DUAL",
+        ] {
+            let sql = lower_profile_sql(session.db_ref(), source, ORACLE_PREVIEW_PROFILE).unwrap();
+            assert_eq!(session.execute(&sql).unwrap().rows[0][0], SqlValue::Null);
+        }
+        for source in ["SELECT ADD_MONTHS(TIMESTAMP '9999-12-31 00:00:00',1) FROM DUAL", "SELECT ADD_MONTHS(TIMESTAMP '2024-01-01 00:00:00',9999999999999999999999999999) FROM DUAL"] {
+            let sql = lower_profile_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE).unwrap();
+            assert_eq!(session.execute(&sql).unwrap_err().sqlstate(),"22008");
+        }
+    }
+
+    #[test]
+    fn preview_qualified_calendar_function_names_are_not_builtin_calls() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for source in ["CREATE TABLE ADD_MONTHS(k NUMBER)", "INSERT INTO ADD_MONTHS(k) VALUES(7)", "CREATE SCHEMA local_calendar", "CREATE FUNCTION local_calendar.ADD_MONTHS(p_date DATE,p_months NUMBER) RETURN DATE IS BEGIN RETURN p_date; END;"] {
+            let sql=lower_session_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE,None,"bicdb").unwrap();session.execute(&sql).unwrap();
+        }
+        let sql = lower_session_sql(
+            session.db_ref(),
+            "SELECT local_calendar.ADD_MONTHS(TIMESTAMP '2024-02-29 12:34:56.9',1) FROM DUAL",
+            ORACLE_PREVIEW_PROFILE,
+            None,
+            "bicdb",
+        )
+        .unwrap();
+        let table_query = lower_session_sql(
+            session.db_ref(),
+            "SELECT k FROM ADD_MONTHS",
+            ORACLE_PREVIEW_PROFILE,
+            None,
+            "bicdb",
+        )
+        .unwrap();
+        assert_eq!(
+            session.execute(&table_query).unwrap().rows[0][0].to_cell(),
+            "7"
+        );
+        assert!(!sql.contains("bicdb_oracle_add_months"));
+        assert_eq!(
+            session.execute(&sql).unwrap().rows[0][0].to_cell(),
+            "2024-02-29 12:34:56"
+        );
+    }
+
+    #[test]
+    fn postgres_month_arithmetic_and_user_function_names_remain_native() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE FUNCTION add_months(p_date TIMESTAMP,p_months NUMERIC) RETURNS TIMESTAMP LANGUAGE plpgsql AS $$BEGIN RETURN p_date; END$$").unwrap();
+        for (sql, expected) in [
+            (
+                "SELECT TIMESTAMP '2024-02-29 12:34:56.9'+INTERVAL '1 month'",
+                "2024-03-29 12:34:56.9",
+            ),
+            (
+                "SELECT add_months(TIMESTAMP '2024-02-29 12:34:56.9',1)",
+                "2024-02-29 12:34:56.9",
+            ),
+        ] {
+            assert_eq!(session.execute(sql).unwrap().rows[0][0].to_cell(), expected);
+        }
+        drop(session);
+        ensure_database_profile(&mut db, POSTGRES_PROFILE).unwrap();
+    }
+
+    #[test]
     fn preview_routine_arithmetic_preserves_date_timestamp_distinctions() {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();

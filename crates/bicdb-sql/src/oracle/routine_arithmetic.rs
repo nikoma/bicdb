@@ -204,7 +204,8 @@ impl Resolve<'_> {
                         "bicdb_oracle_date_coerce"
                         | "bicdb_oracle_date_add_days"
                         | "bicdb_oracle_to_date"
-                        | "bicdb_oracle_trunc_date",
+                        | "bicdb_oracle_trunc_date"
+                        | "bicdb_oracle_add_months",
                     ) => return Kind::Date,
                     Some("bicdb_oracle_date_subtract" | "bicdb_oracle_number_divide") => {
                         return Kind::Number
@@ -287,6 +288,7 @@ impl Resolve<'_> {
     }
 
     fn rewrite(&self, expr: &mut Expr) -> Result<()> {
+        date_trunc::lower_calendar_call(expr)?;
         if let Expr::Cast {
             expr: input,
             data_type: DataType::Date,

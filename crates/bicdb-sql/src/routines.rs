@@ -118,6 +118,8 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     let symbol_names =
         routine_symbol_names(&params, &declarations, &statements, &exception_handlers);
     bind_routine_expressions(
+        &params,
+        oracle::preview_routine_language_version(&routine.language).is_none(),
         &symbol_names,
         &mut declarations,
         &mut statements,
@@ -308,6 +310,8 @@ pub(crate) fn add_routine_symbol(name: &str, names: &mut Vec<String>, seen: &mut
 }
 
 pub(crate) fn bind_routine_expressions(
+    params: &[RoutineParam],
+    declared_types: bool,
     symbol_names: &[String],
     declarations: &mut [RoutineDecl],
     statements: &mut [RoutineStmt],
@@ -324,7 +328,37 @@ pub(crate) fn bind_routine_expressions(
             _ => None,
         })
         .collect::<Vec<_>>();
-    let scope = BoundExprScope::new(&[], symbol_names).with_array_vars(&array_vars);
+    let mut types = Vec::new();
+    if declared_types {
+        for param in params {
+            if let Some(kind) = &param.type_schema {
+                types.push((format!("${}", param.index + 1), kind.pg_type.clone()));
+                if let Some(name) = &param.name {
+                    types.push((name.clone(), kind.pg_type.clone()));
+                }
+            }
+        }
+        for declaration in declarations.iter() {
+            match declaration {
+                RoutineDecl::Variable {
+                    name,
+                    pg_type: Some(kind),
+                    ..
+                } => types.push((name.clone(), kind.clone())),
+                RoutineDecl::Alias { name, position } => {
+                    if let Some((_, kind)) =
+                        types.iter().find(|(key, _)| key == &format!("${position}"))
+                    {
+                        types.push((name.clone(), kind.clone()));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let scope = BoundExprScope::new(&[], symbol_names)
+        .with_array_vars(&array_vars)
+        .with_var_types(&types);
     for declaration in declarations {
         if let RoutineDecl::Variable {
             default_expr: Some(expr),
@@ -2710,5 +2744,58 @@ mod cursor_loop_tests {
                 SqlValue::Int(expected)
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod temporal_type_tests {
+    use crate::*;
+
+    #[test]
+    fn postgres_routines_preserve_declared_calendar_and_temporal_operator_types() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(directory.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for ddl in [
+            "CREATE FUNCTION native_month(p_stamp TIMESTAMP,p_step INTERVAL) RETURNS TIMESTAMP LANGUAGE plpgsql AS $$BEGIN RETURN p_stamp+p_step; END$$",
+            "CREATE FUNCTION native_local(p_stamp TIMESTAMP) RETURNS TIMESTAMP LANGUAGE plpgsql AS $$DECLARE p ALIAS FOR $1; shifted TIMESTAMP:=p+INTERVAL '1 month'; step INTERVAL:=INTERVAL '1 day'; BEGIN RETURN shifted+step; END$$",
+            "CREATE FUNCTION native_date_shift(p_day DATE,p_days INT) RETURNS DATE LANGUAGE plpgsql AS $$BEGIN RETURN p_day+p_days; END$$",
+            "CREATE FUNCTION native_date_month(p_day DATE,p_step INTERVAL) RETURNS TIMESTAMP LANGUAGE plpgsql AS $$BEGIN RETURN p_day+p_step; END$$",
+            "CREATE FUNCTION native_interval_literal() RETURNS INTERVAL LANGUAGE plpgsql AS $$BEGIN RETURN INTERVAL '1 month'; END$$",
+            "CREATE FUNCTION native_delta(p_left TIMESTAMP,p_right TIMESTAMP) RETURNS INTERVAL LANGUAGE plpgsql AS $$BEGIN RETURN p_left-p_right; END$$",
+        ] {session.execute(ddl).unwrap();}
+        for (sql,expected) in [
+            ("SELECT native_month(TIMESTAMP '2024-02-29 12:34:56.9',INTERVAL '1 month')","2024-03-29 12:34:56.9"),
+            ("SELECT native_local(TIMESTAMP '2024-02-29 12:34:56.9')","2024-03-30 12:34:56.9"),
+            ("SELECT native_date_shift(DATE '2024-02-29',1)","2024-03-01"),
+            ("SELECT native_date_month(DATE '2024-02-29',INTERVAL '1 month')","2024-03-29 00:00:00"),
+            ("SELECT native_delta(TIMESTAMP '2024-03-01 00:00:01.123456',TIMESTAMP '2024-03-01 00:00:00.123455')","00:00:01.000001"),
+        ] {assert_eq!(session.execute(sql).unwrap().rows[0][0].to_cell(),expected,"{sql}");}
+        for sql in [
+            "SELECT native_month(NULL,INTERVAL '1 month')",
+            "SELECT native_month(TIMESTAMP '2024-02-29 12:34:56.9',NULL)",
+        ] {
+            assert_eq!(session.execute(sql).unwrap().rows[0][0], SqlValue::Null);
+        }
+        let default_interval =
+            session.execute("SELECT INTERVAL '1 month'").unwrap().rows[0][0].clone();
+        assert_eq!(
+            session
+                .execute("SELECT native_interval_literal()")
+                .unwrap()
+                .rows[0][0],
+            default_interval
+        );
+        session.execute("SET intervalstyle=iso_8601").unwrap();
+        assert_eq!(
+            session
+                .execute("SELECT native_interval_literal()")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "P1M"
+        );
+        session.execute("RESET intervalstyle").unwrap();
+        session.execute("DO $$DECLARE stamp TIMESTAMP:=TIMESTAMP '2024-02-29 12:34:56.9'; shifted TIMESTAMP:=stamp+INTERVAL '1 month'; BEGIN IF shifted<>TIMESTAMP '2024-03-29 12:34:56.9' THEN RAISE EXCEPTION 'native temporal type was lost'; END IF; END$$").unwrap();
     }
 }

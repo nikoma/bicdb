@@ -3126,6 +3126,7 @@ impl<'db> SqlEngine<'db> {
             cols: cols.clone(),
             exact_vars,
             array_vars: Arc::new(FxHashSet::default()),
+            var_types: None,
         };
         let row_lookup = SlotRowLookup { cols };
         let context = BoundRowContext {

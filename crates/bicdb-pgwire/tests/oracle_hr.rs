@@ -58,6 +58,63 @@ impl Running {
 }
 
 #[tokio::test]
+async fn calendar_routines_keep_profile_semantics_in_prepared_calls_after_reopen() {
+    use tokio_postgres::types::Type;
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        for attempt in 0..2 {
+            let server = Running::with_profile(directory.path(), profile);
+            let mut config = tokio_postgres::Config::new();
+            config
+                .host("127.0.0.1")
+                .port(server.port)
+                .user("bicdb")
+                .dbname("bicdb");
+            if profile != "postgres" {
+                config.options("-c bicdb.sql_profile=oracle-preview-v1");
+            }
+            let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+            let connection = tokio::spawn(async move {
+                connection.await.unwrap();
+            });
+            if attempt == 0 {
+                let source = if profile == "postgres" {
+                    "CREATE FUNCTION calendar_shift(p_date TIMESTAMP,p_months NUMERIC) RETURNS TIMESTAMP LANGUAGE plpgsql AS $$BEGIN RETURN p_date+INTERVAL '1 month'; END$$"
+                } else {
+                    "CREATE FUNCTION calendar_shift(p_date DATE,p_months NUMBER) RETURN DATE IS BEGIN RETURN ADD_MONTHS(p_date,p_months); END;"
+                };
+                client.batch_execute(source).await.unwrap();
+            }
+            let mut query="SELECT calendar_shift(CAST(CAST($1 AS VARCHAR) AS TIMESTAMP),CAST(CAST($2 AS VARCHAR) AS NUMERIC))".to_string();
+            if profile != "postgres" {
+                query.push_str(" FROM DUAL");
+            }
+            let statement = client.prepare(&query).await.unwrap();
+            assert_eq!(statement.columns()[0].type_(), &Type::TIMESTAMP);
+            let row = client
+                .query_one(
+                    &statement,
+                    &[&"2024-02-29 12:34:56.9".to_string(), &"1".to_string()],
+                )
+                .await
+                .unwrap();
+            // Native interval addition preserves .9 seconds on March 29;
+            // Oracle's DATE month-end rule returns March 31, whole seconds.
+            let expected = std::time::UNIX_EPOCH
+                + if profile == "postgres" {
+                    std::time::Duration::from_secs(1_711_715_696)
+                        + std::time::Duration::from_millis(900)
+                } else {
+                    std::time::Duration::from_secs(1_711_888_496)
+                };
+            assert_eq!(row.get::<_, std::time::SystemTime>(0), expected);
+            drop(client);
+            connection.await.unwrap();
+        }
+    }
+}
+
+#[tokio::test]
 async fn interval_text_settings_apply_within_batches_in_both_profiles() {
     for profile in ["postgres", "oracle-preview-v1"] {
         let directory = tempfile::tempdir().unwrap();

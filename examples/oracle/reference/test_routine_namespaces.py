@@ -43,6 +43,34 @@ class RoutineNamespaceTests(unittest.TestCase):
         self.assertTrue(all('-999' in obj['inserts'][0] for obj in shadows))
         self.assertTrue(all(case['expected'] != [[{'number': '-999'}]] for case in plan['cases']))
 
+    def test_calendar_values_are_independent_and_include_exact_month_boundaries(self):
+        from routine_calendar import fixture as calendar_fixture
+        plan = calendar_fixture('owner', 'BICDB_TEST')
+        self.assertEqual(len(plan['cases']), 36)
+        self.assertEqual(len({case['id'] for case in plan['cases']}), 36)
+        self.assertEqual({obj['backend'] for obj in plan['setup']}, {0, 1})
+        self.assertTrue(all(obj['kind'] == 'FUNCTION' for obj in plan['setup']))
+        self.assertTrue(any('1.999999999999999999999' in case['sql'] for case in plan['cases']))
+        for prefix in ['bad;DROP', '', 'a']:
+            with self.assertRaises(ValueError): calendar_fixture('owner', prefix)
+
+    def test_calendar_suite_rejects_alternate_reference_calendar_before_ddl(self):
+        class CalendarCursor(Cursor):
+            def fetchone(self): return ('ARABIC HIJRAH',)
+
+        class CalendarConnection(Connection):
+            def cursor(self): return CalendarCursor(self)
+
+        source = CalendarConnection('never matched')
+        target = Connection('never matched')
+        report = run(source, target, 'owner', 'BICDB_TEST', suite='calendar')
+        self.assertFalse(report['success'])
+        self.assertEqual(report['oracle_nls_calendar'], 'ARABIC HIJRAH')
+        self.assertEqual(report['setup_error']['error'], 'ValueError')
+        self.assertEqual(target.statements, [])
+        self.assertFalse(any(sql.startswith('CREATE ') for sql in source.statements))
+        self.assertEqual(report['cleanup_errors'], [])
+
     def test_setup_failure_drops_only_successfully_created_objects_and_redacts_errors(self):
         source = Connection('CREATE TABLE "owner"."BICDB_TEST_A"')
         target = Connection('never matched')

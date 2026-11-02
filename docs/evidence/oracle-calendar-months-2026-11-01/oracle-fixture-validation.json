@@ -1,0 +1,633 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "id": "scalar_0",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_0",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_1",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-03-31T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-03-31T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_1",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-03-31T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-03-31T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_2",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-03-28T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-03-28T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_2",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-03-28T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-03-28T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_3",
+      "expected": [
+        [
+          {
+            "timestamp": "2023-03-31T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2023-03-31T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_3",
+      "expected": [
+        [
+          {
+            "timestamp": "2023-03-31T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2023-03-31T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_4",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_4",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_5",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-15T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-15T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_5",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-15T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-15T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_6",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-15T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-15T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_6",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-15T12:34:56.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-15T12:34:56.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_7",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_7",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_8",
+      "expected": [
+        [
+          {
+            "timestamp": "2023-02-28T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2023-02-28T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_8",
+      "expected": [
+        [
+          {
+            "timestamp": "2023-02-28T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2023-02-28T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_9",
+      "expected": [
+        [
+          {
+            "timestamp": "1900-03-31T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "1900-03-31T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_9",
+      "expected": [
+        [
+          {
+            "timestamp": "1900-03-31T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "1900-03-31T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_10",
+      "expected": [
+        [
+          {
+            "timestamp": "2000-03-31T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2000-03-31T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_10",
+      "expected": [
+        [
+          {
+            "timestamp": "2000-03-31T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2000-03-31T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_11",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_11",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_12",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-01-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_12",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-01-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_13",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_13",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-02-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_14",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-01-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_14",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle": [
+        [
+          {
+            "timestamp": "2024-01-15T00:00:00.000000"
+          }
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_15",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "oracle": [
+        [
+          null
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_15",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "oracle": [
+        [
+          null
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_16",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "oracle": [
+        [
+          null
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_16",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "oracle": [
+        [
+          null
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "scalar_17",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "oracle": [
+        [
+          null
+        ]
+      ],
+      "match": true
+    },
+    {
+      "id": "routine_17",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "oracle": [
+        [
+          null
+        ]
+      ],
+      "match": true
+    }
+  ],
+  "oracle_version": "23.26.3.0.0",
+  "success": true,
+  "matched": 36
+}

@@ -505,10 +505,21 @@ pub(crate) enum BoundExpr {
     Column(ColumnId),
     Var(VarId),
     Literal(SqlValue),
+    IntervalLiteral {
+        value: Box<BoundExpr>,
+        interval: Box<Interval>,
+    },
     Binary {
         left: Box<BoundExpr>,
         op: BinaryOperator,
         right: Box<BoundExpr>,
+    },
+    TemporalBinary {
+        left: Box<BoundExpr>,
+        op: BinaryOperator,
+        right: Box<BoundExpr>,
+        left_type: String,
+        right_type: String,
     },
     Compare {
         left: Box<BoundExpr>,
@@ -589,9 +600,12 @@ fn bound_expr_calls_builtin(expr: &BoundExpr, builtin: &str) -> bool {
         | BoundExpr::Var(_)
         | BoundExpr::Literal(_)
         | BoundExpr::UserCall(_) => false,
-        BoundExpr::Binary { left, right, .. } | BoundExpr::Compare { left, right, .. } => {
+        BoundExpr::Binary { left, right, .. }
+        | BoundExpr::TemporalBinary { left, right, .. }
+        | BoundExpr::Compare { left, right, .. } => {
             bound_expr_calls_builtin(left, builtin) || bound_expr_calls_builtin(right, builtin)
         }
+        BoundExpr::IntervalLiteral { value, .. } => bound_expr_calls_builtin(value, builtin),
         BoundExpr::Subscript { array, index, .. } => {
             bound_expr_calls_builtin(array, builtin) || bound_expr_calls_builtin(index, builtin)
         }
@@ -635,6 +649,7 @@ pub(crate) struct BoundExprScope {
     /// Variables declared with an array type: the only roots `var[index]`
     /// binds for (a jsonb-typed variable subscripts differently).
     pub(crate) array_vars: Arc<FxHashSet<VarId>>,
+    pub(crate) var_types: Option<Arc<FxHashMap<VarId, String>>>,
 }
 
 #[allow(dead_code)]
@@ -1118,6 +1133,7 @@ impl InsertValuesTemplate {
             cols: cached_column_lookups(&[]),
             exact_vars: Arc::new(FxHashMap::default()),
             array_vars: Arc::new(FxHashSet::default()),
+            var_types: None,
         };
         Self::build(schema, columns, &values, &scope)
     }
@@ -1508,6 +1524,41 @@ impl BoundExprScope {
             cols: cached_column_lookups(columns),
             exact_vars: Arc::new(exact_vars),
             array_vars: Arc::new(FxHashSet::default()),
+            var_types: None,
+        }
+    }
+
+    pub(crate) fn with_var_types(mut self, types: &[(String, String)]) -> Self {
+        let types: FxHashMap<_, _> = types
+            .iter()
+            .filter_map(|(name, kind)| self.var_id(name).map(|id| (id, kind.clone())))
+            .collect();
+        if !types.is_empty() {
+            self.var_types = Some(Arc::new(types));
+        }
+        self
+    }
+
+    fn known_expr_type(&self, expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Identifier(ident) => self
+                .var_id(&ident.value)
+                .and_then(|id| self.var_types.as_ref()?.get(&id).cloned()),
+            Expr::Value(value) if matches!(value.value, Value::Placeholder(_)) => {
+                let Value::Placeholder(name) = &value.value else {
+                    unreachable!()
+                };
+                self.var_id(name)
+                    .and_then(|id| self.var_types.as_ref()?.get(&id).cloned())
+            }
+            Expr::Nested(inner) => self.known_expr_type(inner),
+            Expr::BinaryOp { left, op, right } => temporal_binary_result_type(
+                self.known_expr_type(left).as_deref(),
+                op,
+                self.known_expr_type(right).as_deref(),
+            )
+            .map(str::to_string),
+            _ => projected_expr_pg_type(expr, None),
         }
     }
 
@@ -1635,6 +1686,10 @@ impl BoundExprScope {
                 _ => literal_to_value(value).ok().map(BoundExpr::Literal),
             },
             Expr::TypedString(value) => typed_string_to_value(value).ok().map(BoundExpr::Literal),
+            Expr::Interval(interval) => Some(BoundExpr::IntervalLiteral {
+                value: Box::new(self.bind_in(&interval.value, ctx)?),
+                interval: Box::new(interval.clone()),
+            }),
             Expr::BinaryOp { left, op, right } => match op {
                 BinaryOperator::And => Some(BoundExpr::And(
                     Box::new(self.bind_short_circuit_operand(left, ctx)?),
@@ -1660,11 +1715,29 @@ impl BoundExprScope {
                     })
                 }
                 BinaryOperator::Arrow | BinaryOperator::LongArrow => None,
-                _ if bound_expr_supports_binary_operator(op) => Some(BoundExpr::Binary {
-                    left: Box::new(self.bind_in(left, ctx)?),
-                    op: op.clone(),
-                    right: Box::new(self.bind_in(right, ctx)?),
-                }),
+                _ if bound_expr_supports_binary_operator(op) => {
+                    let left_type = self.known_expr_type(left);
+                    let right_type = self.known_expr_type(right);
+                    let left = Box::new(self.bind_in(left, ctx)?);
+                    let right = Box::new(self.bind_in(right, ctx)?);
+                    if temporal_binary_result_type(left_type.as_deref(), op, right_type.as_deref())
+                        .is_some()
+                    {
+                        Some(BoundExpr::TemporalBinary {
+                            left,
+                            op: op.clone(),
+                            right,
+                            left_type: left_type.unwrap(),
+                            right_type: right_type.unwrap(),
+                        })
+                    } else {
+                        Some(BoundExpr::Binary {
+                            left,
+                            op: op.clone(),
+                            right,
+                        })
+                    }
+                }
                 _ => None,
             },
             Expr::Cast {
@@ -1865,6 +1938,31 @@ impl BoundExprScope {
     }
 }
 
+/// Native temporal signatures whose bound evaluation requires declared types.
+fn temporal_binary_result_type(
+    left: Option<&str>,
+    op: &BinaryOperator,
+    right: Option<&str>,
+) -> Option<&'static str> {
+    use BinaryOperator::{Minus, Plus};
+    match (left, op, right) {
+        (Some("date"), Plus | Minus, Some("interval")) | (Some("interval"), Plus, Some("date")) => {
+            Some("timestamp")
+        }
+        (Some("timestamp"), Plus | Minus, Some("interval"))
+        | (Some("interval"), Plus, Some("timestamp")) => Some("timestamp"),
+        (Some("timestamptz"), Plus | Minus, Some("interval"))
+        | (Some("interval"), Plus, Some("timestamptz")) => Some("timestamptz"),
+        (Some("date"), Plus | Minus, Some("int2" | "int4" | "int8"))
+        | (Some("int2" | "int4" | "int8"), Plus, Some("date")) => Some("date"),
+        (Some("date"), Minus, Some("date")) => Some("int4"),
+        (Some("timestamp"), Minus, Some("timestamp"))
+        | (Some("timestamptz"), Minus, Some("timestamptz"))
+        | (Some("interval"), Plus | Minus, Some("interval")) => Some("interval"),
+        _ => None,
+    }
+}
+
 pub(crate) fn bound_expr_supports_binary_operator(op: &BinaryOperator) -> bool {
     matches!(
         op,
@@ -1965,6 +2063,9 @@ impl BoundExpr {
                 ))
             }
             Self::Literal(value) => return Ok(BoundValue::borrowed(value)),
+            Self::IntervalLiteral { value, interval } => {
+                interval_literal_value(interval, |_| value.eval(frame))
+            }
             Self::Subscript {
                 array,
                 index,
@@ -1983,6 +2084,49 @@ impl BoundExpr {
             }
             Self::Binary { left, op, right } => {
                 return left.eval_value(frame)?.binary(op, right.eval_value(frame)?);
+            }
+            Self::TemporalBinary {
+                left,
+                op,
+                right,
+                left_type,
+                right_type,
+            } => {
+                let left = left.eval(frame)?;
+                let right = right.eval(frame)?;
+                // Native DATE +/- INTERVAL promotes DATE to a midnight timestamp.
+                let left_type = if left_type == "date" && right_type == "interval" {
+                    "timestamp"
+                } else {
+                    left_type.as_str()
+                };
+                let right_type = if right_type == "date" && left_type == "interval" {
+                    "timestamp"
+                } else {
+                    right_type.as_str()
+                };
+                let types = (Some(left_type), Some(right_type));
+                if let Some(value) =
+                    eval_typed_date_arithmetic(&left, op, &right, types.0, types.1)?
+                {
+                    Ok(value)
+                } else if let Some(value) =
+                    eval_typed_timestamptz_arithmetic(&left, op, &right, types.0, types.1)?
+                {
+                    Ok(value)
+                } else if let Some(value) =
+                    eval_typed_timestamp_arithmetic(&left, op, &right, types.0, types.1)?
+                {
+                    Ok(value)
+                } else if let Some(value) =
+                    eval_typed_interval_arithmetic(&left, op, &right, types.0, types.1)?
+                {
+                    Ok(value)
+                } else {
+                    Err(SqlError::Unsupported(
+                        "bound temporal operator signature is not supported".into(),
+                    ))
+                }
             }
             Self::Compare { .. } | Self::And(_, _) | Self::Or(_, _) | Self::UnaryNot(_) => self
                 .eval_truth(frame)

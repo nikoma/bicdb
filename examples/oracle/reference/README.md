@@ -193,3 +193,14 @@ python3 examples/oracle/reference/routine_namespaces.py --suite temporal \
   --oracle-config "$HOME/.local/state/bicdb/oracle-reference/hr-connection.json" \
   --output /tmp/bicdb-routine-temporal.json
 ```
+
+## Generated Gregorian calendar semantics
+
+Pass `--suite calendar` to `routine_namespaces.py` to compare ADD_MONTHS through
+both scalar calls and independent stored functions. The 36 cases check month-end
+carry, leap-century rules, time preservation, NULLs, fractional month counts and
+exact values immediately below integer boundaries. The runner checks and records
+the reference connection's Gregorian NLS calendar; a different calendar fails
+before creating objects. PostgreSQL has separate native interval-arithmetic and
+user-function regressions. Alternate calendars, timezone conversions, BC date
+boundaries and Oracle-specific error codes are outside this suite's acceptance.

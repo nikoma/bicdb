@@ -2139,6 +2139,8 @@ impl<'db> SqlSession<'db> {
         let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
         let symbols = routine_symbol_names(&[], &declarations, &statements, &exception_handlers);
         bind_routine_expressions(
+            &[],
+            true,
             &symbols,
             &mut declarations,
             &mut statements,

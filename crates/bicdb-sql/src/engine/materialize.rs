@@ -3075,6 +3075,7 @@ impl<'db> SqlEngine<'db> {
                 Some("numeric".to_string())
             }
             "bicdb_oracle_date_coerce"
+            | "bicdb_oracle_add_months"
             | "bicdb_oracle_to_date"
             | "bicdb_oracle_trunc_date"
             | "bicdb_oracle_date_add_days" => Some("timestamp".to_string()),

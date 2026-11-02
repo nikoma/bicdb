@@ -648,26 +648,44 @@ fn return_only_functions_evaluate_without_a_frame_and_match_the_interpreter() {
          END $$",
     )
     .unwrap();
-    // The body's own errors surface identically from both paths (today
-    // `trunc(NULL)` is an error on the frame path as well).
+    // PostgreSQL returns NULL for these NULL arguments. A real arithmetic
+    // error must still surface identically from inline and frame paths.
+    sql.execute("CREATE FUNCTION fast_divisor(p_value INTEGER) RETURNS INTEGER LANGUAGE plpgsql AS $$BEGIN RETURN 100/p_value; END$$").unwrap();
+    sql.execute("CREATE FUNCTION slow_divisor(p_value INTEGER) RETURNS INTEGER LANGUAGE plpgsql AS $$DECLARE v INT; BEGIN RETURN 100/p_value; END$$").unwrap();
+    sql.execute("CREATE PROCEDURE p_null_fast(INOUT x INT) LANGUAGE plpgsql AS $$BEGIN x:=fast_rand(NULL,5); END$$").unwrap();
+    sql.execute("CREATE PROCEDURE p_null_slow(INOUT x INT) LANGUAGE plpgsql AS $$BEGIN x:=slow_rand(NULL,5); END$$").unwrap();
+    for name in ["p_null_fast", "p_null_slow"] {
+        for _ in 0..2 {
+            let rows = sql.execute(&format!("CALL {name}(NULL)")).unwrap().rows;
+            assert_eq!(
+                rows,
+                vec![vec![SqlValue::Null]],
+                "{name}: PostgreSQL NULL propagation"
+            );
+        }
+    }
     sql.execute(
-        "CREATE PROCEDURE p_err_fast(INOUT x INT) LANGUAGE plpgsql AS $$ BEGIN x := fast_rand(NULL, 5); END $$",
+        "CREATE PROCEDURE p_err_fast(INOUT x INT) LANGUAGE plpgsql AS $$ BEGIN x := fast_divisor(0); END $$",
     )
     .unwrap();
     sql.execute(
-        "CREATE PROCEDURE p_err_slow(INOUT x INT) LANGUAGE plpgsql AS $$ BEGIN x := slow_rand(NULL, 5); END $$",
+        "CREATE PROCEDURE p_err_slow(INOUT x INT) LANGUAGE plpgsql AS $$ BEGIN x := slow_divisor(0); END $$",
     )
     .unwrap();
     for _ in 0..2 {
         let fast = sql
             .execute("CALL p_err_fast(NULL)")
             .err()
-            .map(|e| e.to_string());
+            .map(|e| (e.sqlstate().to_string(), e.to_string()));
         let slow = sql
             .execute("CALL p_err_slow(NULL)")
             .err()
-            .map(|e| e.to_string());
-        assert!(fast.is_some(), "frame path errors, inline path must too");
+            .map(|e| (e.sqlstate().to_string(), e.to_string()));
+        assert_eq!(
+            fast.as_ref().map(|error| error.0.as_str()),
+            Some("22012"),
+            "division by zero must not disappear in the inline path"
+        );
         assert_eq!(fast, slow);
     }
     #[cfg(debug_assertions)]

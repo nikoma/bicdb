@@ -13,6 +13,7 @@ mod decode;
 mod dual;
 mod namespaces;
 mod nvl;
+pub(crate) mod procedures;
 pub(crate) mod routine_arithmetic;
 pub(crate) mod routines;
 mod rownum;
@@ -65,7 +66,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V7: &str = "bicdb_oracle_preview_v7";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V8: &str = "bicdb_oracle_preview_v8";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V9: &str = "bicdb_oracle_preview_v9";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V10: &str = "bicdb_oracle_preview_v10";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v11";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V11: &str = "bicdb_oracle_preview_v11";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v12";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -76,7 +78,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V7_OID: i64 = 999_406;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V8_OID: i64 = 999_407;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V9_OID: i64 = 999_408;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V10_OID: i64 = 999_409;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_410;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V11_OID: i64 = 999_410;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_411;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -95,7 +98,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V8 => Some(8),
         PREVIEW_ROUTINE_LANGUAGE_V9 => Some(9),
         PREVIEW_ROUTINE_LANGUAGE_V10 => Some(10),
-        PREVIEW_ROUTINE_LANGUAGE => Some(11),
+        PREVIEW_ROUTINE_LANGUAGE_V11 => Some(11),
+        PREVIEW_ROUTINE_LANGUAGE => Some(12),
         _ => None,
     }
 }
@@ -103,7 +107,7 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
     matches!(
         preview_routine_language_version(language),
-        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11)
+        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12)
     )
 }
 
@@ -268,8 +272,16 @@ pub fn lower_session_sql(
     if raw_do_block_body(&lowered)?.is_some() {
         return Ok(lowered);
     }
+    if let Some(function) = procedures::header(&lowered)? {
+        let mut statement = Statement::CreateFunction(function);
+        namespaces::qualify(&mut statement, &schema);
+        let Statement::CreateFunction(function) = statement else {
+            unreachable!()
+        };
+        return procedures::render(function);
+    }
     let mut statements = parse_statements(&lowered)?;
-    namespaces::qualify(&mut statements, &schema);
+    namespaces::qualify_with_calls(&mut statements, &schema);
     date_trunc::rewrite(db, &mut statements)?;
     routine_arithmetic::lower_sql_builtins(db, &mut statements, None)?;
     date_trunc::rewrite(db, &mut statements)?;
@@ -296,6 +308,9 @@ pub fn lower_session_sql(
 }
 
 fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
+    if procedures::header(sql)?.is_some() {
+        return Ok(sql.to_string());
+    }
     if !["decode", "nvl", "chr", "to_char"]
         .iter()
         .any(|name| sql.to_ascii_lowercase().contains(name))
@@ -1236,10 +1251,20 @@ fn lower_block(
     // A standalone PL/SQL procedure invocation becomes native CALL. Expressions
     // and assignments are untouched; this is token based, never string regex.
     for i in (1..body.len()).rev() {
-        if (word(&body[i - 1], "BEGIN") || body[i - 1] == Token::SemiColon)
-            && matches!(&body[i],Token::Word(w) if w.quote_style.is_some())
-            && body.get(i + 1) == Some(&Token::LParen)
+        let statement_start = ["BEGIN", "THEN", "ELSE", "LOOP"]
+            .iter()
+            .any(|name| word(&body[i - 1], name))
+            || body[i - 1] == Token::SemiColon;
+        if !statement_start || !matches!(&body[i],Token::Word(w) if w.quote_style.is_some()) {
+            continue;
+        }
+        let mut end_name = i + 1;
+        while body.get(end_name) == Some(&Token::Period)
+            && matches!(body.get(end_name + 1), Some(Token::Word(_)))
         {
+            end_name += 2;
+        }
+        if body.get(end_name) == Some(&Token::LParen) {
             body.insert(
                 i,
                 Token::Word(sqlparser::tokenizer::Word {

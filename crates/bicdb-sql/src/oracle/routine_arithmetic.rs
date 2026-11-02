@@ -2,6 +2,9 @@
 use super::*;
 
 pub(super) fn returns_date(routine: &RoutineSchema) -> Result<bool> {
+    if routine.kind == RoutineKind::Procedure {
+        return Ok(false);
+    }
     let statements = Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition)
         .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
     let [Statement::CreateFunction(function)] = statements.as_slice() else {

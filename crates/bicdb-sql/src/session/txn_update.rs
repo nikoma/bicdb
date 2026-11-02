@@ -3529,7 +3529,14 @@ impl<'db> SqlSession<'db> {
                 .iter()
                 .map(|name| frame.get(name))
                 .collect::<Vec<_>>();
-            Ok(SqlResult::new(frame.output_names.clone(), vec![row]))
+            let column_types = ir
+                .params
+                .iter()
+                .filter(|param| matches!(param.mode, RoutineArgMode::Out | RoutineArgMode::InOut))
+                .map(|param| param.type_schema.as_ref().map(|ty| ty.pg_type.clone()))
+                .collect();
+            Ok(SqlResult::new(frame.output_names.clone(), vec![row])
+                .with_column_types(column_types))
         }
     }
 
@@ -4599,12 +4606,77 @@ impl<'db> SqlSession<'db> {
         frame: &mut RoutineFrame,
         statement: &Statement,
     ) -> Result<SqlResult> {
+        // CALL in a procedural block copies OUT/INOUT results back to the
+        // original writable variables. SQL CALL at the wire boundary instead
+        // returns those values as a row. Validate destinations before effects.
+        let outputs = if let Statement::Call(function) = statement {
+            let name = object_name(&function.name)?;
+            let routine = resolve_routine_cached(self.db_ref(), RoutineKind::Procedure, &name)?
+                .ok_or_else(|| SqlError::InvalidSql(format!("procedure {name} does not exist")))?;
+            let actuals = procedure_actual_arguments(function, &routine.ir.params)?;
+            let mut outputs = Vec::new();
+            for (param, actual) in routine.ir.params.iter().zip(actuals) {
+                if param.mode == RoutineArgMode::In {
+                    continue;
+                }
+                let expr = actual.ok_or_else(|| {
+                    SqlError::data_exception(
+                        "42804",
+                        "procedure output requires a writable variable",
+                        None,
+                    )
+                })?;
+                let parts = match expr {
+                    Expr::Identifier(id) => vec![id.clone()],
+                    Expr::CompoundIdentifier(parts) => parts.clone(),
+                    _ => {
+                        return Err(SqlError::data_exception(
+                            "42804",
+                            "procedure output requires a writable variable",
+                            None,
+                        ))
+                    }
+                };
+                let root = normalize_object_name(&parts[0].value);
+                if !frame.slot_ids.contains_key(&root) && !frame.values.contains_key(&root) {
+                    return Err(SqlError::data_exception(
+                        "42804",
+                        "procedure output requires a declared variable",
+                        None,
+                    ));
+                }
+                outputs.push(RoutineAssignmentTarget::Variable(
+                    parts
+                        .iter()
+                        .map(|p| normalize_object_name(&p.value))
+                        .collect::<Vec<_>>()
+                        .join("."),
+                ));
+            }
+            outputs
+        } else {
+            Vec::new()
+        };
         let previous = self.bind_routine_frame(frame);
         let owned = std::mem::replace(&mut self.ir_owned_statement, true);
         let result = self.execute_parsed_statement(statement);
         self.ir_owned_statement = owned;
         self.unbind_routine_frame(previous);
-        result
+        let result = result?;
+        if !outputs.is_empty() {
+            let row = result.rows.first().ok_or_else(|| {
+                SqlError::InvalidSql("procedure did not return its output row".into())
+            })?;
+            if row.len() != outputs.len() {
+                return Err(SqlError::InvalidSql(
+                    "procedure output arity differs from its declaration".into(),
+                ));
+            }
+            for (target, value) in outputs.iter().zip(row) {
+                self.assign_routine_value(frame, target, value.clone())?;
+            }
+        }
+        Ok(result)
     }
 
     /// `execute_routine_query` for a query that is NOT an IR node (a per-frame

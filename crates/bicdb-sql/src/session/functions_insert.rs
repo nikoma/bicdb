@@ -30,6 +30,7 @@ impl<'db> SqlSession<'db> {
             | "plpgsql"
             | oracle::PREVIEW_ROUTINE_LANGUAGE
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V11
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V10
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V9
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V8
@@ -201,16 +202,17 @@ impl<'db> SqlSession<'db> {
             return Ok(None);
         };
         let rest = trimmed[prefix.len()..].trim_start();
-        let name_end = rest
-            .find(|ch: char| ch == '(' || ch.is_whitespace())
-            .ok_or_else(|| SqlError::InvalidSql("CREATE PROCEDURE requires a name".to_string()))?;
-        let (raw_procedure_schema, name) = routine_schema_and_name(&rest[..name_end]);
+        let header = oracle::procedures::header(trimmed)?
+            .ok_or_else(|| SqlError::InvalidSql("CREATE PROCEDURE requires a header".into()))?;
+        let raw_procedure_schema = relation_schema_name(&header.name);
+        let name = normalize_object_name(&object_name(&header.name)?);
         let language = raw_routine_language(trimmed)?;
         match language.as_str() {
             "sql"
             | "plpgsql"
             | oracle::PREVIEW_ROUTINE_LANGUAGE
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V11
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V10
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V9
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V8
@@ -264,6 +266,15 @@ impl<'db> SqlSession<'db> {
         let name = object_name(&function.name)?.to_ascii_lowercase();
         let routine = resolve_routine_cached(self.db_ref(), RoutineKind::Procedure, &name)?
             .ok_or_else(|| SqlError::InvalidSql(format!("procedure \"{name}\" does not exist")))?;
+        if object_name_parts(&function.name).len() > 1
+            && relation_schema_name(&function.name) != routine.schema.schema
+        {
+            return Err(SqlError::data_exception(
+                "42883",
+                "procedure does not exist in the requested schema",
+                None,
+            ));
+        }
         self.ensure_routine_execute_privilege(&name)?;
         // Evaluate the arguments in place: `function_args` deep-clones every
         // argument expression (TPC-C's NEW_ORDER call carries eleven, one a
@@ -275,14 +286,54 @@ impl<'db> SqlSession<'db> {
         // call re-inferred them from scratch.
         let args = {
             let _types = self.enter_routine_expr_type_scope(&routine.ir);
-            match unnamed_function_arg_exprs(function) {
-                Some(exprs) => exprs
-                    .map(|arg| self.eval_session_expr(arg))
-                    .collect::<Result<Vec<_>>>()?,
-                None => function_args(function)
+            let has_outputs = routine
+                .ir
+                .params
+                .iter()
+                .any(|p| p.mode == RoutineArgMode::Out);
+            let named = !matches!(&function.args, FunctionArguments::List(list)
+                if list.args.iter().all(|arg| matches!(arg,FunctionArg::Unnamed(FunctionArgExpr::Expr(_)))));
+            if has_outputs || named {
+                let actuals = procedure_actual_arguments(function, &routine.ir.params)?;
+                routine
+                    .ir
+                    .params
                     .iter()
-                    .map(|arg| self.eval_session_expr(arg))
-                    .collect::<Result<Vec<_>>>()?,
+                    .zip(actuals)
+                    .filter(|(p, _)| p.mode != RoutineArgMode::Out)
+                    .map(|(param, expr)| match expr {
+                        Some(expr) => self.eval_session_expr(expr),
+                        None => eval_constant_expr(
+                            param.default_expr.as_ref().expect("validated default"),
+                        ),
+                    })
+                    .collect::<Result<Vec<_>>>()?
+            } else {
+                if let FunctionArguments::List(list) = &function.args {
+                    if list.args.len() > routine.ir.params.len()
+                        || routine
+                            .ir
+                            .params
+                            .iter()
+                            .skip(list.args.len())
+                            .any(|p| p.default_expr.is_none())
+                    {
+                        return Err(SqlError::data_exception(
+                            "42883",
+                            "procedure arguments do not match its declaration",
+                            None,
+                        ));
+                    }
+                }
+                match unnamed_function_arg_exprs(function) {
+                    Some(exprs) => exprs
+                        .map(|arg| self.eval_session_expr(arg))
+                        .collect::<Result<Vec<_>>>()?,
+                    None => function_args(function)
+                        .iter()
+                        .map(|arg| self.eval_session_expr(arg))
+                        .collect::<Result<Vec<_>>>()?,
+                }
             }
         };
 
@@ -321,11 +372,21 @@ impl<'db> SqlSession<'db> {
                             && (routine_declarations_may_write(&routine.ir.declarations)
                                 || routine_block_may_write(&routine.ir.statements)
                                 || routine_handlers_may_write(&routine.ir.exception_handlers));
-                        if needs_auto_tx {
-                            return self
-                                .run_wasm_procedure_in_auto_transaction(&int_args, &compiled);
-                        }
-                        return self.run_wasm_procedure(&int_args, &compiled);
+                        let column_types = routine
+                            .ir
+                            .params
+                            .iter()
+                            .filter(|param| {
+                                matches!(param.mode, RoutineArgMode::Out | RoutineArgMode::InOut)
+                            })
+                            .map(|param| param.type_schema.as_ref().map(|ty| ty.pg_type.clone()))
+                            .collect();
+                        let result = if needs_auto_tx {
+                            self.run_wasm_procedure_in_auto_transaction(&int_args, &compiled)
+                        } else {
+                            self.run_wasm_procedure(&int_args, &compiled)
+                        };
+                        return result.map(|row| row.with_column_types(column_types));
                     }
                 }
             }
@@ -469,7 +530,7 @@ impl<'db> SqlSession<'db> {
         let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
             let schema = if matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11)
+                Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12)
             ) {
                 relation_schema_name(name_ast)
             } else {

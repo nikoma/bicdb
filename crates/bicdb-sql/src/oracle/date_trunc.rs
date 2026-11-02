@@ -57,7 +57,7 @@ pub(super) fn numeric_trunc_expr(args: &[Expr]) -> Result<Expr> {
 }
 
 pub(super) fn lower(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
-    if raw_do_block_body(sql)?.is_some() {
+    if raw_do_block_body(sql)?.is_some() || super::procedures::header(sql)?.is_some() {
         return Ok(sql.to_string());
     }
     if !sql.to_ascii_lowercase().contains("trunc")

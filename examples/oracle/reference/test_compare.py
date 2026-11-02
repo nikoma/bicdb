@@ -8,6 +8,7 @@ from compare import canonical, compare_cases, outcome, read_cases, ROOT
 class Cursor:
     def __init__(self, rows=None, error=None):
         self.rows, self.error = rows, error
+        self.description = ('synthetic',) if rows is not None else None
 
     def __enter__(self): return self
     def __exit__(self, *args): pass
@@ -24,6 +25,9 @@ class Connection:
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_command_success_does_not_fetch_a_nonexistent_result(self):
+        self.assertEqual(outcome(Connection(), 'CALL sample()'), {'rows': []})
+
     def test_numbers_preserve_precision_and_ignore_representation_scale(self):
         exact = '12345678901234567890123456789012345678'
         self.assertEqual(canonical(decimal.Decimal(exact)), {'number': exact})

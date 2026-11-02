@@ -27,6 +27,17 @@ class Connection:
 
 
 class RoutineNamespaceTests(unittest.TestCase):
+    def test_procedure_source_expectations_distinguish_call_error_from_handled_writes(self):
+        from routine_procedures import fixture as procedure_fixture
+        plan = procedure_fixture('owner', 'BICDB_TEST')
+        cases = {row['id']:row for row in plan['cases']}
+        self.assertEqual(len(cases),len(plan['cases']))
+        self.assertTrue(all(('expected' in row) != ('expected_error' in row) for row in cases.values()))
+        self.assertEqual(cases['unhandled_call']['expected_error'],dict(oracle='ORA-06502',bicdb='22P02'))
+        self.assertEqual(cases['unhandled_rolled_back']['expected'],[[{'number':'21'}]])
+        self.assertEqual(cases['handled_statements_preserved']['expected'],[[{'number':'24'}]])
+        self.assertEqual(cases['copyback_14']['expected'],[[{'number':'1006'}]])
+
     def test_nvl_source_expectations_cover_eager_errors_and_timestamp_contexts(self):
         from routine_nvl import fixture as nvl_fixture
         plan = nvl_fixture('owner', 'BICDB_TEST')

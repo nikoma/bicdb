@@ -2,14 +2,26 @@
 use super::*;
 
 pub(super) fn qualify<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str) {
+    qualify_impl(node, schema, false)
+}
+
+pub(super) fn qualify_with_calls<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str) {
+    qualify_impl(node, schema, true)
+}
+
+fn qualify_impl<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str, calls: bool) {
     struct Qualify {
         schema: String,
         ctes: Vec<BTreeSet<String>>,
+        calls: bool,
     }
     impl sqlparser::ast::VisitorMut for Qualify {
         type Break = ();
         fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<()> {
             match statement {
+                Statement::Call(function) if self.calls => {
+                    self.pre_visit_relation(&mut function.name)?
+                }
                 Statement::CreateIndex(index) => {
                     if let Some(name) = index.name.as_mut() {
                         self.pre_visit_relation(name)?;
@@ -21,7 +33,7 @@ pub(super) fn qualify<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str) {
                     if function.language.as_ref().is_some_and(|language| {
                         matches!(
                             preview_routine_language_version(&ident_value(language)),
-                            Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11)
+                            Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12)
                         )
                     }) =>
                 {
@@ -122,6 +134,7 @@ pub(super) fn qualify<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str) {
         node,
         &mut Qualify {
             schema: schema.to_string(),
+            calls,
             ctes: Vec::new(),
         },
     );

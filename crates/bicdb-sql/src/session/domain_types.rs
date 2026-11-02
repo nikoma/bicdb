@@ -2208,6 +2208,7 @@ impl<'db> SqlSession<'db> {
                 &mut statements,
                 &mut exception_handlers,
                 &schema,
+                oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 12),
             )?;
             oracle::routines::lower_datetime_trunc(
                 &mut [],

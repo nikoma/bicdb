@@ -53,6 +53,8 @@ def outcome(connection, sql, max_rows=5000, oracle_number_sentinels=False):
     try:
         with connection.cursor() as cursor:
             cursor.execute(sql)
+            if cursor.description is None:
+                return {'rows': []}
             rows = cursor.fetchmany(max_rows + 1)
             if len(rows) > max_rows:
                 raise ValueError('fixture exceeded row limit')

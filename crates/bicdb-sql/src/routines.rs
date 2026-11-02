@@ -102,7 +102,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11)
+        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12)
     ) {
         oracle::routines::bind_function_namespace(
             routine,
@@ -121,7 +121,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             })?,
             matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11)
+                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12)
             ),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 7),
@@ -589,6 +589,88 @@ pub(crate) fn parse_routine_params(args: &[String]) -> Result<Vec<RoutineParam>>
         .enumerate()
         .map(|(index, arg)| parse_routine_param(arg, index))
         .collect()
+}
+
+/// Align CALL arguments with the complete declaration, including OUT slots.
+/// Function input frames omit OUT values; SQL CALL still supplies their slots.
+pub(crate) fn procedure_actual_arguments<'a>(
+    function: &'a Function,
+    params: &[RoutineParam],
+) -> Result<Vec<Option<&'a Expr>>> {
+    let FunctionArguments::List(list) = &function.args else {
+        return Err(SqlError::InvalidSql(
+            "CALL requires an argument list".into(),
+        ));
+    };
+    let invalid = || {
+        SqlError::data_exception(
+            "42883",
+            "procedure arguments do not match its declaration",
+            None,
+        )
+    };
+    if list.duplicate_treatment.is_some() || !list.clauses.is_empty() {
+        return Err(invalid());
+    }
+    let mut actuals = vec![None; params.len()];
+    let mut positional = 0;
+    let mut named = false;
+    for arg in &list.args {
+        let (index, value) = match arg {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) if !named => {
+                let index = positional;
+                positional += 1;
+                (index, expr)
+            }
+            FunctionArg::Named {
+                name,
+                arg: FunctionArgExpr::Expr(expr),
+                ..
+            } => {
+                named = true;
+                let key = normalize_object_name(&ident_value(name));
+                let index = params
+                    .iter()
+                    .position(|param| {
+                        param
+                            .name
+                            .as_ref()
+                            .is_some_and(|name| normalize_object_name(name) == key)
+                    })
+                    .ok_or_else(invalid)?;
+                (index, expr)
+            }
+            FunctionArg::ExprNamed {
+                name: Expr::Identifier(name),
+                arg: FunctionArgExpr::Expr(expr),
+                ..
+            } => {
+                named = true;
+                let key = normalize_object_name(&ident_value(name));
+                let index = params
+                    .iter()
+                    .position(|param| {
+                        param
+                            .name
+                            .as_ref()
+                            .is_some_and(|name| normalize_object_name(name) == key)
+                    })
+                    .ok_or_else(invalid)?;
+                (index, expr)
+            }
+            _ => return Err(invalid()),
+        };
+        let target = actuals.get_mut(index).ok_or_else(invalid)?;
+        if target.replace(value).is_some() {
+            return Err(invalid());
+        }
+    }
+    for (param, actual) in params.iter().zip(&actuals) {
+        if actual.is_none() && (param.mode == RoutineArgMode::Out || param.default_expr.is_none()) {
+            return Err(invalid());
+        }
+    }
+    Ok(actuals)
 }
 
 pub(crate) fn parse_routine_param(arg: &str, index: usize) -> Result<RoutineParam> {

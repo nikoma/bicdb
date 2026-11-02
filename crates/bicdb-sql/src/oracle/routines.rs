@@ -2,13 +2,23 @@
 use super::*;
 
 pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
-    if routine.kind != RoutineKind::Function {
+    let statements = if routine.kind == RoutineKind::Procedure {
+        if !preview_routine_language_version(&routine.language).is_some_and(|v| v >= 12) {
+            return Err(SqlError::Unsupported(
+                "Oracle preview procedures require compiler version 12".into(),
+            ));
+        }
+        let function = super::procedures::header(&routine.definition)?
+            .ok_or_else(|| SqlError::InvalidSql("expected a procedure definition".into()))?;
+        vec![Statement::CreateFunction(function)]
+    } else if routine.kind == RoutineKind::Function {
+        Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition)
+            .map_err(|error| SqlError::InvalidSql(error.to_string()))?
+    } else {
         return Err(SqlError::Unsupported(
-            "Oracle preview static routine compiler currently supports function definitions".into(),
+            "Oracle preview requires a function or procedure definition".into(),
         ));
-    }
-    let statements = Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition)
-        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    };
     let [Statement::CreateFunction(function)] = statements.as_slice() else {
         return Err(SqlError::InvalidSql(
             "preview function requires one CREATE FUNCTION definition".into(),
@@ -20,7 +30,7 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
                 == preview_routine_language_version(&routine.language)
                 && matches!(
                     preview_routine_language_version(&routine.language),
-                    Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11)
+                    Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12)
                 )
         })
     {
@@ -31,14 +41,26 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
     Ok(relation_schema_name(&function.name))
 }
 
-fn bind_relations<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str) -> Result<()> {
+fn bind_relations<T: sqlparser::ast::VisitMut>(
+    node: &mut T,
+    schema: &str,
+    calls: bool,
+) -> Result<()> {
     super::rownum::lower(node)?;
     super::dual::lower(node, false)?;
-    namespaces::qualify(node, schema);
+    if calls {
+        namespaces::qualify_with_calls(node, schema);
+    } else {
+        namespaces::qualify(node, schema);
+    }
     Ok(())
 }
 
-fn bind_namespace_statements(statements: &mut [RoutineStmt], schema: &str) -> Result<()> {
+fn bind_namespace_statements(
+    statements: &mut [RoutineStmt],
+    schema: &str,
+    calls: bool,
+) -> Result<()> {
     for statement in statements {
         match statement {
             RoutineStmt::Block {
@@ -51,99 +73,99 @@ fn bind_namespace_statements(statements: &mut [RoutineStmt], schema: &str) -> Re
                         RoutineDecl::Variable {
                             default_expr: Some(expr),
                             ..
-                        } => bind_relations(&mut expr.expr, schema)?,
+                        } => bind_relations(&mut expr.expr, schema, calls)?,
                         RoutineDecl::Cursor { query, params, .. } => {
                             for param in params {
                                 if let Some(expr) = &mut param.default_expr {
-                                    bind_relations(expr, schema)?;
+                                    bind_relations(expr, schema, calls)?;
                                 }
                             }
-                            bind_relations(query, schema)?;
+                            bind_relations(query, schema, calls)?;
                         }
                         _ => {}
                     }
                 }
-                bind_namespace_statements(body, schema)?;
+                bind_namespace_statements(body, schema, calls)?;
                 for handler in handlers {
-                    bind_namespace_statements(&mut handler.statements, schema)?;
+                    bind_namespace_statements(&mut handler.statements, schema, calls)?;
                 }
             }
             RoutineStmt::Assignment { target, expr } => {
                 if let RoutineAssignmentTarget::ArrayElement { index, .. } = target {
-                    bind_relations(&mut index.expr, schema)?;
+                    bind_relations(&mut index.expr, schema, calls)?;
                 }
-                bind_relations(&mut expr.expr, schema)?;
+                bind_relations(&mut expr.expr, schema, calls)?;
             }
             RoutineStmt::If {
                 condition,
                 then_body,
                 else_body,
             } => {
-                bind_relations(&mut condition.expr, schema)?;
-                bind_namespace_statements(then_body, schema)?;
-                bind_namespace_statements(else_body, schema)?;
+                bind_relations(&mut condition.expr, schema, calls)?;
+                bind_namespace_statements(then_body, schema, calls)?;
+                bind_namespace_statements(else_body, schema, calls)?;
             }
             RoutineStmt::Case {
                 expression,
                 arms,
                 else_body,
             } => {
-                bind_relations(&mut expression.expr, schema)?;
+                bind_relations(&mut expression.expr, schema, calls)?;
                 for arm in arms {
-                    bind_namespace_statements(arm, schema)?;
+                    bind_namespace_statements(arm, schema, calls)?;
                 }
                 if let Some(body) = else_body {
-                    bind_namespace_statements(body, schema)?;
+                    bind_namespace_statements(body, schema, calls)?;
                 }
             }
             RoutineStmt::ForLoop {
                 lower, upper, body, ..
             } => {
-                bind_relations(&mut lower.expr, schema)?;
-                bind_relations(&mut upper.expr, schema)?;
-                bind_namespace_statements(body, schema)?;
+                bind_relations(&mut lower.expr, schema, calls)?;
+                bind_relations(&mut upper.expr, schema, calls)?;
+                bind_namespace_statements(body, schema, calls)?;
             }
             RoutineStmt::ForeachLoop { array, body, .. } => {
-                bind_relations(&mut array.expr, schema)?;
-                bind_namespace_statements(body, schema)?;
+                bind_relations(&mut array.expr, schema, calls)?;
+                bind_namespace_statements(body, schema, calls)?;
             }
             RoutineStmt::WhileLoop { condition, body } => {
-                bind_relations(&mut condition.expr, schema)?;
-                bind_namespace_statements(body, schema)?;
+                bind_relations(&mut condition.expr, schema, calls)?;
+                bind_namespace_statements(body, schema, calls)?;
             }
             RoutineStmt::QueryForLoop { query, body, .. } => {
-                bind_relations(query, schema)?;
-                bind_namespace_statements(body, schema)?;
+                bind_relations(query, schema, calls)?;
+                bind_namespace_statements(body, schema, calls)?;
             }
             RoutineStmt::CursorForLoop {
                 arguments, body, ..
             } => {
                 for arg in arguments {
-                    bind_relations(&mut arg.expr.expr, schema)?;
+                    bind_relations(&mut arg.expr.expr, schema, calls)?;
                 }
-                bind_namespace_statements(body, schema)?;
+                bind_namespace_statements(body, schema, calls)?;
             }
             RoutineStmt::OpenCursor { arguments, .. } => {
                 for arg in arguments {
-                    bind_relations(&mut arg.expr.expr, schema)?;
+                    bind_relations(&mut arg.expr.expr, schema, calls)?;
                 }
             }
-            RoutineStmt::Loop { body } => bind_namespace_statements(body, schema)?,
+            RoutineStmt::Loop { body } => bind_namespace_statements(body, schema, calls)?,
             RoutineStmt::SelectInto { query, .. }
             | RoutineStmt::Perform { query }
-            | RoutineStmt::ReturnQuery(query) => bind_relations(query, schema)?,
+            | RoutineStmt::ReturnQuery(query) => bind_relations(query, schema, calls)?,
             RoutineStmt::Sql(statement) | RoutineStmt::SqlInto { statement, .. } => {
-                bind_relations(statement, schema)?
+                bind_relations(statement, schema, calls)?
             }
-            RoutineStmt::Return(Some(expr)) => bind_relations(&mut expr.expr, schema)?,
+            RoutineStmt::Return(Some(expr)) => bind_relations(&mut expr.expr, schema, calls)?,
             RoutineStmt::RaiseException {
                 arguments, detail, ..
             } => {
                 for arg in arguments {
-                    bind_relations(&mut arg.expr, schema)?;
+                    bind_relations(&mut arg.expr, schema, calls)?;
                 }
                 if let Some(detail) = detail {
-                    bind_relations(&mut detail.expr, schema)?;
+                    bind_relations(&mut detail.expr, schema, calls)?;
                 }
             }
             RoutineStmt::DynamicExecute(_) => {
@@ -171,6 +193,7 @@ pub(crate) fn bind_function_namespace(
     handlers: &mut [RoutineExceptionHandler],
 ) -> Result<()> {
     let schema = function_namespace(routine)?;
+    let calls = preview_routine_language_version(&routine.language).is_some_and(|v| v >= 12);
     if routine.schema != schema {
         return Err(SqlError::InvalidSql(
             "preview function namespace does not match its definition".into(),
@@ -178,10 +201,10 @@ pub(crate) fn bind_function_namespace(
     }
     for param in params {
         if let Some(expr) = &mut param.default_expr {
-            bind_relations(expr, &schema)?;
+            bind_relations(expr, &schema, calls)?;
         }
     }
-    bind_block_namespace(declarations, statements, handlers, &schema)
+    bind_block_namespace(declarations, statements, handlers, &schema, calls)
 }
 
 pub(crate) fn bind_block_namespace(
@@ -189,27 +212,28 @@ pub(crate) fn bind_block_namespace(
     statements: &mut [RoutineStmt],
     handlers: &mut [RoutineExceptionHandler],
     schema: &str,
+    calls: bool,
 ) -> Result<()> {
     for declaration in declarations {
         match declaration {
             RoutineDecl::Variable {
                 default_expr: Some(expr),
                 ..
-            } => bind_relations(&mut expr.expr, &schema)?,
+            } => bind_relations(&mut expr.expr, &schema, calls)?,
             RoutineDecl::Cursor { query, params, .. } => {
                 for param in params {
                     if let Some(expr) = &mut param.default_expr {
-                        bind_relations(expr, &schema)?;
+                        bind_relations(expr, &schema, calls)?;
                     }
                 }
-                bind_relations(query, &schema)?;
+                bind_relations(query, &schema, calls)?;
             }
             _ => {}
         }
     }
-    bind_namespace_statements(statements, &schema)?;
+    bind_namespace_statements(statements, &schema, calls)?;
     for handler in handlers {
-        bind_namespace_statements(&mut handler.statements, &schema)?;
+        bind_namespace_statements(&mut handler.statements, &schema, calls)?;
     }
     Ok(())
 }

@@ -1,0 +1,147 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "expectations": {
+    "add": {
+      "expected": []
+    },
+    "after_add": {
+      "expected": [
+        [
+          {
+            "number": "3"
+          },
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ]
+    },
+    "route_loop": {
+      "expected": []
+    },
+    "after_loop": {
+      "expected": [
+        [
+          {
+            "number": "5"
+          },
+          {
+            "timestamp": "2024-03-02T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    "route_then": {
+      "expected": []
+    },
+    "after_then": {
+      "expected": [
+        [
+          {
+            "number": "8"
+          },
+          {
+            "timestamp": "2024-03-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    "default_omitted": {
+      "expected": []
+    },
+    "default_explicit": {
+      "expected": []
+    },
+    "parameterless": {
+      "expected": []
+    },
+    "after_defaults": {
+      "expected": [
+        [
+          {
+            "number": "21"
+          }
+        ]
+      ]
+    },
+    "unhandled_call": {
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22P02"
+      }
+    },
+    "unhandled_rolled_back": {
+      "expected": [
+        [
+          {
+            "number": "21"
+          }
+        ]
+      ]
+    },
+    "handled_call": {
+      "expected": []
+    },
+    "handled_statements_preserved": {
+      "expected": [
+        [
+          {
+            "number": "24"
+          }
+        ]
+      ]
+    },
+    "copyback_14": {
+      "expected": [
+        [
+          {
+            "number": "1006"
+          }
+        ]
+      ]
+    },
+    "copyback_15": {
+      "expected": [
+        [
+          {
+            "number": "400"
+          }
+        ]
+      ]
+    },
+    "copyback_16": {
+      "expected": [
+        [
+          {
+            "number": "-4"
+          }
+        ]
+      ]
+    },
+    "copyback_17": {
+      "expected": [
+        [
+          {
+            "number": "1006"
+          }
+        ]
+      ]
+    },
+    "replace": {
+      "expected": []
+    },
+    "replaced_call": {
+      "expected": []
+    },
+    "after_replace": {
+      "expected": [
+        [
+          {
+            "number": "30"
+          }
+        ]
+      ]
+    }
+  }
+}

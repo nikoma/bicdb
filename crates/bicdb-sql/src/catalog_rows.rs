@@ -2816,6 +2816,15 @@ pub(crate) fn pg_language_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlVal
             0,
         ));
         rows.push(pg_language_row(
+            oracle::PREVIEW_ROUTINE_LANGUAGE_V11_OID,
+            oracle::PREVIEW_ROUTINE_LANGUAGE_V11,
+            true,
+            true,
+            0,
+            0,
+            0,
+        ));
+        rows.push(pg_language_row(
             oracle::PREVIEW_ROUTINE_LANGUAGE_OID,
             oracle::PREVIEW_ROUTINE_LANGUAGE,
             true,
@@ -2856,6 +2865,7 @@ pub(crate) fn pg_language_oid(language: &str) -> i64 {
         "c" => 13,
         "sql" => 14,
         "plpgsql" => PLPGSQL_LANGUAGE_OID,
+        oracle::PREVIEW_ROUTINE_LANGUAGE_V11 => oracle::PREVIEW_ROUTINE_LANGUAGE_V11_OID,
         oracle::PREVIEW_ROUTINE_LANGUAGE => oracle::PREVIEW_ROUTINE_LANGUAGE_OID,
         oracle::PREVIEW_ROUTINE_LANGUAGE_V10 => oracle::PREVIEW_ROUTINE_LANGUAGE_V10_OID,
         oracle::PREVIEW_ROUTINE_LANGUAGE_V9 => oracle::PREVIEW_ROUTINE_LANGUAGE_V9_OID,

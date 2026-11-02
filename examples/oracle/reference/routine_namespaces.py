@@ -100,12 +100,16 @@ def run(oracle, bicdb, schema, prefix, suite='namespaces'):
                 source.execute("SELECT VALUE FROM NLS_SESSION_PARAMETERS WHERE PARAMETER='NLS_NUMERIC_CHARACTERS'")
                 report['oracle_nls_numeric_characters'] = source.fetchone()[0]
                 if report['oracle_nls_numeric_characters'] != '.,':
-                    raise ValueError('anchor fixture requires dot decimal reference formatting')
+                    raise ValueError('routine fixture requires dot decimal reference formatting')
             if suite == 'concat':
-                source.execute("SELECT PARAMETER,VALUE FROM NLS_SESSION_PARAMETERS WHERE PARAMETER IN ('NLS_DATE_FORMAT','NLS_DATE_LANGUAGE','NLS_LENGTH_SEMANTICS')")
+                source.execute("SELECT PARAMETER,VALUE FROM NLS_SESSION_PARAMETERS WHERE PARAMETER IN ('NLS_DATE_FORMAT','NLS_DATE_LANGUAGE','NLS_LENGTH_SEMANTICS','NLS_CALENDAR')")
                 report['oracle_nls_concat'] = dict(source.fetchall())
-                if report['oracle_nls_concat'] != dict(NLS_DATE_FORMAT='DD-MON-RR', NLS_DATE_LANGUAGE='AMERICAN', NLS_LENGTH_SEMANTICS='BYTE'):
+                if report['oracle_nls_concat'] != dict(NLS_DATE_FORMAT='DD-MON-RR', NLS_DATE_LANGUAGE='AMERICAN', NLS_LENGTH_SEMANTICS='BYTE', NLS_CALENDAR='GREGORIAN'):
                     raise ValueError('concatenation fixture requires the recorded preview NLS defaults')
+                source.execute("SELECT VALUE FROM NLS_DATABASE_PARAMETERS WHERE PARAMETER='NLS_CHARACTERSET'")
+                report['oracle_database_character_set'] = source.fetchone()[0]
+                if report['oracle_database_character_set'] != 'AL32UTF8':
+                    raise ValueError('concatenation byte fixtures require AL32UTF8')
             if suite in ('calendar', 'week'):
                 source.execute("SELECT VALUE FROM NLS_SESSION_PARAMETERS WHERE PARAMETER='NLS_CALENDAR'")
                 report['oracle_nls_calendar'] = source.fetchone()[0]

@@ -10,10 +10,16 @@ pub(crate) fn eval_substring_expr<F>(
     substring_for: Option<&Expr>,
     mut eval: F,
     bytea: bool,
+    invalid_bit_shorthand: bool,
 ) -> Result<SqlValue>
 where
     F: FnMut(&Expr) -> Result<SqlValue>,
 {
+    if invalid_bit_shorthand {
+        return Err(SqlError::undefined_function(
+            "function substr(bit string, integer[, integer]) does not exist",
+        ));
+    }
     let Some(substring_from) = substring_from else {
         return Err(SqlError::InvalidSql(
             "substring requires a start expression".to_string(),

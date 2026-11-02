@@ -1710,6 +1710,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
     if let Expr::Substring { expr, .. } | Expr::Overlay { expr, .. } = expr {
         return match projected_expr_pg_type(expr, schema).as_deref() {
             Some("bit" | "varbit") => Some("bit".to_string()),
+            Some("text" | "varchar" | "bpchar" | "char" | "name") => Some("text".to_string()),
             _ => projected_expr_pg_type(expr, schema),
         };
     }

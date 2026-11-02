@@ -1056,6 +1056,7 @@ impl<'db> SqlEngine<'db> {
                 expr,
                 substring_from,
                 substring_for,
+                shorthand,
                 ..
             } => eval_substring_expr(
                 expr,
@@ -1063,6 +1064,11 @@ impl<'db> SqlEngine<'db> {
                 substring_for.as_deref(),
                 |expr| self.eval_slot_row_value(row, context, expr),
                 self.scoped_slot_row_expr_type(context, expr).as_deref() == Some("bytea"),
+                *shorthand
+                    && matches!(
+                        self.scoped_slot_row_expr_type(context, expr).as_deref(),
+                        Some("bit" | "varbit")
+                    ),
             ),
             Expr::Overlay {
                 expr,
@@ -2586,6 +2592,7 @@ impl<'db> SqlEngine<'db> {
                 expr,
                 substring_from,
                 substring_for,
+                shorthand,
                 ..
             } => eval_substring_expr(
                 expr,
@@ -2593,6 +2600,11 @@ impl<'db> SqlEngine<'db> {
                 substring_for.as_deref(),
                 |expr| self.eval_row_value(row, expr),
                 projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea"),
+                *shorthand
+                    && matches!(
+                        projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref(),
+                        Some("bit" | "varbit")
+                    ),
             ),
             Expr::Overlay {
                 expr,

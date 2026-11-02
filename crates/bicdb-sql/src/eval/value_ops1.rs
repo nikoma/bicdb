@@ -3792,6 +3792,10 @@ pub(crate) fn eval_to_char(args: &[SqlValue]) -> Result<SqlValue> {
     if parse_date_prefix(&input).is_some() {
         return format_timestamp_to_char(&input, &format).map(SqlValue::String);
     }
+    if let Some(Ok(decimal)) = decimal_value(&args[0]) {
+        let negative = decimal.mantissa.is_negative();
+        return format_decimal_to_char(decimal, negative, &format).map(SqlValue::String);
+    }
     let numeric = sql_value_f64(&args[0]).ok_or_else(|| {
         SqlError::Unsupported(format!("to_char does not support {}", args[0].to_cell()))
     })?;
@@ -4038,34 +4042,92 @@ fn to_char_fraction_micros(value: &str) -> i64 {
 pub(crate) fn format_numeric_to_char(value: f64, format: &str) -> Result<String> {
     if !value.is_finite() {
         return Err(SqlError::InvalidSql(
-            "to_char numeric value is not finite".to_string(),
+            "to_char numeric value is not finite".into(),
         ));
     }
-    let (left, right) = format.split_once('.').unwrap_or((format, ""));
-    if !left.chars().all(|ch| ch == '9') || !right.chars().all(|ch| ch == '9') {
+    format_decimal_to_char(
+        parse_decimal(&canonical_float_decimal(value)?)?,
+        value.is_sign_negative(),
+        format,
+    )
+}
+
+fn format_decimal_to_char(value: Decimal, negative: bool, format: &str) -> Result<String> {
+    let fill = format
+        .get(..2)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("FM"));
+    let model = if fill { &format[2..] } else { format };
+    let (left, right) = model.split_once('.').unwrap_or((model, ""));
+    if model.is_empty()
+        || !left.chars().all(|c| c == '9')
+        || !right.chars().all(|c| c == '9')
+        || left.is_empty() && right.is_empty()
+    {
         return Err(SqlError::Unsupported(format!(
             "to_char numeric format {format} is not supported"
         )));
     }
-    let left_width = left.chars().count();
-    let right_width = right.chars().count();
-    let rendered = format!("{:.*}", right_width, value.abs());
-    let (integer, fraction) = rendered.split_once('.').unwrap_or((rendered.as_str(), ""));
-    let integer = if integer == "0" { "" } else { integer };
-    let integer = if value.is_sign_negative() && !integer.is_empty() {
-        format!("-{integer}")
-    } else {
-        integer.to_string()
-    };
-    let integer_width = left_width + 1;
-    if integer.chars().count() > integer_width {
-        let overflow_len = integer_width + usize::from(right_width > 0) + right_width;
-        return Ok("#".repeat(overflow_len));
+    let left_width = left.len();
+    let right_width = right.len();
+    let mut magnitude = value.mantissa.abs();
+    let mut scale = value.scale;
+    if scale as usize > right_width {
+        let divisor = pow10_bigint(scale - u32::try_from(right_width).expect("smaller than scale"));
+        let remainder = &magnitude % &divisor;
+        magnitude /= &divisor;
+        if remainder * 2_i32 >= divisor {
+            magnitude += 1_i32;
+        }
+        scale = right_width as u32;
     }
-    let mut output = format!("{integer:>integer_width$}");
-    if right_width > 0 {
+    // PostgreSQL suppresses a negative sign when the display rounding is zero.
+    let negative = negative && !magnitude.is_zero();
+    let rendered = Decimal {
+        mantissa: magnitude,
+        scale,
+    }
+    .format();
+    let (integer, fraction) = rendered.split_once('.').unwrap_or((&rendered, ""));
+    let integer_digits = if integer == "0" { 0 } else { integer.len() };
+    let decimal_point = model.contains('.');
+    if integer_digits > left_width {
+        return Ok(format!(
+            "{}{}{}{}",
+            if negative {
+                "-"
+            } else if fill {
+                ""
+            } else {
+                " "
+            },
+            "#".repeat(left_width),
+            if decimal_point { "." } else { "" },
+            "#".repeat(right_width)
+        ));
+    }
+    let mut fractional = fraction.to_string();
+    fractional.extend(std::iter::repeat_n(
+        '0',
+        right_width.saturating_sub(fractional.len()),
+    ));
+    if fill {
+        fractional = fractional.trim_end_matches('0').to_string();
+    }
+    let integer =
+        if integer == "0" && decimal_point && !(fill && fractional.is_empty() && left_width > 0) {
+            ""
+        } else {
+            integer
+        };
+    let signed = format!("{}{integer}", if negative { "-" } else { "" });
+    let mut output = if fill {
+        signed
+    } else {
+        format!("{signed:>width$}", width = left_width + 1)
+    };
+    if decimal_point {
         output.push('.');
-        output.push_str(fraction);
+        output.push_str(&fractional);
     }
     Ok(output)
 }

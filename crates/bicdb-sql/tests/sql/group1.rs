@@ -3744,3 +3744,77 @@ fn boolean_scalar_subquery_is_valid_as_a_where_predicate() {
         vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
     );
 }
+
+#[test]
+fn numeric_to_char_matches_postgresql_reference_without_float_rounding() {
+    let (_dir, mut db) = empty_test_db();
+    let mut session = SqlSession::new(&mut db);
+    let reference: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../docs/evidence/oracle-routine-concatenation-2026-11-02/native-number-format-reference.json"
+    )).unwrap();
+    for case in reference["cases"].as_array().unwrap() {
+        let sql = format!(
+            "SELECT to_char(CAST({} AS NUMERIC), '{}')",
+            case["number"].as_str().unwrap(),
+            case["mask"].as_str().unwrap()
+        );
+        assert_eq!(
+            session.execute(&sql).unwrap().rows,
+            vec![vec![SqlValue::String(
+                case["value"].as_str().unwrap().to_string()
+            )]],
+            "{sql}"
+        );
+    }
+    assert_eq!(
+        session
+            .execute("SELECT to_char(9007199254740993::numeric, 'FM9999999999999999')")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("9007199254740993".into())]]
+    );
+}
+
+#[test]
+fn substring_text_metadata_and_bit_overloads_follow_postgresql_rules() {
+    let (_dir, mut db) = empty_test_db();
+    let mut session = SqlSession::new(&mut db);
+    let result = session.execute("SELECT substr(NULL::varchar,1,2), substring(NULL::char(4) FROM 1 FOR 2), overlay(NULL::varchar PLACING 'x' FROM 1), substr(NULL::bytea,1,2)").unwrap();
+    assert_eq!(result.rows, vec![vec![SqlValue::Null; 4]]);
+    assert_eq!(
+        result.column_types,
+        vec![
+            Some("text".into()),
+            Some("text".into()),
+            Some("text".into()),
+            Some("bytea".into())
+        ]
+    );
+    session
+        .execute(
+            "CREATE TABLE substring_values (id integer PRIMARY KEY, bits bit(4), label varchar(4))",
+        )
+        .unwrap();
+    session
+        .execute("INSERT INTO substring_values VALUES(1,B'1010','abcd')")
+        .unwrap();
+    for sql in [
+        "SELECT substr(NULL::bit(4),1,2)",
+        "SELECT substr(B'1010',1,2)",
+        "SELECT substr(bits,1,2) FROM substring_values",
+        "SELECT substr(bits,1,2) FROM substring_values s JOIN (SELECT 1 AS chosen) a ON s.id=a.chosen",
+        "UPDATE substring_values SET bits=substr(bits,1,2)",
+    ] {
+        assert_eq!(session.execute(sql).unwrap_err().sqlstate(), "42883", "{sql}");
+    }
+    assert_eq!(
+        session
+            .execute("SELECT substring(bits FROM 1 FOR 2), substr(label,1,2) FROM substring_values")
+            .unwrap()
+            .rows,
+        vec![vec![
+            SqlValue::String("10".into()),
+            SqlValue::String("ab".into())
+        ]]
+    );
+}

@@ -2683,6 +2683,9 @@ impl<'db> SqlEngine<'db> {
             Expr::Substring { expr, .. } | Expr::Overlay { expr, .. } => {
                 match self.infer_env_expr_type(expr, env).as_deref() {
                     Some("bit" | "varbit") => Some("bit".to_string()),
+                    Some("text" | "varchar" | "bpchar" | "char" | "name") => {
+                        Some("text".to_string())
+                    }
                     _ => self.infer_env_expr_type(expr, env),
                 }
             }

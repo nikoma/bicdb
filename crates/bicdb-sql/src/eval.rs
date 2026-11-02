@@ -260,6 +260,7 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
             expr,
             substring_from,
             substring_for,
+            shorthand,
             ..
         } => eval_substring_expr(
             expr,
@@ -267,6 +268,11 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
             substring_for.as_deref(),
             |expr| eval_value(record, expr),
             projected_expr_pg_type(expr, None).as_deref() == Some("bytea"),
+            *shorthand
+                && matches!(
+                    projected_expr_pg_type(expr, None).as_deref(),
+                    Some("bit" | "varbit")
+                ),
         ),
         Expr::Overlay {
             expr,
@@ -526,6 +532,7 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
             expr,
             substring_from,
             substring_for,
+            shorthand,
             ..
         } => eval_substring_expr(
             expr,
@@ -533,6 +540,11 @@ pub(crate) fn eval_constant_expr(expr: &Expr) -> Result<SqlValue> {
             substring_for.as_deref(),
             eval_constant_expr,
             projected_expr_pg_type(expr, None).as_deref() == Some("bytea"),
+            *shorthand
+                && matches!(
+                    projected_expr_pg_type(expr, None).as_deref(),
+                    Some("bit" | "varbit")
+                ),
         ),
         Expr::Overlay {
             expr,

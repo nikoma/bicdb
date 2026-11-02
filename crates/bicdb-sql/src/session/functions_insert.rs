@@ -2065,6 +2065,7 @@ impl<'db> SqlSession<'db> {
                 expr,
                 substring_from,
                 substring_for,
+                shorthand,
                 ..
             } => eval_substring_expr(
                 expr,
@@ -2079,6 +2080,11 @@ impl<'db> SqlSession<'db> {
                         })
                 },
                 projected_expr_pg_type(expr, Some(schema)).as_deref() == Some("bytea"),
+                *shorthand
+                    && matches!(
+                        projected_expr_pg_type(expr, Some(schema)).as_deref(),
+                        Some("bit" | "varbit")
+                    ),
             )
             .map(Some),
             Expr::Overlay {

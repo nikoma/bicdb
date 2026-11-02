@@ -2756,16 +2756,23 @@ impl<'db> SqlSession<'db> {
                 expr,
                 substring_from,
                 substring_for,
+                shorthand,
                 ..
             } => {
                 let bytea =
                     projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref() == Some("bytea");
+                let invalid_bit_shorthand = *shorthand
+                    && matches!(
+                        projected_expr_pg_type_with_db(self.db_ref(), expr).as_deref(),
+                        Some("bit" | "varbit")
+                    );
                 eval_substring_expr(
                     expr,
                     substring_from.as_deref(),
                     substring_for.as_deref(),
                     |expr| self.eval_session_expr(expr),
                     bytea,
+                    invalid_bit_shorthand,
                 )
             }
             Expr::Trim {

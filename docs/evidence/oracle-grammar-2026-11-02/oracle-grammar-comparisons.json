@@ -1,0 +1,755 @@
+{
+  "format": 1,
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "fixture_prefix": "BICDB_GR_EE9ECA1CB4",
+  "fixture_sha256": "f852df0eee7e114255b0028236d732dac5b869e010fc531a8715a1f23a6d97e7",
+  "total": 14,
+  "matched": 14,
+  "cases": [
+    {
+      "id": "null_extension",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "100"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "101"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "200"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "100"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "101"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "200"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "100"
+          }
+        ],
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "101"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "200"
+          }
+        ],
+        [
+          {
+            "number": "3"
+          },
+          null
+        ]
+      ]
+    },
+    {
+      "id": "optional_filter",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "100"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            null
+          ],
+          [
+            {
+              "number": "3"
+            },
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "100"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            null
+          ],
+          [
+            {
+              "number": "3"
+            },
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "100"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          null
+        ],
+        [
+          {
+            "number": "3"
+          },
+          null
+        ]
+      ]
+    },
+    {
+      "id": "preserved_filter",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "100"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "unqualified",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "100"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "101"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "200"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "100"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "101"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "200"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "100"
+          }
+        ],
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "101"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "200"
+          }
+        ],
+        [
+          {
+            "number": "3"
+          },
+          null
+        ]
+      ]
+    },
+    {
+      "id": "reverse_chain",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            "one"
+          ],
+          [
+            {
+              "number": "1"
+            },
+            null
+          ],
+          [
+            {
+              "number": "2"
+            },
+            null
+          ],
+          [
+            {
+              "number": "3"
+            },
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            "one"
+          ],
+          [
+            {
+              "number": "1"
+            },
+            null
+          ],
+          [
+            {
+              "number": "2"
+            },
+            null
+          ],
+          [
+            {
+              "number": "3"
+            },
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1"
+          },
+          "one"
+        ],
+        [
+          {
+            "number": "1"
+          },
+          null
+        ],
+        [
+          {
+            "number": "2"
+          },
+          null
+        ],
+        [
+          {
+            "number": "3"
+          },
+          null
+        ]
+      ]
+    },
+    {
+      "id": "star_order",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null,
+            null,
+            {
+              "number": "3"
+            },
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null,
+            null,
+            {
+              "number": "3"
+            },
+            {
+              "number": "30"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null,
+          null,
+          {
+            "number": "3"
+          },
+          {
+            "number": "30"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "keyword_column",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            },
+            null
+          ],
+          [
+            {
+              "number": "20"
+            },
+            null
+          ],
+          [
+            {
+              "number": "30"
+            },
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            },
+            null
+          ],
+          [
+            {
+              "number": "20"
+            },
+            null
+          ],
+          [
+            {
+              "number": "30"
+            },
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "10"
+          },
+          null
+        ],
+        [
+          {
+            "number": "20"
+          },
+          null
+        ],
+        [
+          {
+            "number": "30"
+          },
+          null
+        ]
+      ]
+    },
+    {
+      "id": "cursor_loop",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "471"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "471"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "471"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "locks1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "11"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "11"
+            }
+          ]
+        ]
+      },
+      "type_oids": [
+        1700
+      ],
+      "expected": [
+        [
+          {
+            "number": "11"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "locks2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "22"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "22"
+            }
+          ]
+        ]
+      },
+      "type_oids": [
+        1700
+      ],
+      "expected": [
+        [
+          {
+            "number": "22"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "locks3",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "33"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "33"
+            }
+          ]
+        ]
+      },
+      "type_oids": [
+        1700
+      ],
+      "expected": [
+        [
+          {
+            "number": "33"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "locknowait1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "11"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "11"
+            }
+          ]
+        ]
+      },
+      "type_oids": [
+        1700
+      ],
+      "expected": [
+        [
+          {
+            "number": "11"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "locknowait2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "22"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "22"
+            }
+          ]
+        ]
+      },
+      "type_oids": [
+        1700
+      ],
+      "expected": [
+        [
+          {
+            "number": "22"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "locknowait3",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "33"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "33"
+            }
+          ]
+        ]
+      },
+      "type_oids": [
+        1700
+      ],
+      "expected": [
+        [
+          {
+            "number": "33"
+          }
+        ]
+      ],
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "scope": "Conjunctive legacy outer joins including null-extension, filter placement, chained dependencies and projection order; mixed-case cursor loops and uncontended column lock lists. Not general Oracle join grammar or concurrent locking qualification.",
+  "routine_compiler": "bicdb_oracle_preview_v13",
+  "runtime_binary_sha256": "29c3bcff1a19cee418c6f10c6dfbe05650e15bdb2bd99fdd7608081b5c999533"
+}

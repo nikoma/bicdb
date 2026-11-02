@@ -101,6 +101,16 @@ this is not application execution acceptance. The generated passing corpus is
 964 Oracle cases with 145 native PostgreSQL controls. Five separately recorded
 semantic mismatches reproduce on both the previous and new runtimes and remain
 open. All 915 tables and 185,537 current rows remain preserved across the upgrade.
+The [routine grammar qualification](evidence/oracle-grammar-2026-11-02/README.md)
+adds version-13 legacy outer-join lowering and column lock-list binding, with
+978 generated Oracle matches and 154 independent PostgreSQL controls. The
+unchanged original AD_SEQUENCE_NEXT body also matches Oracle on eight controlled
+synthetic-data checks, including state changes and rollback. This is a minimal
+dependency fixture, not full application acceptance. All thirteen separate
+NULL-argument application-copy procedure probes still fail; definition acceptance
+remains 57/62. This qualification builds a development candidate without upgrading
+the running application database. Five separately tracked semantic mismatches
+remain unchanged on the candidate.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source

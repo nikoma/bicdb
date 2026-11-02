@@ -1,0 +1,415 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "native_bicdb": true,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "integer_loop",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "6"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "query_loop",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "30"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "native_concat_null",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "quoted_marker_text",
+      "postgres": {
+        "rows": [
+          [
+            "(+)"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "(+)"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            "(+)"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "reject_oracle_marker",
+      "postgres": {
+        "sqlstate": "42601"
+      },
+      "bicdb": {
+        "sqlstate": "42601"
+      },
+      "expected": {
+        "sqlstate": "42601"
+      },
+      "matched": true
+    },
+    {
+      "id": "reject_delete_without_from",
+      "postgres": {
+        "sqlstate": "42601"
+      },
+      "bicdb": {
+        "sqlstate": "42601"
+      },
+      "expected": {
+        "sqlstate": "42601"
+      },
+      "matched": true
+    },
+    {
+      "id": "lock_list6",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "10"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "type_oids": [
+          23,
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "10"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "type_oids": [
+          23,
+          1700
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "10"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "type_oids": [
+          23,
+          1700
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "lock_list7",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "10"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "type_oids": [
+          23,
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "10"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "type_oids": [
+          23,
+          1700
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "10"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "type_oids": [
+          23,
+          1700
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "lock_list8",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "10"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "type_oids": [
+          23,
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "10"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "type_oids": [
+          23,
+          1700
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "10"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "type_oids": [
+          23,
+          1700
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "matched": 9,
+  "total": 9,
+  "runtime_binary_sha256": "29c3bcff1a19cee418c6f10c6dfbe05650e15bdb2bd99fdd7608081b5c999533"
+}

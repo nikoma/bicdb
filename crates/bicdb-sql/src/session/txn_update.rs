@@ -4015,11 +4015,25 @@ impl<'db> SqlSession<'db> {
                 arguments,
                 detail,
                 sqlstate,
+                error_fields,
             } => {
                 let arguments = arguments
                     .iter()
                     .map(|argument| self.eval_routine_expr(frame, argument))
                     .collect::<Result<Vec<_>>>()?;
+                // A raised integrity error naming its constraint is reported
+                // as a constraint violation so clients see the constraint.
+                if error_fields.constraint.is_some() {
+                    if let Some(code) = integrity_sqlstate(sqlstate) {
+                        return Err(constraint_violation(
+                            code,
+                            format_routine_raise_message(message, &arguments),
+                            error_fields.table.clone(),
+                            error_fields.column.clone(),
+                            error_fields.constraint.clone(),
+                        ));
+                    }
+                }
                 Err(SqlError::RaisedException {
                     sqlstate: sqlstate.clone(),
                     message: format_routine_raise_message(message, &arguments),

@@ -3052,7 +3052,12 @@ pub(crate) fn placeholder_cast_describe_result(sql: &str) -> Option<SqlResult> {
     if column_count == 0 {
         return None;
     }
-    Some(SqlResult::empty(vec!["?column?".to_string(); column_count]))
+    // Clients bind result columns by name (sqlx reads the Describe reply), so
+    // the select list's aliases matter, not only the column count.
+    let names = bicdb_sql::query_output_column_names(sql)
+        .filter(|names| names.len() == column_count)
+        .unwrap_or_else(|| vec!["?column?".to_string(); column_count]);
+    Some(SqlResult::empty(names))
 }
 
 pub(crate) fn resolve_parameter_type_oids(
@@ -3673,5 +3678,27 @@ mod mutating_with_describe_tests {
 
         // Read-only WITH queries keep their existing describe path.
         assert!(mutating_with_describe_sql("WITH x AS (SELECT 1 AS a) SELECT a FROM x").is_none());
+    }
+}
+
+#[cfg(test)]
+mod placeholder_describe_name_tests {
+    use super::placeholder_cast_describe_result;
+
+    #[test]
+    fn parameterized_scalar_subquery_columns_keep_their_aliases() {
+        let result = placeholder_cast_describe_result(
+            "SELECT COALESCE((SELECT MAX(w.created_at) FROM (SELECT created_at FROM changes \
+             WHERE org_id = $1 ORDER BY created_at LIMIT $2) w), $3::timestamptz) AS next_cursor",
+        )
+        .expect("describable");
+        assert_eq!(result.columns, vec!["next_cursor".to_string()]);
+        let result = placeholder_cast_describe_result(
+            "WITH RECURSIVE d AS (SELECT id FROM docs WHERE parent_id = $1 UNION ALL \
+             SELECT c.id FROM docs c JOIN d ON c.parent_id = d.id) \
+             SELECT (SELECT COUNT(*) FROM d)::bigint AS n, (SELECT 1)::bigint AS m",
+        )
+        .expect("describable");
+        assert_eq!(result.columns, vec!["n".to_string(), "m".to_string()]);
     }
 }

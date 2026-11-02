@@ -3372,6 +3372,10 @@ pub struct SqlEngine<'db> {
     /// keyed by AST address are safe only then.
     pub(crate) ir_owned_statement: bool,
     pub(crate) outer_row: Option<OuterSlotRow>,
+    /// The last outer row a correlated subquery of this engine ran with
+    /// (`outer_row` extended by the current row), reused by the next run to
+    /// avoid re-copying `outer_row`'s values; see `run_slot_subquery`.
+    pub(crate) outer_extension_cache: RefCell<Option<OuterExtensionCache>>,
     pub(crate) index_lookup_cache: IndexLookupCache,
     pub(crate) rowid_index_lookup_cache: RowIdIndexLookupCache,
     pub(crate) record_lookup_cache: RecordLookupCache,
@@ -3512,6 +3516,7 @@ impl<'db> SqlEngine<'db> {
             memo_operand_types: false,
             ir_owned_statement: false,
             outer_row: None,
+            outer_extension_cache: RefCell::new(None),
             index_lookup_cache: Rc::new(RefCell::new(FxHashMap::default())),
             rowid_index_lookup_cache: Rc::new(RefCell::new(FxHashMap::default())),
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
@@ -3545,6 +3550,7 @@ impl<'db> SqlEngine<'db> {
             memo_operand_types: false,
             ir_owned_statement: false,
             outer_row: None,
+            outer_extension_cache: RefCell::new(None),
             index_lookup_cache: Rc::new(RefCell::new(FxHashMap::default())),
             rowid_index_lookup_cache: Rc::new(RefCell::new(FxHashMap::default())),
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
@@ -3598,6 +3604,7 @@ impl<'db> SqlEngine<'db> {
             memo_operand_types: false,
             ir_owned_statement,
             outer_row: None,
+            outer_extension_cache: RefCell::new(None),
             index_lookup_cache,
             rowid_index_lookup_cache,
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
@@ -3633,6 +3640,7 @@ impl<'db> SqlEngine<'db> {
             memo_operand_types: false,
             ir_owned_statement: false,
             outer_row: None,
+            outer_extension_cache: RefCell::new(None),
             index_lookup_cache: Rc::new(RefCell::new(FxHashMap::default())),
             rowid_index_lookup_cache: Rc::new(RefCell::new(FxHashMap::default())),
             record_lookup_cache: Rc::new(RefCell::new(BTreeMap::new())),
@@ -4746,6 +4754,7 @@ impl<'db> SqlEngine<'db> {
             routine_vars: self.routine_vars.clone(),
             routine_slots: self.routine_slots.clone(),
             outer_row: self.outer_row.clone(),
+            outer_extension_cache: RefCell::new(None),
             index_lookup_cache: self.index_lookup_cache.clone(),
             rowid_index_lookup_cache: self.rowid_index_lookup_cache.clone(),
             record_lookup_cache: self.record_lookup_cache.clone(),
@@ -5181,4 +5190,17 @@ fn locator_strategy_memo(
         );
     });
     Ok(strategy)
+}
+
+/// See `SqlEngine::outer_extension_cache`.
+#[derive(Debug)]
+pub(crate) struct OuterExtensionCache {
+    /// Identity and length of the engine's `outer_row` the extension was
+    /// built from (the engine never replaces its `outer_row`).
+    parent: usize,
+    parent_len: usize,
+    columns: Vec<String>,
+    /// Indexes into the current row of the columns `extend` appended.
+    novel: std::rc::Rc<[usize]>,
+    row: OuterSlotRow,
 }

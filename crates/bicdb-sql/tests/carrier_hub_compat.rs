@@ -591,3 +591,122 @@ fn plpgsql_case_statement_forms() {
         .to_string();
     assert!(error.contains("case not found"), "{error}");
 }
+
+/// The Hub's board row hierarchy guard raises with USING ERRCODE and
+/// CONSTRAINT; the routine must compile, and the raised error is reported as a
+/// constraint violation naming that constraint.
+#[test]
+fn raise_using_constraint_reports_a_constraint_violation() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE nodes (id INT PRIMARY KEY, parent_id INT)",
+        "CREATE FUNCTION nodes_guard() RETURNS trigger LANGUAGE plpgsql AS $f$
+         BEGIN
+           IF NEW.parent_id IS NULL THEN
+             RETURN NEW;
+           END IF;
+           IF NEW.parent_id = NEW.id THEN
+             RAISE EXCEPTION 'node cannot be its own parent'
+               USING ERRCODE = '23514',
+                     CONSTRAINT = 'nodes_parent_not_self';
+           END IF;
+           RETURN NEW;
+         END
+         $f$",
+        "CREATE TRIGGER nodes_guard BEFORE INSERT OR UPDATE ON nodes FOR EACH ROW EXECUTE FUNCTION nodes_guard()",
+        "INSERT INTO nodes VALUES (1, NULL), (2, 1)",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let error = session.execute("INSERT INTO nodes VALUES (3, 3)").unwrap_err();
+    assert_eq!(error.sqlstate(), "23514", "{error}");
+    assert!(error.to_string().contains("node cannot be its own parent"), "{error}");
+    match &error {
+        bicdb_sql::SqlError::ConstraintViolation { constraint, .. } => {
+            assert_eq!(constraint.as_deref(), Some("nodes_parent_not_self"))
+        }
+        other => panic!("expected a constraint violation, got {other:?}"),
+    }
+}
+
+/// The Hub's AI capability discovery selects `command_item AS source` from
+/// `CROSS JOIN LATERAL jsonb_array_elements(...) AS command_item`; the column
+/// is jsonb (also when no row matches, which is what Describe sees).
+#[test]
+fn set_returning_function_alias_column_is_typed() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE apps (id INT PRIMARY KEY, commands JSONB)",
+        "INSERT INTO apps VALUES (1, '{\"items\": [{\"id\": \"a\"}]}')",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    for sql in [
+        "SELECT item AS source FROM jsonb_array_elements('[1,2]'::jsonb) AS item",
+        "SELECT item AS source FROM apps app CROSS JOIN LATERAL \
+         jsonb_array_elements(COALESCE(app.commands->'items', '[]'::jsonb)) AS item",
+        "SELECT item AS source FROM apps app CROSS JOIN LATERAL \
+         jsonb_array_elements(COALESCE(app.commands->'items', '[]'::jsonb)) AS item WHERE app.id = NULL",
+    ] {
+        let result = session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        assert_eq!(result.column_types, vec![Some("jsonb".to_string())], "{sql}");
+    }
+}
+
+/// The Hub's app manifest listing filters each navigation item with correlated
+/// EXISTS subqueries; the outer row carries megabytes of manifest JSON. Reusing
+/// the outer row between subquery runs must give exactly the per-row answers.
+#[test]
+fn correlated_exists_per_array_element_on_wide_rows() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE manifests (id INT PRIMARY KEY, min_rank INT, navigation JSONB, padding JSONB)")
+        .unwrap();
+    session.execute("CREATE TABLE ranks (role TEXT PRIMARY KEY, rank INT)").unwrap();
+    session
+        .execute("INSERT INTO ranks VALUES ('guest', 10), ('member', 20), ('admin', 40)")
+        .unwrap();
+    let padding = format!("{{\"blob\": \"{}\"}}", "x".repeat(200_000));
+    for (id, min_rank) in [(1, 0), (2, 15), (3, 30)] {
+        let items = (0..300)
+            .map(|i| {
+                let role = ["guest", "member", "admin"][i % 3];
+                format!("{{\"n\": {i}, \"required_role\": \"{role}\"}}")
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        session
+            .execute(&format!(
+                "INSERT INTO manifests VALUES ({id}, {min_rank}, '{{\"items\": [{items}]}}', '{padding}')"
+            ))
+            .unwrap();
+    }
+    let started = std::time::Instant::now();
+    let rows = session_rows(
+        &mut session,
+        "SELECT m.id, (
+           SELECT count(*) FROM jsonb_array_elements(m.navigation->'items') AS entry(item)
+           WHERE EXISTS (
+             SELECT 1 FROM ranks r
+             WHERE r.role = entry.item->>'required_role' AND r.rank >= m.min_rank
+           )
+         )::bigint AS visible
+         FROM manifests m ORDER BY m.id",
+    );
+    let got = rows
+        .into_iter()
+        .map(|row| (row[0].to_cell(), row[1].to_cell()))
+        .collect::<Vec<_>>();
+    // min_rank 0: all 300; 15: member + admin (200); 30: admin only (100).
+    assert_eq!(
+        got,
+        vec![("1".into(), "300".into()), ("2".into(), "200".into()), ("3".into(), "100".into())]
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(30), "took {:?}", started.elapsed());
+}

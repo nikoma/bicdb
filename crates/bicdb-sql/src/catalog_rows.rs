@@ -2583,8 +2583,8 @@ fn routine_depends_on_catalog_user_type(
             .any(|argument| matches(&argument.pg_type))
 }
 
-pub(crate) fn pg_language_rows() -> Vec<BTreeMap<String, SqlValue>> {
-    vec![
+pub(crate) fn pg_language_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    let mut rows = vec![
         pg_language_row(12, "internal", false, false, 0, 0, 2246),
         pg_language_row(13, "c", false, false, 0, 0, 2247),
         pg_language_row(14, "sql", false, true, 0, 0, 2248),
@@ -2597,7 +2597,19 @@ pub(crate) fn pg_language_rows() -> Vec<BTreeMap<String, SqlValue>> {
             PLPGSQL_INLINE_HANDLER_OID,
             PLPGSQL_VALIDATOR_OID,
         ),
-    ]
+    ];
+    if oracle::preview_routine_language_enabled(db)? {
+        rows.push(pg_language_row(
+            oracle::PREVIEW_ROUTINE_LANGUAGE_OID,
+            oracle::PREVIEW_ROUTINE_LANGUAGE,
+            true,
+            true,
+            0,
+            0,
+            0,
+        ));
+    }
+    Ok(rows)
 }
 
 pub(crate) fn pg_language_row(
@@ -2628,6 +2640,7 @@ pub(crate) fn pg_language_oid(language: &str) -> i64 {
         "c" => 13,
         "sql" => 14,
         "plpgsql" => PLPGSQL_LANGUAGE_OID,
+        oracle::PREVIEW_ROUTINE_LANGUAGE => oracle::PREVIEW_ROUTINE_LANGUAGE_OID,
         _ => 0,
     }
 }

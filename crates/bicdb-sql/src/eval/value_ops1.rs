@@ -3230,6 +3230,9 @@ pub(crate) fn eval_compatibility_function_value(
         }
         "trunc" | "pg_catalog.trunc" => {
             require_arg_count("trunc", args, 1)?;
+            if matches!(args[0], SqlValue::Null) {
+                return Ok(Some(SqlValue::Null));
+            }
             let value = sql_value_f64(&args[0]).ok_or_else(|| {
                 SqlError::InvalidSql(format!("trunc expects numeric, got {}", args[0].to_cell()))
             })?;

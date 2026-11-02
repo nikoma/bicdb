@@ -377,7 +377,7 @@ pub(crate) fn routine_language(language: Option<&Ident>, _return_type: &str) -> 
         .map(ident_value)
         .unwrap_or_else(|| "sql".to_string())
         .to_ascii_lowercase();
-    if language == "sql" || language == "plpgsql" {
+    if language == "sql" || language == "plpgsql" || language == oracle::PREVIEW_ROUTINE_LANGUAGE {
         Ok(language)
     } else {
         Err(SqlError::Unsupported(format!(

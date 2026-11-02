@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "name": "PAYMENTTERMDUEDATE",
+  "source_sha256": "f2945cb88b4e4242a218f02515455eb52a061e72d811bcacbea7159906c33008",
+  "only_adaptation": "explicit destination namespace",
+  "success": false,
+  "created": true,
+  "application_qualified": false,
+  "runtime_binary_sha256": "ae79d5fea90c8b0391fe713d40d27cd955078665e8088ce732070fcca41b98e0",
+  "cases": [],
+  "pending_case": {
+    "payment_term_id": 100,
+    "oracle": "2026-12-01 00:00:00"
+  },
+  "error": "collection not found: c_paymentterm",
+  "sqlstate": "42P01",
+  "unqualified_probe_function_removed": true,
+  "failed_probe_absence_verified": true,
+  "existing_getdate_and_charat_still_execute": true
+}

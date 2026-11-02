@@ -26,7 +26,7 @@ impl<'db> SqlSession<'db> {
         let (return_type, returns_set) = raw_routine_return_type(trimmed)?;
         let language = raw_routine_language(trimmed)?;
         match language.as_str() {
-            "sql" | "plpgsql" => {}
+            "sql" | "plpgsql" | oracle::PREVIEW_ROUTINE_LANGUAGE => {}
             other => {
                 return Err(SqlError::Unsupported(format!(
                     "procedural language {other} is not supported"
@@ -195,7 +195,7 @@ impl<'db> SqlSession<'db> {
         let (raw_procedure_schema, name) = routine_schema_and_name(&rest[..name_end]);
         let language = raw_routine_language(trimmed)?;
         match language.as_str() {
-            "sql" | "plpgsql" => {}
+            "sql" | "plpgsql" | oracle::PREVIEW_ROUTINE_LANGUAGE => {}
             other => {
                 return Err(SqlError::Unsupported(format!(
                     "procedural language {other} is not supported"

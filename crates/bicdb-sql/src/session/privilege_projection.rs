@@ -157,6 +157,7 @@ impl<'db> SqlSession<'db> {
         if_not_exists: bool,
         or_replace: bool,
     ) -> Result<()> {
+        oracle::validate_routine_language(self.db_ref(), &routine.language)?;
         self.require_schema_create_privilege(&routine.schema)?;
         if load_routine(self.db_ref(), routine.kind, &routine.name)?.is_some() {
             if if_not_exists {

@@ -202,6 +202,25 @@ contain nested casts. The existing procedure path also normalizes parameter
 modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
+New preview routine definitions persist the language marker
+`bicdb_oracle_preview_v1`. It selects the tested preview routine compiler and
+requires the database's durable Oracle preview profile. PostgreSQL and HR
+databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
+definitions created through the native backend retain native behavior, including
+previously translated routines;
+recreate an Oracle-authored definition to select the new compiler. The marker
+has a separate `pg_language` identity, present only in a preview database.
+
+This compiler resolves procedural `TRUNC` calls from declared DATE/timestamp
+parameters and locals, including local initializers, assignments, conditions
+and returns. Numeric TRUNC remains numeric. It does not infer procedural types
+for columns inside embedded SQL or scalar subqueries; those have their own row
+namespaces. General routine SQL overload resolution, record-field types, Oracle
+date arithmetic and source DATE/TIMESTAMP provenance still require further work.
+The [routine datetime evidence](evidence/oracle-routine-datetime-2026-11-01/README.md)
+records reference values, older-reader execution rejection and the remaining
+original application namespace failure.
+
 This is declaration support for the tested routine subset, not a complete
 PL/SQL compiler. Native routine execution, namespace, overload, privilege and
 error contracts still apply. Oracle AUTHID/rights semantics are not qualified.

@@ -12,10 +12,14 @@ behavior must remain covered by regression tests throughout this work.
 
 The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used
 for [iDempiere seed development](evidence/idempiere-seed-2026-11-01/README.md).
-All 913 tables and 185,292 rows loaded and passed complete value reconciliation.
-This is a data-baseline milestone; the actual application has not passed startup,
-login or business workflows. Its required foreign keys, routines, views and
-remaining migrations are still outstanding.
+The original 913 tables and 185,292 rows loaded and passed complete value
+reconciliation. A separate Oracle reference clone was upgraded through 24
+release-13 migrations; its 915 tables and 185,471 initial rows were also imported
+and reconciled. The [Oracle-provider application login](evidence/idempiere-release13-desktop-2026-11-01/README.md)
+reached a desktop shell through PostgreSQL drivers with application errors.
+Startup and business workflows are not qualified. Required foreign keys, most
+routines and views, and remaining application behavior are still outstanding.
+These are development data baselines, not full schema/application acceptance.
 
 “Partial” means a specific implementation or test exists, not that the full
 workstream is compatible. “Unqualified” means Oracle behavior or operational
@@ -23,7 +27,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 
 | Workstream | Required acceptance | Current programme coverage |
 | --- | --- | --- |
-| 1. Versioned profiles | Durable profile identity, explicit startup selection, incompatible-open rejection, upgrade rules and PostgreSQL isolation | Partial: HR profile and pgwire regression tests; broader profiles and upgrades outstanding |
+| 1. Versioned profiles | Durable profile identity, explicit startup selection, incompatible-open rejection, upgrade rules and PostgreSQL isolation | Partial: bounded HR and separate preview profiles, durable identity and versioned preview routine compiler; general upgrade qualification outstanding |
 | 2. Migration assessment | Inventory source and runtime dependencies; report object locations, dynamic SQL, wrapped code, blockers and manual changes | Partial: [offline lexical inventory](oracle-migration-assessment.md); semantic/catalog/runtime assessment and dependency resolution outstanding |
 | 3. SQL value semantics | Differential null/empty-string, concatenation, padding, comparison, coercion, uniqueness and composite-key tests | Partial: HR lowering and initial reference queries; coercion and padding qualification outstanding |
 | 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings used by HR; full Oracle rules unqualified |
@@ -32,7 +36,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: sample uppercase names and documented heap adaptation; general resolution outstanding |
 | 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Unqualified: HR currently uses BicDB's PostgreSQL-shaped transaction contract |
 | 9. DDL lifecycle | Oracle implicit commits, replacement, dependency invalidation, invalid-object catalogs and recompilation | Outstanding; native transactional DDL is not an Oracle equivalent |
-| 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: one adapted procedure and simple blocks; full language outstanding |
+| 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: bounded procedures/blocks, standalone functions, unparameterized bound cursor loops and declared-type procedural TRUNC; full language and application routines outstanding |
 | 11. Packages | Specs/bodies, visibility, overloads, initialization, session variables and invalidation with pool/session isolation | Outstanding |
 | 12. Autonomous transactions | Independent commit/rollback and lock behavior, nested calls, exceptions and restart tests | Outstanding |
 | 13. Supplied package APIs | Qualify used DBMS/UTL APIs, including LOB, SQL, OUTPUT, UTILITY, APPLICATION_INFO, RANDOM, LOCK and SCHEDULER; file/network ACL enforcement | Outstanding |

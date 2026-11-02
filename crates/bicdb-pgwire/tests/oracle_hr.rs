@@ -519,6 +519,7 @@ async fn oracle_preview_stored_functions_execute_through_pg_driver_after_restart
             for source in [
                 "CREATE OR REPLACE FUNCTION constant_time RETURN DATE AS BEGIN RETURN TIMESTAMP '2024-02-29 23:59:58'; END;",
                 "CREATE OR REPLACE FUNCTION initial_letter(p_value IN VARCHAR2, p_pos IN NUMBER) RETURN VARCHAR2 IS BEGIN RETURN SUBSTR(p_value,p_pos,1); END initial_letter;",
+                "CREATE FUNCTION day_start(p_date DATE) RETURN DATE IS result DATE:=TRUNC(p_date); BEGIN RETURN result; END;",
             ] {
                 client.batch_execute(source).await.unwrap();
             }
@@ -537,6 +538,29 @@ async fn oracle_preview_stored_functions_execute_through_pg_driver_after_restart
             std::time::UNIX_EPOCH + std::time::Duration::from_secs(1709251198)
         );
         assert_eq!(row.get::<_, String>(1), "x");
+        let statement = client
+            .prepare_typed(
+                "SELECT day_start($1) FROM DUAL",
+                &[tokio_postgres::types::Type::TIMESTAMP],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            *statement.columns()[0].type_(),
+            tokio_postgres::types::Type::TIMESTAMP
+        );
+        for (input, expected) in [
+            (1709251198, 1709164800),
+            (1709337598, 1709251200),
+            (1709251198, 1709164800),
+        ] {
+            let value = std::time::UNIX_EPOCH + std::time::Duration::from_secs(input);
+            let row = client.query_one(&statement, &[&value]).await.unwrap();
+            assert_eq!(
+                row.get::<_, std::time::SystemTime>(0),
+                std::time::UNIX_EPOCH + std::time::Duration::from_secs(expected)
+            );
+        }
         drop(client);
         connection.await.unwrap();
     }

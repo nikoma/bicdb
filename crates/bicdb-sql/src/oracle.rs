@@ -6,11 +6,35 @@ use sqlparser::{dialect::OracleDialect, keywords::Keyword};
 
 pub mod assessment;
 mod date_trunc;
+pub(crate) mod routines;
 
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
 pub const ORACLE_PREVIEW_PROFILE: &str = "oracle-preview-v1";
 pub const POSTGRES_PROFILE: &str = "postgres";
 const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v1";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_400;
+
+pub(crate) fn preview_routine_language_enabled(db: &BicDb) -> Result<bool> {
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+        Ok(record) => Ok(record.is_some_and(|record| {
+            record.metadata == serde_json::json!({"format":1,"profile":ORACLE_PREVIEW_PROFILE})
+        })),
+    }
+}
+
+pub(crate) fn validate_routine_language(db: &BicDb, language: &str) -> Result<()> {
+    if language.eq_ignore_ascii_case(PREVIEW_ROUTINE_LANGUAGE)
+        && !preview_routine_language_enabled(db)?
+    {
+        return Err(unsupported(
+            "Oracle preview routine language requires its durable database profile",
+        ));
+    }
+    Ok(())
+}
 
 /// Persist the non-default profile with the database, including native backups.
 /// Existing PostgreSQL databases cannot be silently converted by a serve flag.
@@ -1112,9 +1136,14 @@ fn lower_block(db: &BicDb, source: &[Token], routine: bool, preview: bool) -> Re
         .map(|n| format!("$bicdb_oracle_{n}$"))
         .find(|s| !body.contains(s))
         .ok_or_else(|| unsupported("procedure delimiter exhausted"))?;
+    let language = if preview {
+        PREVIEW_ROUTINE_LANGUAGE
+    } else {
+        "plpgsql"
+    };
     Ok(match header {
         Some(header) => format!(
-            "{} LANGUAGE plpgsql AS {delimiter}{body}{delimiter}",
+            "{} LANGUAGE {language} AS {delimiter}{body}{delimiter}",
             join(&header)
         ),
         None => format!("DO {delimiter}{body}{delimiter}"),
@@ -1594,6 +1623,7 @@ mod tests {
     fn preview_stored_functions_lower_returns_and_local_declarations() {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
         for source in [
             "CREATE OR REPLACE FUNCTION day_now RETURN DATE AS BEGIN RETURN SYSDATE; END; /",
             "CREATE OR REPLACE FUNCTION pick_initial(p_text VARCHAR2, p_pos NUMBER) RETURN VARCHAR2 IS BEGIN RETURN SUBSTR(p_text,p_pos,1); END pick_initial;",
@@ -1635,6 +1665,120 @@ mod tests {
             ORACLE_HR_PROFILE
         )
         .is_err());
+    }
+
+    #[test]
+    fn preview_routine_datetime_trunc_uses_declared_parameters_and_locals() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for source in [
+            "CREATE FUNCTION routine_calendar(p_date DATE,p_month NUMBER) RETURN DATE IS result DATE:=TRUNC(p_date); BEGIN IF p_month=1 THEN result:=TRUNC(p_date,'MM'); ELSIF p_month=2 THEN RETURN TRUNC(TRUNC(result,'MM'),'YYYY'); END IF; RETURN result; END;",
+            "CREATE FUNCTION routine_numeric(p_number NUMBER) RETURN NUMBER IS result NUMBER:=TRUNC(p_number); BEGIN RETURN result; END;",
+        ] {
+            let lowered=lower_profile_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE).unwrap();
+            assert!(lowered.contains(PREVIEW_ROUTINE_LANGUAGE));
+            session.execute(&lowered).unwrap();
+        }
+        for (date, mode, expected) in [
+            ("2024-02-29 23:59:58", 0, "2024-02-29 00:00:00"),
+            ("2024-02-29 23:59:58", 1, "2024-02-01 00:00:00"),
+            ("2024-02-29 23:59:58", 2, "2024-01-01 00:00:00"),
+            ("2025-03-02 12:34:56", 0, "2025-03-02 00:00:00"),
+        ] {
+            let sql = lower_profile_sql(
+                session.db_ref(),
+                &format!("SELECT routine_calendar(TIMESTAMP '{date}',{mode}) FROM DUAL"),
+                ORACLE_PREVIEW_PROFILE,
+            )
+            .unwrap();
+            assert_eq!(
+                session.execute(&sql).unwrap().rows[0][0].to_cell(),
+                expected
+            );
+        }
+        let sql = lower_profile_sql(
+            session.db_ref(),
+            "SELECT routine_numeric(-123.75) FROM DUAL",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        assert_eq!(session.execute(&sql).unwrap().rows[0][0].to_cell(), "-123");
+        for source in [
+            "SELECT routine_numeric(NULL) FROM DUAL",
+            "SELECT routine_calendar(NULL,0) FROM DUAL",
+            "SELECT routine_calendar(NULL,2) FROM DUAL",
+        ] {
+            let sql = lower_profile_sql(session.db_ref(), source, ORACLE_PREVIEW_PROFILE).unwrap();
+            assert_eq!(session.execute(&sql).unwrap().rows[0][0], SqlValue::Null);
+        }
+        assert_eq!(
+            session
+                .execute(
+                    "SELECT trunc(CAST(NULL AS numeric)),trunc(CAST(NULL AS double precision))"
+                )
+                .unwrap()
+                .rows[0],
+            vec![SqlValue::Null, SqlValue::Null]
+        );
+        session.execute("CREATE FUNCTION native_trunc(p_date TIMESTAMP) RETURNS TIMESTAMP LANGUAGE plpgsql AS $$BEGIN RETURN trunc(p_date); END$$").unwrap();
+        assert!(session
+            .execute("SELECT native_trunc(TIMESTAMP '2024-02-29 23:59:58')")
+            .is_err());
+    }
+
+    #[test]
+    fn preview_routine_language_requires_durable_profile_and_has_catalog_identity() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let ddl=format!("CREATE FUNCTION language_check() RETURNS INT LANGUAGE {PREVIEW_ROUTINE_LANGUAGE} AS $$BEGIN RETURN 7; END$$");
+        assert!(SqlSession::new(&mut db).execute(&ddl).is_err());
+        assert!(!preview_routine_language_enabled(&db).unwrap());
+        ensure_database_profile(&mut db, ORACLE_HR_PROFILE).unwrap();
+        assert!(SqlSession::new(&mut db).execute(&ddl).is_err());
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute(&ddl).unwrap();
+        assert_eq!(
+            session.execute("SELECT language_check()").unwrap().rows[0][0],
+            SqlValue::Int(7)
+        );
+        let result=session.execute("SELECT l.lanname,p.prolang=l.oid FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_language l ON p.prolang=l.oid WHERE p.proname='language_check'").unwrap();
+        assert_eq!(
+            result.rows,
+            vec![vec![
+                SqlValue::String(PREVIEW_ROUTINE_LANGUAGE.into()),
+                SqlValue::Bool(true)
+            ]]
+        );
+    }
+
+    #[test]
+    fn preview_routine_variable_types_do_not_retype_embedded_query_columns() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for source in [
+            "CREATE TABLE numeric_shadow(p_date NUMBER)",
+            "INSERT INTO numeric_shadow VALUES(123.75)",
+            "CREATE FUNCTION shadow_trunc(p_date DATE) RETURN NUMBER IS result NUMBER; BEGIN SELECT TRUNC(p_date) INTO result FROM numeric_shadow; RETURN result; END;",
+            "CREATE FUNCTION subquery_trunc(p_date DATE) RETURN NUMBER IS BEGIN RETURN (SELECT TRUNC(p_date) FROM numeric_shadow); END;",
+        ] {
+            let sql=lower_profile_sql(session.db_ref(),source,ORACLE_PREVIEW_PROFILE).unwrap();session.execute(&sql).unwrap();
+        }
+        for function in ["shadow_trunc", "subquery_trunc"] {
+            let sql = lower_profile_sql(
+                session.db_ref(),
+                &format!("SELECT {function}(TIMESTAMP '2024-02-29 23:59:58') FROM DUAL"),
+                ORACLE_PREVIEW_PROFILE,
+            )
+            .unwrap();
+            assert_eq!(session.execute(&sql).unwrap().rows[0][0].to_cell(), "123");
+        }
     }
     #[test]
     fn preview_number_division_keeps_fractional_results_and_oracle_mantissa_precision() {

@@ -3630,7 +3630,7 @@ pub(crate) fn apply_carrier_function_dependency_grants(
         else {
             continue;
         };
-        if !matches!(caller.language.as_str(), "sql" | "plpgsql") {
+        if caller.language != "sql" && !routine_language_is_plpgsql(caller) {
             continue;
         }
         // Dependency analysis mirrors execution: a definer routine with no
@@ -4072,10 +4072,14 @@ pub(crate) fn resolve_routine_cached(
             }
         })
     }) {
+        if let Some(routine) = &cached {
+            oracle::validate_routine_language(db, &routine.schema.language)?;
+        }
         return Ok(cached);
     }
     let resolved = match load_routine(db, kind, name)? {
         Some(schema) => {
+            oracle::validate_routine_language(db, &schema.language)?;
             let schema = Arc::new(schema);
             let ir = compile_cached_routine_ir(&schema)?;
             Some(CachedRoutine { schema, ir })

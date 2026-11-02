@@ -3705,7 +3705,7 @@ pub(crate) fn virtual_rows(db: &BicDb, table: &str) -> Result<Vec<BTreeMap<Strin
         "pg_attribute" => pg_attribute_rows(db),
         "pg_type" => pg_type_rows_for_db(db),
         "pg_proc" => pg_proc_rows(db),
-        "pg_language" => Ok(pg_language_rows()),
+        "pg_language" => pg_language_rows(db),
         "pg_trigger" => pg_trigger_rows(db),
         "pg_sequence" => pg_sequence_rows(db),
         "pg_sequences" => pg_sequences_rows(db),

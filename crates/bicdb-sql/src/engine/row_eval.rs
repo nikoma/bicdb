@@ -972,7 +972,13 @@ impl<'db> SqlEngine<'db> {
                         types.right = right_type.clone();
                     }
                     eval_binary_expr_value_typed(
-                        left, op, right, left_value, right_value, None, &types,
+                        left,
+                        op,
+                        right,
+                        left_value,
+                        right_value,
+                        None,
+                        &types,
                     )
                 }
             }
@@ -2438,7 +2444,13 @@ impl<'db> SqlEngine<'db> {
                         types.right = right_type.clone();
                     }
                     eval_binary_expr_value_typed(
-                        left, op, right, left_value, right_value, None, &types,
+                        left,
+                        op,
+                        right,
+                        left_value,
+                        right_value,
+                        None,
+                        &types,
                     )
                 }
             }

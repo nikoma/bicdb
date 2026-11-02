@@ -204,13 +204,13 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v9`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v10`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
 previously translated routines; recreate an Oracle-authored definition to select
 the new compiler. The compiler versions have separate `pg_language` identities,
-present only in a preview database. Versions 1 through 8 remain readable.
+present only in a preview database. Versions 1 through 9 remain readable.
 Version 5 (OID 999404) fences CASE selector dispatch. Version 6 (OID 999405)
 adds the tested Oracle statement-rollback and strict SELECT INTO contracts;
 earlier definitions retain their previous block-rollback behavior. Recreate an
@@ -283,6 +283,37 @@ remain unqualified. Native PostgreSQL binary decode is independent. The
 [DECODE evidence](evidence/oracle-decode-2026-11-02/README.md) records values,
 metadata, typed binds, native controls, cursor type-cache recovery and the
 unchanged original business-date routine.
+
+Version 10 (OID 999409) adds CHR under the preview's fixed AL32UTF8 character
+set. It interprets the argument as packed UTF-8 bytes for one complete character,
+including multibyte and supplementary characters. Numeric arguments truncate
+their fractional part; negative, nonzero sub-unit and overflowing values report
+22003. SQL and procedural reference errors have different Oracle wrapping
+(ORA-01426 versus ORA-06502); both use numeric-overflow SQLSTATE 22003 over the
+selected PostgreSQL transport. Full Oracle error identity is not established.
+
+The compiler and ordinary SQL resolve default TO_CHAR on nested CHR and other
+known character, NUMBER and logical DATE expressions. PostgreSQL Parse parameter
+types participate in overload resolution. SQL results retain native text types,
+and declared routine returns retain their native VARCHAR representation.
+Prepared-call recovery and reopen are tested. Existing versions 1–9 keep their
+earlier CHR interpretation; recreate unchanged Oracle source to select version
+10. Native PostgreSQL chr independently uses Unicode scalar numbers and strict
+NULL behavior. The [Oracle CHR reference](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/CHR.html)
+describes the character-set-dependent input representation.
+Older stored defaults or views containing untranslated CHR also need explicit
+source recreation; the temporal column backfill does not rewrite their SQL.
+
+NUL cannot be represented as native PostgreSQL text and fails explicitly with
+0A000. Invalid packed characters also fail explicitly; Oracle specifies their
+results as indeterminate. NCHAR_CS and other database character sets remain
+unqualified. This is not a general globalization compatibility claim.
+
+COALESCE now short-circuits in scalar session queries, database-aware constant
+projections, record/default/update evaluation and specialized catalog evaluation,
+as it already did in bound row execution. An unused failing argument is not
+executed; common-type validation still runs. This general correction applies to
+both profiles and is independent of application names or routine versions.
 
 Version 2 binds static relation references in functions to the namespace in the
 stored function declaration. Unqualified declarations created through the

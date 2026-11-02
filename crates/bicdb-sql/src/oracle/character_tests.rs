@@ -245,7 +245,7 @@ fn coalesce_skips_unselected_character_errors_in_every_evaluator() {
         .execute("INSERT INTO lazy_values(k) VALUES(1)")
         .unwrap();
     session
-        .execute("UPDATE lazy_values SET label=coalesce(label,chr(-1))")
+        .execute("UPDATE lazy_values SET label=coalesce(label,chr(0-k))")
         .unwrap();
     assert_eq!(
         session

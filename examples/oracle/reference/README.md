@@ -362,3 +362,16 @@ only. Use the same private connection arguments as the other routine suites.
 compares native PostgreSQL DATE assignment, COPY, timestamp rounding and quoted
 ALTER TYPE with a native BicDB database. Set `ORACLE_CONTROL_PG_DSN` and
 `BICDB_PG_DSN` as above. The runner removes its uniquely named tables.
+
+The `routine_namespaces.py --suite characters` fixture covers fixed AL32UTF8
+CHR values and nested default TO_CHAR in SQL, stored expressions and embedded
+queries. The frozen `chr-reference.json` records source characters, DUMP bytes
+and numeric-range observations. Invalid packed characters and NUL transport
+remain explicitly unsupported. Numeric-error comparisons distinguish SQL
+ORA-01426 from procedural ORA-06502 wrapping; the preview transports both as
+SQLSTATE 22003. This does not establish full Oracle error identity.
+
+`postgres_characters.py --output /private/native-characters.json` independently
+checks Unicode scalar chr, NULL, SQLSTATEs and an unselected failing COALESCE
+argument against PostgreSQL. It uses `ORACLE_CONTROL_PG_DSN` and `BICDB_PG_DSN`,
+creates no objects and retains native PostgreSQL semantics.

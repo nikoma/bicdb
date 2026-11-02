@@ -292,3 +292,32 @@ remain separate from full transaction or application qualification.
 rows, with explicit expected values. They cover equality, upper/lower bounds,
 zero/negative bounds, reversed operands, conjunctions and ordinary filtering.
 They do not qualify same-block sorting/grouping, projected ROWNUM or dynamic bounds.
+
+## Typed routine concatenation and native controls
+
+Use dedicated reference and preview databases with the private connection format
+above. The generated fixture checks 76 bounded cases, including numeric/date
+conversion, NULL operands, UTF-8 byte limits, SQL versus procedural callers and
+single evaluation of sequence operands:
+
+```sh
+python3 examples/oracle/reference/routine_namespaces.py --suite concat \
+  --oracle-config oracle-reference.json --output routine-concat.json
+```
+
+The fixture checks its required Oracle NLS defaults and AL32UTF8 character set
+before creating objects. It drops its uniquely named functions and sequences.
+The independent native control runner uses two dedicated PostgreSQL connections:
+`ORACLE_CONTROL_PG_DSN` for an actual PostgreSQL reference and `BICDB_PG_DSN` for
+BicDB in its default PostgreSQL profile. These variables remain private.
+
+```sh
+python3 examples/oracle/reference/postgres_concat.py --output native-concat.json
+```
+
+This control checks 62 values, result-type OIDs and error SQLSTATEs. It includes
+48 numeric format cases and an exact integer above the floating-point precision
+boundary, and removes its temporary sequence. Both runners exit nonzero for a
+difference or cleanup error. See the
+[qualification record](../../../docs/evidence/oracle-routine-concatenation-2026-11-02/README.md)
+for the measured scope and remaining gaps.

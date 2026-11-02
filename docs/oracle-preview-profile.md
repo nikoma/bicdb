@@ -203,18 +203,42 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v6`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v7`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
 previously translated routines; recreate an Oracle-authored definition to select
 the new compiler. The compiler versions have separate `pg_language` identities,
-present only in a preview database. Versions 1 through 5 remain readable.
+present only in a preview database. Versions 1 through 6 remain readable.
 Version 5 (OID 999404) fences CASE selector dispatch. Version 6 (OID 999405)
 adds the tested Oracle statement-rollback and strict SELECT INTO contracts;
 earlier definitions retain their previous block-rollback behavior. Recreate an
 Oracle source definition to select these new contracts. The database storage
 format is unchanged; these are stored-routine capability markers.
+
+Version 7 (OID 999406) adds typed routine concatenation and one-argument
+`TO_CHAR` for resolved character, NUMBER and logical DATE expressions. NULL is
+an empty operand for Oracle concatenation; an empty final result is NULL.
+Character padding is retained. Numeric conversion uses exact decimals and the
+recorded dot-decimal NLS default. Implicit numeric fields have the independently
+measured 40-character SQL and 100-character procedural widths, including
+scientific formatting when required. Default DATE text uses English
+`DD-MON-RR` with the Gregorian calendar. The preview does not implement mutable
+NLS settings. Binary floating, national-character, LOB, BC date and unresolved
+implicit operand types remain outside this contract and need explicit, supported
+conversion. Source column DATE provenance remains a separate migration gap.
+
+The tested character concatenation limits are 4,000 bytes for SQL expressions
+and 32,767 bytes for procedural expressions. A character-valued Oracle function
+called from SQL also enforces the SQL result limit; an internal procedural
+caller can consume the longer value. SQL inside a routine retains SQL limits,
+including after handled errors. UTF-8 byte boundaries are tested against an
+AL32UTF8 reference. Versions 1–6 and native `LANGUAGE plpgsql` retain their earlier
+concatenation and result contracts. Existing definitions must be explicitly
+recreated to select version 7. Broader standalone SQL implicit conversions and
+all Oracle length/type combinations are not qualified by the routine compiler.
+The [concatenation evidence](evidence/oracle-routine-concatenation-2026-11-02/README.md)
+records reference limits, error cases, source routines and PostgreSQL controls.
 
 Version 2 binds static relation references in functions to the namespace in the
 stored function declaration. Unqualified declarations created through the

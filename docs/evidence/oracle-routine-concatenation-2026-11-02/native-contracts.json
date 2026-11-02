@@ -1,0 +1,1561 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "native_bicdb": true,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "null_operator",
+      "sql": "SELECT 'x'||NULL",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "concat_function",
+      "sql": "SELECT concat('x',NULL)",
+      "postgres": {
+        "rows": [
+          [
+            "x"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "fraction",
+      "sql": "SELECT 'x'||CAST(0.5 AS NUMERIC)",
+      "postgres": {
+        "rows": [
+          [
+            "x0.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x0.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "retained_scale",
+      "sql": "SELECT 'x'||CAST(12.500 AS NUMERIC(10,3))",
+      "postgres": {
+        "rows": [
+          [
+            "x12.500"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x12.500"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "format",
+      "sql": "SELECT to_char(12.5,'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "text_type",
+      "sql": "SELECT substr(CAST(NULL AS VARCHAR),1,2)",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bytea_type",
+      "sql": "SELECT substr(CAST(NULL AS BYTEA),1,2)",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bit_type",
+      "sql": "SELECT substr(CAST(NULL AS BIT(4)),1,2)",
+      "postgres": {
+        "sqlstate": "42883"
+      },
+      "bicdb": {
+        "sqlstate": "42883"
+      },
+      "matched": true
+    },
+    {
+      "id": "valid_bit_substring",
+      "sql": "SELECT substring(B'1010' FROM 1 FOR 2)",
+      "postgres": {
+        "rows": [
+          [
+            "10"
+          ]
+        ],
+        "type_oids": [
+          1560
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "10"
+          ]
+        ],
+        "type_oids": [
+          1560
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "overlay_text_type",
+      "sql": "SELECT overlay(NULL::varchar PLACING 'x' FROM 1)",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "nextval",
+      "sql": "SELECT nextval('\"public\".\"concat_fdd60a6ceec242ea\"')",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "currval",
+      "sql": "SELECT currval('\"public\".\"concat_fdd60a6ceec242ea\"')",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "setval",
+      "sql": "SELECT setval('\"public\".\"concat_fdd60a6ceec242ea\"',5)",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "5"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "5"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_12.5",
+      "sql": "SELECT to_char(CAST(12.5 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            " 12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            " 12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_12",
+      "sql": "SELECT to_char(CAST(12 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            " 12.0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            " 12.0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_0.5",
+      "sql": "SELECT to_char(CAST(0.5 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "   .5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "   .5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_0",
+      "sql": "SELECT to_char(CAST(0 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "   .0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "   .0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_-0.5",
+      "sql": "SELECT to_char(CAST(-0.5 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "  -.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "  -.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_-12.5",
+      "sql": "SELECT to_char(CAST(-12.5 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "-12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_123.5",
+      "sql": "SELECT to_char(CAST(123.5 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            " ##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            " ##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_99.99",
+      "sql": "SELECT to_char(CAST(99.99 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            " ##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            " ##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_0.04",
+      "sql": "SELECT to_char(CAST(0.04 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "   .0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "   .0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_-123.5",
+      "sql": "SELECT to_char(CAST(-123.5 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "-##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_-99.99",
+      "sql": "SELECT to_char(CAST(-99.99 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "-##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_99.9_-0.04",
+      "sql": "SELECT to_char(CAST(-0.04 AS NUMERIC),'99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "   .0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "   .0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_12.5",
+      "sql": "SELECT to_char(CAST(12.5 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_12",
+      "sql": "SELECT to_char(CAST(12 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "12."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "12."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_0.5",
+      "sql": "SELECT to_char(CAST(0.5 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            ".5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            ".5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_0",
+      "sql": "SELECT to_char(CAST(0 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "0."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_-0.5",
+      "sql": "SELECT to_char(CAST(-0.5 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "-.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_-12.5",
+      "sql": "SELECT to_char(CAST(-12.5 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "-12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_123.5",
+      "sql": "SELECT to_char(CAST(123.5 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_99.99",
+      "sql": "SELECT to_char(CAST(99.99 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_0.04",
+      "sql": "SELECT to_char(CAST(0.04 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "0."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_-123.5",
+      "sql": "SELECT to_char(CAST(-123.5 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "-##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_-99.99",
+      "sql": "SELECT to_char(CAST(-99.99 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "-##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-##.#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.9_-0.04",
+      "sql": "SELECT to_char(CAST(-0.04 AS NUMERIC),'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "0."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_12.5",
+      "sql": "SELECT to_char(CAST(12.5 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "13"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "13"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_12",
+      "sql": "SELECT to_char(CAST(12 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "12"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "12"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_0.5",
+      "sql": "SELECT to_char(CAST(0.5 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "1"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "1"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_0",
+      "sql": "SELECT to_char(CAST(0 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_-0.5",
+      "sql": "SELECT to_char(CAST(-0.5 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "-1"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-1"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_-12.5",
+      "sql": "SELECT to_char(CAST(-12.5 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "-13"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-13"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_123.5",
+      "sql": "SELECT to_char(CAST(123.5 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "124"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "124"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_99.99",
+      "sql": "SELECT to_char(CAST(99.99 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "100"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "100"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_0.04",
+      "sql": "SELECT to_char(CAST(0.04 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_-123.5",
+      "sql": "SELECT to_char(CAST(-123.5 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "-124"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-124"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_-99.99",
+      "sql": "SELECT to_char(CAST(-99.99 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "-100"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-100"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM999_-0.04",
+      "sql": "SELECT to_char(CAST(-0.04 AS NUMERIC),'FM999')",
+      "postgres": {
+        "rows": [
+          [
+            "0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_12.5",
+      "sql": "SELECT to_char(CAST(12.5 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            "12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_12",
+      "sql": "SELECT to_char(CAST(12 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            "12."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "12."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_0.5",
+      "sql": "SELECT to_char(CAST(0.5 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            ".5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            ".5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_0",
+      "sql": "SELECT to_char(CAST(0 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            "0."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0."
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_-0.5",
+      "sql": "SELECT to_char(CAST(-0.5 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            "-.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_-12.5",
+      "sql": "SELECT to_char(CAST(-12.5 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            "-12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_123.5",
+      "sql": "SELECT to_char(CAST(123.5 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            "##.##"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "##.##"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_99.99",
+      "sql": "SELECT to_char(CAST(99.99 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            "99.99"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "99.99"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_0.04",
+      "sql": "SELECT to_char(CAST(0.04 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            ".04"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            ".04"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_-123.5",
+      "sql": "SELECT to_char(CAST(-123.5 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            "-##.##"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-##.##"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_-99.99",
+      "sql": "SELECT to_char(CAST(-99.99 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            "-99.99"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-99.99"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "numeric_FM99.99_-0.04",
+      "sql": "SELECT to_char(CAST(-0.04 AS NUMERIC),'FM99.99')",
+      "postgres": {
+        "rows": [
+          [
+            "-.04"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-.04"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "exact_large_number",
+      "sql": "SELECT to_char(9007199254740993::numeric,'FM9999999999999999')",
+      "postgres": {
+        "rows": [
+          [
+            "9007199254740993"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "9007199254740993"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "matched": 62,
+  "total": 62,
+  "runtime_binary_sha256": "5bbf2a158084f7f1ffb26a778e71c94c6229c87e1b88a565f10c5bbe74e041ce"
+}

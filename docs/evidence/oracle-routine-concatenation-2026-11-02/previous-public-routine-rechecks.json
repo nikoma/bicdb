@@ -1,0 +1,69 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "5bbf2a158084f7f1ffb26a778e71c94c6229c87e1b88a565f10c5bbe74e041ce",
+  "matched": 266,
+  "total": 266,
+  "success": true,
+  "suites": [
+    {
+      "suite": "case",
+      "matched": 34,
+      "total": 34,
+      "success": true,
+      "compiler": "bicdb_oracle_preview_v7",
+      "fixture_sha256": "03e9b21df4c59dd8e91390b3ca3ec3804f1404c6e36add378e8a5fb9cb894914",
+      "oracle_version": "23.26.3.0.0",
+      "report_sha256": "632a7b1a204ff6a8db8b90282f54a4d7632930126c8cf0c0ebb21cbfc96016de"
+    },
+    {
+      "suite": "anchors",
+      "matched": 41,
+      "total": 41,
+      "success": true,
+      "compiler": "bicdb_oracle_preview_v7",
+      "fixture_sha256": "5e3684fb9b39a0b2f5d29dd60ab08cdcdc995d6192d975cea14c5f09930ae1e2",
+      "oracle_version": "23.26.3.0.0",
+      "report_sha256": "5784da6b9fa9c1dec63eb07319fed0cd051e7a3d7738fb21347238189aef2149"
+    },
+    {
+      "suite": "week",
+      "matched": 102,
+      "total": 102,
+      "success": true,
+      "compiler": "bicdb_oracle_preview_v7",
+      "fixture_sha256": "13cc00aa1dd0a95be56aff979231912b581c703a7cdd1baf033ffed2875dfe98",
+      "oracle_version": "23.26.3.0.0",
+      "report_sha256": "0ede0452dca6ede1c3cf0b2d45c7e4311a4a51db548bed45356bb3f1e597d086"
+    },
+    {
+      "suite": "calendar",
+      "matched": 36,
+      "total": 36,
+      "success": true,
+      "compiler": "bicdb_oracle_preview_v7",
+      "fixture_sha256": "86395fbbed170498e257ad422a009500d574dccafdf1fcba25b2e2d5ce3d1fef",
+      "oracle_version": "23.26.3.0.0",
+      "report_sha256": "bf86f61afa6c61aea500886e14dcc931b36f0dcdd8cf538405ef1841a43d7db8"
+    },
+    {
+      "suite": "temporal",
+      "matched": 29,
+      "total": 29,
+      "success": true,
+      "compiler": "bicdb_oracle_preview_v7",
+      "fixture_sha256": "a7d1546da63527dc757328f6ba1fc75f2d4a4df63fe9a2d3405251f6d4684f3f",
+      "oracle_version": "23.26.3.0.0",
+      "report_sha256": "c0f8969d1b432ea1b5b3bf69fdc31b8e359331673851af8ebfb61d1e5134c2e8"
+    },
+    {
+      "suite": "namespaces",
+      "matched": 24,
+      "total": 24,
+      "success": true,
+      "compiler": "bicdb_oracle_preview_v7",
+      "fixture_sha256": "a37e2a5b946299ef6f6c8f0116104dea7c8d4a82d9d22b7ac59dc9c860acbaa2",
+      "oracle_version": "23.26.3.0.0",
+      "report_sha256": "b42b39f6d111488b8be62a8d9ac1d27532f3b43ab16dd3050b997f324ce76e96"
+    }
+  ]
+}

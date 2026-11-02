@@ -1,0 +1,94 @@
+{
+  "format": 1,
+  "source_commit": "c24ce269a3ffa6c090987e28e3cf209fe0136502",
+  "previous_main_commit": "a273910a6f56be12383964645e36b620a3bd2fb3",
+  "binary_target": "debug/examples/oracle_server",
+  "binary_sha256": "5bbf2a158084f7f1ffb26a778e71c94c6229c87e1b88a565f10c5bbe74e041ce",
+  "routine_compiler": "bicdb_oracle_preview_v7",
+  "routine_language_oid": 999406,
+  "rust_suites": {
+    "pgwire_unit": 119,
+    "oracle_driver": 22,
+    "protocol": 168,
+    "sql_unit": 392,
+    "integrated_application": 16,
+    "cell_rows": 17,
+    "sql_integration": 419,
+    "binary_storage": 7,
+    "native_application_compatibility": 60
+  },
+  "rust_tests_passed": 1220,
+  "existing_sql_unit_ignores": 3,
+  "python_tests": {
+    "reference": 19,
+    "migration": 14,
+    "hr": 3
+  },
+  "new_public_oracle_comparisons": 76,
+  "previous_public_routine_comparisons": 266,
+  "native_postgres_comparisons": 62,
+  "additional_original_routine_comparisons": 37,
+  "previous_original_routine_comparisons": 21,
+  "accepted_original_definitions": {
+    "accepted": 42,
+    "total": 62
+  },
+  "application_qualified": false,
+  "formatting_passed": true,
+  "license_dependency_checks_passed": true,
+  "licensing_invariants_passed": true,
+  "open_core_boundary_passed": true,
+  "ci_status": "Remote main before this batch passed its two workflows; CI for this source is not yet available before push. Local results reported here.",
+  "published_release": false,
+  "production_deployment": false,
+  "memory": {
+    "native_substring": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 3379503104,
+      "minimum_observed_available_bytes": 17503858688,
+      "minimum_available_gib": 8
+    },
+    "native_numeric": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 15134720,
+      "minimum_observed_available_bytes": 21261623296,
+      "minimum_available_gib": 8
+    },
+    "server": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 3318386688,
+      "minimum_observed_available_bytes": 20456488960,
+      "minimum_available_gib": 8
+    },
+    "delivery": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 3686875136,
+      "minimum_observed_available_bytes": 16841601024,
+      "minimum_available_gib": 8
+    },
+    "native_binary_text": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 1753677824,
+      "minimum_observed_available_bytes": 23334498304,
+      "minimum_available_gib": 8
+    }
+  },
+  "cleanup": {
+    "format": 1,
+    "removed_files": 10,
+    "reclaimed_bytes": 2698465848,
+    "by_category": {
+      "completed_test_executable": {
+        "files": 10,
+        "bytes": 2698465848
+      }
+    },
+    "current_example_binary_preserved": true
+  },
+  "scope": "Bounded typed routine concatenation/default TO_CHAR; original catalog acceptance and selected execution paths only. Full compatibility programme remains incomplete."
+}

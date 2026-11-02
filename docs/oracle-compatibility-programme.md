@@ -45,8 +45,13 @@ predicates. After recreating the unchanged GET_SYSCONFIG source under compiler
 version 6, all 13 selected original-routine comparisons match, together with
 eight existing-configuration cases. This does not increase the 35 accepted
 definitions or qualify all execution paths.
-Required foreign keys, complete routine/view behavior and remaining application
-behavior are still outstanding.
+The [typed concatenation qualification](evidence/oracle-routine-concatenation-2026-11-02/README.md)
+raises accepted original routine definitions to 42 of 62. Its 76 generated
+Oracle comparisons cover bounded conversion, NULL and caller-length contracts;
+37 additional selected original-routine calls match, alongside the previous 21
+comparisons. Definition acceptance does not establish execution of every routine
+or branch. Required foreign keys, complete routine/view behavior and remaining
+application behavior are still outstanding.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source
@@ -61,7 +66,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | --- | --- | --- |
 | 1. Versioned profiles | Durable profile identity, explicit startup selection, incompatible-open rejection, upgrade rules and PostgreSQL isolation | Partial: bounded HR and separate preview profiles, durable identity and versioned preview routine compiler; general upgrade qualification outstanding |
 | 2. Migration assessment | Inventory source and runtime dependencies; report object locations, dynamic SQL, wrapped code, blockers and manual changes | Partial: [offline lexical inventory](oracle-migration-assessment.md); semantic/catalog/runtime assessment and dependency resolution outstanding |
-| 3. SQL value semantics | Differential null/empty-string, concatenation, padding, comparison, coercion, uniqueness and composite-key tests | Partial: HR lowering and initial reference queries; coercion and padding qualification outstanding |
+| 3. SQL value semantics | Differential null/empty-string, concatenation, padding, comparison, coercion, uniqueness and composite-key tests | Partial: HR lowering and version-7 typed routine concatenation with NULL/padding/caller-length reference cases; general SQL coercion and padding qualification outstanding |
 | 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings used by HR; full Oracle rules unqualified |
 | 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL, date formats and Gregorian ADD_MONTHS; NVL2/DECODE and broader semantics outstanding |
 | 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL, pgwire parameters and literal-integer ROWNUM prefix predicates in plain blocks; other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |

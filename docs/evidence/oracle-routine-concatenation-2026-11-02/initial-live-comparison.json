@@ -1,0 +1,1401 @@
+{
+  "format": 1,
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "fixture_prefix": "BICDB_RF_67B7C93C7C",
+  "fixture_sha256": "4a64eafdd5d75db920c6e098b00020698c78d917e0cb07f25d0f29dd31d2da0e",
+  "total": 61,
+  "matched": 60,
+  "cases": [
+    {
+      "id": "text_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "ab"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "ab"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "ab"
+        ]
+      ]
+    },
+    {
+      "id": "text_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "x"
+        ]
+      ]
+    },
+    {
+      "id": "text_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "x"
+        ]
+      ]
+    },
+    {
+      "id": "text_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "text_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "text_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "x"
+        ]
+      ]
+    },
+    {
+      "id": "text_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "a   b "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "a   b "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "a   b "
+        ]
+      ]
+    },
+    {
+      "id": "text_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u96ea\ud83d\ude42"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u96ea\ud83d\ude42"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u96ea\ud83d\ude42"
+        ]
+      ]
+    },
+    {
+      "id": "query_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "ab"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "ab"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "ab"
+        ]
+      ]
+    },
+    {
+      "id": "query_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "x"
+        ]
+      ]
+    },
+    {
+      "id": "query_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "x"
+        ]
+      ]
+    },
+    {
+      "id": "query_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "query_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "query_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "x"
+        ]
+      ]
+    },
+    {
+      "id": "query_14",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "a   b "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "a   b "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "a   b "
+        ]
+      ]
+    },
+    {
+      "id": "query_15",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u96ea\ud83d\ude42"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u96ea\ud83d\ude42"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u96ea\ud83d\ude42"
+        ]
+      ]
+    },
+    {
+      "id": "local_16",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "ab::"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "ab::"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "ab::"
+        ]
+      ]
+    },
+    {
+      "id": "local_17",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "scoped_18",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "inside!\u064e:outside"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "inside!\u064e:outside"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "inside!\u064e:outside"
+        ]
+      ]
+    },
+    {
+      "id": "pad_19",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "x  y  "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x  y  "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "x  y  "
+        ]
+      ]
+    },
+    {
+      "id": "number_20",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_21",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[]"
+        ]
+      ]
+    },
+    {
+      "id": "number_22",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[0]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[0]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[0]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_23",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[0]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[0]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[0]"
+        ]
+      ]
+    },
+    {
+      "id": "number_24",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[.5]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[.5]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[.5]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_25",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[.5]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[.5]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[.5]"
+        ]
+      ]
+    },
+    {
+      "id": "number_26",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[-.5]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[-.5]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[-.5]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_27",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[-.5]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[-.5]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[-.5]"
+        ]
+      ]
+    },
+    {
+      "id": "number_28",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[12.5]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[12.5]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[12.5]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_29",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[12.5]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[12.5]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[12.5]"
+        ]
+      ]
+    },
+    {
+      "id": "number_30",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[.00000001]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[.00000001]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[.00000001]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_31",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[.00000001]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[.00000001]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[.00000001]"
+        ]
+      ]
+    },
+    {
+      "id": "number_32",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[123456789012345678901234567890]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[123456789012345678901234567890]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[123456789012345678901234567890]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_33",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[123456789012345678901234567890]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[123456789012345678901234567890]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[123456789012345678901234567890]"
+        ]
+      ]
+    },
+    {
+      "id": "number_34",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[1000000000000000000000000000000000000000]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[1000000000000000000000000000000000000000]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[1000000000000000000000000000000000000000]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_35",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[1000000000000000000000000000000000000000]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[1000000000000000000000000000000000000000]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[1000000000000000000000000000000000000000]"
+        ]
+      ]
+    },
+    {
+      "id": "number_36",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[-1000000000000000000000000000000000000000]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[-1000000000000000000000000000000000000000]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[-1000000000000000000000000000000000000000]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_37",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[-1.000000000000000000000000000000000E+39]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[-1.000000000000000000000000000000000E+39]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[-1.000000000000000000000000000000000E+39]"
+        ]
+      ]
+    },
+    {
+      "id": "number_38",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[10000000000000000000000000000000000000000]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[10000000000000000000000000000000000000000]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[10000000000000000000000000000000000000000]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_39",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[1.0000000000000000000000000000000000E+40]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[1.0000000000000000000000000000000000E+40]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[1.0000000000000000000000000000000000E+40]"
+        ]
+      ]
+    },
+    {
+      "id": "number_40",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[-10000000000000000000000000000000000000000]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[-10000000000000000000000000000000000000000]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[-10000000000000000000000000000000000000000]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_41",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[-1.000000000000000000000000000000000E+40]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[-1.000000000000000000000000000000000E+40]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[-1.000000000000000000000000000000000E+40]"
+        ]
+      ]
+    },
+    {
+      "id": "number_42",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E+100]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E+100]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E+100]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_43",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[1.000000000000000000000000000000000E+100]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[1.000000000000000000000000000000000E+100]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[1.000000000000000000000000000000000E+100]"
+        ]
+      ]
+    },
+    {
+      "id": "number_44",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[-1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E+100]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[-1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E+100]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[-1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E+100]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_45",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[-1.00000000000000000000000000000000E+100]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[-1.00000000000000000000000000000000E+100]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[-1.00000000000000000000000000000000E+100]"
+        ]
+      ]
+    },
+    {
+      "id": "number_46",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E-100]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E-100]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E-100]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_47",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[1.000000000000000000000000000000000E-100]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[1.000000000000000000000000000000000E-100]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[1.000000000000000000000000000000000E-100]"
+        ]
+      ]
+    },
+    {
+      "id": "number_48",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[-1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E-100]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[-1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E-100]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[-1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E-100]"
+        ]
+      ]
+    },
+    {
+      "id": "numsql_49",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[-1.00000000000000000000000000000000E-100]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[-1.00000000000000000000000000000000E-100]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[-1.00000000000000000000000000000000E-100]"
+        ]
+      ]
+    },
+    {
+      "id": "date_50",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[29-FEB-24]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[29-FEB-24]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[29-FEB-24]"
+        ]
+      ]
+    },
+    {
+      "id": "date_51",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[01-JAN-00]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[01-JAN-00]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[01-JAN-00]"
+        ]
+      ]
+    },
+    {
+      "id": "date_52",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[]"
+        ]
+      ]
+    },
+    {
+      "id": "once_53",
+      "matched": false,
+      "oracle": {
+        "rows": [
+          [
+            "[1]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      },
+      "expected": [
+        [
+          "[1]"
+        ]
+      ]
+    },
+    {
+      "id": "text_54",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "StringDataRightTruncation",
+        "code": "22001"
+      },
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22001"
+      }
+    },
+    {
+      "id": "len_55",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "5000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "5000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "5000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "nestsql_56",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "StringDataRightTruncation",
+        "code": "22001"
+      },
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22001"
+      }
+    },
+    {
+      "id": "over_57",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "32767"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "32767"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "32767"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "over_58",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "StringDataRightTruncation",
+        "code": "22001"
+      },
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22001"
+      }
+    },
+    {
+      "id": "query_59",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01489"
+      },
+      "bicdb": {
+        "error": "StringDataRightTruncation",
+        "code": "22001"
+      },
+      "expected_error": {
+        "oracle": "ORA-01489",
+        "bicdb": "22001"
+      }
+    },
+    {
+      "id": "text_60",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "StringDataRightTruncation",
+        "code": "22001"
+      },
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22001"
+      }
+    }
+  ],
+  "cleanup_errors": [],
+  "success": false,
+  "scope": "Routine concatenation NULLs, padding, Unicode, scoped variables, SQL/PLSQL numeric widths, default English DATE format and bounded byte limits; not general NLS, LOBs, binary floating-point or BC dates",
+  "oracle_nls_numeric_characters": ".,",
+  "oracle_nls_concat": {
+    "NLS_DATE_FORMAT": "DD-MON-RR",
+    "NLS_DATE_LANGUAGE": "AMERICAN",
+    "NLS_LENGTH_SEMANTICS": "BYTE"
+  },
+  "routine_compiler": "bicdb_oracle_preview_v7",
+  "oracle_driver_version": "26.1.0",
+  "pg_driver_version": "3.3.6",
+  "created_at": "2026-11-02T13:59:51.363958+00:00"
+}

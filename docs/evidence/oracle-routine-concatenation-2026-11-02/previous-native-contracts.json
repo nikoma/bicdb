@@ -1,0 +1,283 @@
+{
+  "format": 1,
+  "source_and_target": true,
+  "runtime_binary_sha256": "7e94a49d2d3a09e129e0b8d1e42652400cf626695fbd17ea7e03d9c0a73b9eda",
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "null_operator",
+      "sql": "SELECT 'x'||NULL",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "concat_function",
+      "sql": "SELECT concat('x',NULL)",
+      "postgres": {
+        "rows": [
+          [
+            "x"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "fraction",
+      "sql": "SELECT 'x'||CAST(0.5 AS NUMERIC)",
+      "postgres": {
+        "rows": [
+          [
+            "x0.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x0.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "retained_scale",
+      "sql": "SELECT 'x'||CAST(12.500 AS NUMERIC(10,3))",
+      "postgres": {
+        "rows": [
+          [
+            "x12.500"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x12.500"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "format",
+      "sql": "SELECT to_char(12.5,'FM99.9')",
+      "postgres": {
+        "rows": [
+          [
+            "12.5"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "sqlstate": "0A000"
+      },
+      "matched": false
+    },
+    {
+      "id": "text_type",
+      "sql": "SELECT substr(CAST(NULL AS VARCHAR),1,2)",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          1043
+        ]
+      },
+      "matched": false
+    },
+    {
+      "id": "bytea_type",
+      "sql": "SELECT substr(CAST(NULL AS BYTEA),1,2)",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bit_type",
+      "sql": "SELECT substr(CAST(NULL AS BIT(4)),1,2)",
+      "postgres": {
+        "sqlstate": "42883"
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          1560
+        ]
+      },
+      "matched": false
+    },
+    {
+      "id": "nextval",
+      "sql": "SELECT nextval('\"public\".\"CONCAT_SEQ\"')",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "currval",
+      "sql": "SELECT currval('\"public\".\"CONCAT_SEQ\"')",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "setval",
+      "sql": "SELECT setval('\"public\".\"CONCAT_SEQ\"',5)",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "5"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "5"
+            }
+          ]
+        ],
+        "type_oids": [
+          20
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "success": false,
+  "postgres_reference_version_num": 180004
+}

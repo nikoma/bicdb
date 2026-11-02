@@ -1,0 +1,593 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "id": "text_0",
+      "expected": [
+        [
+          "ab"
+        ]
+      ],
+      "actual": "ab",
+      "matched": true
+    },
+    {
+      "id": "text_1",
+      "expected": [
+        [
+          "x"
+        ]
+      ],
+      "actual": "x",
+      "matched": true
+    },
+    {
+      "id": "text_2",
+      "expected": [
+        [
+          "x"
+        ]
+      ],
+      "actual": "x",
+      "matched": true
+    },
+    {
+      "id": "text_3",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "actual": null,
+      "matched": true
+    },
+    {
+      "id": "text_4",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "actual": null,
+      "matched": true
+    },
+    {
+      "id": "text_5",
+      "expected": [
+        [
+          "x"
+        ]
+      ],
+      "actual": "x",
+      "matched": true
+    },
+    {
+      "id": "text_6",
+      "expected": [
+        [
+          "a   b "
+        ]
+      ],
+      "actual": "a   b ",
+      "matched": true
+    },
+    {
+      "id": "text_7",
+      "expected": [
+        [
+          "\u96ea\ud83d\ude42"
+        ]
+      ],
+      "actual": "\u96ea\ud83d\ude42",
+      "matched": true
+    },
+    {
+      "id": "query_8",
+      "expected": [
+        [
+          "ab"
+        ]
+      ],
+      "actual": "ab",
+      "matched": true
+    },
+    {
+      "id": "query_9",
+      "expected": [
+        [
+          "x"
+        ]
+      ],
+      "actual": "x",
+      "matched": true
+    },
+    {
+      "id": "query_10",
+      "expected": [
+        [
+          "x"
+        ]
+      ],
+      "actual": "x",
+      "matched": true
+    },
+    {
+      "id": "query_11",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "actual": null,
+      "matched": true
+    },
+    {
+      "id": "query_12",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "actual": null,
+      "matched": true
+    },
+    {
+      "id": "query_13",
+      "expected": [
+        [
+          "x"
+        ]
+      ],
+      "actual": "x",
+      "matched": true
+    },
+    {
+      "id": "query_14",
+      "expected": [
+        [
+          "a   b "
+        ]
+      ],
+      "actual": "a   b ",
+      "matched": true
+    },
+    {
+      "id": "query_15",
+      "expected": [
+        [
+          "\u96ea\ud83d\ude42"
+        ]
+      ],
+      "actual": "\u96ea\ud83d\ude42",
+      "matched": true
+    },
+    {
+      "id": "local_16",
+      "expected": [
+        [
+          "ab::"
+        ]
+      ],
+      "actual": "ab::",
+      "matched": true
+    },
+    {
+      "id": "local_17",
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "actual": null,
+      "matched": true
+    },
+    {
+      "id": "scoped_18",
+      "expected": [
+        [
+          "inside!\u064e:outside"
+        ]
+      ],
+      "actual": "inside!\u064e:outside",
+      "matched": true
+    },
+    {
+      "id": "pad_19",
+      "expected": [
+        [
+          "x  y  "
+        ]
+      ],
+      "actual": "x  y  ",
+      "matched": true
+    },
+    {
+      "id": "number_20",
+      "expected": [
+        [
+          "[]"
+        ]
+      ],
+      "actual": "[]",
+      "matched": true
+    },
+    {
+      "id": "numsql_21",
+      "expected": [
+        [
+          "[]"
+        ]
+      ],
+      "actual": "[]",
+      "matched": true
+    },
+    {
+      "id": "number_22",
+      "expected": [
+        [
+          "[0]"
+        ]
+      ],
+      "actual": "[0]",
+      "matched": true
+    },
+    {
+      "id": "numsql_23",
+      "expected": [
+        [
+          "[0]"
+        ]
+      ],
+      "actual": "[0]",
+      "matched": true
+    },
+    {
+      "id": "number_24",
+      "expected": [
+        [
+          "[.5]"
+        ]
+      ],
+      "actual": "[.5]",
+      "matched": true
+    },
+    {
+      "id": "numsql_25",
+      "expected": [
+        [
+          "[.5]"
+        ]
+      ],
+      "actual": "[.5]",
+      "matched": true
+    },
+    {
+      "id": "number_26",
+      "expected": [
+        [
+          "[-.5]"
+        ]
+      ],
+      "actual": "[-.5]",
+      "matched": true
+    },
+    {
+      "id": "numsql_27",
+      "expected": [
+        [
+          "[-.5]"
+        ]
+      ],
+      "actual": "[-.5]",
+      "matched": true
+    },
+    {
+      "id": "number_28",
+      "expected": [
+        [
+          "[12.5]"
+        ]
+      ],
+      "actual": "[12.5]",
+      "matched": true
+    },
+    {
+      "id": "numsql_29",
+      "expected": [
+        [
+          "[12.5]"
+        ]
+      ],
+      "actual": "[12.5]",
+      "matched": true
+    },
+    {
+      "id": "number_30",
+      "expected": [
+        [
+          "[.00000001]"
+        ]
+      ],
+      "actual": "[.00000001]",
+      "matched": true
+    },
+    {
+      "id": "numsql_31",
+      "expected": [
+        [
+          "[.00000001]"
+        ]
+      ],
+      "actual": "[.00000001]",
+      "matched": true
+    },
+    {
+      "id": "number_32",
+      "expected": [
+        [
+          "[123456789012345678901234567890]"
+        ]
+      ],
+      "actual": "[123456789012345678901234567890]",
+      "matched": true
+    },
+    {
+      "id": "numsql_33",
+      "expected": [
+        [
+          "[123456789012345678901234567890]"
+        ]
+      ],
+      "actual": "[123456789012345678901234567890]",
+      "matched": true
+    },
+    {
+      "id": "number_34",
+      "expected": [
+        [
+          "[1000000000000000000000000000000000000000]"
+        ]
+      ],
+      "actual": "[1000000000000000000000000000000000000000]",
+      "matched": true
+    },
+    {
+      "id": "numsql_35",
+      "expected": [
+        [
+          "[1000000000000000000000000000000000000000]"
+        ]
+      ],
+      "actual": "[1000000000000000000000000000000000000000]",
+      "matched": true
+    },
+    {
+      "id": "number_36",
+      "expected": [
+        [
+          "[-1000000000000000000000000000000000000000]"
+        ]
+      ],
+      "actual": "[-1000000000000000000000000000000000000000]",
+      "matched": true
+    },
+    {
+      "id": "numsql_37",
+      "expected": [
+        [
+          "[-1.000000000000000000000000000000000E+39]"
+        ]
+      ],
+      "actual": "[-1.000000000000000000000000000000000E+39]",
+      "matched": true
+    },
+    {
+      "id": "number_38",
+      "expected": [
+        [
+          "[10000000000000000000000000000000000000000]"
+        ]
+      ],
+      "actual": "[10000000000000000000000000000000000000000]",
+      "matched": true
+    },
+    {
+      "id": "numsql_39",
+      "expected": [
+        [
+          "[1.0000000000000000000000000000000000E+40]"
+        ]
+      ],
+      "actual": "[1.0000000000000000000000000000000000E+40]",
+      "matched": true
+    },
+    {
+      "id": "number_40",
+      "expected": [
+        [
+          "[-10000000000000000000000000000000000000000]"
+        ]
+      ],
+      "actual": "[-10000000000000000000000000000000000000000]",
+      "matched": true
+    },
+    {
+      "id": "numsql_41",
+      "expected": [
+        [
+          "[-1.000000000000000000000000000000000E+40]"
+        ]
+      ],
+      "actual": "[-1.000000000000000000000000000000000E+40]",
+      "matched": true
+    },
+    {
+      "id": "number_42",
+      "expected": [
+        [
+          "[1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E+100]"
+        ]
+      ],
+      "actual": "[1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E+100]",
+      "matched": true
+    },
+    {
+      "id": "numsql_43",
+      "expected": [
+        [
+          "[1.000000000000000000000000000000000E+100]"
+        ]
+      ],
+      "actual": "[1.000000000000000000000000000000000E+100]",
+      "matched": true
+    },
+    {
+      "id": "number_44",
+      "expected": [
+        [
+          "[-1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E+100]"
+        ]
+      ],
+      "actual": "[-1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E+100]",
+      "matched": true
+    },
+    {
+      "id": "numsql_45",
+      "expected": [
+        [
+          "[-1.00000000000000000000000000000000E+100]"
+        ]
+      ],
+      "actual": "[-1.00000000000000000000000000000000E+100]",
+      "matched": true
+    },
+    {
+      "id": "number_46",
+      "expected": [
+        [
+          "[1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E-100]"
+        ]
+      ],
+      "actual": "[1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E-100]",
+      "matched": true
+    },
+    {
+      "id": "numsql_47",
+      "expected": [
+        [
+          "[1.000000000000000000000000000000000E-100]"
+        ]
+      ],
+      "actual": "[1.000000000000000000000000000000000E-100]",
+      "matched": true
+    },
+    {
+      "id": "number_48",
+      "expected": [
+        [
+          "[-1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E-100]"
+        ]
+      ],
+      "actual": "[-1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000E-100]",
+      "matched": true
+    },
+    {
+      "id": "numsql_49",
+      "expected": [
+        [
+          "[-1.00000000000000000000000000000000E-100]"
+        ]
+      ],
+      "actual": "[-1.00000000000000000000000000000000E-100]",
+      "matched": true
+    },
+    {
+      "id": "date_50",
+      "expected": [
+        [
+          "[29-FEB-24]"
+        ]
+      ],
+      "actual": "[29-FEB-24]",
+      "matched": true
+    },
+    {
+      "id": "date_51",
+      "expected": [
+        [
+          "[01-JAN-00]"
+        ]
+      ],
+      "actual": "[01-JAN-00]",
+      "matched": true
+    },
+    {
+      "id": "date_52",
+      "expected": [
+        [
+          "[]"
+        ]
+      ],
+      "actual": "[]",
+      "matched": true
+    },
+    {
+      "id": "once_53",
+      "expected": [
+        [
+          "[1]"
+        ]
+      ],
+      "actual": "[1]",
+      "matched": true
+    },
+    {
+      "id": "text_54",
+      "expected": [
+        [
+          "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        ]
+      ],
+      "error": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "matched": false
+    },
+    {
+      "id": "query_55",
+      "expected_error": {
+        "oracle": "ORA-01489",
+        "bicdb": "22001"
+      },
+      "error": {
+        "error": "DatabaseError",
+        "code": "ORA-01489"
+      },
+      "matched": true
+    },
+    {
+      "id": "text_56",
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22001"
+      },
+      "error": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": false,
+  "oracle_version": "23.26.3.0.0",
+  "nls": {
+    "NLS_NUMERIC_CHARACTERS": ".,",
+    "NLS_DATE_FORMAT": "DD-MON-RR",
+    "NLS_DATE_LANGUAGE": "AMERICAN",
+    "NLS_LENGTH_SEMANTICS": "BYTE"
+  },
+  "matched": 56
+}

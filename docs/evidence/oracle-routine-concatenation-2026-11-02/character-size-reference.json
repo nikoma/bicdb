@@ -1,0 +1,19 @@
+{
+  "format": 1,
+  "source_only": true,
+  "oracle_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "sql": "SELECT LENGTH(CAST(RPAD('x',1200,'x') AS CHAR(1200))||CAST(RPAD('y',1200,'y') AS CHAR(1200))) FROM DUAL",
+      "value": 2400
+    },
+    {
+      "sql": "SELECT LENGTH(RPAD('x',3000,'x')||RPAD('y',2000,'y')) FROM DUAL",
+      "oracle_code": "ORA-01489"
+    },
+    {
+      "sql": "SELECT LENGTH(CAST(RPAD('x',1000,'x') AS CHAR(1000))||CAST(RPAD('y',1000,'y') AS CHAR(1000))) FROM DUAL",
+      "value": 2000
+    }
+  ]
+}

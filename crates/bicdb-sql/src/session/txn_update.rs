@@ -3734,11 +3734,16 @@ impl<'db> SqlSession<'db> {
                         .unwrap_or(SqlValue::Null);
                     frame.assign(name, value)?;
                 }
-                RoutineDecl::Cursor { name, query } => {
+                RoutineDecl::Cursor {
+                    name,
+                    params,
+                    query,
+                } => {
                     frame.cursors.insert(
                         normalize_object_name(name),
                         RoutineCursor {
                             query: query.clone(),
+                            params: params.clone(),
                             columns: Vec::new(),
                             column_types: Vec::new(),
                             rows: Vec::new(),
@@ -4072,10 +4077,11 @@ impl<'db> SqlSession<'db> {
             RoutineStmt::CursorForLoop {
                 target,
                 cursor,
+                arguments,
                 body,
-            } => self.execute_routine_cursor_for_loop(frame, target, cursor, body),
-            RoutineStmt::OpenCursor { name } => {
-                self.open_routine_cursor(frame, name)?;
+            } => self.execute_routine_cursor_for_loop(frame, target, cursor, arguments, body),
+            RoutineStmt::OpenCursor { name, arguments } => {
+                self.open_routine_cursor(frame, name, arguments)?;
                 Ok(RoutineControl::Continue)
             }
             RoutineStmt::FetchCursor { name, targets } => {
@@ -4268,10 +4274,11 @@ impl<'db> SqlSession<'db> {
         frame: &mut RoutineFrame,
         target: &str,
         name: &str,
+        arguments: &[RoutineCursorArgument],
         body: &[RoutineStmt],
     ) -> Result<RoutineControl> {
         // A failed open must leave a caller's already-open cursor intact.
-        self.open_routine_cursor(frame, name)?;
+        self.open_routine_cursor(frame, name, arguments)?;
         let key = normalize_object_name(name);
         let columns = frame.cursors[&key].columns.clone();
         let types = frame.cursors[&key].column_types.clone();
@@ -4366,6 +4373,7 @@ impl<'db> SqlSession<'db> {
         &mut self,
         frame: &mut RoutineFrame,
         name: &str,
+        arguments: &[RoutineCursorArgument],
     ) -> Result<()> {
         let key = normalize_object_name(name);
         let cursor = frame.cursors.get(&key).ok_or_else(|| {
@@ -4379,7 +4387,9 @@ impl<'db> SqlSession<'db> {
             ));
         }
         let query = cursor.query.clone();
-        let result = self.execute_routine_query_unowned(frame, &query)?;
+        let params = cursor.params.clone();
+        let result =
+            self.execute_parameterized_cursor_query(frame, &key, &query, &params, arguments)?;
         let cursor = frame
             .cursors
             .get_mut(&key)
@@ -4581,7 +4591,7 @@ impl<'db> SqlSession<'db> {
 
     /// `execute_routine_query` for a query that is NOT an IR node (a per-frame
     /// cursor clone): address-keyed memos stay off for it.
-    fn execute_routine_query_unowned(
+    pub(crate) fn execute_routine_query_unowned(
         &mut self,
         frame: &mut RoutineFrame,
         query: &Query,

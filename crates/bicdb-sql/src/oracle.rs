@@ -24,14 +24,16 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3: &str = "bicdb_oracle_preview_v3";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V4: &str = "bicdb_oracle_preview_v4";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V5: &str = "bicdb_oracle_preview_v5";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V6: &str = "bicdb_oracle_preview_v6";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v7";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V7: &str = "bicdb_oracle_preview_v7";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v8";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V4_OID: i64 = 999_403;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V5_OID: i64 = 999_404;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V6_OID: i64 = 999_405;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_406;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V7_OID: i64 = 999_406;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_407;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -46,7 +48,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V4 => Some(4),
         PREVIEW_ROUTINE_LANGUAGE_V5 => Some(5),
         PREVIEW_ROUTINE_LANGUAGE_V6 => Some(6),
-        PREVIEW_ROUTINE_LANGUAGE => Some(7),
+        PREVIEW_ROUTINE_LANGUAGE_V7 => Some(7),
+        PREVIEW_ROUTINE_LANGUAGE => Some(8),
         _ => None,
     }
 }
@@ -54,7 +57,7 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
     matches!(
         preview_routine_language_version(language),
-        Some(3 | 4 | 5 | 6 | 7)
+        Some(3 | 4 | 5 | 6 | 7 | 8)
     )
 }
 
@@ -1102,11 +1105,7 @@ fn lower_block(
 }
 
 fn lower_cursor_declarations(body: &mut [Token]) -> Result<()> {
-    let declarations_end = body
-        .iter()
-        .position(|token| word(token, "BEGIN"))
-        .unwrap_or(body.len());
-    for index in 0..declarations_end {
+    for index in 0..body.len() {
         let declaration_start =
             index == 0 || word(&body[index - 1], "DECLARE") || body[index - 1] == Token::SemiColon;
         if !declaration_start || !word(&body[index], "CURSOR") {
@@ -1115,18 +1114,31 @@ fn lower_cursor_declarations(body: &mut [Token]) -> Result<()> {
         if !matches!(body.get(index + 1), Some(Token::Word(_))) {
             return Err(unsupported("cursor declaration requires an identifier"));
         }
-        if body.get(index + 2) == Some(&Token::LParen) {
-            return Err(unsupported(
-                "parameterized cursor declarations are not implemented",
-            ));
+        let mut separator = index + 2;
+        if body.get(separator) == Some(&Token::LParen) {
+            let mut depth = 0;
+            while separator < body.len() {
+                match body[separator] {
+                    Token::LParen => depth += 1,
+                    Token::RParen => {
+                        depth -= 1;
+                        if depth == 0 {
+                            separator += 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                separator += 1;
+            }
         }
-        if !body.get(index + 2).is_some_and(|token| word(token, "IS")) {
+        if !body.get(separator).is_some_and(|token| word(token, "IS")) {
             return Err(unsupported(
                 "Oracle cursor declarations require IS followed by a query",
             ));
         }
         body.swap(index, index + 1);
-        body[index + 2] = Token::Word(sqlparser::tokenizer::Word {
+        body[separator] = Token::Word(sqlparser::tokenizer::Word {
             value: "FOR".into(),
             quote_style: None,
             keyword: Keyword::FOR,

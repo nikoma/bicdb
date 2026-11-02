@@ -56,6 +56,9 @@ pub(crate) fn prepare_declared_types(
 
 pub(crate) fn prepare_local_declarations(declarations: &mut [RoutineDecl]) -> Result<()> {
     for declaration in declarations {
+        if let RoutineDecl::Cursor { params, .. } = declaration {
+            crate::routines::parameterized_cursors::prepare_parameters(params)?;
+        }
         if let RoutineDecl::Variable {
             declared_date,
             oracle_date,
@@ -115,6 +118,7 @@ impl Kind {
 struct Environment {
     v4_semantics: bool,
     concatenation: bool,
+    number_arithmetic: bool,
     variables: BTreeMap<String, Kind>,
     records: BTreeMap<String, BTreeMap<String, Kind>>,
 }
@@ -229,6 +233,7 @@ impl Resolve<'_> {
                     Some(
                         "bicdb_oracle_date_subtract"
                         | "bicdb_oracle_number_divide"
+                        | "bicdb_oracle_number_arithmetic"
                         | "bicdb_oracle_number_trunc"
                         | "bicdb_oracle_plsql_number_trunc",
                     ) => return Kind::Number,
@@ -482,7 +487,26 @@ impl Resolve<'_> {
         if left_kind == Kind::Number && right_kind.day_operand()
             || right_kind == Kind::Number && left_kind.day_operand()
         {
-            if *op == BinaryOperator::Divide {
+            if self.env.number_arithmetic
+                && matches!(
+                    op,
+                    BinaryOperator::Plus
+                        | BinaryOperator::Minus
+                        | BinaryOperator::Multiply
+                        | BinaryOperator::Divide
+                )
+            {
+                let context = if self.sql_depth == 0 && self.queries.is_empty() {
+                    "plsql"
+                } else {
+                    "sql"
+                };
+                *expr = expression(&format!(
+                    "bicdb_oracle_number_arithmetic({},{},'{op}','{context}')",
+                    numeric(left),
+                    numeric(right)
+                ))?;
+            } else if *op == BinaryOperator::Divide {
                 *expr = expression(&format!(
                     "bicdb_oracle_number_divide({},{})",
                     numeric(left),
@@ -567,8 +591,8 @@ fn visit<T: sqlparser::ast::VisitMut>(db: &BicDb, env: &Environment, node: &mut 
     }
 }
 
-fn record_types(db: &BicDb, query: &Query) -> BTreeMap<String, Kind> {
-    infer_query_result_columns(db, &query.to_string())
+fn record_types(db: &BicDb, env: &Environment, query: &Query) -> BTreeMap<String, Kind> {
+    let mut fields: BTreeMap<_, _> = infer_query_result_columns(db, &query.to_string())
         .ok()
         .flatten()
         .unwrap_or_default()
@@ -579,13 +603,63 @@ fn record_types(db: &BicDb, query: &Query) -> BTreeMap<String, Kind> {
                 kind.as_deref().map_or(Kind::Unknown, pg_kind),
             )
         })
-        .collect()
+        .collect();
+    if let SetExpr::Select(select) = query.body.as_ref() {
+        let resolve = Resolve {
+            db,
+            env,
+            queries: vec![query.clone()],
+            sql_depth: 1,
+        };
+        for item in &select.projection {
+            let (expr, name) = match item {
+                SelectItem::ExprWithAlias { expr, alias } => (expr, alias.value.clone()),
+                SelectItem::UnnamedExpr(expr) => (expr, select_expr_column_name(expr)),
+                _ => continue,
+            };
+            let kind = resolve.kind(expr);
+            if kind != Kind::Unknown {
+                fields.insert(name.to_ascii_lowercase(), kind);
+            }
+        }
+    }
+    fields
+}
+
+fn prepare_cursor(
+    db: &BicDb,
+    env: &Environment,
+    name: &str,
+    params: &mut [RoutineParam],
+    query: &mut Query,
+) -> Result<BTreeMap<String, Kind>> {
+    let mut scope = env.clone();
+    let mut qualified = BTreeMap::new();
+    for param in params {
+        if let Some(expr) = &mut param.default_expr {
+            visit(db, env, expr)?;
+        }
+        let kind = if param.oracle_date {
+            Kind::Date
+        } else {
+            param
+                .type_schema
+                .as_ref()
+                .map_or(Kind::Unknown, |kind| pg_kind(&kind.pg_type))
+        };
+        let name = normalize_object_name(param.name.as_ref().expect("validated formal"));
+        scope.variables.insert(name.clone(), kind);
+        qualified.insert(name, kind);
+    }
+    scope.records.insert(normalize_object_name(name), qualified);
+    visit(db, &scope, query)?;
+    Ok(record_types(db, &scope, query))
 }
 
 fn statements(
     db: &BicDb,
     env: &Environment,
-    cursors: &BTreeMap<String, Query>,
+    cursors: &BTreeMap<String, BTreeMap<String, Kind>>,
     body: &mut [RoutineStmt],
 ) -> Result<()> {
     for statement in body {
@@ -632,9 +706,13 @@ fn statements(
                             default_expr: Some(expr),
                             ..
                         } => visit(db, &local_env, &mut expr.expr)?,
-                        RoutineDecl::Cursor { name, query } => {
-                            visit(db, &local_env, query)?;
-                            local_cursors.insert(normalize_object_name(name), query.clone());
+                        RoutineDecl::Cursor {
+                            name,
+                            params,
+                            query,
+                        } => {
+                            let fields = prepare_cursor(db, &local_env, name, params, query)?;
+                            local_cursors.insert(normalize_object_name(name), fields);
                         }
                         _ => {}
                     }
@@ -703,21 +781,30 @@ fn statements(
                 let mut scope = env.clone();
                 scope
                     .records
-                    .insert(normalize_object_name(target), record_types(db, query));
+                    .insert(normalize_object_name(target), record_types(db, env, query));
                 statements(db, &scope, cursors, body)?;
             }
             RoutineStmt::CursorForLoop {
                 target,
                 cursor,
+                arguments,
                 body,
             } => {
+                for arg in arguments {
+                    visit(db, env, &mut arg.expr.expr)?;
+                }
                 let mut scope = env.clone();
-                if let Some(query) = cursors.get(cursor) {
+                if let Some(fields) = cursors.get(cursor) {
                     scope
                         .records
-                        .insert(normalize_object_name(target), record_types(db, query));
+                        .insert(normalize_object_name(target), fields.clone());
                 }
                 statements(db, &scope, cursors, body)?;
+            }
+            RoutineStmt::OpenCursor { arguments, .. } => {
+                for arg in arguments {
+                    visit(db, env, &mut arg.expr.expr)?;
+                }
             }
             RoutineStmt::Loop { body } => statements(db, env, cursors, body)?,
             RoutineStmt::SelectInto { query, .. }
@@ -742,7 +829,6 @@ fn statements(
             RoutineStmt::ContinueLoop
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
-            | RoutineStmt::OpenCursor { .. }
             | RoutineStmt::FetchCursor { .. }
             | RoutineStmt::CloseCursor { .. }
             | RoutineStmt::Return(None) => {}
@@ -755,6 +841,7 @@ pub(crate) fn lower(
     db: &BicDb,
     v4_semantics: bool,
     concatenation: bool,
+    number_arithmetic: bool,
     params: &mut [RoutineParam],
     declarations: &mut [RoutineDecl],
     body: &mut [RoutineStmt],
@@ -763,6 +850,7 @@ pub(crate) fn lower(
     let mut env = Environment {
         v4_semantics,
         concatenation,
+        number_arithmetic,
         ..Environment::default()
     };
     for param in params.iter() {
@@ -819,9 +907,13 @@ pub(crate) fn lower(
                 default_expr: Some(expr),
                 ..
             } => visit(db, &env, &mut expr.expr)?,
-            RoutineDecl::Cursor { name, query } => {
-                visit(db, &env, query)?;
-                cursors.insert(normalize_object_name(name), query.clone());
+            RoutineDecl::Cursor {
+                name,
+                params,
+                query,
+            } => {
+                let fields = prepare_cursor(db, &env, name, params, query)?;
+                cursors.insert(normalize_object_name(name), fields);
             }
             _ => {}
         }

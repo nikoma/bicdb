@@ -2158,6 +2158,12 @@ impl<'db> SqlSession<'db> {
             )));
         }
         let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
+        routines::parameterized_cursors::validate_capabilities(
+            &language,
+            &declarations,
+            &statements,
+            &exception_handlers,
+        )?;
         if oracle_block {
             oracle::routine_arithmetic::prepare_local_declarations(&mut declarations)?;
             routines::nested_blocks::prepare_declared_types(
@@ -2187,6 +2193,8 @@ impl<'db> SqlSession<'db> {
                 true,
                 oracle::preview_routine_language_version(&language)
                     .is_some_and(|version| version >= 7),
+                oracle::preview_routine_language_version(&language)
+                    .is_some_and(|version| version >= 8),
                 &mut [],
                 &mut declarations,
                 &mut statements,

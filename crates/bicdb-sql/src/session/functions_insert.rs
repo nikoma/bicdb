@@ -29,6 +29,7 @@ impl<'db> SqlSession<'db> {
             "sql"
             | "plpgsql"
             | oracle::PREVIEW_ROUTINE_LANGUAGE
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V6
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V5
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V4
@@ -206,6 +207,7 @@ impl<'db> SqlSession<'db> {
             "sql"
             | "plpgsql"
             | oracle::PREVIEW_ROUTINE_LANGUAGE
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V6
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V5
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V4
@@ -461,7 +463,7 @@ impl<'db> SqlSession<'db> {
         let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
             let schema = if matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(2 | 3 | 4 | 5 | 6 | 7)
+                Some(2 | 3 | 4 | 5 | 6 | 7 | 8)
             ) {
                 relation_schema_name(name_ast)
             } else {

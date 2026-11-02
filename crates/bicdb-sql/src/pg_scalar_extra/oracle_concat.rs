@@ -3,6 +3,11 @@
 use super::*;
 
 fn number_text(value: &SqlValue, width: usize) -> Result<String> {
+    match value.to_cell().as_str() {
+        "Infinity" => return Ok("~".into()),
+        "-Infinity" => return Ok("-~".into()),
+        _ => {}
+    }
     let decimal = parse_decimal(&value.to_cell())?;
     if decimal.mantissa.is_zero() {
         return Ok("0".into());

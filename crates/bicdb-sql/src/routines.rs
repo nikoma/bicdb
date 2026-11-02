@@ -10,6 +10,7 @@
 use crate::*;
 
 pub(crate) mod nested_blocks;
+pub(crate) mod parameterized_cursors;
 mod procedural_case;
 
 pub(crate) fn routine_record_value(columns: &[String], row: &[SqlValue]) -> SqlValue {
@@ -79,6 +80,12 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     let body = plpgsql_body_from_definition(&routine.definition)?;
     let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
+    parameterized_cursors::validate_capabilities(
+        &routine.language,
+        &declarations,
+        &statements,
+        &exception_handlers,
+    )?;
     let oracle_date_return = if oracle::typed_preview_routine_language(&routine.language) {
         nested_blocks::prepare_declared_types(&mut statements, &mut exception_handlers)?;
         oracle::routine_arithmetic::prepare_declared_types(routine, &mut params, &mut declarations)?
@@ -95,7 +102,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4 | 5 | 6 | 7)
+        Some(2 | 3 | 4 | 5 | 6 | 7 | 8)
     ) {
         oracle::routines::bind_function_namespace(
             routine,
@@ -114,10 +121,12 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             })?,
             matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(4 | 5 | 6 | 7)
+                Some(4 | 5 | 6 | 7 | 8)
             ),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 7),
+            oracle::preview_routine_language_version(&routine.language)
+                .is_some_and(|version| version >= 8),
             &mut params,
             &mut declarations,
             &mut statements,
@@ -505,9 +514,20 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
                 array.bind(scope);
                 bind_routine_statement_exprs(body, scope);
             }
-            RoutineStmt::QueryForLoop { body, .. }
-            | RoutineStmt::CursorForLoop { body, .. }
-            | RoutineStmt::Loop { body } => {
+            RoutineStmt::CursorForLoop {
+                arguments, body, ..
+            } => {
+                for arg in arguments {
+                    arg.expr.bind(scope);
+                }
+                bind_routine_statement_exprs(body, scope);
+            }
+            RoutineStmt::OpenCursor { arguments, .. } => {
+                for arg in arguments {
+                    arg.expr.bind(scope);
+                }
+            }
+            RoutineStmt::QueryForLoop { body, .. } | RoutineStmt::Loop { body } => {
                 bind_routine_statement_exprs(body, scope);
             }
             RoutineStmt::WhileLoop { condition, body } => {
@@ -532,7 +552,6 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
             | RoutineStmt::Perform { .. }
             | RoutineStmt::Sql(_)
             | RoutineStmt::SqlInto { .. }
-            | RoutineStmt::OpenCursor { .. }
             | RoutineStmt::FetchCursor { .. }
             | RoutineStmt::CloseCursor { .. }
             | RoutineStmt::ReturnQuery(_)
@@ -951,13 +970,15 @@ pub(crate) fn parse_routine_decl(declaration: &str) -> Result<RoutineDecl> {
     let rest = rest.trim_start();
     if let Some(cursor_rest) = strip_prefix_ci(rest, "CURSOR") {
         let cursor_rest = cursor_rest.trim_start();
-        let Some(query_sql) = strip_prefix_ci(cursor_rest, "FOR") else {
+        let (params, cursor_rest) = parameterized_cursors::parse_parameters(cursor_rest)?;
+        let Some(query_sql) = strip_prefix_ci(cursor_rest.trim_start(), "FOR") else {
             return Err(SqlError::UnsupportedPlpgsqlFeature(
                 "cursor declarations must use CURSOR FOR query".to_string(),
             ));
         };
         return Ok(RoutineDecl::Cursor {
             name: normalize_object_name(&name),
+            params,
             query: parse_single_query(query_sql.trim())?,
         });
     }
@@ -1494,8 +1515,8 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
         ));
     }
     if let Some(rest) = strip_prefix_ci(statement, "OPEN") {
-        let name = parse_single_routine_identifier(rest.trim(), "OPEN")?;
-        return Ok(RoutineStmt::OpenCursor { name });
+        let (name, arguments) = parameterized_cursors::parse_call(rest.trim())?;
+        return Ok(RoutineStmt::OpenCursor { name, arguments });
     }
     if let Some(rest) = strip_prefix_ci(statement, "FETCH") {
         return parse_routine_fetch(rest.trim());
@@ -1721,10 +1742,14 @@ pub(crate) fn parse_routine_for_loop(statement: &str) -> Result<RoutineStmt> {
             .into_iter()
             .filter(|token| !matches!(token, Token::Whitespace(_)))
             .collect::<Vec<_>>();
-        if let [Token::Word(cursor)] = tokens.as_slice() {
+        if matches!(tokens.as_slice(), [Token::Word(_)])
+            || matches!(tokens.as_slice(), [Token::Word(word), Token::LParen, ..] if word.keyword != sqlparser::keywords::Keyword::SELECT)
+        {
+            let (cursor, arguments) = parameterized_cursors::parse_call(range_sql)?;
             return Ok(RoutineStmt::CursorForLoop {
                 target: iterator,
-                cursor: normalize_object_name(&cursor.value),
+                cursor,
+                arguments,
                 body,
             });
         }

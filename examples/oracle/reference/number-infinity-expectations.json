@@ -1,0 +1,903 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "operator": "+",
+      "left": "inf",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "inf",
+      "right": "inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "+",
+      "left": "inf",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "inf",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "+",
+      "left": "inf",
+      "right": "0",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "inf",
+      "right": "0",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "+",
+      "left": "inf",
+      "right": "1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "inf",
+      "right": "1",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "+",
+      "left": "inf",
+      "right": "-1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "inf",
+      "right": "-1",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "+",
+      "left": "-inf",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "-inf",
+      "right": "inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "+",
+      "left": "-inf",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "-inf",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "+",
+      "left": "-inf",
+      "right": "0",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "-inf",
+      "right": "0",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "+",
+      "left": "-inf",
+      "right": "1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "-inf",
+      "right": "1",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "+",
+      "left": "-inf",
+      "right": "-1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "-inf",
+      "right": "-1",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "+",
+      "left": "0",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "0",
+      "right": "inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "+",
+      "left": "0",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "0",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "+",
+      "left": "1",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "1",
+      "right": "inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "+",
+      "left": "1",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "1",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "+",
+      "left": "-1",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "-1",
+      "right": "inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "+",
+      "left": "-1",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "+",
+      "left": "-1",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "-",
+      "left": "inf",
+      "right": "inf",
+      "context": "sql",
+      "text": "0"
+    },
+    {
+      "operator": "-",
+      "left": "inf",
+      "right": "inf",
+      "context": "plsql",
+      "text": "0"
+    },
+    {
+      "operator": "-",
+      "left": "inf",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "inf",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "-",
+      "left": "inf",
+      "right": "0",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "inf",
+      "right": "0",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "-",
+      "left": "inf",
+      "right": "1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "inf",
+      "right": "1",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "-",
+      "left": "inf",
+      "right": "-1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "inf",
+      "right": "-1",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "-",
+      "left": "-inf",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "-inf",
+      "right": "inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "-",
+      "left": "-inf",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "-inf",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "-",
+      "left": "-inf",
+      "right": "0",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "-inf",
+      "right": "0",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "-",
+      "left": "-inf",
+      "right": "1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "-inf",
+      "right": "1",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "-",
+      "left": "-inf",
+      "right": "-1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "-inf",
+      "right": "-1",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "-",
+      "left": "0",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "0",
+      "right": "inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "-",
+      "left": "0",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "0",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "-",
+      "left": "1",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "1",
+      "right": "inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "-",
+      "left": "1",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "1",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "-",
+      "left": "-1",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "-1",
+      "right": "inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "-",
+      "left": "-1",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "-",
+      "left": "-1",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "*",
+      "left": "inf",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "inf",
+      "right": "inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "*",
+      "left": "inf",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "inf",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "*",
+      "left": "inf",
+      "right": "0",
+      "context": "sql",
+      "text": "0"
+    },
+    {
+      "operator": "*",
+      "left": "inf",
+      "right": "0",
+      "context": "plsql",
+      "text": "0"
+    },
+    {
+      "operator": "*",
+      "left": "inf",
+      "right": "1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "inf",
+      "right": "1",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "*",
+      "left": "inf",
+      "right": "-1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "inf",
+      "right": "-1",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "*",
+      "left": "-inf",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "-inf",
+      "right": "inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "*",
+      "left": "-inf",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "-inf",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "*",
+      "left": "-inf",
+      "right": "0",
+      "context": "sql",
+      "text": "0"
+    },
+    {
+      "operator": "*",
+      "left": "-inf",
+      "right": "0",
+      "context": "plsql",
+      "text": "0"
+    },
+    {
+      "operator": "*",
+      "left": "-inf",
+      "right": "1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "-inf",
+      "right": "1",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "*",
+      "left": "-inf",
+      "right": "-1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "-inf",
+      "right": "-1",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "*",
+      "left": "0",
+      "right": "inf",
+      "context": "sql",
+      "text": "0"
+    },
+    {
+      "operator": "*",
+      "left": "0",
+      "right": "inf",
+      "context": "plsql",
+      "text": "0"
+    },
+    {
+      "operator": "*",
+      "left": "0",
+      "right": "-inf",
+      "context": "sql",
+      "text": "0"
+    },
+    {
+      "operator": "*",
+      "left": "0",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "0"
+    },
+    {
+      "operator": "*",
+      "left": "1",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "1",
+      "right": "inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "*",
+      "left": "1",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "1",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "*",
+      "left": "-1",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "-1",
+      "right": "inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "*",
+      "left": "-1",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "*",
+      "left": "-1",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "/",
+      "left": "inf",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "/",
+      "left": "inf",
+      "right": "inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "/",
+      "left": "inf",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "/",
+      "left": "inf",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "/",
+      "left": "inf",
+      "right": "0",
+      "context": "sql",
+      "error": "ORA-01476"
+    },
+    {
+      "operator": "/",
+      "left": "inf",
+      "right": "0",
+      "context": "plsql",
+      "error": "ORA-01476"
+    },
+    {
+      "operator": "/",
+      "left": "inf",
+      "right": "1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "/",
+      "left": "inf",
+      "right": "1",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "/",
+      "left": "inf",
+      "right": "-1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "/",
+      "left": "inf",
+      "right": "-1",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "/",
+      "left": "-inf",
+      "right": "inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "/",
+      "left": "-inf",
+      "right": "inf",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "/",
+      "left": "-inf",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "/",
+      "left": "-inf",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "/",
+      "left": "-inf",
+      "right": "0",
+      "context": "sql",
+      "error": "ORA-01476"
+    },
+    {
+      "operator": "/",
+      "left": "-inf",
+      "right": "0",
+      "context": "plsql",
+      "error": "ORA-01476"
+    },
+    {
+      "operator": "/",
+      "left": "-inf",
+      "right": "1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "/",
+      "left": "-inf",
+      "right": "1",
+      "context": "plsql",
+      "text": "-~"
+    },
+    {
+      "operator": "/",
+      "left": "-inf",
+      "right": "-1",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "/",
+      "left": "-inf",
+      "right": "-1",
+      "context": "plsql",
+      "text": "~"
+    },
+    {
+      "operator": "/",
+      "left": "0",
+      "right": "inf",
+      "context": "sql",
+      "text": "0"
+    },
+    {
+      "operator": "/",
+      "left": "0",
+      "right": "inf",
+      "context": "plsql",
+      "text": "0"
+    },
+    {
+      "operator": "/",
+      "left": "0",
+      "right": "-inf",
+      "context": "sql",
+      "text": "0"
+    },
+    {
+      "operator": "/",
+      "left": "0",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "0"
+    },
+    {
+      "operator": "/",
+      "left": "1",
+      "right": "inf",
+      "context": "sql",
+      "text": "0"
+    },
+    {
+      "operator": "/",
+      "left": "1",
+      "right": "inf",
+      "context": "plsql",
+      "text": "0"
+    },
+    {
+      "operator": "/",
+      "left": "1",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "/",
+      "left": "1",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "0"
+    },
+    {
+      "operator": "/",
+      "left": "-1",
+      "right": "inf",
+      "context": "sql",
+      "text": "0"
+    },
+    {
+      "operator": "/",
+      "left": "-1",
+      "right": "inf",
+      "context": "plsql",
+      "text": "0"
+    },
+    {
+      "operator": "/",
+      "left": "-1",
+      "right": "-inf",
+      "context": "sql",
+      "error": "ORA-01426"
+    },
+    {
+      "operator": "/",
+      "left": "-1",
+      "right": "-inf",
+      "context": "plsql",
+      "text": "0"
+    }
+  ],
+  "oracle_version": "23.26.3.0.0"
+}

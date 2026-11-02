@@ -1,0 +1,3475 @@
+{
+  "format": 1,
+  "oracle": {
+    "setup": [
+      {
+        "backend": 0,
+        "kind": "TABLE",
+        "name": "\"public\".\"BICDB_CP_T\"",
+        "sql": "CREATE TABLE \"public\".\"BICDB_CP_T\"(v_arg NUMBER,amount NUMBER)",
+        "inserts": [
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(1,5)",
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(1,7)",
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(2,9)"
+        ]
+      },
+      {
+        "backend": 0,
+        "kind": "SEQUENCE",
+        "name": "\"public\".\"BICDB_CP_SEQ\"",
+        "sql": "CREATE SEQUENCE \"public\".\"BICDB_CP_SEQ\" START WITH 1",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_POSITIONAL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_POSITIONAL\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=70; total NUMBER:=0;CURSOR c(v_arg NUMBER,v_extra NUMBER) IS SELECT v_arg+v_extra AS amount FROM DUAL; BEGIN FOR r IN c(p_value,3) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_NAMED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_NAMED\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=70; total NUMBER:=0;CURSOR c(v_arg NUMBER,v_extra NUMBER) IS SELECT v_arg+v_extra AS amount FROM DUAL; BEGIN FOR r IN c(v_extra=>3,v_arg=>p_value) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_MIXED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_MIXED\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=70; total NUMBER:=0;CURSOR c(v_arg NUMBER,v_extra NUMBER) IS SELECT v_arg+v_extra AS amount FROM DUAL; BEGIN FOR r IN c(p_value,v_extra=>3) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ACTUAL_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ACTUAL_SCOPE\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=70; total NUMBER:=0;CURSOR c(v_arg NUMBER,v_extra NUMBER) IS SELECT v_arg+v_extra AS amount FROM DUAL; BEGIN FOR r IN c(v_arg+1,v_arg+2) LOOP total:=r.amount; END LOOP; RETURN total*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_REOPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_REOPEN\"(p_value NUMBER) RETURN NUMBER IS v NUMBER; total NUMBER;CURSOR c(x NUMBER) IS SELECT x AS amount FROM DUAL; BEGIN OPEN c(p_value); FETCH c INTO v; CLOSE c; total:=v; OPEN c(p_value+1); FETCH c INTO v; CLOSE c; RETURN total*100+v; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_SNAPSHOT\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_SNAPSHOT\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=p_value; v NUMBER;CURSOR c(v_arg NUMBER) IS SELECT v_arg AS amount FROM DUAL; BEGIN OPEN c(v_arg); v_arg:=v_arg+10; FETCH c INTO v; CLOSE c; RETURN v*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_BODY_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_BODY_SCOPE\"(p_value NUMBER) RETURN NUMBER IS v_arg VARCHAR2(20):='outside'; total NUMBER:=0;CURSOR c(v_arg NUMBER) IS SELECT v_arg AS amount FROM DUAL; BEGIN FOR r IN c(p_value) LOOP IF v_arg<>'outside' THEN RETURN -999; END IF; total:=r.amount; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_QUALIFIED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_QUALIFIED\"(p_value NUMBER) RETURN NUMBER IS CURSOR c(x NUMBER) IS SELECT c.x AS amount FROM DUAL; BEGIN FOR r IN c(p_value) LOOP RETURN r.amount; END LOOP; RETURN -999; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_COLUMN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_COLUMN\"(p_value NUMBER) RETURN NUMBER IS total NUMBER:=0;CURSOR c(v_arg NUMBER) IS SELECT SUM(amount) AS amount FROM \"public\".\"BICDB_CP_T\" WHERE v_arg=1; BEGIN FOR r IN c(p_value) LOOP total:=r.amount; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_NESTED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_NESTED\"(p_value NUMBER) RETURN NUMBER IS total NUMBER:=0;CURSOR c(x NUMBER) IS SELECT x AS amount FROM DUAL; BEGIN FOR parent IN c(p_value) LOOP DECLARE CURSOR c(x NUMBER) IS SELECT x+1 AS amount FROM DUAL; BEGIN FOR child IN c(parent.amount) LOOP total:=child.amount; END LOOP; END; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ERROR_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ERROR_SCOPE\"(p_value NUMBER) RETURN NUMBER IS x VARCHAR2(20):='safe'; total NUMBER;CURSOR c(x NUMBER) IS SELECT 10/(x-x) AS amount FROM DUAL; BEGIN BEGIN FOR r IN c(p_value) LOOP total:=r.amount; END LOOP; EXCEPTION WHEN OTHERS THEN NULL; END; RETURN LENGTH(x); END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_PRIOR_OPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_PRIOR_OPEN\"(p_value NUMBER) RETURN NUMBER IS v NUMBER;CURSOR c(x NUMBER) IS SELECT x AS amount FROM DUAL; BEGIN OPEN c(p_value); BEGIN FOR r IN c(99) LOOP NULL; END LOOP; EXCEPTION WHEN OTHERS THEN NULL; END; FETCH c INTO v; CLOSE c; RETURN v; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ONCE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ONCE\"(p_value NUMBER) RETURN NUMBER IS total NUMBER;CURSOR c(x NUMBER) IS SELECT x AS amount FROM DUAL; BEGIN FOR r IN c(\"public\".\"BICDB_CP_SEQ\".NEXTVAL) LOOP total:=r.amount; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_DEFAULT_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_DEFAULT_SCOPE\"(p_value NUMBER) RETURN NUMBER IS chosen NUMBER:=70; total NUMBER;CURSOR c(x NUMBER DEFAULT 2,y NUMBER DEFAULT chosen) IS SELECT x+y AS amount FROM DUAL; BEGIN FOR r IN c LOOP total:=r.amount; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_DEFAULT_OPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_DEFAULT_OPEN\"(p_value NUMBER) RETURN NUMBER IS chosen NUMBER:=p_value; total NUMBER:=0;CURSOR c(x NUMBER DEFAULT chosen) IS SELECT x AS amount FROM DUAL; BEGIN chosen:=p_value+2; FOR r IN c LOOP total:=r.amount; END LOOP; chosen:=p_value+3; FOR r IN c() LOOP total:=total+r.amount; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_DEFAULT_SKIP\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_DEFAULT_SKIP\"(p_value NUMBER) RETURN NUMBER IS CURSOR c(x NUMBER DEFAULT 1/0) IS SELECT x AS amount FROM DUAL; BEGIN FOR r IN c(p_value) LOOP RETURN r.amount; END LOOP; RETURN -999; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_DATE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_DATE\"(p_value NUMBER) RETURN NUMBER IS CURSOR c(x DATE) IS SELECT x AS chosen FROM DUAL; BEGIN FOR r IN c(TIMESTAMP '2024-02-29 12:34:56.999999') LOOP RETURN (r.chosen-TRUNC(r.chosen))*86400; END LOOP; RETURN -999; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "TABLE",
+        "name": "\"public\".\"BICDB_CP_T\"",
+        "sql": "CREATE TABLE \"public\".\"BICDB_CP_T\"(v_arg NUMBER,amount NUMBER)",
+        "inserts": [
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(1,5)",
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(1,7)",
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(2,9)"
+        ]
+      },
+      {
+        "backend": 1,
+        "kind": "SEQUENCE",
+        "name": "\"public\".\"BICDB_CP_SEQ\"",
+        "sql": "CREATE SEQUENCE \"public\".\"BICDB_CP_SEQ\" START WITH 1",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_POSITIONAL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_POSITIONAL\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=70; total NUMBER:=0;CURSOR c(v_arg NUMBER,v_extra NUMBER) IS SELECT v_arg+v_extra AS amount FROM DUAL; BEGIN FOR r IN c(p_value,3) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_NAMED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_NAMED\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=70; total NUMBER:=0;CURSOR c(v_arg NUMBER,v_extra NUMBER) IS SELECT v_arg+v_extra AS amount FROM DUAL; BEGIN FOR r IN c(v_extra=>3,v_arg=>p_value) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_MIXED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_MIXED\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=70; total NUMBER:=0;CURSOR c(v_arg NUMBER,v_extra NUMBER) IS SELECT v_arg+v_extra AS amount FROM DUAL; BEGIN FOR r IN c(p_value,v_extra=>3) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ACTUAL_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ACTUAL_SCOPE\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=70; total NUMBER:=0;CURSOR c(v_arg NUMBER,v_extra NUMBER) IS SELECT v_arg+v_extra AS amount FROM DUAL; BEGIN FOR r IN c(v_arg+1,v_arg+2) LOOP total:=r.amount; END LOOP; RETURN total*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_REOPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_REOPEN\"(p_value NUMBER) RETURN NUMBER IS v NUMBER; total NUMBER;CURSOR c(x NUMBER) IS SELECT x AS amount FROM DUAL; BEGIN OPEN c(p_value); FETCH c INTO v; CLOSE c; total:=v; OPEN c(p_value+1); FETCH c INTO v; CLOSE c; RETURN total*100+v; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_SNAPSHOT\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_SNAPSHOT\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=p_value; v NUMBER;CURSOR c(v_arg NUMBER) IS SELECT v_arg AS amount FROM DUAL; BEGIN OPEN c(v_arg); v_arg:=v_arg+10; FETCH c INTO v; CLOSE c; RETURN v*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_BODY_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_BODY_SCOPE\"(p_value NUMBER) RETURN NUMBER IS v_arg VARCHAR2(20):='outside'; total NUMBER:=0;CURSOR c(v_arg NUMBER) IS SELECT v_arg AS amount FROM DUAL; BEGIN FOR r IN c(p_value) LOOP IF v_arg<>'outside' THEN RETURN -999; END IF; total:=r.amount; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_QUALIFIED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_QUALIFIED\"(p_value NUMBER) RETURN NUMBER IS CURSOR c(x NUMBER) IS SELECT c.x AS amount FROM DUAL; BEGIN FOR r IN c(p_value) LOOP RETURN r.amount; END LOOP; RETURN -999; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_COLUMN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_COLUMN\"(p_value NUMBER) RETURN NUMBER IS total NUMBER:=0;CURSOR c(v_arg NUMBER) IS SELECT SUM(amount) AS amount FROM \"public\".\"BICDB_CP_T\" WHERE v_arg=1; BEGIN FOR r IN c(p_value) LOOP total:=r.amount; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_NESTED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_NESTED\"(p_value NUMBER) RETURN NUMBER IS total NUMBER:=0;CURSOR c(x NUMBER) IS SELECT x AS amount FROM DUAL; BEGIN FOR parent IN c(p_value) LOOP DECLARE CURSOR c(x NUMBER) IS SELECT x+1 AS amount FROM DUAL; BEGIN FOR child IN c(parent.amount) LOOP total:=child.amount; END LOOP; END; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ERROR_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ERROR_SCOPE\"(p_value NUMBER) RETURN NUMBER IS x VARCHAR2(20):='safe'; total NUMBER;CURSOR c(x NUMBER) IS SELECT 10/(x-x) AS amount FROM DUAL; BEGIN BEGIN FOR r IN c(p_value) LOOP total:=r.amount; END LOOP; EXCEPTION WHEN OTHERS THEN NULL; END; RETURN LENGTH(x); END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_PRIOR_OPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_PRIOR_OPEN\"(p_value NUMBER) RETURN NUMBER IS v NUMBER;CURSOR c(x NUMBER) IS SELECT x AS amount FROM DUAL; BEGIN OPEN c(p_value); BEGIN FOR r IN c(99) LOOP NULL; END LOOP; EXCEPTION WHEN OTHERS THEN NULL; END; FETCH c INTO v; CLOSE c; RETURN v; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ONCE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ONCE\"(p_value NUMBER) RETURN NUMBER IS total NUMBER;CURSOR c(x NUMBER) IS SELECT x AS amount FROM DUAL; BEGIN FOR r IN c(\"public\".\"BICDB_CP_SEQ\".NEXTVAL) LOOP total:=r.amount; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_DEFAULT_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_DEFAULT_SCOPE\"(p_value NUMBER) RETURN NUMBER IS chosen NUMBER:=70; total NUMBER;CURSOR c(x NUMBER DEFAULT 2,y NUMBER DEFAULT chosen) IS SELECT x+y AS amount FROM DUAL; BEGIN FOR r IN c LOOP total:=r.amount; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_DEFAULT_OPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_DEFAULT_OPEN\"(p_value NUMBER) RETURN NUMBER IS chosen NUMBER:=p_value; total NUMBER:=0;CURSOR c(x NUMBER DEFAULT chosen) IS SELECT x AS amount FROM DUAL; BEGIN chosen:=p_value+2; FOR r IN c LOOP total:=r.amount; END LOOP; chosen:=p_value+3; FOR r IN c() LOOP total:=total+r.amount; END LOOP; RETURN total; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_DEFAULT_SKIP\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_DEFAULT_SKIP\"(p_value NUMBER) RETURN NUMBER IS CURSOR c(x NUMBER DEFAULT 1/0) IS SELECT x AS amount FROM DUAL; BEGIN FOR r IN c(p_value) LOOP RETURN r.amount; END LOOP; RETURN -999; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_DATE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_DATE\"(p_value NUMBER) RETURN NUMBER IS CURSOR c(x DATE) IS SELECT x AS chosen FROM DUAL; BEGIN FOR r IN c(TIMESTAMP '2024-02-29 12:34:56.999999') LOOP RETURN (r.chosen-TRUNC(r.chosen))*86400; END LOOP; RETURN -999; END;",
+        "inserts": []
+      }
+    ],
+    "cases": [
+      {
+        "id": "positional_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_POSITIONAL\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "470"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "positional_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_POSITIONAL\"(5) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "870"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "positional_2",
+        "sql": "SELECT \"public\".\"BICDB_CP_POSITIONAL\"(NULL) FROM DUAL",
+        "expected": [
+          [
+            null
+          ]
+        ]
+      },
+      {
+        "id": "named_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_NAMED\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "470"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "named_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_NAMED\"(5) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "870"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "named_2",
+        "sql": "SELECT \"public\".\"BICDB_CP_NAMED\"(NULL) FROM DUAL",
+        "expected": [
+          [
+            null
+          ]
+        ]
+      },
+      {
+        "id": "mixed_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_MIXED\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "470"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "mixed_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_MIXED\"(5) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "870"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "mixed_2",
+        "sql": "SELECT \"public\".\"BICDB_CP_MIXED\"(NULL) FROM DUAL",
+        "expected": [
+          [
+            null
+          ]
+        ]
+      },
+      {
+        "id": "actual_scope_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_ACTUAL_SCOPE\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "14370"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "reopen_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_REOPEN\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "102"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "reopen_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_REOPEN\"(3) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "304"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "snapshot_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_SNAPSHOT\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "111"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "snapshot_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_SNAPSHOT\"(3) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "313"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "body_scope_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_BODY_SCOPE\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "body_scope_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_BODY_SCOPE\"(3) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "qualified_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_QUALIFIED\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "qualified_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_QUALIFIED\"(3) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "column_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_COLUMN\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "12"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "column_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_COLUMN\"(3) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "12"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "nested_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_NESTED\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "nested_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_NESTED\"(3) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "error_scope_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_ERROR_SCOPE\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "error_scope_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_ERROR_SCOPE\"(3) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "prior_open_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_PRIOR_OPEN\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "prior_open_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_PRIOR_OPEN\"(3) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "once_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_ONCE\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "once_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_ONCE\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "default_scope_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_DEFAULT_SCOPE\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "72"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "default_open_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_DEFAULT_OPEN\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "default_open_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_DEFAULT_OPEN\"(3) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "11"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "default_skip_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_DEFAULT_SKIP\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "default_skip_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_DEFAULT_SKIP\"(3) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "date_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_DATE\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "45296"
+            }
+          ]
+        ]
+      }
+    ],
+    "compiler_probe": "bicdb_cp_positional",
+    "scope": "Bound parameterized cursor arguments, OPEN-time snapshots, query/outer scope, named notation, cleanup and Oracle defaults/logical DATE; not refcursors, scroll portals or full cursor attributes"
+  },
+  "postgres": {
+    "setup": [
+      {
+        "backend": 0,
+        "kind": "TABLE",
+        "name": "\"public\".\"BICDB_CP_T\"",
+        "sql": "CREATE TABLE \"public\".\"BICDB_CP_T\"(v_arg NUMERIC,amount NUMERIC)",
+        "inserts": [
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(1,5)",
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(1,7)",
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(2,9)"
+        ]
+      },
+      {
+        "backend": 0,
+        "kind": "SEQUENCE",
+        "name": "\"public\".\"BICDB_CP_SEQ\"",
+        "sql": "CREATE SEQUENCE \"public\".\"BICDB_CP_SEQ\" START WITH 1",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_POSITIONAL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_POSITIONAL\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg NUMERIC:=70; total NUMERIC:=0;c CURSOR (v_arg NUMERIC,v_extra NUMERIC) FOR SELECT v_arg+v_extra AS amount; BEGIN FOR r IN c(p_value,3) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_NAMED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_NAMED\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg NUMERIC:=70; total NUMERIC:=0;c CURSOR (v_arg NUMERIC,v_extra NUMERIC) FOR SELECT v_arg+v_extra AS amount; BEGIN FOR r IN c(v_extra=>3,v_arg=>p_value) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_MIXED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_MIXED\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg NUMERIC:=70; total NUMERIC:=0;c CURSOR (v_arg NUMERIC,v_extra NUMERIC) FOR SELECT v_arg+v_extra AS amount; BEGIN FOR r IN c(p_value,v_extra=>3) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ACTUAL_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ACTUAL_SCOPE\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg NUMERIC:=70; total NUMERIC:=0;c CURSOR (v_arg NUMERIC,v_extra NUMERIC) FOR SELECT v_arg+v_extra AS amount; BEGIN FOR r IN c(v_arg+1,v_arg+2) LOOP total:=r.amount; END LOOP; RETURN total*100+v_arg; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_REOPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_REOPEN\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v NUMERIC; total NUMERIC;c CURSOR (x NUMERIC) FOR SELECT x AS amount; BEGIN OPEN c(p_value); FETCH c INTO v; CLOSE c; total:=v; OPEN c(p_value+1); FETCH c INTO v; CLOSE c; RETURN total*100+v; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_SNAPSHOT\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_SNAPSHOT\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg NUMERIC:=p_value; v NUMERIC;c CURSOR (v_arg NUMERIC) FOR SELECT v_arg AS amount; BEGIN OPEN c(v_arg); v_arg:=v_arg+10; FETCH c INTO v; CLOSE c; RETURN v*100+v_arg; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_BODY_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_BODY_SCOPE\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg VARCHAR(20):='outside'; total NUMERIC:=0;c CURSOR (v_arg NUMERIC) FOR SELECT v_arg AS amount; BEGIN FOR r IN c(p_value) LOOP IF v_arg<>'outside' THEN RETURN -999; END IF; total:=r.amount; END LOOP; RETURN total; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_QUALIFIED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_QUALIFIED\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE c CURSOR (x NUMERIC) FOR SELECT c.x AS amount; BEGIN FOR r IN c(p_value) LOOP RETURN r.amount; END LOOP; RETURN -999; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_COLUMN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_COLUMN\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE total NUMERIC:=0;c CURSOR (v_arg NUMERIC) FOR SELECT SUM(amount) AS amount FROM \"public\".\"BICDB_CP_T\" WHERE v_arg=1; BEGIN FOR r IN c(p_value) LOOP total:=r.amount; END LOOP; RETURN total; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_NESTED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_NESTED\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE total NUMERIC:=0;c CURSOR (x NUMERIC) FOR SELECT x AS amount; BEGIN FOR parent IN c(p_value) LOOP DECLARE c CURSOR (x NUMERIC) FOR SELECT x+1 AS amount; BEGIN FOR child IN c(parent.amount) LOOP total:=child.amount; END LOOP; END; END LOOP; RETURN total; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ERROR_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ERROR_SCOPE\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE x VARCHAR(20):='safe'; total NUMERIC;c CURSOR (x NUMERIC) FOR SELECT 10/(x-x) AS amount; BEGIN BEGIN FOR r IN c(p_value) LOOP total:=r.amount; END LOOP; EXCEPTION WHEN OTHERS THEN NULL; END; RETURN LENGTH(x); END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_PRIOR_OPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_PRIOR_OPEN\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v NUMERIC;c CURSOR (x NUMERIC) FOR SELECT x AS amount; BEGIN OPEN c(p_value); BEGIN FOR r IN c(99) LOOP NULL; END LOOP; EXCEPTION WHEN OTHERS THEN NULL; END; FETCH c INTO v; CLOSE c; RETURN v; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ONCE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ONCE\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE total NUMERIC;c CURSOR (x NUMERIC) FOR SELECT x AS amount; BEGIN FOR r IN c(nextval('\"public\".\"BICDB_CP_SEQ\"')) LOOP total:=r.amount; END LOOP; RETURN total; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "TABLE",
+        "name": "\"public\".\"BICDB_CP_T\"",
+        "sql": "CREATE TABLE \"public\".\"BICDB_CP_T\"(v_arg NUMERIC,amount NUMERIC)",
+        "inserts": [
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(1,5)",
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(1,7)",
+          "INSERT INTO \"public\".\"BICDB_CP_T\" VALUES(2,9)"
+        ]
+      },
+      {
+        "backend": 1,
+        "kind": "SEQUENCE",
+        "name": "\"public\".\"BICDB_CP_SEQ\"",
+        "sql": "CREATE SEQUENCE \"public\".\"BICDB_CP_SEQ\" START WITH 1",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_POSITIONAL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_POSITIONAL\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg NUMERIC:=70; total NUMERIC:=0;c CURSOR (v_arg NUMERIC,v_extra NUMERIC) FOR SELECT v_arg+v_extra AS amount; BEGIN FOR r IN c(p_value,3) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_NAMED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_NAMED\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg NUMERIC:=70; total NUMERIC:=0;c CURSOR (v_arg NUMERIC,v_extra NUMERIC) FOR SELECT v_arg+v_extra AS amount; BEGIN FOR r IN c(v_extra=>3,v_arg=>p_value) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_MIXED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_MIXED\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg NUMERIC:=70; total NUMERIC:=0;c CURSOR (v_arg NUMERIC,v_extra NUMERIC) FOR SELECT v_arg+v_extra AS amount; BEGIN FOR r IN c(p_value,v_extra=>3) LOOP total:=total+r.amount; END LOOP; RETURN total*100+v_arg; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ACTUAL_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ACTUAL_SCOPE\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg NUMERIC:=70; total NUMERIC:=0;c CURSOR (v_arg NUMERIC,v_extra NUMERIC) FOR SELECT v_arg+v_extra AS amount; BEGIN FOR r IN c(v_arg+1,v_arg+2) LOOP total:=r.amount; END LOOP; RETURN total*100+v_arg; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_REOPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_REOPEN\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v NUMERIC; total NUMERIC;c CURSOR (x NUMERIC) FOR SELECT x AS amount; BEGIN OPEN c(p_value); FETCH c INTO v; CLOSE c; total:=v; OPEN c(p_value+1); FETCH c INTO v; CLOSE c; RETURN total*100+v; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_SNAPSHOT\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_SNAPSHOT\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg NUMERIC:=p_value; v NUMERIC;c CURSOR (v_arg NUMERIC) FOR SELECT v_arg AS amount; BEGIN OPEN c(v_arg); v_arg:=v_arg+10; FETCH c INTO v; CLOSE c; RETURN v*100+v_arg; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_BODY_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_BODY_SCOPE\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg VARCHAR(20):='outside'; total NUMERIC:=0;c CURSOR (v_arg NUMERIC) FOR SELECT v_arg AS amount; BEGIN FOR r IN c(p_value) LOOP IF v_arg<>'outside' THEN RETURN -999; END IF; total:=r.amount; END LOOP; RETURN total; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_QUALIFIED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_QUALIFIED\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE c CURSOR (x NUMERIC) FOR SELECT c.x AS amount; BEGIN FOR r IN c(p_value) LOOP RETURN r.amount; END LOOP; RETURN -999; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_COLUMN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_COLUMN\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE total NUMERIC:=0;c CURSOR (v_arg NUMERIC) FOR SELECT SUM(amount) AS amount FROM \"public\".\"BICDB_CP_T\" WHERE v_arg=1; BEGIN FOR r IN c(p_value) LOOP total:=r.amount; END LOOP; RETURN total; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_NESTED\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_NESTED\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE total NUMERIC:=0;c CURSOR (x NUMERIC) FOR SELECT x AS amount; BEGIN FOR parent IN c(p_value) LOOP DECLARE c CURSOR (x NUMERIC) FOR SELECT x+1 AS amount; BEGIN FOR child IN c(parent.amount) LOOP total:=child.amount; END LOOP; END; END LOOP; RETURN total; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ERROR_SCOPE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ERROR_SCOPE\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE x VARCHAR(20):='safe'; total NUMERIC;c CURSOR (x NUMERIC) FOR SELECT 10/(x-x) AS amount; BEGIN BEGIN FOR r IN c(p_value) LOOP total:=r.amount; END LOOP; EXCEPTION WHEN OTHERS THEN NULL; END; RETURN LENGTH(x); END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_PRIOR_OPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_PRIOR_OPEN\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v NUMERIC;c CURSOR (x NUMERIC) FOR SELECT x AS amount; BEGIN OPEN c(p_value); BEGIN FOR r IN c(99) LOOP NULL; END LOOP; EXCEPTION WHEN OTHERS THEN NULL; END; FETCH c INTO v; CLOSE c; RETURN v; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_ONCE\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ONCE\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE total NUMERIC;c CURSOR (x NUMERIC) FOR SELECT x AS amount; BEGIN FOR r IN c(nextval('\"public\".\"BICDB_CP_SEQ\"')) LOOP total:=r.amount; END LOOP; RETURN total; END$$",
+        "inserts": []
+      }
+    ],
+    "cases": [
+      {
+        "id": "positional_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_POSITIONAL\"(1)",
+        "expected": [
+          [
+            {
+              "number": "470"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "positional_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_POSITIONAL\"(5)",
+        "expected": [
+          [
+            {
+              "number": "870"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "positional_2",
+        "sql": "SELECT \"public\".\"BICDB_CP_POSITIONAL\"(NULL)",
+        "expected": [
+          [
+            null
+          ]
+        ]
+      },
+      {
+        "id": "named_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_NAMED\"(1)",
+        "expected": [
+          [
+            {
+              "number": "470"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "named_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_NAMED\"(5)",
+        "expected": [
+          [
+            {
+              "number": "870"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "named_2",
+        "sql": "SELECT \"public\".\"BICDB_CP_NAMED\"(NULL)",
+        "expected": [
+          [
+            null
+          ]
+        ]
+      },
+      {
+        "id": "mixed_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_MIXED\"(1)",
+        "expected": [
+          [
+            {
+              "number": "470"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "mixed_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_MIXED\"(5)",
+        "expected": [
+          [
+            {
+              "number": "870"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "mixed_2",
+        "sql": "SELECT \"public\".\"BICDB_CP_MIXED\"(NULL)",
+        "expected": [
+          [
+            null
+          ]
+        ]
+      },
+      {
+        "id": "actual_scope_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_ACTUAL_SCOPE\"(1)",
+        "expected": [
+          [
+            {
+              "number": "14370"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "reopen_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_REOPEN\"(1)",
+        "expected": [
+          [
+            {
+              "number": "102"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "reopen_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_REOPEN\"(3)",
+        "expected": [
+          [
+            {
+              "number": "304"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "snapshot_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_SNAPSHOT\"(1)",
+        "expected": [
+          [
+            {
+              "number": "111"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "snapshot_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_SNAPSHOT\"(3)",
+        "expected": [
+          [
+            {
+              "number": "313"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "body_scope_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_BODY_SCOPE\"(1)",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "body_scope_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_BODY_SCOPE\"(3)",
+        "expected": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "qualified_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_QUALIFIED\"(1)",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "qualified_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_QUALIFIED\"(3)",
+        "expected": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "column_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_COLUMN\"(1)",
+        "expected_error": {
+          "postgres": "42702",
+          "bicdb": "42702"
+        }
+      },
+      {
+        "id": "column_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_COLUMN\"(3)",
+        "expected_error": {
+          "postgres": "42702",
+          "bicdb": "42702"
+        }
+      },
+      {
+        "id": "nested_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_NESTED\"(1)",
+        "expected": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "nested_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_NESTED\"(3)",
+        "expected": [
+          [
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "error_scope_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_ERROR_SCOPE\"(1)",
+        "expected": [
+          [
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "error_scope_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_ERROR_SCOPE\"(3)",
+        "expected": [
+          [
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "prior_open_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_PRIOR_OPEN\"(1)",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "prior_open_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_PRIOR_OPEN\"(3)",
+        "expected": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "once_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_ONCE\"(1)",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "once_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_ONCE\"(1)",
+        "expected": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      }
+    ],
+    "compiler_probe": "bicdb_cp_positional",
+    "scope": "Bound parameterized cursor arguments, OPEN-time snapshots, query/outer scope, named notation, cleanup and Oracle defaults/logical DATE; not refcursors, scroll portals or full cursor attributes"
+  },
+  "number_arithmetic": {
+    "setup": [
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_ADD_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_ADD_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN RETURN p_left+p_right; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_ADD_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_ADD_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN RETURN p_left+p_right; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_ADD_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_ADD_SQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN SELECT p_left+p_right INTO result FROM DUAL; RETURN result; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_ADD_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_ADD_SQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN SELECT p_left+p_right INTO result FROM DUAL; RETURN result; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_SUBTRACT_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN RETURN p_left-p_right; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_SUBTRACT_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN RETURN p_left-p_right; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_SUBTRACT_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_SUBTRACT_SQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN SELECT p_left-p_right INTO result FROM DUAL; RETURN result; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_SUBTRACT_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_SUBTRACT_SQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN SELECT p_left-p_right INTO result FROM DUAL; RETURN result; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_MULTIPLY_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN RETURN p_left*p_right; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_MULTIPLY_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN RETURN p_left*p_right; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_MULTIPLY_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_MULTIPLY_SQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN SELECT p_left*p_right INTO result FROM DUAL; RETURN result; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_MULTIPLY_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_MULTIPLY_SQL\"(p_left NUMBER,p_right NUMBER) RETURN NUMBER IS result NUMBER; BEGIN SELECT p_left*p_right INTO result FROM DUAL; RETURN result; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INFINITY\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INFINITY\"(p_value NUMBER) RETURN NUMBER IS BEGIN RETURN p_value*2; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INFINITY\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INFINITY\"(p_value NUMBER) RETURN NUMBER IS BEGIN RETURN p_value*2; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_ADD_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN result:=p_left+p_right; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_ADD_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN result:=p_left+p_right; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_ADD_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_ADD_SQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN SELECT p_left+p_right INTO result FROM DUAL; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_ADD_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_ADD_SQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN SELECT p_left+p_right INTO result FROM DUAL; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN result:=p_left-p_right; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN result:=p_left-p_right; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN SELECT p_left-p_right INTO result FROM DUAL; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN SELECT p_left-p_right INTO result FROM DUAL; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN result:=p_left*p_right; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN result:=p_left*p_right; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN SELECT p_left*p_right INTO result FROM DUAL; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN SELECT p_left*p_right INTO result FROM DUAL; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN result:=p_left/p_right; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN result:=p_left/p_right; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_DIVIDE_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN SELECT p_left/p_right INTO result FROM DUAL; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_NA_INF_DIVIDE_SQL\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(p_left NUMBER,p_right NUMBER) RETURN VARCHAR2 IS result NUMBER; BEGIN SELECT p_left/p_right INTO result FROM DUAL; RETURN TO_CHAR(result); END;",
+        "inserts": []
+      }
+    ],
+    "cases": [
+      {
+        "id": "add_plsql_0",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_1",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(-1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_2",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(0,0) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_3",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(0.5,-0.5) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_4",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(99999999999999999999999999999999999999,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "100000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_5",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "111111111011111111101111111110111111110"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_6",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(-12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "86419753208641975320864197532086419754"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_7",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(1e100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_8",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(1e-100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_9",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(1e-65,1e-65) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.00000000000000000000000000000000000000000000000000000000000000002"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_10",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_11",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(-1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_12",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(9.9999999999999999999999999999999999999e125,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "999999999999999999999999999999999999990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_13",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(0.12345678901234567890123456789012345678,0.98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1.1111111101111111110111111111011111111"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_plsql_14",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_PLSQL\"(9.9999999999999999999999999999999999999e125,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "999999999999999999999999999999999999990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_0",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_1",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(-1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_2",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(0,0) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_3",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(0.5,-0.5) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_4",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(99999999999999999999999999999999999999,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "100000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_5",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "111111111011111111101111111110111111110"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_6",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(-12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "86419753208641975320864197532086419754"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_7",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(1e100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_8",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(1e-100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_9",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(1e-65,1e-65) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.00000000000000000000000000000000000000000000000000000000000000002"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_10",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_11",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(-1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_12",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(9.9999999999999999999999999999999999999e125,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "999999999999999999999999999999999999990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_13",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(0.12345678901234567890123456789012345678,0.98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1.1111111101111111110111111111011111111"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "add_sql_14",
+        "sql": "SELECT \"public\".\"BICDB_NA_ADD_SQL\"(9.9999999999999999999999999999999999999e125,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "999999999999999999999999999999999999990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_0",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_1",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(-1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-3"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_2",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(0,0) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_3",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(0.5,-0.5) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_4",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(99999999999999999999999999999999999999,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "99999999999999999999999999999999999998"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_5",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-86419753208641975320864197532086419754"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_6",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(-12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-111111111011111111101111111110111111110"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_7",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(1e100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_8",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(1e-100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_9",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(1e-65,1e-65) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_10",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-0.1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_11",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(-1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-0.1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_12",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(9.9999999999999999999999999999999999999e125,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "999999999999999999999999999999999999990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_13",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(0.12345678901234567890123456789012345678,0.98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-0.86419753208641975320864197532086419754"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_plsql_14",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_PLSQL\"(9.9999999999999999999999999999999999999e125,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "999999999999999999999999999999999999990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_0",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_1",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(-1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-3"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_2",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(0,0) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_3",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(0.5,-0.5) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_4",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(99999999999999999999999999999999999999,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "99999999999999999999999999999999999998"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_5",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-86419753208641975320864197532086419754"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_6",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(-12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-111111111011111111101111111110111111110"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_7",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(1e100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_8",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(1e-100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_9",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(1e-65,1e-65) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_10",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-0.1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_11",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(-1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-0.1"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_12",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(9.9999999999999999999999999999999999999e125,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "999999999999999999999999999999999999990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_13",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(0.12345678901234567890123456789012345678,0.98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-0.86419753208641975320864197532086419754"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "subtract_sql_14",
+        "sql": "SELECT \"public\".\"BICDB_NA_SUBTRACT_SQL\"(9.9999999999999999999999999999999999999e125,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "999999999999999999999999999999999999990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_0",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_1",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(-1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-2"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_2",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(0,0) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_3",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(0.5,-0.5) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-0.25"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_4",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(99999999999999999999999999999999999999,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "99999999999999999999999999999999999999"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_5",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1219326311370217952261850327338667885855000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_6",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(-12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-1219326311370217952261850327338667885855000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_7",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(1e100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_8",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(1e-100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_9",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(1e-65,1e-65) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_10",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_11",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(-1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_12",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(9.9999999999999999999999999999999999999e125,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "999999999999999999999999999999999999990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_13",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(0.12345678901234567890123456789012345678,0.98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.1219326311370217952261850327338667885855"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_plsql_14",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_PLSQL\"(9.9999999999999999999999999999999999999e125,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "Infinity"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_0",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_1",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(-1,2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-2"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_2",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(0,0) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_3",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(0.5,-0.5) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-0.25"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_4",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(99999999999999999999999999999999999999,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "99999999999999999999999999999999999999"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_5",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "1219326311370217952261850327338667885855000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_6",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(-12345678901234567890123456789012345678,98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "-1219326311370217952261850327338667885855000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_7",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(1e100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_8",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(1e-100,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_9",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(1e-65,1e-65) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_10",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_11",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(-1e-130,0.1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_12",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(9.9999999999999999999999999999999999999e125,1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "999999999999999999999999999999999999990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_13",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(0.12345678901234567890123456789012345678,0.98765432109876543210987654321098765432) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "0.1219326311370217952261850327338667885855"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "multiply_sql_14",
+        "sql": "SELECT \"public\".\"BICDB_NA_MULTIPLY_SQL\"(9.9999999999999999999999999999999999999e125,2) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_0",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_1",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_2",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_3",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_4",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),0) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_5",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),0) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_6",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_7",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),1) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_8",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),-1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_9",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),-1) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_10",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_11",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_12",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_13",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_14",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),0) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_15",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),0) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_16",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_17",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),1) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_18",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),-1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_19",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),-1) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_20",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_21",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_22",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_23",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_24",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_25",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_26",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_27",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_28",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_29",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_30",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_SQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_31",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_ADD_PLSQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_32",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_33",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_34",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_35",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_36",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),0) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_37",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),0) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_38",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_39",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),1) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_40",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),-1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_41",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),-1) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_42",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_43",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_44",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_45",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_46",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),0) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_47",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),0) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_48",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_49",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),1) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_50",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),-1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_51",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),-1) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_52",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_53",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_54",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_55",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_56",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_57",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_58",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_59",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_60",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_61",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_62",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_SQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_63",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_SUBTRACT_PLSQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_64",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_65",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_66",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_67",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_68",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),0) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_69",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),0) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_70",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_71",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),1) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_72",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),-1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_73",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),-1) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_74",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_75",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_76",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_77",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_78",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),0) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_79",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),0) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_80",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_81",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),1) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_82",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),-1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_83",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),-1) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_84",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_85",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_86",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_87",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_88",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_89",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_90",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_91",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_92",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_93",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_94",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_SQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_95",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_MULTIPLY_PLSQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_96",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_97",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_98",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_99",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_100",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),0) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01476",
+          "bicdb": "22012"
+        }
+      },
+      {
+        "id": "infinity_101",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),0) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01476",
+          "bicdb": "22012"
+        }
+      },
+      {
+        "id": "infinity_102",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_103",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),1) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_104",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),-1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_105",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(9e125),-1) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_106",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_107",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_108",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_109",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_110",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),0) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01476",
+          "bicdb": "22012"
+        }
+      },
+      {
+        "id": "infinity_111",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),0) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01476",
+          "bicdb": "22012"
+        }
+      },
+      {
+        "id": "infinity_112",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_113",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),1) FROM DUAL",
+        "expected": [
+          [
+            "-~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_114",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),-1) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_115",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(\"public\".\"BICDB_NA_INFINITY\"(-9e125),-1) FROM DUAL",
+        "expected": [
+          [
+            "~"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_116",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_117",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_118",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_119",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(0,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_120",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_121",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_122",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_123",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_124",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_125",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      },
+      {
+        "id": "infinity_126",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_SQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected_error": {
+          "oracle": "ORA-01426",
+          "bicdb": "22003"
+        }
+      },
+      {
+        "id": "infinity_127",
+        "sql": "SELECT \"public\".\"BICDB_NA_INF_DIVIDE_PLSQL\"(-1,\"public\".\"BICDB_NA_INFINITY\"(-9e125)) FROM DUAL",
+        "expected": [
+          [
+            "0"
+          ]
+        ]
+      }
+    ],
+    "compiler_probe": "bicdb_na_add_plsql",
+    "scope": "Resolved version-8 NUMBER addition, subtraction and multiplication in SQL/procedural contexts; representable operands, base-100 rounding, cancellation, underflow, and reference NUMBER infinity operations. Not unconstrained input conversion or binary floating point."
+  }
+}

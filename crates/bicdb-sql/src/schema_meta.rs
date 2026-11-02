@@ -4553,7 +4553,10 @@ impl RoutineFrameTemplate {
     }
 }
 
-fn coerce_routine_assignment(value: SqlValue, schema: &RoutineTypeSchema) -> Result<SqlValue> {
+pub(crate) fn coerce_routine_assignment(
+    value: SqlValue,
+    schema: &RoutineTypeSchema,
+) -> Result<SqlValue> {
     if matches!(schema.pg_type.as_str(), "record" | "trigger" | "void") {
         return Ok(value);
     }

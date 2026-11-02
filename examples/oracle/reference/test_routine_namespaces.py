@@ -156,6 +156,27 @@ class RoutineNamespaceTests(unittest.TestCase):
         literals = [obj for obj in plan['setup'] if obj['name'].endswith('_LITERAL"')]
         self.assertTrue(all('() RETURN' not in obj['sql'] for obj in literals))
 
+    def test_parameterized_cursor_fixture_keeps_distinct_backend_scope_rules(self):
+        from routine_cursors import fixture as cursor_fixture
+        oracle = cursor_fixture('owner', 'BICDB_TEST')
+        postgres = cursor_fixture('public', 'BICDB_TEST', native=True)
+        self.assertEqual(len(oracle['cases']), 34)
+        self.assertEqual(len(postgres['cases']), 28)
+        self.assertTrue(all(case['expected'] == [[{'number': '12'}]] for case in oracle['cases'] if case['id'].startswith('column_')))
+        self.assertTrue(all(case['expected_error'] == dict(postgres='42702', bicdb='42702') for case in postgres['cases'] if case['id'].startswith('column_')))
+        self.assertTrue(any(case['id'].startswith('date_') for case in oracle['cases']))
+        self.assertFalse(any('DEFAULT' in obj['sql'] for obj in postgres['setup']))
+
+    def test_number_fixture_retains_overflow_infinity_and_finite_reference_cases(self):
+        from routine_number_arithmetic import fixture as number_fixture
+        plan = number_fixture('owner', 'BICDB_TEST')
+        self.assertEqual(len(plan['cases']), 218)
+        self.assertEqual(len({case['id'] for case in plan['cases']}), 218)
+        cases = {case['id']: case for case in plan['cases']}
+        self.assertEqual(cases['multiply_plsql_14']['expected'], [[{'number': 'Infinity'}]])
+        self.assertEqual(cases['multiply_sql_14']['expected_error'], dict(oracle='ORA-01426', bicdb='22003'))
+        self.assertEqual(sum(case['id'].startswith('infinity_') for case in plan['cases']), 128)
+
 
 if __name__ == '__main__':
     unittest.main()

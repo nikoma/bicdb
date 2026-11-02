@@ -71,7 +71,11 @@ def fixture(schema, prefix):
 
 
 def run(oracle, bicdb, schema, prefix, suite='namespaces'):
-    if suite == 'concat':
+    if suite == 'numberops':
+        from routine_number_arithmetic import fixture as make_fixture
+    elif suite == 'cursors':
+        from routine_cursors import fixture as make_fixture
+    elif suite == 'concat':
         from routine_concat import fixture as make_fixture
     elif suite == 'case':
         from routine_case import fixture as make_fixture
@@ -159,7 +163,7 @@ def main():
     parser.add_argument('--oracle-config', required=True, type=Path)
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN')
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--suite', choices=('namespaces', 'temporal', 'calendar', 'week', 'anchors', 'case', 'concat'), default='namespaces')
+    parser.add_argument('--suite', choices=('namespaces', 'temporal', 'calendar', 'week', 'anchors', 'case', 'concat', 'cursors', 'numberops'), default='namespaces')
     args = parser.parse_args()
     report = dict(format=1, success=False)
     try:

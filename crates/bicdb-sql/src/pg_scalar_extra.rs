@@ -211,6 +211,151 @@ fn oracle_number_divide(left: &SqlValue, right: &SqlValue) -> Result<SqlValue> {
     Ok(SqlValue::String(value.format()))
 }
 
+fn oracle_number_arithmetic(
+    left: &SqlValue,
+    right: &SqlValue,
+    operator: &str,
+    context: &str,
+) -> Result<SqlValue> {
+    let procedural = match context {
+        "plsql" => true,
+        "sql" => false,
+        _ => {
+            return Err(SqlError::Unsupported(
+                "unknown Oracle NUMBER arithmetic context".into(),
+            ))
+        }
+    };
+    let infinity = |value: &SqlValue| match value.to_cell().as_str() {
+        "Infinity" => Some(false),
+        "-Infinity" => Some(true),
+        _ => None,
+    };
+    let left_inf = infinity(left);
+    let right_inf = infinity(right);
+    let left = if left_inf.is_none() {
+        Some(parse_decimal(&left.to_cell())?)
+    } else {
+        None
+    };
+    let right = if right_inf.is_none() {
+        Some(parse_decimal(&right.to_cell())?)
+    } else {
+        None
+    };
+    let zero = |value: &Option<Decimal>| value.as_ref().is_some_and(|v| v.mantissa.is_zero());
+    let negative = |value: &Option<Decimal>, inf: Option<bool>| {
+        inf.unwrap_or_else(|| value.as_ref().is_some_and(|v| v.mantissa.is_negative()))
+    };
+    let overflow =
+        || SqlError::numeric_value_out_of_range("Oracle NUMBER arithmetic is out of range");
+    let finish_infinity = |negative: bool| {
+        if procedural {
+            Ok(SqlValue::String(
+                if negative { "-Infinity" } else { "Infinity" }.into(),
+            ))
+        } else {
+            Err(overflow())
+        }
+    };
+    if operator == "/" && zero(&right) {
+        return Err(division_by_zero());
+    }
+    if left_inf.is_some() || right_inf.is_some() {
+        // Oracle NUMBER's infinity operations differ from IEEE arithmetic.
+        // These rules are independently measured on the recorded reference.
+        let sign = match operator {
+            "+" => left_inf.or(right_inf).expect("infinite operand"),
+            "-" if left_inf == Some(false) && right_inf == Some(false) => {
+                return Ok(SqlValue::String("0".into()))
+            }
+            "-" => left_inf.unwrap_or_else(|| !right_inf.expect("right infinite")),
+            "*" if zero(&left) || zero(&right) => return Ok(SqlValue::String("0".into())),
+            "*" => negative(&left, left_inf) != negative(&right, right_inf),
+            "/" if !procedural && left_inf.is_none() && right_inf == Some(true) && !zero(&left) => {
+                return Err(overflow())
+            }
+            "/" if left_inf.is_none() => return Ok(SqlValue::String("0".into())),
+            "/" => negative(&left, left_inf) != negative(&right, right_inf),
+            _ => {
+                return Err(SqlError::Unsupported(
+                    "unsupported Oracle NUMBER arithmetic operator".into(),
+                ))
+            }
+        };
+        return finish_infinity(sign);
+    }
+    let left = left.expect("finite left");
+    let right = right.expect("finite right");
+    let canonical_result = |value: SqlValue| -> Result<SqlValue> {
+        let mut text = value.to_cell();
+        if text.contains('.') {
+            text = text.trim_end_matches('0').trim_end_matches('.').to_string();
+        }
+        Ok(SqlValue::String(text))
+    };
+    if operator == "/" {
+        if left.mantissa.is_zero() {
+            return Ok(SqlValue::String("0".into()));
+        }
+        let exponent = decimal_quotient_exponent(&left, &right)?;
+        if exponent < -130 {
+            return Ok(SqlValue::String("0".into()));
+        }
+        let sign = left.mantissa.is_negative() != right.mantissa.is_negative();
+        if exponent > 125 {
+            return finish_infinity(sign);
+        }
+        return match oracle_number_divide(
+            &SqlValue::String(left.format()),
+            &SqlValue::String(right.format()),
+        ) {
+            Ok(value) => canonical_result(value),
+            Err(error) if error.sqlstate() == "22003" => finish_infinity(sign),
+            Err(error) => Err(error),
+        };
+    }
+    let value = match operator {
+        "+" | "-" => {
+            let scale = left.scale.max(right.scale);
+            let left = left.mantissa * pow10_bigint(scale - left.scale);
+            let right = right.mantissa * pow10_bigint(scale - right.scale);
+            Decimal {
+                mantissa: if operator == "+" {
+                    left + right
+                } else {
+                    left - right
+                },
+                scale,
+            }
+        }
+        "*" => Decimal {
+            mantissa: left.mantissa * right.mantissa,
+            scale: left.scale.checked_add(right.scale).ok_or_else(overflow)?,
+        },
+        _ => {
+            return Err(SqlError::Unsupported(
+                "unsupported Oracle NUMBER arithmetic operator".into(),
+            ))
+        }
+    };
+    if !value.mantissa.is_zero() {
+        let exponent = value.mantissa.abs().to_string().len() as i64 - i64::from(value.scale) - 1;
+        if exponent < -130 {
+            return Ok(SqlValue::String("0".into()));
+        }
+        if exponent > 125 {
+            return finish_infinity(value.mantissa.is_negative());
+        }
+    }
+    let sign = value.mantissa.is_negative();
+    match oracle_number_divide(&SqlValue::String(value.format()), &SqlValue::Int(1)) {
+        Ok(value) => canonical_result(value),
+        Err(error) if error.sqlstate() == "22003" => finish_infinity(sign),
+        Err(error) => Err(error),
+    }
+}
+
 fn pad(text: &str, length: i64, fill: &str, left: bool) -> String {
     let chars = text.chars().collect::<Vec<_>>();
     let length = length.max(0) as usize;
@@ -443,6 +588,7 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             | "bicdb_oracle_plsql_trunc_date"
             | "bicdb_oracle_date_add_days"
             | "bicdb_oracle_number_divide"
+            | "bicdb_oracle_number_arithmetic"
             | "bicdb_oracle_number_trunc"
             | "bicdb_oracle_plsql_number_trunc"
             | "bicdb_oracle_date_coerce"
@@ -468,6 +614,9 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         "bicdb_oracle_number_trunc" | "bicdb_oracle_plsql_number_trunc"
     ) {
         arity(name, args, 1..=2)?;
+    }
+    if name == "bicdb_oracle_number_arithmetic" {
+        arity(name, args, 4..=4)?;
     }
     if name == "bicdb_oracle_number_divide" {
         arity(name, args, 2..=2)?;
@@ -757,6 +906,9 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
             )?
         }
         "bicdb_oracle_number_divide" => oracle_number_divide(&args[0], &args[1])?,
+        "bicdb_oracle_number_arithmetic" => {
+            oracle_number_arithmetic(&args[0], &args[1], &args[2].to_cell(), &args[3].to_cell())?
+        }
         "bicdb_oracle_number_trunc" | "bicdb_oracle_plsql_number_trunc" => {
             let scale = if let Some(value) = args.get(1) {
                 let value = parse_decimal(&value.to_cell())?;

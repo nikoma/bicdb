@@ -33,6 +33,15 @@ class ComparisonTests(unittest.TestCase):
         self.assertNotEqual(canonical('a '), canonical('a'))
         with self.assertRaises(TypeError): canonical(0.1)
 
+    def test_oracle_number_infinities_do_not_reinterpret_native_finite_values(self):
+        endpoint = decimal.Decimal('1e126')
+        self.assertEqual(canonical(endpoint, oracle_number_sentinels=True), {'number': 'Infinity'})
+        self.assertEqual(canonical(endpoint.copy_negate(), oracle_number_sentinels=True), {'number': '-Infinity'})
+        self.assertEqual(canonical(decimal.Decimal('Infinity')), {'number': 'Infinity'})
+        self.assertEqual(canonical(endpoint), {'number': '1' + '0' * 126})
+        near = decimal.Decimal('9.9999999999999999999999999999999999999e125')
+        self.assertNotEqual(canonical(near, oracle_number_sentinels=True), {'number': 'Infinity'})
+
     def test_dates_are_not_silently_equated_with_timestamps(self):
         date = datetime.date(2020, 2, 29)
         self.assertNotEqual(canonical(date), canonical(datetime.datetime(2020, 2, 29)))

@@ -20,7 +20,7 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
                 == preview_routine_language_version(&routine.language)
                 && matches!(
                     preview_routine_language_version(&routine.language),
-                    Some(2 | 3 | 4 | 5 | 6 | 7)
+                    Some(2 | 3 | 4 | 5 | 6 | 7 | 8)
                 )
         })
     {
@@ -52,7 +52,14 @@ fn bind_namespace_statements(statements: &mut [RoutineStmt], schema: &str) -> Re
                             default_expr: Some(expr),
                             ..
                         } => bind_relations(&mut expr.expr, schema)?,
-                        RoutineDecl::Cursor { query, .. } => bind_relations(query, schema)?,
+                        RoutineDecl::Cursor { query, params, .. } => {
+                            for param in params {
+                                if let Some(expr) = &mut param.default_expr {
+                                    bind_relations(expr, schema)?;
+                                }
+                            }
+                            bind_relations(query, schema)?;
+                        }
                         _ => {}
                     }
                 }
@@ -108,9 +115,20 @@ fn bind_namespace_statements(statements: &mut [RoutineStmt], schema: &str) -> Re
                 bind_relations(query, schema)?;
                 bind_namespace_statements(body, schema)?;
             }
-            RoutineStmt::CursorForLoop { body, .. } | RoutineStmt::Loop { body } => {
-                bind_namespace_statements(body, schema)?
+            RoutineStmt::CursorForLoop {
+                arguments, body, ..
+            } => {
+                for arg in arguments {
+                    bind_relations(&mut arg.expr.expr, schema)?;
+                }
+                bind_namespace_statements(body, schema)?;
             }
+            RoutineStmt::OpenCursor { arguments, .. } => {
+                for arg in arguments {
+                    bind_relations(&mut arg.expr.expr, schema)?;
+                }
+            }
+            RoutineStmt::Loop { body } => bind_namespace_statements(body, schema)?,
             RoutineStmt::SelectInto { query, .. }
             | RoutineStmt::Perform { query }
             | RoutineStmt::ReturnQuery(query) => bind_relations(query, schema)?,
@@ -137,7 +155,6 @@ fn bind_namespace_statements(statements: &mut [RoutineStmt], schema: &str) -> Re
             RoutineStmt::ContinueLoop
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
-            | RoutineStmt::OpenCursor { .. }
             | RoutineStmt::FetchCursor { .. }
             | RoutineStmt::CloseCursor { .. }
             | RoutineStmt::Return(None) => {}
@@ -179,7 +196,14 @@ pub(crate) fn bind_block_namespace(
                 default_expr: Some(expr),
                 ..
             } => bind_relations(&mut expr.expr, &schema)?,
-            RoutineDecl::Cursor { query, .. } => bind_relations(query, &schema)?,
+            RoutineDecl::Cursor { query, params, .. } => {
+                for param in params {
+                    if let Some(expr) = &mut param.default_expr {
+                        bind_relations(expr, &schema)?;
+                    }
+                }
+                bind_relations(query, &schema)?;
+            }
             _ => {}
         }
     }
@@ -286,12 +310,19 @@ fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
                     }
                 }
                 for decl in declarations {
-                    if let RoutineDecl::Variable {
-                        default_expr: Some(expr),
-                        ..
-                    } = decl
-                    {
-                        lower_expression(&mut expr.expr, &local_types);
+                    match decl {
+                        RoutineDecl::Variable {
+                            default_expr: Some(expr),
+                            ..
+                        } => lower_expression(&mut expr.expr, &local_types),
+                        RoutineDecl::Cursor { params, .. } => {
+                            for param in params {
+                                if let Some(expr) = &mut param.default_expr {
+                                    lower_expression(expr, &local_types);
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 lower_statements(body, &local_types);
@@ -342,9 +373,22 @@ fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
                 lower_expression(&mut condition.expr, types);
                 lower_statements(body, types);
             }
-            RoutineStmt::QueryForLoop { body, .. }
-            | RoutineStmt::CursorForLoop { body, .. }
-            | RoutineStmt::Loop { body } => lower_statements(body, types),
+            RoutineStmt::CursorForLoop {
+                arguments, body, ..
+            } => {
+                for arg in arguments {
+                    lower_expression(&mut arg.expr.expr, types);
+                }
+                lower_statements(body, types);
+            }
+            RoutineStmt::OpenCursor { arguments, .. } => {
+                for arg in arguments {
+                    lower_expression(&mut arg.expr.expr, types);
+                }
+            }
+            RoutineStmt::QueryForLoop { body, .. } | RoutineStmt::Loop { body } => {
+                lower_statements(body, types)
+            }
             RoutineStmt::Return(Some(expr)) | RoutineStmt::DynamicExecute(expr) => {
                 lower_expression(&mut expr.expr, types)
             }
@@ -365,7 +409,6 @@ fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
             | RoutineStmt::Perform { .. }
             | RoutineStmt::Sql(_)
             | RoutineStmt::SqlInto { .. }
-            | RoutineStmt::OpenCursor { .. }
             | RoutineStmt::FetchCursor { .. }
             | RoutineStmt::CloseCursor { .. }
             | RoutineStmt::ReturnQuery(_)
@@ -412,12 +455,19 @@ pub(crate) fn lower_datetime_trunc(
         }
     }
     for declaration in declarations {
-        if let RoutineDecl::Variable {
-            default_expr: Some(expr),
-            ..
-        } = declaration
-        {
-            lower_expression(&mut expr.expr, &types);
+        match declaration {
+            RoutineDecl::Variable {
+                default_expr: Some(expr),
+                ..
+            } => lower_expression(&mut expr.expr, &types),
+            RoutineDecl::Cursor { params, .. } => {
+                for param in params {
+                    if let Some(expr) = &mut param.default_expr {
+                        lower_expression(expr, &types);
+                    }
+                }
+            }
+            _ => {}
         }
     }
     lower_statements(statements, &types);

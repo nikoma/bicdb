@@ -17,12 +17,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 
 
-def canonical(value):
+def canonical(value, oracle_number_sentinels=False):
     """Keep numeric precision, nulls and string padding in comparisons."""
     if value is None or isinstance(value, (str, bool)):
         return value
     if isinstance(value, (int, decimal.Decimal)):
         number = decimal.Decimal(value)
+        # Oracle NUMBER infinities are exposed by python-oracledb as the
+        # otherwise unrepresentable endpoints +/-1e126. Preserve their kind;
+        # PostgreSQL permits finite numbers of that magnitude, so opt in only
+        # for the Oracle reference transport.
+        if oracle_number_sentinels and number.copy_abs() == decimal.Decimal('1e126'):
+            return {'number': '-Infinity' if number.is_signed() else 'Infinity'}
         # Decimal.normalize() rounds to the process context (usually 28 digits).
         # Formatting and trimming preserve Oracle's full 38-digit precision.
         text = format(number, 'f')
@@ -43,14 +49,14 @@ def canonical(value):
     raise TypeError(f'unsupported result type: {type(value).__name__}')
 
 
-def outcome(connection, sql, max_rows=5000):
+def outcome(connection, sql, max_rows=5000, oracle_number_sentinels=False):
     try:
         with connection.cursor() as cursor:
             cursor.execute(sql)
             rows = cursor.fetchmany(max_rows + 1)
             if len(rows) > max_rows:
                 raise ValueError('fixture exceeded row limit')
-            return {'rows': [[canonical(value) for value in row] for row in rows]}
+            return {'rows': [[canonical(value, oracle_number_sentinels=oracle_number_sentinels) for value in row] for row in rows]}
     except Exception as error:
         # Driver messages can include connection information. Publish only the
         # stable error code and class, never exception text or connection DSNs.
@@ -62,7 +68,7 @@ def outcome(connection, sql, max_rows=5000):
 def compare_cases(oracle, bicdb, cases):
     results = []
     for case in cases:
-        reference = outcome(oracle, case['sql'])
+        reference = outcome(oracle, case['sql'], oracle_number_sentinels=True)
         actual = outcome(bicdb, case['sql'])
         matched = 'rows' in reference and 'rows' in actual and reference == actual
         if 'expected_error' in case:

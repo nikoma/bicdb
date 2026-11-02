@@ -1171,7 +1171,7 @@ fn routine_statement_profile_signature(statement: &RoutineStmt) -> String {
         RoutineStmt::Loop { .. } => "LOOP".to_string(),
         RoutineStmt::WhileLoop { condition, .. } => format!("WHILE {condition}"),
         RoutineStmt::ExitLoop => "EXIT".to_string(),
-        RoutineStmt::OpenCursor { name } => format!("OPEN {name}"),
+        RoutineStmt::OpenCursor { name, .. } => format!("OPEN {name}"),
         RoutineStmt::FetchCursor { name, targets } => {
             format!("FETCH {name} INTO {}", targets.join(","))
         }
@@ -4160,6 +4160,7 @@ enum RoutineDecl {
     },
     Cursor {
         name: String,
+        params: Vec<RoutineParam>,
         query: Query,
     },
 }
@@ -4242,6 +4243,7 @@ enum RoutineStmt {
     CursorForLoop {
         target: String,
         cursor: String,
+        arguments: Vec<RoutineCursorArgument>,
         body: Vec<RoutineStmt>,
     },
     /// `LOOP ... END LOOP`: repeats until EXIT or RETURN.
@@ -4257,6 +4259,7 @@ enum RoutineStmt {
     ExitLoop,
     OpenCursor {
         name: String,
+        arguments: Vec<RoutineCursorArgument>,
     },
     FetchCursor {
         name: String,
@@ -4500,8 +4503,15 @@ struct RoutineFrameTemplateParam {
 }
 
 #[derive(Clone, Debug)]
+struct RoutineCursorArgument {
+    name: Option<String>,
+    expr: RoutineExpr,
+}
+
+#[derive(Clone, Debug)]
 struct RoutineCursor {
     query: Query,
+    params: Vec<RoutineParam>,
     columns: Vec<String>,
     column_types: Vec<Option<String>>,
     rows: Vec<Vec<SqlValue>>,

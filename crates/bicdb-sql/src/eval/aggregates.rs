@@ -1662,6 +1662,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             "to_date" => return Some("date".to_string()),
             "trunc" if function_args(function).len() == 2 => return Some("numeric".to_string()),
             "bicdb_oracle_number_divide"
+            | "bicdb_oracle_number_arithmetic"
             | "bicdb_oracle_date_subtract"
             | "bicdb_oracle_number_trunc"
             | "bicdb_oracle_plsql_number_trunc" => return Some("numeric".to_string()),

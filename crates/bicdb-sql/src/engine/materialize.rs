@@ -3096,6 +3096,7 @@ impl<'db> SqlEngine<'db> {
             "to_date" => Some("date".to_string()),
             "trunc" if args.len() == 2 => Some("numeric".to_string()),
             "bicdb_oracle_number_divide"
+            | "bicdb_oracle_number_arithmetic"
             | "bicdb_oracle_date_subtract"
             | "bicdb_oracle_number_trunc" => Some("numeric".to_string()),
             "bicdb_oracle_date_coerce"

@@ -900,7 +900,10 @@ fn pg_depend_links_check_constraints_and_policies_to_called_functions() {
          JOIN pg_catalog.pg_proc AS p ON p.oid = d.refobjid \
          WHERE c.conname = 'rows_payload'",
     );
-    assert_eq!(constraint_deps, vec![vec![SqlValue::String("payload_ok".into())]]);
+    assert_eq!(
+        constraint_deps,
+        vec![vec![SqlValue::String("payload_ok".into())]]
+    );
     let policy_deps = session_rows(
         &mut session,
         "SELECT p.proname FROM pg_catalog.pg_policy AS pol \
@@ -909,5 +912,8 @@ fn pg_depend_links_check_constraints_and_policies_to_called_functions() {
          JOIN pg_catalog.pg_proc AS p ON p.oid = d.refobjid \
          WHERE pol.polname = 'rows_tenant'",
     );
-    assert_eq!(policy_deps, vec![vec![SqlValue::String("tenant_now".into())]]);
+    assert_eq!(
+        policy_deps,
+        vec![vec![SqlValue::String("tenant_now".into())]]
+    );
 }

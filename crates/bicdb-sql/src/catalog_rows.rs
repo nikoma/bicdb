@@ -2628,7 +2628,10 @@ fn expression_routine_dependencies(expression: &str, routines: &[RoutineSchema])
                 .name
                 .0
                 .iter()
-                .filter_map(|part| part.as_ident().map(|ident| ident.value.to_ascii_lowercase()))
+                .filter_map(|part| {
+                    part.as_ident()
+                        .map(|ident| ident.value.to_ascii_lowercase())
+                })
                 .collect::<Vec<_>>();
             let argc = match &function.args {
                 FunctionArguments::List(list) => list.args.len(),
@@ -2648,7 +2651,10 @@ fn expression_routine_dependencies(expression: &str, routines: &[RoutineSchema])
                 .iter()
                 .filter(|param| param.mode != RoutineArgMode::Out)
                 .collect::<Vec<_>>();
-            let required = inputs.iter().filter(|param| param.default_expr.is_none()).count();
+            let required = inputs
+                .iter()
+                .filter(|param| param.default_expr.is_none())
+                .count();
             (required..=inputs.len()).contains(&argc)
         };
         let named = routines
@@ -2667,10 +2673,18 @@ fn expression_routine_dependencies(expression: &str, routines: &[RoutineSchema])
                     .filter(|routine| routine_schema_name(routine).eq_ignore_ascii_case("public"))
                     .copied()
                     .collect::<Vec<_>>();
-                if public.is_empty() && named.len() == 1 { named.clone() } else { public }
+                if public.is_empty() && named.len() == 1 {
+                    named.clone()
+                } else {
+                    public
+                }
             }
         };
-        oids.extend(chosen.into_iter().map(|routine| routine_oid(routine.kind, &routine.name)));
+        oids.extend(
+            chosen
+                .into_iter()
+                .map(|routine| routine_oid(routine.kind, &routine.name)),
+        );
     }
     oids.sort_unstable();
     oids.dedup();

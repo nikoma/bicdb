@@ -5693,7 +5693,22 @@ fn fold_policy_init_plans<'e>(
             Some(cached) => cached,
             None => {
                 let evaluated = engine.execute_query(query).and_then(|result| {
-                    let pg_type = result.column_types.first().cloned().flatten();
+                    // The scalar executor can omit projection metadata for a
+                    // user function nested under an operator. Resolve the
+                    // declared expression type before turning its value into
+                    // a literal; JSONB arrays must not become plain strings.
+                    let declared = match query.body.as_ref() {
+                        SetExpr::Select(select) => match select.projection.first() {
+                            Some(
+                                SelectItem::UnnamedExpr(expr)
+                                | SelectItem::ExprWithAlias { expr, .. },
+                            ) => engine.infer_env_expr_type(expr, &[]),
+                            _ => None,
+                        },
+                        _ => None,
+                    };
+                    let pg_type =
+                        declared.or_else(|| result.column_types.first().cloned().flatten());
                     scalar_subquery_value(result).map(|value| (value, pg_type))
                 });
                 match evaluated {

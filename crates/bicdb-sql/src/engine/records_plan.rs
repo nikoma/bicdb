@@ -332,6 +332,11 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<CteResult> {
         let name = cte.alias.name.value.clone();
         let key = cte_key(&name);
+        // Under WITH RECURSIVE only a CTE that references its own name is
+        // recursive (PostgreSQL rule). A sibling UNION ALL that does not was
+        // iterated anyway: its branches produced the same rows every round
+        // until the iteration limit.
+        let self_referencing = cte_references_own_name(&cte.query, &name);
         let SetExpr::SetOperation {
             left,
             op: SetOperator::Union,
@@ -355,6 +360,23 @@ impl<'db> SqlEngine<'db> {
                 CteResult::new(name, columns, result.rows).with_column_types(result.column_types)
             );
         };
+        if !self_referencing {
+            let engine = self
+                .inherit_transaction(SqlEngine::with_ctes_and_context(
+                    self.db_ref(),
+                    self.settings,
+                    outer_ctes.clone(),
+                    self.security_context.clone(),
+                    self.session_gucs.clone(),
+                ))
+                .with_shared_routine_vars(self.routine_vars.clone())
+                .with_cancellation(self.cancellation.clone());
+            let result = engine.execute_query(&cte.query)?;
+            let columns = cte_columns(&name, &cte.alias.columns, &result.columns)?;
+            return Ok(
+                CteResult::new(name, columns, result.rows).with_column_types(result.column_types)
+            );
+        }
         match set_quantifier {
             SetQuantifier::None | SetQuantifier::Distinct | SetQuantifier::All => {}
             _ => {
@@ -2500,4 +2522,23 @@ impl SqlEngine<'_> {
         }
         Ok(())
     }
+}
+
+/// Whether a CTE body reads a relation with the CTE's own (unqualified) name.
+fn cte_references_own_name(query: &Query, name: &str) -> bool {
+    use sqlparser::ast::visit_relations;
+    use std::ops::ControlFlow;
+    visit_relations(query, |relation| {
+        let parts = &relation.0;
+        let own = parts.len() == 1
+            && parts[0]
+                .as_ident()
+                .is_some_and(|ident| ident.value.eq_ignore_ascii_case(name));
+        if own {
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        }
+    })
+    .is_break()
 }

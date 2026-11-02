@@ -237,3 +237,40 @@ fn disable_trigger_all_suspends_foreign_keys_for_a_data_load() {
     session.execute("ALTER TABLE versions DISABLE TRIGGER USER").unwrap();
     assert!(session.execute("INSERT INTO versions VALUES (12, 98)").is_err());
 }
+
+/// Board fields carry CHECK (NOT (options_json ? 'options') OR ...): the jsonb
+/// key-existence operators must work in CHECK constraints and WHERE clauses,
+/// not only in SELECT lists.
+#[test]
+fn jsonb_existence_operators_work_in_check_constraints_and_where() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE fields (id INT PRIMARY KEY, options_json JSONB NOT NULL, \
+         CHECK (NOT (options_json ? 'options') OR jsonb_typeof(options_json->'options') = 'array'))",
+        "INSERT INTO fields VALUES (1, '{\"options\": []}')",
+        "INSERT INTO fields VALUES (2, '{\"schemaVersion\": \"1\"}')",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    assert!(
+        session.execute("INSERT INTO fields VALUES (3, '{\"options\": 5}')").is_err(),
+        "the CHECK constraint must reject a non-array options value"
+    );
+    let ids = |session: &mut SqlSession<'_>, sql: &str| -> Vec<SqlValue> {
+        session_rows(session, sql).into_iter().map(|row| row[0].clone()).collect()
+    };
+    assert_eq!(
+        ids(&mut session, "SELECT id FROM fields WHERE options_json ? 'options' ORDER BY id"),
+        vec![SqlValue::Int(1)]
+    );
+    assert_eq!(
+        ids(&mut session, "SELECT id FROM fields WHERE options_json ?| array['options', 'schemaVersion'] ORDER BY id"),
+        vec![SqlValue::Int(1), SqlValue::Int(2)]
+    );
+    assert_eq!(
+        ids(&mut session, "SELECT id FROM fields WHERE NOT (options_json ?& array['options', 'schemaVersion']) ORDER BY id"),
+        vec![SqlValue::Int(1), SqlValue::Int(2)]
+    );
+}

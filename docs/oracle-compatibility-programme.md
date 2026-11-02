@@ -85,6 +85,14 @@ matching generated Oracle cases and 132 independent PostgreSQL controls. Full
 routine/view behavior, deferred foreign keys and business workflows remain
 unqualified. A named-schema primary-key UPDATE failure is independently
 reproduced under both profiles and remains a separate engine blocker.
+The [NVL qualification](evidence/oracle-nvl-2026-11-02/README.md) adds eager,
+type-directed NVL and timestamp precision propagation under compiler version 11.
+All 93 new comparisons and 845 retained generated cases match, alongside 132
+native PostgreSQL controls. The upgraded development database preserves all
+915 tables and 185,537 current rows. PRODUCTATTRIBUTE was explicitly recreated
+from unchanged source and retains its six passing probes. The definition
+baseline is still 44/62; the remaining definitions and full application behavior
+are not established by these scalar/routine checks.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source
@@ -101,7 +109,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 2. Migration assessment | Inventory source and runtime dependencies; report object locations, dynamic SQL, wrapped code, blockers and manual changes | Partial: [offline lexical inventory](oracle-migration-assessment.md); semantic/catalog/runtime assessment and dependency resolution outstanding |
 | 3. SQL value semantics | Differential null/empty-string, concatenation, padding, comparison, coercion, uniqueness and composite-key tests | Partial: HR lowering and version-7 typed routine concatenation with NULL/padding/caller-length reference cases; general SQL coercion and padding qualification outstanding |
 | 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings, bounded NUMBER arithmetic/reference infinity transport, and durable DATE/TIMESTAMP column provenance with storage/anchor/reference checks; 2,263-column application backfill and complete target-value preservation verified; timezone regions and full conversion rules unqualified |
-| 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL, date formats and Gregorian ADD_MONTHS; version-9 bounded DECODE and version-10 AL32UTF8 CHR/default TO_CHAR, with generic COALESCE evaluation checks; NVL2 and broader NVL/scalar semantics outstanding |
+| 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL, date formats and Gregorian ADD_MONTHS; version-9 bounded DECODE, version-10 AL32UTF8 CHR/default TO_CHAR, and version-11 eager typed NVL with timestamp precision; NVL2 and broader scalar/NLS/type semantics outstanding |
 | 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL, pgwire parameters and literal-integer ROWNUM prefix predicates in plain blocks; other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |
 | 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: application-schema selection, versioned static function relation binding and documented heap adaptation; general resolution and synonyms outstanding |
 | 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Partial: [nested-block contracts](evidence/oracle-nested-block-contracts-2026-11-02/README.md) distinguish new Oracle routine statement rollback from native PostgreSQL block rollback; general transactions, DDL commits and locking qualification outstanding |

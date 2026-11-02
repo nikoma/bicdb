@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "isolated_database_only": true,
+  "application_database_opened_with_old_reader": false,
+  "new_runtime_sha256": "1f2985ca97e4dab02af40f85b5eeada698163d5a4be53390438543d3138f0c83",
+  "old_runtime_sha256": "f91cc6dad93939a6d292b9fd8a9de92374ce3d638e2111a1e94f660754048ed9",
+  "readers": [
+    {
+      "label": "new",
+      "calls": [
+        {
+          "sql": "SELECT nvl_reader(65) FROM DUAL",
+          "value": "65"
+        },
+        {
+          "sql": "SELECT nvl_reader(49835) FROM DUAL",
+          "value": "49835"
+        },
+        {
+          "sql": "SELECT nvl_reader(NULL) FROM DUAL",
+          "value": "None"
+        }
+      ],
+      "recovery": true
+    },
+    {
+      "label": "old",
+      "calls": [
+        {
+          "sql": "SELECT nvl_reader(65) FROM DUAL",
+          "sqlstate": "0A000"
+        },
+        {
+          "sql": "SELECT nvl_reader(49835) FROM DUAL",
+          "sqlstate": "0A000"
+        },
+        {
+          "sql": "SELECT nvl_reader(NULL) FROM DUAL",
+          "sqlstate": "0A000"
+        }
+      ],
+      "recovery": true
+    }
+  ],
+  "success": true
+}

@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "success": true,
+  "application_qualified": false,
+  "scope": "Complete target row-multiset preservation against a stopped-writer pre-upgrade BicDB snapshot; not equality to the original Oracle export after application writes",
+  "matched_tables": 915,
+  "total_rows": 185537,
+  "runtime_binary_sha256": "1f2985ca97e4dab02af40f85b5eeada698163d5a4be53390438543d3138f0c83",
+  "all_target_row_multisets_preserved": true,
+  "public_table_fingerprint_reference": "../oracle-characters-2026-11-02/complete-target-value-preservation.json",
+  "public_table_fingerprint_reference_sha256": "c8dc22bad4af04e4386f51581f98378b246b840338a3f23ec90d70815e47e18d",
+  "all_current_table_fingerprints_equal_public_reference": true
+}

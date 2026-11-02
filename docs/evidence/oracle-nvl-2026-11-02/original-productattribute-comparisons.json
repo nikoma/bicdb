@@ -1,0 +1,85 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "1f2985ca97e4dab02af40f85b5eeada698163d5a4be53390438543d3138f0c83",
+  "application_qualified": false,
+  "source_body_unchanged": true,
+  "source_sha256": "9df97f8e2b3fd7daa03860d20bc3b32b5b273649603aff3c81180a32912ffd7c",
+  "oracle_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "instance_0",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "instance_1",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "instance_2",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "instance_3",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "instance_4",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "instance_5",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    }
+  ],
+  "matched": 6,
+  "total": 6,
+  "success": true
+}

@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "source_body_unchanged": true,
+  "source_sha256": "9df97f8e2b3fd7daa03860d20bc3b32b5b273649603aff3c81180a32912ffd7c",
+  "only_adaptation": "explicit destination namespace",
+  "application_qualified": false,
+  "runtime_binary_sha256": "1f2985ca97e4dab02af40f85b5eeada698163d5a4be53390438543d3138f0c83",
+  "success": true,
+  "previous_compiler": "bicdb_oracle_preview_v10",
+  "compiler": "bicdb_oracle_preview_v11"
+}

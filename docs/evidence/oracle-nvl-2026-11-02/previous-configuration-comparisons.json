@@ -1,0 +1,270 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "1f2985ca97e4dab02af40f85b5eeada698163d5a4be53390438543d3138f0c83",
+  "source_body_unchanged": true,
+  "only_source_adaptation": "explicit destination namespace",
+  "source_sha256": "371a77923a465ddf5eb64ab6297bb3e3fb4d93bc860af41f3f0ea340f66504fc",
+  "configuration_definition_preserved": true,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "acct_all_seed_0",
+      "matched": true,
+      "oracle": {
+        "row_count": 379,
+        "canonical_rows_sha256": "32e7ed41c6b74d069d8458ffbf6e8a9f3d4ead37ff7c66fa6c9c538cedab303d"
+      },
+      "bicdb": {
+        "row_count": 379,
+        "canonical_rows_sha256": "32e7ed41c6b74d069d8458ffbf6e8a9f3d4ead37ff7c66fa6c9c538cedab303d"
+      }
+    },
+    {
+      "id": "acct_all_seed_1",
+      "matched": true,
+      "oracle": {
+        "row_count": 379,
+        "canonical_rows_sha256": "dcd602da0618125a432738a5c4ec201323387785592d07c9037adb8b87ced3a1"
+      },
+      "bicdb": {
+        "row_count": 379,
+        "canonical_rows_sha256": "dcd602da0618125a432738a5c4ec201323387785592d07c9037adb8b87ced3a1"
+      }
+    },
+    {
+      "id": "acct_absent_0",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      }
+    },
+    {
+      "id": "acct_absent_1",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      }
+    },
+    {
+      "id": "acct_absent_2",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "5f3693275204f819f34ef17d7588c5440adb251c4a769b08cb8d01af8eabf1f0"
+      }
+    },
+    {
+      "id": "partner_all_seed",
+      "matched": true,
+      "oracle": {
+        "row_count": 18,
+        "canonical_rows_sha256": "8de24b54a867f0a38555d7072bc74b08e7b689c2675d5d365ed65c0a75516716"
+      },
+      "bicdb": {
+        "row_count": 18,
+        "canonical_rows_sha256": "8de24b54a867f0a38555d7072bc74b08e7b689c2675d5d365ed65c0a75516716"
+      }
+    },
+    {
+      "id": "partner_absent_0",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "partner_absent_1",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "document_all_seed",
+      "matched": true,
+      "oracle": {
+        "row_count": 56,
+        "canonical_rows_sha256": "56b88e1d74cec641ea9db9cc3f60bf47003179465c0e40d072dceb13dc719623"
+      },
+      "bicdb": {
+        "row_count": 56,
+        "canonical_rows_sha256": "56b88e1d74cec641ea9db9cc3f60bf47003179465c0e40d072dceb13dc719623"
+      }
+    },
+    {
+      "id": "document_zero",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "configuration_missing_default",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "ed6ff83c95f97f39502188c2157fd1b00acd3fd8b3f210eeb498b9ce464f96f6"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "ed6ff83c95f97f39502188c2157fd1b00acd3fd8b3f210eeb498b9ce464f96f6"
+      }
+    },
+    {
+      "id": "payment_all_seed",
+      "matched": true,
+      "oracle": {
+        "row_count": 2,
+        "canonical_rows_sha256": "98f0c00caa55203b3d34a7d50cd471b218190eb4fa6e1ae77acf6e01ba0999c7"
+      },
+      "bicdb": {
+        "row_count": 2,
+        "canonical_rows_sha256": "98f0c00caa55203b3d34a7d50cd471b218190eb4fa6e1ae77acf6e01ba0999c7"
+      }
+    },
+    {
+      "id": "payment_absent_error_contract",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "configuration_seed_0",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "829881a2291f015de98bde86052983aadd357b263d1fd228b5294fd54b1dc582"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "829881a2291f015de98bde86052983aadd357b263d1fd228b5294fd54b1dc582"
+      }
+    },
+    {
+      "id": "configuration_seed_1",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "04fff7478ac57bf180357fa167e33d5ddd444beb832a15d535050883ac81791d"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "04fff7478ac57bf180357fa167e33d5ddd444beb832a15d535050883ac81791d"
+      }
+    },
+    {
+      "id": "configuration_seed_2",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "d4069694ac2409595b680f0247749317341c09ff7973499e3efbfca0f2cc6ea6"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "d4069694ac2409595b680f0247749317341c09ff7973499e3efbfca0f2cc6ea6"
+      }
+    },
+    {
+      "id": "configuration_seed_3",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "829881a2291f015de98bde86052983aadd357b263d1fd228b5294fd54b1dc582"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "829881a2291f015de98bde86052983aadd357b263d1fd228b5294fd54b1dc582"
+      }
+    },
+    {
+      "id": "configuration_seed_4",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "617e41a989111b8d69fd934279b1bfc0420419506fd333dcce888f7a9b976d28"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "617e41a989111b8d69fd934279b1bfc0420419506fd333dcce888f7a9b976d28"
+      }
+    },
+    {
+      "id": "configuration_seed_5",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "04fff7478ac57bf180357fa167e33d5ddd444beb832a15d535050883ac81791d"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "04fff7478ac57bf180357fa167e33d5ddd444beb832a15d535050883ac81791d"
+      }
+    },
+    {
+      "id": "configuration_seed_6",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "d4069694ac2409595b680f0247749317341c09ff7973499e3efbfca0f2cc6ea6"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "d4069694ac2409595b680f0247749317341c09ff7973499e3efbfca0f2cc6ea6"
+      }
+    },
+    {
+      "id": "configuration_seed_7",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "fc4d84d6305991f2db88107cf009eac860ab29b350fc9c54e37b99a679b7949a"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "fc4d84d6305991f2db88107cf009eac860ab29b350fc9c54e37b99a679b7949a"
+      }
+    }
+  ],
+  "success": true,
+  "oracle_version": "23.26.3.0.0",
+  "matched": 21,
+  "total": 21,
+  "baseline_matched": 13,
+  "baseline_total": 13,
+  "unresolved": []
+}

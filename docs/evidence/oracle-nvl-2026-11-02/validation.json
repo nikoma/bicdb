@@ -1,0 +1,32 @@
+{
+  "format": 1,
+  "engine_source_commit": "f50af24feb326fe7caacaf9e9b06989bdf0ac385",
+  "qualification_source_commit": "624190b6b1cf6762576cc994369a46b5a130e274",
+  "runtime_binary_sha256": "1f2985ca97e4dab02af40f85b5eeada698163d5a4be53390438543d3138f0c83",
+  "rust_passed": 1255,
+  "rust_ignored": 3,
+  "python_reference_passed": 23,
+  "python_migration_passed": 22,
+  "oracle_nvl_cases": 93,
+  "retained_oracle_cases": 845,
+  "native_postgres_cases": 132,
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "resources": [
+    {
+      "run": "nvl-final-build-memory",
+      "status": "completed",
+      "peak_owned_group_rss_bytes": 3595796480,
+      "minimum_observed_available_bytes": 21228273664
+    },
+    {
+      "run": "nvl-final-validation-memory",
+      "status": "completed",
+      "peak_owned_group_rss_bytes": 3817762816,
+      "minimum_observed_available_bytes": 18470973440
+    }
+  ],
+  "cleanup_reclaimed_bytes": 2559605544,
+  "application_qualified": false
+}

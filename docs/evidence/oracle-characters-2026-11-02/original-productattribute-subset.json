@@ -1,0 +1,112 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "scope": "Unchanged original routine against a disposable four-table seed subset; not the running application database",
+  "tables": [
+    {
+      "name": "M_ATTRIBUTESET",
+      "rows": 4,
+      "source_row_file_sha256": "060ffd37c6e8af5dc24824c02f37c0492e6baa95c93853d62a42d0d2d0fad600",
+      "verified_value_digest": "14fd4fd1fe6e25a6bf3e6f79a029877d1406bee843f7d3b7ce0a88877929e069"
+    },
+    {
+      "name": "M_ATTRIBUTESETINSTANCE",
+      "rows": 4,
+      "source_row_file_sha256": "7dfb81aff13da691f3c0be2e44a925eef11c07a78feac7a7b94a97da86602737",
+      "verified_value_digest": "6391460bce7652492720c5f1f45d194c11b9b7447d7d0c83498a39779000e04f"
+    },
+    {
+      "name": "M_ATTRIBUTE",
+      "rows": 4,
+      "source_row_file_sha256": "864e0a40a18c4bde16fb2ca98884dc1649849d1671642f8b9a8769c36d23126d",
+      "verified_value_digest": "c0545156fc7758667c3ac1365c30b2ed05379e3e284d7f3e67834a5057c5bd30"
+    },
+    {
+      "name": "M_ATTRIBUTEINSTANCE",
+      "rows": 5,
+      "source_row_file_sha256": "b49e6fb4947b8742021b6ae8f880a5a644f4dfccd9bd924e39c9c4d0e0526faf",
+      "verified_value_digest": "8cbe5f1dd0e03f87b8274185b23bfce678ced79b4adda697047fa3005cefab04"
+    }
+  ],
+  "cases": [
+    {
+      "id": "seed_instance_0",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "seed_instance_1",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "seed_instance_2",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "seed_instance_3",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "seed_instance_4",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    },
+    {
+      "id": "seed_instance_5",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    }
+  ],
+  "success": true,
+  "runtime_binary_sha256": "f91cc6dad93939a6d292b9fd8a9de92374ce3d638e2111a1e94f660754048ed9",
+  "source_body_unchanged": true,
+  "only_adaptation": "explicit destination namespace",
+  "source_sha256": "9df97f8e2b3fd7daa03860d20bc3b32b5b273649603aff3c81180a32912ffd7c",
+  "matched": 6,
+  "total": 6
+}

@@ -1,0 +1,2698 @@
+{
+  "format": 1,
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "fixture_prefix": "BICDB_TC_E8C0B7F84B",
+  "fixture_sha256": "97cdf2853ad2d19eeb82f1a8220b530ff5f63bce17ba7e1788427ac3f548149d",
+  "total": 119,
+  "matched": 119,
+  "cases": [
+    {
+      "id": "sql_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "function_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[A]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[A]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[A]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "#"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "#"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "#"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "#"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "#"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "#"
+        ]
+      ]
+    },
+    {
+      "id": "function_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "#"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "#"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "#"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "#"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "#"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "#"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[#]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[#]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[#]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            " "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            " "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          " "
+        ]
+      ]
+    },
+    {
+      "id": "to_char_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            " "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            " "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          " "
+        ]
+      ]
+    },
+    {
+      "id": "function_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            " "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            " "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          " "
+        ]
+      ]
+    },
+    {
+      "id": "default_function_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            " "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            " "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          " "
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[ ]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[ ]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[ ]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\n"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\n"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\n"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\n"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\n"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\n"
+        ]
+      ]
+    },
+    {
+      "id": "function_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\n"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\n"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\n"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\n"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\n"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\n"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\n]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\n]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\n]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "~"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "~"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "~"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "~"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "~"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "~"
+        ]
+      ]
+    },
+    {
+      "id": "function_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "~"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "~"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "~"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "~"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "~"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "~"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[~]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[~]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[~]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u007f"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u007f"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u007f"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u007f"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u007f"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u007f"
+        ]
+      ]
+    },
+    {
+      "id": "function_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u007f"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u007f"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u007f"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u007f"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u007f"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u007f"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\u007f]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\u007f]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\u007f]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00ab"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00ab"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00ab"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00ab"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00ab"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00ab"
+        ]
+      ]
+    },
+    {
+      "id": "function_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00ab"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00ab"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00ab"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00ab"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00ab"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00ab"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\u00ab]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\u00ab]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\u00ab]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00bb"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00bb"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00bb"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00bb"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00bb"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00bb"
+        ]
+      ]
+    },
+    {
+      "id": "function_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00bb"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00bb"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00bb"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00bb"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00bb"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00bb"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\u00bb]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\u00bb]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\u00bb]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00e9"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00e9"
+        ]
+      ]
+    },
+    {
+      "id": "function_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00e9"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00e9"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\u00e9]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\u00e9]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\u00e9]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u20ac"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u20ac"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u20ac"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u20ac"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u20ac"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u20ac"
+        ]
+      ]
+    },
+    {
+      "id": "function_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u20ac"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u20ac"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u20ac"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u20ac"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u20ac"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u20ac"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\u20ac]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\u20ac]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\u20ac]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u4e2d"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u4e2d"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u4e2d"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u4e2d"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u4e2d"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u4e2d"
+        ]
+      ]
+    },
+    {
+      "id": "function_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u4e2d"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u4e2d"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u4e2d"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u4e2d"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u4e2d"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u4e2d"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\u4e2d]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\u4e2d]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\u4e2d]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ud83d\ude00"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ud83d\ude00"
+        ]
+      ]
+    },
+    {
+      "id": "function_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ud83d\ude00"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ud83d\ude00"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\ud83d\ude00]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\ud83d\ude00]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\ud83d\ude00]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ud800\udc00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud800\udc00"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ud800\udc00"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ud800\udc00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud800\udc00"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ud800\udc00"
+        ]
+      ]
+    },
+    {
+      "id": "function_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ud800\udc00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud800\udc00"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ud800\udc00"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ud800\udc00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud800\udc00"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ud800\udc00"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\ud800\udc00]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\ud800\udc00]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\ud800\udc00]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\udbff\udfff"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\udbff\udfff"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\udbff\udfff"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\udbff\udfff"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\udbff\udfff"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\udbff\udfff"
+        ]
+      ]
+    },
+    {
+      "id": "function_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\udbff\udfff"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\udbff\udfff"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\udbff\udfff"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\udbff\udfff"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\udbff\udfff"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\udbff\udfff"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\udbff\udfff]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\udbff\udfff]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\udbff\udfff]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_14",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u0080"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u0080"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u0080"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_14",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u0080"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u0080"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u0080"
+        ]
+      ]
+    },
+    {
+      "id": "function_14",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u0080"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u0080"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u0080"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_14",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u0080"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u0080"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u0080"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_14",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\u0080]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\u0080]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\u0080]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_15",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u07ff"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u07ff"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u07ff"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_15",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u07ff"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u07ff"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u07ff"
+        ]
+      ]
+    },
+    {
+      "id": "function_15",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u07ff"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u07ff"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u07ff"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_15",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u07ff"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u07ff"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u07ff"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_15",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\u07ff]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\u07ff]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\u07ff]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_16",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u0800"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u0800"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u0800"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_16",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u0800"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u0800"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u0800"
+        ]
+      ]
+    },
+    {
+      "id": "function_16",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u0800"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u0800"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u0800"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_16",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u0800"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u0800"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u0800"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_16",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\u0800]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\u0800]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\u0800]"
+        ]
+      ]
+    },
+    {
+      "id": "sql_17",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ufffd"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ufffd"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ufffd"
+        ]
+      ]
+    },
+    {
+      "id": "to_char_17",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ufffd"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ufffd"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ufffd"
+        ]
+      ]
+    },
+    {
+      "id": "function_17",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ufffd"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ufffd"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ufffd"
+        ]
+      ]
+    },
+    {
+      "id": "default_function_17",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\ufffd"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ufffd"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\ufffd"
+        ]
+      ]
+    },
+    {
+      "id": "nested_function_17",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[\ufffd]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\ufffd]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[\ufffd]"
+        ]
+      ]
+    },
+    {
+      "id": "conversion_sql_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "conversion_routine_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "conversion_sql_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "conversion_routine_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "conversion_sql_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "conversion_routine_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "conversion_sql_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "conversion_routine_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "conversion_sql_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "conversion_routine_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "conversion_sql_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "conversion_routine_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "conversion_sql_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "conversion_routine_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "number_error_0",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "expected_error": {
+        "oracle": "ORA-01426",
+        "bicdb": "22003"
+      }
+    },
+    {
+      "id": "number_error_1",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "expected_error": {
+        "oracle": "ORA-01426",
+        "bicdb": "22003"
+      }
+    },
+    {
+      "id": "number_error_2",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "expected_error": {
+        "oracle": "ORA-01426",
+        "bicdb": "22003"
+      }
+    },
+    {
+      "id": "number_error_3",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "expected_error": {
+        "oracle": "ORA-01426",
+        "bicdb": "22003"
+      }
+    },
+    {
+      "id": "number_error_4",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "expected_error": {
+        "oracle": "ORA-01426",
+        "bicdb": "22003"
+      }
+    },
+    {
+      "id": "number_error_5",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "expected_error": {
+        "oracle": "ORA-01426",
+        "bicdb": "22003"
+      }
+    },
+    {
+      "id": "number_error_6",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01722"
+      },
+      "bicdb": {
+        "error": "InvalidTextRepresentation",
+        "code": "22P02"
+      },
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "number_error_7",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01722"
+      },
+      "bicdb": {
+        "error": "InvalidTextRepresentation",
+        "code": "22P02"
+      },
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "nesting_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "nesting_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "nesting_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "nesting_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "A"
+        ]
+      ]
+    },
+    {
+      "id": "nesting_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "[prefix]"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[prefix]"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "[prefix]"
+        ]
+      ]
+    },
+    {
+      "id": "procedural_short_circuit",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "prefix"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "prefix"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "prefix"
+        ]
+      ]
+    },
+    {
+      "id": "procedural_selected_error",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22003"
+      }
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "scope": "Fixed AL32UTF8 complete characters, truncating numeric input, error codes, nested default TO_CHAR and stored routines. NUL transport, indeterminate invalid code points, NCHAR_CS and other database character sets remain unsupported/unqualified.",
+  "oracle_nls_numeric_characters": ".,",
+  "oracle_nls_concat": {
+    "NLS_CALENDAR": "GREGORIAN",
+    "NLS_DATE_FORMAT": "DD-MON-RR",
+    "NLS_DATE_LANGUAGE": "AMERICAN",
+    "NLS_LENGTH_SEMANTICS": "BYTE"
+  },
+  "oracle_database_character_set": "AL32UTF8",
+  "routine_compiler": "bicdb_oracle_preview_v10",
+  "runtime_binary_sha256": "f91cc6dad93939a6d292b9fd8a9de92374ce3d638e2111a1e94f660754048ed9"
+}

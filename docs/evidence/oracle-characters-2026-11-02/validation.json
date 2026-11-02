@@ -1,0 +1,47 @@
+{
+  "format": 1,
+  "engine_source_commit": "c512c89f2e4a2e914697e5cc1448fe25d3aafafc",
+  "qualification_source_commit": "0a9ec6a6714eeadadae65dbfd602cbf8bb38ddf4",
+  "runtime_binary_sha256": "f91cc6dad93939a6d292b9fd8a9de92374ce3d638e2111a1e94f660754048ed9",
+  "rust_passed": 1251,
+  "rust_ignored": 3,
+  "focused_runtime_coalesce_followup_passed": 1,
+  "python_reference_passed": 22,
+  "python_migration_passed": 22,
+  "oracle_character_cases": 119,
+  "retained_oracle_cases": 726,
+  "native_postgres_cases": 132,
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "resources": [
+    {
+      "run": "chr-build-memory",
+      "status": "completed",
+      "peak_owned_group_rss_bytes": 3613642752,
+      "minimum_observed_available_bytes": 19611381760
+    },
+    {
+      "run": "chr-complete-validation-memory",
+      "status": "completed",
+      "peak_owned_group_rss_bytes": 3572449280,
+      "minimum_observed_available_bytes": 19678081024
+    },
+    {
+      "run": "chr-runtime-unit-memory",
+      "status": "completed",
+      "peak_owned_group_rss_bytes": 3855138816,
+      "minimum_observed_available_bytes": 21511303168
+    },
+    {
+      "run": "temporal-complete-preservation-memory",
+      "status": "completed",
+      "peak_owned_group_rss_bytes": 2105970688,
+      "minimum_observed_available_bytes": 20909563904
+    }
+  ],
+  "earlier_validation_batches_interrupted_to_fix_observed_failures": true,
+  "cleanup_reclaimed_bytes": 2834368224,
+  "cache_size_gib_approx": 5.5,
+  "application_qualified": false
+}

@@ -1,0 +1,506 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "native_bicdb": true,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "unicode_0",
+      "sql": "SELECT chr(10) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\n"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\n"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_1",
+      "sql": "SELECT chr(32) AS value",
+      "postgres": {
+        "rows": [
+          [
+            " "
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            " "
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_2",
+      "sql": "SELECT chr(35) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "#"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_3",
+      "sql": "SELECT chr(65) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "A"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_4",
+      "sql": "SELECT chr(127) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\u007f"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u007f"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_5",
+      "sql": "SELECT chr(128) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\u0080"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u0080"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_6",
+      "sql": "SELECT chr(171) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\u00ab"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00ab"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_7",
+      "sql": "SELECT chr(187) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\u00bb"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00bb"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_8",
+      "sql": "SELECT chr(233) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_9",
+      "sql": "SELECT chr(8364) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\u20ac"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u20ac"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_10",
+      "sql": "SELECT chr(20013) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\u4e2d"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u4e2d"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_11",
+      "sql": "SELECT chr(49835) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\uc2ab"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\uc2ab"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_12",
+      "sql": "SELECT chr(49851) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\uc2bb"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\uc2bb"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_13",
+      "sql": "SELECT chr(128512) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_14",
+      "sql": "SELECT chr(1114111) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\udbff\udfff"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\udbff\udfff"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "null",
+      "sql": "SELECT chr(CAST(NULL AS INTEGER)) AS value",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qualified",
+      "sql": "SELECT pg_catalog.chr(49835) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "\uc2ab"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\uc2ab"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "short_circuit",
+      "sql": "SELECT coalesce(chr(65),chr(-1)) AS value",
+      "postgres": {
+        "rows": [
+          [
+            "A"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ],
+        "type_oids": [
+          25
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "nul_error",
+      "sql": "SELECT chr(0) AS value",
+      "postgres": {
+        "sqlstate": "54000"
+      },
+      "bicdb": {
+        "sqlstate": "54000"
+      },
+      "matched": true
+    },
+    {
+      "id": "negative_error",
+      "sql": "SELECT chr(-1) AS value",
+      "postgres": {
+        "sqlstate": "22023"
+      },
+      "bicdb": {
+        "sqlstate": "22023"
+      },
+      "matched": true
+    },
+    {
+      "id": "surrogate_error",
+      "sql": "SELECT chr(55296) AS value",
+      "postgres": {
+        "sqlstate": "54000"
+      },
+      "bicdb": {
+        "sqlstate": "54000"
+      },
+      "matched": true
+    },
+    {
+      "id": "too_large_error",
+      "sql": "SELECT chr(1114112) AS value",
+      "postgres": {
+        "sqlstate": "54000"
+      },
+      "bicdb": {
+        "sqlstate": "54000"
+      },
+      "matched": true
+    }
+  ],
+  "success": true,
+  "matched": 22,
+  "total": 22,
+  "runtime_binary_sha256": "f91cc6dad93939a6d292b9fd8a9de92374ce3d638e2111a1e94f660754048ed9"
+}

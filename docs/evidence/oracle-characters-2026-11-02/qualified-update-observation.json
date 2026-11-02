@@ -1,0 +1,51 @@
+{
+  "format": 1,
+  "cases": [
+    {
+      "profile": "postgres",
+      "id": "non_primary_update",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "id": "primary_update",
+      "success": false,
+      "sqlstate": "42601",
+      "message": "invalid SQL: relation names beginning with `__bicdb_s_` are reserved for schema isolation"
+    },
+    {
+      "profile": "postgres",
+      "id": "read_after_updates",
+      "success": true,
+      "rows": [
+        [
+          1,
+          "B"
+        ]
+      ]
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "id": "non_primary_update",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "id": "primary_update",
+      "success": false,
+      "sqlstate": "42601",
+      "message": "invalid SQL: relation names beginning with `__bicdb_s_` are reserved for schema isolation"
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "id": "read_after_updates",
+      "success": true,
+      "rows": [
+        [
+          1,
+          "B"
+        ]
+      ]
+    }
+  ]
+}

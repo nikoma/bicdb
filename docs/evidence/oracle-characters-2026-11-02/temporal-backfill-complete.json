@@ -1,0 +1,66 @@
+{
+  "format": 1,
+  "success": true,
+  "reconciled_columns": 2263,
+  "validated_tables": 906,
+  "all_table_row_multisets_preserved": true,
+  "source_row_count_differences": [
+    {
+      "table": "AD_ALERTPROCESSORLOG",
+      "source_rows": 0,
+      "target_rows": 1
+    },
+    {
+      "table": "AD_CHANGELOG",
+      "source_rows": 0,
+      "target_rows": 6
+    },
+    {
+      "table": "AD_ISSUE",
+      "source_rows": 0,
+      "target_rows": 12
+    },
+    {
+      "table": "AD_PINSTANCE",
+      "source_rows": 0,
+      "target_rows": 7
+    },
+    {
+      "table": "AD_PINSTANCE_LOG",
+      "source_rows": 0,
+      "target_rows": 2
+    },
+    {
+      "table": "AD_PINSTANCE_PARA",
+      "source_rows": 0,
+      "target_rows": 6
+    },
+    {
+      "table": "AD_PREFERENCE",
+      "source_rows": 17,
+      "target_rows": 26
+    },
+    {
+      "table": "AD_SESSION",
+      "source_rows": 0,
+      "target_rows": 11
+    },
+    {
+      "table": "AD_USERPREFERENCE",
+      "source_rows": 0,
+      "target_rows": 1
+    },
+    {
+      "table": "AD_WORKFLOWPROCESSORLOG",
+      "source_rows": 0,
+      "target_rows": 1
+    },
+    {
+      "table": "PA_DASHBOARDPREFERENCE",
+      "source_rows": 0,
+      "target_rows": 10
+    }
+  ],
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "application_qualified": false
+}

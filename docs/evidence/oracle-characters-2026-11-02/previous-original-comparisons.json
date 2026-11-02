@@ -1,0 +1,461 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "f91cc6dad93939a6d292b9fd8a9de92374ce3d638e2111a1e94f660754048ed9",
+  "application_qualified": false,
+  "source_bodies_unchanged": true,
+  "only_source_adaptation": "explicit destination namespace",
+  "source_hashes": {
+    "DBA_DISPLAYTYPE": "6d5571a45997a43fd3effd06ff1bc12d05b295f2eaffb239415cd5b3206d12a9",
+    "PAYMENTTERMDUEDAYS": "f43e8ad7f63972159d56ef8e98e492d144b45b798f2b984d26ab2f77dd60216e"
+  },
+  "oracle_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "display_10",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "ec6666aa7ee8c505aa50c4c26b7602792962ebfb59148420ace23ec07031ad01"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "ec6666aa7ee8c505aa50c4c26b7602792962ebfb59148420ace23ec07031ad01"
+      }
+    },
+    {
+      "id": "display_11",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "240f04387d7dcd7b647357ddd3b3475f2a8bac6152179a9acc3c19f68d5e08f9"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "240f04387d7dcd7b647357ddd3b3475f2a8bac6152179a9acc3c19f68d5e08f9"
+      }
+    },
+    {
+      "id": "display_12",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "8f76e86d0f3a77adfb8e9cfd6341d5651ec900f0826e8203dfed0f4bee31e581"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "8f76e86d0f3a77adfb8e9cfd6341d5651ec900f0826e8203dfed0f4bee31e581"
+      }
+    },
+    {
+      "id": "display_13",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "d438b1702d3eea4bf2c78a7ff194a38c3eb7567dbc71804de0dddd27314dbf89"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "d438b1702d3eea4bf2c78a7ff194a38c3eb7567dbc71804de0dddd27314dbf89"
+      }
+    },
+    {
+      "id": "display_14",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "36d4771ee006ef3268c987cea660609cd80ec216f98eec6e31d87443b9327d2e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "36d4771ee006ef3268c987cea660609cd80ec216f98eec6e31d87443b9327d2e"
+      }
+    },
+    {
+      "id": "display_15",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "60f96e819d3b54f4546418b5d827e239c057cbbab624c8c4aff276124be8e401"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "60f96e819d3b54f4546418b5d827e239c057cbbab624c8c4aff276124be8e401"
+      }
+    },
+    {
+      "id": "display_16",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "154497bdb6744463243d233764ac9f02384fdedd9ba2f43c3cd68c9a46646488"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "154497bdb6744463243d233764ac9f02384fdedd9ba2f43c3cd68c9a46646488"
+      }
+    },
+    {
+      "id": "display_17",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "faf6f511e69f343014198ad7d9ae1a61a75b32f6926d9163dfc1941978a6854d"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "faf6f511e69f343014198ad7d9ae1a61a75b32f6926d9163dfc1941978a6854d"
+      }
+    },
+    {
+      "id": "display_18",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "113a80fce1608cd09167b1b533d37f004aa7c06dc09bb6be1574ba4f54aef7e8"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "113a80fce1608cd09167b1b533d37f004aa7c06dc09bb6be1574ba4f54aef7e8"
+      }
+    },
+    {
+      "id": "display_19",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "81d92d6729c02bb162b14a60407bf3bce4702ba9c5ba92abf4572f5027dfd4d4"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "81d92d6729c02bb162b14a60407bf3bce4702ba9c5ba92abf4572f5027dfd4d4"
+      }
+    },
+    {
+      "id": "display_20",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "2eb8a6758aa8bd9be617887116fba0ff852ac464ff48ff3e5a54d35db9f9e25e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "2eb8a6758aa8bd9be617887116fba0ff852ac464ff48ff3e5a54d35db9f9e25e"
+      }
+    },
+    {
+      "id": "display_21",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "07729c11e4f76e4fe5be1725ebf1a4797e401b416dfd41bc58de791650fcaedf"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "07729c11e4f76e4fe5be1725ebf1a4797e401b416dfd41bc58de791650fcaedf"
+      }
+    },
+    {
+      "id": "display_22",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "669aa07d41103ea50d7461c40ddd07cbcf74df1cdd575cd0b00360d0896d41b4"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "669aa07d41103ea50d7461c40ddd07cbcf74df1cdd575cd0b00360d0896d41b4"
+      }
+    },
+    {
+      "id": "display_23",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "664460f53768fd6ce48608f5f94e81f9d209ae34af14f4eec52e6daf3063fd21"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "664460f53768fd6ce48608f5f94e81f9d209ae34af14f4eec52e6daf3063fd21"
+      }
+    },
+    {
+      "id": "display_24",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "f3e7f562556590fe9c40d3332c29571f00ad70e1f581bad173737149021a9ffd"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "f3e7f562556590fe9c40d3332c29571f00ad70e1f581bad173737149021a9ffd"
+      }
+    },
+    {
+      "id": "display_25",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "ba2218510f1478e67b8ca215b1e127d8cee47d9dd099b5084e78c7f864905635"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "ba2218510f1478e67b8ca215b1e127d8cee47d9dd099b5084e78c7f864905635"
+      }
+    },
+    {
+      "id": "display_26",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "a546518fc2267cf6756d54767fb20b9b52e2f4cfb0fb1cc90891999421459e45"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "a546518fc2267cf6756d54767fb20b9b52e2f4cfb0fb1cc90891999421459e45"
+      }
+    },
+    {
+      "id": "display_27",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "faef63c3b96a61f7ce4e80bb0790a52450560485d2435554e5bfdb36408d67fb"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "faef63c3b96a61f7ce4e80bb0790a52450560485d2435554e5bfdb36408d67fb"
+      }
+    },
+    {
+      "id": "display_28",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "6604f9dcc7f6a5bb8a64b72f2acdda46a582a82d74e519eef3efd1cad73c4798"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "6604f9dcc7f6a5bb8a64b72f2acdda46a582a82d74e519eef3efd1cad73c4798"
+      }
+    },
+    {
+      "id": "display_29",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "663039e25fe76c3eb58540523b57f2defd0648efdc6fcd18ed0f886446db5101"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "663039e25fe76c3eb58540523b57f2defd0648efdc6fcd18ed0f886446db5101"
+      }
+    },
+    {
+      "id": "display_30",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "f39f8c762a773b381d785ddae44f3202a409bfc0bb28663a5e44158166986a17"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "f39f8c762a773b381d785ddae44f3202a409bfc0bb28663a5e44158166986a17"
+      }
+    },
+    {
+      "id": "display_31",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "9b8f5c1014c310caefb5521e19e57b76544d79081f2d3fe38b0850bc4197d9aa"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "9b8f5c1014c310caefb5521e19e57b76544d79081f2d3fe38b0850bc4197d9aa"
+      }
+    },
+    {
+      "id": "display_32",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "17fa1145372e773cd05a69d720a5fa23e83812bfde93b5583712bb7285936360"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "17fa1145372e773cd05a69d720a5fa23e83812bfde93b5583712bb7285936360"
+      }
+    },
+    {
+      "id": "display_33",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "69860d1c7c8b73a5f636d9f32cf18c59ad7500f36a774629ee1dbe736d959e23"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "69860d1c7c8b73a5f636d9f32cf18c59ad7500f36a774629ee1dbe736d959e23"
+      }
+    },
+    {
+      "id": "display_0",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "1503b07faa8c43eb409d80ad75c43a89dc57cb0cfdff2760cd42d50676fa7399"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "1503b07faa8c43eb409d80ad75c43a89dc57cb0cfdff2760cd42d50676fa7399"
+      }
+    },
+    {
+      "id": "display_-1",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "302832fc18e974a151f2094eadc1318db710e5e84c7a2576273e1a488a7294a5"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "302832fc18e974a151f2094eadc1318db710e5e84c7a2576273e1a488a7294a5"
+      }
+    },
+    {
+      "id": "display_999",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "492e7be1e4f9cd5e1c268f8589eb33f4794627e2356465d71f9758ea9c49ee95"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "492e7be1e4f9cd5e1c268f8589eb33f4794627e2356465d71f9758ea9c49ee95"
+      }
+    },
+    {
+      "id": "display_0_5",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "9d86cafece23aff20399513e64ddfc27494458aa94bd05cbcd410b64b9e2ef1d"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "9d86cafece23aff20399513e64ddfc27494458aa94bd05cbcd410b64b9e2ef1d"
+      }
+    },
+    {
+      "id": "display_NULL",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "f4475c309eed68a8f546846d4cb92ad38059aacbbe453a9c3247c87adb7fda4c"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "f4475c309eed68a8f546846d4cb92ad38059aacbbe453a9c3247c87adb7fda4c"
+      }
+    },
+    {
+      "id": "due_days_0",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "91c1a1ea0a8147ab69de8c4b1881929bdf59342f044a30d9dd785eef1fe9eb29"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "91c1a1ea0a8147ab69de8c4b1881929bdf59342f044a30d9dd785eef1fe9eb29"
+      }
+    },
+    {
+      "id": "due_days_1",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "dc2fe5198a37c3806b9b51b9f88c6318c601d5894edcb9f77c116f3200b868cb"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "dc2fe5198a37c3806b9b51b9f88c6318c601d5894edcb9f77c116f3200b868cb"
+      }
+    },
+    {
+      "id": "due_days_2",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "91c1a1ea0a8147ab69de8c4b1881929bdf59342f044a30d9dd785eef1fe9eb29"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "91c1a1ea0a8147ab69de8c4b1881929bdf59342f044a30d9dd785eef1fe9eb29"
+      }
+    },
+    {
+      "id": "due_days_3",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "91c1a1ea0a8147ab69de8c4b1881929bdf59342f044a30d9dd785eef1fe9eb29"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "91c1a1ea0a8147ab69de8c4b1881929bdf59342f044a30d9dd785eef1fe9eb29"
+      }
+    },
+    {
+      "id": "due_days_4",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "dc2fe5198a37c3806b9b51b9f88c6318c601d5894edcb9f77c116f3200b868cb"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "dc2fe5198a37c3806b9b51b9f88c6318c601d5894edcb9f77c116f3200b868cb"
+      }
+    },
+    {
+      "id": "due_days_5",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "cae64dd41f2e9a37366ad480b823f2181382c7df2bbe6ba80e533e6904060479"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "cae64dd41f2e9a37366ad480b823f2181382c7df2bbe6ba80e533e6904060479"
+      }
+    },
+    {
+      "id": "due_days_6",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "cae64dd41f2e9a37366ad480b823f2181382c7df2bbe6ba80e533e6904060479"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "cae64dd41f2e9a37366ad480b823f2181382c7df2bbe6ba80e533e6904060479"
+      }
+    },
+    {
+      "id": "due_days_null_date",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "cae64dd41f2e9a37366ad480b823f2181382c7df2bbe6ba80e533e6904060479"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "cae64dd41f2e9a37366ad480b823f2181382c7df2bbe6ba80e533e6904060479"
+      }
+    }
+  ],
+  "matched": 37,
+  "total": 37,
+  "success": true
+}

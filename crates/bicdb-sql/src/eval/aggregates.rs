@@ -1648,6 +1648,8 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         match unqualified_name {
             "nextval" | "currval" | "setval" => return Some("int8".to_string()),
             "bicdb_oracle_column_type"
+            | "chr"
+            | "bicdb_oracle_chr"
             | "bicdb_oracle_decode_key"
             | "bicdb_oracle_decode_text"
             | "bicdb_oracle_concat"

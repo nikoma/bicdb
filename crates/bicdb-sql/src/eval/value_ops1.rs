@@ -3350,6 +3350,9 @@ pub(crate) fn eval_compatibility_function_value(
         }
         "chr" | "pg_catalog.chr" => {
             require_arg_count("chr", args, 1)?;
+            if matches!(args[0], SqlValue::Null) {
+                return Ok(Some(SqlValue::Null));
+            }
             let code = sql_value_i64(&args[0]).ok_or_else(|| {
                 SqlError::invalid_parameter_value(
                     "requested character is not valid for encoding UTF8",
@@ -3366,9 +3369,17 @@ pub(crate) fn eval_compatibility_function_value(
                 .ok()
                 .and_then(char::from_u32)
                 .ok_or_else(|| {
-                    SqlError::invalid_parameter_value(
-                        "requested character is not valid for encoding UTF8",
-                    )
+                    if code < 0 {
+                        SqlError::invalid_parameter_value(
+                            "requested character is not valid for encoding UTF8",
+                        )
+                    } else {
+                        SqlError::data_exception(
+                            "54000",
+                            "requested character is not valid for encoding UTF8",
+                            Some("text".into()),
+                        )
+                    }
                 })?;
             Ok(Some(SqlValue::String(character.to_string())))
         }

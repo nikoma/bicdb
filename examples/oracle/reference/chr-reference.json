@@ -1,0 +1,589 @@
+{
+  "format": 1,
+  "source_only": true,
+  "oracle_database_version": "23.26.3.0.0",
+  "oracle_database_character_set": "AL32UTF8",
+  "valid_character_cases": [
+    {
+      "input": "65",
+      "rows": {
+        "rows": [
+          [
+            "A",
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            },
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 41"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "35",
+      "rows": {
+        "rows": [
+          [
+            "#",
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            },
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 23"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "32",
+      "rows": {
+        "rows": [
+          [
+            " ",
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            },
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 20"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "10",
+      "rows": {
+        "rows": [
+          [
+            "\n",
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            },
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: a"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "126",
+      "rows": {
+        "rows": [
+          [
+            "~",
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            },
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 7e"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "127",
+      "rows": {
+        "rows": [
+          [
+            "\u007f",
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            },
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 7f"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "49835",
+      "rows": {
+        "rows": [
+          [
+            "\u00ab",
+            {
+              "number": "1"
+            },
+            {
+              "number": "2"
+            },
+            "Typ=1 Len=2 CharacterSet=AL32UTF8: c2,ab"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "49851",
+      "rows": {
+        "rows": [
+          [
+            "\u00bb",
+            {
+              "number": "1"
+            },
+            {
+              "number": "2"
+            },
+            "Typ=1 Len=2 CharacterSet=AL32UTF8: c2,bb"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "50089",
+      "rows": {
+        "rows": [
+          [
+            "\u00e9",
+            {
+              "number": "1"
+            },
+            {
+              "number": "2"
+            },
+            "Typ=1 Len=2 CharacterSet=AL32UTF8: c3,a9"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "14844588",
+      "rows": {
+        "rows": [
+          [
+            "\u20ac",
+            {
+              "number": "1"
+            },
+            {
+              "number": "3"
+            },
+            "Typ=1 Len=3 CharacterSet=AL32UTF8: e2,82,ac"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "14989485",
+      "rows": {
+        "rows": [
+          [
+            "\u4e2d",
+            {
+              "number": "1"
+            },
+            {
+              "number": "3"
+            },
+            "Typ=1 Len=3 CharacterSet=AL32UTF8: e4,b8,ad"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "4036991104",
+      "rows": {
+        "rows": [
+          [
+            "\ud83d\ude00",
+            {
+              "number": "1"
+            },
+            {
+              "number": "4"
+            },
+            "Typ=1 Len=4 CharacterSet=AL32UTF8: f0,9f,98,80"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "4036001920",
+      "rows": {
+        "rows": [
+          [
+            "\ud800\udc00",
+            {
+              "number": "1"
+            },
+            {
+              "number": "4"
+            },
+            "Typ=1 Len=4 CharacterSet=AL32UTF8: f0,90,80,80"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "4103061439",
+      "rows": {
+        "rows": [
+          [
+            "\udbff\udfff",
+            {
+              "number": "1"
+            },
+            {
+              "number": "4"
+            },
+            "Typ=1 Len=4 CharacterSet=AL32UTF8: f4,8f,bf,bf"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "49792",
+      "rows": {
+        "rows": [
+          [
+            "\u0080",
+            {
+              "number": "1"
+            },
+            {
+              "number": "2"
+            },
+            "Typ=1 Len=2 CharacterSet=AL32UTF8: c2,80"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "57279",
+      "rows": {
+        "rows": [
+          [
+            "\u07ff",
+            {
+              "number": "1"
+            },
+            {
+              "number": "2"
+            },
+            "Typ=1 Len=2 CharacterSet=AL32UTF8: df,bf"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "14721152",
+      "rows": {
+        "rows": [
+          [
+            "\u0800",
+            {
+              "number": "1"
+            },
+            {
+              "number": "3"
+            },
+            "Typ=1 Len=3 CharacterSet=AL32UTF8: e0,a0,80"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "15712189",
+      "rows": {
+        "rows": [
+          [
+            "\ufffd",
+            {
+              "number": "1"
+            },
+            {
+              "number": "3"
+            },
+            "Typ=1 Len=3 CharacterSet=AL32UTF8: ef,bf,bd"
+          ]
+        ]
+      }
+    }
+  ],
+  "numeric_range_probe": [
+    {
+      "input": "0",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 0"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "65.4",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 41"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "65.5",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 41"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "65.9",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 41"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "-65",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "4294967361",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "-1",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "128",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 80"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "233",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: e9"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "49835.9",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=2 CharacterSet=AL32UTF8: c2,ab"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "NULL",
+      "oracle": {
+        "rows": [
+          [
+            "NULL"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "'65.9'",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 41"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "'x'",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01722"
+      }
+    },
+    {
+      "input": "''",
+      "oracle": {
+        "rows": [
+          [
+            "NULL"
+          ]
+        ]
+      }
+    }
+  ],
+  "extra_range_probe": [
+    {
+      "input": "-0.1",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "-0.9",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "4294967295.9",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=4 CharacterSet=AL32UTF8: ff,ff,ff,ff"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "4294967296.1",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "4103061439.9",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=4 CharacterSet=AL32UTF8: f4,8f,bf,bf"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "1e-50",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "' 65 '",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 41"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "'1,000'",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01722"
+      }
+    },
+    {
+      "input": "1e126",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    }
+  ],
+  "fraction_probe": [
+    {
+      "input": "0.1",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "0.9",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "1e-10",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "1e-20",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "1e-30",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "1e-39",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "0.00000000000000000000000000000000000001",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01426"
+      }
+    },
+    {
+      "input": "-0",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=1 CharacterSet=AL32UTF8: 0"
+          ]
+        ]
+      }
+    },
+    {
+      "input": "65535.99",
+      "oracle": {
+        "rows": [
+          [
+            "Typ=1 Len=2 CharacterSet=AL32UTF8: ff,ff"
+          ]
+        ]
+      }
+    }
+  ]
+}

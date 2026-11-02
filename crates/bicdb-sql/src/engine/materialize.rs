@@ -3087,6 +3087,7 @@ impl<'db> SqlEngine<'db> {
             | "initcap"
             | "md5"
             | "to_char"
+            | "chr"
             | "format"
             | "left"
             | "right"
@@ -3096,6 +3097,7 @@ impl<'db> SqlEngine<'db> {
             | "rpad"
             | "bicdb_variadic_call" => Some("text".to_string()),
             "bicdb_oracle_column_type"
+            | "bicdb_oracle_chr"
             | "bicdb_oracle_decode_key"
             | "bicdb_oracle_decode_text"
             | "bicdb_oracle_concat"

@@ -102,7 +102,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9)
+        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10)
     ) {
         oracle::routines::bind_function_namespace(
             routine,
@@ -121,7 +121,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             })?,
             matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(4 | 5 | 6 | 7 | 8 | 9)
+                Some(4 | 5 | 6 | 7 | 8 | 9 | 10)
             ),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 7),
@@ -129,6 +129,8 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
                 .is_some_and(|version| version >= 8),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 9),
+            oracle::preview_routine_language_version(&routine.language)
+                .is_some_and(|version| version >= 10),
             &mut params,
             &mut declarations,
             &mut statements,

@@ -120,8 +120,9 @@ struct Environment {
     concatenation: bool,
     number_arithmetic: bool,
     decode: bool,
-    only_decode: bool,
-    defer_decode: bool,
+    character_conversion: bool,
+    sql_builtins_only: bool,
+    defer_bind_types: bool,
     variables: BTreeMap<String, Kind>,
     records: BTreeMap<String, BTreeMap<String, Kind>>,
 }
@@ -252,6 +253,12 @@ impl Resolve<'_> {
                 let name = object_name_lowercase(&function.name).ok();
                 match name.as_deref() {
                     Some(
+                        "chr"
+                        | "pg_catalog.chr"
+                        | "bicdb_oracle_chr"
+                        | "bicdb_oracle_default_to_char",
+                    ) => return Kind::Text,
+                    Some(
                         "substr" | "substring" | "trim" | "btrim" | "ltrim" | "rtrim" | "reverse",
                     ) if self.env.concatenation => {
                         if function_args(function)
@@ -357,25 +364,29 @@ impl Resolve<'_> {
     }
 
     fn rewrite(&self, expr: &mut Expr) -> Result<()> {
+        if self.env.character_conversion {
+            if let Expr::Function(function) = expr {
+                if object_name_lowercase(&function.name).is_ok_and(|name| name == "chr") {
+                    function.name = ObjectName::from(vec![Ident::new("bicdb_oracle_chr")]);
+                }
+            }
+        }
         if self.env.decode {
             super::decode::lower_call(
                 expr,
                 |arg| self.kind(arg),
                 self.sql_depth > 0 || !self.queries.is_empty(),
-                self.env.defer_decode,
+                self.env.defer_bind_types,
             )?;
         }
-        if self.env.only_decode {
-            return Ok(());
-        }
-
-        if self.env.concatenation {
+        if self.env.concatenation || self.env.character_conversion {
             if let Expr::Function(function) = expr {
                 if object_name_lowercase(&function.name).is_ok_and(|name| name == "to_char") {
                     let args = function_args(function);
                     if let [arg] = args.as_slice() {
                         let kind=match self.kind(arg) {
                             Kind::Number=>"number",Kind::Date=>"date",Kind::Text|Kind::Null=>"text",
+                            Kind::Unknown if self.env.sql_builtins_only && self.env.defer_bind_types => return Ok(()),
                             _=>return Err(SqlError::Unsupported("default Oracle TO_CHAR requires resolved character, NUMBER or logical DATE input".into())),
                         };
                         let context = if self.sql_depth > 0 || !self.queries.is_empty() {
@@ -390,6 +401,12 @@ impl Resolve<'_> {
                     }
                 }
             }
+        }
+        if self.env.sql_builtins_only {
+            return Ok(());
+        }
+
+        if self.env.concatenation {
             if let Expr::BinaryOp {
                 left,
                 op: BinaryOperator::StringConcat,
@@ -585,17 +602,17 @@ impl Resolve<'_> {
     }
 }
 
-/// DECODE alone for standalone SQL. Other routine arithmetic rules must not be
-/// applied to ordinary SQL as a side effect of resolving this function.
-pub(super) fn lower_decode_sql(
+/// Resolve standalone SQL builtins without applying routine arithmetic rules.
+pub(super) fn lower_sql_builtins(
     db: &BicDb,
     statements: &mut Vec<Statement>,
     oids: Option<&[i32]>,
 ) -> Result<()> {
     let mut env = Environment {
         decode: true,
-        only_decode: true,
-        defer_decode: oids.is_none(),
+        character_conversion: true,
+        sql_builtins_only: true,
+        defer_bind_types: oids.is_none(),
         ..Environment::default()
     };
     if let Some(oids) = oids {
@@ -961,6 +978,7 @@ pub(crate) fn lower(
     concatenation: bool,
     number_arithmetic: bool,
     decode: bool,
+    character_conversion: bool,
     params: &mut [RoutineParam],
     declarations: &mut [RoutineDecl],
     body: &mut [RoutineStmt],
@@ -971,6 +989,7 @@ pub(crate) fn lower(
         concatenation,
         number_arithmetic,
         decode,
+        character_conversion,
         ..Environment::default()
     };
     for param in params.iter() {

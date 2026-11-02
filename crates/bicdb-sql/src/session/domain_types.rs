@@ -2224,6 +2224,8 @@ impl<'db> SqlSession<'db> {
                     .is_some_and(|version| version >= 8),
                 oracle::preview_routine_language_version(&language)
                     .is_some_and(|version| version >= 9),
+                oracle::preview_routine_language_version(&language)
+                    .is_some_and(|version| version >= 10),
                 &mut [],
                 &mut declarations,
                 &mut statements,

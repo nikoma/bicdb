@@ -5,6 +5,7 @@
 //! `date_bin`, `to_date`, `timezone`) and `similarity` (pg_trgm). Semantics follow PostgreSQL 16-18.
 use crate::*;
 use regex::RegexBuilder;
+mod oracle_chr;
 mod oracle_concat;
 mod oracle_decode;
 
@@ -549,6 +550,9 @@ fn trigram_set(text: &str) -> Result<std::collections::BTreeSet<String>> {
 }
 
 pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Option<SqlValue>> {
+    if name == "bicdb_oracle_chr" {
+        return oracle_chr::evaluate(args).map(Some);
+    }
     if matches!(
         name,
         "bicdb_oracle_decode_key"

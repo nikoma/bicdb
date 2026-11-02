@@ -305,7 +305,9 @@ for twenty Oracle comparisons and the remaining original application failure.
 The [iDempiere migration tools](../examples/oracle/idempiere/README.md) keep source
 snapshots and upstream binaries outside the checkout. Tables and rows alone are
 not application acceptance. Foreign-key validation/deferment, routines, views,
-JDBC integration and business workflows must be qualified independently.
+JDBC integration and business workflows must be qualified independently. The
+[object coverage inventory](evidence/idempiere-object-coverage-2026-11-01/README.md)
+separates accepted definitions, repeatable seed results and remaining blockers.
 
 For a small local development server built from the production SQL and pgwire
 crates, `cargo run -p bicdb-pgwire --example oracle_server -- PATH PORT` selects

@@ -16,6 +16,7 @@
   "reference_seed_import_requires": "Oracle Data Pump-capable reference instance; seed import and release-13 clone upgrade validated in isolated development fixtures",
   "qualification_evidence": [
     "../../../docs/evidence/idempiere-seed-2026-11-01/README.md",
-    "../../../docs/evidence/idempiere-release13-desktop-2026-11-01/README.md"
+    "../../../docs/evidence/idempiere-release13-desktop-2026-11-01/README.md",
+    "../../../docs/evidence/idempiere-object-coverage-2026-11-01/README.md"
   ]
 }

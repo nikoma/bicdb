@@ -24,8 +24,12 @@ reconciliation. A separate Oracle reference clone was upgraded through 24
 release-13 migrations; its 915 tables and 185,471 initial rows were also imported
 and reconciled. The [Oracle-provider application login](evidence/idempiere-release13-desktop-2026-11-01/README.md)
 reached a desktop shell through PostgreSQL drivers with application errors.
-Startup and business workflows are not qualified. Required foreign keys, most
-routines and views, and remaining application behavior are still outstanding.
+Startup and business workflows are not qualified. The later
+[object inventory](evidence/idempiere-object-coverage-2026-11-01/README.md) records
+30 accepted routine definitions and 90 repeated non-clock seed-view matches;
+catalog acceptance and bounded seed results are not full execution acceptance.
+Required foreign keys, complete routine/view behavior and remaining application
+behavior are still outstanding.
 These are development data baselines, not full schema/application acceptance.
 
 “Partial” means a specific implementation or test exists, not that the full

@@ -231,9 +231,17 @@ fn disable_trigger_all_suspends_foreign_keys_for_a_data_load() {
         session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
     // Checks are back on once the triggers are enabled again.
-    assert!(session.execute("INSERT INTO versions VALUES (11, 99)").is_err());
-    assert!(session.execute("INSERT INTO definitions VALUES (2, 99)").is_err());
+    assert!(session
+        .execute("INSERT INTO versions VALUES (11, 99)")
+        .is_err());
+    assert!(session
+        .execute("INSERT INTO definitions VALUES (2, 99)")
+        .is_err());
     // DISABLE TRIGGER USER leaves foreign keys enforced.
-    session.execute("ALTER TABLE versions DISABLE TRIGGER USER").unwrap();
-    assert!(session.execute("INSERT INTO versions VALUES (12, 98)").is_err());
+    session
+        .execute("ALTER TABLE versions DISABLE TRIGGER USER")
+        .unwrap();
+    assert!(session
+        .execute("INSERT INTO versions VALUES (12, 98)")
+        .is_err());
 }

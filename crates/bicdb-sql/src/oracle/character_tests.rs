@@ -167,3 +167,46 @@ fn older_routine_character_contract_and_native_postgres_chr_are_independent() {
         .execute("SELECT to_char(chr(65))")
         .is_err());
 }
+
+#[test]
+fn coalesce_skips_unselected_character_errors_in_every_evaluator() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = preview(root.path());
+    assert_eq!(
+        execute(&mut db, "SELECT COALESCE(CHR(65),CHR(-1)) FROM DUAL")
+            .unwrap()
+            .rows[0][0]
+            .to_cell(),
+        "A"
+    );
+    let statement = parse_statements("SELECT coalesce(chr(65),chr(-1))")
+        .unwrap()
+        .remove(0);
+    let Statement::Query(query) = statement else {
+        panic!("query")
+    };
+    let SetExpr::Select(select) = *query.body else {
+        panic!("select")
+    };
+    let SelectItem::UnnamedExpr(expr) = &select.projection[0] else {
+        panic!("expression")
+    };
+    assert_eq!(eval_constant_expr(expr).unwrap().to_cell(), "A");
+    assert_eq!(eval_value(&Record::new("r"), expr).unwrap().to_cell(), "A");
+    assert_eq!(
+        eval_virtual_value(&BTreeMap::new(), expr)
+            .unwrap()
+            .to_cell(),
+        "A"
+    );
+    let native = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(native.path()).unwrap();
+    assert_eq!(
+        SqlSession::new(&mut db)
+            .execute("SELECT coalesce(chr(65),chr(-1))")
+            .unwrap()
+            .rows[0][0]
+            .to_cell(),
+        "A"
+    );
+}

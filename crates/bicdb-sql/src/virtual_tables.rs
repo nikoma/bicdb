@@ -1132,6 +1132,15 @@ pub(crate) fn eval_virtual_value(
         }
         Expr::Function(function) => {
             let name = object_name(&function.name)?.to_ascii_lowercase();
+            if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
+                for arg in function_arg_list(function).iter() {
+                    let value = eval_virtual_value(row, arg)?;
+                    if !matches!(value, SqlValue::Null) {
+                        return Ok(value);
+                    }
+                }
+                return Ok(SqlValue::Null);
+            }
             let arg_exprs = function_args(function);
             let args = arg_exprs
                 .iter()
@@ -1282,6 +1291,20 @@ pub(crate) fn execute_builtin_function(
 ) -> Result<SqlResult> {
     let name = object_name(&function.name)?.to_ascii_lowercase();
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
+    if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
+        let expr = Expr::Function(function.clone());
+        if let Some(db) = db {
+            validate_common_type_expr(db, &expr)?;
+        }
+        // COALESCE is a short-circuit expression, including the scalar
+        // no-FROM path. Passing eagerly evaluated arguments to its ordinary
+        // value dispatcher would evaluate an unselected failing branch.
+        let value = eval_constant_function_value(function)?;
+        return Ok(
+            SqlResult::new(vec![bare_name.to_string()], vec![vec![value]])
+                .with_column_types(vec![projected_expr_pg_type(&expr, None)]),
+        );
+    }
     if matches!(bare_name, "pg_snapshot_xip" | "txid_snapshot_xip") {
         let args = function_args(function)
             .iter()

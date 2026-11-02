@@ -14,6 +14,7 @@ def queries():
     cases += [
         ('null', 'SELECT chr(CAST(NULL AS INTEGER)) AS value'),
         ('qualified', 'SELECT pg_catalog.chr(49835) AS value'),
+        ('short_circuit', 'SELECT coalesce(chr(65),chr(-1)) AS value'),
         ('nul_error', 'SELECT chr(0) AS value'),
         ('negative_error', 'SELECT chr(-1) AS value'),
         ('surrogate_error', 'SELECT chr(55296) AS value'),

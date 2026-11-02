@@ -394,6 +394,15 @@ pub(crate) fn eval_value(record: &Record, expr: &Expr) -> Result<SqlValue> {
 
 pub(crate) fn eval_record_function_value(record: &Record, function: &Function) -> Result<SqlValue> {
     let name = object_name(&function.name)?.to_ascii_lowercase();
+    if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
+        for arg in function_arg_list(function).iter() {
+            let value = eval_value(record, arg)?;
+            if !matches!(value, SqlValue::Null) {
+                return Ok(value);
+            }
+        }
+        return Ok(SqlValue::Null);
+    }
     let arg_exprs = function_args(function);
     let args = arg_exprs
         .iter()

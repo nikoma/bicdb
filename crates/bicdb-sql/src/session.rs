@@ -2740,6 +2740,7 @@ impl<'db> SqlSession<'db> {
                 schema,
                 &records,
                 false,
+                Some(&self.sql_engine()),
             )?;
         }
         self.enforce_rls_checks(&table, schema.as_ref(), PolicyAction::Insert, &records)?;

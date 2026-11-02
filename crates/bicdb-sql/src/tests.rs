@@ -1031,6 +1031,7 @@ fn primary_key_unique_validation_uses_record_id_lookup_without_full_scan() {
         &schema,
         std::slice::from_ref(&record),
         false,
+        None,
     )
     .unwrap();
     let stats = SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());

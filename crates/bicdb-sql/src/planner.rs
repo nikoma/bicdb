@@ -1266,6 +1266,7 @@ impl InsertValuesTemplate {
         table: &str,
         record: &Record,
         cells: &[Option<SqlValue>],
+        check_engine: Option<&SqlEngine<'_>>,
     ) -> Result<()> {
         for (index, (plan, cell)) in self.columns.iter().zip(cells).enumerate() {
             if !plan.needs_not_null {
@@ -1288,7 +1289,7 @@ impl InsertValuesTemplate {
                 ));
             }
         }
-        validate_checks(table, &self.schema, record)
+        validate_checks(table, &self.schema, record, check_engine)
     }
 }
 

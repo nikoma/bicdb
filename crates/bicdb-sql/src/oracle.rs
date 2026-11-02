@@ -7,6 +7,7 @@ use sqlparser::{dialect::OracleDialect, keywords::Keyword};
 mod anchored_types;
 pub mod assessment;
 mod date_trunc;
+mod decode;
 mod dual;
 mod namespaces;
 pub(crate) mod routine_arithmetic;
@@ -25,7 +26,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V4: &str = "bicdb_oracle_preview_v4";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V5: &str = "bicdb_oracle_preview_v5";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V6: &str = "bicdb_oracle_preview_v6";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V7: &str = "bicdb_oracle_preview_v7";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v8";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V8: &str = "bicdb_oracle_preview_v8";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v9";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -33,7 +35,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V4_OID: i64 = 999_403;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V5_OID: i64 = 999_404;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V6_OID: i64 = 999_405;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V7_OID: i64 = 999_406;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_407;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V8_OID: i64 = 999_407;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_408;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -49,7 +52,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V5 => Some(5),
         PREVIEW_ROUTINE_LANGUAGE_V6 => Some(6),
         PREVIEW_ROUTINE_LANGUAGE_V7 => Some(7),
-        PREVIEW_ROUTINE_LANGUAGE => Some(8),
+        PREVIEW_ROUTINE_LANGUAGE_V8 => Some(8),
+        PREVIEW_ROUTINE_LANGUAGE => Some(9),
         _ => None,
     }
 }
@@ -57,7 +61,7 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
     matches!(
         preview_routine_language_version(language),
-        Some(3 | 4 | 5 | 6 | 7 | 8)
+        Some(3 | 4 | 5 | 6 | 7 | 8 | 9)
     )
 }
 
@@ -180,7 +184,8 @@ fn lower_profile_sql_in_namespace(
         },
     )?;
     if profile == ORACLE_PREVIEW_PROFILE {
-        date_trunc::lower(db, &lowered, None)
+        let lowered = date_trunc::lower(db, &lowered, None)?;
+        lower_decode(db, &lowered, None)
     } else {
         Ok(lowered)
     }
@@ -194,7 +199,8 @@ pub fn lower_typed_native_sql(
     oids: &[i32],
 ) -> Result<String> {
     if profile == ORACLE_PREVIEW_PROFILE {
-        date_trunc::lower(db, sql, Some(oids))
+        let lowered = date_trunc::lower(db, sql, Some(oids))?;
+        lower_decode(db, &lowered, Some(oids))
     } else {
         Ok(sql.to_string())
     }
@@ -223,6 +229,7 @@ pub fn lower_session_sql(
     let mut statements = parse_statements(&lowered)?;
     namespaces::qualify(&mut statements, &schema);
     date_trunc::rewrite(db, &mut statements)?;
+    routine_arithmetic::lower_decode_sql(db, &mut statements, None)?;
     struct Locks<'a>(&'a BicDb);
     impl sqlparser::ast::VisitorMut for Locks<'_> {
         type Break = SqlError;
@@ -238,6 +245,21 @@ pub fn lower_session_sql(
     {
         return Err(error);
     }
+    Ok(statements
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; "))
+}
+
+fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
+    if !sql.to_ascii_lowercase().contains("decode") || raw_do_block_body(sql)?.is_some() {
+        return Ok(sql.to_string());
+    }
+    let mut statements = parse_statements(sql)?;
+    // CREATE FUNCTION bodies are opaque strings here. Their compiler capability
+    // marker controls DECODE when the routine is compiled, including on reload.
+    routine_arithmetic::lower_decode_sql(db, &mut statements, oids)?;
     Ok(statements
         .iter()
         .map(ToString::to_string)
@@ -815,6 +837,20 @@ fn canonical_tokens_with_routine_types(
     namespace: Option<&str>,
 ) -> Result<Vec<Token>> {
     let mut pieces = Vec::new();
+    let mut decode_scope = Vec::new();
+    let mut in_decode = vec![false; source.len()];
+    for (index, token) in source.iter().enumerate() {
+        if *token == Token::LParen {
+            let opens_decode = index >= 1
+                && word(&source[index - 1], "DECODE")
+                && (index < 2 || source[index - 2] != Token::Period);
+            decode_scope.push(opens_decode || decode_scope.last().copied().unwrap_or(false));
+        }
+        in_decode[index] = preview && decode_scope.last().copied().unwrap_or(false);
+        if *token == Token::RParen {
+            decode_scope.pop();
+        }
+    }
     let mut i = 0;
     while i < source.len() {
         let t = &source[i];
@@ -867,11 +903,11 @@ fn canonical_tokens_with_routine_types(
                     "OCTET_LENGTH" if preview => pieces.push("octet_length".into()),
                     "NUMBER" => pieces.push("NUMERIC".into()),
                     "VARCHAR2" => pieces.push("VARCHAR".into()),
-                    "DATE" if preserve_date => pieces.push("DATE".into()),
+                    "DATE" if preserve_date || in_decode[i] => pieces.push("DATE".into()),
                     "DATE" => pieces.push("TIMESTAMP(0)".into()),
                     "NOCACHE" => pieces.push("CACHE 1".into()),
                     "NOCYCLE" => pieces.push("NO CYCLE".into()),
-                    "SYSDATE" if preserve_date => pieces.push("bicdb_oracle_date_coerce(CAST(date_trunc('second', clock_timestamp()) AS TIMESTAMP))".into()),
+                    "SYSDATE" if preserve_date || in_decode[i] => pieces.push("bicdb_oracle_date_coerce(CAST(date_trunc('second', clock_timestamp()) AS TIMESTAMP))".into()),
                     "SYSDATE" => pieces.push(
                         "CAST(date_trunc('second', clock_timestamp()) AS TIMESTAMP(0))".into(),
                     ),

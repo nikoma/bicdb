@@ -459,7 +459,14 @@ pub(crate) fn eval_record_case(
     let operand_value = operand.map(|expr| eval_value(record, expr)).transpose()?;
     for condition in conditions {
         let matched = if let Some(operand_value) = &operand_value {
-            values_equal(operand_value, &eval_value(record, &condition.condition)?)
+            simple_case_values_equal(
+                operand_value,
+                &eval_value(record, &condition.condition)?,
+                operand
+                    .and_then(|expr| projected_expr_pg_type(expr, None))
+                    .as_deref(),
+                projected_expr_pg_type(&condition.condition, None).as_deref(),
+            )?
         } else {
             eval_predicate_truth(record, &condition.condition)?.unwrap_or(false)
         };
@@ -828,7 +835,14 @@ pub(crate) fn eval_constant_case(
     let operand_value = operand.map(eval_constant_expr).transpose()?;
     for condition in conditions {
         let matched = if let Some(operand_value) = &operand_value {
-            values_equal(operand_value, &eval_constant_expr(&condition.condition)?)
+            simple_case_values_equal(
+                operand_value,
+                &eval_constant_expr(&condition.condition)?,
+                operand
+                    .and_then(|expr| projected_expr_pg_type(expr, None))
+                    .as_deref(),
+                projected_expr_pg_type(&condition.condition, None).as_deref(),
+            )?
         } else {
             eval_constant_truth(&condition.condition)?.unwrap_or(false)
         };

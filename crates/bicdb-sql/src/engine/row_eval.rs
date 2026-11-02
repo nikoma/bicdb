@@ -1278,10 +1278,15 @@ impl<'db> SqlEngine<'db> {
             .transpose()?;
         for condition in conditions {
             let matched = if let Some(operand_value) = &operand_value {
-                values_equal(
+                simple_case_values_equal(
                     operand_value,
                     &self.eval_slot_row_value(row, context, &condition.condition)?,
-                )
+                    operand
+                        .and_then(|expr| self.scoped_slot_row_expr_type(context, expr))
+                        .as_deref(),
+                    self.scoped_slot_row_expr_type(context, &condition.condition)
+                        .as_deref(),
+                )?
             } else {
                 self.eval_slot_row_truth(row, context, &condition.condition)?
                     .unwrap_or(false)
@@ -2735,10 +2740,15 @@ impl<'db> SqlEngine<'db> {
             .transpose()?;
         for condition in conditions {
             let matched = if let Some(operand_value) = &operand_value {
-                values_equal(
+                simple_case_values_equal(
                     operand_value,
                     &self.eval_row_value(row, &condition.condition)?,
-                )
+                    operand
+                        .and_then(|expr| self.infer_sql_row_expr_type(row, expr))
+                        .as_deref(),
+                    self.infer_sql_row_expr_type(row, &condition.condition)
+                        .as_deref(),
+                )?
             } else {
                 self.eval_row_truth(row, &condition.condition)?
                     .unwrap_or(false)

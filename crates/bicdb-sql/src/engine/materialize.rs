@@ -219,10 +219,18 @@ impl<'db> SqlEngine<'db> {
                     .transpose()?;
                 for condition in conditions {
                     let matched = if let Some(operand_value) = &operand_value {
-                        values_equal(
+                        simple_case_values_equal(
                             operand_value,
                             &self.eval_select_constant_expr(&condition.condition)?,
-                        )
+                            operand
+                                .as_deref()
+                                .and_then(|expr| {
+                                    projected_expr_pg_type_with_db(self.db_ref(), expr)
+                                })
+                                .as_deref(),
+                            projected_expr_pg_type_with_db(self.db_ref(), &condition.condition)
+                                .as_deref(),
+                        )?
                     } else {
                         sql_value_truth(self.eval_select_constant_expr(&condition.condition)?)?
                             .unwrap_or(false)
@@ -3087,7 +3095,10 @@ impl<'db> SqlEngine<'db> {
             | "lpad"
             | "rpad"
             | "bicdb_variadic_call" => Some("text".to_string()),
-            "bicdb_oracle_concat" | "bicdb_oracle_default_to_char" => Some("text".to_string()),
+            "bicdb_oracle_decode_key"
+            | "bicdb_oracle_decode_text"
+            | "bicdb_oracle_concat"
+            | "bicdb_oracle_default_to_char" => Some("text".to_string()),
             "nextval" | "currval" | "setval" => Some("int8".to_string()),
             "starts_with" => Some("bool".to_string()),
             "pow" | "cbrt" | "exp" | "ln" | "log" => Some("float8".to_string()),
@@ -3095,11 +3106,14 @@ impl<'db> SqlEngine<'db> {
             "age" | "make_interval" => Some("interval".to_string()),
             "to_date" => Some("date".to_string()),
             "trunc" if args.len() == 2 => Some("numeric".to_string()),
-            "bicdb_oracle_number_divide"
+            "bicdb_oracle_decode_number"
+            | "bicdb_oracle_number_divide"
             | "bicdb_oracle_number_arithmetic"
             | "bicdb_oracle_date_subtract"
             | "bicdb_oracle_number_trunc" => Some("numeric".to_string()),
-            "bicdb_oracle_date_coerce"
+            "bicdb_oracle_decode_date"
+            | "bicdb_oracle_decode_timestamp"
+            | "bicdb_oracle_date_coerce"
             | "bicdb_oracle_add_months"
             | "bicdb_oracle_to_date"
             | "bicdb_oracle_trunc_date"

@@ -6,6 +6,7 @@
 use crate::*;
 use regex::RegexBuilder;
 mod oracle_concat;
+mod oracle_decode;
 
 fn any_null(args: &[SqlValue]) -> bool {
     args.iter().any(|value| matches!(value, SqlValue::Null))
@@ -548,6 +549,16 @@ fn trigram_set(text: &str) -> Result<std::collections::BTreeSet<String>> {
 }
 
 pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Option<SqlValue>> {
+    if matches!(
+        name,
+        "bicdb_oracle_decode_key"
+            | "bicdb_oracle_decode_number"
+            | "bicdb_oracle_decode_text"
+            | "bicdb_oracle_decode_date"
+            | "bicdb_oracle_decode_timestamp"
+    ) {
+        return oracle_decode::evaluate(name, args).map(Some);
+    }
     if name == "bicdb_oracle_default_to_char" {
         return oracle_concat::default_to_char(args).map(Some);
     }

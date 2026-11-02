@@ -1,0 +1,547 @@
+{
+  "format": 1,
+  "scope": "DECODE scalar SQL values, null equality, nonpadded character comparisons, selected conversions and lazy searches/results under fixed default NLS settings; not full NLS or numeric precedence for binary floating point",
+  "cases": [
+    {
+      "id": "number_match",
+      "sql": "SELECT DECODE(1,1,'match','fallback') FROM DUAL",
+      "expected": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "null_match",
+      "sql": "SELECT DECODE(NULL,NULL,'match','fallback') FROM DUAL",
+      "expected": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "empty_match",
+      "sql": "SELECT DECODE('',NULL,'match','fallback') FROM DUAL",
+      "expected": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "number_comparison",
+      "sql": "SELECT DECODE('001',1,'match','fallback') FROM DUAL",
+      "expected": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "text_comparison",
+      "sql": "SELECT DECODE(1,'001','match','fallback') FROM DUAL",
+      "expected": [
+        [
+          "fallback"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "char_width",
+      "sql": "SELECT DECODE(CAST('x' AS CHAR(3)),CAST('x' AS CHAR(1)),'match','fallback') FROM DUAL",
+      "expected": [
+        [
+          "fallback"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "char_padding",
+      "sql": "SELECT DECODE(CAST('x' AS CHAR(3)),'x  ','match','fallback') FROM DUAL",
+      "expected": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "lazy_default",
+      "sql": "SELECT DECODE(1,1,7,CAST('bad' AS NUMBER)) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "null_first_result",
+      "sql": "SELECT DECODE(2,1,NULL,2,7,'bad') FROM DUAL",
+      "expected": [
+        [
+          "7"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "null_default",
+      "sql": "SELECT DECODE(3,1,NULL,2,7,'bad') FROM DUAL",
+      "expected": [
+        [
+          "bad"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "unselected_conversion",
+      "sql": "SELECT DECODE(1,1,7,2,'bad',0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "selected_conversion",
+      "sql": "SELECT DECODE(2,1,7,2,'bad',0) FROM DUAL",
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "lazy_search",
+      "sql": "SELECT DECODE(1,1,7,1/0,9,0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "selected_search",
+      "sql": "SELECT DECODE(2,1,7,1/0,9,0) FROM DUAL",
+      "expected_error": {
+        "oracle": "ORA-01476",
+        "bicdb": "22012"
+      }
+    },
+    {
+      "id": "lazy_result",
+      "sql": "SELECT DECODE(1,1,7,2,1/0,0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "selected_result",
+      "sql": "SELECT DECODE(2,1,7,2,1/0,0) FROM DUAL",
+      "expected_error": {
+        "oracle": "ORA-01476",
+        "bicdb": "22012"
+      }
+    },
+    {
+      "id": "invalid_first_search",
+      "sql": "SELECT DECODE(1,CAST('bad' AS NUMBER),7,0) FROM DUAL",
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "bad_text_search",
+      "sql": "SELECT DECODE(1,'bad',1,0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "bad_number_expression",
+      "sql": "SELECT DECODE('bad',1,1,0) FROM DUAL",
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "null_expression",
+      "sql": "SELECT DECODE(NULL,1,1,7) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "first_null_match",
+      "sql": "SELECT DECODE(NULL,NULL,'a ',NULL,'b','c') FROM DUAL",
+      "expected": [
+        [
+          "a "
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "date_search",
+      "sql": "SELECT DECODE(DATE '2024-02-29',DATE '2024-02-29',17,0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "17"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "truncate_timestamp_search",
+      "sql": "SELECT DECODE(TIMESTAMP '2024-02-29 00:00:00.123456',DATE '2024-02-29',17,0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "17"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "date_result",
+      "sql": "SELECT DECODE(1,1,DATE '2024-02-29',DATE '2000-01-01') FROM DUAL",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_DATE",
+      "bicdb_type_oid": 1114
+    },
+    {
+      "id": "char_result",
+      "sql": "SELECT DECODE(1,1,CAST('x' AS CHAR(3)),'fallback') FROM DUAL",
+      "expected": [
+        [
+          "x  "
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "typed_null_result",
+      "sql": "SELECT DECODE(2,1,CAST(NULL AS NUMBER),2,3,4) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "typed_null_search",
+      "sql": "SELECT DECODE('001',CAST(NULL AS NUMBER),NULL,1,'match','fallback') FROM DUAL",
+      "expected": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "timestamp_result",
+      "sql": "SELECT DECODE(1,1,TIMESTAMP '2024-02-29 12:34:56.123456',NULL) FROM DUAL",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.123456"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_TIMESTAMP",
+      "bicdb_type_oid": 1114
+    },
+    {
+      "id": "timestamp_text",
+      "sql": "SELECT DECODE(2,1,NULL,2,TIMESTAMP '2024-02-29 12:34:56.123456') FROM DUAL",
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123456000 PM"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "date_text",
+      "sql": "SELECT DECODE(2,1,NULL,2,DATE '2024-02-29') FROM DUAL",
+      "expected": [
+        [
+          "29-FEB-24"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "number_text",
+      "sql": "SELECT DECODE(2,1,NULL,2,0.5) FROM DUAL",
+      "expected": [
+        [
+          ".5"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "date_input",
+      "sql": "SELECT DECODE('29-FEB-24',DATE '2024-02-29',1,0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "date_iso",
+      "sql": "SELECT DECODE('2024-02-29',DATE '2024-02-29',1,0) FROM DUAL",
+      "expected_error": {
+        "oracle": "ORA-01861",
+        "bicdb": "22007"
+      }
+    },
+    {
+      "id": "group_number",
+      "sql": "SELECT DECODE('1,234',1234,1,0) FROM DUAL",
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "bad_group",
+      "sql": "SELECT DECODE('1,,23',123,1,0) FROM DUAL",
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "number_date_type",
+      "sql": "SELECT DECODE(1,1,7,2,DATE '2024-02-29',0) FROM DUAL",
+      "expected_error": {
+        "oracle": "ORA-00932",
+        "bicdb": "42804"
+      }
+    },
+    {
+      "id": "timestamp_search",
+      "sql": "SELECT DECODE(TIMESTAMP '2024-02-29 00:00:00.123456',TIMESTAMP '2024-02-29 00:00:00.123456',1,0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "compact_date",
+      "sql": "SELECT DECODE('29FEB24',DATE '2024-02-29',1,0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "month_name_date",
+      "sql": "SELECT DECODE('29-February-24',DATE '2024-02-29',1,0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "default_date_result",
+      "sql": "SELECT DECODE(2,1,DATE '2000-01-01','29/Feb/24') FROM DUAL",
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_DATE",
+      "bicdb_type_oid": 1114
+    },
+    {
+      "id": "lazy_date_input",
+      "sql": "SELECT DECODE(1,1,DATE '2000-01-01','bad') FROM DUAL",
+      "expected": [
+        [
+          {
+            "timestamp": "2000-01-01T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_DATE",
+      "bicdb_type_oid": 1114
+    },
+    {
+      "id": "untyped_null_search",
+      "sql": "SELECT DECODE('001',NULL,'nil',1,'match','other') FROM DUAL",
+      "expected": [
+        [
+          "other"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "key_null_collision",
+      "sql": "SELECT DECODE('null:',NULL,'nil','null:','match','other') FROM DUAL",
+      "expected": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "numeric_text_distinct",
+      "sql": "SELECT DECODE('1.0','1','match','other') FROM DUAL",
+      "expected": [
+        [
+          "other"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "exact_number",
+      "sql": "SELECT DECODE(9007199254740993,9007199254740992,'bad',9007199254740993,'match','other') FROM DUAL",
+      "expected": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR",
+      "bicdb_type_oid": 25
+    },
+    {
+      "id": "negative_zero",
+      "sql": "SELECT DECODE(0,-0.0,1.00,0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "limit_255",
+      "sql": "SELECT DECODE(1,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    },
+    {
+      "id": "limit_256",
+      "sql": "SELECT DECODE(1,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,0) FROM DUAL",
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER",
+      "bicdb_type_oid": 1700
+    }
+  ]
+}

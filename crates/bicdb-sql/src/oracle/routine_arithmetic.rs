@@ -82,7 +82,7 @@ pub(crate) fn prepare_local_declarations(declarations: &mut [RoutineDecl]) -> Re
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Kind {
+pub(super) enum Kind {
     Date,
     Timestamp,
     TemporalUnknown,
@@ -119,6 +119,9 @@ struct Environment {
     v4_semantics: bool,
     concatenation: bool,
     number_arithmetic: bool,
+    decode: bool,
+    only_decode: bool,
+    defer_decode: bool,
     variables: BTreeMap<String, Kind>,
     records: BTreeMap<String, BTreeMap<String, Kind>>,
 }
@@ -128,17 +131,25 @@ struct Resolve<'a> {
     env: &'a Environment,
     queries: Vec<Query>,
     sql_depth: usize,
+    statement_from: Vec<Option<String>>,
 }
 
 impl Resolve<'_> {
     fn query_kind(&self, expr: &Expr) -> Option<Kind> {
-        let mut probe = self.queries.last()?.clone();
-        let SetExpr::Select(select) = probe.body.as_mut() else {
+        let sql = if let Some(query) = self.queries.last() {
+            let mut probe = query.clone();
+            let SetExpr::Select(select) = probe.body.as_mut() else {
+                return None;
+            };
+            select.projection = vec![SelectItem::UnnamedExpr(expr.clone())];
+            probe.locks.clear();
+            probe.to_string()
+        } else if let Some(Some(from)) = self.statement_from.last() {
+            format!("SELECT {expr} FROM {from}")
+        } else {
             return None;
         };
-        select.projection = vec![SelectItem::UnnamedExpr(expr.clone())];
-        probe.locks.clear();
-        infer_query_result_types(self.db, &probe.to_string())
+        infer_query_result_types(self.db, &sql)
             .ok()
             .flatten()?
             .first()?
@@ -209,6 +220,23 @@ impl Resolve<'_> {
                 _ => Kind::Other,
             },
             Expr::UnaryOp { expr, .. } => self.kind(expr),
+            Expr::Case {
+                conditions,
+                else_result,
+                ..
+            } => {
+                let mut kinds = conditions
+                    .iter()
+                    .map(|arm| self.kind(&arm.result))
+                    .chain(else_result.iter().map(|value| self.kind(value)))
+                    .filter(|kind| *kind != Kind::Null);
+                let first = kinds.next().unwrap_or(Kind::Null);
+                if kinds.all(|kind| kind == first) {
+                    first
+                } else {
+                    Kind::Unknown
+                }
+            }
             Expr::Function(function) => {
                 let name = object_name_lowercase(&function.name).ok();
                 match name.as_deref() {
@@ -224,14 +252,17 @@ impl Resolve<'_> {
                     }
                     Some(
                         "bicdb_oracle_date_coerce"
+                        | "bicdb_oracle_decode_date"
                         | "bicdb_oracle_date_add_days"
                         | "bicdb_oracle_to_date"
                         | "bicdb_oracle_trunc_date"
                         | "bicdb_oracle_plsql_trunc_date"
                         | "bicdb_oracle_add_months",
                     ) => return Kind::Date,
+                    Some("bicdb_oracle_decode_timestamp") => return Kind::Timestamp,
                     Some(
-                        "bicdb_oracle_date_subtract"
+                        "bicdb_oracle_decode_number"
+                        | "bicdb_oracle_date_subtract"
                         | "bicdb_oracle_number_divide"
                         | "bicdb_oracle_number_arithmetic"
                         | "bicdb_oracle_number_trunc"
@@ -315,6 +346,18 @@ impl Resolve<'_> {
     }
 
     fn rewrite(&self, expr: &mut Expr) -> Result<()> {
+        if self.env.decode {
+            super::decode::lower_call(
+                expr,
+                |arg| self.kind(arg),
+                self.sql_depth > 0 || !self.queries.is_empty(),
+                self.env.defer_decode,
+            )?;
+        }
+        if self.env.only_decode {
+            return Ok(());
+        }
+
         if self.env.concatenation {
             if let Expr::Function(function) = expr {
                 if object_name_lowercase(&function.name).is_ok_and(|name| name == "to_char") {
@@ -531,14 +574,66 @@ impl Resolve<'_> {
     }
 }
 
+/// DECODE alone for standalone SQL. Other routine arithmetic rules must not be
+/// applied to ordinary SQL as a side effect of resolving this function.
+pub(super) fn lower_decode_sql(
+    db: &BicDb,
+    statements: &mut Vec<Statement>,
+    oids: Option<&[i32]>,
+) -> Result<()> {
+    let mut env = Environment {
+        decode: true,
+        only_decode: true,
+        defer_decode: oids.is_none(),
+        ..Environment::default()
+    };
+    if let Some(oids) = oids {
+        // Unspecified PostgreSQL bind types default to text. Explicit Parse
+        // OIDs take precedence; delaying the first pass avoids freezing a
+        // numeric/date bind's DECODE rules before those OIDs are available.
+        let _ = visit_expressions_mut(statements, |expr| {
+            if let Expr::Value(value) = expr {
+                if let Value::Placeholder(name) = &value.value {
+                    let kind = name
+                        .strip_prefix('$')
+                        .and_then(|n| n.parse::<usize>().ok())
+                        .and_then(|n| n.checked_sub(1))
+                        .and_then(|n| oids.get(n))
+                        .and_then(|oid| pg_type_spec_by_oid(*oid))
+                        .map_or(Kind::Text, |spec| {
+                            if spec.name == "timestamp" {
+                                Kind::Timestamp
+                            } else {
+                                pg_kind(spec.name)
+                            }
+                        });
+                    env.variables.insert(normalize_object_name(name), kind);
+                }
+            }
+            ControlFlow::<()>::Continue(())
+        });
+    }
+    visit(db, &env, statements)
+}
+
 impl sqlparser::ast::VisitorMut for Resolve<'_> {
     type Break = SqlError;
-    fn pre_visit_statement(&mut self, _: &mut Statement) -> ControlFlow<SqlError> {
+    fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<SqlError> {
         self.sql_depth += 1;
+        self.statement_from.push(if self.env.decode {
+            match statement {
+                Statement::Update(update) => Some(update.table.to_string()),
+                Statement::CreateIndex(index) => Some(index.table_name.to_string()),
+                _ => None,
+            }
+        } else {
+            None
+        });
         ControlFlow::Continue(())
     }
     fn post_visit_statement(&mut self, _: &mut Statement) -> ControlFlow<SqlError> {
         self.sql_depth -= 1;
+        self.statement_from.pop();
         ControlFlow::Continue(())
     }
     fn pre_visit_query(&mut self, query: &mut Query) -> ControlFlow<SqlError> {
@@ -585,6 +680,7 @@ fn visit<T: sqlparser::ast::VisitMut>(db: &BicDb, env: &Environment, node: &mut 
         env,
         queries: Vec::new(),
         sql_depth: 0,
+        statement_from: Vec::new(),
     }) {
         ControlFlow::Continue(()) => Ok(()),
         ControlFlow::Break(error) => Err(error),
@@ -610,6 +706,7 @@ fn record_types(db: &BicDb, env: &Environment, query: &Query) -> BTreeMap<String
             env,
             queries: vec![query.clone()],
             sql_depth: 1,
+            statement_from: Vec::new(),
         };
         for item in &select.projection {
             let (expr, name) = match item {
@@ -842,6 +939,7 @@ pub(crate) fn lower(
     v4_semantics: bool,
     concatenation: bool,
     number_arithmetic: bool,
+    decode: bool,
     params: &mut [RoutineParam],
     declarations: &mut [RoutineDecl],
     body: &mut [RoutineStmt],
@@ -851,6 +949,7 @@ pub(crate) fn lower(
         v4_semantics,
         concatenation,
         number_arithmetic,
+        decode,
         ..Environment::default()
     };
     for param in params.iter() {

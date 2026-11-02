@@ -30,6 +30,7 @@ impl<'db> SqlSession<'db> {
             | "plpgsql"
             | oracle::PREVIEW_ROUTINE_LANGUAGE
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V8
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V6
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V5
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V4
@@ -208,6 +209,7 @@ impl<'db> SqlSession<'db> {
             | "plpgsql"
             | oracle::PREVIEW_ROUTINE_LANGUAGE
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V8
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V6
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V5
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V4
@@ -463,7 +465,7 @@ impl<'db> SqlSession<'db> {
         let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
             let schema = if matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(2 | 3 | 4 | 5 | 6 | 7 | 8)
+                Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9)
             ) {
                 relation_schema_name(name_ast)
             } else {
@@ -2382,7 +2384,14 @@ impl<'db> SqlSession<'db> {
                 return Ok(None);
             };
             let matched = if let Some(operand_value) = &operand_value {
-                values_equal(operand_value, &condition_value)
+                simple_case_values_equal(
+                    operand_value,
+                    &condition_value,
+                    operand
+                        .and_then(|expr| projected_expr_pg_type(expr, Some(schema)))
+                        .as_deref(),
+                    projected_expr_pg_type(&condition.condition, Some(schema)).as_deref(),
+                )?
             } else {
                 sql_value_truth(condition_value)?.unwrap_or(false)
             };

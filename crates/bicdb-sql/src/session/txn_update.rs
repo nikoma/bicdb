@@ -3033,10 +3033,18 @@ impl<'db> SqlSession<'db> {
                     .transpose()?;
                 for condition in conditions {
                     let matched = if let Some(operand_value) = &operand_value {
-                        values_equal(
+                        simple_case_values_equal(
                             operand_value,
                             &self.eval_session_expr(&condition.condition)?,
-                        )
+                            operand
+                                .as_deref()
+                                .and_then(|expr| {
+                                    projected_expr_pg_type_with_db(self.db_ref(), expr)
+                                })
+                                .as_deref(),
+                            projected_expr_pg_type_with_db(self.db_ref(), &condition.condition)
+                                .as_deref(),
+                        )?
                     } else {
                         sql_value_truth(self.eval_session_expr(&condition.condition)?)?
                             .unwrap_or(false)

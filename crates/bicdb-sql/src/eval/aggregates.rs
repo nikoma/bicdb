@@ -1647,9 +1647,11 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         // Result types of the scalar functions in pg_scalar_extra.rs.
         match unqualified_name {
             "nextval" | "currval" | "setval" => return Some("int8".to_string()),
-            "bicdb_oracle_concat" | "bicdb_oracle_default_to_char" | "to_char" => {
-                return Some("text".to_string())
-            }
+            "bicdb_oracle_decode_key"
+            | "bicdb_oracle_decode_text"
+            | "bicdb_oracle_concat"
+            | "bicdb_oracle_default_to_char"
+            | "to_char" => return Some("text".to_string()),
             "strpos" => return Some("int4".to_string()),
             // reverse/btrim/ltrim/rtrim keep their bytea-aware typing below.
             "lpad" | "rpad" | "repeat" => return Some("text".to_string()),
@@ -1661,12 +1663,15 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             "age" | "make_interval" => return Some("interval".to_string()),
             "to_date" => return Some("date".to_string()),
             "trunc" if function_args(function).len() == 2 => return Some("numeric".to_string()),
-            "bicdb_oracle_number_divide"
+            "bicdb_oracle_decode_number"
+            | "bicdb_oracle_number_divide"
             | "bicdb_oracle_number_arithmetic"
             | "bicdb_oracle_date_subtract"
             | "bicdb_oracle_number_trunc"
             | "bicdb_oracle_plsql_number_trunc" => return Some("numeric".to_string()),
-            "bicdb_oracle_date_coerce"
+            "bicdb_oracle_decode_date"
+            | "bicdb_oracle_decode_timestamp"
+            | "bicdb_oracle_date_coerce"
             | "bicdb_oracle_add_months"
             | "bicdb_oracle_to_date"
             | "bicdb_oracle_trunc_date"

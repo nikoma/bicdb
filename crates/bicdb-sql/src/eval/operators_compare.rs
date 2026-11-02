@@ -1045,6 +1045,67 @@ pub(crate) fn values_equal(left: &SqlValue, right: &SqlValue) -> bool {
     }
 }
 
+/// A simple CASE retains SQL NULL inequality and uses bpchar equality when
+/// both operands resolve to CHAR (or its unknown literal coercion). DECODE's
+/// generated opaque TEXT keys deliberately do not take this padded path.
+pub(crate) fn simple_case_values_equal(
+    left: &SqlValue,
+    right: &SqlValue,
+    left_type: Option<&str>,
+    right_type: Option<&str>,
+) -> Result<bool> {
+    if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
+        return Ok(false);
+    }
+    if left_type == Some("bpchar") && matches!(right_type, Some("bpchar") | None)
+        || right_type == Some("bpchar") && left_type.is_none()
+    {
+        return Ok(pg_typed_compare("bpchar", left, right)? == Ordering::Equal);
+    }
+    Ok(values_equal(left, right))
+}
+
+#[cfg(test)]
+mod simple_case_tests {
+    use super::*;
+
+    #[test]
+    fn native_case_uses_padded_char_comparison_and_keeps_text_and_null_rules() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for sql in [
+            "CREATE TABLE case_padding(a CHAR(3),b CHAR(1))",
+            "INSERT INTO case_padding VALUES('x','x')",
+            "CREATE FUNCTION case_padding_test() RETURNS INT LANGUAGE plpgsql AS $$DECLARE v INT; BEGIN SELECT CASE a WHEN b THEN 1 ELSE 2 END INTO v FROM case_padding; RETURN v; END$$",
+        ] {
+            session.execute(sql).unwrap();
+        }
+        for (sql, expected) in [
+            (
+                "SELECT CASE CAST('x' AS CHAR(3)) WHEN CAST('x' AS CHAR(1)) THEN 1 ELSE 2 END",
+                1,
+            ),
+            (
+                "SELECT CASE CAST('x  ' AS VARCHAR) WHEN CAST('x' AS VARCHAR) THEN 1 ELSE 2 END",
+                2,
+            ),
+            ("SELECT CASE NULL WHEN NULL THEN 1 ELSE 2 END", 2),
+            (
+                "SELECT CASE a WHEN b THEN 1 ELSE 2 END FROM case_padding",
+                1,
+            ),
+            ("SELECT case_padding_test()", 1),
+        ] {
+            assert_eq!(
+                session.execute(sql).unwrap().rows[0][0].to_cell(),
+                expected.to_string(),
+                "{sql}"
+            );
+        }
+    }
+}
+
 pub(crate) fn values_equal_scalar(left: &SqlValue, right: &SqlValue) -> bool {
     match (left, right) {
         (SqlValue::Null, _) | (_, SqlValue::Null) => false,

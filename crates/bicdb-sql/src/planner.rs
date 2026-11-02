@@ -1823,6 +1823,20 @@ impl BoundExprScope {
                 else_result,
                 ..
             } => {
+                if let Some(operand) = operand {
+                    // This compact IR does not carry comparison types. Keep
+                    // CHAR and unresolved row operands on the typed evaluator
+                    // rather than losing bpchar equality at bind time.
+                    if std::iter::once(operand.as_ref())
+                        .chain(conditions.iter().map(|branch| &branch.condition))
+                        .any(|expr| {
+                            self.known_expr_type(expr)
+                                .is_none_or(|kind| kind == "bpchar")
+                        })
+                    {
+                        return None;
+                    }
+                }
                 if !ctx
                     .validate_case
                     .is_some_and(|validate| validate(conditions, else_result.as_deref()))

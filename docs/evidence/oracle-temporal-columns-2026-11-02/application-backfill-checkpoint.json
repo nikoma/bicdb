@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "created_at": "2026-11-02T19:28:30.539230+00:00",
+  "complete": false,
+  "source_temporal_columns": 2263,
+  "reconciled_columns": 127,
+  "validated_tables_in_current_resume": 51,
+  "fingerprinted_tables": 62,
+  "source_row_count_difference_tables": 2,
+  "application_qualified": false,
+  "stopped_writer_snapshot_verified_files": 988,
+  "stopped_writer_snapshot_bytes": 415981036
+}

@@ -1,0 +1,32 @@
+{
+  "format": 1,
+  "success": true,
+  "total": 110,
+  "matched": 110,
+  "suites": [
+    {
+      "suite": "decode",
+      "matched": 12,
+      "total": 12,
+      "success": true
+    },
+    {
+      "suite": "cursors",
+      "matched": 30,
+      "total": 30,
+      "success": true
+    },
+    {
+      "suite": "concat",
+      "matched": 62,
+      "total": 62,
+      "success": true
+    },
+    {
+      "suite": "columns",
+      "matched": 6,
+      "total": 6,
+      "success": true
+    }
+  ]
+}

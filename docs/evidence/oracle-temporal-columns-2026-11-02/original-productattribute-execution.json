@@ -1,0 +1,85 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "e807b88c08e3329a44ac59b8ea241708c7ec34c46d58ce499812540ed7bc5cab",
+  "application_qualified": false,
+  "source_body_unchanged": true,
+  "source_sha256": "9df97f8e2b3fd7daa03860d20bc3b32b5b273649603aff3c81180a32912ffd7c",
+  "oracle_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "instance_0",
+      "matched": false,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      }
+    },
+    {
+      "id": "instance_1",
+      "matched": false,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      }
+    },
+    {
+      "id": "instance_2",
+      "matched": false,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      }
+    },
+    {
+      "id": "instance_3",
+      "matched": false,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      }
+    },
+    {
+      "id": "instance_4",
+      "matched": false,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      }
+    },
+    {
+      "id": "instance_5",
+      "matched": false,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      }
+    }
+  ],
+  "matched": 0,
+  "total": 6,
+  "success": false
+}

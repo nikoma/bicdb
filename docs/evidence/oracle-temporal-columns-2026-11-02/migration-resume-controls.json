@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "isolated_database_only": true,
+  "success": true,
+  "application_qualified": false,
+  "reconciled_columns": 3,
+  "existing_target_data_preserved": true,
+  "source_count_difference_recorded": true,
+  "unchanged_resume_passed": true,
+  "changed_target_resume_rejected": true
+}

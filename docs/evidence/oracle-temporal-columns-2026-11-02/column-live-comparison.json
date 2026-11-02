@@ -1,0 +1,924 @@
+{
+  "format": 1,
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "fixture_prefix": "BICDB_TC_A516344BE6",
+  "fixture_sha256": "8d719b8d3968a2c61da03d4a791c79c0c2f48ed392efb385f4851b7ca6857947",
+  "total": 21,
+  "matched": 21,
+  "cases": [
+    {
+      "id": "stored_column_values",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            },
+            {
+              "timestamp": "2024-02-29T23:59:59.000000"
+            },
+            {
+              "timestamp": "2024-02-29T23:59:59.999999"
+            },
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "2024-02-29T23:59:59.000000"
+            },
+            null
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "timestamp": "1999-12-31T23:59:59.000000"
+            },
+            {
+              "timestamp": "1999-12-31T23:59:59.999999"
+            },
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "1999-12-31T23:59:59.000000"
+            },
+            null
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.499999"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.500000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            },
+            null
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.500001"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:57.000000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.500000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            },
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            },
+            {
+              "timestamp": "2024-02-29T23:59:59.000000"
+            },
+            {
+              "timestamp": "2024-02-29T23:59:59.999999"
+            },
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "2024-02-29T23:59:59.000000"
+            },
+            null
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "timestamp": "1999-12-31T23:59:59.000000"
+            },
+            {
+              "timestamp": "1999-12-31T23:59:59.999999"
+            },
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "1999-12-31T23:59:59.000000"
+            },
+            null
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.499999"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.500000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            },
+            null
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.500001"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:57.000000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.500000"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            },
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "0"
+          },
+          {
+            "timestamp": "2024-02-29T23:59:59.000000"
+          },
+          {
+            "timestamp": "2024-02-29T23:59:59.999999"
+          },
+          {
+            "timestamp": "2024-03-01T00:00:00.000000"
+          },
+          {
+            "timestamp": "2024-03-01T00:00:00.000000"
+          },
+          {
+            "timestamp": "2024-02-29T23:59:59.000000"
+          },
+          null
+        ],
+        [
+          {
+            "number": "1"
+          },
+          {
+            "timestamp": "1999-12-31T23:59:59.000000"
+          },
+          {
+            "timestamp": "1999-12-31T23:59:59.999999"
+          },
+          {
+            "timestamp": "2000-01-01T00:00:00.000000"
+          },
+          {
+            "timestamp": "2000-01-01T00:00:00.000000"
+          },
+          {
+            "timestamp": "1999-12-31T23:59:59.000000"
+          },
+          null
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          },
+          {
+            "timestamp": "2024-02-29T12:34:56.499999"
+          },
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          },
+          {
+            "timestamp": "2024-02-29T12:34:56.500000"
+          },
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          },
+          null
+        ],
+        [
+          {
+            "number": "3"
+          },
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          },
+          {
+            "timestamp": "2024-02-29T12:34:56.500001"
+          },
+          {
+            "timestamp": "2024-02-29T12:34:57.000000"
+          },
+          {
+            "timestamp": "2024-02-29T12:34:56.500000"
+          },
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          },
+          null
+        ]
+      ]
+    },
+    {
+      "id": "anchor_d_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T23:59:59.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T23:59:59.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T23:59:59.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_d_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "1999-12-31T23:59:59.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "1999-12-31T23:59:59.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "1999-12-31T23:59:59.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_d_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_d_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T23:59:59.999999"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T23:59:59.999999"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T23:59:59.999999"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "1999-12-31T23:59:59.999999"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "1999-12-31T23:59:59.999999"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "1999-12-31T23:59:59.999999"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.499999"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.499999"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.499999"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.500001"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.500001"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.500001"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t0_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-03-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t0_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2000-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t0_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t0_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:57.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:57.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:57.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t3_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-03-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t3_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2000-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t3_14",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.500000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.500000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.500000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "anchor_t3_15",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.500000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.500000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.500000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "quoted_anchor_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T23:59:59.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T23:59:59.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T23:59:59.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "quoted_anchor_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "1999-12-31T23:59:59.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "1999-12-31T23:59:59.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "1999-12-31T23:59:59.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "quoted_anchor_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "quoted_anchor_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.000000"
+          }
+        ]
+      ]
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "scope": "Oracle DATE versus TIMESTAMP precision in PostgreSQL COPY storage, anchored locals, quoted columns, logical metadata and unchanged native transport OIDs. TIMESTAMP WITH TIME ZONE declaration and NULL metadata only; region behavior and mutable NLS unqualified.",
+  "routine_compiler": "bicdb_oracle_preview_v9",
+  "temporal_column_metadata": [
+    {
+      "column": "D",
+      "oracle": "DATE",
+      "bicdb": "DATE",
+      "expected": "DATE",
+      "matched": true
+    },
+    {
+      "column": "T",
+      "oracle": "TIMESTAMP(6)",
+      "bicdb": "TIMESTAMP(6)",
+      "expected": "TIMESTAMP(6)",
+      "matched": true
+    },
+    {
+      "column": "T0",
+      "oracle": "TIMESTAMP(0)",
+      "bicdb": "TIMESTAMP(0)",
+      "expected": "TIMESTAMP(0)",
+      "matched": true
+    },
+    {
+      "column": "T3",
+      "oracle": "TIMESTAMP(3)",
+      "bicdb": "TIMESTAMP(3)",
+      "expected": "TIMESTAMP(3)",
+      "matched": true
+    },
+    {
+      "column": "Quoted.Date",
+      "oracle": "DATE",
+      "bicdb": "DATE",
+      "expected": "DATE",
+      "matched": true
+    },
+    {
+      "column": "Z",
+      "oracle": "TIMESTAMP(6) WITH TIME ZONE",
+      "bicdb": "TIMESTAMP(6) WITH TIME ZONE",
+      "expected": "TIMESTAMP(6) WITH TIME ZONE",
+      "matched": true
+    }
+  ],
+  "oracle_projection_types": [
+    "DB_TYPE_NUMBER",
+    "DB_TYPE_DATE",
+    "DB_TYPE_TIMESTAMP",
+    "DB_TYPE_TIMESTAMP",
+    "DB_TYPE_TIMESTAMP",
+    "DB_TYPE_DATE",
+    "DB_TYPE_TIMESTAMP_TZ"
+  ],
+  "bicdb_projection_types": [
+    1700,
+    1114,
+    1114,
+    1114,
+    1114,
+    1114,
+    1184
+  ],
+  "runtime_binary_sha256": "e807b88c08e3329a44ac59b8ea241708c7ec34c46d58ce499812540ed7bc5cab"
+}

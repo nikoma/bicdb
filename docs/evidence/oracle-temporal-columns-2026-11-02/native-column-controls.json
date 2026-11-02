@@ -1,0 +1,339 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "native_bicdb": true,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "values_after_copy_and_alter",
+      "sql": "SELECT * FROM \"public\".\"bicdb_native_columns_894778c24906\" ORDER BY k",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            },
+            {
+              "date": "2024-02-29"
+            },
+            {
+              "timestamp": "2024-02-29T23:59:59.999999"
+            },
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "date": "1999-12-31"
+            },
+            {
+              "timestamp": "1999-12-31T23:59:59.999999"
+            },
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            }
+          ]
+        ],
+        "names": [
+          "k",
+          "d",
+          "t",
+          "t0",
+          "Mixed.Stamp"
+        ],
+        "type_oids": [
+          23,
+          1082,
+          1114,
+          1114,
+          1114
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            },
+            {
+              "date": "2024-02-29"
+            },
+            {
+              "timestamp": "2024-02-29T23:59:59.999999"
+            },
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "date": "1999-12-31"
+            },
+            {
+              "timestamp": "1999-12-31T23:59:59.999999"
+            },
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            },
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            }
+          ]
+        ],
+        "names": [
+          "k",
+          "d",
+          "t",
+          "t0",
+          "Mixed.Stamp"
+        ],
+        "type_oids": [
+          23,
+          1082,
+          1114,
+          1114,
+          1114
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "date_subtraction",
+      "sql": "SELECT d-d AS delta FROM \"public\".\"bicdb_native_columns_894778c24906\" ORDER BY k",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "names": [
+          "delta"
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "names": [
+          "delta"
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "timestamp_subtraction",
+      "sql": "SELECT t-t0 AS delta FROM \"public\".\"bicdb_native_columns_894778c24906\" ORDER BY k",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "interval": {
+                "days": -1,
+                "seconds": 86399,
+                "microseconds": 999999
+              }
+            }
+          ],
+          [
+            {
+              "interval": {
+                "days": -1,
+                "seconds": 86399,
+                "microseconds": 999999
+              }
+            }
+          ]
+        ],
+        "names": [
+          "delta"
+        ],
+        "type_oids": [
+          1186
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "interval": {
+                "days": -1,
+                "seconds": 86399,
+                "microseconds": 999999
+              }
+            }
+          ],
+          [
+            {
+              "interval": {
+                "days": -1,
+                "seconds": 86399,
+                "microseconds": 999999
+              }
+            }
+          ]
+        ],
+        "names": [
+          "delta"
+        ],
+        "type_oids": [
+          1186
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "date_has_no_time",
+      "sql": "SELECT d=DATE '2024-02-29' AS same_day FROM \"public\".\"bicdb_native_columns_894778c24906\" WHERE k=0",
+      "postgres": {
+        "rows": [
+          [
+            true
+          ]
+        ],
+        "names": [
+          "same_day"
+        ],
+        "type_oids": [
+          16
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            true
+          ]
+        ],
+        "names": [
+          "same_day"
+        ],
+        "type_oids": [
+          16
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "quoted_name_survives",
+      "sql": "SELECT \"Mixed.Stamp\" FROM \"public\".\"bicdb_native_columns_894778c24906\" ORDER BY k",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ],
+          [
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            }
+          ]
+        ],
+        "names": [
+          "Mixed.Stamp"
+        ],
+        "type_oids": [
+          1114
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ],
+          [
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            }
+          ]
+        ],
+        "names": [
+          "Mixed.Stamp"
+        ],
+        "type_oids": [
+          1114
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "metadata",
+      "sql": "SELECT d,t,t0,\"Mixed.Stamp\" FROM \"public\".\"bicdb_native_columns_894778c24906\" WHERE false",
+      "postgres": {
+        "rows": [],
+        "names": [
+          "d",
+          "t",
+          "t0",
+          "Mixed.Stamp"
+        ],
+        "type_oids": [
+          1082,
+          1114,
+          1114,
+          1114
+        ]
+      },
+      "bicdb": {
+        "rows": [],
+        "names": [
+          "d",
+          "t",
+          "t0",
+          "Mixed.Stamp"
+        ],
+        "type_oids": [
+          1082,
+          1114,
+          1114,
+          1114
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "matched": 6,
+  "total": 6,
+  "runtime_binary_sha256": "e807b88c08e3329a44ac59b8ea241708c7ec34c46d58ce499812540ed7bc5cab"
+}

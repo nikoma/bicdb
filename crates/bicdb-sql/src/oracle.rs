@@ -1305,7 +1305,26 @@ mod tests {
                 expected
             );
         }
-        assert!(lower_profile_sql(session.db_ref(),"CREATE FUNCTION cursor_args RETURN NUMBER IS CURSOR c(p NUMBER) IS SELECT p FROM DUAL; BEGIN RETURN 1; END;",ORACLE_PREVIEW_PROFILE).is_err());
+        for (name, call) in [("cursor_args", "c(p=>42)"), ("cursor_missing_arg", "c")] {
+            let definition = format!("CREATE FUNCTION {name} RETURN NUMBER IS CURSOR c(p NUMBER) IS SELECT p AS v FROM DUAL; BEGIN FOR r IN {call} LOOP RETURN r.v; END LOOP; RETURN 0; END;");
+            let lowered =
+                lower_profile_sql(session.db_ref(), &definition, ORACLE_PREVIEW_PROFILE).unwrap();
+            session.execute(&lowered).unwrap();
+        }
+        let valid = lower_profile_sql(
+            session.db_ref(),
+            "SELECT cursor_args() FROM DUAL",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        assert_eq!(session.execute(&valid).unwrap().rows[0][0].to_cell(), "42");
+        let invalid = lower_profile_sql(
+            session.db_ref(),
+            "SELECT cursor_missing_arg() FROM DUAL",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        assert_eq!(session.execute(&invalid).unwrap_err().sqlstate(), "42601");
     }
 
     #[test]

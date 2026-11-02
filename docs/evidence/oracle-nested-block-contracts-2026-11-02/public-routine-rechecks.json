@@ -1,0 +1,43 @@
+{
+  "format": 1,
+  "routine_compiler": "bicdb_oracle_preview_v6",
+  "total_assertions": 266,
+  "suites": {
+    "case": {
+      "assertions": 34,
+      "success": true,
+      "routine_compiler": "bicdb_oracle_preview_v6",
+      "report_sha256": "28e248f5a2aa4497a789b939d5f003b68bac42dfb647f4e9df3656f3212b9ab6"
+    },
+    "anchors": {
+      "assertions": 41,
+      "success": true,
+      "routine_compiler": "bicdb_oracle_preview_v6",
+      "report_sha256": "d77d501edc8bcea6e38c520149a0da76c33549e540b85408194e9825896c177d"
+    },
+    "week": {
+      "assertions": 102,
+      "success": true,
+      "routine_compiler": "bicdb_oracle_preview_v6",
+      "report_sha256": "338add724816ae229da8d03ee968f3eb91c0400179750374778bb6b257000907"
+    },
+    "calendar": {
+      "assertions": 36,
+      "success": true,
+      "routine_compiler": "bicdb_oracle_preview_v6",
+      "report_sha256": "eb3a7faa31087e338ddb659892e863c11cf76f0212d6e4cddb03fa11a42baa56"
+    },
+    "temporal": {
+      "assertions": 29,
+      "success": true,
+      "routine_compiler": "bicdb_oracle_preview_v6",
+      "report_sha256": "9a8ec72b6ccc838bc3b8f967eb8806d0db838311ab72a946c3540e7d2cc110e7"
+    },
+    "namespaces": {
+      "assertions": 24,
+      "success": true,
+      "routine_compiler": "bicdb_oracle_preview_v6",
+      "report_sha256": "5f0eab6024b914e5a9e23ab128bba9d25d1b6c3f29976b91236f54677326cbf2"
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "isolated_database_only": true,
+  "application_database_opened_with_old_reader": false,
+  "new_runtime_sha256": "7e94a49d2d3a09e129e0b8d1e42652400cf626695fbd17ea7e03d9c0a73b9eda",
+  "old_runtime_sha256": "54179155d9b026dae1dbeb93efc5f77c69b2714da9437b133f1ae667660422b0",
+  "readers": [
+    {
+      "label": "new",
+      "calls": [
+        {
+          "sql": "SELECT case_route(1) FROM DUAL",
+          "value": "11"
+        },
+        {
+          "sql": "SELECT case_route(NULL) FROM DUAL",
+          "value": "22"
+        },
+        {
+          "sql": "SELECT case_caught(0) FROM DUAL",
+          "value": "99"
+        }
+      ],
+      "recovery": true
+    },
+    {
+      "label": "old",
+      "calls": [
+        {
+          "sql": "SELECT case_route(1) FROM DUAL",
+          "sqlstate": "0A000"
+        },
+        {
+          "sql": "SELECT case_route(NULL) FROM DUAL",
+          "sqlstate": "0A000"
+        },
+        {
+          "sql": "SELECT case_caught(0) FROM DUAL",
+          "sqlstate": "0A000"
+        }
+      ],
+      "recovery": true
+    }
+  ],
+  "success": true
+}

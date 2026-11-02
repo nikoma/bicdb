@@ -1,0 +1,584 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "8fcffde890decfcdd48efd7e02b7edc573fd26c4d67953f7804d46c0326375de",
+  "application_qualified": false,
+  "success": false,
+  "oracle_version": "23.26.3.0.0",
+  "oracle_reference": {
+    "format": 1,
+    "backend": "oracle",
+    "reference_only": true,
+    "application_qualified": false,
+    "cases": [
+      {
+        "id": "handled_assignment",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "failed_statement_atomicity",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "handler_propagation",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      }
+    ],
+    "cleanup_errors": [],
+    "success": true,
+    "scope": "Synthetic nested-block write rollback, local values and handler propagation",
+    "database_version": "23.26.3.0.0"
+  },
+  "bicdb_oracle": {
+    "format": 1,
+    "backend": "bicdb_oracle",
+    "reference_only": false,
+    "application_qualified": false,
+    "cases": [
+      {
+        "id": "handled_assignment",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": false,
+        "error": {
+          "error": "FeatureNotSupported",
+          "code": "0A000"
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "failed_statement_atomicity",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": false,
+        "error": {
+          "error": "FeatureNotSupported",
+          "code": "0A000"
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "handler_propagation",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": false,
+        "error": {
+          "error": "FeatureNotSupported",
+          "code": "0A000"
+        },
+        "rollback_verified": true
+      }
+    ],
+    "cleanup_errors": [],
+    "success": false,
+    "scope": "Synthetic nested-block write rollback, local values and handler propagation",
+    "database_version": 180004
+  },
+  "rownum_cases": [
+    {
+      "id": "equals_first",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "equals_second",
+      "matched": true,
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      }
+    },
+    {
+      "id": "upper_inclusive",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "upper_exclusive",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "lower_exclusive",
+      "matched": true,
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      }
+    },
+    {
+      "id": "lower_inclusive",
+      "matched": true,
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      }
+    },
+    {
+      "id": "starts_one",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "positive",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "not_second",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "not_first",
+      "matched": true,
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      }
+    },
+    {
+      "id": "zero",
+      "matched": true,
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      }
+    },
+    {
+      "id": "negative",
+      "matched": true,
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      }
+    },
+    {
+      "id": "reversed",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "filter_before_prefix",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "combined",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      }
+    }
+  ],
+  "bicdb_postgres": {
+    "format": 1,
+    "backend": "bicdb_postgres",
+    "reference_only": false,
+    "application_qualified": false,
+    "cases": [
+      {
+        "id": "handled_assignment",
+        "expected": {
+          "value": {
+            "number": "10"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": false,
+        "error": {
+          "error": "FeatureNotSupported",
+          "code": "0A000"
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "failed_statement_atomicity",
+        "expected": {
+          "value": {
+            "number": "10"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": false,
+        "error": {
+          "error": "FeatureNotSupported",
+          "code": "0A000"
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "handler_propagation",
+        "expected": {
+          "value": {
+            "number": "10"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": false,
+        "error": {
+          "error": "FeatureNotSupported",
+          "code": "0A000"
+        },
+        "rollback_verified": true
+      }
+    ],
+    "cleanup_errors": [],
+    "success": false,
+    "scope": "Synthetic nested-block write rollback, local values and handler propagation",
+    "database_version": 180004
+  }
+}

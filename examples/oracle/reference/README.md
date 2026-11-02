@@ -280,6 +280,15 @@ The runner also checks failing-statement atomicity, handler propagation and
 rollback, using fresh dedicated connections and cleaning up its tables.
 
 Supply `--oracle-config`, `--output` and a dedicated PostgreSQL connection in
-`ORACLE_CONTROL_PG_DSN`. This is reference-only evidence; it does not execute or
-qualify BicDB. [Measured contracts and implementation dependencies](../../../docs/evidence/oracle-nested-block-contracts-2026-11-02/README.md)
-remain separate from the generated routine comparisons.
+`ORACLE_CONTROL_PG_DSN`. Without target options the runner is reference-only.
+Optional `--bicdb-oracle-dsn-env` and `--bicdb-postgres-dsn-env` name environment
+variables containing dedicated BicDB connections. They run the same scenarios
+through the PostgreSQL driver under the selected profile and record each
+backend independently. Synthetic writes are rolled back and tables removed.
+[Measured contracts and implementation dependencies](../../../docs/evidence/oracle-nested-block-contracts-2026-11-02/README.md)
+remain separate from full transaction or application qualification.
+
+`rownum-cases.json` adds 15 plain prefix-query comparisons over ordered derived
+rows, with explicit expected values. They cover equality, upper/lower bounds,
+zero/negative bounds, reversed operands, conjunctions and ordinary filtering.
+They do not qualify same-block sorting/grouping, projected ROWNUM or dynamic bounds.

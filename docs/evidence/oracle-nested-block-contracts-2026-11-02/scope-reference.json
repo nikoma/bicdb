@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "source_only": true,
+  "synthetic_data_only": true,
+  "server_version_num": 180004,
+  "cases": [
+    {
+      "name": "scopes",
+      "expected": 57,
+      "actual": 57,
+      "matched": true
+    },
+    {
+      "name": "controls",
+      "expected": 12,
+      "actual": 12,
+      "matched": true
+    },
+    {
+      "name": "init_error",
+      "expected": 8,
+      "actual": 8,
+      "matched": true
+    },
+    {
+      "name": "lexical",
+      "expected": 4,
+      "actual": 4,
+      "matched": true
+    },
+    {
+      "name": "return",
+      "expected": "inside",
+      "actual": "inside",
+      "matched": true
+    }
+  ],
+  "success": true
+}

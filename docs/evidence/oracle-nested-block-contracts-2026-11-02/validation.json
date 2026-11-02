@@ -1,0 +1,65 @@
+{
+  "format": 1,
+  "source_commit": "8e58804a993c646d43a059ad6b46edfd560ba938",
+  "previous_main_commit": "1b56f31",
+  "binary_target": "debug/examples/oracle_server",
+  "binary_sha256": "7e94a49d2d3a09e129e0b8d1e42652400cf626695fbd17ea7e03d9c0a73b9eda",
+  "routine_compiler": "bicdb_oracle_preview_v6",
+  "routine_language_oid": 999405,
+  "rust_suites": {
+    "pgwire_unit": 119,
+    "oracle_driver": 22,
+    "protocol": 168,
+    "sql_unit": 388,
+    "integrated_application": 16,
+    "cell_rows": 17,
+    "sql_integration": 417
+  },
+  "rust_tests_passed": 1147,
+  "existing_sql_unit_ignores": 3,
+  "reference_harness_tests_passed": 19,
+  "public_routine_comparisons": 266,
+  "rownum_comparisons": 15,
+  "oracle_block_driver_cases": 3,
+  "postgres_block_driver_cases": 3,
+  "original_application_comparisons": 21,
+  "original_application_baseline": {
+    "matched": 13,
+    "total": 13
+  },
+  "accepted_original_definitions": {
+    "accepted": 35,
+    "total": 62
+  },
+  "application_qualified": false,
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "ci_status": "Not inspected; reported checks are local",
+  "published_release": false,
+  "production_deployment": false,
+  "memory": {
+    "focused_blocks": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 3671519232,
+      "minimum_observed_available_bytes": 21449490432,
+      "minimum_available_gib": 8
+    },
+    "server": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 1587621888,
+      "minimum_observed_available_bytes": 23642562560,
+      "minimum_available_gib": 8
+    },
+    "delivery": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 2891169792,
+      "minimum_observed_available_bytes": 21333331968,
+      "minimum_available_gib": 8
+    }
+  },
+  "scope": "Bounded nested blocks, scoped bindings, statement undo and literal-integer ROWNUM prefixes; full compatibility programme remains incomplete"
+}

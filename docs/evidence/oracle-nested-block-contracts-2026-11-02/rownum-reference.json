@@ -1,0 +1,258 @@
+{
+  "format": 1,
+  "source_only": true,
+  "oracle_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "equals_first",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM=1",
+      "expected_values": [
+        3
+      ],
+      "actual_values": [
+        3
+      ],
+      "matched": true
+    },
+    {
+      "id": "equals_second",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM=2",
+      "expected_values": [],
+      "actual_values": [],
+      "matched": true
+    },
+    {
+      "id": "upper_inclusive",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<=2",
+      "expected_values": [
+        3,
+        2
+      ],
+      "actual_values": [
+        3,
+        2
+      ],
+      "matched": true
+    },
+    {
+      "id": "upper_exclusive",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<3",
+      "expected_values": [
+        3,
+        2
+      ],
+      "actual_values": [
+        3,
+        2
+      ],
+      "matched": true
+    },
+    {
+      "id": "lower_exclusive",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM>1",
+      "expected_values": [],
+      "actual_values": [],
+      "matched": true
+    },
+    {
+      "id": "lower_inclusive",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM>=2",
+      "expected_values": [],
+      "actual_values": [],
+      "matched": true
+    },
+    {
+      "id": "starts_one",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM>=1",
+      "expected_values": [
+        3,
+        2,
+        1
+      ],
+      "actual_values": [
+        3,
+        2,
+        1
+      ],
+      "matched": true
+    },
+    {
+      "id": "positive",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM>0",
+      "expected_values": [
+        3,
+        2,
+        1
+      ],
+      "actual_values": [
+        3,
+        2,
+        1
+      ],
+      "matched": true
+    },
+    {
+      "id": "not_second",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<>2",
+      "expected_values": [
+        3
+      ],
+      "actual_values": [
+        3
+      ],
+      "matched": true
+    },
+    {
+      "id": "not_first",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<>1",
+      "expected_values": [],
+      "actual_values": [],
+      "matched": true
+    },
+    {
+      "id": "zero",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<=0",
+      "expected_values": [],
+      "actual_values": [],
+      "matched": true
+    },
+    {
+      "id": "negative",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM<=-1",
+      "expected_values": [],
+      "actual_values": [],
+      "matched": true
+    },
+    {
+      "id": "reversed",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE 2>=ROWNUM",
+      "expected_values": [
+        3,
+        2
+      ],
+      "actual_values": [
+        3,
+        2
+      ],
+      "matched": true
+    },
+    {
+      "id": "filter_before_prefix",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE v<>3 AND ROWNUM<=1",
+      "expected_values": [
+        2
+      ],
+      "actual_values": [
+        2
+      ],
+      "matched": true
+    },
+    {
+      "id": "combined",
+      "sql": "SELECT v FROM (SELECT 1 v FROM DUAL UNION ALL SELECT 2 v FROM DUAL UNION ALL SELECT 3 v FROM DUAL ORDER BY v DESC) WHERE ROWNUM>=1 AND ROWNUM<3",
+      "expected_values": [
+        3,
+        2
+      ],
+      "actual_values": [
+        3,
+        2
+      ],
+      "matched": true
+    }
+  ],
+  "nested_blocks": {
+    "format": 1,
+    "backend": "oracle",
+    "reference_only": true,
+    "application_qualified": false,
+    "cases": [
+      {
+        "id": "handled_assignment",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "failed_statement_atomicity",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      },
+      {
+        "id": "handler_propagation",
+        "expected": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "matched": true,
+        "actual": {
+          "value": {
+            "number": "20"
+          },
+          "local_value": {
+            "number": "7"
+          },
+          "row_count": {
+            "number": "1"
+          }
+        },
+        "rollback_verified": true
+      }
+    ],
+    "cleanup_errors": [],
+    "success": true,
+    "scope": "Synthetic nested-block write rollback, local values and handler propagation",
+    "database_version": "23.26.3.0.0"
+  },
+  "success": true
+}

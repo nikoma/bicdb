@@ -38,7 +38,13 @@ dependency refresh remains outstanding.
 The [procedural CASE qualification](evidence/oracle-procedural-case-2026-11-02/README.md)
 adds general statement semantics with independent PostgreSQL regressions and
 34 live Oracle comparisons. The selected original-routine recheck now matches
-12 of 13 cases; nested exception blocks and ROWNUM still block GET_SYSCONFIG.
+12 of 13 cases in that batch. The later
+[nested-block qualification](evidence/oracle-nested-block-contracts-2026-11-02/README.md)
+implements scoped blocks, versioned statement rollback and bounded ROWNUM prefix
+predicates. After recreating the unchanged GET_SYSCONFIG source under compiler
+version 6, all 13 selected original-routine comparisons match, together with
+eight existing-configuration cases. This does not increase the 35 accepted
+definitions or qualify all execution paths.
 Required foreign keys, complete routine/view behavior and remaining application
 behavior are still outstanding.
 These are development data baselines, not full schema/application acceptance. The
@@ -58,11 +64,11 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 3. SQL value semantics | Differential null/empty-string, concatenation, padding, comparison, coercion, uniqueness and composite-key tests | Partial: HR lowering and initial reference queries; coercion and padding qualification outstanding |
 | 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings used by HR; full Oracle rules unqualified |
 | 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL, date formats and Gregorian ADD_MONTHS; NVL2/DECODE and broader semantics outstanding |
-| 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL and pgwire parameters; other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |
+| 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL, pgwire parameters and literal-integer ROWNUM prefix predicates in plain blocks; other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |
 | 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: application-schema selection, versioned static function relation binding and documented heap adaptation; general resolution and synonyms outstanding |
-| 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Unqualified in BicDB; [independent nested-block contracts](evidence/oracle-nested-block-contracts-2026-11-02/README.md) establish the Oracle/PostgreSQL rollback difference and implementation dependencies |
+| 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Partial: [nested-block contracts](evidence/oracle-nested-block-contracts-2026-11-02/README.md) distinguish new Oracle routine statement rollback from native PostgreSQL block rollback; general transactions, DDL commits and locking qualification outstanding |
 | 9. DDL lifecycle | Oracle implicit commits, replacement, dependency invalidation, invalid-object catalogs and recompilation | Outstanding; native transactional DDL is not an Oracle equivalent |
-| 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: bounded procedures/blocks, standalone functions, unparameterized bound cursor loops, declared-type procedural TRUNC and versioned logical DATE arithmetic; full language and application routines outstanding |
+| 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: scoped blocks/declarations and nested handlers, standalone functions, unparameterized bound cursor loops, declared-type procedural TRUNC and versioned logical DATE arithmetic; full language and application routines outstanding |
 | 11. Packages | Specs/bodies, visibility, overloads, initialization, session variables and invalidation with pool/session isolation | Outstanding |
 | 12. Autonomous transactions | Independent commit/rollback and lock behavior, nested calls, exceptions and restart tests | Outstanding |
 | 13. Supplied package APIs | Qualify used DBMS/UTL APIs, including LOB, SQL, OUTPUT, UTILITY, APPLICATION_INFO, RANDOM, LOCK and SCHEDULER; file/network ACL enforcement | Outstanding |

@@ -203,16 +203,18 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v5`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v6`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
 previously translated routines; recreate an Oracle-authored definition to select
 the new compiler. The compiler versions have separate `pg_language` identities,
-present only in a preview database. Versions 1 through 4 remain readable.
-Version 5 (OID 999404) fences new definitions from older runtimes whose CASE
-lowering can evaluate a simple selector repeatedly. The database storage format
-is unchanged; this is a stored-routine capability marker.
+present only in a preview database. Versions 1 through 5 remain readable.
+Version 5 (OID 999404) fences CASE selector dispatch. Version 6 (OID 999405)
+adds the tested Oracle statement-rollback and strict SELECT INTO contracts;
+earlier definitions retain their previous block-rollback behavior. Recreate an
+Oracle source definition to select these new contracts. The database storage
+format is unchanged; these are stored-routine capability markers.
 
 Version 2 binds static relation references in functions to the namespace in the
 stored function declaration. Unqualified declarations created through the
@@ -320,6 +322,35 @@ Oracle grammar/behavior is not qualified. Labels, newer selector predicates and
 full Oracle conversion semantics remain unqualified.
 Native routine definitions currently compile on invocation; Oracle-compatible
 DDL validation and invalidation remain separate outstanding work.
+
+Nested BEGIN/END and DECLARE blocks share the routine interpreter. Local
+declarations shadow values, assignment types and cursors, then restore the outer
+bindings on normal completion, errors and loop/return exits. A declaration's
+initialization error propagates to the enclosing block. An error raised inside
+a selected handler propagates outward instead of selecting a second handler
+from that same block. Native routines retain PostgreSQL block rollback and
+local-variable state. New version-6 Oracle routines retain prior successful
+statements when a later error is handled, while undoing a failed statement's
+partial writes. Their SELECT INTO raises NO_DATA_FOUND or TOO_MANY_ROWS rather
+than adopting PostgreSQL's non-strict zero/first-row behavior. These are bounded
+contracts; bare rethrow, stacked diagnostics, user-defined exceptions,
+autonomous work and general transaction/error continuation remain unqualified.
+Native LANGUAGE plpgsql routines inside a preview database retain native policy.
+
+Preview anonymous blocks carry their language explicitly after the DO body;
+native DO blocks keep PostgreSQL behavior. The routine-resolution cache also
+includes database instance identity for positive and negative entries, preventing
+cross-database reuse when catalog generations happen to match.
+
+ROWNUM supports conjunctive prefix comparisons with literal integer bounds in
+plain query blocks, including comparisons written with the operands reversed.
+It counts the accepted prefix, so ROWNUM=2 and ROWNUM>1 produce no rows. Ordered
+prefix selection requires ordering in an inner query. Same-block ORDER BY,
+grouping/aggregates, projection of ROWNUM, disjunctions, non-integer or dynamic
+bounds and mixed native row limits remain explicitly unsupported. This is not
+a general ROWNUM-to-LIMIT substitution. Native PostgreSQL columns named rownum
+retain their normal meaning. The public [prefix fixture](../examples/oracle/reference/rownum-cases.json)
+contains 15 independently checked Oracle expectations.
 
 This is declaration support for the tested routine subset, not a complete
 PL/SQL compiler. Native routine execution, namespace, overload, privilege and

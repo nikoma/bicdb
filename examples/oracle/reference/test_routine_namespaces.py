@@ -95,6 +95,31 @@ class RoutineNamespaceTests(unittest.TestCase):
         self.assertFalse(any(sql.startswith('CREATE ') for sql in source.statements))
         self.assertEqual(target.statements, [])
 
+    def test_anchor_fixture_keeps_sizes_nulls_and_explicit_error_contracts(self):
+        from routine_anchors import fixture as anchor_fixture
+        plan = anchor_fixture('owner', 'BICDB_TEST')
+        self.assertEqual(len(plan['cases']), 24)
+        self.assertEqual(len({case['id'] for case in plan['cases']}), 24)
+        errors = [case for case in plan['cases'] if 'expected_error' in case]
+        self.assertEqual(len(errors), 4)
+        self.assertEqual({case['expected_error']['oracle'] for case in errors}, {'ORA-06502'})
+        cases = {case['id']: case for case in plan['cases']}
+        self.assertEqual(cases['argument_size_not_inherited']['expected'], [['abcdef']])
+        self.assertEqual(cases['not_null_and_default_not_inherited']['expected'], [[None]])
+        self.assertTrue(any('"Short.Text"%TYPE' in obj['sql'] for obj in plan['setup']))
+
+    def test_anchor_suite_rejects_different_numeric_format_before_ddl(self):
+        class NumericCursor(Cursor):
+            def fetchone(self): return (',.',)
+        class NumericConnection(Connection):
+            def cursor(self): return NumericCursor(self)
+        source, target = NumericConnection('never matched'), Connection('never matched')
+        report = run(source, target, 'owner', 'BICDB_TEST', suite='anchors')
+        self.assertFalse(report['success'])
+        self.assertEqual(report['oracle_nls_numeric_characters'], ',.')
+        self.assertFalse(any(sql.startswith('CREATE ') for sql in source.statements))
+        self.assertEqual(target.statements, [])
+
     def test_setup_failure_drops_only_successfully_created_objects_and_redacts_errors(self):
         source = Connection('CREATE TABLE "owner"."BICDB_TEST_A"')
         target = Connection('never matched')

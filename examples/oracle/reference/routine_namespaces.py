@@ -71,7 +71,9 @@ def fixture(schema, prefix):
 
 
 def run(oracle, bicdb, schema, prefix, suite='namespaces'):
-    if suite == 'temporal':
+    if suite == 'anchors':
+        from routine_anchors import fixture as make_fixture
+    elif suite == 'temporal':
         from routine_temporal import fixture as make_fixture
     elif suite == 'week':
         from routine_week import fixture as make_fixture
@@ -90,6 +92,11 @@ def run(oracle, bicdb, schema, prefix, suite='namespaces'):
     with oracle.cursor() as source, bicdb.cursor() as target:
         cursors = (source, target)
         try:
+            if suite == 'anchors':
+                source.execute("SELECT VALUE FROM NLS_SESSION_PARAMETERS WHERE PARAMETER='NLS_NUMERIC_CHARACTERS'")
+                report['oracle_nls_numeric_characters'] = source.fetchone()[0]
+                if report['oracle_nls_numeric_characters'] != '.,':
+                    raise ValueError('anchor fixture requires dot decimal reference formatting')
             if suite in ('calendar', 'week'):
                 source.execute("SELECT VALUE FROM NLS_SESSION_PARAMETERS WHERE PARAMETER='NLS_CALENDAR'")
                 report['oracle_nls_calendar'] = source.fetchone()[0]
@@ -139,7 +146,7 @@ def main():
     parser.add_argument('--oracle-config', required=True, type=Path)
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN')
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--suite', choices=('namespaces', 'temporal', 'calendar', 'week'), default='namespaces')
+    parser.add_argument('--suite', choices=('namespaces', 'temporal', 'calendar', 'week', 'anchors'), default='namespaces')
     args = parser.parse_args()
     report = dict(format=1, success=False)
     try:

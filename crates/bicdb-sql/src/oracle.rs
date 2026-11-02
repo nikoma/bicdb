@@ -4,6 +4,7 @@
 use crate::*;
 use sqlparser::{dialect::OracleDialect, keywords::Keyword};
 
+mod anchored_types;
 pub mod assessment;
 mod date_trunc;
 mod dual;
@@ -139,12 +140,21 @@ pub(crate) fn default_unique_null_policy(db: &BicDb) -> Result<UniqueNullPolicy>
 /// The preview profile grows independently of the bounded HR profile. Its
 /// database marker and startup opt-in prevent accidental profile switching.
 pub fn lower_profile_sql(db: &BicDb, sql: &str, profile: &str) -> Result<String> {
+    lower_profile_sql_in_namespace(db, sql, profile, None)
+}
+
+fn lower_profile_sql_in_namespace(
+    db: &BicDb,
+    sql: &str,
+    profile: &str,
+    namespace: Option<&str>,
+) -> Result<String> {
     if !is_oracle_profile(profile) {
         return Err(unsupported(
             "Oracle front end requires an Oracle SQL profile",
         ));
     }
-    let lowered = lower_oracle_sql(db, sql, profile == ORACLE_PREVIEW_PROFILE).map_err(
+    let lowered = lower_oracle_sql(db, sql, profile == ORACLE_PREVIEW_PROFILE, namespace).map_err(
         |error| match error {
             SqlError::Unsupported(message) if profile == ORACLE_PREVIEW_PROFILE => {
                 SqlError::Unsupported(message.replacen(ORACLE_HR_PROFILE, profile, 1))
@@ -183,11 +193,11 @@ pub fn lower_session_sql(
     search_path: Option<&str>,
     user: &str,
 ) -> Result<String> {
-    let lowered = lower_profile_sql(db, sql, profile)?;
     if profile != ORACLE_PREVIEW_PROFILE {
-        return Ok(lowered);
+        return lower_profile_sql(db, sql, profile);
     }
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);
+    let lowered = lower_profile_sql_in_namespace(db, sql, profile, Some(&schema))?;
     let mut statements = parse_statements(&lowered)?;
     namespaces::qualify(&mut statements, &schema);
     date_trunc::rewrite(db, &mut statements)?;
@@ -349,10 +359,15 @@ fn join(tokens: &[Token]) -> String {
 /// Lower Oracle-profile source before pgwire parameter inference, Describe or
 /// execution. The server fixes the profile for the lifetime of the database.
 pub fn lower_hr_sql(db: &BicDb, sql: &str) -> Result<String> {
-    lower_oracle_sql(db, sql, false)
+    lower_oracle_sql(db, sql, false, None)
 }
 
-fn lower_oracle_sql(db: &BicDb, sql: &str, preview: bool) -> Result<String> {
+fn lower_oracle_sql(
+    db: &BicDb,
+    sql: &str,
+    preview: bool,
+    namespace: Option<&str>,
+) -> Result<String> {
     let mut source = tokens(sql)?;
     if source.is_empty() {
         return Ok(String::new());
@@ -372,7 +387,7 @@ fn lower_oracle_sql(db: &BicDb, sql: &str, preview: bool) -> Result<String> {
         return source
             .split(|token| *token == Token::SemiColon)
             .filter(|statement| !statement.is_empty())
-            .map(|statement| lower_oracle_sql(db, &join(statement), preview))
+            .map(|statement| lower_oracle_sql(db, &join(statement), preview, namespace))
             .collect::<Result<Vec<_>>>()
             .map(|statements| statements.join("; "));
     }
@@ -432,7 +447,7 @@ fn lower_oracle_sql(db: &BicDb, sql: &str, preview: bool) -> Result<String> {
             .take(4)
             .any(|token| word(token, "PROCEDURE") || (preview && word(token, "FUNCTION")));
     if routine || block {
-        return lower_block(db, &source, routine, preview);
+        return lower_block(db, &source, routine, preview, namespace);
     }
     let mut canonical = canonical_tokens(db, &source, preview)?;
     expand_references(db, &mut canonical)?;
@@ -774,7 +789,7 @@ fn syntax_word(value: &str, preview: bool) -> bool {
 }
 
 fn canonical_tokens(db: &BicDb, source: &[Token], preview: bool) -> Result<Vec<Token>> {
-    canonical_tokens_with_routine_types(db, source, preview, false)
+    canonical_tokens_with_routine_types(db, source, preview, false, None)
 }
 
 fn canonical_tokens_with_routine_types(
@@ -782,11 +797,19 @@ fn canonical_tokens_with_routine_types(
     source: &[Token],
     preview: bool,
     preserve_date: bool,
+    namespace: Option<&str>,
 ) -> Result<Vec<Token>> {
     let mut pieces = Vec::new();
     let mut i = 0;
     while i < source.len() {
         let t = &source[i];
+        if let Some((data_type, consumed)) =
+            anchored_types::lower(db, &source[i..], namespace, preview, preserve_date)?
+        {
+            pieces.push(data_type);
+            i += consumed;
+            continue;
+        }
         if let Token::Word(w) = t {
             let upper = w.value.to_ascii_uppercase();
             if w.quote_style.is_none() {
@@ -815,33 +838,6 @@ fn canonical_tokens_with_routine_types(
                         "CHAR"
                     };
                     pieces.push(format!("{name}({})", source[i + 2]));
-                    i += 5;
-                    continue;
-                }
-                if i + 4 < source.len()
-                    && source[i + 1] == Token::Period
-                    && source[i + 3] == Token::Mod
-                    && word(&source[i + 4], "TYPE")
-                {
-                    let column = match &source[i + 2] {
-                        Token::Word(w) => w.value.to_uppercase(),
-                        _ => return Err(unsupported("invalid %TYPE column")),
-                    };
-                    let name = w.value.to_uppercase();
-                    let schema = load_schema(db, &name)?
-                        .ok_or_else(|| unsupported(format!("unknown %TYPE table {name}")))?;
-                    let ty = schema
-                        .columns
-                        .iter()
-                        .find(|c| c.name == column)
-                        .map(|c| c.pg_type.clone())
-                        .ok_or_else(|| unsupported(format!("unknown %TYPE column {column}")))?;
-                    if preserve_date && matches!(ty.as_str(), "timestamp" | "timestamptz") {
-                        return Err(unsupported(
-                            "temporal %TYPE requires source logical type provenance",
-                        ));
-                    }
-                    pieces.push(ty);
                     i += 5;
                     continue;
                 }
@@ -942,13 +938,30 @@ fn canonical_tokens_with_routine_types(
         .map_err(|e| unsupported(e.to_string()))
 }
 
-fn lower_block(db: &BicDb, source: &[Token], routine: bool, preview: bool) -> Result<String> {
+fn lower_block(
+    db: &BicDb,
+    source: &[Token],
+    routine: bool,
+    preview: bool,
+    namespace: Option<&str>,
+) -> Result<String> {
     if source.iter().any(|t| *t == Token::StringConcat) {
         return Err(unsupported("procedural concatenation is not yet supported"));
     }
     // A final slash is the SQL*Plus submission delimiter, not part of PL/SQL.
     let source = source.strip_suffix(&[Token::Div]).unwrap_or(source);
-    let canonical = canonical_tokens_with_routine_types(db, source, preview, preview && routine)?;
+    let definition_namespace = if routine {
+        anchored_types::definition_namespace(source, namespace)?
+    } else {
+        namespace.map(str::to_string)
+    };
+    let canonical = canonical_tokens_with_routine_types(
+        db,
+        source,
+        preview,
+        preview && routine,
+        definition_namespace.as_deref(),
+    )?;
     let (header, body) = if routine {
         let mut depth = 0;
         let boundary = canonical

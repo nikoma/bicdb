@@ -58,6 +58,92 @@ impl Running {
 }
 
 #[tokio::test]
+async fn anchored_types_keep_owner_precision_and_driver_types_after_reopen() {
+    use tokio_postgres::types::Type;
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        for attempt in 0..2 {
+            let server = Running::with_profile(directory.path(), profile);
+            let mut config = tokio_postgres::Config::new();
+            config
+                .host("127.0.0.1")
+                .port(server.port)
+                .user("bicdb")
+                .dbname("bicdb");
+            if profile != "postgres" {
+                config.options("-c bicdb.sql_profile=oracle-preview-v1");
+            }
+            let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+            let connection = tokio::spawn(async move {
+                connection.await.unwrap();
+            });
+            if attempt == 0 {
+                client.batch_execute(r#"CREATE SCHEMA "left_scope"; CREATE SCHEMA "right_scope"; CREATE TABLE "public"."anchor_rows"("value" VARCHAR(1)); CREATE TABLE "left_scope"."anchor_rows"("value" NUMERIC(5,2)); CREATE TABLE "right_scope"."anchor_rows"("value" NUMERIC(6,3))"#).await.unwrap();
+                client
+                    .batch_execute(r#"SET search_path='"left_scope"'"#)
+                    .await
+                    .unwrap();
+                let selected = if profile == "postgres" {
+                    "CREATE FUNCTION selected_anchor(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE result NUMERIC(5,2); BEGIN result:=p_value; RETURN result; END$$"
+                } else {
+                    r#"CREATE FUNCTION selected_anchor(p_value NUMBER) RETURN NUMBER IS result "anchor_rows"."value"%TYPE; BEGIN result:=p_value; RETURN result; END;"#
+                };
+                client.batch_execute(selected).await.unwrap();
+                client
+                    .batch_execute(r#"SET search_path='"right_scope"'"#)
+                    .await
+                    .unwrap();
+                let owned = if profile == "postgres" {
+                    r#"CREATE FUNCTION "left_scope".owner_anchor(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE result NUMERIC(5,2); BEGIN result:=p_value; RETURN result; END$$"#
+                } else {
+                    r#"CREATE FUNCTION "left_scope".owner_anchor(p_value NUMBER) RETURN NUMBER IS result "anchor_rows"."value"%TYPE; BEGIN result:=p_value; RETURN result; END;"#
+                };
+                client.batch_execute(owned).await.unwrap();
+            }
+            client
+                .batch_execute(r#"SET search_path='"right_scope"'"#)
+                .await
+                .unwrap();
+            let suffix = if profile == "postgres" {
+                ""
+            } else {
+                " FROM DUAL"
+            };
+            for name in ["selected_anchor", "owner_anchor"] {
+                let sql = format!(
+                    r#"SELECT CAST("left_scope".{name}(CAST(CAST($1 AS VARCHAR) AS NUMERIC)) AS VARCHAR(40)){suffix}"#
+                );
+                let statement = client.prepare(&sql).await.unwrap();
+                assert_eq!(statement.columns()[0].type_(), &Type::VARCHAR);
+                assert_eq!(
+                    client
+                        .query_one(&statement, &[&"12.345"])
+                        .await
+                        .unwrap()
+                        .get::<_, String>(0),
+                    "12.35"
+                );
+                let null: Option<String> = None;
+                assert!(client
+                    .query_one(&statement, &[&null])
+                    .await
+                    .unwrap()
+                    .get::<_, Option<String>>(0)
+                    .is_none());
+                let error = client.query_one(&statement, &[&"1000"]).await.unwrap_err();
+                assert_eq!(
+                    error.code(),
+                    Some(&tokio_postgres::error::SqlState::NUMERIC_VALUE_OUT_OF_RANGE)
+                );
+                assert!(client.query_one(&statement, &[&"-12.345"]).await.is_ok());
+            }
+            drop(client);
+            connection.await.unwrap();
+        }
+    }
+}
+
+#[tokio::test]
 async fn week_and_null_formats_keep_profile_semantics_after_reopen() {
     use tokio_postgres::types::Type;
     for profile in ["postgres", "oracle-preview-v1"] {

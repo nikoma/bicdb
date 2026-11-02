@@ -1,0 +1,73 @@
+import unittest
+
+from routine_namespaces import fixture, identifier, run
+
+
+class Cursor:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
+    def execute(self, sql):
+        self.connection.statements.append(sql)
+        if sql.startswith(self.connection.fail_prefix):
+            raise RuntimeError('private connection information')
+
+
+class Connection:
+    version = 'test'
+
+    def __init__(self, fail_prefix):
+        self.fail_prefix = fail_prefix
+        self.statements = []
+
+    def cursor(self): return Cursor(self)
+
+
+class RoutineNamespaceTests(unittest.TestCase):
+    def test_identifiers_quote_contents_and_reject_nul(self):
+        self.assertEqual(identifier('Quoted.Schema"Name'), '"Quoted.Schema""Name"')
+        for value in ('', 'a\x00b', None):
+            with self.assertRaises(ValueError): identifier(value)
+        with self.assertRaises(ValueError): fixture('owner', 'unsafe;DROP')
+
+    def test_fixture_has_distinct_shadows_and_explicit_oracle_expectations(self):
+        plan = fixture('Quoted.Schema', 'BICDB_TEST')
+        self.assertEqual(len(plan['cases']), 24)
+        self.assertEqual(len({case['id'] for case in plan['cases']}), 24)
+        shadows = [obj for obj in plan['setup'] if obj['name'].startswith('"public".')]
+        self.assertEqual(len(shadows), 3)
+        self.assertTrue(all(obj['backend'] == 1 for obj in shadows))
+        self.assertTrue(all('-999' in obj['inserts'][0] for obj in shadows))
+        self.assertTrue(all(case['expected'] != [[{'number': '-999'}]] for case in plan['cases']))
+
+    def test_setup_failure_drops_only_successfully_created_objects_and_redacts_errors(self):
+        source = Connection('CREATE TABLE "owner"."BICDB_TEST_A"')
+        target = Connection('never matched')
+        report = run(source, target, 'owner', 'BICDB_TEST')
+        self.assertFalse(report['success'])
+        self.assertEqual(sum(sql.startswith('DROP ') for sql in source.statements), 1)
+        self.assertEqual(sum(sql.startswith('DROP ') for sql in target.statements), 1)
+        self.assertNotIn('private connection information', str(report))
+
+    def test_cleanup_errors_remain_failures(self):
+        class FailingCleanupCursor(Cursor):
+            def execute(self, sql):
+                if sql.startswith('DROP '):
+                    raise RuntimeError('private cleanup details')
+                super().execute(sql)
+
+        class FailingCleanup(Connection):
+            def cursor(self): return FailingCleanupCursor(self)
+
+        source = FailingCleanup('INSERT INTO')
+        report = run(source, Connection('never matched'), 'owner', 'BICDB_TEST')
+        self.assertFalse(report['success'])
+        self.assertEqual(len(report['cleanup_errors']), 1)
+        self.assertNotIn('private cleanup details', str(report))
+
+
+if __name__ == '__main__':
+    unittest.main()

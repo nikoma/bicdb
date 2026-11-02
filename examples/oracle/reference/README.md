@@ -148,5 +148,31 @@ NUMBER expression evaluation is a separate acceptance requirement; the
 records the initial failing integer-division composition probe. The subsequent
 division implementation is checked with `number-division-cases.json` and one
 hundred deterministic synthetic cases in `number-division-generated-cases.json`.
+
+## Generated routine namespaces
+
+`routine_namespaces.py` provides an independent Oracle comparison for static
+function namespace binding. Use dedicated test schemas and a BicDB
+`oracle-preview-v1` database. BicDB needs an existing schema with the same name
+as Oracle's current schema; its connection also needs CREATE permission in that
+schema and `public` for shadow tables. The runner creates uniquely named test
+tables/functions and removes only objects it successfully created. Oracle DDL
+commits independently. Cleanup failures make the run fail and are recorded with
+their object names for inspection. DSNs, passwords and driver error messages are
+excluded from reports.
+
+```bash
+python3 examples/oracle/reference/routine_namespaces.py \
+  --oracle-config "$HOME/.local/state/bicdb/oracle-reference/hr-connection.json" \
+  --output /tmp/bicdb-routine-namespaces.json
+```
+
+The runner reads `BICDB_PG_DSN` by default. Twenty-four generated cases cover
+bound cursors, CTEs, SELECT INTO, query FOR loops, nested cursors and explicit
+qualifications. Different-valued BicDB public shadow tables detect unintended
+fallback. Both databases must match each other and the fixture's expected typed
+values. Any execution error or mismatch fails; there is no ignored-difference
+list. This qualifies those static relation lookups, not full PL/SQL or Oracle
+AUTHID rights. The ordinary `compare.py` command remains a read-only query runner.
 Run each with the same preview profile and an explicit `--cases` path. Expected
 values come from the Oracle reference, independently of BicDB's implementation.

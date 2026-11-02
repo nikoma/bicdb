@@ -6,14 +6,30 @@ use sqlparser::{dialect::OracleDialect, keywords::Keyword};
 
 pub mod assessment;
 mod date_trunc;
+mod namespaces;
 pub(crate) mod routines;
 
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
 pub const ORACLE_PREVIEW_PROFILE: &str = "oracle-preview-v1";
 pub const POSTGRES_PROFILE: &str = "postgres";
 const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v1";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_400;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1: &str = "bicdb_oracle_preview_v1";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v2";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_401;
+
+pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
+    match language
+        .trim()
+        .trim_matches('\'')
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        PREVIEW_ROUTINE_LANGUAGE_V1 => Some(1),
+        PREVIEW_ROUTINE_LANGUAGE => Some(2),
+        _ => None,
+    }
+}
 
 pub(crate) fn preview_routine_language_enabled(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
@@ -26,7 +42,7 @@ pub(crate) fn preview_routine_language_enabled(db: &BicDb) -> Result<bool> {
 }
 
 pub(crate) fn validate_routine_language(db: &BicDb, language: &str) -> Result<()> {
-    if language.eq_ignore_ascii_case(PREVIEW_ROUTINE_LANGUAGE)
+    if preview_routine_language_version(language).is_some()
         && !preview_routine_language_enabled(db)?
     {
         return Err(unsupported(
@@ -161,119 +177,7 @@ pub fn lower_session_sql(
     }
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);
     let mut statements = parse_statements(&lowered)?;
-    struct Qualify {
-        schema: String,
-        ctes: Vec<BTreeSet<String>>,
-    }
-    impl sqlparser::ast::VisitorMut for Qualify {
-        type Break = ();
-        fn pre_visit_statement(&mut self, statement: &mut Statement) -> ControlFlow<()> {
-            match statement {
-                Statement::CreateIndex(index) => {
-                    if let Some(name) = index.name.as_mut() {
-                        self.pre_visit_relation(name)?;
-                    }
-                }
-                Statement::CreateSequence { name, .. } => self.pre_visit_relation(name)?,
-                Statement::CreateView(view) => self.pre_visit_relation(&mut view.name)?,
-                _ => {}
-            }
-            // sqlparser's relation visitor does not visit DROP's name list.
-            // Bind it to the same application schema as CREATE and queries.
-            if let Statement::Drop {
-                object_type, names, ..
-            } = statement
-            {
-                if matches!(
-                    object_type,
-                    sqlparser::ast::ObjectType::Table
-                        | sqlparser::ast::ObjectType::View
-                        | sqlparser::ast::ObjectType::Index
-                        | sqlparser::ast::ObjectType::Sequence
-                ) {
-                    for name in names {
-                        self.pre_visit_relation(name)?;
-                    }
-                }
-            }
-            if let Statement::Copy {
-                source: sqlparser::ast::CopySource::Table { table_name, .. },
-                ..
-            } = statement
-            {
-                return self.pre_visit_relation(table_name);
-            }
-            ControlFlow::Continue(())
-        }
-        fn pre_visit_query(&mut self, query: &mut Query) -> ControlFlow<()> {
-            self.ctes.push(
-                query
-                    .with
-                    .as_ref()
-                    .map(|with| {
-                        with.cte_tables
-                            .iter()
-                            .map(|cte| ident_value(&cte.alias.name))
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-            );
-            ControlFlow::Continue(())
-        }
-        fn post_visit_query(&mut self, _: &mut Query) -> ControlFlow<()> {
-            self.ctes.pop();
-            ControlFlow::Continue(())
-        }
-        fn pre_visit_table_factor(&mut self, table: &mut TableFactor) -> ControlFlow<()> {
-            if let TableFactor::Table {
-                name,
-                alias,
-                args: None,
-                ..
-            } = table
-            {
-                let parts = object_name_parts(name);
-                let is_cte =
-                    parts.len() == 1 && self.ctes.iter().rev().any(|ctes| ctes.contains(&parts[0]));
-                if alias.is_none() && !is_cte {
-                    if let Some(table) = parts.last() {
-                        // The storage relation is encoded for schema isolation.
-                        // Retain Oracle's visible table name for table.column
-                        // references, including correlated outer references.
-                        *alias = Some(TableAlias {
-                            explicit: true,
-                            name: Ident::with_quote('"', table),
-                            columns: Vec::new(),
-                            at: None,
-                        });
-                    }
-                }
-            }
-            ControlFlow::Continue(())
-        }
-        fn pre_visit_relation(&mut self, name: &mut ObjectName) -> ControlFlow<()> {
-            let parts = object_name_parts(name);
-            if let [table] = parts.as_slice() {
-                if !self.ctes.iter().rev().any(|ctes| ctes.contains(table)) {
-                    name.0.insert(
-                        0,
-                        sqlparser::ast::ObjectNamePart::Identifier(Ident::with_quote(
-                            '"',
-                            &self.schema,
-                        )),
-                    );
-                }
-            }
-            ControlFlow::Continue(())
-        }
-    }
-    let _ = sqlparser::ast::VisitMut::visit(
-        &mut statements,
-        &mut Qualify {
-            schema,
-            ctes: Vec::new(),
-        },
-    );
+    namespaces::qualify(&mut statements, &schema);
     date_trunc::rewrite(db, &mut statements)?;
     struct Locks<'a>(&'a BicDb);
     impl sqlparser::ast::VisitorMut for Locks<'_> {
@@ -1779,6 +1683,163 @@ mod tests {
             .unwrap();
             assert_eq!(session.execute(&sql).unwrap().rows[0][0].to_cell(), "123");
         }
+    }
+
+    #[test]
+    fn preview_routine_namespace_binds_cursor_queries_and_ctes() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for source in [
+            r#"CREATE SCHEMA "App.Space""#,
+            r#"CREATE TABLE "App.Space".scope_values(bucket NUMBER,v NUMBER)"#,
+            r#"INSERT INTO "App.Space".scope_values VALUES(7,11),(7,22),(8,44)"#,
+            "CREATE TABLE scope_values(bucket NUMBER,v NUMBER)",
+            "INSERT INTO scope_values VALUES(7,999)",
+            r#"CREATE FUNCTION "App.Space".namespace_total(p_bucket NUMBER) RETURN NUMBER IS total NUMBER:=0; CURSOR c IS WITH local_rows AS (SELECT scope_values.v FROM scope_values WHERE bucket=p_bucket) SELECT v FROM local_rows; BEGIN FOR r IN c LOOP total:=total+r.v; END LOOP; RETURN total; END;"#,
+        ] {
+            let sql = lower_session_sql(
+                session.db_ref(),
+                source,
+                ORACLE_PREVIEW_PROFILE,
+                None,
+                "bicdb",
+            )
+            .unwrap();
+            session.execute(&sql).unwrap();
+        }
+        for (bucket, expected) in [(7, "33"), (8, "44"), (9, "0"), (7, "33")] {
+            let sql = lower_session_sql(
+                session.db_ref(),
+                &format!("SELECT namespace_total({bucket}) FROM DUAL"),
+                ORACLE_PREVIEW_PROFILE,
+                None,
+                "bicdb",
+            )
+            .unwrap();
+            assert_eq!(
+                session.execute(&sql).unwrap().rows[0][0].to_cell(),
+                expected
+            );
+        }
+        let sql=lower_session_sql(session.db_ref(),"CREATE FUNCTION implicit_total(p_bucket NUMBER) RETURN NUMBER IS result NUMBER; BEGIN SELECT SUM(v) INTO result FROM scope_values WHERE bucket=p_bucket; RETURN result; END;",ORACLE_PREVIEW_PROFILE,Some(r#""App.Space""#),"bicdb").unwrap();
+        session.execute(&sql).unwrap();
+        assert_eq!(
+            session.execute("SELECT implicit_total(7)").unwrap().rows[0][0].to_cell(),
+            "33"
+        );
+        let routine = load_routine(session.db_ref(), RoutineKind::Function, "implicit_total")
+            .unwrap()
+            .unwrap();
+        assert_eq!(routine.schema, "App.Space");
+    }
+
+    #[test]
+    fn preview_routine_v2_preserves_old_versions_and_exact_drop_namespace() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute(r#"CREATE SCHEMA "Bound"; CREATE TABLE "Bound".numbers(v INT); INSERT INTO "Bound".numbers VALUES(2); CREATE TABLE numbers(v INT); INSERT INTO numbers VALUES(99)"#).unwrap();
+        for (name, language, expected) in [
+            ("native_value", "plpgsql", 99),
+            ("legacy_value", PREVIEW_ROUTINE_LANGUAGE_V1, 99),
+            ("bound_value", PREVIEW_ROUTINE_LANGUAGE, 2),
+        ] {
+            session.execute(&format!(r#"CREATE FUNCTION "Bound".{name}() RETURNS INT LANGUAGE {language} AS $$DECLARE result INT; BEGIN SELECT v INTO result FROM numbers; RETURN result; END$$"#)).unwrap();
+            assert_eq!(
+                session.execute(&format!("SELECT {name}()")).unwrap().rows[0][0],
+                SqlValue::Int(expected)
+            );
+        }
+        let rows=session.execute("SELECT n.nspname FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON p.pronamespace=n.oid WHERE p.proname='bound_value'").unwrap();
+        assert_eq!(rows.rows, vec![vec![SqlValue::String("Bound".into())]]);
+        assert!(session
+            .execute(r#"DROP FUNCTION "bound".bound_value"#)
+            .is_err());
+        session
+            .execute(r#"DROP FUNCTION IF EXISTS "bound".bound_value"#)
+            .unwrap();
+        assert_eq!(
+            session.execute("SELECT bound_value()").unwrap().rows[0][0],
+            SqlValue::Int(2)
+        );
+        session.execute("BEGIN").unwrap();
+        session
+            .execute(r#"DROP FUNCTION "Bound".bound_value"#)
+            .unwrap();
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            session.execute("SELECT bound_value()").unwrap().rows[0][0],
+            SqlValue::Int(2)
+        );
+        session
+            .execute(r#"DROP FUNCTION "Bound".bound_value"#)
+            .unwrap();
+        assert!(
+            load_routine(session.db_ref(), RoutineKind::Function, "bound_value")
+                .unwrap()
+                .is_none()
+        );
+        session.execute(&format!("CREATE FUNCTION dynamic_scope() RETURNS INT LANGUAGE {PREVIEW_ROUTINE_LANGUAGE} AS $$BEGIN EXECUTE 'SELECT 7'; RETURN 7; END$$")).unwrap();
+        assert_eq!(
+            session
+                .execute("SELECT dynamic_scope()")
+                .unwrap_err()
+                .sqlstate(),
+            "0A000"
+        );
+        session.execute("DROP FUNCTION dynamic_scope").unwrap();
+    }
+
+    #[test]
+    fn preview_routine_namespace_binding_preserves_native_table_privileges() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute(r#"CREATE SCHEMA "Bound"; CREATE TABLE "Bound".numbers(v INT); INSERT INTO "Bound".numbers VALUES(2)"#).unwrap();
+        session.execute(&format!(r#"CREATE FUNCTION "Bound".bound_read() RETURNS INT LANGUAGE {PREVIEW_ROUTINE_LANGUAGE} AS $$DECLARE result INT; BEGIN SELECT v INTO result FROM numbers; RETURN result; END$$"#)).unwrap();
+        for source in [
+            "CREATE ROLE scope_reader",
+            r#"GRANT USAGE ON SCHEMA "Bound" TO scope_reader"#,
+            r#"GRANT EXECUTE ON FUNCTION "Bound".bound_read TO scope_reader"#,
+            "SET ROLE scope_reader",
+        ] {
+            session.execute(source).unwrap();
+        }
+        assert_eq!(
+            session
+                .execute("SELECT bound_read()")
+                .unwrap_err()
+                .sqlstate(),
+            "42501"
+        );
+        session.execute("RESET ROLE").unwrap();
+        session
+            .execute(r#"GRANT SELECT ON "Bound".numbers TO scope_reader"#)
+            .unwrap();
+        session.execute("SET ROLE scope_reader").unwrap();
+        assert_eq!(
+            session.execute("SELECT bound_read()").unwrap().rows[0][0],
+            SqlValue::Int(2)
+        );
+    }
+
+    #[test]
+    fn postgres_routine_namespace_lookup_retains_native_behavior() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, POSTGRES_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute(r#"CREATE SCHEMA "Bound"; CREATE TABLE "Bound".numbers(v INT); INSERT INTO "Bound".numbers VALUES(2); CREATE TABLE numbers(v INT); INSERT INTO numbers VALUES(99)"#).unwrap();
+        session.execute(r#"CREATE FUNCTION "Bound".native_value() RETURNS INT LANGUAGE plpgsql AS $$DECLARE result INT; BEGIN SELECT v INTO result FROM numbers; RETURN result; END$$"#).unwrap();
+        assert_eq!(
+            session.execute("SELECT native_value()").unwrap().rows[0][0],
+            SqlValue::Int(99)
+        );
+        assert!(!preview_routine_language_enabled(session.db_ref()).unwrap());
     }
     #[test]
     fn preview_number_division_keeps_fractional_results_and_oracle_mantissa_precision() {

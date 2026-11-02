@@ -58,6 +58,58 @@ impl Running {
 }
 
 #[tokio::test]
+async fn oracle_routine_namespace_survives_reopen_and_public_shadow_tables() {
+    use tokio_postgres::types::Type;
+    let directory = tempfile::tempdir().unwrap();
+    for attempt in 0..2 {
+        let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+        let (client, connection) = tokio_postgres::Config::new()
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb")
+            .options("-c bicdb.sql_profile=oracle-preview-v1")
+            .connect(tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        let connection = tokio::spawn(async move {
+            connection.await.unwrap();
+        });
+        if attempt == 0 {
+            for source in [
+                r#"CREATE SCHEMA "App.Space""#,
+                r#"CREATE TABLE "App.Space".scope_values(bucket NUMBER,v NUMBER)"#,
+                r#"INSERT INTO "App.Space".scope_values VALUES(7,11),(7,22),(8,44)"#,
+                "CREATE TABLE scope_values(bucket NUMBER,v NUMBER)",
+                "INSERT INTO scope_values VALUES(7,999)",
+                r#"CREATE FUNCTION "App.Space".namespace_total(p_bucket NUMBER) RETURN NUMBER IS total NUMBER:=0; CURSOR c IS SELECT v FROM scope_values WHERE bucket=p_bucket; BEGIN FOR r IN c LOOP total:=total+r.v; END LOOP; RETURN total; END;"#,
+            ] {
+                client.batch_execute(source).await.unwrap();
+            }
+        }
+        let query = client
+            .prepare_typed(
+                r#"SELECT CAST("App.Space".namespace_total($1) AS VARCHAR2(20)) FROM DUAL"#,
+                &[Type::INT4],
+            )
+            .await
+            .unwrap();
+        for (bucket, expected) in [(7i32, "33"), (8, "44"), (9, "0"), (7, "33")] {
+            assert_eq!(
+                client
+                    .query_one(&query, &[&bucket])
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                expected
+            );
+        }
+        drop(client);
+        connection.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn bound_cursor_loops_rebind_driver_parameters_after_restart() {
     use tokio_postgres::types::Type;
     for profile in ["postgres", "oracle-preview-v1"] {

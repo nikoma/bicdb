@@ -28,7 +28,7 @@ pub(crate) fn routine_exception_matches(handler: &RoutineExceptionHandler, sqlst
 pub(crate) fn routine_language_is_plpgsql(routine: &RoutineSchema) -> bool {
     let language = routine.language.trim().trim_matches('\'');
     language.eq_ignore_ascii_case("plpgsql")
-        || language.eq_ignore_ascii_case(oracle::PREVIEW_ROUTINE_LANGUAGE)
+        || oracle::preview_routine_language_version(language).is_some()
 }
 
 pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
@@ -70,16 +70,22 @@ pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
     }
     let body = plpgsql_body_from_definition(&routine.definition)?;
     let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
-    if routine
-        .language
-        .eq_ignore_ascii_case(oracle::PREVIEW_ROUTINE_LANGUAGE)
-    {
+    if oracle::preview_routine_language_version(&routine.language).is_some() {
         oracle::routines::lower_datetime_trunc(
             &mut params,
             &mut declarations,
             &mut statements,
             &mut exception_handlers,
         );
+    }
+    if oracle::preview_routine_language_version(&routine.language) == Some(2) {
+        oracle::routines::bind_function_namespace(
+            routine,
+            &mut params,
+            &mut declarations,
+            &mut statements,
+            &mut exception_handlers,
+        )?;
     }
     let symbol_names =
         routine_symbol_names(&params, &declarations, &statements, &exception_handlers);

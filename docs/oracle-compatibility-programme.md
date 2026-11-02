@@ -10,6 +10,13 @@ Unchanged Oracle drivers would require a separate protocol implementation.
 has an explicit implementation and qualification record. Default PostgreSQL
 behavior must remain covered by regression tests throughout this work.
 
+Compatibility fixes must implement general semantic rules, independent of
+application, tenant, schema or table names. Each change needs regressions for
+default PostgreSQL behavior and the intended Oracle behavior independently;
+Oracle reference comparisons establish the latter where available. Application
+workloads expose gaps and provide acceptance tests. Their identities must never
+select special engine behavior.
+
 The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used
 for [iDempiere seed development](evidence/idempiere-seed-2026-11-01/README.md).
 The original 913 tables and 185,292 rows loaded and passed complete value
@@ -33,7 +40,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings used by HR; full Oracle rules unqualified |
 | 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL and date formats; NVL2/DECODE and broader semantics outstanding |
 | 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL and pgwire parameters; other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |
-| 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: sample uppercase names and documented heap adaptation; general resolution outstanding |
+| 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: application-schema selection, versioned static function relation binding and documented heap adaptation; general resolution and synonyms outstanding |
 | 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Unqualified: HR currently uses BicDB's PostgreSQL-shaped transaction contract |
 | 9. DDL lifecycle | Oracle implicit commits, replacement, dependency invalidation, invalid-object catalogs and recompilation | Outstanding; native transactional DDL is not an Oracle equivalent |
 | 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: bounded procedures/blocks, standalone functions, unparameterized bound cursor loops and declared-type procedural TRUNC; full language and application routines outstanding |

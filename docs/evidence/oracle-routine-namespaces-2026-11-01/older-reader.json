@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "isolated_database_only": true,
+  "application_database_opened_with_old_reader": false,
+  "success": true,
+  "new_runtime_sha256": "38655da8e2e6c5c717b0078f90a0eb6f732567d280ab3d749fe59ad86682aa5e",
+  "old_runtime_sha256": "ae79d5fea90c8b0391fe713d40d27cd955078665e8088ce732070fcca41b98e0",
+  "new_result": "2024-02-29 00:00:00",
+  "old_sqlstate": "0A000",
+  "old_error": "unsupported PL/pgSQL feature: stored routine guard_day uses unsupported language bicdb_oracle_preview_v2"
+}

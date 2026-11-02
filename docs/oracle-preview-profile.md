@@ -203,13 +203,24 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v1`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v2`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
-previously translated routines;
-recreate an Oracle-authored definition to select the new compiler. The marker
-has a separate `pg_language` identity, present only in a preview database.
+previously translated routines; recreate an Oracle-authored definition to select
+the new compiler. The compiler versions have separate `pg_language` identities,
+present only in a preview database. Version 1 remains supported with its original
+lookup behavior.
+
+Version 2 binds static relation references in functions to the namespace in the
+stored function declaration. Unqualified declarations created through the
+preview session front end use its selected application schema. Quoted namespace
+spelling is retained in routine metadata and qualified DROP checks. The common
+relation visitor preserves CTE names, explicit qualifications and visible table
+aliases. Native table privileges still apply; Oracle AUTHID rights are not
+established. Dynamic SQL namespace binding and version-2 procedures are explicitly
+unsupported. Routine names still use global normalized keys: this does not
+provide schema-isolated overloads or full qualified routine-call resolution.
 
 This compiler resolves procedural `TRUNC` calls from declared DATE/timestamp
 parameters and locals, including local initializers, assignments, conditions
@@ -218,8 +229,10 @@ for columns inside embedded SQL or scalar subqueries; those have their own row
 namespaces. General routine SQL overload resolution, record-field types, Oracle
 date arithmetic and source DATE/TIMESTAMP provenance still require further work.
 The [routine datetime evidence](evidence/oracle-routine-datetime-2026-11-01/README.md)
-records reference values, older-reader execution rejection and the remaining
-original application namespace failure.
+records version-1 reference values, older-reader execution rejection and its
+original application namespace failure. The [static namespace evidence](evidence/oracle-routine-namespaces-2026-11-01/README.md)
+records version-2 comparisons, PostgreSQL isolation regressions and the next
+application arithmetic gap.
 
 This is declaration support for the tested routine subset, not a complete
 PL/SQL compiler. Native routine execution, namespace, overload, privilege and

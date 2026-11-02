@@ -1,6 +1,141 @@
 //! Declared-type overload selection for explicitly versioned preview routines.
 use super::*;
 
+pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
+    if routine.kind != RoutineKind::Function {
+        return Err(SqlError::Unsupported(
+            "Oracle preview routine v2 currently supports function definitions".into(),
+        ));
+    }
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition)
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    let [Statement::CreateFunction(function)] = statements.as_slice() else {
+        return Err(SqlError::InvalidSql(
+            "preview function requires one CREATE FUNCTION definition".into(),
+        ));
+    };
+    if normalize_object_name(&object_name(&function.name)?) != routine.name
+        || !function.language.as_ref().is_some_and(|language| {
+            preview_routine_language_version(&ident_value(language)) == Some(2)
+        })
+    {
+        return Err(SqlError::InvalidSql(
+            "preview function definition identity does not match its metadata".into(),
+        ));
+    }
+    Ok(relation_schema_name(&function.name))
+}
+
+fn bind_namespace_statements(statements: &mut [RoutineStmt], schema: &str) -> Result<()> {
+    for statement in statements {
+        match statement {
+            RoutineStmt::Assignment { target, expr } => {
+                if let RoutineAssignmentTarget::ArrayElement { index, .. } = target {
+                    namespaces::qualify(&mut index.expr, schema);
+                }
+                namespaces::qualify(&mut expr.expr, schema);
+            }
+            RoutineStmt::If {
+                condition,
+                then_body,
+                else_body,
+            } => {
+                namespaces::qualify(&mut condition.expr, schema);
+                bind_namespace_statements(then_body, schema)?;
+                bind_namespace_statements(else_body, schema)?;
+            }
+            RoutineStmt::ForLoop {
+                lower, upper, body, ..
+            } => {
+                namespaces::qualify(&mut lower.expr, schema);
+                namespaces::qualify(&mut upper.expr, schema);
+                bind_namespace_statements(body, schema)?;
+            }
+            RoutineStmt::ForeachLoop { array, body, .. } => {
+                namespaces::qualify(&mut array.expr, schema);
+                bind_namespace_statements(body, schema)?;
+            }
+            RoutineStmt::WhileLoop { condition, body } => {
+                namespaces::qualify(&mut condition.expr, schema);
+                bind_namespace_statements(body, schema)?;
+            }
+            RoutineStmt::QueryForLoop { query, body, .. } => {
+                namespaces::qualify(query, schema);
+                bind_namespace_statements(body, schema)?;
+            }
+            RoutineStmt::CursorForLoop { body, .. } | RoutineStmt::Loop { body } => {
+                bind_namespace_statements(body, schema)?
+            }
+            RoutineStmt::SelectInto { query, .. }
+            | RoutineStmt::Perform { query }
+            | RoutineStmt::ReturnQuery(query) => namespaces::qualify(query, schema),
+            RoutineStmt::Sql(statement) | RoutineStmt::SqlInto { statement, .. } => {
+                namespaces::qualify(statement, schema)
+            }
+            RoutineStmt::Return(Some(expr)) => namespaces::qualify(&mut expr.expr, schema),
+            RoutineStmt::RaiseException {
+                arguments, detail, ..
+            } => {
+                for arg in arguments {
+                    namespaces::qualify(&mut arg.expr, schema);
+                }
+                if let Some(detail) = detail {
+                    namespaces::qualify(&mut detail.expr, schema);
+                }
+            }
+            RoutineStmt::DynamicExecute(_) => {
+                return Err(SqlError::Unsupported(
+                    "Oracle preview routine v2 dynamic SQL namespace binding is not implemented"
+                        .into(),
+                ))
+            }
+            RoutineStmt::ContinueLoop
+            | RoutineStmt::ExitLoop
+            | RoutineStmt::Null
+            | RoutineStmt::OpenCursor { .. }
+            | RoutineStmt::FetchCursor { .. }
+            | RoutineStmt::CloseCursor { .. }
+            | RoutineStmt::Return(None) => {}
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn bind_function_namespace(
+    routine: &RoutineSchema,
+    params: &mut [RoutineParam],
+    declarations: &mut [RoutineDecl],
+    statements: &mut [RoutineStmt],
+    handlers: &mut [RoutineExceptionHandler],
+) -> Result<()> {
+    let schema = function_namespace(routine)?;
+    if routine.schema != schema {
+        return Err(SqlError::InvalidSql(
+            "preview function namespace does not match its definition".into(),
+        ));
+    }
+    for param in params {
+        if let Some(expr) = &mut param.default_expr {
+            namespaces::qualify(expr, &schema);
+        }
+    }
+    for declaration in declarations {
+        match declaration {
+            RoutineDecl::Variable {
+                default_expr: Some(expr),
+                ..
+            } => namespaces::qualify(&mut expr.expr, &schema),
+            RoutineDecl::Cursor { query, .. } => namespaces::qualify(query, &schema),
+            _ => {}
+        }
+    }
+    bind_namespace_statements(statements, &schema)?;
+    for handler in handlers {
+        bind_namespace_statements(&mut handler.statements, &schema)?;
+    }
+    Ok(())
+}
+
 type Types = BTreeMap<String, String>;
 
 fn input_type(expr: &Expr, types: &Types) -> Option<String> {

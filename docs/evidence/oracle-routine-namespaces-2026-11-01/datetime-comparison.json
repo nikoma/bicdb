@@ -1,0 +1,139 @@
+{
+  "format": 1,
+  "reference_version": "23.26.3.0.0",
+  "profile": "oracle-preview-v1",
+  "routine_language": "bicdb_oracle_preview_v2",
+  "synthetic_only": true,
+  "cases": [
+    {
+      "routine": "calendar",
+      "arguments": "TIMESTAMP '2024-02-29 23:59:58',0",
+      "oracle": "2024-02-29 00:00:00",
+      "bicdb": "2024-02-29 00:00:00",
+      "expected": "2024-02-29 00:00:00",
+      "match": true
+    },
+    {
+      "routine": "calendar",
+      "arguments": "TIMESTAMP '2024-02-29 23:59:58',1",
+      "oracle": "2024-02-01 00:00:00",
+      "bicdb": "2024-02-01 00:00:00",
+      "expected": "2024-02-01 00:00:00",
+      "match": true
+    },
+    {
+      "routine": "calendar",
+      "arguments": "TIMESTAMP '2024-02-29 23:59:58',2",
+      "oracle": "2024-01-01 00:00:00",
+      "bicdb": "2024-01-01 00:00:00",
+      "expected": "2024-01-01 00:00:00",
+      "match": true
+    },
+    {
+      "routine": "calendar",
+      "arguments": "TIMESTAMP '2025-03-02 12:34:56',0",
+      "oracle": "2025-03-02 00:00:00",
+      "bicdb": "2025-03-02 00:00:00",
+      "expected": "2025-03-02 00:00:00",
+      "match": true
+    },
+    {
+      "routine": "calendar",
+      "arguments": "TIMESTAMP '2025-03-02 12:34:56',1",
+      "oracle": "2025-03-01 00:00:00",
+      "bicdb": "2025-03-01 00:00:00",
+      "expected": "2025-03-01 00:00:00",
+      "match": true
+    },
+    {
+      "routine": "calendar",
+      "arguments": "TIMESTAMP '2025-03-02 12:34:56',2",
+      "oracle": "2025-01-01 00:00:00",
+      "bicdb": "2025-01-01 00:00:00",
+      "expected": "2025-01-01 00:00:00",
+      "match": true
+    },
+    {
+      "routine": "calendar",
+      "arguments": "NULL,0",
+      "oracle": "None",
+      "bicdb": "None",
+      "expected": "None",
+      "match": true
+    },
+    {
+      "routine": "calendar",
+      "arguments": "NULL,1",
+      "oracle": "None",
+      "bicdb": "None",
+      "expected": "None",
+      "match": true
+    },
+    {
+      "routine": "calendar",
+      "arguments": "NULL,2",
+      "oracle": "None",
+      "bicdb": "None",
+      "expected": "None",
+      "match": true
+    },
+    {
+      "routine": "calendar",
+      "arguments": "TIMESTAMP '2024-02-29 23:59:58',0",
+      "oracle": "2024-02-29 00:00:00",
+      "bicdb": "2024-02-29 00:00:00",
+      "expected": "2024-02-29 00:00:00",
+      "match": true
+    },
+    {
+      "routine": "timestamp",
+      "arguments": "TIMESTAMP '2024-02-29 23:59:58.654321'",
+      "oracle": "2024-02-29 00:00:00",
+      "bicdb": "2024-02-29 00:00:00",
+      "expected": "2024-02-29 00:00:00",
+      "match": true
+    },
+    {
+      "routine": "timestamp",
+      "arguments": "TIMESTAMP '2025-01-01 01:02:03.456789'",
+      "oracle": "2025-01-01 00:00:00",
+      "bicdb": "2025-01-01 00:00:00",
+      "expected": "2025-01-01 00:00:00",
+      "match": true
+    },
+    {
+      "routine": "timestamp",
+      "arguments": "NULL",
+      "oracle": "None",
+      "bicdb": "None",
+      "expected": "None",
+      "match": true
+    },
+    {
+      "routine": "numeric",
+      "arguments": "-123.75",
+      "oracle": "-123",
+      "bicdb": "-123",
+      "expected": "-123",
+      "match": true
+    },
+    {
+      "routine": "numeric",
+      "arguments": "123.75",
+      "oracle": "123",
+      "bicdb": "123",
+      "expected": "123",
+      "match": true
+    },
+    {
+      "routine": "numeric",
+      "arguments": "NULL",
+      "oracle": "None",
+      "bicdb": "None",
+      "expected": "None",
+      "match": true
+    }
+  ],
+  "success": true,
+  "runtime_binary_sha256": "38655da8e2e6c5c717b0078f90a0eb6f732567d280ab3d749fe59ad86682aa5e"
+}

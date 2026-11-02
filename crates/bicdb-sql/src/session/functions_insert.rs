@@ -26,7 +26,10 @@ impl<'db> SqlSession<'db> {
         let (return_type, returns_set) = raw_routine_return_type(trimmed)?;
         let language = raw_routine_language(trimmed)?;
         match language.as_str() {
-            "sql" | "plpgsql" | oracle::PREVIEW_ROUTINE_LANGUAGE => {}
+            "sql"
+            | "plpgsql"
+            | oracle::PREVIEW_ROUTINE_LANGUAGE
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V1 => {}
             other => {
                 return Err(SqlError::Unsupported(format!(
                     "procedural language {other} is not supported"
@@ -195,7 +198,10 @@ impl<'db> SqlSession<'db> {
         let (raw_procedure_schema, name) = routine_schema_and_name(&rest[..name_end]);
         let language = raw_routine_language(trimmed)?;
         match language.as_str() {
-            "sql" | "plpgsql" | oracle::PREVIEW_ROUTINE_LANGUAGE => {}
+            "sql"
+            | "plpgsql"
+            | oracle::PREVIEW_ROUTINE_LANGUAGE
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V1 => {}
             other => {
                 return Err(SqlError::Unsupported(format!(
                     "procedural language {other} is not supported"
@@ -442,8 +448,14 @@ impl<'db> SqlSession<'db> {
         name_ast: &ObjectName,
     ) -> Result<Option<RoutineSchema>> {
         let (schema, name) = routine_schema_and_name(&object_name(name_ast)?);
-        let routine = load_routine(self.db_ref(), kind, &name)?
-            .filter(|routine| name_ast.0.len() == 1 || routine_schema_name(routine) == schema);
+        let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
+            let schema = if oracle::preview_routine_language_version(&routine.language) == Some(2) {
+                relation_schema_name(name_ast)
+            } else {
+                schema.clone()
+            };
+            name_ast.0.len() == 1 || routine_schema_name(routine) == schema
+        });
         if let Some(routine) = &routine {
             let object = match kind {
                 RoutineKind::Function => "function",

@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "name": "PAYMENTTERMDUEDATE",
+  "source_sha256": "f2945cb88b4e4242a218f02515455eb52a061e72d811bcacbea7159906c33008",
+  "only_adaptation": "explicit destination namespace",
+  "success": false,
+  "created": true,
+  "application_qualified": false,
+  "runtime_binary_sha256": "38655da8e2e6c5c717b0078f90a0eb6f732567d280ab3d749fe59ad86682aa5e",
+  "cases": [],
+  "pending_case": {
+    "payment_term_id": 100,
+    "oracle": "2026-12-01 00:00:00"
+  },
+  "error": "invalid SQL: arithmetic operands must be numeric",
+  "sqlstate": "42601",
+  "unqualified_probe_function_removed": true,
+  "failed_probe_absence_verified": true,
+  "existing_getdate_and_charat_still_execute": true
+}

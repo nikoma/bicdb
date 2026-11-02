@@ -153,11 +153,14 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn save_session_routine_if_missing(
         &mut self,
-        routine: RoutineSchema,
+        mut routine: RoutineSchema,
         if_not_exists: bool,
         or_replace: bool,
     ) -> Result<()> {
         oracle::validate_routine_language(self.db_ref(), &routine.language)?;
+        if oracle::preview_routine_language_version(&routine.language) == Some(2) {
+            routine.schema = oracle::routines::function_namespace(&routine)?;
+        }
         self.require_schema_create_privilege(&routine.schema)?;
         if load_routine(self.db_ref(), routine.kind, &routine.name)?.is_some() {
             if if_not_exists {

@@ -807,6 +807,7 @@ impl SqlSchemaSessionCacheScope {
                         .borrow_mut()
                         .push(SqlIndexDefinitionsCacheMap::default());
                 });
+                records::policy_init_plans_begin_statement();
                 true
             } else {
                 false
@@ -832,6 +833,7 @@ impl SqlSchemaSessionCacheScope {
         SQL_INDEX_DEFINITIONS_CACHE_STACK.with(|stack| {
             stack.borrow_mut().pop();
         });
+        records::policy_init_plans_end_statement();
         *cached_generation = schema_generation;
         self.active = false;
     }
@@ -866,6 +868,7 @@ impl Drop for SqlSchemaSessionCacheScope {
             SQL_INDEX_DEFINITIONS_CACHE_STACK.with(|stack| {
                 stack.borrow_mut().pop();
             });
+            records::policy_init_plans_end_statement();
         }
     }
 }

@@ -1830,8 +1830,14 @@ impl BoundExprScope {
                     if std::iter::once(operand.as_ref())
                         .chain(conditions.iter().map(|branch| &branch.condition))
                         .any(|expr| {
-                            self.known_expr_type(expr)
-                                .is_none_or(|kind| kind == "bpchar")
+                            let mut input = expr;
+                            while let Expr::Nested(inner) = input { input = inner; }
+                            let literal = matches!(input, Expr::Value(value) if matches!(value.value, Value::Null | Value::SingleQuotedString(_)));
+                            match self.known_expr_type(expr).as_deref() {
+                                Some("bpchar") => true,
+                                None => !literal,
+                                _ => false,
+                            }
                         })
                     {
                         return None;

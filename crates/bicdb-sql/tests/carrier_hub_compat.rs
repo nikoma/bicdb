@@ -991,7 +991,10 @@ fn plpgsql_uuid_v7_with_bit_operations() {
     for id in &ids {
         assert_eq!(id.len(), 36, "{id}");
         assert_eq!(&id[14..15], "7", "version nibble: {id}");
-        assert!(matches!(&id[19..20], "8" | "9" | "a" | "b"), "variant: {id}");
+        assert!(
+            matches!(&id[19..20], "8" | "9" | "a" | "b"),
+            "variant: {id}"
+        );
     }
     let mut unique = ids.clone();
     unique.sort();
@@ -999,6 +1002,12 @@ fn plpgsql_uuid_v7_with_bit_operations() {
     assert_eq!(unique.len(), ids.len());
     // The first 48 bits are the millisecond clock: ids sort by time.
     assert!(ids.windows(2).all(|pair| pair[0][..13] <= pair[1][..13]));
-    let shifted = session_rows(&mut session, "SELECT (1099511627776::bigint >> 40) & 255, (1::bigint << 3) | 1, 6 # 3");
-    assert_eq!(shifted[0], vec![SqlValue::Int(1), SqlValue::Int(9), SqlValue::Int(5)]);
+    let shifted = session_rows(
+        &mut session,
+        "SELECT (1099511627776::bigint >> 40) & 255, (1::bigint << 3) | 1, 6 # 3",
+    );
+    assert_eq!(
+        shifted[0],
+        vec![SqlValue::Int(1), SqlValue::Int(9), SqlValue::Int(5)]
+    );
 }

@@ -30,8 +30,9 @@ pub(crate) fn resolve_regprocedure_oid(
     }
     let (schema, name) = alias_schema_and_name(name);
     let requested_namespace = schema.as_ref().map(|schema| namespace_oid(schema));
-    let mut matches = pg_proc_rows(db)?
-        .into_iter()
+    let rows = crate::catalog_rows::pg_proc_rows_shared(db)?;
+    let mut matches = rows
+        .iter()
         .filter(|row| {
             row.get("proname")
                 .is_some_and(|candidate| candidate.to_cell() == name)
@@ -64,8 +65,9 @@ pub(crate) fn resolve_regprocedure_name(
     pg_type: &str,
     oid: i64,
 ) -> Result<Option<String>> {
-    let row = pg_proc_rows(db)?
-        .into_iter()
+    let rows = crate::catalog_rows::pg_proc_rows_shared(db)?;
+    let row = rows
+        .iter()
         .find(|row| row.get("oid").and_then(sql_value_i64) == Some(oid));
     let Some(row) = row else {
         return Ok(None);

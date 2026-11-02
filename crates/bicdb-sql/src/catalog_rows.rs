@@ -2743,7 +2743,53 @@ pub(crate) const PG_PLPGSQL_PROC_ROWS: &[(i64, &str, i64, &str, &str, i64)] = &[
     ),
 ];
 
+type PgProcRows = std::sync::Arc<Vec<BTreeMap<String, SqlValue>>>;
+
+thread_local! {
+    // db -> (catalog stamp, pg_proc rows). Building the rows parses every
+    // routine's argument list; a constant 'f(args)'::regprocedure in a
+    // correlated subquery resolved it once per outer row, which made the
+    // Hub's role SQL spend about twenty minutes in one statement.
+    static PG_PROC_ROWS_MEMO: std::cell::RefCell<rustc_hash::FxHashMap<u64, ((u64, u64, u64, u64, usize), PgProcRows)>> =
+        std::cell::RefCell::new(rustc_hash::FxHashMap::default());
+}
+
+/// `pg_proc` rows, shared and rebuilt only when routines, user types or
+/// schemas change.
+pub(crate) fn pg_proc_rows_shared(db: &BicDb) -> Result<PgProcRows> {
+    let key = db.instance_id();
+    let stamp = (
+        db.collection_generation(ROUTINE_COLLECTION),
+        db.collection_generation(USER_TYPE_COLLECTION),
+        db.collection_generation(USER_TYPE_OID_COLLECTION),
+        db.collection_generation(SCHEMA_COLLECTION),
+        db.collection_count(),
+    );
+    let hit = PG_PROC_ROWS_MEMO.with(|memo| {
+        memo.borrow()
+            .get(&key)
+            .filter(|(cached, _)| *cached == stamp)
+            .map(|(_, rows)| std::sync::Arc::clone(rows))
+    });
+    if let Some(rows) = hit {
+        return Ok(rows);
+    }
+    let rows = std::sync::Arc::new(pg_proc_rows_uncached(db)?);
+    PG_PROC_ROWS_MEMO.with(|memo| {
+        let mut memo = memo.borrow_mut();
+        if memo.len() >= 64 {
+            memo.clear();
+        }
+        memo.insert(key, (stamp, std::sync::Arc::clone(&rows)));
+    });
+    Ok(rows)
+}
+
 pub(crate) fn pg_proc_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
+    Ok(pg_proc_rows_shared(db)?.as_ref().clone())
+}
+
+fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let mut rows = PG_BUILTIN_PROC_ROWS
         .iter()
         .map(|&(oid, name, return_type, nargs)| {

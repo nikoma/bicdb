@@ -274,3 +274,46 @@ fn jsonb_existence_operators_work_in_check_constraints_and_where() {
         vec![SqlValue::Int(1), SqlValue::Int(2)]
     );
 }
+
+/// The Hub's role SQL compares trigger functions with constant
+/// 'schema.f(args)'::regprocedure casts inside correlated subqueries. pg_proc is
+/// cached for those lookups; the cache must follow routines created, replaced
+/// and dropped, also inside an open transaction.
+#[test]
+fn regprocedure_casts_follow_routine_changes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    let resolves = |session: &mut SqlSession<'_>, signature: &str| -> bool {
+        let sql = format!("SELECT to_regprocedure('{signature}') IS NOT NULL");
+        session_rows(session, &sql)[0][0] == SqlValue::Bool(true)
+    };
+    session
+        .execute("CREATE FUNCTION guard_one() RETURNS integer LANGUAGE sql AS 'SELECT 1'")
+        .unwrap();
+    assert!(resolves(&mut session, "guard_one()"));
+    assert!(!resolves(&mut session, "guard_two(integer)"));
+    session.execute("BEGIN").unwrap();
+    session
+        .execute("CREATE FUNCTION guard_two(value integer) RETURNS integer LANGUAGE sql AS 'SELECT value'")
+        .unwrap();
+    assert!(resolves(&mut session, "guard_two(integer)"), "a routine created in the open transaction resolves");
+    session.execute("DROP FUNCTION guard_one()").unwrap();
+    assert!(!resolves(&mut session, "guard_one()"), "a routine dropped in the open transaction no longer resolves");
+    session.execute("ROLLBACK").unwrap();
+    assert!(resolves(&mut session, "guard_one()"), "rollback restores the dropped routine");
+    assert!(!resolves(&mut session, "guard_two(integer)"), "rollback removes the created routine");
+    // A constant cast evaluated once per outer row of a correlated subquery.
+    for sql in [
+        "CREATE TABLE things (id INT PRIMARY KEY)",
+        "INSERT INTO things SELECT generate_series(1, 200)",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let rows = session_rows(
+        &mut session,
+        "SELECT count(*) FROM things AS outer_thing WHERE EXISTS (SELECT 1 FROM pg_catalog.pg_proc AS p \
+         WHERE p.oid = 'guard_one()'::regprocedure AND outer_thing.id > 0)",
+    );
+    assert_eq!(rows[0][0], SqlValue::Int(200));
+}

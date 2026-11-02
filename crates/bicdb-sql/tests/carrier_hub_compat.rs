@@ -951,3 +951,54 @@ fn has_table_privilege_accepts_relation_oids() {
         ]
     );
 }
+
+/// The Hub's board row version history mints UUIDv7 ids in PL/pgSQL with
+/// bigint shifts, bitwise masks, set_byte / get_byte and encode(..., 'hex').
+#[test]
+fn plpgsql_uuid_v7_with_bit_operations() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE OR REPLACE FUNCTION history_uuid_v7()
+             RETURNS UUID LANGUAGE plpgsql VOLATILE SET search_path = pg_catalog, public
+             AS $function$
+             DECLARE
+               unix_milliseconds BIGINT;
+               uuid_bytes BYTEA;
+             BEGIN
+               unix_milliseconds := floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint;
+               uuid_bytes := gen_random_bytes(16);
+               uuid_bytes := set_byte(uuid_bytes, 0, ((unix_milliseconds >> 40) & 255)::integer);
+               uuid_bytes := set_byte(uuid_bytes, 1, ((unix_milliseconds >> 32) & 255)::integer);
+               uuid_bytes := set_byte(uuid_bytes, 2, ((unix_milliseconds >> 24) & 255)::integer);
+               uuid_bytes := set_byte(uuid_bytes, 3, ((unix_milliseconds >> 16) & 255)::integer);
+               uuid_bytes := set_byte(uuid_bytes, 4, ((unix_milliseconds >> 8) & 255)::integer);
+               uuid_bytes := set_byte(uuid_bytes, 5, (unix_milliseconds & 255)::integer);
+               uuid_bytes := set_byte(uuid_bytes, 6, (get_byte(uuid_bytes, 6) & 15) | 112);
+               uuid_bytes := set_byte(uuid_bytes, 8, (get_byte(uuid_bytes, 8) & 63) | 128);
+               RETURN encode(uuid_bytes, 'hex')::uuid;
+             END;
+             $function$",
+        )
+        .unwrap();
+    let mut ids = Vec::new();
+    for _ in 0..5 {
+        let rows = session_rows(&mut session, "SELECT history_uuid_v7()::text");
+        ids.push(rows[0][0].to_cell());
+    }
+    for id in &ids {
+        assert_eq!(id.len(), 36, "{id}");
+        assert_eq!(&id[14..15], "7", "version nibble: {id}");
+        assert!(matches!(&id[19..20], "8" | "9" | "a" | "b"), "variant: {id}");
+    }
+    let mut unique = ids.clone();
+    unique.sort();
+    unique.dedup();
+    assert_eq!(unique.len(), ids.len());
+    // The first 48 bits are the millisecond clock: ids sort by time.
+    assert!(ids.windows(2).all(|pair| pair[0][..13] <= pair[1][..13]));
+    let shifted = session_rows(&mut session, "SELECT (1099511627776::bigint >> 40) & 255, (1::bigint << 3) | 1, 6 # 3");
+    assert_eq!(shifted[0], vec![SqlValue::Int(1), SqlValue::Int(9), SqlValue::Int(5)]);
+}

@@ -970,6 +970,10 @@ pub(crate) fn next_plpgsql_statement(value: &str) -> Result<(&str, usize)> {
         let end = matching_end_if(value)?;
         return Ok((&original[leading_len..leading_len + end], leading_len + end));
     }
+    if starts_with_plpgsql_word(value, "CASE") {
+        let end = plpgsql_case_statement(value)?.end;
+        return Ok((&original[leading_len..leading_len + end], leading_len + end));
+    }
     if value
         .get(..3)
         .is_some_and(|prefix| prefix.eq_ignore_ascii_case("FOR"))
@@ -993,15 +997,6 @@ pub(crate) fn next_plpgsql_statement(value: &str) -> Result<(&str, usize)> {
                     .is_none_or(|ch| ch.is_whitespace() || ch == extra)
             })
     };
-    if opens("CASE", '(') {
-        let end = matching_routine_end(
-            value,
-            RoutineBoundary::Case,
-            RoutineBoundary::EndCase,
-            "CASE statement is missing END CASE",
-        )?;
-        return Ok((&original[leading_len..leading_len + end], leading_len + end));
-    }
     if opens("WHILE", '(') || opens("LOOP", ';') {
         let end = matching_end_loop(value)?;
         return Ok((&original[leading_len..leading_len + end], leading_len + end));
@@ -2879,4 +2874,165 @@ mod temporal_type_tests {
         session.execute("RESET intervalstyle").unwrap();
         session.execute("DO $$DECLARE stamp TIMESTAMP:=TIMESTAMP '2024-02-29 12:34:56.9'; shifted TIMESTAMP:=stamp+INTERVAL '1 month'; BEGIN IF shifted<>TIMESTAMP '2024-03-29 12:34:56.9' THEN RAISE EXCEPTION 'native temporal type was lost'; END IF; END$$").unwrap();
     }
+}
+
+fn starts_with_plpgsql_word(value: &str, word: &str) -> bool {
+    value
+        .get(..word.len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(word))
+        && value[word.len()..]
+            .chars()
+            .next()
+            .is_none_or(|ch| ch.is_whitespace() || ch == '(')
+}
+
+/// Byte ranges of a PL/pgSQL CASE statement (`value` starts with CASE).
+struct PlpgsqlCaseStatement {
+    /// The simple-CASE operand, empty for a searched CASE.
+    operand: std::ops::Range<usize>,
+    /// (WHEN condition, THEN body) per clause.
+    clauses: Vec<(std::ops::Range<usize>, std::ops::Range<usize>)>,
+    else_body: Option<std::ops::Range<usize>>,
+    /// Offset just past END CASE.
+    end: usize,
+}
+
+/// Splits a CASE statement at its own WHEN / THEN / ELSE / END CASE, skipping
+/// the keywords of nested CASE expressions and statements, IF and LOOP blocks
+/// and BEGIN ... EXCEPTION WHEN blocks.
+fn plpgsql_case_statement(value: &str) -> Result<PlpgsqlCaseStatement> {
+    #[derive(PartialEq)]
+    enum Block {
+        Case,
+        If,
+        Loop,
+        Begin,
+    }
+    let tokens = Tokenizer::new(&PostgreSqlDialect {}, value)
+        .tokenize_with_location()
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?
+        .into_iter()
+        .filter(|token| !matches!(token.token, Token::Whitespace(_)))
+        .collect::<Vec<_>>();
+    let mut lines = vec![0];
+    for (index, byte) in value.bytes().enumerate() {
+        if byte == b'\n' {
+            lines.push(index + 1);
+        }
+    }
+    let offset = |location: sqlparser::tokenizer::Location| {
+        let line = lines[(location.line as usize).saturating_sub(1)];
+        line + value[line..]
+            .char_indices()
+            .nth((location.column as usize).saturating_sub(1))
+            .map_or(value.len() - line, |(index, _)| index)
+    };
+    let word = |index: usize| -> String {
+        match tokens.get(index).map(|token| &token.token) {
+            Some(Token::Word(word)) if word.quote_style.is_none() => {
+                word.value.to_ascii_uppercase()
+            }
+            _ => String::new(),
+        }
+    };
+    if word(0) != "CASE" {
+        return Err(SqlError::InvalidSql("CASE statement expected".to_string()));
+    }
+    let start_of = |index: usize| offset(tokens[index].span.start);
+    let end_of = |index: usize| offset(tokens[index].span.end);
+    let mut stack: Vec<Block> = Vec::new();
+    let mut operand_end = None;
+    let mut clauses = Vec::new();
+    let mut when_start: Option<usize> = None;
+    let mut body_start: Option<(std::ops::Range<usize>, usize)> = None;
+    let mut else_start: Option<usize> = None;
+    let mut start = false;
+    let mut loop_header = false;
+    let mut index = 1;
+    let close_body = |clauses: &mut Vec<_>,
+                      body_start: &mut Option<(std::ops::Range<usize>, usize)>,
+                      at: usize| {
+        if let Some((condition, body)) = body_start.take() {
+            clauses.push((condition, body..at));
+        }
+    };
+    while index < tokens.len() {
+        let current = word(index);
+        if stack.is_empty() {
+            match current.as_str() {
+                "WHEN" => {
+                    if operand_end.is_none() {
+                        operand_end = Some(start_of(index));
+                    }
+                    close_body(&mut clauses, &mut body_start, start_of(index));
+                    when_start = Some(end_of(index));
+                    index += 1;
+                    start = false;
+                    continue;
+                }
+                "THEN" if when_start.is_some() => {
+                    let condition = when_start.take().unwrap()..start_of(index);
+                    body_start = Some((condition, end_of(index)));
+                    index += 1;
+                    start = true;
+                    continue;
+                }
+                "ELSE" if when_start.is_none() && body_start.is_some() => {
+                    close_body(&mut clauses, &mut body_start, start_of(index));
+                    else_start = Some(end_of(index));
+                    index += 1;
+                    start = true;
+                    continue;
+                }
+                "END" if word(index + 1) == "CASE" => {
+                    let at = start_of(index);
+                    close_body(&mut clauses, &mut body_start, at);
+                    if clauses.is_empty() {
+                        return Err(SqlError::InvalidSql(
+                            "CASE statement requires at least one WHEN".to_string(),
+                        ));
+                    }
+                    return Ok(PlpgsqlCaseStatement {
+                        operand: end_of(0)..operand_end.unwrap_or(end_of(0)),
+                        clauses,
+                        else_body: else_start.map(|begin| begin..at),
+                        end: end_of(index + 1),
+                    });
+                }
+                _ => {}
+            }
+        }
+        match current.as_str() {
+            "CASE" => stack.push(Block::Case),
+            "END" => {
+                let next = word(index + 1);
+                match next.as_str() {
+                    "CASE" | "IF" | "LOOP" => {
+                        stack.pop();
+                        index += 1;
+                    }
+                    _ => {
+                        stack.pop();
+                    }
+                }
+            }
+            "IF" if start => stack.push(Block::If),
+            "FOR" | "FOREACH" | "WHILE" if start => {
+                loop_header = true;
+                stack.push(Block::Loop);
+            }
+            "LOOP" if start && !loop_header => stack.push(Block::Loop),
+            "BEGIN" if start => stack.push(Block::Begin),
+            _ => {}
+        }
+        let starts_body = matches!(current.as_str(), "THEN" | "ELSE" | "BEGIN" | "LOOP");
+        if current == "LOOP" {
+            loop_header = false;
+        }
+        start = starts_body || matches!(tokens[index].token, Token::SemiColon);
+        index += 1;
+    }
+    Err(SqlError::InvalidSql(
+        "CASE statement is missing END CASE".to_string(),
+    ))
 }

@@ -3,82 +3,42 @@
 use super::*;
 
 pub(super) fn parse(statement: &str) -> Result<RoutineStmt> {
-    let events = routine_boundaries(statement)?;
-    let mut depth = 0usize;
-    let mut markers = Vec::new();
-    let mut close = None;
-    for (start, end, kind) in events {
-        match kind {
-            RoutineBoundary::Case | RoutineBoundary::If | RoutineBoundary::Loop => depth += 1,
-            RoutineBoundary::EndCase | RoutineBoundary::EndIf | RoutineBoundary::EndLoop => {
-                if depth == 1 {
-                    if kind != RoutineBoundary::EndCase {
-                        return Err(SqlError::InvalidSql("CASE requires END CASE".into()));
-                    }
-                    close = Some((start, end));
-                    break;
-                }
-                depth = depth.checked_sub(1).ok_or_else(|| {
-                    SqlError::InvalidSql("unmatched procedural CASE boundary".into())
-                })?;
-            }
-            _ if depth == 1 => markers.push((start, end, kind)),
-            _ => {}
-        }
-    }
-    let (body_end, end) =
-        close.ok_or_else(|| SqlError::InvalidSql("CASE requires END CASE".into()))?;
-    if !statement[end..].trim().is_empty() {
+    let parts = plpgsql_case_statement(statement)?;
+    if !statement[parts.end..].trim().is_empty() {
         return Err(SqlError::UnsupportedPlpgsqlFeature(
             "labeled END CASE is not implemented".into(),
         ));
     }
-    let Some(&(first, _, RoutineBoundary::When)) = markers.first() else {
-        return Err(SqlError::InvalidSql(
-            "CASE requires at least one WHEN branch".into(),
-        ));
-    };
-    // A scalar CASE computes an integer dispatch index once. This evaluates a
-    // simple-case selector once and never evaluates conditions after a match.
-    let selector = statement["CASE".len()..first].trim();
+    let selector = statement[parts.operand].trim();
+    // Reuse the shared statement scanner, but dispatch via one scalar CASE.
+    // Expanding a selector into an IF chain would evaluate it repeatedly.
     let mut expression = format!("CASE {selector}");
     let mut arms = Vec::new();
-    let mut else_body = None;
-    let mut index = 0;
-    while index < markers.len() {
-        let (_, begin, kind) = markers[index];
-        match kind {
-            RoutineBoundary::When => {
-                let Some(&(then, body, RoutineBoundary::Then)) = markers.get(index + 1) else {
-                    return Err(SqlError::InvalidSql("CASE WHEN requires THEN".into()));
-                };
-                let condition = statement[begin..then].trim();
-                if condition.is_empty() {
-                    return Err(SqlError::InvalidSql(
-                        "CASE WHEN requires an expression".into(),
-                    ));
-                }
-                let end = markers.get(index + 2).map_or(body_end, |marker| marker.0);
-                expression.push_str(&format!(" WHEN {condition} THEN {}", arms.len()));
-                arms.push(parse_routine_statements(&statement[body..end])?);
-                index += 2;
-            }
-            RoutineBoundary::Else if index + 1 == markers.len() => {
-                else_body = Some(parse_routine_statements(&statement[begin..body_end])?);
-                index += 1;
-            }
-            _ => {
+    for (condition, body) in parts.clauses {
+        let condition = statement[condition].trim();
+        let alternatives = if selector.is_empty() {
+            vec![condition.to_string()]
+        } else {
+            split_top_level_commas_nested(condition)
+        };
+        for alternative in alternatives {
+            if alternative.trim().is_empty() {
                 return Err(SqlError::InvalidSql(
-                    "invalid procedural CASE branch".into(),
-                ))
+                    "CASE WHEN requires an expression".into(),
+                ));
             }
+            expression.push_str(&format!(" WHEN {alternative} THEN {}", arms.len()));
         }
+        arms.push(parse_routine_statements(&statement[body])?);
     }
     expression.push_str(" ELSE -1 END");
     Ok(RoutineStmt::Case {
         expression: RoutineExpr::unbound(parse_routine_expr(&expression)?),
         arms,
-        else_body,
+        else_body: parts
+            .else_body
+            .map(|range| parse_routine_statements(&statement[range]))
+            .transpose()?,
     })
 }
 

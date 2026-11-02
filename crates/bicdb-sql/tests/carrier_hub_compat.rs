@@ -461,3 +461,133 @@ fn timestamp_column_interval_arithmetic_is_exact() {
     );
     assert_eq!(rows.len(), 1);
 }
+
+/// The Hub's board capacity trigger nests a PL/pgSQL CASE statement (closed by
+/// END CASE) inside IF ... ELSE ... END IF.
+#[test]
+fn plpgsql_case_statement_inside_if_block() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE items (id INT PRIMARY KEY, kind TEXT, score INT)",
+        "CREATE FUNCTION score_item() RETURNS trigger LANGUAGE plpgsql AS $f$
+         BEGIN
+           IF NEW.kind = 'fixed' THEN
+             NEW.score := 1;
+           ELSE
+             CASE NEW.kind
+               WHEN 'a' THEN NEW.score := 2;
+               WHEN 'b' THEN NEW.score := 3;
+               ELSE NEW.score := 4;
+             END CASE;
+           END IF;
+           RETURN NEW;
+         END
+         $f$",
+        "CREATE TRIGGER score_item BEFORE INSERT ON items FOR EACH ROW EXECUTE FUNCTION score_item()",
+        "INSERT INTO items (id, kind) VALUES (1, 'fixed'), (2, 'a'), (3, 'b'), (4, 'z')",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let rows = session_rows(&mut session, "SELECT score FROM items ORDER BY id");
+    let scores = rows
+        .into_iter()
+        .map(|row| row[0].clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        scores,
+        vec![
+            SqlValue::Int(1),
+            SqlValue::Int(2),
+            SqlValue::Int(3),
+            SqlValue::Int(4)
+        ]
+    );
+}
+
+/// The Hub's document capability query is WITH RECURSIVE target, ancestors
+/// (recursive), ..., candidates AS (... UNION ALL ...). Only a CTE that
+/// references itself is recursive; the UNION ALL sibling is evaluated once.
+#[test]
+fn with_recursive_evaluates_non_self_referencing_union_ctes_once() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE docs (id INT PRIMARY KEY, parent_id INT)",
+        "INSERT INTO docs VALUES (1, NULL), (2, 1), (3, 2)",
+    ] {
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let rows = session_rows(
+        &mut session,
+        "WITH RECURSIVE target AS (SELECT id, parent_id FROM docs WHERE id = 3),
+         ancestors AS (
+           SELECT parent_id AS id, 1 AS depth FROM target WHERE parent_id IS NOT NULL
+           UNION ALL
+           SELECT docs.parent_id, ancestors.depth + 1 FROM ancestors JOIN docs ON docs.id = ancestors.id
+           WHERE docs.parent_id IS NOT NULL
+         ),
+         candidates AS (
+           SELECT 'owner' AS source, 0 AS depth FROM target
+           UNION ALL
+           SELECT 'ancestor', depth FROM ancestors
+           UNION ALL
+           SELECT 'none', 999
+         )
+         SELECT source, depth FROM candidates ORDER BY depth",
+    );
+    let got = rows
+        .into_iter()
+        .map(|row| format!("{}:{}", row[0].to_cell(), row[1].to_cell()))
+        .collect::<Vec<_>>();
+    assert_eq!(got, vec!["owner:0", "ancestor:1", "ancestor:2", "none:999"]);
+}
+
+#[test]
+fn plpgsql_case_statement_forms() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE things (id INT PRIMARY KEY, kind TEXT)",
+        "INSERT INTO things VALUES (1, 'a'), (2, 'a'), (3, 'b')",
+        "CREATE FUNCTION classify(kind TEXT, n INT) RETURNS TEXT LANGUAGE plpgsql AS $f$
+         DECLARE result TEXT; total BIGINT; wanted TEXT := kind;
+         BEGIN
+           CASE
+             WHEN n < 0 THEN result := 'negative';
+             WHEN n = 0 THEN
+               IF kind IS NULL THEN result := 'zero-null'; ELSE result := 'zero'; END IF;
+             ELSE
+               CASE kind
+                 WHEN 'a', 'b' THEN
+                   SELECT count(*) INTO total FROM things WHERE things.kind = wanted;
+                   result := kind || ':' || total::text;
+                 WHEN 'c' THEN result := (CASE WHEN n > 10 THEN 'big' ELSE 'small' END);
+               END CASE;
+           END CASE;
+           RETURN result;
+         END
+         $f$",
+    ] {
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let one = |session: &mut SqlSession<'_>, sql: &str| session_rows(session, sql)[0][0].to_cell();
+    assert_eq!(one(&mut session, "SELECT classify('x', -1)"), "negative");
+    assert_eq!(one(&mut session, "SELECT classify(NULL, 0)"), "zero-null");
+    assert_eq!(one(&mut session, "SELECT classify('q', 0)"), "zero");
+    assert_eq!(one(&mut session, "SELECT classify('a', 5)"), "a:2");
+    assert_eq!(one(&mut session, "SELECT classify('b', 5)"), "b:1");
+    assert_eq!(one(&mut session, "SELECT classify('c', 50)"), "big");
+    let error = session
+        .execute("SELECT classify('zzz', 5)")
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("case not found"), "{error}");
+}

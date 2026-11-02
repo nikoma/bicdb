@@ -1577,13 +1577,23 @@ pub(crate) fn execute_copy_query(
 }
 
 pub(crate) fn copy_in_data(state: &mut ConnectionState, payload: &[u8]) -> Result<()> {
-    let input =
-        std::str::from_utf8(payload).map_err(|error| PgWireError::Protocol(error.to_string()))?;
     let copy = state
         .copy_in
         .as_mut()
         .ok_or_else(|| PgWireError::Protocol("COPY FROM STDIN is not active".to_string()))?;
-    copy.pending.push_str(input);
+    // Decode everything up to a character split by the message boundary;
+    // keep its leading bytes for the next CopyData.
+    copy.pending_bytes.extend_from_slice(payload);
+    let valid = match std::str::from_utf8(&copy.pending_bytes) {
+        Ok(text) => text.len(),
+        Err(error) if error.error_len().is_none() => error.valid_up_to(),
+        Err(error) => return Err(PgWireError::Protocol(error.to_string())),
+    };
+    let rest = copy.pending_bytes.split_off(valid);
+    let decoded = std::mem::replace(&mut copy.pending_bytes, rest);
+    // Valid by construction: `valid` is a UTF-8 boundary.
+    copy.pending
+        .push_str(std::str::from_utf8(&decoded).map_err(|error| PgWireError::Protocol(error.to_string()))?);
     while let Some(newline) = copy.pending.find('\n') {
         let mut line = copy.pending[..newline].to_string();
         if line.ends_with('\r') {
@@ -1653,6 +1663,11 @@ pub(crate) fn finish_copy_in_inner(
         .copy_in
         .take()
         .ok_or_else(|| PgWireError::Protocol("COPY FROM STDIN is not active".to_string()))?;
+    if !copy.pending_bytes.is_empty() {
+        return Err(PgWireError::Protocol(
+            "COPY data ends with an incomplete UTF-8 character".to_string(),
+        ));
+    }
     if !copy.pending.is_empty() {
         let line = std::mem::take(&mut copy.pending);
         copy_in_line(&mut copy, line.trim_end_matches('\r'))?;

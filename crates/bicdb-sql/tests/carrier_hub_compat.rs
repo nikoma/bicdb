@@ -891,3 +891,30 @@ fn pg_depend_links_check_constraints_and_policies_to_called_functions() {
     );
     assert_eq!(policy_deps, vec![vec![SqlValue::String("tenant_now".into())]]);
 }
+
+/// The Hub's role SQL calls has_table_privilege('carrier_app', class.oid, ...);
+/// a relation given by OID or regclass must answer like one given by name.
+#[test]
+fn has_table_privilege_accepts_relation_oids() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE ROLE writer LOGIN",
+        "CREATE TABLE items (id INT PRIMARY KEY)",
+        "GRANT INSERT ON items TO writer",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let row = session_rows(
+        &mut session,
+        "SELECT has_table_privilege('writer', 'public.items', 'INSERT'), \
+                has_table_privilege('writer', 'public.items'::regclass, 'INSERT'), \
+                has_table_privilege('writer', (SELECT oid FROM pg_catalog.pg_class WHERE relname = 'items'), 'INSERT'), \
+                has_table_privilege('writer', 'public.items'::regclass, 'DELETE')",
+    );
+    assert_eq!(
+        row[0],
+        vec![SqlValue::Bool(true), SqlValue::Bool(true), SqlValue::Bool(true), SqlValue::Bool(false)]
+    );
+}

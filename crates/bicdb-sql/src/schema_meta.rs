@@ -3144,12 +3144,12 @@ pub(crate) fn has_table_privilege(db: &BicDb, args: &[SqlValue]) -> Result<bool>
     let (role, table, privilege) = match args {
         [table, privilege] => (
             Some(current_role_name()),
-            sql_value_text(table),
+            table_name_from_value(db, table),
             sql_value_text(privilege),
         ),
         [role, table, privilege] => (
-            sql_value_text(role),
-            sql_value_text(table),
+            role_name_from_value(db, role)?,
+            table_name_from_value(db, table),
             sql_value_text(privilege),
         ),
         _ => {
@@ -3179,6 +3179,19 @@ pub(crate) fn has_table_privilege(db: &BicDb, args: &[SqlValue]) -> Result<bool>
         }
     }
     Ok(false)
+}
+
+/// A relation given by name or by OID (`class.oid`, `policy.polrelid`), as
+/// PostgreSQL's has_*_privilege functions accept both.
+fn table_name_from_value(db: &BicDb, value: &SqlValue) -> Option<String> {
+    match value {
+        SqlValue::Null => None,
+        SqlValue::Int(oid) => table_oids(db)
+            .iter()
+            .find(|(_, table_oid)| **table_oid == *oid)
+            .map(|(name, _)| name.clone()),
+        other => sql_value_text(other),
+    }
 }
 
 pub(crate) fn has_function_privilege(db: &BicDb, args: &[SqlValue]) -> Result<bool> {

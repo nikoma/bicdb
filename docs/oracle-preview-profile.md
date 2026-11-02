@@ -268,6 +268,8 @@ year's first day), ISO weeks/year starts, and D/DY/DAY with its AMERICA default
 week suite. Alternate NLS territories and general NLS session configuration
 remain unsupported. Stored SQL and top-level SQL share the one-row DUAL
 lowering, with explicit aliases and CTE shadowing retained.
+The [week and procedural-format evidence](evidence/oracle-week-truncation-2026-11-01/README.md)
+records the reference assertions and remaining limits.
 
 This is declaration support for the tested routine subset, not a complete
 PL/SQL compiler. Native routine execution, namespace, overload, privilege and

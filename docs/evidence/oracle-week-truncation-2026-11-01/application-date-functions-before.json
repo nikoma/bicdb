@@ -1,0 +1,285 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "ba8f21e172d3229821327be7f6d476de102488871ffb96083383f152db46bb16",
+  "source_equivalent_commit": "e9a8b34f91fbf4bf7d197de648712beec2ed8b5a",
+  "only_adaptation": "explicit destination namespace",
+  "application_qualified": false,
+  "routines": [
+    {
+      "name": "ADDDAYS",
+      "source_sha256": "7612048fabd96dd041ef92fa4bcbb9582faeb35d9c03eac6d9589657b7398e1a",
+      "source_body_unchanged": true,
+      "created": true,
+      "cases": [
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"ADDDAYS\"(TIMESTAMP '2024-02-29 12:34:56.9',1) FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-03-01T12:34:56.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": {
+            "timestamp": "2024-03-01T12:34:56.000000"
+          },
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"ADDDAYS\"(TIMESTAMP '2024-03-01 00:00:00',-1) FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          },
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"ADDDAYS\"(TIMESTAMP '2024-02-29 12:34:56',0.25) FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-02-29T18:34:56.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": {
+            "timestamp": "2024-02-29T18:34:56.000000"
+          },
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"ADDDAYS\"(NULL,1) FROM DUAL",
+          "oracle": null,
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": null,
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"ADDDAYS\"(TIMESTAMP '2024-03-01 00:00:00',NULL) FROM DUAL",
+          "oracle": null,
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": null,
+          "bicdb_type_oid": 1114,
+          "match": true
+        }
+      ],
+      "matched": 5,
+      "total": 5,
+      "all_selected_cases_match": true
+    },
+    {
+      "name": "DAYSBETWEEN",
+      "source_sha256": "0dd53651e5b9f43b2e490ae8f78b7b2ed1eaada33ff382cc337b6dd74954adc5",
+      "source_body_unchanged": true,
+      "created": true,
+      "cases": [
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"DAYSBETWEEN\"(TIMESTAMP '2024-03-01 01:00:00',TIMESTAMP '2024-02-29 23:00:00') FROM DUAL",
+          "oracle": {
+            "number": "1"
+          },
+          "oracle_type": "DB_TYPE_NUMBER",
+          "bicdb": {
+            "number": "1"
+          },
+          "bicdb_type_oid": 1700,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"DAYSBETWEEN\"(TIMESTAMP '2024-02-29 23:00:00',TIMESTAMP '2024-03-01 01:00:00') FROM DUAL",
+          "oracle": {
+            "number": "-1"
+          },
+          "oracle_type": "DB_TYPE_NUMBER",
+          "bicdb": {
+            "number": "-1"
+          },
+          "bicdb_type_oid": 1700,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"DAYSBETWEEN\"(TIMESTAMP '2024-02-29 23:00:00',TIMESTAMP '2024-02-29 01:00:00') FROM DUAL",
+          "oracle": {
+            "number": "0"
+          },
+          "oracle_type": "DB_TYPE_NUMBER",
+          "bicdb": {
+            "number": "0"
+          },
+          "bicdb_type_oid": 1700,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"DAYSBETWEEN\"(NULL,NULL) FROM DUAL",
+          "oracle": null,
+          "oracle_type": "DB_TYPE_NUMBER",
+          "bicdb": null,
+          "bicdb_type_oid": 1700,
+          "match": true
+        }
+      ],
+      "matched": 4,
+      "total": 4,
+      "all_selected_cases_match": true
+    },
+    {
+      "name": "FIRSTOF",
+      "source_sha256": "c2213a5a625c01041352773b0374ee457f4f695d10b2a4f901557be585dd2664",
+      "source_body_unchanged": true,
+      "created": true,
+      "cases": [
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','DD') FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          },
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','MM') FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-02-01T00:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": {
+            "timestamp": "2024-02-01T00:00:00.000000"
+          },
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','YYYY') FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-01-01T00:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": {
+            "timestamp": "2024-01-01T00:00:00.000000"
+          },
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','Q') FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-01-01T00:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": {
+            "timestamp": "2024-01-01T00:00:00.000000"
+          },
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','IW') FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          },
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','HH24') FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-02-29T12:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": {
+            "timestamp": "2024-02-29T12:00:00.000000"
+          },
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','MI') FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-02-29T12:34:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": {
+            "timestamp": "2024-02-29T12:34:00.000000"
+          },
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','CC') FROM DUAL",
+          "oracle": {
+            "timestamp": "2001-01-01T00:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": {
+            "timestamp": "2001-01-01T00:00:00.000000"
+          },
+          "bicdb_type_oid": 1114,
+          "match": true
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','W') FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "error": "unsupported SQL: Oracle datetime TRUNC format W is not implemented",
+          "sqlstate": "0A000",
+          "match": false
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','WW') FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "error": "unsupported SQL: Oracle datetime TRUNC format WW is not implemented",
+          "sqlstate": "0A000",
+          "match": false
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','D') FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "error": "unsupported SQL: Oracle datetime TRUNC format D is not implemented",
+          "sqlstate": "0A000",
+          "match": false
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(TIMESTAMP '2024-02-29 12:34:56.9','DAY') FROM DUAL",
+          "oracle": {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          },
+          "oracle_type": "DB_TYPE_DATE",
+          "error": "unsupported SQL: Oracle datetime TRUNC format DAY is not implemented",
+          "sqlstate": "0A000",
+          "match": false
+        },
+        {
+          "sql": "SELECT \"IDEMPIERE_QUAL\".\"FIRSTOF\"(NULL,'MM') FROM DUAL",
+          "oracle": null,
+          "oracle_type": "DB_TYPE_DATE",
+          "bicdb": null,
+          "bicdb_type_oid": 1114,
+          "match": true
+        }
+      ],
+      "error": "ORA-01899: bad precision specifier\nORA-06512: at \"IDEMPIERE_QUAL.FIRSTOF\", line 9\nHelp: https://docs.oracle.com/error-help/db/ora-01899/",
+      "sqlstate": null,
+      "matched": 9,
+      "total": 14,
+      "all_selected_cases_match": false
+    }
+  ],
+  "all_selected_cases_match": false
+}

@@ -1,0 +1,1302 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "id": "scalar_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_3",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_3",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_3",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_4",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_4",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_4",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_5",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_5",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_5",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_6",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_6",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_6",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_7",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_7",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_7",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_8",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_8",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_8",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_9",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_9",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_9",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_10",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-12-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_10",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-12-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_10",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-12-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_11",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-01-03T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_11",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-01-03T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_11",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-01-03T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_12",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_12",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_12",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_13",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_13",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_13",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_14",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_14",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_14",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_15",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_15",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_15",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_16",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_16",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_16",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_17",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-28T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_17",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-28T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_17",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-28T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_18",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_18",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_18",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_19",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_19",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_19",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_20",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_20",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_20",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_null_date_0",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_null_date_1",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_null_format_0",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_null_format_1",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_null_date_0",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_null_date_1",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_null_format_0",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01899"
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_null_format_1",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01899"
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_null_date_0",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_null_date_1",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_null_format_0",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "embedded_sql_null_format_1",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "numeric_null_0",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "numeric_null_1",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123456789012345678901234.56"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_0",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123456789012345678901234.56"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-123.45"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_1",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-123.45"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1.2"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_2",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1.2"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_3",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_3",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.45"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_4",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_4",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_5",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_5",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_6",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_6",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.45"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_7",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_7",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_8",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_8",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_9",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_9",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_10",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_10",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "scalar_numeric_11",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "procedure_numeric_11",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "match": true
+    },
+    {
+      "id": "recovery_after_errors",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "match": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "oracle_version": "23.26.3.0.0",
+  "matched": 102
+}

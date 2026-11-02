@@ -1,0 +1,2880 @@
+{
+  "format": 1,
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "fixture_prefix": "BICDB_RF_A08FB5B0DD",
+  "fixture_sha256": "2dfe5e990af8f0d2bf3255fe2a6221cd588cb426dad7ca0c7e322fbe446ea898",
+  "total": 102,
+  "matched": 102,
+  "cases": [
+    {
+      "id": "scalar_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2023-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2023-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2023-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2023-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2023-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2023-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2023-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2023-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2023-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2023-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-12-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-12-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2022-12-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-12-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-12-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2022-12-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-12-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-12-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2022-12-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-01-03T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-01-03T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2022-01-03T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-01-03T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-01-03T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2022-01-03T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-01-03T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2022-01-03T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2022-01-03T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2019-12-30T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2019-12-30T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2019-12-30T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2019-12-30T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2019-12-30T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2019-12-30T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_14",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2019-12-30T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_14",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2019-12-30T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_14",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2019-12-30T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2019-12-30T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_15",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_15",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_15",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_16",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-29T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_16",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-29T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_16",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-29T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_17",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-28T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-28T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-28T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_17",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-28T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-28T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-28T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_17",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-28T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-01-28T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-01-28T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_18",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-03-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_18",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-03-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_18",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-03-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-03-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_19",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_19",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_19",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-26T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-26T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_20",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_20",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_20",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_null_date_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "scalar_null_date_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "scalar_null_format_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "scalar_null_format_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "procedure_null_date_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "procedure_null_date_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "procedure_null_format_0",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01899"
+      },
+      "bicdb": {
+        "error": "InvalidParameterValue",
+        "code": "22023"
+      },
+      "expected_error": {
+        "oracle": "ORA-01899",
+        "bicdb": "22023"
+      }
+    },
+    {
+      "id": "procedure_null_format_1",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01899"
+      },
+      "bicdb": {
+        "error": "InvalidParameterValue",
+        "code": "22023"
+      },
+      "expected_error": {
+        "oracle": "ORA-01899",
+        "bicdb": "22023"
+      }
+    },
+    {
+      "id": "embedded_sql_null_date_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_null_date_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_null_format_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "embedded_sql_null_format_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "numeric_null_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "numeric_null_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123456789012345678901234.56"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123456789012345678901234.56"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123456789012345678901234.56"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123456789012345678901234.56"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123456789012345678901234.56"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123456789012345678901234.56"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-123.45"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-123.45"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "-123.45"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-123.45"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-123.45"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "-123.45"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1.2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1.2"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1.2"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1.2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1.2"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1.2"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123.4"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.45"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123.45"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123.45"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "120"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "100"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "100"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "100"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123.4"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.45"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123.45"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123.45"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123.4"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123.4"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "120"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "100"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "100"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "120"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "120"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123.4"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123.4"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "scalar_numeric_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "procedure_numeric_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "120"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "120"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "recovery_after_errors",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-25T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-25T00:00:00.000000"
+          }
+        ]
+      ]
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "scope": "Gregorian/America week and ISO-year values; SQL versus PL/SQL NULL-format errors; not alternate NLS territories or full Oracle error mapping",
+  "oracle_nls_calendar": "GREGORIAN",
+  "oracle_nls_territory": "AMERICA",
+  "routine_compiler": "bicdb_oracle_preview_v4",
+  "oracle_driver_version": "26.1.0",
+  "pg_driver_version": "3.3.6",
+  "created_at": "2026-11-02T06:50:25.551668+00:00"
+}

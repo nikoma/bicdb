@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "implementation_commit": "34bdeede122118035ced3d9c7c12cfcf13ecda40",
+  "binary_target": "debug/examples/oracle_server",
+  "binary_sha256": "77942c5fde7c9e8486324649279e2dda1c7cde469e3613b1b586cda3decd1a6e",
+  "rust_tests_passed": 1099,
+  "existing_sql_unit_ignores": 3,
+  "suites": {
+    "pgwire_unit": 118,
+    "oracle_driver": 20,
+    "protocol": 168,
+    "sql_unit": 371,
+    "integrated_application": 5,
+    "sql_integration": 417
+  },
+  "reference_harness_tests_passed": 17,
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "published_release": false,
+  "production_deployment": false,
+  "application_qualified": false
+}

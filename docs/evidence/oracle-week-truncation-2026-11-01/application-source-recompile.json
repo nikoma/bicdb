@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "name": "FIRSTOF",
+  "source_sha256": "c2213a5a625c01041352773b0374ee457f4f695d10b2a4f901557be585dd2664",
+  "source_body_unchanged": true,
+  "only_adaptation": "explicit destination namespace; original CREATE OR REPLACE used",
+  "runtime_binary_sha256": "77942c5fde7c9e8486324649279e2dda1c7cde469e3613b1b586cda3decd1a6e",
+  "application_qualified": false,
+  "success": true,
+  "old_language": "bicdb_oracle_preview_v3",
+  "new_language": "bicdb_oracle_preview_v4"
+}

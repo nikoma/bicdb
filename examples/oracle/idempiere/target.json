@@ -11,8 +11,11 @@
   "oracle_import_script": "org.adempiere.server-feature/utils.unix/oracle/ImportIdempiere.sh",
   "observed_oracle_database_sql_files": 59,
   "observed_oracle_migration_sql_files": 1085,
-  "status": "selected; source inspection in progress; application not running on BicDB",
+  "status": "Oracle seed and release-13 data imported and reconciled on native BicDB; Oracle-provider desktop shell reached with errors; full application qualification outstanding",
   "qualification_route": "Oracle schema and SQL, using PostgreSQL client transport with an explicit BicDB Oracle profile",
-  "reference_seed_import_requires": "Oracle Data Pump; unavailable in the installed Free Lite reference image",
-  "qualification_evidence": []
+  "reference_seed_import_requires": "Oracle Data Pump-capable reference instance; seed import and release-13 clone upgrade validated in isolated development fixtures",
+  "qualification_evidence": [
+    "../../../docs/evidence/idempiere-seed-2026-11-01/README.md",
+    "../../../docs/evidence/idempiere-release13-desktop-2026-11-01/README.md"
+  ]
 }

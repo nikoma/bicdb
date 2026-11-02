@@ -5,6 +5,17 @@
       {
         "backend": 0,
         "kind": "TABLE",
+        "name": "\"public\".\"BICDB_CP_K\"",
+        "sql": "CREATE TABLE \"public\".\"BICDB_CP_K\"(category NUMBER,amount NUMBER,day DATE,tag VARCHAR2(20))",
+        "inserts": [
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(1,NULL,DATE '2002-07-04','A')",
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(1,7,DATE '2002-07-05','B')",
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(2,3,DATE '2002-07-04','C')"
+        ]
+      },
+      {
+        "backend": 0,
+        "kind": "TABLE",
         "name": "\"public\".\"BICDB_CP_T\"",
         "sql": "CREATE TABLE \"public\".\"BICDB_CP_T\"(v_arg NUMBER,amount NUMBER)",
         "inserts": [
@@ -60,6 +71,13 @@
         "kind": "FUNCTION",
         "name": "\"public\".\"BICDB_CP_SNAPSHOT\"",
         "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_SNAPSHOT\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=p_value; v NUMBER;CURSOR c(v_arg NUMBER) IS SELECT v_arg AS amount FROM DUAL; BEGIN OPEN c(v_arg); v_arg:=v_arg+10; FETCH c INTO v; CLOSE c; RETURN v*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_COALESCE_REOPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_COALESCE_REOPEN\"(p_value NUMBER) RETURN NUMBER IS current_day DATE:=DATE '2002-07-03'; total NUMBER:=0; chosen VARCHAR2(20):='text';CURSOR c(x NUMBER,pp_date DATE) IS SELECT amount FROM \"public\".\"BICDB_CP_K\" WHERE category=x AND day>=pp_date AND COALESCE(amount,0)>=0 AND tag<>'excluded' ORDER BY day; BEGIN FOR i IN 1..3 LOOP FOR r IN c(p_value,current_day) LOOP SELECT COALESCE(chosen,'fallback') INTO chosen FROM DUAL; total:=total+COALESCE(r.amount,0); END LOOP; current_day:=current_day+1; END LOOP; RETURN total; END;",
         "inserts": []
       },
       {
@@ -142,6 +160,17 @@
       {
         "backend": 1,
         "kind": "TABLE",
+        "name": "\"public\".\"BICDB_CP_K\"",
+        "sql": "CREATE TABLE \"public\".\"BICDB_CP_K\"(category NUMBER,amount NUMBER,day DATE,tag VARCHAR2(20))",
+        "inserts": [
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(1,NULL,DATE '2002-07-04','A')",
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(1,7,DATE '2002-07-05','B')",
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(2,3,DATE '2002-07-04','C')"
+        ]
+      },
+      {
+        "backend": 1,
+        "kind": "TABLE",
         "name": "\"public\".\"BICDB_CP_T\"",
         "sql": "CREATE TABLE \"public\".\"BICDB_CP_T\"(v_arg NUMBER,amount NUMBER)",
         "inserts": [
@@ -197,6 +226,13 @@
         "kind": "FUNCTION",
         "name": "\"public\".\"BICDB_CP_SNAPSHOT\"",
         "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_SNAPSHOT\"(p_value NUMBER) RETURN NUMBER IS v_arg NUMBER:=p_value; v NUMBER;CURSOR c(v_arg NUMBER) IS SELECT v_arg AS amount FROM DUAL; BEGIN OPEN c(v_arg); v_arg:=v_arg+10; FETCH c INTO v; CLOSE c; RETURN v*100+v_arg; END;",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_COALESCE_REOPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_COALESCE_REOPEN\"(p_value NUMBER) RETURN NUMBER IS current_day DATE:=DATE '2002-07-03'; total NUMBER:=0; chosen VARCHAR2(20):='text';CURSOR c(x NUMBER,pp_date DATE) IS SELECT amount FROM \"public\".\"BICDB_CP_K\" WHERE category=x AND day>=pp_date AND COALESCE(amount,0)>=0 AND tag<>'excluded' ORDER BY day; BEGIN FOR i IN 1..3 LOOP FOR r IN c(p_value,current_day) LOOP SELECT COALESCE(chosen,'fallback') INTO chosen FROM DUAL; total:=total+COALESCE(r.amount,0); END LOOP; current_day:=current_day+1; END LOOP; RETURN total; END;",
         "inserts": []
       },
       {
@@ -422,6 +458,28 @@
           [
             {
               "number": "313"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "coalesce_reopen_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_COALESCE_REOPEN\"(1) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "21"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "coalesce_reopen_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_COALESCE_REOPEN\"(2) FROM DUAL",
+        "expected": [
+          [
+            {
+              "number": "6"
             }
           ]
         ]
@@ -655,6 +713,17 @@
       {
         "backend": 0,
         "kind": "TABLE",
+        "name": "\"public\".\"BICDB_CP_K\"",
+        "sql": "CREATE TABLE \"public\".\"BICDB_CP_K\"(category NUMERIC,amount NUMERIC,day DATE,tag VARCHAR(20))",
+        "inserts": [
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(1,NULL,DATE '2002-07-04','A')",
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(1,7,DATE '2002-07-05','B')",
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(2,3,DATE '2002-07-04','C')"
+        ]
+      },
+      {
+        "backend": 0,
+        "kind": "TABLE",
         "name": "\"public\".\"BICDB_CP_T\"",
         "sql": "CREATE TABLE \"public\".\"BICDB_CP_T\"(v_arg NUMERIC,amount NUMERIC)",
         "inserts": [
@@ -715,6 +784,13 @@
       {
         "backend": 0,
         "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_COALESCE_REOPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_COALESCE_REOPEN\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE current_day DATE:=DATE '2002-07-03'; total NUMERIC:=0; chosen VARCHAR(20):='text';c CURSOR (x NUMERIC,pp_date DATE) FOR SELECT amount FROM \"public\".\"BICDB_CP_K\" WHERE category=x AND day>=pp_date AND COALESCE(amount,0)>=0 AND tag<>'excluded' ORDER BY day; BEGIN FOR i IN 1..3 LOOP FOR r IN c(p_value,current_day) LOOP SELECT COALESCE(chosen,'fallback') INTO chosen; total:=total+COALESCE(r.amount,0); END LOOP; current_day:=current_day+1; END LOOP; RETURN total; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 0,
+        "kind": "FUNCTION",
         "name": "\"public\".\"BICDB_CP_BODY_SCOPE\"",
         "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_BODY_SCOPE\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg VARCHAR(20):='outside'; total NUMERIC:=0;c CURSOR (v_arg NUMERIC) FOR SELECT v_arg AS amount; BEGIN FOR r IN c(p_value) LOOP IF v_arg<>'outside' THEN RETURN -999; END IF; total:=r.amount; END LOOP; RETURN total; END$$",
         "inserts": []
@@ -760,6 +836,17 @@
         "name": "\"public\".\"BICDB_CP_ONCE\"",
         "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_ONCE\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE total NUMERIC;c CURSOR (x NUMERIC) FOR SELECT x AS amount; BEGIN FOR r IN c(nextval('\"public\".\"BICDB_CP_SEQ\"')) LOOP total:=r.amount; END LOOP; RETURN total; END$$",
         "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "TABLE",
+        "name": "\"public\".\"BICDB_CP_K\"",
+        "sql": "CREATE TABLE \"public\".\"BICDB_CP_K\"(category NUMERIC,amount NUMERIC,day DATE,tag VARCHAR(20))",
+        "inserts": [
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(1,NULL,DATE '2002-07-04','A')",
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(1,7,DATE '2002-07-05','B')",
+          "INSERT INTO \"public\".\"BICDB_CP_K\" VALUES(2,3,DATE '2002-07-04','C')"
+        ]
       },
       {
         "backend": 1,
@@ -819,6 +906,13 @@
         "kind": "FUNCTION",
         "name": "\"public\".\"BICDB_CP_SNAPSHOT\"",
         "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_SNAPSHOT\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE v_arg NUMERIC:=p_value; v NUMERIC;c CURSOR (v_arg NUMERIC) FOR SELECT v_arg AS amount; BEGIN OPEN c(v_arg); v_arg:=v_arg+10; FETCH c INTO v; CLOSE c; RETURN v*100+v_arg; END$$",
+        "inserts": []
+      },
+      {
+        "backend": 1,
+        "kind": "FUNCTION",
+        "name": "\"public\".\"BICDB_CP_COALESCE_REOPEN\"",
+        "sql": "CREATE FUNCTION \"public\".\"BICDB_CP_COALESCE_REOPEN\"(p_value NUMERIC) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE current_day DATE:=DATE '2002-07-03'; total NUMERIC:=0; chosen VARCHAR(20):='text';c CURSOR (x NUMERIC,pp_date DATE) FOR SELECT amount FROM \"public\".\"BICDB_CP_K\" WHERE category=x AND day>=pp_date AND COALESCE(amount,0)>=0 AND tag<>'excluded' ORDER BY day; BEGIN FOR i IN 1..3 LOOP FOR r IN c(p_value,current_day) LOOP SELECT COALESCE(chosen,'fallback') INTO chosen; total:=total+COALESCE(r.amount,0); END LOOP; current_day:=current_day+1; END LOOP; RETURN total; END$$",
         "inserts": []
       },
       {
@@ -1016,6 +1110,28 @@
           [
             {
               "number": "313"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "coalesce_reopen_0",
+        "sql": "SELECT \"public\".\"BICDB_CP_COALESCE_REOPEN\"(1)",
+        "expected": [
+          [
+            {
+              "number": "21"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "coalesce_reopen_1",
+        "sql": "SELECT \"public\".\"BICDB_CP_COALESCE_REOPEN\"(2)",
+        "expected": [
+          [
+            {
+              "number": "6"
             }
           ]
         ]

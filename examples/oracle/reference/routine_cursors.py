@@ -38,6 +38,10 @@ def fixture(schema, prefix, native=False):
         'OPEN c(p_value); FETCH c INTO v; CLOSE c; total:=v; OPEN c(p_value+1); FETCH c INTO v; CLOSE c; RETURN total*100+v;', [('1', 102), ('3', 304)])
     add('SNAPSHOT', f'v_arg {num}:=p_value; v {num};' + cursor(f'v_arg {num}', 'SELECT v_arg AS amount' + dual),
         'OPEN c(v_arg); v_arg:=v_arg+10; FETCH c INTO v; CLOSE c; RETURN v*100+v_arg;', [('1', 111), ('3', 313)])
+    add('COALESCE_REOPEN', f'current_day DATE:=DATE \'2002-07-03\'; total {num}:=0; chosen {text}(20):=\'text\';' +
+        cursor(f'x {num},pp_date DATE', f"SELECT amount FROM {q('K')} WHERE category=x AND day>=pp_date AND COALESCE(amount,0)>=0 AND tag<>'excluded' ORDER BY day"),
+        f"FOR i IN 1..3 LOOP FOR r IN c(p_value,current_day) LOOP SELECT COALESCE(chosen,'fallback') INTO chosen{dual}; total:=total+COALESCE(r.amount,0); END LOOP; current_day:=current_day+1; END LOOP; RETURN total;",
+        [('1', 21), ('2', 6)])
     add('BODY_SCOPE', f'v_arg {text}(20):=\'outside\'; total {num}:=0;' + cursor(f'v_arg {num}', 'SELECT v_arg AS amount' + dual),
         "FOR r IN c(p_value) LOOP IF v_arg<>'outside' THEN RETURN -999; END IF; total:=r.amount; END LOOP; RETURN total;", [('1', 1), ('3', 3)])
     add('QUALIFIED', cursor(f'x {num}', 'SELECT c.x AS amount' + dual),
@@ -65,6 +69,11 @@ def fixture(schema, prefix, native=False):
             "FOR r IN c(TIMESTAMP '2024-02-29 12:34:56.999999') LOOP RETURN (r.chosen-TRUNC(r.chosen))*86400; END LOOP; RETURN -999;", [('1', 45296)])
     setup = []
     for backend in (0, 1):
+        setup.append(dict(backend=backend, kind='TABLE', name=q('K'),
+                          sql=f'CREATE TABLE {q("K")}(category {num},amount {num},day DATE,tag {text}(20))',
+                          inserts=[f"INSERT INTO {q('K')} VALUES(1,NULL,DATE '2002-07-04','A')",
+                                   f"INSERT INTO {q('K')} VALUES(1,7,DATE '2002-07-05','B')",
+                                   f"INSERT INTO {q('K')} VALUES(2,3,DATE '2002-07-04','C')"]))
         setup.append(dict(backend=backend, kind='TABLE', name=q('T'),
                           sql=f'CREATE TABLE {q("T")}(v_arg {num},amount {num})',
                           inserts=[f'INSERT INTO {q("T")} VALUES(1,5)', f'INSERT INTO {q("T")} VALUES(1,7)', f'INSERT INTO {q("T")} VALUES(2,9)']))

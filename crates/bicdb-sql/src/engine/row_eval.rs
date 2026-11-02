@@ -1342,13 +1342,17 @@ impl<'db> SqlEngine<'db> {
         }
         let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
         if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
-            let arg_types = function_args(function)
+            // Type memos in a routine are keyed by stable IR node addresses.
+            // Cloning arguments here lets freed temporary nodes reuse an
+            // address and inherit another call's type on the next cursor OPEN.
+            let arg_exprs = function_arg_list(function);
+            let arg_types = arg_exprs
                 .iter()
                 .map(|arg| self.infer_slot_row_expr_type(context.row_lookup.columns(), arg))
                 .collect::<Vec<_>>();
             select_common_pg_type(self.db_ref(), &arg_types, "COALESCE")?;
-            for arg in function_args(function) {
-                let value = self.eval_slot_row_value(row, context, &arg)?;
+            for arg in arg_exprs.iter() {
+                let value = self.eval_slot_row_value(row, context, arg)?;
                 if !matches!(value, SqlValue::Null) {
                     return Ok(value);
                 }

@@ -1559,22 +1559,39 @@ impl<'db> SqlEngine<'db> {
         query: &Query,
         probe: Option<Rc<std::cell::Cell<bool>>>,
     ) -> Result<SqlResult> {
-        let columns = context.row_lookup.columns();
+        self.run_query_with_outer_extension(context.row_lookup.columns(), row, probe, query)
+    }
+
+    /// Runs `query` as a correlated subquery whose outer row is this engine's
+    /// outer row followed by `row` (named by `columns`), reusing the previous
+    /// extension's copy of the outer row (see `take_outer_extension`).
+    pub(crate) fn run_query_with_outer_extension(
+        &self,
+        columns: &[String],
+        row: &[SqlValue],
+        probe: Option<Rc<std::cell::Cell<bool>>>,
+        query: &Query,
+    ) -> Result<SqlResult> {
         let (mut outer_row, novel) = self.take_outer_extension(columns, row);
         let base_probes = outer_row.probe_count();
         if let Some(probe) = probe {
             outer_row = outer_row.with_read_probe(probe);
         }
+        // The child's outer row is set before `inherit_transaction`, which
+        // otherwise deep-copies this engine's outer row into the child only
+        // for it to be replaced.
         let mut engine = self
-            .inherit_transaction(SqlEngine::with_ctes_and_context(
-                self.db_ref(),
-                self.settings,
-                self.ctes.clone(),
-                self.security_context.clone(),
-                self.session_gucs.clone(),
-            ))
+            .inherit_transaction(
+                SqlEngine::with_ctes_and_context(
+                    self.db_ref(),
+                    self.settings,
+                    self.ctes.clone(),
+                    self.security_context.clone(),
+                    self.session_gucs.clone(),
+                )
+                .with_outer_slot_row(outer_row),
+            )
             .with_shared_routine_vars(self.routine_vars.clone())
-            .with_outer_slot_row(outer_row)
             .with_cancellation(self.cancellation.clone());
         let result = engine.execute_query(query);
         if let (Some(parent), Some(novel), Some(mut used)) =
@@ -3036,20 +3053,14 @@ impl<'db> SqlEngine<'db> {
         row: &SqlRow,
         query: &Query,
     ) -> Result<SqlResult> {
-        self.inherit_transaction(SqlEngine::with_ctes_and_context(
-            self.db_ref(),
-            self.settings,
-            self.ctes.clone(),
-            self.security_context.clone(),
-            self.session_gucs.clone(),
-        ))
-        .with_shared_routine_vars(self.routine_vars.clone())
-        .with_outer_slot_row(extend_outer_slot_context_from_sql_row(
-            self.outer_row.as_ref(),
-            row,
-        ))
-        .with_cancellation(self.cancellation.clone())
-        .execute_query(query)
+        // Same layout as `OuterSlotRow::from_sql_row`: columns sorted by name.
+        let mut columns = row.keys().cloned().collect::<Vec<_>>();
+        columns.sort();
+        let values = columns
+            .iter()
+            .map(|column| row.get(column).cloned().unwrap_or(SqlValue::Null))
+            .collect::<Vec<_>>();
+        self.run_query_with_outer_extension(&columns, &values, None, query)
     }
 
     pub(crate) fn execute_correlated_subquery_values(

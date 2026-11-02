@@ -4624,28 +4624,6 @@ pub(crate) fn subquery_values(result: SqlResult) -> Result<Vec<SqlValue>> {
         .collect())
 }
 
-pub(crate) fn extend_outer_slot_context(
-    existing: Option<&OuterSlotRow>,
-    columns: &[String],
-    row: &[SqlValue],
-) -> OuterSlotRow {
-    let Some(existing) = existing else {
-        return OuterSlotRow::from_slot(columns, row);
-    };
-    existing.extend(columns, row)
-}
-
-pub(crate) fn extend_outer_slot_context_from_sql_row(
-    existing: Option<&OuterSlotRow>,
-    row: &SqlRow,
-) -> OuterSlotRow {
-    let row = OuterSlotRow::from_sql_row(row);
-    match existing {
-        Some(existing) => existing.extend(row.columns(), row.values_unprobed()),
-        None => row,
-    }
-}
-
 impl<'db> SqlEngine<'db> {
     pub(crate) fn materialize_view_with_selection(
         &self,

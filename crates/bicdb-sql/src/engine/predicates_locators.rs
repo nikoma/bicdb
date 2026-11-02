@@ -4648,20 +4648,8 @@ impl<'db> SqlEngine<'db> {
             if left_idx % 128 == 0 {
                 self.check_cancellation()?;
             }
-            let outer_row =
-                extend_outer_slot_context(self.outer_row.as_ref(), &left.columns, left_row);
-            let result = self
-                .inherit_transaction(SqlEngine::with_ctes_and_context(
-                    self.db_ref(),
-                    self.settings,
-                    self.ctes.clone(),
-                    self.security_context.clone(),
-                    self.session_gucs.clone(),
-                ))
-                .with_shared_routine_vars(self.routine_vars.clone())
-                .with_outer_slot_row(outer_row)
-                .with_cancellation(self.cancellation.clone())
-                .execute_query(subquery)?;
+            let result =
+                self.run_query_with_outer_extension(&left.columns, left_row, None, subquery)?;
             let source_columns =
                 table_alias_columns(&alias_name, &alias_name, alias_columns, &result.columns)?;
             let actual_right_columns = aliased_row_output_columns(&alias_name, &source_columns);

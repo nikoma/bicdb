@@ -562,6 +562,51 @@
         ]
       ]
     },
+    "eager_once_1": {
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ]
+    },
+    "eager_once_2": {
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ]
+    },
+    "eager_once_observed": {
+      "expected": [
+        [
+          {
+            "number": "3"
+          }
+        ]
+      ]
+    },
+    "first_once": {
+      "expected": [
+        [
+          {
+            "number": "4"
+          }
+        ]
+      ]
+    },
+    "first_once_observed": {
+      "expected": [
+        [
+          {
+            "number": "5"
+          }
+        ]
+      ]
+    },
     "column_stamp0_1": {
       "expected": [
         [

@@ -37,6 +37,8 @@ class RoutineNamespaceTests(unittest.TestCase):
         self.assertEqual(cases['unused_division']['expected_error'],
                          dict(oracle='ORA-01476', bicdb='22012'))
         self.assertEqual(cases['coalesce_lazy']['expected'], [['A']])
+        self.assertEqual(cases['eager_once_observed']['expected'], [[{'number': '3'}]])
+        self.assertEqual(cases['first_once_observed']['expected'], [[{'number': '5'}]])
         self.assertEqual(cases['pl_stamp']['expected'],
                          [['29-FEB-24 12.34.56.123456 PM']])
         self.assertEqual(cases['sql_stamp']['expected'],

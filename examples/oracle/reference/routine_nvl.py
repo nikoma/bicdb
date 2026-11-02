@@ -64,6 +64,8 @@ def fixture(schema, prefix):
     setup, cases = [], []
     table = q('ROWS')
     for backend in (0, 1):
+        setup.append(dict(backend=backend, kind='SEQUENCE', name=q('SEQ'),
+                          sql=f'CREATE SEQUENCE {q("SEQ")} START WITH 1', inserts=[]))
         setup.append(dict(backend=backend, kind='TABLE', name=table,
                           sql=f'CREATE TABLE {table}(id NUMBER,d DATE,t0 TIMESTAMP(0),t3 TIMESTAMP(3),n NUMBER(5,2),label VARCHAR2(8),c CHAR(3))',
                           inserts=[f"INSERT INTO {table} VALUES(1,TIMESTAMP '2024-02-29 12:34:56',TIMESTAMP '2024-02-29 12:34:56',TIMESTAMP '2024-02-29 12:34:56.123456',12.34,'first','A')",
@@ -83,6 +85,7 @@ def fixture(schema, prefix):
         ('CHARVALUE', '', 'VARCHAR2', "v CHAR(3):='A'; BEGIN RETURN NVL(v,'longer'); END;"),
         ('CHARNIL', '', 'VARCHAR2', "v CHAR(3); BEGIN RETURN NVL(v,'longer'); END;"),
         ('CONTEXT', '', 'VARCHAR2', 'BEGIN RETURN NVL(\'\',12345678901234567890123456789012345678901234567890123456789012345678901234567890); END;'),
+        ('TICK', '', 'NUMBER', f'v NUMBER; BEGIN SELECT {q("SEQ")}.NEXTVAL INTO v FROM DUAL; RETURN v; END;'),
     ]
     for backend in (0, 1):
         for suffix, arguments, result, body in definitions:
@@ -135,6 +138,11 @@ def fixture(schema, prefix):
         ('pl_char', f"{q('CHARVALUE')}()"),
         ('pl_char_null', f"{q('CHARNIL')}()"),
         ('pl_number_context', f"{q('CONTEXT')}()"),
+        ('eager_once_1', f"NVL(1,{q('TICK')}())"),
+        ('eager_once_2', f"NVL(1,{q('TICK')}())"),
+        ('eager_once_observed', f"NVL(NULL,{q('TICK')}())"),
+        ('first_once', f"NVL({q('TICK')}(),0)"),
+        ('first_once_observed', f"NVL(NULL,{q('TICK')}())"),
     ]
     extra = [(name, f'SELECT {expression} FROM DUAL') for name, expression in expressions]
     for name, expression in [('column_stamp0', "NVL('',t0)"), ('column_stamp3', "NVL('',t3)"),

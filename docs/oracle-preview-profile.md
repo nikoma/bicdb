@@ -203,13 +203,13 @@ modes and local declaration sections. PostgreSQL procedural expressions resolve
 quoted parameter names consistently in builtin arguments and direct returns.
 
 New preview routine definitions persist the language marker
-`bicdb_oracle_preview_v8`. It selects the tested preview routine compiler and
+`bicdb_oracle_preview_v9`. It selects the tested preview routine compiler and
 requires the database's durable Oracle preview profile. PostgreSQL and HR
 databases cannot enable it with a connection setting. Native `LANGUAGE plpgsql`
 definitions created through the native backend retain native behavior, including
 previously translated routines; recreate an Oracle-authored definition to select
 the new compiler. The compiler versions have separate `pg_language` identities,
-present only in a preview database. Versions 1 through 7 remain readable.
+present only in a preview database. Versions 1 through 8 remain readable.
 Version 5 (OID 999404) fences CASE selector dispatch. Version 6 (OID 999405)
 adds the tested Oracle statement-rollback and strict SELECT INTO contracts;
 earlier definitions retain their previous block-rollback behavior. Recreate an
@@ -268,6 +268,20 @@ are not established by these tests.
 The [cursor and arithmetic qualification](evidence/oracle-parameterized-cursors-2026-11-02/README.md)
 records the source comparisons, transport policy, older-reader fence and remaining
 application failures.
+
+Version 9 (OID 999408) adds type-directed DECODE in stored SQL. The preview
+also resolves ordinary SQL DECODE after namespace and PostgreSQL parameter-type
+binding. Resolved character, NUMBER, logical DATE and TIMESTAMP inputs use the
+first search/result conversion rules, NULL equality, nonpadded character
+comparison and lazy searches/results. The selector is evaluated once. Direct
+procedural DECODE requires an embedded SQL statement. Versions 1–8 retain their
+earlier compiler behavior; explicitly recreate source definitions to select
+version 9. Mutable NLS, implicit character-to-TIMESTAMP, binary floating point,
+national/LOB types, source DATE column provenance and broader conversion rules
+remain unqualified. Native PostgreSQL binary decode is independent. The
+[DECODE evidence](evidence/oracle-decode-2026-11-02/README.md) records values,
+metadata, typed binds, native controls, cursor type-cache recovery and the
+unchanged original business-date routine.
 
 Version 2 binds static relation references in functions to the namespace in the
 stored function declaration. Unqualified declarations created through the
@@ -408,8 +422,7 @@ contains 15 independently checked Oracle expectations.
 This is declaration support for the tested routine subset, not a complete
 PL/SQL compiler. Native routine execution, namespace, overload, privilege and
 error contracts still apply. Oracle AUTHID/rights semantics are not qualified.
-Packages, autonomous transactions and procedural concatenation still fail
-explicitly. Other routine bodies can require additional expression, cursor,
+Packages and autonomous transactions still fail explicitly. Other routine bodies can require additional expression, cursor,
 exception or application-schema adaptations. Accepted DDL alone is not proof
 that every routine compiles and executes: migration acceptance must exercise
 each required routine and its dependencies through the application driver.
@@ -429,8 +442,9 @@ cursor with the current parameter/local values, assigns a record for each row
 and closes it on completion, EXIT, RETURN or an error. Nested bound cursor loops
 and CONTINUE use the same interpreter. Embedded SQL resolves quoted routine
 parameters after row columns, consistently with bound procedural expressions.
-Parameterized cursor declarations, REF CURSOR APIs, cursor attributes, bulk
-operations and full Oracle cursor/error semantics remain outstanding. This
+Version 8 adds the parameterized declarations described above. REF CURSOR APIs,
+complete cursor attributes, bulk operations and full Oracle cursor/error semantics
+remain outstanding. This
 subset materializes query results on open; it does not provide streaming cursor
 execution or qualify all cursor repositioning behavior.
 See the [bound cursor evidence](evidence/oracle-bound-cursors-2026-11-01/README.md)

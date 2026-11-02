@@ -1,0 +1,335 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "native_bicdb": true,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "hex",
+      "sql": "SELECT decode('6162','hex')",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "bytes": "6162"
+            }
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "bytes": "6162"
+            }
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "base64",
+      "sql": "SELECT decode('YWI=','base64')",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "bytes": "6162"
+            }
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "bytes": "6162"
+            }
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "escape",
+      "sql": "SELECT decode('abc','escape')",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "bytes": "616263"
+            }
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "bytes": "616263"
+            }
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "empty",
+      "sql": "SELECT decode('','hex')",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "bytes": ""
+            }
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "bytes": ""
+            }
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "null_text",
+      "sql": "SELECT decode(NULL,'hex')",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "null_format",
+      "sql": "SELECT decode('6162',NULL)",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "invalid_hex",
+      "sql": "SELECT decode('!','hex')",
+      "postgres": {
+        "sqlstate": "22023"
+      },
+      "bicdb": {
+        "sqlstate": "22023"
+      },
+      "matched": true
+    },
+    {
+      "id": "case_text_padding",
+      "sql": "SELECT CASE CAST('x  ' AS VARCHAR) WHEN CAST('x' AS VARCHAR) THEN 1 ELSE 2 END",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "case_null",
+      "sql": "SELECT CASE NULL WHEN NULL THEN 1 ELSE 2 END",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "case_unselected",
+      "sql": "SELECT CASE WHEN true THEN 7 ELSE 1/0 END",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "case_padding",
+      "sql": "SELECT CASE CAST('x' AS CHAR(3)) WHEN CAST('x' AS CHAR(1)) THEN 1 ELSE 2 END",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qualified_decode",
+      "sql": "SELECT pg_catalog.decode('6162','hex')",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "bytes": "6162"
+            }
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "bytes": "6162"
+            }
+          ]
+        ],
+        "type_oids": [
+          17
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "matched": 12,
+  "total": 12,
+  "runtime_binary_sha256": "0986d3e13929caf04defa5000fa9dec801ea1dc9fab8c6303e7a37e366032c49"
+}

@@ -1,0 +1,1401 @@
+{
+  "format": 1,
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "fixture_prefix": "BICDB_RF_5BBB4999B4",
+  "fixture_sha256": "b63e0016ebec335cc98d692a735f7c52ebc4d49705e23a62650416e5e6bfaf93",
+  "total": 57,
+  "matched": 57,
+  "cases": [
+    {
+      "id": "stored_number_match",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "match"
+        ]
+      ]
+    },
+    {
+      "id": "stored_null_match",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "match"
+        ]
+      ]
+    },
+    {
+      "id": "stored_empty_match",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "match"
+        ]
+      ]
+    },
+    {
+      "id": "stored_number_comparison",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "match"
+        ]
+      ]
+    },
+    {
+      "id": "stored_text_comparison",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "fallback"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "fallback"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "fallback"
+        ]
+      ]
+    },
+    {
+      "id": "stored_char_width",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "fallback"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "fallback"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "fallback"
+        ]
+      ]
+    },
+    {
+      "id": "stored_char_padding",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "match"
+        ]
+      ]
+    },
+    {
+      "id": "stored_lazy_default",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_null_first_result",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "7"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "7"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "7"
+        ]
+      ]
+    },
+    {
+      "id": "stored_null_default",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "bad"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "bad"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "bad"
+        ]
+      ]
+    },
+    {
+      "id": "stored_unselected_conversion",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_selected_conversion",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01722"
+      },
+      "bicdb": {
+        "error": "InvalidTextRepresentation",
+        "code": "22P02"
+      },
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "stored_lazy_search",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_selected_search",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01476"
+      },
+      "bicdb": {
+        "error": "DivisionByZero",
+        "code": "22012"
+      },
+      "expected_error": {
+        "oracle": "ORA-01476",
+        "bicdb": "22012"
+      }
+    },
+    {
+      "id": "stored_lazy_result",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_selected_result",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01476"
+      },
+      "bicdb": {
+        "error": "DivisionByZero",
+        "code": "22012"
+      },
+      "expected_error": {
+        "oracle": "ORA-01476",
+        "bicdb": "22012"
+      }
+    },
+    {
+      "id": "stored_invalid_first_search",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01722"
+      },
+      "bicdb": {
+        "error": "InvalidTextRepresentation",
+        "code": "22P02"
+      },
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "stored_bad_text_search",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "0"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_bad_number_expression",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01722"
+      },
+      "bicdb": {
+        "error": "InvalidTextRepresentation",
+        "code": "22P02"
+      },
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "stored_null_expression",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_first_null_match",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "a "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "a "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "a "
+        ]
+      ]
+    },
+    {
+      "id": "stored_date_search",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "17"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "17"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "17"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_truncate_timestamp_search",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "17"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "17"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "17"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_date_result",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_char_result",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "x  "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x  "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "x  "
+        ]
+      ]
+    },
+    {
+      "id": "stored_typed_null_result",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "3"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_typed_null_search",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "match"
+        ]
+      ]
+    },
+    {
+      "id": "stored_timestamp_result",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.123456"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_timestamp_text",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "29-FEB-24 12.34.56.123456000 PM"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "29-FEB-24 12.34.56.123456000 PM"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "29-FEB-24 12.34.56.123456000 PM"
+        ]
+      ]
+    },
+    {
+      "id": "stored_date_text",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "29-FEB-24"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "29-FEB-24"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "29-FEB-24"
+        ]
+      ]
+    },
+    {
+      "id": "stored_number_text",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            ".5"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            ".5"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          ".5"
+        ]
+      ]
+    },
+    {
+      "id": "stored_date_input",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_date_iso",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01861"
+      },
+      "bicdb": {
+        "error": "InvalidDatetimeFormat",
+        "code": "22007"
+      },
+      "expected_error": {
+        "oracle": "ORA-01861",
+        "bicdb": "22007"
+      }
+    },
+    {
+      "id": "stored_group_number",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01722"
+      },
+      "bicdb": {
+        "error": "InvalidTextRepresentation",
+        "code": "22P02"
+      },
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "stored_bad_group",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01722"
+      },
+      "bicdb": {
+        "error": "InvalidTextRepresentation",
+        "code": "22P02"
+      },
+      "expected_error": {
+        "oracle": "ORA-01722",
+        "bicdb": "22P02"
+      }
+    },
+    {
+      "id": "stored_timestamp_search",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_compact_date",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_month_name_date",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_default_date_result",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2024-02-29T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_lazy_date_input",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "timestamp": "2000-01-01T00:00:00.000000"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "timestamp": "2000-01-01T00:00:00.000000"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_untyped_null_search",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "other"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "other"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "other"
+        ]
+      ]
+    },
+    {
+      "id": "stored_key_null_collision",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "match"
+        ]
+      ]
+    },
+    {
+      "id": "stored_numeric_text_distinct",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "other"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "other"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "other"
+        ]
+      ]
+    },
+    {
+      "id": "stored_exact_number",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "match"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "match"
+        ]
+      ]
+    },
+    {
+      "id": "stored_negative_zero",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_limit_255",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "stored_limit_256",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "formal_number_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "one"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "one"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "one"
+        ]
+      ]
+    },
+    {
+      "id": "formal_number_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "nil"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "nil"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "nil"
+        ]
+      ]
+    },
+    {
+      "id": "formal_number_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "other"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "other"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "other"
+        ]
+      ]
+    },
+    {
+      "id": "formal_text_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "padded"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "padded"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "padded"
+        ]
+      ]
+    },
+    {
+      "id": "formal_text_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "other"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "other"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "other"
+        ]
+      ]
+    },
+    {
+      "id": "formal_text_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "nil"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "nil"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "nil"
+        ]
+      ]
+    },
+    {
+      "id": "formal_date_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "leap"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "leap"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "leap"
+        ]
+      ]
+    },
+    {
+      "id": "formal_date_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "other"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "other"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "other"
+        ]
+      ]
+    },
+    {
+      "id": "selector_once_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "once"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "once"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "once"
+        ]
+      ]
+    },
+    {
+      "id": "selector_once_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "later"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "later"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "later"
+        ]
+      ]
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "scope": "Stored SQL DECODE, declared formal types, null equality, nonpadded comparison, lazy search/result conversion, and one selector evaluation; fixed default NLS only, not binary floating point or full Oracle diagnostics",
+  "oracle_nls_numeric_characters": ".,",
+  "oracle_nls_concat": {
+    "NLS_CALENDAR": "GREGORIAN",
+    "NLS_DATE_FORMAT": "DD-MON-RR",
+    "NLS_DATE_LANGUAGE": "AMERICAN",
+    "NLS_LENGTH_SEMANTICS": "BYTE"
+  },
+  "oracle_database_character_set": "AL32UTF8",
+  "routine_compiler": "bicdb_oracle_preview_v9",
+  "oracle_driver_version": "26.1.0",
+  "pg_driver_version": "3.3.6",
+  "created_at": "2026-11-02T17:49:00.041186+00:00"
+}

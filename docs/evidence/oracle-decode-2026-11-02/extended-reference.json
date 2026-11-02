@@ -1,0 +1,103 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "id": "timestamp_result",
+      "expression": "DECODE(1,1,TIMESTAMP '2024-02-29 12:34:56.123456',NULL)",
+      "rows": [
+        [
+          {
+            "timestamp": "2024-02-29T12:34:56.123456"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_TIMESTAMP"
+    },
+    {
+      "id": "timestamp_text",
+      "expression": "DECODE(2,1,NULL,2,TIMESTAMP '2024-02-29 12:34:56.123456')",
+      "rows": [
+        [
+          "29-FEB-24 12.34.56.123456000 PM"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "date_text",
+      "expression": "DECODE(2,1,NULL,2,DATE '2024-02-29')",
+      "rows": [
+        [
+          "29-FEB-24"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "number_text",
+      "expression": "DECODE(2,1,NULL,2,0.5)",
+      "rows": [
+        [
+          ".5"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "date_input",
+      "expression": "DECODE('29-FEB-24',DATE '2024-02-29',1,0)",
+      "rows": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "date_iso",
+      "expression": "DECODE('2024-02-29',DATE '2024-02-29',1,0)",
+      "error": "ORA-01861"
+    },
+    {
+      "id": "group_number",
+      "expression": "DECODE('1,234',1234,1,0)",
+      "error": "ORA-01722"
+    },
+    {
+      "id": "bad_group",
+      "expression": "DECODE('1,,23',123,1,0)",
+      "error": "ORA-01722"
+    },
+    {
+      "id": "number_date_type",
+      "expression": "DECODE(1,1,7,2,DATE '2024-02-29',0)",
+      "error": "ORA-00932"
+    },
+    {
+      "id": "timestamp_search",
+      "expression": "DECODE(TIMESTAMP '2024-02-29 00:00:00.123456',TIMESTAMP '2024-02-29 00:00:00.123456',1,0)",
+      "rows": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    }
+  ],
+  "oracle_version": "23.26.3.0.0",
+  "nls": {
+    "NLS_NUMERIC_CHARACTERS": ".,",
+    "NLS_DATE_FORMAT": "DD-MON-RR",
+    "NLS_DATE_LANGUAGE": "AMERICAN",
+    "NLS_TIMESTAMP_FORMAT": "DD-MON-RR HH.MI.SSXFF AM"
+  },
+  "procedural_direct_errors": [
+    "PLS-00204: function or pseudo-column 'DECODE' may be used inside a SQL statement only",
+    "PL/SQL: Statement ignored"
+  ]
+}

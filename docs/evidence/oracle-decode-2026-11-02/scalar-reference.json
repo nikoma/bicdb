@@ -1,0 +1,272 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "id": "number_match",
+      "expression": "DECODE(1,1,'match','fallback')",
+      "rows": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "null_match",
+      "expression": "DECODE(NULL,NULL,'match','fallback')",
+      "rows": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "empty_match",
+      "expression": "DECODE('',NULL,'match','fallback')",
+      "rows": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "number_comparison",
+      "expression": "DECODE('001',1,'match','fallback')",
+      "rows": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "text_comparison",
+      "expression": "DECODE(1,'001','match','fallback')",
+      "rows": [
+        [
+          "fallback"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "char_width",
+      "expression": "DECODE(CAST('x' AS CHAR(3)),CAST('x' AS CHAR(1)),'match','fallback')",
+      "rows": [
+        [
+          "fallback"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "char_padding",
+      "expression": "DECODE(CAST('x' AS CHAR(3)),'x  ','match','fallback')",
+      "rows": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "lazy_default",
+      "expression": "DECODE(1,1,7,CAST('bad' AS NUMBER))",
+      "rows": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "null_first_result",
+      "expression": "DECODE(2,1,NULL,2,7,'bad')",
+      "rows": [
+        [
+          "7"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "null_default",
+      "expression": "DECODE(3,1,NULL,2,7,'bad')",
+      "rows": [
+        [
+          "bad"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "unselected_conversion",
+      "expression": "DECODE(1,1,7,2,'bad',0)",
+      "rows": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "selected_conversion",
+      "expression": "DECODE(2,1,7,2,'bad',0)",
+      "error": "ORA-01722"
+    },
+    {
+      "id": "lazy_search",
+      "expression": "DECODE(1,1,7,1/0,9,0)",
+      "rows": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "selected_search",
+      "expression": "DECODE(2,1,7,1/0,9,0)",
+      "error": "ORA-01476"
+    },
+    {
+      "id": "lazy_result",
+      "expression": "DECODE(1,1,7,2,1/0,0)",
+      "rows": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "selected_result",
+      "expression": "DECODE(2,1,7,2,1/0,0)",
+      "error": "ORA-01476"
+    },
+    {
+      "id": "invalid_first_search",
+      "expression": "DECODE(1,CAST('bad' AS NUMBER),7,0)",
+      "error": "ORA-01722"
+    },
+    {
+      "id": "bad_text_search",
+      "expression": "DECODE(1,'bad',1,0)",
+      "rows": [
+        [
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "bad_number_expression",
+      "expression": "DECODE('bad',1,1,0)",
+      "error": "ORA-01722"
+    },
+    {
+      "id": "null_expression",
+      "expression": "DECODE(NULL,1,1,7)",
+      "rows": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "first_null_match",
+      "expression": "DECODE(NULL,NULL,'a ',NULL,'b','c')",
+      "rows": [
+        [
+          "a "
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "date_search",
+      "expression": "DECODE(DATE '2024-02-29',DATE '2024-02-29',17,0)",
+      "rows": [
+        [
+          {
+            "number": "17"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "truncate_timestamp_search",
+      "expression": "DECODE(TIMESTAMP '2024-02-29 00:00:00.123456',DATE '2024-02-29',17,0)",
+      "rows": [
+        [
+          {
+            "number": "17"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "date_result",
+      "expression": "DECODE(1,1,DATE '2024-02-29',DATE '2000-01-01')",
+      "rows": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_DATE"
+    },
+    {
+      "id": "char_result",
+      "expression": "DECODE(1,1,CAST('x' AS CHAR(3)),'fallback')",
+      "rows": [
+        [
+          "x  "
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "typed_null_result",
+      "expression": "DECODE(2,1,CAST(NULL AS NUMBER),2,3,4)",
+      "rows": [
+        [
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "typed_null_search",
+      "expression": "DECODE('001',CAST(NULL AS NUMBER),NULL,1,'match','fallback')",
+      "rows": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    }
+  ],
+  "oracle_version": "23.26.3.0.0"
+}

@@ -1,0 +1,135 @@
+{
+  "format": 1,
+  "runtime_source_commit": "4c8553992da0ff95aef52c44b29d44234fa26c02",
+  "full_rust_validation_source_commit": "ed0967811b105ab1f185a769dd49136c5926cb90",
+  "cursor_cache_followup_source_commit": "4c8553992da0ff95aef52c44b29d44234fa26c02",
+  "binary_target": "debug/examples/oracle_server",
+  "binary_sha256": "0986d3e13929caf04defa5000fa9dec801ea1dc9fab8c6303e7a37e366032c49",
+  "routine_compiler": "bicdb_oracle_preview_v9",
+  "routine_language_oid": 999408,
+  "full_rust_validation": {
+    "passed": 1238,
+    "existing_ignores": 3,
+    "suites": {
+      "pgwire_unit": 119,
+      "oracle_driver": 22,
+      "protocol": 168,
+      "sql_unit": 404,
+      "binary_storage": 7,
+      "carrier_hub": 22,
+      "cell_rows": 17,
+      "native_compat": 60,
+      "sql_integration": 419
+    }
+  },
+  "cursor_cache_followup": {
+    "passed": 529,
+    "suites": {
+      "parameterized_cursor_unit": 5,
+      "decode_unit": 6,
+      "carrier_hub": 22,
+      "cell_rows": 17,
+      "native_compat": 60,
+      "sql_integration": 419
+    }
+  },
+  "python_tests": {
+    "reference": 22,
+    "migration": 14,
+    "hr": 3
+  },
+  "generated_oracle_cases": 705,
+  "native_postgres_cases": 104,
+  "previous_original_calls": 58,
+  "original_business_date_probe": {
+    "matched": 3,
+    "total": 3
+  },
+  "expanded_business_date_calls": {
+    "matched": 96,
+    "total": 96
+  },
+  "accepted_original_definitions": {
+    "accepted": 43,
+    "total": 62
+  },
+  "application_qualified": false,
+  "published_release": false,
+  "production_deployment": false,
+  "development_fixture_verified": true,
+  "formatting_passed": true,
+  "licensing_invariants_passed": true,
+  "license_dependency_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "ci_status": "Local checks completed; exact merged-main GitHub CI is tracked separately after push.",
+  "memory": {
+    "full": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 3797360640,
+      "minimum_observed_available_bytes": 20736790528,
+      "minimum_available_gib": 8,
+      "minimum_observed_disk_available_bytes": 26674208768,
+      "minimum_disk_available_gib": 2
+    },
+    "cursor_cache_followup": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 3810930688,
+      "minimum_observed_available_bytes": 21635088384,
+      "minimum_available_gib": 8,
+      "minimum_observed_disk_available_bytes": 26936680448,
+      "minimum_disk_available_gib": 2
+    },
+    "server_build": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 3674476544,
+      "minimum_observed_available_bytes": 20724219904,
+      "minimum_available_gib": 8,
+      "minimum_observed_disk_available_bytes": 26679164928,
+      "minimum_disk_available_gib": 2
+    }
+  },
+  "cleanup": {
+    "build": {
+      "format": 1,
+      "removed_files": 9,
+      "reclaimed_bytes": 2550175352,
+      "by_category": {
+        "completed_test_executable": {
+          "files": 9,
+          "bytes": 2550175352
+        }
+      },
+      "current_example_binary_preserved": true
+    },
+    "superseded_binaries": {
+      "format": 1,
+      "removed_files": 2,
+      "reclaimed_bytes": 622001648,
+      "active_binary_preserved": true,
+      "previous_reader_preserved": true
+    },
+    "remaining_build_cache_bytes": 5738617228
+  },
+  "earlier_attempts": [
+    {
+      "kind": "test_failure",
+      "reason": "A new test assumed routine bodies compiled at CREATE; corrected to assert unsupported direct procedural DECODE at invocation."
+    },
+    {
+      "kind": "existing_native_failure",
+      "reason": "Padded CHAR simple CASE compared raw strings; typed evaluators now retain bpchar comparison semantics."
+    },
+    {
+      "kind": "validation_interruption",
+      "reason": "Stopped only the owned validation process after live upgrade exposed missing legacy language OIDs; rebuilt and completed final checks."
+    },
+    {
+      "kind": "live_comparison_failure",
+      "reason": "Expanded date coverage matched 95/96: cloned COALESCE arguments reused type-memo node addresses on cursor reopen. Borrowed stable arguments; 96/96 then matched, with new independent Oracle and PostgreSQL cursor cases."
+    }
+  ],
+  "scope": "Bounded DECODE and cursor argument typing; all 26 migration workstreams and full application acceptance remain active."
+}

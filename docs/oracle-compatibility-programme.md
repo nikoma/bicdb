@@ -58,6 +58,12 @@ arithmetic cases match Oracle; the previous 342 generated Oracle cases and 58
 selected original calls still match. The newly accepted NEXTBUSINESSDAY source
 matches only one of three execution probes: weekday/weekend calls still hit the
 unimplemented Oracle DECODE semantics. Its NULL result is not DECODE qualification.
+That execution blocker is superseded by the
+[version-9 DECODE qualification](evidence/oracle-decode-2026-11-02/README.md): all
+three probes and 96 expanded business-date calls now match. Broader holiday
+coverage exposed and fixed unstable COALESCE argument type memoization on cursor
+reopen. The generated corpus now contains 705 matching Oracle cases and 104
+native PostgreSQL controls. The 43/62 definition count is unchanged.
 The remaining 19 definitions, foreign keys and full application workflows remain
 migration blockers.
 These are development data baselines, not full schema/application acceptance. The
@@ -76,7 +82,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 2. Migration assessment | Inventory source and runtime dependencies; report object locations, dynamic SQL, wrapped code, blockers and manual changes | Partial: [offline lexical inventory](oracle-migration-assessment.md); semantic/catalog/runtime assessment and dependency resolution outstanding |
 | 3. SQL value semantics | Differential null/empty-string, concatenation, padding, comparison, coercion, uniqueness and composite-key tests | Partial: HR lowering and version-7 typed routine concatenation with NULL/padding/caller-length reference cases; general SQL coercion and padding qualification outstanding |
 | 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings used by HR and version-8 bounded NUMBER arithmetic/reference infinity transport; full Oracle input, storage, type and conversion rules unqualified |
-| 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL, date formats and Gregorian ADD_MONTHS; NVL2/DECODE and broader semantics outstanding |
+| 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL, date formats and Gregorian ADD_MONTHS; version-9 bounded DECODE values, conversions and lazy evaluation; NVL2 and broader semantics outstanding |
 | 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL, pgwire parameters and literal-integer ROWNUM prefix predicates in plain blocks; other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |
 | 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: application-schema selection, versioned static function relation binding and documented heap adaptation; general resolution and synonyms outstanding |
 | 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Partial: [nested-block contracts](evidence/oracle-nested-block-contracts-2026-11-02/README.md) distinguish new Oracle routine statement rollback from native PostgreSQL block rollback; general transactions, DDL commits and locking qualification outstanding |

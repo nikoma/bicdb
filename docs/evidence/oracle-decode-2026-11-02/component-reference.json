@@ -1,0 +1,52 @@
+[
+  {
+    "components": 255,
+    "bind_selector": true,
+    "value": 1
+  },
+  {
+    "components": 256,
+    "bind_selector": true,
+    "value": 1
+  },
+  {
+    "components": 257,
+    "bind_selector": true,
+    "value": 1
+  },
+  {
+    "components": 258,
+    "bind_selector": true,
+    "value": 1
+  },
+  {
+    "components": 513,
+    "bind_selector": true,
+    "value": 1
+  },
+  {
+    "components": 514,
+    "bind_selector": true,
+    "value": 1
+  },
+  {
+    "components": 1025,
+    "bind_selector": true,
+    "value": 1
+  },
+  {
+    "components": 1026,
+    "bind_selector": true,
+    "value": 1
+  },
+  {
+    "components": 2049,
+    "bind_selector": true,
+    "value": 1
+  },
+  {
+    "components": 2050,
+    "bind_selector": true,
+    "value": 1
+  }
+]

@@ -1,0 +1,131 @@
+{
+  "format": 1,
+  "source_only": true,
+  "cases": [
+    {
+      "id": "compact_date",
+      "expression": "DECODE('29FEB24',DATE '2024-02-29',1,0)",
+      "rows": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "month_name_date",
+      "expression": "DECODE('29-February-24',DATE '2024-02-29',1,0)",
+      "rows": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "default_date_result",
+      "expression": "DECODE(2,1,DATE '2000-01-01','29/Feb/24')",
+      "rows": [
+        [
+          {
+            "timestamp": "2024-02-29T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_DATE"
+    },
+    {
+      "id": "lazy_date_input",
+      "expression": "DECODE(1,1,DATE '2000-01-01','bad')",
+      "rows": [
+        [
+          {
+            "timestamp": "2000-01-01T00:00:00.000000"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_DATE"
+    },
+    {
+      "id": "untyped_null_search",
+      "expression": "DECODE('001',NULL,'nil',1,'match','other')",
+      "rows": [
+        [
+          "other"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "key_null_collision",
+      "expression": "DECODE('null:',NULL,'nil','null:','match','other')",
+      "rows": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "numeric_text_distinct",
+      "expression": "DECODE('1.0','1','match','other')",
+      "rows": [
+        [
+          "other"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "exact_number",
+      "expression": "DECODE(9007199254740993,9007199254740992,'bad',9007199254740993,'match','other')",
+      "rows": [
+        [
+          "match"
+        ]
+      ],
+      "oracle_type": "DB_TYPE_VARCHAR"
+    },
+    {
+      "id": "negative_zero",
+      "expression": "DECODE(0,-0.0,1.00,0)",
+      "rows": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "limit_255",
+      "expression": "DECODE(1,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7)",
+      "rows": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    },
+    {
+      "id": "limit_256",
+      "expression": "DECODE(1,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,0)",
+      "rows": [
+        [
+          {
+            "number": "7"
+          }
+        ]
+      ],
+      "oracle_type": "DB_TYPE_NUMBER"
+    }
+  ],
+  "oracle_version": "23.26.3.0.0"
+}

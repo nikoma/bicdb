@@ -1,0 +1,49 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "0986d3e13929caf04defa5000fa9dec801ea1dc9fab8c6303e7a37e366032c49",
+  "application_qualified": false,
+  "source_body_unchanged": true,
+  "source_sha256": "6821542374142064c32818ba48a4acc8176d1f398bbc7e82e9a2b52128c78350",
+  "oracle_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "weekday",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "2b3ce8033e35afbd27020d7c22e6b9233bb1f68696e86736adfbab8e25220b4f"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "2b3ce8033e35afbd27020d7c22e6b9233bb1f68696e86736adfbab8e25220b4f"
+      }
+    },
+    {
+      "id": "weekend",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "2b3ce8033e35afbd27020d7c22e6b9233bb1f68696e86736adfbab8e25220b4f"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "2b3ce8033e35afbd27020d7c22e6b9233bb1f68696e86736adfbab8e25220b4f"
+      }
+    },
+    {
+      "id": "null_date",
+      "matched": true,
+      "oracle": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      },
+      "bicdb": {
+        "row_count": 1,
+        "canonical_rows_sha256": "0b99263f4bec935e7fb92342d0093bd0cd780cb3f12d3f6ce42c1d448e810e0e"
+      }
+    }
+  ],
+  "matched": 3,
+  "total": 3,
+  "success": true
+}

@@ -2281,6 +2281,25 @@ impl<'db> SqlSession<'db> {
         function: &Function,
     ) -> Result<Option<SqlValue>> {
         let name = object_name(&function.name)?.to_ascii_lowercase();
+        if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
+            let arguments = function_arg_list(function);
+            let types = arguments
+                .iter()
+                .map(|argument| projected_expr_pg_type(argument, Some(schema)))
+                .collect::<Vec<_>>();
+            select_common_pg_type(self.db_ref(), &types, "COALESCE")?;
+            for argument in arguments.iter() {
+                let Some(value) =
+                    self.eval_target_record_expr(table, alias, schema, record, argument)?
+                else {
+                    return Ok(None);
+                };
+                if !matches!(value, SqlValue::Null) {
+                    return Ok(Some(value));
+                }
+            }
+            return Ok(Some(SqlValue::Null));
+        }
         let arg_exprs = function_args(function);
         let args = arg_exprs
             .iter()
@@ -2295,13 +2314,6 @@ impl<'db> SqlSession<'db> {
             .iter()
             .map(|arg| projected_expr_pg_type(arg, Some(schema)))
             .collect::<Vec<_>>();
-        if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
-            return Ok(Some(
-                args.into_iter()
-                    .find(|value| !matches!(value, SqlValue::Null))
-                    .unwrap_or(SqlValue::Null),
-            ));
-        }
         if let Some(value) = eval_network_function_value(&name, &args, &arg_types)?
             .or(eval_user_range_function_value(
                 self.db_ref(),

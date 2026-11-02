@@ -2599,6 +2599,16 @@ impl<'db> SqlSession<'db> {
                     Some(dispatch) => std::borrow::Cow::Borrowed(dispatch.name.as_str()),
                     None => object_name_lowercase(&function.name)?,
                 };
+                if matches!(name.as_ref(), "coalesce" | "pg_catalog.coalesce") {
+                    validate_common_type_expr(self.db_ref(), expr)?;
+                    for argument in function_arg_list(function).iter() {
+                        let value = self.eval_session_expr(argument)?;
+                        if !matches!(value, SqlValue::Null) {
+                            return Ok(value);
+                        }
+                    }
+                    return Ok(SqlValue::Null);
+                }
                 if let Some((name, [base_expr, json_expr])) = populate_record_call(function)? {
                     let base = self.eval_session_expr(&base_expr)?;
                     let json = self.eval_session_expr(&json_expr)?;

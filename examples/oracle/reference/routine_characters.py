@@ -15,6 +15,7 @@ def fixture(schema, prefix):
         ('VALUE', '(n NUMBER)', 'BEGIN RETURN CHR(n); END;'),
         ('DEFAULT', '(n NUMBER)', 'BEGIN RETURN TO_CHAR(CHR(n)); END;'),
         ('NESTED', '(n NUMBER,p_label VARCHAR2)', "v VARCHAR2(100); BEGIN SELECT COALESCE(p_label,TO_CHAR(CHR(n))) INTO v FROM DUAL; RETURN '['||v||']'; END;"),
+        ('SHORT', '(p_label VARCHAR2)', 'BEGIN RETURN COALESCE(p_label,CHR(-1)); END;'),
     ]
     setup = []
     for backend in (0, 1):
@@ -53,5 +54,7 @@ def fixture(schema, prefix):
         (f'{q("NESTED")}(65,\'prefix\')','[prefix]'),
     ]):
         cases.append(dict(id=f'nesting_{index}',sql=f'SELECT {expression} FROM DUAL',expected=[[expected]]))
+    cases.append(dict(id='procedural_short_circuit',sql=f'SELECT {q("SHORT")}(\'prefix\') FROM DUAL',expected=[['prefix']]))
+    cases.append(dict(id='procedural_selected_error',sql=f'SELECT {q("SHORT")}(NULL) FROM DUAL',expected_error=dict(oracle='ORA-01426',bicdb='22003')))
     return dict(setup=setup,cases=cases,compiler_probe=(prefix + '_VALUE').lower(),
                 scope='Fixed AL32UTF8 complete characters, truncating numeric input, error codes, nested default TO_CHAR and stored routines. NUL transport, indeterminate invalid code points, NCHAR_CS and other database character sets remain unsupported/unqualified.')

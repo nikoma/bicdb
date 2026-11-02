@@ -179,7 +179,9 @@ fn coalesce_skips_unselected_character_errors_in_every_evaluator() {
             .to_cell(),
         "A"
     );
-    let statement = parse_statements("SELECT coalesce(chr(65),chr(-1))")
+    // The specialized virtual-catalog evaluator supports literal text; keep
+    // the selected operand within that contract while guarding the unused call.
+    let statement = parse_statements("SELECT coalesce('A',chr(-1))")
         .unwrap()
         .remove(0);
     let Statement::Query(query) = statement else {
@@ -192,6 +194,34 @@ fn coalesce_skips_unselected_character_errors_in_every_evaluator() {
         panic!("expression")
     };
     assert_eq!(eval_constant_expr(expr).unwrap().to_cell(), "A");
+    assert_eq!(
+        SqlSession::new(&mut db)
+            .eval_session_expr(expr)
+            .unwrap()
+            .to_cell(),
+        "A"
+    );
+    execute(&mut db,"CREATE FUNCTION short_character(p_label VARCHAR2) RETURN VARCHAR2 IS BEGIN RETURN COALESCE(p_label,CHR(-1)); END;").unwrap();
+    assert_eq!(
+        execute(&mut db, "SELECT short_character('prefix') FROM DUAL")
+            .unwrap()
+            .rows[0][0]
+            .to_cell(),
+        "prefix"
+    );
+    assert_eq!(
+        execute(&mut db, "SELECT short_character(NULL) FROM DUAL")
+            .unwrap_err()
+            .sqlstate(),
+        "22003"
+    );
+    assert_eq!(
+        SqlEngine::new(&db)
+            .eval_select_constant_expr(expr)
+            .unwrap()
+            .to_cell(),
+        "A"
+    );
     assert_eq!(eval_value(&Record::new("r"), expr).unwrap().to_cell(), "A");
     assert_eq!(
         eval_virtual_value(&BTreeMap::new(), expr)
@@ -204,6 +234,22 @@ fn coalesce_skips_unselected_character_errors_in_every_evaluator() {
     assert_eq!(
         SqlSession::new(&mut db)
             .execute("SELECT coalesce(chr(65),chr(-1))")
+            .unwrap()
+            .rows[0][0]
+            .to_cell(),
+        "A"
+    );
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE lazy_values(k INTEGER PRIMARY KEY,label TEXT DEFAULT coalesce(chr(65),chr(-1)))").unwrap();
+    session
+        .execute("INSERT INTO lazy_values(k) VALUES(1)")
+        .unwrap();
+    session
+        .execute("UPDATE lazy_values SET label=coalesce(label,chr(-1))")
+        .unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT label FROM lazy_values")
             .unwrap()
             .rows[0][0]
             .to_cell(),

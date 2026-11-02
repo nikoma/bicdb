@@ -9,7 +9,7 @@
 //! `IS [NOT] NULL` works on every column. Anything else is reported as unsupported rather than
 //! silently indexing every row, which would make a partial UNIQUE index reject valid rows.
 use crate::*;
-use bicdb_core::{IndexPredicate, IndexPredicateBinaryOperator, IndexPredicateValueType};
+use bicdb_core::{IndexField, IndexPredicate, IndexPredicateBinaryOperator, IndexPredicateValueType};
 
 pub(crate) fn partial_index_predicate(
     schema: &TableSchema,
@@ -61,10 +61,11 @@ fn or(left: IndexPredicate, right: IndexPredicate) -> IndexPredicate {
     )
 }
 
-/// A column reference of this table, with its type.
-struct ColumnRef<'a> {
+/// A column reference of this table (or a text field of a json/jsonb
+/// column, `column ->> 'key'`), with how its values compare to constants.
+struct ColumnRef {
     field: IndexPredicate,
-    column: &'a ColumnSchema,
+    value_type: Option<IndexPredicateValueType>,
 }
 
 fn strip(expr: &Expr) -> &Expr {
@@ -74,7 +75,10 @@ fn strip(expr: &Expr) -> &Expr {
     }
 }
 
-fn column_ref<'a>(schema: &'a TableSchema, expr: &Expr) -> Option<ColumnRef<'a>> {
+fn column_ref(schema: &TableSchema, expr: &Expr) -> Option<ColumnRef> {
+    if let Some(reference) = json_text_field_ref(schema, expr) {
+        return Some(reference);
+    }
     let name = match strip(expr) {
         Expr::Identifier(ident) => ident.value.clone(),
         Expr::CompoundIdentifier(parts) => parts.last()?.value.clone(),
@@ -84,7 +88,46 @@ fn column_ref<'a>(schema: &'a TableSchema, expr: &Expr) -> Option<ColumnRef<'a>>
     let field = index_field_from_expr_for_schema(schema, strip(expr)).ok()?;
     Some(ColumnRef {
         field: IndexPredicate::Field { field },
-        column,
+        value_type: comparable_type(column),
+    })
+}
+
+/// `json_column ->> 'key'`: the key's value inside a json/jsonb column, which
+/// is stored as plain JSON, so the predicate reads it by path. Like
+/// PostgreSQL's `->>`, a missing key or JSON null reads as SQL NULL. Only
+/// string values compare equal to a text constant (`->>` would also render a
+/// JSON number or boolean as text; those rows stay outside the index).
+fn json_text_field_ref(schema: &TableSchema, expr: &Expr) -> Option<ColumnRef> {
+    let Expr::BinaryOp {
+        left,
+        op: BinaryOperator::LongArrow,
+        right,
+    } = strip(expr)
+    else {
+        return None;
+    };
+    let name = match strip(left) {
+        Expr::Identifier(ident) => ident.value.clone(),
+        Expr::CompoundIdentifier(parts) => parts.last()?.value.clone(),
+        _ => return None,
+    };
+    let column = schema.column(&name)?;
+    if !matches!(column.pg_type.to_ascii_lowercase().as_str(), "json" | "jsonb") {
+        return None;
+    }
+    let SqlValue::String(key) = eval_constant_expr(strip(right)).ok()? else {
+        return None;
+    };
+    let IndexField::MetadataPath(mut path) = index_field_from_expr_for_schema(schema, strip(left)).ok()?
+    else {
+        return None;
+    };
+    path.push(key);
+    Some(ColumnRef {
+        field: IndexPredicate::Field {
+            field: IndexField::MetadataPath(path),
+        },
+        value_type: Some(IndexPredicateValueType::String),
     })
 }
 
@@ -150,7 +193,7 @@ fn is_not_null(field: IndexPredicate) -> IndexPredicate {
 
 /// `column <op> constant` (true only for non-NULL column values, as in SQL).
 fn compare(
-    column: &ColumnRef<'_>,
+    column: &ColumnRef,
     operator: IndexPredicateBinaryOperator,
     constant: JsonValue,
     value_type: IndexPredicateValueType,
@@ -203,7 +246,7 @@ fn membership(
     whole: &Expr,
 ) -> Result<IndexPredicate> {
     let column = column_ref(schema, column_expr).ok_or_else(|| unsupported(whole))?;
-    let value_type = comparable_type(column.column).ok_or_else(|| unsupported(whole))?;
+    let value_type = column.value_type.ok_or_else(|| unsupported(whole))?;
     let mut constants = Vec::with_capacity(values.len());
     for value in values {
         constants.push(constant_json(value, value_type).ok_or_else(|| unsupported(whole))?);
@@ -253,7 +296,7 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
         | Expr::IsFalse(inner)
         | Expr::IsNotTrue(inner) => {
             let column = column_ref(schema, inner).ok_or_else(|| unsupported(predicate))?;
-            if comparable_type(column.column) != Some(IndexPredicateValueType::Bool) {
+            if column.value_type != Some(IndexPredicateValueType::Bool) {
                 return Err(unsupported(predicate));
             }
             let equal = |flag: bool| {
@@ -274,7 +317,7 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
         }
         Expr::Identifier(_) | Expr::CompoundIdentifier(_) => {
             let column = column_ref(schema, expr).ok_or_else(|| unsupported(predicate))?;
-            if comparable_type(column.column) != Some(IndexPredicateValueType::Bool) {
+            if column.value_type != Some(IndexPredicateValueType::Bool) {
                 return Err(unsupported(predicate));
             }
             Ok(compare(
@@ -293,7 +336,7 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
             Expr::IsNotNull(column) => translate(schema, &Expr::IsNull(column.clone())),
             Expr::Identifier(_) | Expr::CompoundIdentifier(_) => {
                 let column = column_ref(schema, inner).ok_or_else(|| unsupported(predicate))?;
-                if comparable_type(column.column) != Some(IndexPredicateValueType::Bool) {
+                if column.value_type != Some(IndexPredicateValueType::Bool) {
                     return Err(unsupported(predicate));
                 }
                 Ok(compare(
@@ -349,7 +392,7 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
             };
             let operator = operator.ok_or_else(|| unsupported(predicate))?;
             let value_type =
-                comparable_type(column.column).ok_or_else(|| unsupported(predicate))?;
+                column.value_type.ok_or_else(|| unsupported(predicate))?;
             if matches!(
                 value_type,
                 IndexPredicateValueType::Bool | IndexPredicateValueType::String

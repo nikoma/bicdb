@@ -442,7 +442,125 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
         changed = true;
     }
 
+    if let Some(next) = rewrite_locking_clause_before_limit(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     changed.then_some(rewritten)
+}
+
+/// PostgreSQL accepts a locking clause (`FOR UPDATE [OF ...] [NOWAIT | SKIP
+/// LOCKED]`, `FOR SHARE`, `FOR NO KEY UPDATE`, `FOR KEY SHARE`) either before
+/// or after `LIMIT` / `OFFSET` / `FETCH`; sqlparser only parses it after.
+/// Queue-claim SQL commonly writes `... FOR UPDATE SKIP LOCKED LIMIT 1`, so
+/// move the limit clause in front of the locking clause. The rewrite works on
+/// tokens (quotes, dollar-quoted bodies and comments stay intact) and only
+/// runs when that exact ordering is present.
+pub(crate) fn rewrite_locking_clause_before_limit(input: &str) -> Option<String> {
+    let lower = input.to_ascii_lowercase();
+    if !lower.contains("for") || !(lower.contains("limit") || lower.contains("offset") || lower.contains("fetch")) {
+        return None;
+    }
+    let tokens = Tokenizer::new(&PostgreSqlDialect {}, input)
+        .tokenize()
+        .ok()?;
+    let word = |token: &Token| -> Option<String> {
+        match token {
+            Token::Word(word) if word.quote_style.is_none() => Some(word.value.to_ascii_uppercase()),
+            _ => None,
+        }
+    };
+    let next_significant = |from: usize| -> Option<usize> {
+        (from..tokens.len()).find(|index| !matches!(tokens[*index], Token::Whitespace(_)))
+    };
+    let mut output: Vec<Token> = Vec::with_capacity(tokens.len() + 2);
+    let mut changed = false;
+    let mut index = 0;
+    while index < tokens.len() {
+        let is_lock_start = word(&tokens[index]).as_deref() == Some("FOR")
+            && next_significant(index + 1)
+                .and_then(|next| word(&tokens[next]))
+                .is_some_and(|next| matches!(next.as_str(), "UPDATE" | "SHARE" | "NO" | "KEY"));
+        if !is_lock_start {
+            output.push(tokens[index].clone());
+            index += 1;
+            continue;
+        }
+        // The locking clause (possibly several) runs until a LIMIT / OFFSET /
+        // FETCH keyword or the end of the enclosing query at this depth.
+        let lock_start = index;
+        let mut depth = 0i32;
+        let mut cursor = index;
+        let mut limit_start = None;
+        while cursor < tokens.len() {
+            match &tokens[cursor] {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    if depth == 0 {
+                        break;
+                    }
+                    depth -= 1;
+                }
+                Token::SemiColon if depth == 0 => break,
+                token if depth == 0 => {
+                    if word(token)
+                        .is_some_and(|keyword| matches!(keyword.as_str(), "LIMIT" | "OFFSET" | "FETCH"))
+                    {
+                        limit_start = Some(cursor);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            cursor += 1;
+        }
+        let Some(limit_start) = limit_start else {
+            output.extend(tokens[lock_start..cursor].iter().cloned());
+            index = cursor;
+            continue;
+        };
+        // The limit clause ends where the locking clause would have: a closing
+        // parenthesis of the enclosing query, a semicolon, or the end of input.
+        let mut depth = 0i32;
+        let mut limit_end = limit_start;
+        while limit_end < tokens.len() {
+            match &tokens[limit_end] {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    if depth == 0 {
+                        break;
+                    }
+                    depth -= 1;
+                }
+                Token::SemiColon if depth == 0 => break,
+                _ => {}
+            }
+            limit_end += 1;
+        }
+        let mut lock = tokens[lock_start..limit_start].to_vec();
+        while matches!(lock.last(), Some(Token::Whitespace(_))) {
+            lock.pop();
+        }
+        let mut limit = tokens[limit_start..limit_end].to_vec();
+        let trailing: Vec<Token> = {
+            let mut trailing = Vec::new();
+            while matches!(limit.last(), Some(Token::Whitespace(_))) {
+                trailing.insert(0, limit.pop().unwrap());
+            }
+            trailing
+        };
+        output.extend(limit);
+        output.push(Token::Whitespace(sqlparser::tokenizer::Whitespace::Space));
+        output.extend(lock);
+        output.extend(trailing);
+        changed = true;
+        index = limit_end;
+    }
+    if !changed {
+        return None;
+    }
+    Some(output.iter().map(ToString::to_string).collect())
 }
 
 pub(crate) fn rewrite_variadic_builtin_calls(input: &str) -> Option<String> {

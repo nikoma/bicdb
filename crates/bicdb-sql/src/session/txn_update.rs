@@ -1492,6 +1492,9 @@ impl<'db> SqlSession<'db> {
                 | IndexField::Coalesce { field: inner, .. } => {
                     index_field_touches(inner, touches, primary_key_columns)
                 }
+                IndexField::FirstNonNull(fields) => fields
+                    .iter()
+                    .any(|inner| index_field_touches(inner, touches, primary_key_columns)),
                 IndexField::Timestamp | IndexField::Geometry => true,
             }
         }

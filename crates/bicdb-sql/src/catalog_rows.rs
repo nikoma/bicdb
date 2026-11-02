@@ -7049,7 +7049,8 @@ pub(crate) fn index_field_attnum(
         | IndexField::Lower(_)
         | IndexField::Upper(_)
         | IndexField::Trim(_)
-        | IndexField::Coalesce { .. } => None,
+        | IndexField::Coalesce { .. }
+        | IndexField::FirstNonNull(_) => None,
     }
 }
 

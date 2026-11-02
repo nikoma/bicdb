@@ -4641,6 +4641,10 @@ pub enum IndexField {
         value: IndexValue,
         index_value: IndexValue,
     },
+    /// `COALESCE(a, b, ...)` over fields of one type with no constant
+    /// fallback: the first non-NULL field, or NULL when every field is NULL
+    /// (so a NULLS DISTINCT unique index does not constrain that row).
+    FirstNonNull(Vec<IndexField>),
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -8962,6 +8966,8 @@ impl IndexRecordMutation {
                 | IndexField::Upper(inner)
                 | IndexField::Trim(inner)
                 | IndexField::Coalesce { field: inner, .. } => base_column(inner),
+                // Several base columns: treat any change as relevant.
+                IndexField::FirstNonNull(_) => None,
                 // The id cannot change here; timestamps and geometry are
                 // not top-level keys the writer accounts for.
                 IndexField::Id | IndexField::Timestamp | IndexField::Geometry => None,
@@ -21335,6 +21341,9 @@ fn validate_secure_index_field(
         | IndexField::Coalesce { field: inner, .. } => {
             validate_secure_index_field(collection, unique, policy, inner)
         }
+        IndexField::FirstNonNull(fields) => fields
+            .iter()
+            .try_for_each(|inner| validate_secure_index_field(collection, unique, policy, inner)),
     }
 }
 
@@ -21345,6 +21354,7 @@ fn index_field_contains_geometry(field: &IndexField) -> bool {
         | IndexField::Upper(inner)
         | IndexField::Trim(inner)
         | IndexField::Coalesce { field: inner, .. } => index_field_contains_geometry(inner),
+        IndexField::FirstNonNull(fields) => fields.iter().any(index_field_contains_geometry),
         IndexField::Id | IndexField::Timestamp | IndexField::MetadataPath(_) => false,
     }
 }
@@ -21374,6 +21384,16 @@ fn validate_index_field(index: &str, field: &IndexField) -> Result<()> {
         | IndexField::Upper(inner)
         | IndexField::Trim(inner)
         | IndexField::Coalesce { field: inner, .. } => validate_index_field(index, inner)?,
+        IndexField::FirstNonNull(fields) => {
+            if fields.len() < 2 {
+                return Err(BicDbError::Index(format!(
+                    "index `{index}` COALESCE needs at least two fields"
+                )));
+            }
+            for inner in fields {
+                validate_index_field(index, inner)?;
+            }
+        }
         IndexField::Id | IndexField::Timestamp | IndexField::Geometry => {}
     }
     Ok(())
@@ -21585,6 +21605,17 @@ fn image_cells_index_key(
                 IndexValue::Null => index_value.clone(),
                 value => value,
             },
+            IndexField::FirstNonNull(fields) => {
+                let mut first = IndexValue::Null;
+                for inner in fields {
+                    let value = field_value(stored, cells, inner)?;
+                    if !matches!(value, IndexValue::Null) {
+                        first = value;
+                        break;
+                    }
+                }
+                first
+            }
             IndexField::Upper(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
                 value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
@@ -21680,6 +21711,17 @@ fn stored_index_key(stored: &StoredRecord, fields: &[IndexField]) -> Option<Vec<
                 IndexValue::Null => index_value.clone(),
                 value => value,
             },
+            IndexField::FirstNonNull(fields) => {
+                let mut first = IndexValue::Null;
+                for inner in fields {
+                    let value = field_value(stored, cells, inner)?;
+                    if !matches!(value, IndexValue::Null) {
+                        first = value;
+                        break;
+                    }
+                }
+                first
+            }
             IndexField::Upper(inner) => match field_value(stored, cells, inner)? {
                 IndexValue::Null => IndexValue::Null,
                 value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
@@ -21722,6 +21764,11 @@ fn record_index_field_json(record: &Record, field: &IndexField) -> Value {
             Value::Null => index_literal_json(value),
             value => value,
         },
+        IndexField::FirstNonNull(fields) => fields
+            .iter()
+            .map(|inner| record_index_field_json(record, inner))
+            .find(|value| !value.is_null())
+            .unwrap_or(Value::Null),
         IndexField::Upper(inner) => match record_index_field_json(record, inner) {
             Value::Null => Value::Null,
             value => Value::String(predicate_value_text(&value).to_ascii_uppercase()),
@@ -22129,6 +22176,11 @@ fn record_index_field_value(record: &Record, field: &IndexField) -> IndexValue {
             IndexValue::Null => index_value.clone(),
             value => value,
         },
+        IndexField::FirstNonNull(fields) => fields
+            .iter()
+            .map(|inner| record_index_field_value(record, inner))
+            .find(|value| !matches!(value, IndexValue::Null))
+            .unwrap_or(IndexValue::Null),
         IndexField::Upper(inner) => match record_index_field_value(record, inner) {
             IndexValue::Null => IndexValue::Null,
             value => IndexValue::String(index_value_text(&value).to_ascii_uppercase()),
@@ -23917,6 +23969,14 @@ fn index_field_stats_name(field: &IndexField) -> String {
             index_field_stats_name(field),
             index_value_text(value)
         ),
+        IndexField::FirstNonNull(fields) => format!(
+            "coalesce({})",
+            fields
+                .iter()
+                .map(index_field_stats_name)
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
         IndexField::Upper(inner) => format!("upper({})", index_field_stats_name(inner)),
         IndexField::Lower(inner) => format!("lower({})", index_field_stats_name(inner)),
         IndexField::Trim(inner) => format!("trim({})", index_field_stats_name(inner)),
@@ -24709,6 +24769,14 @@ fn spatial_field_name(field: &IndexField) -> String {
             "coalesce({},{})",
             spatial_field_name(field),
             index_value_text(value)
+        ),
+        IndexField::FirstNonNull(fields) => format!(
+            "coalesce({})",
+            fields
+                .iter()
+                .map(spatial_field_name)
+                .collect::<Vec<_>>()
+                .join(",")
         ),
         IndexField::Upper(inner) => format!("upper({})", spatial_field_name(inner)),
         IndexField::Lower(inner) => format!("lower({})", spatial_field_name(inner)),

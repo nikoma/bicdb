@@ -1769,6 +1769,10 @@ pub(crate) fn unique_key_values_not_distinct(
 pub(crate) fn index_field_pg_type(schema: &TableSchema, field: &IndexField) -> Option<String> {
     match field {
         IndexField::Coalesce { field, .. } => index_field_pg_type(schema, field),
+        // Construction requires every field to share one type.
+        IndexField::FirstNonNull(fields) => fields
+            .first()
+            .and_then(|field| index_field_pg_type(schema, field)),
         IndexField::Id => schema
             .column(schema.primary_key())
             .map(|column| column.pg_type.clone()),
@@ -1952,6 +1956,11 @@ pub(crate) fn record_index_field_sql_value(
                 value => value,
             }
         }
+        IndexField::FirstNonNull(fields) => fields
+            .iter()
+            .map(|inner| record_index_field_sql_value(record, inner, schema))
+            .find(|value| !matches!(value, SqlValue::Null))
+            .unwrap_or(SqlValue::Null),
         IndexField::Upper(inner) => match record_index_field_sql_value(record, inner, schema) {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::String(value.to_cell().to_ascii_uppercase()),

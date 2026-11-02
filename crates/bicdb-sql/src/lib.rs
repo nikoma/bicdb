@@ -3465,6 +3465,9 @@ pub enum DatabaseDdl {
     Drop {
         name: String,
         if_exists: bool,
+        /// `WITH (FORCE)`: terminate the database's other sessions first,
+        /// as PostgreSQL 13+ does, instead of refusing while they exist.
+        force: bool,
     },
     AlterOwner {
         name: String,

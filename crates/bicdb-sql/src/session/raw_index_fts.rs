@@ -1260,7 +1260,7 @@ impl<'db> SqlSession<'db> {
                 }
                 Ok(Some(SqlResult::command("ALTER DATABASE")))
             }
-            DatabaseDdl::Drop { name, if_exists } => {
+            DatabaseDdl::Drop { name, if_exists, .. } => {
                 let Some(database) = list_databases(self.db_ref())?
                     .into_iter()
                     .find(|database| database.name.eq_ignore_ascii_case(&name))

@@ -16,6 +16,7 @@ pub(crate) fn index_field_is_expression(field: &IndexField) -> bool {
             | IndexField::Upper(_)
             | IndexField::Trim(_)
             | IndexField::Coalesce { .. }
+            | IndexField::FirstNonNull(_)
     )
 }
 
@@ -2858,7 +2859,9 @@ pub(crate) fn index_field_from_expr_for_schema(
 ) -> Result<IndexField> {
     match expr {
         Expr::Function(function) if function_name_is(function, "coalesce") => {
-            return coalesce_index_field(expr, function, Some(schema))
+            return coalesce_index_field(expr, function, Some(schema)).or_else(|error| {
+                first_non_null_index_field(schema, function).ok_or(error)
+            })
         }
         Expr::Function(function) if function_name_is(function, "upper") => {
             let Some(args) = positional_function_args(&function.args) else {
@@ -3812,6 +3815,12 @@ pub(crate) fn canonical_index_field_for_schema(
         IndexField::Trim(inner) => {
             IndexField::Trim(Box::new(canonical_index_field_for_schema(schema, *inner)))
         }
+        IndexField::FirstNonNull(fields) => IndexField::FirstNonNull(
+            fields
+                .into_iter()
+                .map(|field| canonical_index_field_for_schema(schema, field))
+                .collect(),
+        ),
         other => other,
     }
 }
@@ -5205,6 +5214,13 @@ pub(crate) fn index_field_matches(left: &IndexField, right: &IndexField) -> bool
         (IndexField::Upper(left), IndexField::Upper(right))
         | (IndexField::Lower(left), IndexField::Lower(right))
         | (IndexField::Trim(left), IndexField::Trim(right)) => index_field_matches(left, right),
+        (IndexField::FirstNonNull(left), IndexField::FirstNonNull(right)) => {
+            left.len() == right.len()
+                && left
+                    .iter()
+                    .zip(right)
+                    .all(|(left, right)| index_field_matches(left, right))
+        }
         _ => false,
     }
 }
@@ -6155,4 +6171,30 @@ pub(crate) fn legacy_namespace_oid(name: &str) -> i64 {
         "information_schema" => 13207,
         other => legacy_stable_name_hash_wide(80_000, other, 10_000),
     }
+}
+
+/// `COALESCE(a, b, ...)` over two or more index fields of one PostgreSQL type
+/// with no constant: the first non-NULL field (NULL when all are NULL). The
+/// Hub keys an active grant on whichever principal column is set this way.
+fn first_non_null_index_field(schema: &TableSchema, function: &Function) -> Option<IndexField> {
+    let args = positional_function_args(&function.args)?;
+    if args.len() < 2 {
+        return None;
+    }
+    let mut fields = Vec::with_capacity(args.len());
+    let mut pg_type: Option<String> = None;
+    for arg in args {
+        if eval_constant_expr(arg).is_ok() {
+            return None;
+        }
+        let field = index_field_from_expr_for_schema(schema, arg).ok()?;
+        let field_type = index_field_pg_type(schema, &field)?;
+        match &pg_type {
+            Some(existing) if !existing.eq_ignore_ascii_case(&field_type) => return None,
+            Some(_) => {}
+            None => pg_type = Some(field_type),
+        }
+        fields.push(field);
+    }
+    Some(IndexField::FirstNonNull(fields))
 }

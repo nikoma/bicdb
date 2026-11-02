@@ -2537,6 +2537,53 @@ pub(crate) fn pg_depend_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue
             }
         }
     }
+    // CHECK constraints and row security policies depend on the user
+    // functions their expressions call (PostgreSQL records these as normal
+    // dependencies). Grant scripts follow them to give a table's writers
+    // EXECUTE on CHECK helpers, which PostgreSQL requires.
+    let routines = list_routines(db)?;
+    let constraint_rows =
+        pg_constraint_rows_from_schemas(db, &schemas, &relation_oids, None, None, None);
+    for row in &constraint_rows {
+        if virtual_cell(row, "contype").to_cell() != "c" {
+            continue;
+        }
+        let Some(oid) = sql_value_i64(&virtual_cell(row, "oid")) else {
+            continue;
+        };
+        let SqlValue::String(expression) = virtual_cell(row, "conbin") else {
+            continue;
+        };
+        for routine_oid in expression_routine_dependencies(&expression, &routines) {
+            rows.push(dependency_row(
+                PG_CONSTRAINT_CATALOG_OID,
+                oid,
+                0,
+                PG_PROC_CATALOG_OID,
+                routine_oid,
+                "n",
+            ));
+        }
+    }
+    for row in pg_policy_rows(db)? {
+        let Some(oid) = sql_value_i64(&virtual_cell(&row, "oid")) else {
+            continue;
+        };
+        for column in ["polqual", "polwithcheck"] {
+            if let SqlValue::String(expression) = virtual_cell(&row, column) {
+                for routine_oid in expression_routine_dependencies(&expression, &routines) {
+                    rows.push(dependency_row(
+                        PG_POLICY_CATALOG_OID,
+                        oid,
+                        0,
+                        PG_PROC_CATALOG_OID,
+                        routine_oid,
+                        "n",
+                    ));
+                }
+            }
+        }
+    }
     for routine in list_routines(db)? {
         for user_type in &user_types {
             if routine_depends_on_catalog_user_type(&routine, user_type) {
@@ -2563,6 +2610,71 @@ pub(crate) fn pg_depend_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue
     });
     rows.dedup();
     Ok(rows)
+}
+
+/// OIDs of the user routines an expression calls, matched by (schema-)name
+/// and argument count; an unqualified name resolves like the search path
+/// (public, then any schema when that leaves one candidate).
+fn expression_routine_dependencies(expression: &str, routines: &[RoutineSchema]) -> Vec<i64> {
+    use sqlparser::ast::{visit_expressions, FunctionArguments};
+    use std::ops::ControlFlow;
+    let Ok(expr) = parse_check_expression(expression) else {
+        return Vec::new();
+    };
+    let mut calls = Vec::new();
+    let _ = visit_expressions(&expr, |inner| {
+        if let Expr::Function(function) = inner {
+            let parts = function
+                .name
+                .0
+                .iter()
+                .filter_map(|part| part.as_ident().map(|ident| ident.value.to_ascii_lowercase()))
+                .collect::<Vec<_>>();
+            let argc = match &function.args {
+                FunctionArguments::List(list) => list.args.len(),
+                _ => 0,
+            };
+            calls.push((parts, argc));
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    let mut oids = Vec::new();
+    for (parts, argc) in calls {
+        let Some(name) = parts.last() else { continue };
+        let schema = (parts.len() > 1).then(|| parts[parts.len() - 2].clone());
+        let arity_matches = |routine: &RoutineSchema| {
+            let params = parse_routine_params(&routine.args).unwrap_or_default();
+            let inputs = params
+                .iter()
+                .filter(|param| param.mode != RoutineArgMode::Out)
+                .collect::<Vec<_>>();
+            let required = inputs.iter().filter(|param| param.default_expr.is_none()).count();
+            (required..=inputs.len()).contains(&argc)
+        };
+        let named = routines
+            .iter()
+            .filter(|routine| routine.name.eq_ignore_ascii_case(name) && arity_matches(routine))
+            .collect::<Vec<_>>();
+        let chosen = match &schema {
+            Some(schema) => named
+                .iter()
+                .filter(|routine| routine_schema_name(routine).eq_ignore_ascii_case(schema))
+                .copied()
+                .collect::<Vec<_>>(),
+            None => {
+                let public = named
+                    .iter()
+                    .filter(|routine| routine_schema_name(routine).eq_ignore_ascii_case("public"))
+                    .copied()
+                    .collect::<Vec<_>>();
+                if public.is_empty() && named.len() == 1 { named.clone() } else { public }
+            }
+        };
+        oids.extend(chosen.into_iter().map(|routine| routine_oid(routine.kind, &routine.name)));
+    }
+    oids.sort_unstable();
+    oids.dedup();
+    oids
 }
 
 fn routine_depends_on_catalog_user_type(

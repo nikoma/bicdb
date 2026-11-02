@@ -402,6 +402,26 @@ impl OuterSlotRow {
         extended
     }
 
+    /// Refills the slots an `extend` appended (after `parent_len`) from the
+    /// current row; `novel[k]` is the current-row index of appended slot `k`.
+    pub(crate) fn refill_extension(&mut self, parent_len: usize, novel: &[usize], row: &[SqlValue]) {
+        for (k, &index) in novel.iter().enumerate() {
+            self.values[parent_len + k] = row.get(index).cloned().unwrap_or(SqlValue::Null);
+        }
+    }
+
+    pub(crate) fn probe_count(&self) -> usize {
+        self.probes.len()
+    }
+
+    pub(crate) fn truncate_probes(&mut self, len: usize) {
+        self.probes.truncate(len);
+    }
+
+    pub(crate) fn value_count(&self) -> usize {
+        self.values.len()
+    }
+
     /// Adds a probe set when any column of this row is read.
     pub(crate) fn with_read_probe(mut self, probe: Rc<std::cell::Cell<bool>>) -> Self {
         let bound = self.values.len();

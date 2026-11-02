@@ -616,3 +616,57 @@ fn set_returning_function_alias_column_is_typed() {
         assert_eq!(result.column_types, vec![Some("jsonb".to_string())], "{sql}");
     }
 }
+
+/// The Hub's app manifest listing filters each navigation item with correlated
+/// EXISTS subqueries; the outer row carries megabytes of manifest JSON. Reusing
+/// the outer row between subquery runs must give exactly the per-row answers.
+#[test]
+fn correlated_exists_per_array_element_on_wide_rows() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE TABLE manifests (id INT PRIMARY KEY, min_rank INT, navigation JSONB, padding JSONB)")
+        .unwrap();
+    session.execute("CREATE TABLE ranks (role TEXT PRIMARY KEY, rank INT)").unwrap();
+    session
+        .execute("INSERT INTO ranks VALUES ('guest', 10), ('member', 20), ('admin', 40)")
+        .unwrap();
+    let padding = format!("{{\"blob\": \"{}\"}}", "x".repeat(200_000));
+    for (id, min_rank) in [(1, 0), (2, 15), (3, 30)] {
+        let items = (0..300)
+            .map(|i| {
+                let role = ["guest", "member", "admin"][i % 3];
+                format!("{{\"n\": {i}, \"required_role\": \"{role}\"}}")
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        session
+            .execute(&format!(
+                "INSERT INTO manifests VALUES ({id}, {min_rank}, '{{\"items\": [{items}]}}', '{padding}')"
+            ))
+            .unwrap();
+    }
+    let started = std::time::Instant::now();
+    let rows = session_rows(
+        &mut session,
+        "SELECT m.id, (
+           SELECT count(*) FROM jsonb_array_elements(m.navigation->'items') AS entry(item)
+           WHERE EXISTS (
+             SELECT 1 FROM ranks r
+             WHERE r.role = entry.item->>'required_role' AND r.rank >= m.min_rank
+           )
+         )::bigint AS visible
+         FROM manifests m ORDER BY m.id",
+    );
+    let got = rows
+        .into_iter()
+        .map(|row| (row[0].to_cell(), row[1].to_cell()))
+        .collect::<Vec<_>>();
+    // min_rank 0: all 300; 15: member + admin (200); 30: admin only (100).
+    assert_eq!(
+        got,
+        vec![("1".into(), "300".into()), ("2".into(), "200".into()), ("3".into(), "100".into())]
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(30), "took {:?}", started.elapsed());
+}

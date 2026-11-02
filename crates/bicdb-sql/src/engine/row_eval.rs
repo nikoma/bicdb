@@ -1553,22 +1553,65 @@ impl<'db> SqlEngine<'db> {
         query: &Query,
         probe: Option<Rc<std::cell::Cell<bool>>>,
     ) -> Result<SqlResult> {
-        let mut outer_row =
-            extend_outer_slot_context(self.outer_row.as_ref(), context.row_lookup.columns(), row);
+        let columns = context.row_lookup.columns();
+        let (mut outer_row, novel) = self.take_outer_extension(columns, row);
+        let base_probes = outer_row.probe_count();
         if let Some(probe) = probe {
             outer_row = outer_row.with_read_probe(probe);
         }
-        self.inherit_transaction(SqlEngine::with_ctes_and_context(
-            self.db_ref(),
-            self.settings,
-            self.ctes.clone(),
-            self.security_context.clone(),
-            self.session_gucs.clone(),
-        ))
-        .with_shared_routine_vars(self.routine_vars.clone())
-        .with_outer_slot_row(outer_row)
-        .with_cancellation(self.cancellation.clone())
-        .execute_query(query)
+        let mut engine = self
+            .inherit_transaction(SqlEngine::with_ctes_and_context(
+                self.db_ref(),
+                self.settings,
+                self.ctes.clone(),
+                self.security_context.clone(),
+                self.session_gucs.clone(),
+            ))
+            .with_shared_routine_vars(self.routine_vars.clone())
+            .with_outer_slot_row(outer_row)
+            .with_cancellation(self.cancellation.clone());
+        let result = engine.execute_query(query);
+        if let (Some(parent), Some(novel), Some(mut used)) =
+            (self.outer_row.as_ref(), novel, engine.outer_row.take())
+        {
+            used.truncate_probes(base_probes);
+            *self.outer_extension_cache.borrow_mut() = Some(OuterExtensionCache {
+                parent: parent as *const OuterSlotRow as usize,
+                parent_len: parent.value_count(),
+                columns: columns.to_vec(),
+                novel,
+                row: used,
+            });
+        }
+        result
+    }
+
+    /// The outer row for a correlated subquery: this engine's outer row
+    /// followed by `row`. A wide outer row (the Hub's app manifests carry
+    /// megabytes of JSON) used to be copied for every inner row of a
+    /// correlated EXISTS; the previous extension is reused when built from
+    /// the same parent and column layout, and only `row`'s slots are refilled.
+    /// The second value is set when the result may be cached afterwards.
+    fn take_outer_extension(
+        &self,
+        columns: &[String],
+        row: &[SqlValue],
+    ) -> (OuterSlotRow, Option<std::rc::Rc<[usize]>>) {
+        let Some(parent) = self.outer_row.as_ref() else {
+            return (OuterSlotRow::from_slot(columns, row), None);
+        };
+        let identity = parent as *const OuterSlotRow as usize;
+        if let Some(mut cached) = self.outer_extension_cache.borrow_mut().take() {
+            if cached.parent == identity
+                && cached.parent_len == parent.value_count()
+                && cached.columns.as_slice() == columns
+            {
+                cached.row.refill_extension(cached.parent_len, &cached.novel, row);
+                return (cached.row, Some(cached.novel));
+            }
+        }
+        let novel = merge_novel_right_ordinals(parent.columns(), columns);
+        (parent.extend(columns, row), Some(novel))
     }
 
     pub(crate) fn execute_correlated_slot_subquery_values(

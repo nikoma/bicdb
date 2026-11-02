@@ -263,14 +263,22 @@ fn jsonb_existence_operators_work_in_check_constraints_and_where() {
         session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
     assert!(
-        session.execute("INSERT INTO fields VALUES (3, '{\"options\": 5}')").is_err(),
+        session
+            .execute("INSERT INTO fields VALUES (3, '{\"options\": 5}')")
+            .is_err(),
         "the CHECK constraint must reject a non-array options value"
     );
     let ids = |session: &mut SqlSession<'_>, sql: &str| -> Vec<SqlValue> {
-        session_rows(session, sql).into_iter().map(|row| row[0].clone()).collect()
+        session_rows(session, sql)
+            .into_iter()
+            .map(|row| row[0].clone())
+            .collect()
     };
     assert_eq!(
-        ids(&mut session, "SELECT id FROM fields WHERE options_json ? 'options' ORDER BY id"),
+        ids(
+            &mut session,
+            "SELECT id FROM fields WHERE options_json ? 'options' ORDER BY id"
+        ),
         vec![SqlValue::Int(1)]
     );
     assert_eq!(
@@ -305,18 +313,32 @@ fn regprocedure_casts_follow_routine_changes() {
     session
         .execute("CREATE FUNCTION guard_two(value integer) RETURNS integer LANGUAGE sql AS 'SELECT value'")
         .unwrap();
-    assert!(resolves(&mut session, "guard_two(integer)"), "a routine created in the open transaction resolves");
+    assert!(
+        resolves(&mut session, "guard_two(integer)"),
+        "a routine created in the open transaction resolves"
+    );
     session.execute("DROP FUNCTION guard_one()").unwrap();
-    assert!(!resolves(&mut session, "guard_one()"), "a routine dropped in the open transaction no longer resolves");
+    assert!(
+        !resolves(&mut session, "guard_one()"),
+        "a routine dropped in the open transaction no longer resolves"
+    );
     session.execute("ROLLBACK").unwrap();
-    assert!(resolves(&mut session, "guard_one()"), "rollback restores the dropped routine");
-    assert!(!resolves(&mut session, "guard_two(integer)"), "rollback removes the created routine");
+    assert!(
+        resolves(&mut session, "guard_one()"),
+        "rollback restores the dropped routine"
+    );
+    assert!(
+        !resolves(&mut session, "guard_two(integer)"),
+        "rollback removes the created routine"
+    );
     // A constant cast evaluated once per outer row of a correlated subquery.
     for sql in [
         "CREATE TABLE things (id INT PRIMARY KEY)",
         "INSERT INTO things SELECT generate_series(1, 200)",
     ] {
-        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
     let rows = session_rows(
         &mut session,

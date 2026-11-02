@@ -1592,8 +1592,9 @@ pub(crate) fn copy_in_data(state: &mut ConnectionState, payload: &[u8]) -> Resul
     let rest = copy.pending_bytes.split_off(valid);
     let decoded = std::mem::replace(&mut copy.pending_bytes, rest);
     // Valid by construction: `valid` is a UTF-8 boundary.
-    copy.pending
-        .push_str(std::str::from_utf8(&decoded).map_err(|error| PgWireError::Protocol(error.to_string()))?);
+    copy.pending.push_str(
+        std::str::from_utf8(&decoded).map_err(|error| PgWireError::Protocol(error.to_string()))?,
+    );
     while let Some(newline) = copy.pending.find('\n') {
         let mut line = copy.pending[..newline].to_string();
         if line.ends_with('\r') {

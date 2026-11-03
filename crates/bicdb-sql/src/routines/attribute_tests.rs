@@ -142,3 +142,40 @@ fn declaration_security_attributes_exclude_body_literals_and_argument_defaults()
         assert_eq!(routine_definition_is_security_definer(definition), expected, "{definition}");
     }
 }
+
+#[test]
+fn user_schema_prefix_does_not_turn_a_granted_function_into_an_admin_builtin() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE ROLE prefix_caller",
+        "CREATE SCHEMA bicdb_user_space",
+        "GRANT USAGE ON SCHEMA bicdb_user_space TO prefix_caller",
+        "CREATE TABLE bicdb_user_space.visible(v INT)",
+        "INSERT INTO bicdb_user_space.visible VALUES(1)",
+        "GRANT SELECT ON bicdb_user_space.visible TO prefix_caller",
+        "CREATE FUNCTION bicdb_user_space.lookup_value() RETURNS INT LANGUAGE plpgsql AS $$DECLARE result INT;BEGIN SELECT v INTO result FROM bicdb_user_space.visible;RETURN result;END$$",
+        "GRANT EXECUTE ON FUNCTION bicdb_user_space.lookup_value() TO prefix_caller",
+        "SET ROLE prefix_caller",
+    ] {
+        session.execute(sql).unwrap();
+    }
+    assert_eq!(
+        session
+            .execute("SELECT bicdb_user_space.lookup_value()")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(1)]]
+    );
+    for sql in [
+        "SELECT bicdb_advance_transaction_floor(0)",
+        "SELECT pg_catalog.bicdb_advance_transaction_floor(0)",
+    ] {
+        assert_eq!(
+            session.execute(sql).unwrap_err().sqlstate(),
+            "42501",
+            "{sql}"
+        );
+    }
+}

@@ -88,7 +88,9 @@ pub(crate) fn eval_db_catalog_function_value(
     session_gucs: Option<&HashMap<String, String>>,
 ) -> Result<Option<SqlValue>> {
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
-    if bare_name.starts_with("bicdb_") || bare_name == "travel_time" {
+    // A qualified user-schema name is not a builtin name, even when that
+    // schema starts with bicdb_. Catalog builtins are unqualified or pg_catalog.
+    if !bare_name.contains('.') && (bare_name.starts_with("bicdb_") || bare_name == "travel_time") {
         // Authorization keys on the EFFECTIVE role, never `session_user`:
         // `SET ROLE` must drop privilege here exactly as it does at the table
         // gate. Keying on `session_user` left every bicdb_* admin function —

@@ -72,7 +72,7 @@ impl RowLockTable {
             let mut wait = self.register(key, shard);
             // A longer condition-variable sleep must not multiply the existing
             // total timeout. Owner release still wakes the waiter immediately.
-            if wait_period() > Duration::from_micros(250) {
+            if max_attempts != usize::MAX && wait_period() > Duration::from_micros(250) {
                 let budget = Duration::from_micros(250)
                     .saturating_mul(u32::try_from(max_attempts).unwrap_or(u32::MAX));
                 wait.deadline = Some(Instant::now() + budget);

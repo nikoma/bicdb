@@ -157,3 +157,48 @@ fn row_locks_do_not_lock_another_roles_rls_hidden_rows() {
     bob.execute("ROLLBACK").unwrap();
     alice.execute("ROLLBACK").unwrap();
 }
+
+#[test]
+fn blocking_row_wait_honors_cancellation_and_releases_transaction_locks_on_rollback() {
+    use bicdb_core::CancellationToken;
+    use std::sync::{atomic::AtomicBool, Arc};
+    use std::time::{Duration, Instant};
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut setup = SqlSession::new(&mut db);
+    setup
+        .execute("CREATE TABLE cancellation_rows(id INT PRIMARY KEY)")
+        .unwrap();
+    setup
+        .execute("INSERT INTO cancellation_rows VALUES (1),(2)")
+        .unwrap();
+    drop(setup);
+    let mut owner = SqlSession::new_shared(&db);
+    owner.execute("BEGIN").unwrap();
+    owner
+        .execute("SELECT id FROM cancellation_rows WHERE id=1 FOR UPDATE")
+        .unwrap();
+    let mut waiter = SqlSession::new_shared(&db);
+    waiter.execute("BEGIN").unwrap();
+    waiter
+        .execute("SELECT id FROM cancellation_rows WHERE id=2 FOR UPDATE")
+        .unwrap();
+    waiter = waiter.with_cancellation(CancellationToken::new(
+        Arc::new(AtomicBool::new(false)),
+        Some(Instant::now() + Duration::from_millis(100)),
+    ));
+    let error = waiter
+        .execute("SELECT id FROM cancellation_rows WHERE id=1 FOR UPDATE")
+        .unwrap_err();
+    assert_eq!(error.sqlstate(), "57014");
+    waiter = waiter.with_cancellation(CancellationToken::uncancelable());
+    waiter.execute("ROLLBACK").unwrap();
+    assert_eq!(
+        owner
+            .execute("SELECT id FROM cancellation_rows WHERE id=2 FOR UPDATE NOWAIT")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::Int(2)]]
+    );
+    owner.execute("ROLLBACK").unwrap();
+}

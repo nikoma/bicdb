@@ -1311,12 +1311,61 @@ impl BicDb {
         cycle_free_wait: bool,
         locked_keys: &Mutex<LockedKeys>,
     ) -> Result<()> {
+        self.lock_tx_record_waiting(
+            tx_id,
+            collection,
+            record_id,
+            max_attempts,
+            notify_wait,
+            cycle_free_wait,
+            locked_keys,
+            None,
+        )
+    }
+
+    /// SQL blocking locks wait for release or cancellation. A wait graph,
+    /// rather than transaction age or an implicit retry deadline, rejects cycles.
+    pub(crate) fn lock_tx_record_cancellable(
+        &self,
+        tx_id: TransactionId,
+        collection: &str,
+        record_id: &str,
+        locked_keys: &Mutex<LockedKeys>,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<()> {
+        self.lock_tx_record_waiting(
+            tx_id,
+            collection,
+            record_id,
+            usize::MAX,
+            true,
+            false,
+            locked_keys,
+            Some(cancellation),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn lock_tx_record_waiting(
+        &self,
+        tx_id: TransactionId,
+        collection: &str,
+        record_id: &str,
+        max_attempts: usize,
+        notify_wait: bool,
+        cycle_free_wait: bool,
+        locked_keys: &Mutex<LockedKeys>,
+        cancellation: Option<&crate::CancellationToken>,
+    ) -> Result<()> {
         let key = (collection.to_string(), record_id.to_string());
         let shard_idx = self.write_locks.shard_idx(&key);
         let mut last_owner = None;
         let mut wait_edge: Option<wait_graph::WaitEdge<'_>> = None;
         let mut key_wait: Option<row_lock_waiters::KeyWait<'_>> = None;
         for attempt in 0..=max_attempts {
+            if let Some(cancellation) = cancellation {
+                cancellation.check()?;
+            }
             // Route to the key's shard; the check-then-insert stays atomic under
             // the single shard lock, so two writers of the same record still
             // serialize.
@@ -1335,7 +1384,11 @@ impl BicDb {
                     // below. A rejected caller must release its locks on
                     // rollback, as with the existing conflict path.
                     let requester_is_older = tx_id.0 < owner.0;
-                    let policy = row_lock_policy();
+                    let policy = if cancellation.is_some() {
+                        RowLockPolicy::WaitGraph
+                    } else {
+                        row_lock_policy()
+                    };
                     let loses_immediately = match policy {
                         RowLockPolicy::OldDies => requester_is_older,
                         RowLockPolicy::WaitDie => !requester_is_older,
@@ -1356,6 +1409,11 @@ impl BicDb {
                         drop(wait_edge.take());
                         wait_edge = self.wait_graph.wait_for(tx_id, owner);
                         if wait_edge.is_none() {
+                            if cancellation.is_some() {
+                                return Err(BicDbError::TransactionDeadlock(
+                                    "cycle detected while waiting for a row lock".into(),
+                                ));
+                            }
                             break;
                         }
                     }

@@ -217,10 +217,11 @@ impl SqlEngine<'_> {
             for ((table, _, _, _, nonblock), id) in targets.iter().zip(ids) {
                 if nonblock.is_none() {
                     self.check_cancellation()?;
-                    if !tx.lock_visible_record_waiting(
+                    if !tx.lock_visible_record_cancellable(
                         self.security_context.as_ref(),
                         table,
                         &id,
+                        &self.cancellation,
                     )? {
                         return Err(SqlError::BicDb(BicDbError::TransactionConflict(format!(
                             "{READ_COMMITTED_LOCK_REFRESH}{table}:{id}"

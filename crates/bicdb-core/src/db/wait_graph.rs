@@ -1,4 +1,4 @@
-//! Optional row-lock deadlock detection. Edges exist only for live waiters;
+//! Row-lock deadlock detection. Edges exist only for live waiters;
 //! independent concurrent waits by the same transaction are reference counted.
 use super::*;
 

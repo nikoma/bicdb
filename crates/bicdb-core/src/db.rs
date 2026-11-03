@@ -15006,6 +15006,28 @@ impl Transaction {
         collection: &str,
         id: &str,
     ) -> Result<bool> {
+        self.lock_visible_record_waiting_inner(context, collection, id, None)
+    }
+
+    /// SQL blocking row lock with cancellation and cycle detection. A caller
+    /// must roll back its statement/transaction after an error, as for DML.
+    pub fn lock_visible_record_cancellable(
+        &self,
+        context: Option<&SecurityContext>,
+        collection: &str,
+        id: &str,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<bool> {
+        self.lock_visible_record_waiting_inner(context, collection, id, Some(cancellation))
+    }
+
+    fn lock_visible_record_waiting_inner(
+        &self,
+        context: Option<&SecurityContext>,
+        collection: &str,
+        id: &str,
+        cancellation: Option<&crate::CancellationToken>,
+    ) -> Result<bool> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -15019,7 +15041,15 @@ impl Transaction {
             )));
         }
         let db = self.db_ref();
-        if self.isolation == TransactionIsolation::ReadCommitted
+        if let Some(cancellation) = cancellation {
+            db.lock_tx_record_cancellable(
+                self.id,
+                collection,
+                id,
+                &self.locked_keys,
+                cancellation,
+            )?;
+        } else if self.isolation == TransactionIsolation::ReadCommitted
             && self.locked_keys.lock().len() == 0
         {
             // A locking SELECT with no row locks cannot form a row-lock cycle.

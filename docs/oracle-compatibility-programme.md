@@ -191,6 +191,14 @@ initial copy's read-only preflight; its apply run exposed the corrected undo
 memory problem. Full application-copy reconciliation remains pending at this
 checkpoint. Definitions remain 60/62, dictionary contracts remain 0/11, and
 runtime/workflow qualification is still incomplete.
+The [ALTER constraint batch qualification](evidence/oracle-alter-constraint-batches-2026-11-03/README.md)
+prepares CHECK expressions once per rewritten row batch while retaining every
+row's constraint validation and failure rollback. A 500-row regression verifies
+the preparation count and exact restoration; nine new independent PostgreSQL
+controls pass, bringing the retained native corpus to 266/266. The full Rust
+batch passes 1,326 tests. A fresh persistent-copy character reconciliation trial
+is pending. This optimization does not change the 60/62 definition inventory,
+the 0/11 dictionary result or application/workflow qualification.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source

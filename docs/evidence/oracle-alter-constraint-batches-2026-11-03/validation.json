@@ -1,0 +1,78 @@
+{
+  "format": 1,
+  "engine_source_commit": "be5e8ae5a661d52a4c41085a7b5278f67e83308e",
+  "runtime_binary_sha256": "fcf02c0cc6f48002c4b5ad1e983e6979ae33d76b2e8fe97b742fef9fbbb96e85",
+  "rust_passed": 1326,
+  "rust_existing_ignored": 3,
+  "rust_suite_results": 11,
+  "independent_postgres_controls": 266,
+  "new_alter_postgres_controls": 9,
+  "retained_generated_oracle_positive_and_error_contract_cases": 1475,
+  "separate_negative_nvarchar_alias_boundary_cases": 1,
+  "source_based_reconciliation_checks": 9,
+  "reader_checks": 6,
+  "importer_checks": 3,
+  "original_counter_matches": 14,
+  "original_record_matches": 8,
+  "original_sequence_matches": 9,
+  "application_definition_baseline": 60,
+  "application_definition_total": 62,
+  "application_null_input_diagnostic_calls_completed": 1,
+  "application_null_input_diagnostic_calls_total": 13,
+  "oracle_dictionary_matched": 0,
+  "oracle_dictionary_total": 11,
+  "separate_character_assignment_matched": 2,
+  "separate_character_assignment_total": 2,
+  "known_semantic_gap_mismatches": 5,
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "minimum_available_gib": 8,
+  "build_jobs": 1,
+  "incremental": false,
+  "resource_checks": [
+    {
+      "check": "alter-batch-focused-memory.json",
+      "minimum_observed_available_bytes": 21924712448,
+      "peak_owned_group_rss_bytes": 4656504832
+    },
+    {
+      "check": "alter-batch-validation-memory.json",
+      "minimum_observed_available_bytes": 18983825408,
+      "peak_owned_group_rss_bytes": 4314112000
+    },
+    {
+      "check": "alter-batch-build-memory.json",
+      "minimum_observed_available_bytes": 19831975936,
+      "peak_owned_group_rss_bytes": 1815818240
+    },
+    {
+      "check": "alter-batch-run_alter_batch_native.py.guard.json",
+      "minimum_observed_available_bytes": 15086329856,
+      "peak_owned_group_rss_bytes": 159105024
+    },
+    {
+      "check": "alter-batch-run_character_view_native.py.guard.json",
+      "minimum_observed_available_bytes": 20344217600,
+      "peak_owned_group_rss_bytes": 131670016
+    },
+    {
+      "check": "alter-batch-probe_character_reconciliation.py.guard.json",
+      "minimum_observed_available_bytes": 20173713408,
+      "peak_owned_group_rss_bytes": 359419904
+    },
+    {
+      "check": "alter-batch-run_character_final_references.py.guard.json",
+      "minimum_observed_available_bytes": 17065631744,
+      "peak_owned_group_rss_bytes": 1132781568
+    }
+  ],
+  "completed_test_executable_cleanup_reclaimed_bytes": 3229565920,
+  "build_cache_size_rounded_gib": 6.6,
+  "temporary_ram_build_outputs_restored": true,
+  "full_application_copy_reconciliation_qualified": false,
+  "application_qualified": false,
+  "application_database_updated": false,
+  "development_binary_built": true,
+  "release_published": false
+}

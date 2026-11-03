@@ -676,7 +676,13 @@ impl Resolve<'_> {
                 }
             }
         }
-        if self.env.sql_builtins_only {
+        // Standalone DML has a target row scope but no enclosing Query.
+        // Its proven temporal operands need the same day-arithmetic rules as
+        // SELECT expressions. Keep ordinary SQL queries on their existing path.
+        let dml_scope = self.env.statement_provenance
+            && self.queries.is_empty()
+            && self.statement_from.last().is_some_and(Option::is_some);
+        if self.env.sql_builtins_only && !dml_scope {
             return Ok(());
         }
 

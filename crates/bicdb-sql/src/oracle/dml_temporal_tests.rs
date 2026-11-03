@@ -100,15 +100,22 @@ fn procedural_delete_capability_is_versioned() {
     );
 }
 #[test]
-fn native_dml_and_timestamp_restrictions_remain_independent() {
+fn native_dml_and_sql_timestamp_conversion_remain_independent() {
     let root = tempfile::tempdir().unwrap();
     let mut db = database(root.path());
-    assert!(run(
+    run(
         &mut db,
-        "DELETE FROM dated_rows WHERE precise+7<TIMESTAMP '2020-01-09 00:00:00'"
+        "DELETE FROM dated_rows WHERE precise+7<TIMESTAMP '2020-01-09 00:00:00'",
     )
-    .is_err());
+    .unwrap();
+    assert_eq!(
+        run(&mut db, "SELECT id FROM dated_rows").unwrap().rows[0][0].to_cell(),
+        "2"
+    );
     let mut native = SqlSession::new(&mut db);
+    assert!(native
+        .execute("SELECT TIMESTAMP '2020-01-01 12:00:00.123456'+7")
+        .is_err());
     native
         .execute("CREATE TABLE native_numbers(id int PRIMARY KEY,n int)")
         .unwrap();

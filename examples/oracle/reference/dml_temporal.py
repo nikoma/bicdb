@@ -1,12 +1,14 @@
 """Source comparisons for logical DATE provenance in DML predicates.
 
 Only owned synthetic tables are modified. Complete Oracle DML, correlated
-subqueries and timestamp day arithmetic are outside this bounded contract.
+subqueries and full datetime coercion are outside this bounded contract.
 """
 import json
 from routine_namespaces import identifier
 
 PLANS = [
+    ("delete_timestamp_days", "DELETE FROM {T} WHERE precise+7<TIMESTAMP '2020-01-09 00:00:00'", [2]),
+    ("delete_timestamp_fraction", "DELETE FROM {T} WHERE precise+0.5=DATE '2020-01-02'", [2]),
     ("delete_days", "DELETE FROM {T} WHERE created+7<DATE '2020-01-09'", [2]),
     ("delete_alias", "DELETE FROM {T} d WHERE d.created+7<DATE '2020-01-09' AND d.id=1", [2]),
     ("delete_fractional_days", "DELETE FROM {T} WHERE created+0.5<DATE '2020-01-02'", [2]),
@@ -35,15 +37,15 @@ def run(reference, target, schema, prefix):
 
     try:
         for connection in (reference, target):
-            execute(connection, "CREATE TABLE " + name + " (id NUMBER PRIMARY KEY,created DATE)")
+            execute(connection, "CREATE TABLE " + name + " (id NUMBER PRIMARY KEY,created DATE,precise TIMESTAMP(6))")
             created.append(connection)
         for case, statement, expected in PLANS:
             row = dict(id=case, sql=statement.format(T=name), expected=expected)
             for label, connection in (("oracle", reference), ("bicdb", target)):
                 try:
                     execute(connection, "DELETE FROM " + name)
-                    execute(connection, "INSERT INTO " + name + " VALUES(1,DATE '2020-01-01')")
-                    execute(connection, "INSERT INTO " + name + " VALUES(2,DATE '2020-01-10')")
+                    execute(connection, "INSERT INTO " + name + " VALUES(1,DATE '2020-01-01',TIMESTAMP '2020-01-01 12:00:00.123456')")
+                    execute(connection, "INSERT INTO " + name + " VALUES(2,DATE '2020-01-10',TIMESTAMP '2020-01-10 12:00:00.654321')")
                     execute(connection, row["sql"])
                     row[label] = dict(ids=execute(connection, "SELECT id FROM " + name + " ORDER BY id", True))
                 except Exception as exc:

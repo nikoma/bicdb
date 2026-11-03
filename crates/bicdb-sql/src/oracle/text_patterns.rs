@@ -726,10 +726,10 @@ mod tests {
         );
         assert_eq!(
             preview_routine_language_version(PREVIEW_ROUTINE_LANGUAGE),
-            Some(20)
+            Some(21)
         );
         for unknown in [
-            "bicdb_oracle_preview_v21",
+            "bicdb_oracle_preview_v22",
             "bicdb_oracle_preview_v200",
             "bicdb_oracle_preview_v0",
         ] {
@@ -739,6 +739,6 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
-        assert!(SqlSession::new(&mut db).execute("CREATE FUNCTION future_compiler() RETURNS INTEGER LANGUAGE bicdb_oracle_preview_v21 AS $$BEGIN RETURN 7;END;$$").is_err());
+        assert!(SqlSession::new(&mut db).execute("CREATE FUNCTION future_compiler() RETURNS INTEGER LANGUAGE bicdb_oracle_preview_v22 AS $$BEGIN RETURN 7;END;$$").is_err());
     }
 }

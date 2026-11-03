@@ -117,9 +117,12 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
             };
             match parsed {
                 Ok(statements) => statements,
-                Err(error) => match oracle::syntax::fallback(candidate)? {
+                Err(error) => match oracle::collections::multisets::fallback(candidate)? {
                     Some(statements) => statements,
-                    None => return Err(SqlError::InvalidSql(error.to_string())),
+                    None => match oracle::syntax::fallback(candidate)? {
+                        Some(statements) => statements,
+                        None => return Err(SqlError::InvalidSql(error.to_string())),
+                    },
                 },
             }
         }

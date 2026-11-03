@@ -1435,6 +1435,39 @@ pub(crate) fn query_from_body(body: SetExpr) -> Query {
     }
 }
 
+fn retain_set_all_rows(
+    rows: Vec<Vec<SqlValue>>,
+    right: &[Vec<SqlValue>],
+    column_types: &[Option<String>],
+    retain_matches: bool,
+) -> Result<Vec<Vec<SqlValue>>> {
+    let allocation_error =
+        || SqlError::data_exception("53200", "set operation allocation failed", None);
+    let mut consumed = Vec::new();
+    consumed
+        .try_reserve_exact(right.len())
+        .map_err(|_| allocation_error())?;
+    consumed.resize(right.len(), false);
+    let mut retained = Vec::new();
+    retained
+        .try_reserve(rows.len())
+        .map_err(|_| allocation_error())?;
+    for row in rows {
+        let mut matched = false;
+        for (index, candidate) in right.iter().enumerate() {
+            if !consumed[index] && sql_rows_not_distinct_typed(&row, candidate, column_types)? {
+                consumed[index] = true;
+                matched = true;
+                break;
+            }
+        }
+        if matched == retain_matches {
+            retained.push(row);
+        }
+    }
+    Ok(retained)
+}
+
 pub(crate) fn combine_set_results(
     left: SqlResult,
     op: SetOperator,
@@ -1469,43 +1502,46 @@ pub(crate) fn combine_set_results(
         }
         SetOperator::Intersect => {
             if set_quantifier == SetQuantifier::All {
-                return Err(SqlError::Unsupported(
-                    "INTERSECT ALL is not supported".to_string(),
-                ));
-            }
-            let mut retained = Vec::new();
-            for row in rows {
-                let mut matched = false;
-                for candidate in &right.rows {
-                    if sql_rows_not_distinct_typed(&row, candidate, &column_types)? {
-                        matched = true;
-                        break;
+                rows = retain_set_all_rows(rows, &right.rows, &column_types, true)?;
+            } else {
+                let mut retained = Vec::new();
+                for row in rows {
+                    let mut matched = false;
+                    for candidate in &right.rows {
+                        if sql_rows_not_distinct_typed(&row, candidate, &column_types)? {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if matched {
+                        retained.push(row);
                     }
                 }
-                if matched {
-                    retained.push(row);
-                }
+                rows = deduplicate_sql_rows_typed(retained, &column_types)?;
             }
-            rows = deduplicate_sql_rows_typed(retained, &column_types)?;
         }
         SetOperator::Except | SetOperator::Minus => {
             if set_quantifier == SetQuantifier::All {
-                return Err(SqlError::Unsupported(format!("{op} ALL is not supported")));
-            }
-            let mut retained = Vec::new();
-            for row in rows {
-                let mut matched = false;
-                for candidate in &right.rows {
-                    if sql_rows_not_distinct_typed(&row, candidate, &column_types)? {
-                        matched = true;
-                        break;
+                if op == SetOperator::Minus {
+                    return Err(SqlError::Unsupported(format!("{op} ALL is not supported")));
+                }
+                rows = retain_set_all_rows(rows, &right.rows, &column_types, false)?;
+            } else {
+                let mut retained = Vec::new();
+                for row in rows {
+                    let mut matched = false;
+                    for candidate in &right.rows {
+                        if sql_rows_not_distinct_typed(&row, candidate, &column_types)? {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if !matched {
+                        retained.push(row);
                     }
                 }
-                if !matched {
-                    retained.push(row);
-                }
+                rows = deduplicate_sql_rows_typed(retained, &column_types)?;
             }
-            rows = deduplicate_sql_rows_typed(retained, &column_types)?;
         }
     }
     // PostgreSQL resolves a set-operation result column to the common type of the
@@ -7382,6 +7418,63 @@ mod scalar_fetch_tests {
                 .unwrap_err()
                 .sqlstate(),
             "0A000"
+        );
+    }
+}
+
+#[cfg(test)]
+mod set_all_tests {
+    use super::*;
+    fn result(values: Vec<SqlValue>, kind: &str) -> SqlResult {
+        SqlResult::new(
+            vec!["v".into()],
+            values.into_iter().map(|v| vec![v]).collect(),
+        )
+        .with_column_types(vec![Some(kind.into())])
+    }
+    #[test]
+    fn all_query_sets_count_null_rows_without_deduplicating() {
+        let left = result(
+            vec![SqlValue::Null, SqlValue::Null, SqlValue::Int(1)],
+            "int4",
+        );
+        let right = result(vec![SqlValue::Null, SqlValue::Int(1)], "int4");
+        assert_eq!(
+            combine_set_results(
+                left.clone(),
+                SetOperator::Intersect,
+                SetQuantifier::All,
+                right.clone()
+            )
+            .unwrap()
+            .rows,
+            vec![vec![SqlValue::Null], vec![SqlValue::Int(1)]]
+        );
+        assert_eq!(
+            combine_set_results(left, SetOperator::Except, SetQuantifier::All, right)
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Null]]
+        );
+    }
+    #[test]
+    fn all_query_sets_reuse_typed_text_and_numeric_equality() {
+        let text = |v: &str| SqlValue::String(v.into());
+        let left = result(vec![text("01"), text("1"), text("1")], "text");
+        let right = result(vec![text("1")], "text");
+        assert_eq!(
+            combine_set_results(left, SetOperator::Intersect, SetQuantifier::All, right)
+                .unwrap()
+                .rows,
+            vec![vec![text("1")]]
+        );
+        let left = result(vec![text("1.00"), text("0.50")], "numeric");
+        let right = result(vec![text("1.0"), text("0.5")], "numeric");
+        assert_eq!(
+            combine_set_results(left, SetOperator::Intersect, SetQuantifier::All, right)
+                .unwrap()
+                .rows,
+            vec![vec![text("1.00")], vec![text("0.50")]]
         );
     }
 }

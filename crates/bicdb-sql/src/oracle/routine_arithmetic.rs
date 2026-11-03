@@ -190,7 +190,7 @@ struct Environment {
     defer_bind_types: bool,
     text_patterns: bool,
     collection_namespace: Option<String>,
-    collections: BTreeMap<String, super::collections::CollectionSchema>,
+    collections: BTreeMap<String, super::collections::CollectionBinding>,
     variables: BTreeMap<String, Kind>,
     records: BTreeMap<String, BTreeMap<String, Kind>>,
 }
@@ -1000,6 +1000,17 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
                 return ControlFlow::Break(error);
             }
         }
+        if super::collections::multisets::enabled() {
+            if let Err(error) = super::collections::multisets::lower_expression(
+                self.db,
+                expr,
+                &self.env.collections,
+                self.env.collection_namespace.as_deref(),
+                self.sql_depth > 0 || !self.queries.is_empty(),
+            ) {
+                return ControlFlow::Break(error);
+            }
+        }
         match self.rewrite(expr) {
             Ok(()) => ControlFlow::Continue(()),
             Err(error) => ControlFlow::Break(error),
@@ -1421,11 +1432,14 @@ pub(crate) fn lower(
         for param in params.iter() {
             if let Some(kind) = &param.type_schema {
                 if let Some(collection) = super::collections::schema_for_type(db, &kind.pg_type)? {
+                    let binding = super::collections::CollectionBinding {
+                        type_name: kind.pg_type.clone(),
+                        schema: collection,
+                    };
                     env.collections
-                        .insert(format!("${}", param.index + 1), collection.clone());
+                        .insert(format!("${}", param.index + 1), binding.clone());
                     if let Some(name) = &param.name {
-                        env.collections
-                            .insert(normalize_object_name(name), collection);
+                        env.collections.insert(normalize_object_name(name), binding);
                     }
                 }
             }

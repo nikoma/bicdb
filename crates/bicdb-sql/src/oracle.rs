@@ -163,7 +163,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V16: &str = "bicdb_oracle_preview_v16"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V17: &str = "bicdb_oracle_preview_v17";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V18: &str = "bicdb_oracle_preview_v18";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V19: &str = "bicdb_oracle_preview_v19";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v20";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V20: &str = "bicdb_oracle_preview_v20";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v21";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -183,7 +184,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V16_OID: i64 = 999_415;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V17_OID: i64 = 999_416;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V18_OID: i64 = 999_417;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V19_OID: i64 = 999_418;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_419;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V20_OID: i64 = 999_419;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_420;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -211,7 +213,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V17 => Some(17),
         PREVIEW_ROUTINE_LANGUAGE_V18 => Some(18),
         PREVIEW_ROUTINE_LANGUAGE_V19 => Some(19),
-        PREVIEW_ROUTINE_LANGUAGE => Some(20),
+        PREVIEW_ROUTINE_LANGUAGE_V20 => Some(20),
+        PREVIEW_ROUTINE_LANGUAGE => Some(21),
         _ => None,
     }
 }
@@ -1303,6 +1306,8 @@ fn canonical_tokens_with_routine_types(
                         i += 3;
                         continue;
                     }
+                    "MULTISET" if preview && source.get(i + 1).is_some_and(|token| ["INTERSECT","UNION","EXCEPT"].iter().any(|value| word(token,value))) => pieces.push("MULTISET".into()),
+                    "EMPTY" if preview && i >= 1 && (word(&source[i-1],"IS") || (i >= 2 && word(&source[i-1],"NOT") && word(&source[i-2],"IS"))) => pieces.push("EMPTY".into()),
                     "TRIM" | "REGEXP_SUBSTR" | "REGEXP_REPLACE" if preview
                         && (i == 0 || source[i - 1] != Token::Period)
                         && source.get(i + 1) == Some(&Token::LParen) => pieces.push(w.value.to_ascii_lowercase()),
@@ -1651,12 +1656,14 @@ fn lower_native(db: &BicDb, sql: &str, preview: bool, namespace: Option<&str>) -
     let rewritten = preview.then(|| rewrite_is_json_predicates(sql)).flatten();
     let sql = rewritten.as_deref().unwrap_or(sql);
     let _grammar = syntax::Scope::new(preview);
+    let _multisets = collections::multisets::Scope::new(preview);
     let mut statements = parse_statements(sql)?;
     if preview {
         syntax::rewrite(db, &mut statements, namespace)?;
     }
     if preview {
         collections::lower_constructors(db, &mut statements, namespace)?;
+        collections::multisets::lower(db, &mut statements, namespace)?;
     }
     if preview {
         struct Aliases;

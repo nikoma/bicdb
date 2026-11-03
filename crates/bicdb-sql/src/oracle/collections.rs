@@ -1,6 +1,7 @@
 //! Named Oracle collection metadata, with native array transport carriers.
 use super::*;
 mod methods;
+pub(crate) mod multisets;
 pub(crate) use methods::*;
 
 thread_local! { static ROUTINE_CONSTRUCTORS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }

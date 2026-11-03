@@ -1,6 +1,12 @@
 //! Dense collection values, bounds and versioned procedural lowering.
 use super::*;
 
+#[derive(Clone, Debug)]
+pub(crate) struct CollectionBinding {
+    pub(crate) type_name: String,
+    pub(crate) schema: CollectionSchema,
+}
+
 pub(crate) fn schema_for_type(db: &BicDb, name: &str) -> Result<Option<CollectionSchema>> {
     if pg_type_oid_by_name(name).is_some() {
         return Ok(None);
@@ -40,7 +46,7 @@ pub(crate) fn integer_argument(value: &SqlValue) -> Result<Option<i32>> {
         })
 }
 
-fn dense_elements(value: &SqlValue) -> Result<&Vec<JsonValue>> {
+pub(crate) fn dense_elements(value: &SqlValue) -> Result<&Vec<JsonValue>> {
     if matches!(value, SqlValue::Null) {
         return Err(errors::database_error(
             -6531,
@@ -181,7 +187,7 @@ pub(crate) fn assignment_element(value: SqlValue, schema: &CollectionSchema) -> 
 
 pub(crate) fn declaration_bindings(
     db: &BicDb,
-    bindings: &mut BTreeMap<String, CollectionSchema>,
+    bindings: &mut BTreeMap<String, CollectionBinding>,
     declarations: &[RoutineDecl],
 ) -> Result<()> {
     for declaration in declarations {
@@ -191,7 +197,13 @@ pub(crate) fn declaration_bindings(
                 bindings.remove(&key);
                 if let Some(kind) = pg_type {
                     if let Some(collection) = schema_for_type(db, kind)? {
-                        bindings.insert(key, collection);
+                        bindings.insert(
+                            key,
+                            CollectionBinding {
+                                type_name: kind.clone(),
+                                schema: collection,
+                            },
+                        );
                     }
                 }
             }
@@ -237,7 +249,7 @@ fn scalar_arguments(function: &sqlparser::ast::Function) -> Result<Vec<&Expr>> {
 
 pub(crate) fn method_expression(
     expr: &mut Expr,
-    bindings: &BTreeMap<String, CollectionSchema>,
+    bindings: &BTreeMap<String, CollectionBinding>,
 ) -> Result<()> {
     if let Expr::CompoundIdentifier(parts) = expr {
         if let [variable, method] = parts.as_slice() {
@@ -269,7 +281,7 @@ pub(crate) fn method_expression(
             *expr = expression(&format!(
                 "CAST(pg_catalog.bicdb_oracle_collection_get({variable},{}) AS {})",
                 render_sql(*index),
-                collection.element.pg_type
+                collection.schema.element.pg_type
             ))?;
         }
         [variable, method] if bindings.contains_key(&normalize_object_name(variable)) => {
@@ -290,7 +302,7 @@ pub(crate) fn method_expression(
 
 pub(crate) fn method_statement(
     statement: &mut RoutineStmt,
-    bindings: &BTreeMap<String, CollectionSchema>,
+    bindings: &BTreeMap<String, CollectionBinding>,
 ) -> Result<()> {
     let RoutineStmt::Sql(Statement::Call(function)) = statement else {
         return Ok(());

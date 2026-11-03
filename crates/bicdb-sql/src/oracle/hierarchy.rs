@@ -37,10 +37,12 @@ pub(super) fn bind_pseudocolumns<T: sqlparser::ast::VisitMut>(node: &mut T) -> R
             if self.scopes.last() == Some(&true) {
                 if let Expr::Identifier(id) = expr {
                     if id.quote_style.is_none() {
+                        // Persist an explicit SQL type with the marker so view
+                        // descriptions and empty results retain numeric OIDs.
                         let function = if id.value.eq_ignore_ascii_case("LEVEL") {
-                            Some("bicdb_oracle_hierarchy_level()")
+                            Some("CAST(bicdb_oracle_hierarchy_level() AS BIGINT)")
                         } else if id.value.eq_ignore_ascii_case("CONNECT_BY_ISCYCLE") {
-                            Some("bicdb_oracle_hierarchy_cycle()")
+                            Some("CAST(bicdb_oracle_hierarchy_cycle() AS BIGINT)")
                         } else {
                             None
                         };
@@ -206,6 +208,7 @@ mod tests {
             ]
         );
         assert_eq!(result.columns, vec!["LEVEL"]);
+        assert_eq!(result.column_types, vec![Some("int8".to_string())]);
         for sql in [
             "CREATE TABLE hierarchy_rows(id NUMBER,parent_id NUMBER)",
             "INSERT INTO hierarchy_rows VALUES(1,NULL),(2,1),(3,1),(4,2)",
@@ -285,6 +288,49 @@ mod tests {
             session.execute("SELECT sys_guid()").unwrap().rows,
             vec![vec![SqlValue::Int(7)]]
         );
+    }
+
+    #[test]
+    fn saved_hierarchy_views_and_routine_cursors_survive_reopen() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        for sql in [
+            "CREATE VIEW hierarchy_saved AS SELECT LEVEL N FROM DUAL CONNECT BY LEVEL<=3",
+            "CREATE FUNCTION hierarchy_cursor_sum RETURN NUMBER IS v NUMBER:=0; BEGIN FOR r IN (SELECT LEVEL N FROM DUAL CONNECT BY LEVEL<=3) LOOP v:=v+r.n; END LOOP; RETURN v; END;",
+        ] {
+            let lowered = lower_profile_sql(&db, sql, ORACLE_PREVIEW_PROFILE).unwrap();
+            SqlSession::new(&mut db).execute(&lowered).unwrap();
+        }
+        assert_eq!(
+            db.get(PROFILE_COLLECTION, "profile")
+                .unwrap()
+                .unwrap()
+                .metadata,
+            metadata_v4()
+        );
+        drop(db);
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        for (sql, expected) in [
+            (
+                "SELECT N FROM hierarchy_saved ORDER BY N",
+                vec![vec!["1"], vec!["2"], vec!["3"]],
+            ),
+            ("SELECT hierarchy_cursor_sum() FROM DUAL", vec![vec!["6"]]),
+        ] {
+            let lowered = lower_profile_sql(&db, sql, ORACLE_PREVIEW_PROFILE).unwrap();
+            let result = SqlSession::new(&mut db).execute(&lowered).unwrap();
+            assert_eq!(
+                result
+                    .rows
+                    .iter()
+                    .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                    .collect::<Vec<_>>(),
+                expected,
+                "{sql}"
+            );
+        }
     }
 
     #[test]

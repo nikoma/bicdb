@@ -602,6 +602,10 @@ state, distributed child commits and comprehensive failure injection remain
 programme work. Native LANGUAGE plpgsql and the bounded HR profile retain their
 separate contracts.
 
+The [transaction evidence](evidence/oracle-autonomous-transactions-2026-11-03/README.md)
+separates generated Oracle matches from definition acceptance and failing
+original application calls.
+
 Routine DROP statements use ordinary DDL processing rather than the procedural
 body lowerer. Qualified names are checked against the recorded namespace;
 removal requires native effective-role ownership or superuser authority.

@@ -1,0 +1,710 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "source_execution_compared": true,
+  "scope": "Unchanged original AD_SEQUENCE_NEXT body in fresh schemas with a minimal dependency table; existing-row branches, rollback and missing-row application error; not full application qualification",
+  "source_sha256": "2a174da91b8afd59124f39b630d1f8346b521392d141e7ee75687ce73d195cfe",
+  "runtime_binary_sha256": "fa73e212f299d4a3b3896264807fa0aa1a5f6a80d132c36cbb23b5fa2b14a95d",
+  "cases": [
+    {
+      "id": "existing_0",
+      "expected": {
+        "number": "1000"
+      },
+      "oracle": {
+        "number": "1000"
+      },
+      "oracle_state": [
+        [
+          "standard",
+          {
+            "number": "1001"
+          },
+          {
+            "number": "10"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "20"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "0"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "5"
+          },
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "bicdb": {
+        "number": "1000"
+      },
+      "type_oids": [
+        1700
+      ],
+      "bicdb_state": [
+        [
+          "standard",
+          {
+            "number": "1001"
+          },
+          {
+            "number": "10"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "20"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "0"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "5"
+          },
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "existing_1",
+      "expected": {
+        "number": "1001"
+      },
+      "oracle": {
+        "number": "1001"
+      },
+      "oracle_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "10"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "20"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "0"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "5"
+          },
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "bicdb": {
+        "number": "1001"
+      },
+      "type_oids": [
+        1700
+      ],
+      "bicdb_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "10"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "20"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "0"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "5"
+          },
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "existing_2",
+      "expected": {
+        "number": "10"
+      },
+      "oracle": {
+        "number": "10"
+      },
+      "oracle_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "11"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "20"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "0"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "5"
+          },
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "bicdb": {
+        "number": "10"
+      },
+      "type_oids": [
+        1700
+      ],
+      "bicdb_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "11"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "20"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "0"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "5"
+          },
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "existing_3",
+      "expected": {
+        "number": "11"
+      },
+      "oracle": {
+        "number": "11"
+      },
+      "oracle_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "12"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "20"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "0"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "5"
+          },
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "bicdb": {
+        "number": "11"
+      },
+      "type_oids": [
+        1700
+      ],
+      "bicdb_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "12"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "20"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "0"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "5"
+          },
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "existing_4",
+      "expected": {
+        "number": "20"
+      },
+      "oracle": {
+        "number": "20"
+      },
+      "oracle_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "12"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "22"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "5"
+          },
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "bicdb": {
+        "number": "20"
+      },
+      "type_oids": [
+        1700
+      ],
+      "bicdb_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "12"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "22"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "5"
+          },
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "existing_5",
+      "expected": {
+        "number": "5"
+      },
+      "oracle": {
+        "number": "5"
+      },
+      "oracle_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "12"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "22"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "8"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "bicdb": {
+        "number": "5"
+      },
+      "type_oids": [
+        1700
+      ],
+      "bicdb_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "12"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "22"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "50"
+          },
+          {
+            "number": "8"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "existing_6",
+      "expected": {
+        "number": "50"
+      },
+      "oracle": {
+        "number": "50"
+      },
+      "oracle_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "12"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "22"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "53"
+          },
+          {
+            "number": "8"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "bicdb": {
+        "number": "50"
+      },
+      "type_oids": [
+        1700
+      ],
+      "bicdb_state": [
+        [
+          "standard",
+          {
+            "number": "1002"
+          },
+          {
+            "number": "12"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "disabled",
+          {
+            "number": "22"
+          },
+          {
+            "number": "-1"
+          },
+          {
+            "number": "1"
+          }
+        ],
+        [
+          "step",
+          {
+            "number": "53"
+          },
+          {
+            "number": "8"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "rollback",
+      "oracle": [
+        [
+          {
+            "number": "1002"
+          },
+          {
+            "number": "12"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "1002"
+          },
+          {
+            "number": "12"
+          }
+        ]
+      ],
+      "expected": [
+        [
+          {
+            "number": "1002"
+          },
+          {
+            "number": "12"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "missing_sequence_error",
+      "expected": {
+        "code": -20100,
+        "message": "ORA-20100: Table Sequence not found"
+      },
+      "oracle": {
+        "code": -20100,
+        "message": "ORA-20100: Table Sequence not found"
+      },
+      "bicdb": {
+        "code": -20100,
+        "message": "ORA-20100: Table Sequence not found"
+      },
+      "sqlstate": "P0001",
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "oracle_version": "23.26.3.0.0",
+  "matched": 9,
+  "total": 9
+}

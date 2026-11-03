@@ -128,6 +128,17 @@ Independent references distinguish Oracle statement-end uniqueness from PostgreS
 checks, including ordered shifts. Referenced parent keys, triggers, FROM/RETURNING,
 concurrent moves and deferred-constraint modes remain outside this qualification.
 No application database upgrade or full application acceptance is implied.
+The [independent-transaction qualification](evidence/oracle-autonomous-transactions-2026-11-03/README.md)
+adds version-15 standalone autonomous functions/procedures, with separate
+transaction ownership, parent-lock protection, snapshot boundaries, Describe
+safeguards and no speculative replay across independent calls. Its 38 new
+Oracle matches bring the passing generated corpus to 1,165, with 214 independent
+PostgreSQL controls. Recompiling original definitions on an isolated application
+copy advances the definition baseline to 60/62. A valid original NEXTIDFUNC call
+still fails at the dynamic-SQL namespace guard; hierarchy/collection support,
+dictionary anchors and further runtime dependencies remain. The five separately
+tracked semantic mismatches are unchanged. This is a development candidate,
+with the running application binary and database preserved.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source
@@ -151,7 +162,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 9. DDL lifecycle | Oracle implicit commits, replacement, dependency invalidation, invalid-object catalogs and recompilation | Partial: tested procedure replacement after cached calls; Oracle implicit commits, dependencies and invalid-object lifecycle remain outstanding |
 | 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: scoped blocks/declarations and nested handlers, standalone functions and version-12 procedures with OUT/IN OUT copyback, version-8 parameterized bound cursors with query-local formals/defaults and independent native scope checks, declared-type procedural TRUNC and versioned logical DATE arithmetic; full language and application routines outstanding |
 | 11. Packages | Specs/bodies, visibility, overloads, initialization, session variables and invalidation with pool/session isolation | Outstanding |
-| 12. Autonomous transactions | Independent commit/rollback and lock behavior, nested calls, exceptions and restart tests | Outstanding |
+| 12. Autonomous transactions | Independent commit/rollback and lock behavior, nested calls, exceptions and restart tests | Partial: [version-15 standalone routine transactions](evidence/oracle-autonomous-transactions-2026-11-03/README.md), separate parent/observer visibility, active-return errors, parent-lock deadlocks, snapshot boundaries, Describe safeguards and restart; child DDL, package/session-state integration, distributed commits and broader failure qualification outstanding |
 | 13. Supplied package APIs | Qualify used DBMS/UTL APIs, including LOB, SQL, OUTPUT, UTILITY, APPLICATION_INFO, RANDOM, LOCK and SCHEDULER; file/network ACL enforcement | Outstanding |
 | 14. Triggers | Row/statement/compound/INSTEAD OF/system triggers, order, transition state, mutating-table rules and transactional effects | Outstanding for Oracle; sample triggers explicitly deferred |
 | 15. Session state | NLS, temporary tables, cursors, sequence visibility and cache behavior, pool reset, reconnect and isolation | Partial: sample sequences; broader Oracle state semantics unqualified |

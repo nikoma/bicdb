@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "source_execution_compared": true,
+  "scope": "One valid original NEXTIDFUNC system-counter call in a generated schema with unchanged GET_SYSCONFIG/NEXTID/NEXTIDFUNC bodies and minimal dependency tables. Oracle returns 10; BicDB refuses compilation of the called NEXTID body at the existing dynamic-SQL namespace guard. No runtime branch is qualified by this diagnostic.",
+  "source_sha256": {
+    "GET_SYSCONFIG": "371a77923a465ddf5eb64ab6297bb3e3fb4d93bc860af41f3f0ea340f66504fc",
+    "NEXTID": "2909da207a432c9edd296db5b53d0aa2e4bf08ca22c0494d5934ddc35c917171",
+    "NEXTIDFUNC": "c9294765e35fced72635c796d17099c7f3bfbbdd5031d88cbee271e4e2a8e6b4"
+  },
+  "runtime_binary_sha256": "fa73e212f299d4a3b3896264807fa0aa1a5f6a80d132c36cbb23b5fa2b14a95d",
+  "cases": [
+    {
+      "id": "pending_parent_call_0",
+      "oracle": [
+        [
+          {
+            "number": "10"
+          }
+        ]
+      ],
+      "bicdb": {
+        "error_code": "0A000"
+      },
+      "matched": false
+    }
+  ],
+  "cleanup_errors": [],
+  "success": false,
+  "oracle_version": "23.26.3.0.0",
+  "failure": {
+    "error": "FeatureNotSupported",
+    "code": "0A000"
+  },
+  "matched": 0,
+  "total": 1
+}

@@ -1,0 +1,1516 @@
+{
+  "format": 1,
+  "reference_version": "23.26.3.0.0",
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "independent_commit",
+      "reference": {
+        "status": "ok"
+      },
+      "bicdb": {
+        "status": "ok"
+      },
+      "matched": true
+    },
+    {
+      "id": "parent_sees_own_and_child",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "observer_sees_child_only",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "child_survives_parent_rollback",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "open_exit",
+      "reference": {
+        "oracle_code": 6519
+      },
+      "bicdb": {
+        "oracle_code": 6519
+      },
+      "matched": true
+    },
+    {
+      "id": "open_exit_observer",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "error_rollback",
+      "reference": {
+        "oracle_code": 20100
+      },
+      "bicdb": {
+        "oracle_code": 20100
+      },
+      "matched": true
+    },
+    {
+      "id": "error_rollback_observer",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "committed_error",
+      "reference": {
+        "oracle_code": 20101
+      },
+      "bicdb": {
+        "oracle_code": 20101
+      },
+      "matched": true
+    },
+    {
+      "id": "committed_error_observer",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "empty_update",
+      "reference": {
+        "oracle_code": 6519
+      },
+      "bicdb": {
+        "oracle_code": 6519
+      },
+      "matched": true
+    },
+    {
+      "id": "empty_update_observer",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "empty_delete",
+      "reference": {
+        "oracle_code": 6519
+      },
+      "bicdb": {
+        "oracle_code": 6519
+      },
+      "matched": true
+    },
+    {
+      "id": "empty_delete_observer",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "savepoint",
+      "reference": {
+        "oracle_code": 6519
+      },
+      "bicdb": {
+        "oracle_code": 6519
+      },
+      "matched": true
+    },
+    {
+      "id": "savepoint_observer",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "empty_lock_caught",
+      "reference": {
+        "oracle_code": 6519
+      },
+      "bicdb": {
+        "oracle_code": 6519
+      },
+      "matched": true
+    },
+    {
+      "id": "empty_lock_caught_observer",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "failed_insert_caught",
+      "reference": {
+        "status": "ok"
+      },
+      "bicdb": {
+        "status": "ok"
+      },
+      "matched": true
+    },
+    {
+      "id": "failed_insert_caught_observer",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "plain_read",
+      "reference": {
+        "status": "ok"
+      },
+      "bicdb": {
+        "status": "ok"
+      },
+      "matched": true
+    },
+    {
+      "id": "plain_read_observer",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "nested_rollback",
+      "reference": {
+        "status": "ok"
+      },
+      "bicdb": {
+        "status": "ok"
+      },
+      "matched": true
+    },
+    {
+      "id": "nested_rollback_observer",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "sql_function",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "42"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "42"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "sql_function_committed",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "serializable_before",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "serializable_child_commit",
+      "reference": {
+        "status": "ok"
+      },
+      "bicdb": {
+        "status": "ok"
+      },
+      "matched": true
+    },
+    {
+      "id": "serializable_parent_snapshot",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "serializable_observer_current",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "new_transaction_current",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "parent_lock_deadlock",
+      "reference": {
+        "oracle_code": 60
+      },
+      "bicdb": {
+        "oracle_code": 60
+      },
+      "matched": true
+    },
+    {
+      "id": "deadlock_parent_rollback",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "default_in_caller",
+      "reference": {
+        "status": "ok"
+      },
+      "bicdb": {
+        "status": "ok"
+      },
+      "matched": true
+    },
+    {
+      "id": "default_parent_value",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "default_not_independent",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "default_rolled_back",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "6"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "shared_error_context",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "-20102"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-20102"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "matched": 38,
+  "total": 38,
+  "success": true,
+  "runtime_binary_sha256": "fa73e212f299d4a3b3896264807fa0aa1a5f6a80d132c36cbb23b5fa2b14a95d"
+}

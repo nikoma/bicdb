@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "00701f07e16628cf30f295e4b13a76adea8fa6c0c4a2faff9281b3a8f2fcbf26",
+  "older_binary_sha256": "a7f530bddd9d34e5617a8a57befff800ffc2fcf124a9e4939b3d5fe931c5f797",
+  "application_database_updated": false,
+  "cases": [
+    {
+      "id": "older_reader_opens_unchanged_legacy_metadata",
+      "success": true
+    },
+    {
+      "id": "migration_preflight_refuses_lost_legacy_provenance",
+      "success": true
+    },
+    {
+      "id": "read_only_preflight_preserves_legacy_reader_and_value",
+      "success": true
+    },
+    {
+      "id": "older_reader_refuses_metadata_v3_at_startup",
+      "success": true,
+      "exit_code": 1
+    },
+    {
+      "id": "current_reader_reopens_value_with_native_varchar_codec",
+      "success": true
+    },
+    {
+      "id": "byte_capacity_and_error_stack_survive_restart",
+      "success": true,
+      "sqlstate": "22001",
+      "oracle_error_code": -12899
+    }
+  ],
+  "success": true
+}

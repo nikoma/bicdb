@@ -1,0 +1,124 @@
+{
+  "format": 1,
+  "scope": "Separate observations of existing PL/SQL NVL constant-propagation and conversion gaps; not included in passing procedure qualification cases",
+  "application_qualified": false,
+  "runtime_binary_sha256": "00701f07e16628cf30f295e4b13a76adea8fa6c0c4a2faff9281b3a8f2fcbf26",
+  "cases": [
+    {
+      "id": "literal_integer",
+      "declaration": "",
+      "expression": "NVL(1,'bad')",
+      "oracle": {
+        "rows": [
+          [
+            "1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "error": "InvalidTextRepresentation",
+        "code": "22P02"
+      },
+      "matched": false
+    },
+    {
+      "id": "literal_decimal",
+      "declaration": "",
+      "expression": "NVL(1.5,'bad')",
+      "oracle": {
+        "rows": [
+          [
+            "1.5"
+          ]
+        ]
+      },
+      "bicdb": {
+        "error": "InvalidTextRepresentation",
+        "code": "22P02"
+      },
+      "matched": false
+    },
+    {
+      "id": "number",
+      "declaration": "v NUMBER:=1;",
+      "expression": "NVL(v,'bad')",
+      "oracle": {
+        "rows": [
+          [
+            "1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "error": "InvalidTextRepresentation",
+        "code": "22P02"
+      },
+      "matched": false
+    },
+    {
+      "id": "pls_integer",
+      "declaration": "v PLS_INTEGER:=1;",
+      "expression": "NVL(v,'bad')",
+      "oracle": {
+        "rows": [
+          [
+            "1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      },
+      "matched": false
+    },
+    {
+      "id": "literal_cast",
+      "declaration": "",
+      "expression": "NVL(TO_NUMBER('1'),'bad')",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "FeatureNotSupported",
+        "code": "0A000"
+      },
+      "matched": false,
+      "expected_pg_sqlstate": "22P02"
+    },
+    {
+      "id": "literal_chr",
+      "declaration": "",
+      "expression": "NVL(1,CHR(-1))",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "matched": true,
+      "expected_pg_sqlstate": "22003"
+    },
+    {
+      "id": "literal_text",
+      "declaration": "",
+      "expression": "NVL('A',1/0)",
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-01476"
+      },
+      "bicdb": {
+        "error": "DivisionByZero",
+        "code": "22012"
+      },
+      "matched": true,
+      "expected_pg_sqlstate": "22012"
+    }
+  ],
+  "total": 7,
+  "matched": 2,
+  "success": false
+}

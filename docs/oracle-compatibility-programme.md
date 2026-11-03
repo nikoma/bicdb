@@ -172,6 +172,15 @@ its separate BYTE/CHAR assignment checks remain 1/2. Source observations show
 that byte/character length provenance and byte-capacity enforcement must be
 preserved before dictionary lengths can be generated reliably. Dictionary
 views, visibility and source defaults remain implementation work.
+The [character column qualification](evidence/oracle-character-columns-2026-11-03/README.md)
+adds durable BYTE/CHAR provenance and STANDARD byte-capacity enforcement for new
+CHAR/VARCHAR2 columns, with importer preflight and resume checks. The separate
+assignment comparison now matches 2/2; dictionary contracts remain 0/11. Legacy
+metadata reconciliation, routine BYTE propagation and broader character semantics
+remain open. A shared expression-cache ownership correction preserves stable AST
+nodes and excludes synthesized arguments from address-based memoization. Original
+sequence checks retain 9/9 matches. These changes do not advance the 60/62
+application definition baseline or the 1/13 NULL-input diagnostics.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source
@@ -187,7 +196,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 1. Versioned profiles | Durable profile identity, explicit startup selection, incompatible-open rejection, upgrade rules and PostgreSQL isolation | Partial: bounded HR and separate preview profiles, durable identity and versioned preview routine compiler; general upgrade qualification outstanding |
 | 2. Migration assessment | Inventory source and runtime dependencies; report object locations, dynamic SQL, wrapped code, blockers and manual changes | Partial: [offline lexical inventory](oracle-migration-assessment.md); semantic/catalog/runtime assessment and dependency resolution outstanding |
 | 3. SQL value semantics | Differential null/empty-string, concatenation, padding, comparison, coercion, uniqueness and composite-key tests | Partial: HR lowering and version-7 typed routine concatenation with NULL/padding/caller-length reference cases; general SQL coercion and padding qualification outstanding |
-| 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings, bounded NUMBER arithmetic/reference infinity transport, and durable DATE/TIMESTAMP column provenance with storage/anchor/reference checks; 2,263-column application backfill and complete target-value preservation verified; timezone regions and full conversion rules unqualified |
+| 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings, bounded NUMBER arithmetic/reference infinity transport, and durable DATE/TIMESTAMP column provenance with storage/anchor/reference checks; 2,263-column application temporal backfill and complete target-value preservation verified; durable BYTE/CHAR columns with STANDARD capacity and importer provenance checks; legacy character reconciliation, timezone regions and full conversion rules unqualified |
 | 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL, date formats and Gregorian ADD_MONTHS; version-9 bounded DECODE, version-10 AL32UTF8 CHR/default TO_CHAR, and version-11 eager typed NVL with timestamp precision; NVL2, PL/SQL constant propagation and broader scalar/NLS/type semantics outstanding |
 | 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL, pgwire parameters and literal-integer ROWNUM prefix predicates in plain blocks; other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |
 | 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: application-schema selection, versioned static function/procedure relation binding, CALL namespaces and documented heap adaptation; general resolution and synonyms outstanding |

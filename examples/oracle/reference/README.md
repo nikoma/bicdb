@@ -484,3 +484,18 @@ and view columns against PostgreSQL. It uses ORACLE_CONTROL_PG_DSN and a native
 BICDB_PG_DSN with two pre-existing dedicated schemas, and removes its own tables
 and view while retaining those schemas. Restricted-role visibility
 is outside this owner/admin fixture.
+
+
+The preview's SQL character-column fixture uses dedicated schemas and explicit
+BYTE/CHAR declarations under AL32UTF8 and STANDARD string limits:
+
+```sh
+python examples/oracle/reference/character_columns.py \
+  --oracle-config /private/reference.json --output /private/character-columns.json
+```
+
+Set BICDB_PG_DSN privately to an Oracle-preview target with a matching schema.
+The fixture removes its own tables. It compares saved values, fixed padding,
+capacity errors, prepared UPDATE and PostgreSQL COPY behavior against Oracle
+INSERT behavior, including multibyte and supplementary characters. See the
+[qualification and remaining scope](../../../docs/evidence/oracle-character-columns-2026-11-03/README.md).

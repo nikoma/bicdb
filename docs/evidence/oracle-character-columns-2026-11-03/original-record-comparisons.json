@@ -1,0 +1,185 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "source_execution_compared": true,
+  "scope": "Unchanged original TORECORDID body in generated schemas with minimal dictionary and record tables; ordinary and long-name UUID discovery, typed UUID binds, SQL-like text, Unicode and SQL no-data boundaries. Not application workflow qualification.",
+  "source_sha256": "65b86cd37b1b0d416f3f40e24a5e6a0542071c35551aea8a671afc01001b088c",
+  "runtime_binary_sha256": "00701f07e16628cf30f295e4b13a76adea8fa6c0c4a2faff9281b3a8f2fcbf26",
+  "cases": [
+    {
+      "id": "ordinary_plain",
+      "oracle": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "expected": [
+        [
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "ordinary_sql_like",
+      "oracle": [
+        [
+          {
+            "number": "2"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "2"
+          }
+        ]
+      ],
+      "expected": [
+        [
+          {
+            "number": "2"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "ordinary_unicode",
+      "oracle": [
+        [
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "expected": [
+        [
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "ordinary_missing",
+      "oracle": [
+        [
+          null
+        ]
+      ],
+      "bicdb": [
+        [
+          null
+        ]
+      ],
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "long_plain",
+      "oracle": [
+        [
+          null
+        ]
+      ],
+      "bicdb": [
+        [
+          null
+        ]
+      ],
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "long_sql_like",
+      "oracle": [
+        [
+          null
+        ]
+      ],
+      "bicdb": [
+        [
+          null
+        ]
+      ],
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "long_unicode",
+      "oracle": [
+        [
+          null
+        ]
+      ],
+      "bicdb": [
+        [
+          null
+        ]
+      ],
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "long_missing",
+      "oracle": [
+        [
+          null
+        ]
+      ],
+      "bicdb": [
+        [
+          null
+        ]
+      ],
+      "expected": [
+        [
+          null
+        ]
+      ],
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "oracle_version": "23.26.3.0.0",
+  "matched": 8,
+  "total": 8
+}

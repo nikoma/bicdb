@@ -1,0 +1,72 @@
+{
+  "format": 1,
+  "engine_source_commit": "19094026ad35ff9a46be839bff6a68bfe7ce8600",
+  "runtime_binary_sha256": "00701f07e16628cf30f295e4b13a76adea8fa6c0c4a2faff9281b3a8f2fcbf26",
+  "rust_broad_passed": 1319,
+  "rust_existing_ignored": 3,
+  "rust_final_source_unit_followup_passed": 473,
+  "post_broad_change": "Named the synthesized argument scope guard field to remove its unused-field warning; repeated all SQL unit tests and rebuilt the pgwire example on the final engine commit.",
+  "python_reference_passed": 25,
+  "python_migration_passed": 24,
+  "python_hr_passed": 3,
+  "new_oracle_character_column_matched": 138,
+  "new_oracle_character_column_total": 138,
+  "retained_generated_oracle_positive_and_error_contract_cases": 1296,
+  "new_view_anchor_cases": 41,
+  "total_passing_generated_oracle_positive_and_error_contract_cases": 1475,
+  "separate_negative_nvarchar_alias_boundary_cases": 1,
+  "independent_postgres_controls": 252,
+  "reader_and_restart_checks": 6,
+  "production_importer_checks": 3,
+  "original_sequence_matched": 9,
+  "original_record_matched": 8,
+  "original_counter_matched": 14,
+  "oracle_dictionary_matched": 0,
+  "oracle_dictionary_total": 11,
+  "oracle_dictionary_source_qualified": true,
+  "separate_character_assignment_matched": 2,
+  "separate_character_assignment_total": 2,
+  "application_definition_baseline": 60,
+  "application_definition_total": 62,
+  "application_null_diagnostic_calls_succeeded": 1,
+  "application_null_diagnostic_calls_total": 13,
+  "known_semantic_gaps_unchanged": true,
+  "known_semantic_gap_mismatches": 5,
+  "type_cache_regression_reproduced_before_fix": true,
+  "initial_retained_sequence_attempt": {
+    "success": false,
+    "completed_matching_calls": 5,
+    "planned_calls": 9,
+    "sqlstate": "42846",
+    "message": "cannot cast type numeric to timestamp"
+  },
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "resources": {
+    "build_jobs": 1,
+    "incremental": false,
+    "minimum_available_gib": 8,
+    "peak_owned_group_rss_bytes": 4435648512,
+    "minimum_observed_available_bytes": 20282445824
+  },
+  "earlier_resource_interruptions": [
+    {
+      "kind": "disk",
+      "report_status": "aborted_low_disk"
+    },
+    {
+      "kind": "memory",
+      "report_status": "aborted_low_memory"
+    }
+  ],
+  "earlier_schema_cache_cleanup_reclaimed_bytes": 27600881292,
+  "post_broad_cleanup_reclaimed_bytes": 2904179936,
+  "final_cleanup_reclaimed_bytes": 298562416,
+  "application_database_updated": false,
+  "application_qualified": false,
+  "development_binary_built": true,
+  "release_published": false,
+  "remaining_oracle_build_cache_du_h": "6.8G",
+  "remaining_schema_build_cache_du_h": "22G"
+}

@@ -1,0 +1,481 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "source_execution_compared": false,
+  "scope": "Unchanged original routine definitions and actual NULL-argument CALL diagnostics on an isolated copy only; original definitions from the retained export; no source application routines executed",
+  "disposable_copy_only": true,
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "runtime_binary_sha256": "00701f07e16628cf30f295e4b13a76adea8fa6c0c4a2faff9281b3a8f2fcbf26",
+  "procedures": [
+    {
+      "name": "AD_SEQUENCE_DOC",
+      "argument_count": 3,
+      "call_succeeded": false,
+      "sqlstate": "P0001",
+      "message": "ORA-20100: Document Sequence not found -\nDETAIL:  {\"oracle_error_stack\":[{\"code\":-20100,\"message\":\"ORA-20100: Document Sequence not found -\"}]}"
+    },
+    {
+      "name": "AD_SEQUENCE_DOCTYPE",
+      "argument_count": 3,
+      "call_succeeded": false,
+      "sqlstate": "42601",
+      "message": "invalid SQL: procedure DBMS_OUTPUT.PUT_LINE does not exist"
+    },
+    {
+      "name": "AD_SEQUENCE_NEXT",
+      "argument_count": 3,
+      "call_succeeded": false,
+      "sqlstate": "P0001",
+      "message": "ORA-20100: Table Sequence not found\nDETAIL:  {\"oracle_error_stack\":[{\"code\":-20100,\"message\":\"ORA-20100: Table Sequence not found\"}]}"
+    },
+    {
+      "name": "C_ACCTSCHEMA_DEFAULT_COPY",
+      "argument_count": 2,
+      "call_succeeded": false,
+      "sqlstate": "42601",
+      "message": "invalid SQL: sql parser error: Expected: an SQL statement, found: << at Line: 1, Column: 1"
+    },
+    {
+      "name": "C_BP_GROUP_ACCT_COPY",
+      "argument_count": 2,
+      "call_succeeded": false,
+      "sqlstate": "42601",
+      "message": "invalid SQL: sql parser error: Expected: an SQL statement, found: << at Line: 1, Column: 1"
+    },
+    {
+      "name": "C_ORDER_DRILLDOWN",
+      "argument_count": 1,
+      "call_succeeded": false,
+      "sqlstate": "42601",
+      "message": "invalid SQL: sql parser error: Expected: an SQL statement, found: << at Line: 1, Column: 1"
+    },
+    {
+      "name": "DBA_AFTERIMPORT",
+      "argument_count": 0,
+      "call_succeeded": false,
+      "sqlstate": "0A000",
+      "message": "unsupported SQL: Oracle concatenation requires resolved character, NUMBER or logical DATE operands; use an explicit conversion for other types (expression: Unknown)"
+    },
+    {
+      "name": "DBA_CLEANUP",
+      "argument_count": 0,
+      "call_succeeded": false,
+      "sqlstate": "42601",
+      "message": "invalid SQL: sql parser error: Expected: ), found: \"ESCAPE\" at Line: 1, Column: 84"
+    },
+    {
+      "name": "DBA_RECOMPILE",
+      "argument_count": 1,
+      "call_succeeded": false,
+      "sqlstate": "42601",
+      "message": "invalid SQL: sql parser error: Expected: end of statement, found: ( at Line: 1, Column: 47"
+    },
+    {
+      "name": "FACT_ACCT_BALANCE_UPDATE",
+      "argument_count": 1,
+      "call_succeeded": false,
+      "sqlstate": "0A000",
+      "message": "unsupported SQL: Oracle concatenation requires resolved character, NUMBER or logical DATE operands; use an explicit conversion for other types (expression: Unknown)"
+    },
+    {
+      "name": "M_PRODUCT_CATEGORY_ACCT_COPY",
+      "argument_count": 2,
+      "call_succeeded": false,
+      "sqlstate": "42601",
+      "message": "invalid SQL: sql parser error: Expected: an SQL statement, found: << at Line: 1, Column: 1"
+    },
+    {
+      "name": "M_PRODUCT_DELETE",
+      "argument_count": 1,
+      "call_succeeded": true
+    },
+    {
+      "name": "NEXTID",
+      "argument_count": 3,
+      "call_succeeded": false,
+      "sqlstate": "42601",
+      "message": "invalid SQL: procedure DBMS_OUTPUT.PUT_LINE does not exist"
+    }
+  ],
+  "definitions": [
+    {
+      "name": "ACCTBALANCE",
+      "kind": "FUNCTION",
+      "source_sha256": "6bf1b0f0186862ef904d32d867c4910231cf05f6bb31be71c3a0bdc1c1e98bcc",
+      "definition_accepted": true
+    },
+    {
+      "name": "ADDDAYS",
+      "kind": "FUNCTION",
+      "source_sha256": "7612048fabd96dd041ef92fa4bcbb9582faeb35d9c03eac6d9589657b7398e1a",
+      "definition_accepted": true
+    },
+    {
+      "name": "BOMPRICELIMIT",
+      "kind": "FUNCTION",
+      "source_sha256": "6ed1abffa73196081aa6f1761b191b72c3dedf85d9674c8a2e73699a66e51148",
+      "definition_accepted": true
+    },
+    {
+      "name": "BOMPRICELIST",
+      "kind": "FUNCTION",
+      "source_sha256": "ec5709fd753cfe7d6485dc12bcebe3fc911b0e8205dfb33b7aa66eb9ce9fcb83",
+      "definition_accepted": true
+    },
+    {
+      "name": "BOMPRICESTD",
+      "kind": "FUNCTION",
+      "source_sha256": "12eaf5d5976607e7b1f5dc76a90ef799cd026e0144019df9f478edc08c5cd1ce",
+      "definition_accepted": true
+    },
+    {
+      "name": "BOMQTYAVAILABLE",
+      "kind": "FUNCTION",
+      "source_sha256": "50bb7bdc065ec61dae7d845a93e409d9a617b2e21924d1b084cd436d38017f82",
+      "definition_accepted": true
+    },
+    {
+      "name": "BOMQTYONHAND",
+      "kind": "FUNCTION",
+      "source_sha256": "951434d5c7db2759e4d4d057a4bf13f1572210862b0483124295e94fcaa3972a",
+      "definition_accepted": true
+    },
+    {
+      "name": "BOMQTYONHANDFORRESERVATION",
+      "kind": "FUNCTION",
+      "source_sha256": "ff80efd3f9f2a6ee4cf60c427d1b336353f3ca5b46bcc99d5a38c7220888d5f2",
+      "definition_accepted": true
+    },
+    {
+      "name": "BOMQTYORDERED",
+      "kind": "FUNCTION",
+      "source_sha256": "6f806e57fe281d4b23a8f397c1791e3662ad0f1825ebe95745891e6d48c24392",
+      "definition_accepted": true
+    },
+    {
+      "name": "BOMQTYRESERVED",
+      "kind": "FUNCTION",
+      "source_sha256": "fa668fb6f78a12a4a081e6736077d0946f219b3175d389e60ec9477c8b7cd10b",
+      "definition_accepted": true
+    },
+    {
+      "name": "BPARTNERREMITLOCATION",
+      "kind": "FUNCTION",
+      "source_sha256": "b677895ea1fec90fae2338a0405293a1a10a452eaefa07982670ba47cc4d3295",
+      "definition_accepted": true
+    },
+    {
+      "name": "CHARAT",
+      "kind": "FUNCTION",
+      "source_sha256": "ce24769ae0154a3c132a5674fd961b356a3da3123f95af657a7dec01941cf785",
+      "definition_accepted": true
+    },
+    {
+      "name": "CURRENCYBASE",
+      "kind": "FUNCTION",
+      "source_sha256": "831591c8075b68f6b61d3581d7c9863ebd09bef7f28becac5632c8e1b108c08d",
+      "definition_accepted": true
+    },
+    {
+      "name": "CURRENCYCONVERT",
+      "kind": "FUNCTION",
+      "source_sha256": "9fb67caeeca50679751f7111f0763e5e196ebd46e765ba4fb72d08838b6c7c60",
+      "definition_accepted": true
+    },
+    {
+      "name": "CURRENCYCONVERTINVOICE",
+      "kind": "FUNCTION",
+      "source_sha256": "895a41457d1bf9b50b126b82e104ed079d51b1e0c5d5d7a3bf9784df83f8fb17",
+      "definition_accepted": true
+    },
+    {
+      "name": "CURRENCYCONVERTPAYMENT",
+      "kind": "FUNCTION",
+      "source_sha256": "0bd815d05e479ca5aaae910e9bdfe651d769999cdc9a362be0a24ad0c13c5e4c",
+      "definition_accepted": true
+    },
+    {
+      "name": "CURRENCYRATE",
+      "kind": "FUNCTION",
+      "source_sha256": "40db024c66b77be01c9dbd4e27f5217ceaa1475ff6906fa42d5d6b5d67a0f31a",
+      "definition_accepted": true
+    },
+    {
+      "name": "CURRENCYROUND",
+      "kind": "FUNCTION",
+      "source_sha256": "9cea3391d45696e995b12253eff77737386bb3d6d99e4be19a55b9026592251d",
+      "definition_accepted": true
+    },
+    {
+      "name": "DAYSBETWEEN",
+      "kind": "FUNCTION",
+      "source_sha256": "0dd53651e5b9f43b2e490ae8f78b7b2ed1eaada33ff382cc337b6dd74954adc5",
+      "definition_accepted": true
+    },
+    {
+      "name": "DBA_CONSTRAINTCMD",
+      "kind": "FUNCTION",
+      "source_sha256": "f24b370a9179fafb1cf14825b13d9868f78a90ca7863af621b84e98b2b7931e8",
+      "definition_accepted": true
+    },
+    {
+      "name": "DBA_DISPLAYTYPE",
+      "kind": "FUNCTION",
+      "source_sha256": "6d5571a45997a43fd3effd06ff1bc12d05b295f2eaffb239415cd5b3206d12a9",
+      "definition_accepted": true
+    },
+    {
+      "name": "DOCUMENTNO",
+      "kind": "FUNCTION",
+      "source_sha256": "83356452277d18f855c676daaa36d82b668cd96d9cf5445b6f591b0834365cb2",
+      "definition_accepted": true
+    },
+    {
+      "name": "FIRSTOF",
+      "kind": "FUNCTION",
+      "source_sha256": "c2213a5a625c01041352773b0374ee457f4f695d10b2a4f901557be585dd2664",
+      "definition_accepted": true
+    },
+    {
+      "name": "GENERATE_UUID",
+      "kind": "FUNCTION",
+      "source_sha256": "57b1fee4695ba78117f074f8f449abbbb741dbf9216dfcc4f029f4109e10035e",
+      "definition_accepted": true
+    },
+    {
+      "name": "GET1099BUCKET",
+      "kind": "FUNCTION",
+      "source_sha256": "467ae0d8bdc99047e00d4eccd693a1eaab22a3063209f3eb12957bbe2835f194",
+      "definition_accepted": true
+    },
+    {
+      "name": "GETDATE",
+      "kind": "FUNCTION",
+      "source_sha256": "8e4bc3d5201a98c0fad39c248c0bc88e9f948b2a0ab936db5d2464c9f2d87f0c",
+      "definition_accepted": true
+    },
+    {
+      "name": "GET_SYSCONFIG",
+      "kind": "FUNCTION",
+      "source_sha256": "371a77923a465ddf5eb64ab6297bb3e3fb4d93bc860af41f3f0ea340f66504fc",
+      "definition_accepted": true
+    },
+    {
+      "name": "INVOICEDISCOUNT",
+      "kind": "FUNCTION",
+      "source_sha256": "1dc408cb0d4d3dae03993d8164078814a2edba88768c067a993b8d67c0c85e19",
+      "definition_accepted": true
+    },
+    {
+      "name": "INVOICEOPEN",
+      "kind": "FUNCTION",
+      "source_sha256": "add6872b1a895ebdbdcb132d047eeaba2a2056e5197f65eb71df0cc8df413b15",
+      "definition_accepted": true
+    },
+    {
+      "name": "INVOICEOPENTODATE",
+      "kind": "FUNCTION",
+      "source_sha256": "512af8001376586f0172f4b71e0c907d12934800842995c3a9e341f35db43838",
+      "definition_accepted": true
+    },
+    {
+      "name": "INVOICEPAID",
+      "kind": "FUNCTION",
+      "source_sha256": "199bd4cb9187989465bc27d275c399cffce29d1075af74885cf40a7c27c0fce1",
+      "definition_accepted": true
+    },
+    {
+      "name": "INVOICEPAIDTODATE",
+      "kind": "FUNCTION",
+      "source_sha256": "9e01552da14a2a67cd100b66a041364252f8907a3c1ae19428506e55ddf5da76",
+      "definition_accepted": true
+    },
+    {
+      "name": "INVOICEWRITEOFF",
+      "kind": "FUNCTION",
+      "source_sha256": "9eb1a3c79b3e2c68e92d8383225353b2d5d9a4de0c4d755af5d08af803f4cd19",
+      "definition_accepted": true
+    },
+    {
+      "name": "ISINTERSECTCSV",
+      "kind": "FUNCTION",
+      "source_sha256": "a5062d4046a8d6e3c27c4014ec7ec1d694e10d9a11499275eab148dd018bcc25",
+      "definition_accepted": true
+    },
+    {
+      "name": "ISMEMBEROFACCTSCHEMA",
+      "kind": "FUNCTION",
+      "source_sha256": "1743a5e777105f039f917d9977f6daf3ef9feaea055254125ed4658fd9952053",
+      "definition_accepted": true
+    },
+    {
+      "name": "NEXTBUSINESSDAY",
+      "kind": "FUNCTION",
+      "source_sha256": "6821542374142064c32818ba48a4acc8176d1f398bbc7e82e9a2b52128c78350",
+      "definition_accepted": true
+    },
+    {
+      "name": "NEXTIDFUNC",
+      "kind": "FUNCTION",
+      "source_sha256": "c9294765e35fced72635c796d17099c7f3bfbbdd5031d88cbee271e4e2a8e6b4",
+      "definition_accepted": true
+    },
+    {
+      "name": "PAYMENTALLOCATED",
+      "kind": "FUNCTION",
+      "source_sha256": "5a09d8fc99f68b75ff2344e8d29645338151fba183e5914f88ca10753306b405",
+      "definition_accepted": true
+    },
+    {
+      "name": "PAYMENTAVAILABLE",
+      "kind": "FUNCTION",
+      "source_sha256": "111b5d1f5d7847e4b3c4a3f622ac504549920dc23d290a3311de056348e7ab10",
+      "definition_accepted": true
+    },
+    {
+      "name": "PAYMENTTERMDISCOUNT",
+      "kind": "FUNCTION",
+      "source_sha256": "b6f19e2a4d3fb9b638cc6488a78d7c4968429e1cbd7e5c4ba1fe251fb6a94811",
+      "definition_accepted": true
+    },
+    {
+      "name": "PAYMENTTERMDUEDATE",
+      "kind": "FUNCTION",
+      "source_sha256": "f2945cb88b4e4242a218f02515455eb52a061e72d811bcacbea7159906c33008",
+      "definition_accepted": true
+    },
+    {
+      "name": "PAYMENTTERMDUEDAYS",
+      "kind": "FUNCTION",
+      "source_sha256": "f43e8ad7f63972159d56ef8e98e492d144b45b798f2b984d26ab2f77dd60216e",
+      "definition_accepted": true
+    },
+    {
+      "name": "PRODQTYORDERED",
+      "kind": "FUNCTION",
+      "source_sha256": "630fb227a0c34e53009b2aa07f96f0fa8709f443610d0f1ccd698f0312cf275d",
+      "definition_accepted": true
+    },
+    {
+      "name": "PRODQTYRESERVED",
+      "kind": "FUNCTION",
+      "source_sha256": "64a0d0efdd60ca0c05be87554bac2a38bda871f4f84930f554e54308732dd005",
+      "definition_accepted": true
+    },
+    {
+      "name": "PRODUCTATTRIBUTE",
+      "kind": "FUNCTION",
+      "source_sha256": "9df97f8e2b3fd7daa03860d20bc3b32b5b273649603aff3c81180a32912ffd7c",
+      "definition_accepted": true
+    },
+    {
+      "name": "REGISTER_MIGRATION_SCRIPT",
+      "kind": "FUNCTION",
+      "source_sha256": "c424b03a8b07bee14db66a08c05a97177c8cc88dd8b7fb7c56ee7ac02213be1e",
+      "definition_accepted": true
+    },
+    {
+      "name": "TORECORDID",
+      "kind": "FUNCTION",
+      "source_sha256": "65b86cd37b1b0d416f3f40e24a5e6a0542071c35551aea8a671afc01001b088c",
+      "definition_accepted": true
+    },
+    {
+      "name": "TOTABLEOFVARCHAR2",
+      "kind": "FUNCTION",
+      "source_sha256": "9fcafc9cf5bfec22ea7dcbc898b0d0b91ef5e7068fb6865de4576c942a5b9e98",
+      "definition_accepted": false,
+      "sqlstate": "0A000",
+      "message": "unsupported SQL: oracle-preview-v1: hierarchical queries are not implemented"
+    },
+    {
+      "name": "AD_COLUMN_SYNC",
+      "kind": "PROCEDURE",
+      "source_sha256": "e024bd4b190b3fffa5a968305dae406c0235ee7bb1bd8138743b94bc6a13dbc7",
+      "definition_accepted": false,
+      "sqlstate": "0A000",
+      "message": "unsupported SQL: oracle-preview-v1: unknown %TYPE table IDEMPIERE_QUAL.USER_TAB_COLUMNS"
+    },
+    {
+      "name": "AD_SEQUENCE_DOC",
+      "kind": "PROCEDURE",
+      "source_sha256": "212c3e865bffa51ca67750e91204e338474766c621abc8ebd97dd82d62fab4bb",
+      "definition_accepted": true
+    },
+    {
+      "name": "AD_SEQUENCE_DOCTYPE",
+      "kind": "PROCEDURE",
+      "source_sha256": "b2c1b29d0d1d7268811f27868979a90b587b53d7c8b3b693625ce224c73b826d",
+      "definition_accepted": true
+    },
+    {
+      "name": "AD_SEQUENCE_NEXT",
+      "kind": "PROCEDURE",
+      "source_sha256": "2a174da91b8afd59124f39b630d1f8346b521392d141e7ee75687ce73d195cfe",
+      "definition_accepted": true
+    },
+    {
+      "name": "C_ACCTSCHEMA_DEFAULT_COPY",
+      "kind": "PROCEDURE",
+      "source_sha256": "f4293f1d82b7f4e27ee2a0e430b716d8e17678c00174fa1e4781cdaf97c70457",
+      "definition_accepted": true
+    },
+    {
+      "name": "C_BP_GROUP_ACCT_COPY",
+      "kind": "PROCEDURE",
+      "source_sha256": "613bf3fecf118e1933dc7d60b4f6a8ee763e921f884e7f9549d552dae508f4cb",
+      "definition_accepted": true
+    },
+    {
+      "name": "C_ORDER_DRILLDOWN",
+      "kind": "PROCEDURE",
+      "source_sha256": "302823f125f844983c31a1b5ac3a37b842f4f91666d6f532db3ed2da427b6086",
+      "definition_accepted": true
+    },
+    {
+      "name": "DBA_AFTERIMPORT",
+      "kind": "PROCEDURE",
+      "source_sha256": "13184ce5cb9f7d49ab53668a0f4bb8ea5d4119e43bb603dcea89e38109a63491",
+      "definition_accepted": true
+    },
+    {
+      "name": "DBA_CLEANUP",
+      "kind": "PROCEDURE",
+      "source_sha256": "4e7e50ab65099ce9a56aae41835bfac996c08aec13f877d7dc75ffc8ed8fcb00",
+      "definition_accepted": true
+    },
+    {
+      "name": "DBA_RECOMPILE",
+      "kind": "PROCEDURE",
+      "source_sha256": "5b1698050d6009d5e2eda6d42dc2ac2c0b19cc5cfd814e7703479329182940f9",
+      "definition_accepted": true
+    },
+    {
+      "name": "FACT_ACCT_BALANCE_UPDATE",
+      "kind": "PROCEDURE",
+      "source_sha256": "da60f0c3870c5a32c6b1f4126c79d1fdd298fa820821ca1abfce0755e0bc1998",
+      "definition_accepted": true
+    },
+    {
+      "name": "M_PRODUCT_CATEGORY_ACCT_COPY",
+      "kind": "PROCEDURE",
+      "source_sha256": "2ad746d4a22eb4c8e8c78dc33110f19e4697f04b7e356744c935fad2398d0d25",
+      "definition_accepted": true
+    },
+    {
+      "name": "M_PRODUCT_DELETE",
+      "kind": "PROCEDURE",
+      "source_sha256": "352c751f0cbf3cc5ec5ed5d09b64199b1b5c55511dc41f35835feefe61af63f9",
+      "definition_accepted": true
+    },
+    {
+      "name": "NEXTID",
+      "kind": "PROCEDURE",
+      "source_sha256": "2909da207a432c9edd296db5b53d0aa2e4bf08ca22c0494d5934ddc35c917171",
+      "definition_accepted": true
+    }
+  ],
+  "accepted": 60,
+  "total": 62,
+  "completed": true
+}

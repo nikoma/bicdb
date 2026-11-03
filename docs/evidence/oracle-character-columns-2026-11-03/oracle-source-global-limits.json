@@ -1,0 +1,71 @@
+[
+  {
+    "kind": "fixed",
+    "descriptor": [
+      2000,
+      2000
+    ]
+  },
+  {
+    "kind": "fixed",
+    "n": 1,
+    "value": [
+      1999,
+      2000
+    ]
+  },
+  {
+    "kind": "fixed",
+    "n": 1000,
+    "value": [
+      1000,
+      2000
+    ]
+  },
+  {
+    "kind": "fixed",
+    "n": 2000,
+    "error": "ORA-12899"
+  },
+  {
+    "kind": "fixed",
+    "n": 2001,
+    "error": "ORA-12899"
+  },
+  {
+    "kind": "varying",
+    "descriptor": [
+      4000,
+      4000
+    ]
+  },
+  {
+    "kind": "varying",
+    "n": 1,
+    "value": [
+      1,
+      2
+    ]
+  },
+  {
+    "kind": "varying",
+    "n": 1000,
+    "value": [
+      1000,
+      2000
+    ]
+  },
+  {
+    "kind": "varying",
+    "n": 2000,
+    "value": [
+      2000,
+      4000
+    ]
+  },
+  {
+    "kind": "varying",
+    "n": 2001,
+    "error": "ORA-12899"
+  }
+]

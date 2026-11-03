@@ -1,0 +1,24 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "00701f07e16628cf30f295e4b13a76adea8fa6c0c4a2faff9281b3a8f2fcbf26",
+  "application_qualified": false,
+  "application_database_updated": false,
+  "scope": "Production DDL generator, capability and provenance checks, and COPY on a disposable synthetic character table; no application data imported",
+  "cases": [
+    {
+      "id": "production_capability_probe",
+      "success": true
+    },
+    {
+      "id": "production_unit_aware_ddl_and_provenance",
+      "success": true,
+      "verified_columns": 4
+    },
+    {
+      "id": "copy_preserves_unicode_nulls_and_byte_padding",
+      "success": true,
+      "rows": 2
+    }
+  ],
+  "success": true
+}

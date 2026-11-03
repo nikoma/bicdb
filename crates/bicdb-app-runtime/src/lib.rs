@@ -10,10 +10,12 @@ mod auth;
 mod bounded_sql;
 mod host;
 mod http;
+mod management;
 mod openapi;
 mod otlp;
 mod package;
 mod package_input;
+mod package_tables;
 pub use package_input::{encoded_package_byte_limit, MAX_MODULE_NAME_BYTES, MAX_PACKAGE_MODULES};
 mod program;
 mod providers;
@@ -36,6 +38,7 @@ pub use http::{
     ApplicationHttpRequest, ApplicationHttpResponse, HttpAdmissionCheck, HttpHostPolicy,
     HttpServerHandle, TrustedHttpHandler,
 };
+pub use management::{ManagementHttpHandler, MANAGEMENT_PATH_PREFIX};
 pub use openapi::generate_openapi;
 pub use otlp::{OtlpObservability, OtlpObservabilityConfig};
 pub use package::{
@@ -44,6 +47,7 @@ pub use package::{
     ApplicationExecutionScope, ApplicationPackage, FrontendAsset, PackageVerification,
     PackageVerifier, TrustedSigningKeys,
 };
+pub use package_tables::{prepare_unsigned_package, TableDeclarationV1};
 pub use program::{
     execute_application_program, ApplicationProgramHost, DenyApplicationProgramHost,
 };

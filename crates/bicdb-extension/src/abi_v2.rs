@@ -299,7 +299,12 @@ pub struct WorkerDefinition {
 #[serde(deny_unknown_fields)]
 pub struct ScheduleDefinition {
     pub name: String,
+    /// WebAssembly or program export. Empty only for a script schedule.
+    #[serde(default)]
     pub export: String,
+    /// Signed package script handler, called with the occurrence event.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script: Option<RouteScript>,
     pub schedule: String,
     pub timezone: String,
     #[serde(default)]
@@ -1441,7 +1446,15 @@ pub struct RouteV2 {
     pub name: String,
     pub method: HttpMethod,
     pub template: String,
+    /// WebAssembly or BicDB application-program export. Empty only for a
+    /// route served by a signed package script (`script`).
+    #[serde(default)]
     pub export: String,
+    /// Signed JavaScript/TypeScript handler from the package `scripts` map.
+    /// It receives the same ABI-v2 HTTP request and per-caller authority as a
+    /// WebAssembly handler and returns an HTTP response object.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script: Option<RouteScript>,
     #[serde(default)]
     pub resource: Option<String>,
     #[serde(default)]
@@ -1511,6 +1524,18 @@ pub struct RouteV2 {
     pub sse: bool,
     #[serde(default)]
     pub websocket: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RouteScript {
+    /// Key of the script in the signed package `scripts` map.
+    pub module: String,
+    /// Global function called with the HTTP request.
+    pub export: String,
+    /// Declared egress policy available to `http.post`; absent disables HTTP.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub egress: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -2867,6 +2892,18 @@ impl ApplicationManifestV2 {
                 }
                 _ => {}
             }
+            if let Some(egress) = route
+                .script
+                .as_ref()
+                .and_then(|script| script.egress.as_ref())
+            {
+                if !self.egress.iter().any(|policy| &policy.name == egress) {
+                    return invalid(format!(
+                        "script route `{}` references undeclared egress policy `{egress}`",
+                        route.name
+                    ));
+                }
+            }
             if let Some(call) = &route.service_call {
                 if !self
                     .service_imports
@@ -3138,7 +3175,27 @@ impl ApplicationManifestV2 {
         unique_by("schedule", self.schedules.iter().map(|item| &item.name))?;
         for schedule in &self.schedules {
             validate_identifier("schedule", &schedule.name)?;
-            validate_identifier("schedule export", &schedule.export)?;
+            match &schedule.script {
+                Some(script) => {
+                    validate_identifier("schedule script module", &script.module)?;
+                    validate_identifier("schedule script export", &script.export)?;
+                    if !schedule.export.is_empty() || script.export.contains(['-', '.']) {
+                        return invalid(format!(
+                            "script schedule `{}` must name only a JavaScript identifier export",
+                            schedule.name
+                        ));
+                    }
+                    if let Some(egress) = &script.egress {
+                        if !self.egress.iter().any(|policy| &policy.name == egress) {
+                            return invalid(format!(
+                                "script schedule `{}` references undeclared egress policy `{egress}`",
+                                schedule.name
+                            ));
+                        }
+                    }
+                }
+                None => validate_identifier("schedule export", &schedule.export)?,
+            }
             validate_nonempty("schedule expression", &schedule.schedule, 256)?;
             validate_nonempty("schedule timezone", &schedule.timezone, 128)?;
             if schedule.max_concurrency == 0 || schedule.max_concurrency > 64 {
@@ -3739,6 +3796,7 @@ impl ApplicationManifestV2 {
             for route in self.routes.iter().filter(|route| {
                 route.resource.is_none()
                     && route.service_call.is_none()
+                    && route.script.is_none()
                     && !is_carrier_realtime_route(&self.realtime, route)
                     && !route.export.starts_with("__carrier_security_")
             }) {
@@ -9746,7 +9804,39 @@ impl RouteV2 {
     fn validate(&self) -> Result<()> {
         validate_identifier("v2 route", &self.name)?;
         let template_parameters = route_template_parameters(&self.template)?;
-        validate_identifier("v2 route export", &self.export)?;
+        if let Some(script) = &self.script {
+            validate_identifier("route script module", &script.module)?;
+            validate_identifier("route script export", &script.export)?;
+            if script.export.contains(['-', '.']) {
+                return invalid(format!(
+                    "route `{}` script export must be a JavaScript identifier",
+                    self.name
+                ));
+            }
+            if let Some(egress) = &script.egress {
+                validate_identifier("route script egress", egress)?;
+            }
+            if !self.export.is_empty()
+                || self.resource.is_some()
+                || self.operation.is_some()
+                || self.service_call.is_some()
+                || self.application_request.is_some()
+                || self.application_response.is_some()
+                || self.idempotency.is_some()
+                || self.cache.is_some()
+                || self.streaming_request
+                || self.streaming_response
+                || self.sse
+                || self.websocket
+            {
+                return invalid(format!(
+                    "script route `{}` cannot also bind an export, resource, service, program contract, or stream",
+                    self.name
+                ));
+            }
+        } else {
+            validate_identifier("v2 route export", &self.export)?;
+        }
         if self.resource.is_some() != self.operation.is_some() {
             return invalid(format!(
                 "route `{}` must bind both resource and operation",
@@ -12395,6 +12485,7 @@ mod tests {
             method: HttpMethod::Get,
             template: "/plugin-info".to_string(),
             export: "carrier_service_route".to_string(),
+            script: None,
             resource: None,
             operation: None,
             service_call: Some(RouteServiceCall {

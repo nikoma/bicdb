@@ -518,6 +518,7 @@ impl ApplicationRuntime {
         let verification = self.verifier.verify(package)?;
         validate_runtime_profile(package)?;
         self.compile_modules(package)?;
+        compile_scripts(package)?;
         Ok(verification)
     }
 
@@ -538,6 +539,7 @@ impl ApplicationRuntime {
         let verification = self.verifier.verify(&package)?;
         validate_runtime_profile(&package)?;
         let modules = self.compile_modules(&package)?;
+        let scripts = compile_scripts(&package)?;
         persist_package(
             &self.config.package_root,
             &verification.package_sha256,
@@ -556,6 +558,7 @@ impl ApplicationRuntime {
             readiness: ApplicationReadiness::default(),
             activated_at_ms: 0,
             modules,
+            scripts,
             manifest,
             carrier_plan,
         });
@@ -1041,6 +1044,20 @@ impl ApplicationRuntime {
                 .map(|snapshot| diagnostic(snapshot)),
         );
         diagnostics
+    }
+
+    /// Decode an unverified package from bytes with the install size limits.
+    pub fn read_package_bytes(&self, bytes: &[u8]) -> Result<ApplicationPackage> {
+        self.verifier.read_package(bytes)
+    }
+
+    /// Number of prior snapshots available to `rollback`.
+    pub fn history_len(&self, application: &str) -> usize {
+        self.history
+            .lock()
+            .expect("package history poisoned")
+            .get(&normalized(application))
+            .map_or(0, VecDeque::len)
     }
 
     pub fn inspect(&self, application: &str) -> Result<RuntimeDiagnostic> {
@@ -2380,6 +2397,44 @@ impl ApplicationRuntime {
         Ok(compiled)
     }
 
+    /// Run a signed package script route handler for one authenticated
+    /// caller with the same capability host a WebAssembly handler receives.
+    pub(crate) fn invoke_script_route(
+        &self,
+        snapshot: &PackageSnapshot,
+        script: &bicdb_extension::abi_v2::RouteScript,
+        actor: ActorContext,
+        request: Value,
+    ) -> Result<Value> {
+        let javascript = snapshot
+            .scripts
+            .get(&script.module)
+            .cloned()
+            .ok_or_else(|| {
+                AppRuntimeError::InvalidPackage(format!(
+                    "script `{}` is not installed",
+                    script.module
+                ))
+            })?;
+        let db = self.db.read();
+        let host = CapabilityHost::new_validated(
+            &db,
+            Arc::clone(&snapshot.manifest),
+            actor,
+            self.services.clone(),
+        )?;
+        crate::script_workflow::execute_script_handler(
+            &javascript,
+            &script.export,
+            &request,
+            host,
+            crate::ScriptWorkflowOptions {
+                limits: bicdb_script::Limits::default(),
+                egress_policy: script.egress.clone(),
+            },
+        )
+    }
+
     pub(crate) fn restore_active_snapshot(&self) -> Result<()> {
         let path = self
             .config
@@ -2485,6 +2540,7 @@ impl ApplicationRuntime {
         }
         validate_runtime_profile(&package)?;
         let modules = self.compile_modules(&package)?;
+        let scripts = compile_scripts(&package)?;
         let package = Arc::new(package);
         let manifest = Arc::new(package.manifest.clone());
         let carrier_plan = ApplicationExecutionPlan::prepare(Arc::clone(&manifest));
@@ -2509,6 +2565,7 @@ impl ApplicationRuntime {
             },
             activated_at_ms: package_ref.activated_at_ms,
             modules,
+            scripts,
             manifest,
             carrier_plan,
         }))
@@ -3161,19 +3218,24 @@ impl ApplicationRuntime {
 
     pub(crate) fn prepare_supervisors(&self, snapshot: &PackageSnapshot) -> Result<SupervisorSet> {
         let application = snapshot.package.manifest.application.as_deref().unwrap();
-        let module = snapshot
+        let mut supervisors = SupervisorSet::default();
+        if application.workers.is_empty() && application.schedules.is_empty() {
+            return Ok(supervisors);
+        }
+        let entry = snapshot
             .modules
             .get(&snapshot.package.manifest.identity.name)
-            .cloned()
-            .ok_or_else(|| {
+            .cloned();
+        let module = || {
+            entry.clone().ok_or_else(|| {
                 AppRuntimeError::InvalidPackage("application entry module is absent".to_string())
-            })?;
+            })
+        };
         let manifest = Arc::new(snapshot.package.manifest.clone());
-        let mut supervisors = SupervisorSet::default();
         for worker in &application.workers {
             let control = start_worker(
                 self.db.clone(),
-                module.clone(),
+                module()?,
                 manifest.clone(),
                 self.services.clone(),
                 worker.clone(),
@@ -3183,9 +3245,24 @@ impl ApplicationRuntime {
         }
         for schedule in &application.schedules {
             let plan = parse_schedule_plan(&schedule.schedule, &schedule.timezone)?;
+            let handler = match &schedule.script {
+                Some(script) => ScheduleHandler::Script(
+                    snapshot
+                        .scripts
+                        .get(&script.module)
+                        .cloned()
+                        .ok_or_else(|| {
+                            AppRuntimeError::InvalidPackage(format!(
+                                "script `{}` is not installed",
+                                script.module
+                            ))
+                        })?,
+                ),
+                None => ScheduleHandler::Wasm(module()?),
+            };
             let control = start_schedule(
                 self.db.clone(),
-                module.clone(),
+                handler,
                 manifest.clone(),
                 self.services.clone(),
                 schedule.clone(),
@@ -3520,4 +3597,27 @@ impl ApplicationRuntime {
         validate_service_response(&result.body, &method_contract)?;
         Ok(result.body)
     }
+}
+
+/// Compile every signed package script with the same compiler and sandbox
+/// check used for published workflows. Any failure rejects the whole package.
+pub(crate) fn compile_scripts(package: &ApplicationPackage) -> Result<BTreeMap<String, Arc<str>>> {
+    let limits = bicdb_script::Limits {
+        source_bytes: crate::package::MAX_SCRIPT_BYTES,
+        ..bicdb_script::Limits::default()
+    };
+    package
+        .scripts
+        .iter()
+        .map(|(name, source)| {
+            bicdb_script::compile_typescript(source, &limits)
+                .map(|compiled| (name.clone(), Arc::<str>::from(compiled.javascript)))
+                .map_err(|error| {
+                    AppRuntimeError::InvalidPackage(format!(
+                        "script `{name}` failed to compile: {}",
+                        crate::script_workflow::bounded_error_text(&error.0)
+                    ))
+                })
+        })
+        .collect()
 }

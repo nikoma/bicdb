@@ -556,8 +556,9 @@ pub(crate) fn validate_runtime_profile(package: &ApplicationPackage) -> Result<(
             || analysis.actions != statement.actions
         {
             return Err(AppRuntimeError::InvalidPackage(format!(
-                "declared SQL `{}` authority does not match its parsed relations/actions/routines",
-                statement.id
+                "declared SQL `{}` authority does not match its parsed relations/actions/routines \
+                 (parsed relations {:?}, actions {:?}, routines {:?})",
+                statement.id, analysis.relations, analysis.actions, analysis.routines
             )));
         }
         if analysis.parameter_count != statement.parameters.len() {
@@ -2222,6 +2223,7 @@ mod tests {
         ScheduleDefinition {
             name: "daily_reconcile".to_string(),
             export: "reconcile".to_string(),
+            script: None,
             schedule: "@every 1s".to_string(),
             timezone: "UTC".to_string(),
             payload: json!({"source": "scheduler-test"}),
@@ -3288,6 +3290,7 @@ mod tests {
             modules: BTreeMap::from([("carrier-app".to_string(), module)]),
             frontend_assets: BTreeMap::new(),
             components: Vec::new(),
+            scripts: BTreeMap::new(),
             dependency_lock,
             sbom,
             provenance,

@@ -24,6 +24,7 @@ chrono.workspace = true
 chrono-tz = "0.10"
 cron.workspace = true
 ed25519-dalek.workspace = true
+subtle.workspace = true
 geo.workspace = true
 handlebars.workspace = true
 hex.workspace = true

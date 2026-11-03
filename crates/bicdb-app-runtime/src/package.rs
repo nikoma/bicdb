@@ -11,6 +11,9 @@ use crate::{AppRuntimeError, Result};
 pub(crate) const MAX_FRONTEND_ASSETS: usize = 4_096;
 pub(crate) const MAX_FRONTEND_ASSET_PATH_BYTES: usize = 1_024;
 pub(crate) const MAX_APPLICATION_COMPONENTS: usize = 128;
+pub(crate) const MAX_PACKAGE_SCRIPTS: usize = 256;
+pub(crate) const MAX_SCRIPT_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_SCRIPTS_TOTAL_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
@@ -111,6 +114,11 @@ pub struct ApplicationPackage {
     /// compatibility; the hardened cell construction path requires it.
     #[serde(default)]
     pub components: Vec<ApplicationComponent>,
+    /// Script name to TypeScript/JavaScript source for `RouteV2::script`
+    /// handlers. The SHA-256 of every exact source is covered by the package
+    /// signature; sources are compiled again at every stage and restore.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub scripts: BTreeMap<String, String>,
     pub dependency_lock: Vec<u8>,
     pub sbom: Vec<u8>,
     pub provenance: Vec<u8>,
@@ -231,6 +239,8 @@ struct PackageSigningEnvelope<'a> {
     frontend_assets: &'a BTreeMap<String, FrontendAssetSignature>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     components: &'a Vec<ApplicationComponent>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    script_sha256: &'a BTreeMap<String, String>,
     dependency_lock_sha256: String,
     sbom_sha256: String,
     provenance_sha256: String,
@@ -277,9 +287,20 @@ impl PackageVerifier {
         let application = package.manifest.application.as_deref().ok_or_else(|| {
             AppRuntimeError::InvalidPackage("missing ABI v2 application manifest".to_string())
         })?;
-        if !package
-            .modules
-            .contains_key(&package.manifest.identity.name)
+        // Script-only packages carry no WebAssembly at all; any WebAssembly,
+        // worker, schedule, or exported service still requires the entry module.
+        let script_only = package.modules.is_empty()
+            && !package.scripts.is_empty()
+            && application.workers.is_empty()
+            && application
+                .schedules
+                .iter()
+                .all(|schedule| schedule.script.is_some())
+            && application.service_exports.is_empty();
+        if !script_only
+            && !package
+                .modules
+                .contains_key(&package.manifest.identity.name)
         {
             return Err(AppRuntimeError::InvalidPackage(format!(
                 "package lacks entry module `{}`",
@@ -288,6 +309,7 @@ impl PackageVerifier {
         }
         validate_components(package)?;
         validate_frontend_assets(package)?;
+        validate_scripts(package, application)?;
         let module_sha256 = package
             .modules
             .iter()
@@ -388,6 +410,68 @@ fn validate_components(package: &ApplicationPackage) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn validate_scripts(
+    package: &ApplicationPackage,
+    application: &bicdb_extension::abi_v2::ApplicationManifestV2,
+) -> Result<()> {
+    if package.scripts.len() > MAX_PACKAGE_SCRIPTS {
+        return Err(AppRuntimeError::InvalidPackage(format!(
+            "application package exceeds {MAX_PACKAGE_SCRIPTS} scripts"
+        )));
+    }
+    let mut total = 0_usize;
+    for (name, source) in &package.scripts {
+        if !valid_script_name(name) {
+            return Err(AppRuntimeError::InvalidPackage(format!(
+                "script name `{name}` must be 1..=128 ASCII letters, digits, `_`, `-`, or `.`, starting with a letter or `_`"
+            )));
+        }
+        if source.trim().is_empty() || source.len() > MAX_SCRIPT_BYTES {
+            return Err(AppRuntimeError::InvalidPackage(format!(
+                "script `{name}` must contain 1..={MAX_SCRIPT_BYTES} bytes"
+            )));
+        }
+        total = total.saturating_add(source.len());
+    }
+    if total > MAX_SCRIPTS_TOTAL_BYTES {
+        return Err(AppRuntimeError::InvalidPackage(format!(
+            "package scripts exceed {MAX_SCRIPTS_TOTAL_BYTES} bytes in total"
+        )));
+    }
+    let handlers =
+        application
+            .routes
+            .iter()
+            .filter_map(|route| Some(("route", &route.name, route.script.as_ref()?)))
+            .chain(application.schedules.iter().filter_map(|schedule| {
+                Some(("schedule", &schedule.name, schedule.script.as_ref()?))
+            }));
+    for (kind, name, script) in handlers {
+        if !package.scripts.contains_key(&script.module) {
+            return Err(AppRuntimeError::InvalidPackage(format!(
+                "{kind} `{name}` references absent script `{}`",
+                script.module
+            )));
+        }
+        if !bicdb_script::is_entry_name(&script.export) {
+            return Err(AppRuntimeError::InvalidPackage(format!(
+                "{kind} `{name}` script export `{}` is not a usable JavaScript function name",
+                script.export
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn valid_script_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    name.len() <= 128
+        && bytes
+            .next()
+            .is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
 }
 
 fn validate_frontend_assets(package: &ApplicationPackage) -> Result<()> {
@@ -688,12 +772,18 @@ pub fn canonical_signing_payload(package: &ApplicationPackage) -> Result<Vec<u8>
             )
         })
         .collect::<BTreeMap<_, _>>();
+    let script_sha256 = package
+        .scripts
+        .iter()
+        .map(|(name, source)| (name.clone(), sha256(source.as_bytes())))
+        .collect::<BTreeMap<_, _>>();
     Ok(serde_json::to_vec(&PackageSigningEnvelope {
         format: "bicdb-application-package-signature-v1",
         manifest,
         module_sha256: &module_sha256,
         frontend_assets: &frontend_assets,
         components: &package.components,
+        script_sha256: &script_sha256,
         dependency_lock_sha256: sha256(&package.dependency_lock),
         sbom_sha256: sha256(&package.sbom),
         provenance_sha256: sha256(&package.provenance),
@@ -833,6 +923,7 @@ mod tests {
             modules: BTreeMap::from([("carrier-test".to_string(), b"\0asm-test".to_vec())]),
             frontend_assets: BTreeMap::new(),
             components: Vec::new(),
+            scripts: BTreeMap::new(),
             dependency_lock,
             sbom,
             provenance,

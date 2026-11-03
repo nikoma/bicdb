@@ -2652,7 +2652,15 @@ pub(crate) fn validate_object(
             match field.field_type {
                 FieldType::Bool => value.is_boolean(),
                 FieldType::Int64 => value.as_i64().is_some() || value.as_u64().is_some(),
-                FieldType::Float64 | FieldType::Decimal => value.is_number(),
+                FieldType::Float64 => value.is_number(),
+                // Declared SQL binds and stores numeric values as exact
+                // decimal text; both forms are the same decimal value.
+                FieldType::Decimal => {
+                    value.is_number()
+                        || value
+                            .as_str()
+                            .is_some_and(|value| value.parse::<rust_decimal::Decimal>().is_ok())
+                }
                 FieldType::String | FieldType::Timestamp | FieldType::Date => value.is_string(),
                 FieldType::Bytes => value.is_string() || value.is_array(),
                 FieldType::Uuid => value
@@ -3639,6 +3647,7 @@ mod tests {
             method,
             template,
             export: "carrier_resource_api".to_string(),
+            script: None,
             resource: Some(contract.name.clone()),
             operation: Some(operation),
             service_call: None,

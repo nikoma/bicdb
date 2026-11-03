@@ -652,6 +652,36 @@ impl ApplicationRuntime {
                         trailers: Vec::new(),
                         retry_after_ms: None,
                     }
+                } else if let Some(script) = &route.script {
+                    let script_request = HttpRequestV2 {
+                        request_id: request_id.clone(),
+                        method: request.method,
+                        path: request.path.clone(),
+                        path_parameters,
+                        query: request.query.clone(),
+                        headers: request
+                            .headers
+                            .iter()
+                            .filter(|(name, _)| !sensitive_request_header(name))
+                            .cloned()
+                            .collect(),
+                        cookies: Vec::new(),
+                        body: request.body.clone(),
+                        trusted_client_address: request.peer_address.clone(),
+                        origin: origin.clone(),
+                        deadline_unix_ms: actor.deadline_unix_ms,
+                        trace_id: trace_id.clone(),
+                        actor: actor.clone(),
+                    };
+                    script_http_response(
+                        &route.name,
+                        self.invoke_script_route(
+                            &snapshot,
+                            script,
+                            actor.clone(),
+                            serde_json::to_value(script_request)?,
+                        )?,
+                    )?
                 } else {
                     let wasm_request = HttpRequestV2 {
                         request_id: request_id.clone(),
@@ -3621,6 +3651,83 @@ fn error_response_with_request_id(
         .to_string(),
     )
         .into_response()
+}
+
+/// Accept either an exact ABI-v2 `HttpResponseV2` or the plain script form
+/// `{status, headers?, body?}`: headers are an object or `[name, value]`
+/// pairs; an absent/null body is empty, a string is text, anything else JSON.
+fn script_http_response(route: &str, value: Value) -> Result<ApplicationHttpResponse> {
+    let invalid = |reason: &str| {
+        AppRuntimeError::Extension(bicdb_extension::ExtensionError::Runtime(format!(
+            "script route `{route}` returned an invalid HTTP response: {reason}"
+        )))
+    };
+    if let Ok(response) = serde_json::from_value::<HttpResponseV2>(value.clone()) {
+        if !(100..=599).contains(&response.status) {
+            return Err(invalid("status must be 100..=599"));
+        }
+        if matches!(
+            response.body,
+            HttpResponseBodyV2::Stream(_)
+                | HttpResponseBodyV2::Sse(_)
+                | HttpResponseBodyV2::WebSocket(_)
+        ) {
+            return Err(invalid("script routes cannot return stream handles"));
+        }
+        return Ok(ApplicationHttpResponse {
+            status: response.status,
+            headers: response.headers,
+            body: response.body,
+            trailers: response.trailers,
+            retry_after_ms: response.retry_after_ms,
+        });
+    }
+    let Value::Object(mut object) = value else {
+        return Err(invalid("expected an object with a numeric status"));
+    };
+    if let Some(key) = object
+        .keys()
+        .find(|key| !matches!(key.as_str(), "status" | "headers" | "body"))
+    {
+        return Err(invalid(&format!("unknown field `{key}`")));
+    }
+    let status = object
+        .get("status")
+        .and_then(Value::as_u64)
+        .filter(|status| (100..=599).contains(status))
+        .ok_or_else(|| invalid("status must be an integer in 100..=599"))? as u16;
+    let mut headers = Vec::new();
+    match object.remove("headers") {
+        None | Some(Value::Null) => {}
+        Some(Value::Object(map)) => {
+            for (name, value) in map {
+                let Value::String(value) = value else {
+                    return Err(invalid("header values must be strings"));
+                };
+                headers.push((name, value));
+            }
+        }
+        Some(Value::Array(pairs)) => {
+            for pair in pairs {
+                let (name, value) = serde_json::from_value::<(String, String)>(pair)
+                    .map_err(|_| invalid("header pairs must be [name, value] strings"))?;
+                headers.push((name, value));
+            }
+        }
+        Some(_) => return Err(invalid("headers must be an object or [name, value] pairs")),
+    }
+    let body = match object.remove("body") {
+        None | Some(Value::Null) => HttpResponseBodyV2::Empty,
+        Some(Value::String(text)) => HttpResponseBodyV2::Text(text),
+        Some(value) => HttpResponseBodyV2::Json(value),
+    };
+    Ok(ApplicationHttpResponse {
+        status,
+        headers,
+        body,
+        trailers: Vec::new(),
+        retry_after_ms: None,
+    })
 }
 
 fn match_route(template: &str, path: &str) -> Option<BTreeMap<String, String>> {

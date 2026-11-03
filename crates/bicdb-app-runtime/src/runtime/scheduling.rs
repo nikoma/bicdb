@@ -4,9 +4,17 @@ use super::*;
 #[allow(unused_imports)]
 use crate::*;
 
+/// Code that serves one schedule: the WebAssembly entry module or the
+/// compiled JavaScript of a signed package script.
+#[derive(Clone)]
+pub(crate) enum ScheduleHandler {
+    Wasm(Arc<WasmExtension>),
+    Script(Arc<str>),
+}
+
 pub(crate) fn start_schedule(
     db: Arc<RwLock<BicDb>>,
-    module: Arc<WasmExtension>,
+    module: ScheduleHandler,
     manifest: Arc<bicdb_extension::ExtensionManifest>,
     services: InvocationServices,
     schedule: ScheduleDefinition,
@@ -154,7 +162,7 @@ pub(crate) fn start_schedule(
 
 pub(crate) fn execute_schedule_occurrence(
     db: &Arc<RwLock<BicDb>>,
-    module: &Arc<WasmExtension>,
+    module: &ScheduleHandler,
     manifest: Arc<bicdb_extension::ExtensionManifest>,
     services: InvocationServices,
     schedule: &ScheduleDefinition,
@@ -225,6 +233,29 @@ pub(crate) fn execute_schedule_occurrence(
         .and_then(|application| application.application_program.as_ref())
         .is_some_and(|program| program.callables.contains_key(&schedule.export));
     let database = db.read();
+    let module = match (module, &schedule.script) {
+        (ScheduleHandler::Script(javascript), Some(script)) => {
+            let host = CapabilityHost::new(&database, manifest, actor, services)?;
+            return crate::script_workflow::execute_script_handler(
+                javascript,
+                &script.export,
+                &invocation.payload,
+                host,
+                crate::ScriptWorkflowOptions {
+                    limits: bicdb_script::Limits::default(),
+                    egress_policy: script.egress.clone(),
+                },
+            )
+            .map(|_| ());
+        }
+        (ScheduleHandler::Wasm(module), None) => module,
+        _ => {
+            return Err(AppRuntimeError::InvalidPackage(format!(
+                "schedule `{}` handler does not match its signed definition",
+                schedule.name
+            )));
+        }
+    };
     if carrier_callable {
         execute_carrier_callable_with_host(
             &database,

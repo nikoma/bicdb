@@ -226,6 +226,7 @@ impl ApplicationPackage {
         }
         if self.frontend_assets.len() > MAX_FRONTEND_ASSETS
             || self.components.len() > MAX_APPLICATION_COMPONENTS
+            || self.scripts.len() > crate::package::MAX_PACKAGE_SCRIPTS
         {
             return Err(AppRuntimeError::InvalidPackage(
                 "package has too many frontend assets or components".into(),
@@ -237,6 +238,11 @@ impl ApplicationPackage {
             .values()
             .map(Vec::len)
             .chain(self.frontend_assets.values().map(|asset| asset.bytes.len()))
+            .chain(
+                self.scripts
+                    .iter()
+                    .map(|(name, source)| name.len() + source.len()),
+            )
             .chain([
                 self.dependency_lock.len(),
                 self.sbom.len(),

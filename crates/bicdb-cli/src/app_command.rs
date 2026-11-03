@@ -13,8 +13,9 @@ use bicdb_app_runtime::{
     ApplicationTelemetryProtocolV1, BlobProvider, BoundedObservability, CompositeObservability,
     HostObservability, HttpEgressProviderConfig, HttpHostPolicy, InMemoryEvaluationProvider,
     InMemorySecretProvider, InvocationServices, JsonlObservability, JwtAuthenticator,
-    JwtConfiguration, LocalBlobProvider, OtlpObservability, OtlpObservabilityConfig,
-    PackageVerifier, ProductionEgressProvider, TrustedSigningKeys,
+    JwtConfiguration, LocalBlobProvider, ManagementHttpHandler, OtlpObservability,
+    OtlpObservabilityConfig, PackageVerifier, ProductionEgressProvider, TrustedHttpHandler,
+    TrustedSigningKeys,
 };
 use bicdb_blob_s3::{S3BlobProvider, S3BlobProviderConfig};
 use bicdb_core::BicDb;
@@ -158,7 +159,195 @@ pub enum AppCommand {
         max_concurrent_requests: usize,
         #[arg(long, default_value_t = 1000)]
         rate_limit_per_minute: u32,
+        /// Enable the operator lifecycle API (`/_bicdb/apps`) with the bearer
+        /// token in FILE (at least 32 bytes). Packages are still verified
+        /// against --trusted-key keys. Disabled when omitted.
+        #[arg(long)]
+        management_token_file: Option<PathBuf>,
+        /// Serve the lifecycle API only on this separate loopback address
+        /// (IP:PORT) instead of the application listener.
+        #[arg(long, requires = "management_token_file")]
+        management_listen: Option<String>,
     },
+}
+
+/// Offline package signing. Keys are Ed25519: the private file holds the
+/// 32-byte seed and the public file the 32-byte key, both as lowercase hex.
+#[derive(Debug, Subcommand)]
+pub enum AppPackageCommand {
+    /// Write a new private seed (mode 0600) and its public key. The public
+    /// file is accepted as-is by `bicdb app ... --trusted-key ID=FILE`.
+    Keygen {
+        #[arg(long)]
+        out_private: PathBuf,
+        #[arg(long)]
+        out_public: PathBuf,
+    },
+    /// Hash and sign an unsigned package. Expands an optional top-level
+    /// `tables` list into schema-only resources with tenant row-level
+    /// security and a migration plan, completes raw SQL hashes and authority,
+    /// and fills the dependency lock, SBOM and provenance hashes, signature
+    /// key id/algorithm, package_sha256 and signature.
+    Sign {
+        package: PathBuf,
+        #[arg(long)]
+        key_id: String,
+        /// Ed25519 seed: 32 raw bytes, or 64 hex characters, or base64.
+        #[arg(long)]
+        signing_key: PathBuf,
+        /// Output path (defaults to replacing PACKAGE).
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+}
+
+pub fn run_package_command(command: AppPackageCommand) -> Result<()> {
+    match command {
+        AppPackageCommand::Keygen {
+            out_private,
+            out_public,
+        } => {
+            let mut seed = [0_u8; 32];
+            File::open("/dev/urandom")?.read_exact(&mut seed)?;
+            let key = ed25519_dalek::SigningKey::from_bytes(&seed);
+            let public = hex::encode(key.verifying_key().as_bytes());
+            write_new_file(
+                &out_private,
+                format!("{}\n", hex::encode(seed)).as_bytes(),
+                true,
+            )?;
+            write_new_file(&out_public, format!("{public}\n").as_bytes(), false)?;
+            print_json(&serde_json::json!({
+                "private_key": out_private,
+                "public_key": out_public,
+                "public_key_hex": public,
+            }))?;
+        }
+        AppPackageCommand::Sign {
+            package: input,
+            key_id,
+            signing_key,
+            out,
+        } => {
+            let seed = decode_signing_seed(
+                &fs::read(&signing_key)
+                    .with_context(|| format!("read signing key {}", signing_key.display()))?,
+            )?;
+            let key = ed25519_dalek::SigningKey::from_bytes(&seed);
+            let reader = PackageVerifier::new(TrustedSigningKeys::default(), 256 * 1024 * 1024)?;
+            let limit = bicdb_app_runtime::encoded_package_byte_limit(reader.max_package_bytes())?;
+            if fs::metadata(&input)
+                .with_context(|| format!("read package {}", input.display()))?
+                .len()
+                > limit
+            {
+                bail!("encoded package exceeds byte limit {limit}");
+            }
+            // Expand compact `tables` and derive raw SQL authority before
+            // the bytes are hashed, then decode with the install limits.
+            let mut document: serde_json::Value = serde_json::from_slice(&fs::read(&input)?)
+                .with_context(|| format!("parse package {}", input.display()))?;
+            bicdb_app_runtime::prepare_unsigned_package(&mut document)?;
+            let mut package = reader
+                .read_package(serde_json::to_vec(&document)?.as_slice())
+                .with_context(|| format!("read bounded package {}", input.display()))?;
+            sign_package(&mut package, &key_id, &key)?;
+            let mut trusted = TrustedSigningKeys::default();
+            trusted.insert_ed25519(key_id.clone(), key.verifying_key().as_bytes())?;
+            let verification = PackageVerifier::new(trusted, 256 * 1024 * 1024)?
+                .verify(&package)
+                .context("signed package does not verify")?;
+            let destination = out.unwrap_or(input);
+            atomic_write(&destination, &serde_json::to_vec(&package)?)?;
+            print_json(&serde_json::json!({
+                "package": destination,
+                "application": package.manifest.identity.name,
+                "version": package.manifest.identity.version,
+                "package_sha256": verification.package_sha256,
+                "signing_key_id": key_id,
+            }))?;
+        }
+    }
+    Ok(())
+}
+
+/// Fill the derived hashes and the Ed25519 signature over the canonical
+/// signing payload (`package_sha256` hex, signed as ASCII).
+fn sign_package(
+    package: &mut ApplicationPackage,
+    key_id: &str,
+    key: &ed25519_dalek::SigningKey,
+) -> Result<()> {
+    use ed25519_dalek::Signer;
+    use sha2::{Digest, Sha256};
+    let digest = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
+    let (lock, sbom, provenance) = (
+        digest(&package.dependency_lock),
+        digest(&package.sbom),
+        digest(&package.provenance),
+    );
+    let metadata = &mut package
+        .manifest
+        .application
+        .as_deref_mut()
+        .ok_or_else(|| anyhow::anyhow!("package lacks an ABI-v2 application manifest"))?
+        .package;
+    metadata.dependency_lock_sha256 = lock;
+    metadata.sbom_sha256 = sbom;
+    metadata.provenance_sha256 = provenance;
+    metadata.signature_key_id = key_id.to_string();
+    metadata.signature_algorithm = "ed25519".to_string();
+    metadata.package_sha256 = "0".repeat(64);
+    metadata.signature = "unsigned-placeholder".to_string();
+    let hash = digest(&bicdb_app_runtime::canonical_signing_payload(package)?);
+    let signature = key.sign(hash.as_bytes());
+    let metadata = &mut package
+        .manifest
+        .application
+        .as_deref_mut()
+        .expect("checked above")
+        .package;
+    metadata.package_sha256 = hash;
+    metadata.signature = base64::engine::general_purpose::STANDARD.encode(signature.to_bytes());
+    Ok(())
+}
+
+fn decode_signing_seed(bytes: &[u8]) -> Result<[u8; 32]> {
+    if let Ok(seed) = <[u8; 32]>::try_from(bytes) {
+        return Ok(seed);
+    }
+    let value = std::str::from_utf8(bytes)
+        .context("signing key must be 32 raw bytes, hex, or base64")?
+        .trim();
+    let decoded = hex::decode(value)
+        .ok()
+        .filter(|decoded| decoded.len() == 32)
+        .or_else(|| {
+            base64::engine::general_purpose::STANDARD
+                .decode(value)
+                .ok()
+                .filter(|decoded| decoded.len() == 32)
+        });
+    match decoded {
+        Some(decoded) => Ok(decoded.try_into().expect("length checked")),
+        None => bail!("signing key must be a 32-byte Ed25519 seed as raw bytes, hex, or base64"),
+    }
+}
+
+fn write_new_file(path: &Path, bytes: &[u8], private: bool) -> Result<()> {
+    let mut options = OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(if private { 0o600 } else { 0o644 });
+    }
+    let mut file = options
+        .open(path)
+        .with_context(|| format!("create {} (refusing to overwrite)", path.display()))?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    Ok(())
 }
 
 struct RuntimeBundle {
@@ -345,6 +534,8 @@ pub fn run(
             max_response_bytes,
             max_concurrent_requests,
             rate_limit_per_minute,
+            management_token_file,
+            management_listen,
         } => serve(
             database_path,
             bundle,
@@ -371,6 +562,8 @@ pub fn run(
                 max_response_bytes,
                 max_concurrent_requests,
                 rate_limit_per_minute,
+                management_token_file,
+                management_listen,
             },
         )?,
     }
@@ -474,6 +667,8 @@ struct ServeOptions {
     max_response_bytes: usize,
     max_concurrent_requests: usize,
     rate_limit_per_minute: u32,
+    management_token_file: Option<PathBuf>,
+    management_listen: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1312,6 +1507,35 @@ fn serve(database_path: PathBuf, bundle: RuntimeBundle, options: ServeOptions) -
         );
     }
     let authenticator = load_authenticator(&options)?;
+    let management: Option<Arc<dyn TrustedHttpHandler>> = match &options.management_token_file {
+        Some(path) => {
+            let token = fs::read(path)
+                .with_context(|| format!("read management token {}", path.display()))?;
+            Some(Arc::new(ManagementHttpHandler::new(
+                Arc::clone(&bundle.runtime),
+                &token,
+            )?))
+        }
+        None => None,
+    };
+    let management_address = options
+        .management_listen
+        .as_deref()
+        .map(|address| {
+            address
+                .parse::<std::net::SocketAddr>()
+                .context("--management-listen must be IP:PORT")
+        })
+        .transpose()?;
+    if management_address.is_some_and(|address| !address.ip().is_loopback()) {
+        bail!("--management-listen must be a loopback address");
+    }
+    // With a dedicated management address the application listener never
+    // serves the lifecycle API.
+    let (application_handler, management_handler) = match management_address {
+        Some(_) => (None, management),
+        None => (management, None),
+    };
     let db = Arc::clone(&bundle.db);
     let policy = HttpHostPolicy {
         max_request_bytes: options.max_request_bytes,
@@ -1377,16 +1601,28 @@ fn serve(database_path: PathBuf, bundle: RuntimeBundle, options: ServeOptions) -
             })?;
         let (http, scheme) = match (options.http_tls_cert, options.http_tls_key) {
             (Some(certificate), Some(private_key)) => (
-                application_runtime
-                    .serve_http_tls(address, certificate, private_key, authenticator, policy)
+                Arc::clone(&application_runtime)
+                    .serve_http_tls_with_handler(
+                        address,
+                        certificate,
+                        private_key,
+                        Arc::clone(&authenticator),
+                        policy.clone(),
+                        application_handler,
+                    )
                     .await?,
                 "https",
             ),
             (None, None) if address.ip().is_loopback() => {
                 let listener = tokio::net::TcpListener::bind(address).await?;
                 (
-                    application_runtime
-                        .serve_http(listener, authenticator, policy)
+                    Arc::clone(&application_runtime)
+                        .serve_http_with_handler(
+                            listener,
+                            Arc::clone(&authenticator),
+                            policy.clone(),
+                            application_handler,
+                        )
                         .await?,
                     "http",
                 )
@@ -1403,12 +1639,29 @@ fn serve(database_path: PathBuf, bundle: RuntimeBundle, options: ServeOptions) -
                 ));
             }
         };
+        let management = match (management_address, management_handler) {
+            (Some(address), Some(handler)) => {
+                let listener = tokio::net::TcpListener::bind(address).await?;
+                let server = Arc::clone(&application_runtime)
+                    .serve_http_with_handler(listener, authenticator, policy, Some(handler))
+                    .await?;
+                println!(
+                    "BicDB application management listening on http://{}",
+                    server.address
+                );
+                Some(server)
+            }
+            _ => None,
+        };
         println!(
             "BicDB application HTTP listening on {scheme}://{}; pgwire listening on {}",
             http.address, pg_address,
         );
         let _ = shutdown_rx.await;
         pg_server.request_shutdown();
+        if let Some(management) = management {
+            management.shutdown().await?;
+        }
         http.shutdown().await
     })?;
     pg_task
@@ -1601,7 +1854,14 @@ fn load_or_create_blob_key(package_root: &Path) -> Result<Vec<u8>> {
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = path
         .parent()
-        .ok_or_else(|| anyhow::anyhow!("diagnostic output has no parent"))?;
+        .map(|parent| {
+            if parent.as_os_str().is_empty() {
+                Path::new(".")
+            } else {
+                parent
+            }
+        })
+        .ok_or_else(|| anyhow::anyhow!("output path has no parent"))?;
     fs::create_dir_all(parent)?;
     let temporary = parent.join(format!(".bicdb-diagnostics-{}.tmp", std::process::id()));
     let mut file = File::create(&temporary)?;

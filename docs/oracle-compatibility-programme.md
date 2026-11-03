@@ -251,9 +251,12 @@ Definition and application-execution counts are unchanged.
 The [full character-copy verification](evidence/oracle-character-full-copy-2026-11-03/README.md)
 completes reconciliation of all 910 affected tables and 7,150 declarations.
 A byte-identical disk copy passes full 915-table/185,537-row fingerprints and
-declaration checks on two independent opens. The migration trial's earlier
-after-inventory connection closure remains unexplained; long-session reliability,
-host-crash durability and application workflows remain unqualified.
+declaration checks on two independent opens. The later
+[connection-lifecycle verification](evidence/oracle-character-reconnect-2026-11-03/README.md)
+identifies an idle control connection in the repeated trial. Fresh-connection
+and process-reopen verification preserve all 915 tables/185,537 rows and validate
+all 7,150 declarations after the completed migration. Host-crash durability and
+application workflows remain unqualified.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source

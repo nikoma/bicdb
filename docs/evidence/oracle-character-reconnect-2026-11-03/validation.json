@@ -1,0 +1,99 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "d6efa6ebdb23c834fb8a2877fd6625781370774820bfca67d1a2f3dde7c71366",
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "application_qualified": false,
+  "application_database_updated": false,
+  "disposable_copy_only": true,
+  "source_execution_compared": false,
+  "storage_kind": "persistent_disk",
+  "persistent_copy_reopen_qualified": true,
+  "scope": "Exported character declaration reconciliation on an isolated imported application copy; complete current-value fingerprints and restart, not application execution acceptance",
+  "success": true,
+  "verification_reconnected_after_migration": true,
+  "previously_completed_migration_reused": true,
+  "source_character_columns": 7150,
+  "reconciled_tables": 910,
+  "all_application_tables": 915,
+  "all_application_rows": 185537,
+  "before_multiset_inventory_sha256": "46775dc6a9b112529051c7f9730ffa6148263e4ff203c3da5fbde1eb11f61d6b",
+  "after_multiset_inventory_sha256": "46775dc6a9b112529051c7f9730ffa6148263e4ff203c3da5fbde1eb11f61d6b",
+  "source_row_count_differences": [
+    {
+      "table": "AD_ALERTPROCESSORLOG",
+      "source_rows": 0,
+      "target_rows": 1
+    },
+    {
+      "table": "AD_CHANGELOG",
+      "source_rows": 0,
+      "target_rows": 6
+    },
+    {
+      "table": "AD_ISSUE",
+      "source_rows": 0,
+      "target_rows": 12
+    },
+    {
+      "table": "AD_PINSTANCE",
+      "source_rows": 0,
+      "target_rows": 7
+    },
+    {
+      "table": "AD_PINSTANCE_LOG",
+      "source_rows": 0,
+      "target_rows": 2
+    },
+    {
+      "table": "AD_PINSTANCE_PARA",
+      "source_rows": 0,
+      "target_rows": 6
+    },
+    {
+      "table": "AD_PREFERENCE",
+      "source_rows": 17,
+      "target_rows": 26
+    },
+    {
+      "table": "AD_SESSION",
+      "source_rows": 0,
+      "target_rows": 11
+    },
+    {
+      "table": "AD_USERPREFERENCE",
+      "source_rows": 0,
+      "target_rows": 1
+    },
+    {
+      "table": "AD_WORKFLOWPROCESSORLOG",
+      "source_rows": 0,
+      "target_rows": 1
+    },
+    {
+      "table": "PA_DASHBOARDPREFERENCE",
+      "source_rows": 0,
+      "target_rows": 10
+    }
+  ],
+  "reopened_multiset_inventory_sha256": "46775dc6a9b112529051c7f9730ffa6148263e4ff203c3da5fbde1eb11f61d6b",
+  "reopened_character_declarations_verified": 7150,
+  "connection_diagnosis": {
+    "format": 1,
+    "scope": "Verification harness connection lifecycle; no server timeout policy changed",
+    "configured_idle_timeout_seconds": 300,
+    "control_connection_id": 1,
+    "migration_connection_id": 2,
+    "control_closed_seconds_after_migration_connection_opened": 299,
+    "migration_connection_observed_duration_seconds": 8352,
+    "migration_queries_at_completion": 18083,
+    "failed_queries_at_completion": 0,
+    "verification_uses_fresh_connection": true,
+    "previous_failed_verification_report_retained": true
+  },
+  "resource_guard": {
+    "status": "completed",
+    "returncode": 0,
+    "peak_group_rss_bytes": 2214875136,
+    "minimum_observed_available_bytes": 25792864256
+  }
+}

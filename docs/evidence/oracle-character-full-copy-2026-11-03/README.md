@@ -1,5 +1,9 @@
 # Full application-copy character reconciliation
 
+The subsequent [connection-lifecycle verification](../oracle-character-reconnect-2026-11-03/README.md)
+completes a persistent trial and identifies the idle-control pattern behind its
+after-inventory disconnect. This report retains the earlier checkpoint's results.
+
 Source-driven character reconciliation completed all 910 affected tables and
 7,150 declarations on an isolated application copy. Every completed table's
 before/after row multiset matched. The original source snapshot and running

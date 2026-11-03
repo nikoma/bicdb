@@ -19,6 +19,12 @@ select special engine behavior.
 
 The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used
 for [iDempiere seed development](evidence/idempiere-seed-2026-11-01/README.md).
+The latest [dictionary type-anchor checkpoint](evidence/oracle-dictionary-type-anchors-2026-11-03/README.md)
+accepts **61/62 unchanged routine definitions** through PostgreSQL drivers.
+The remaining definition needs hierarchical queries and collection behavior;
+dictionary rows, constraints, complete execution and workflows remain incomplete.
+The milestones below retain their results at the time each was measured.
+
 The original 913 tables and 185,292 rows loaded and passed complete value
 reconciliation. A separate Oracle reference clone was upgraded through 24
 release-13 migrations; its 915 tables and 185,471 initial rows were also imported
@@ -207,6 +213,13 @@ The integrated source passes 1,329 Rust tests and 58 Python tests. SQL column
 limits, routine buffer limits and fixed-width padding remain distinct contracts.
 Dictionary query contents, view-expression type provenance, full NLS behavior
 and application qualification remain open; definitions remain 60/62.
+The [dictionary type-anchor qualification](evidence/oracle-dictionary-type-anchors-2026-11-03/README.md)
+adds local-object precedence and bounded SYS/public dictionary type descriptors,
+raising definition acceptance to 61/62. All 132 VARCHAR2/NUMBER/DATE descriptor
+contracts match Oracle; three LONG/RAW cases remain unsupported. The integrated
+Rust batch passes 1,332 tests and all 266 retained PostgreSQL controls pass.
+Dictionary queries remain 0/11, and only one of 14 accepted-procedure NULL-input
+diagnostics completes. Hierarchy, collections and full execution remain open.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source

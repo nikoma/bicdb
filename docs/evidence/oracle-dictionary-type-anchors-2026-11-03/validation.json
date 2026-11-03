@@ -1,0 +1,108 @@
+{
+  "format": 1,
+  "engine_source_commit": "730d5f5010f6b8684e831bab104d85add19000f7",
+  "runtime_binary_sha256": "566674990af56e236de7675b98920b2e07d25b905438b2b9507714cd48f22cf8",
+  "rust_passed": 1332,
+  "rust_existing_ignored": 3,
+  "rust_suite_results": 11,
+  "python_reference_passed": 25,
+  "python_migration_passed": 30,
+  "python_hr_passed": 3,
+  "oracle_dictionary_type_anchor_matched": 132,
+  "oracle_dictionary_type_anchor_total": 135,
+  "unsupported_source_scalar_types": [
+    "LONG",
+    "RAW"
+  ],
+  "source_descriptor_bindings": 135,
+  "oracle_dictionary_type_anchor_compatibility_complete": false,
+  "oracle_dictionary_row_matched": 0,
+  "oracle_dictionary_row_total": 11,
+  "independent_postgres_controls": 266,
+  "retained_generated_oracle_positive_and_error_contract_cases": 1475,
+  "separate_negative_nvarchar_alias_boundary_cases": 1,
+  "oracle_buffer_contracts": 53,
+  "routine_reader_checks": 7,
+  "source_based_reconciliation_checks": 9,
+  "character_metadata_reader_checks": 6,
+  "importer_checks": 3,
+  "original_counter_matches": 14,
+  "original_record_matches": 8,
+  "original_sequence_matches": 9,
+  "application_definition_accepted": 61,
+  "application_definition_total": 62,
+  "application_null_input_diagnostics_completed": 1,
+  "application_null_input_diagnostics_total": 14,
+  "source_application_routines_executed": false,
+  "existing_nvl_conversion_mismatches": 5,
+  "completed_test_executable_cleanup_reclaimed_bytes": 3231031264,
+  "build_cache_size_rounded_gib": 6.9,
+  "minimum_available_gib": 8,
+  "build_jobs": 1,
+  "incremental": false,
+  "resource_checks": [
+    {
+      "check": "dictionary-type-anchors-focused-memory.json",
+      "peak_owned_group_rss_bytes": 4665925632,
+      "minimum_observed_available_bytes": 17783046144
+    },
+    {
+      "check": "dictionary-type-anchors-build-memory.json",
+      "peak_owned_group_rss_bytes": 4152197120,
+      "minimum_observed_available_bytes": 17352896512
+    },
+    {
+      "check": "dictionary-type-anchors-definitions-memory.json",
+      "peak_owned_group_rss_bytes": 1105502208,
+      "minimum_observed_available_bytes": 20371038208
+    },
+    {
+      "check": "dictionary-type-anchors-validation-memory.json",
+      "peak_owned_group_rss_bytes": 4219232256,
+      "minimum_observed_available_bytes": 17787883520
+    },
+    {
+      "check": "dictionary-type-anchors-reference-final-memory.json",
+      "peak_owned_group_rss_bytes": 172183552,
+      "minimum_observed_available_bytes": 23321186304
+    },
+    {
+      "check": "dictionary-type-anchors-run_routine_characters_cli.py.guard.json",
+      "peak_owned_group_rss_bytes": 172290048,
+      "minimum_observed_available_bytes": 22394515456
+    },
+    {
+      "check": "dictionary-type-anchors-probe_routine_character_readers.py.guard.json",
+      "peak_owned_group_rss_bytes": 131883008,
+      "minimum_observed_available_bytes": 23153344512
+    },
+    {
+      "check": "dictionary-type-anchors-run_alter_batch_native.py.guard.json",
+      "peak_owned_group_rss_bytes": 159780864,
+      "minimum_observed_available_bytes": 22942547968
+    },
+    {
+      "check": "dictionary-type-anchors-run_character_view_native.py.guard.json",
+      "peak_owned_group_rss_bytes": 148361216,
+      "minimum_observed_available_bytes": 22494703616
+    },
+    {
+      "check": "dictionary-type-anchors-probe_character_reconciliation.py.guard.json",
+      "peak_owned_group_rss_bytes": 217649152,
+      "minimum_observed_available_bytes": 22575816704
+    },
+    {
+      "check": "dictionary-type-anchors-run_character_final_references.py.guard.json",
+      "peak_owned_group_rss_bytes": 1134022656,
+      "minimum_observed_available_bytes": 20681478144
+    }
+  ],
+  "initial_reference_serialization_failure": true,
+  "application_qualified": false,
+  "application_database_updated": false,
+  "development_binary_built": true,
+  "release_published": false,
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true
+}

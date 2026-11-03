@@ -14,7 +14,7 @@ def run(reference, target, schema, prefix):
     definitions = [
         ("numeric_declaration", "NUM", "(p NUMBER) RETURN NUMBER DETERMINISTIC AS BEGIN RETURN p+1; END;"),
         ("parameterless_declaration", "ZERO", "RETURN NUMBER DETERMINISTIC AS BEGIN RETURN 7; END;"),
-        ("quoted_parameter_declaration", "QUOTED", '("DETERMINISTIC" NUMBER) RETURN NUMBER DETERMINISTIC AS BEGIN RETURN "DETERMINISTIC"+1; END;'),
+        ("quoted_parameter_declaration", "QUOTED", '("DETERMINISTIC" NUMBER) RETURN NUMBER DETERMINISTIC AS marker VARCHAR2(30):=\'SECURITY DEFINER\'; BEGIN RETURN "DETERMINISTIC"+1; END;'),
     ]
     plans = [
         ("numeric_value", f"SELECT {names['NUM']}(4) FROM DUAL", [[5]]),

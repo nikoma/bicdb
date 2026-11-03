@@ -4166,10 +4166,10 @@ impl RoutineSchema {
         self.owner.as_deref()
     }
 
-    fn with_legacy_security_metadata(mut self) -> Self {
-        if !self.security_definer && routine_definition_is_security_definer(&self.definition) {
-            self.security_definer = true;
-        }
+    fn with_declared_security_metadata(mut self) -> Self {
+        // Stored flags from older writers may have classified body literals as
+        // attributes. The declaration is authoritative in both directions.
+        self.security_definer = routine_definition_is_security_definer(&self.definition);
         self
     }
 
@@ -4189,13 +4189,26 @@ impl RoutineSchema {
 }
 
 fn routine_definition_is_security_definer(definition: &str) -> bool {
-    definition
-        .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
-        .filter(|token| !token.is_empty())
-        .map(str::to_ascii_lowercase)
-        .collect::<Vec<_>>()
-        .windows(2)
-        .any(|tokens| tokens == ["security", "definer"])
+    let function = Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, definition)
+        .ok()
+        .and_then(|mut statements| {
+            if statements.len() != 1 {
+                return None;
+            }
+            match statements.remove(0) {
+                Statement::CreateFunction(function) => Some(function),
+                _ => None,
+            }
+        })
+        // PostgreSQL dollar-quoted procedure bodies use the existing parsing
+        // proxy. It retains the procedure header without inspecting body text.
+        .or_else(|| oracle::procedures::header(definition).ok().flatten());
+    function.is_some_and(|function| {
+        matches!(
+            function.security,
+            Some(sqlparser::ast::FunctionSecurity::Definer)
+        )
+    })
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]

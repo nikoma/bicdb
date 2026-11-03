@@ -4161,7 +4161,7 @@ pub(crate) fn load_routine(
     match db.get(ROUTINE_COLLECTION, &routine_key(kind, name)) {
         Ok(Some(record)) => Ok(Some(
             serde_json::from_value::<RoutineSchema>(record.metadata.clone())?
-                .with_legacy_security_metadata(),
+                .with_declared_security_metadata(),
         )),
         Ok(None) => Ok(None),
         Err(BicDbError::CollectionNotFound(_)) => Ok(None),

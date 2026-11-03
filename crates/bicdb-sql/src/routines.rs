@@ -2367,7 +2367,7 @@ pub(crate) fn list_routines(db: &BicDb) -> Result<Vec<RoutineSchema>> {
         .into_iter()
         .map(|record| {
             serde_json::from_value::<RoutineSchema>(record.metadata)
-                .map(RoutineSchema::with_legacy_security_metadata)
+                .map(RoutineSchema::with_declared_security_metadata)
                 .map_err(SqlError::from)
         })
         .collect::<Result<Vec<_>>>()?;

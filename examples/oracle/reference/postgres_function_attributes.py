@@ -36,17 +36,17 @@ def run(reference, target, schemas):
             for index, kind in enumerate(("immutable", "stable", "volatile"), 1):
                 query(connection, f"CREATE FUNCTION {relations[kind]}() RETURNS INT {kind.upper()} LANGUAGE sql AS $$SELECT {index}$$")
                 created.append((backend, relations[kind]))
-            query(connection, f'CREATE FUNCTION {relations["default"]}("IMMUTABLE" INT) RETURNS TEXT LANGUAGE sql AS $$SELECT \'STABLE VOLATILE IMMUTABLE\'$$')
+            query(connection, f'CREATE FUNCTION {relations["default"]}("IMMUTABLE" INT) RETURNS TEXT LANGUAGE sql AS $$SELECT \'SECURITY DEFINER\'$$')
             created.append((backend, relations["default"]))
-        catalog = ("SELECT p.proname,p.provolatile FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace "
+        catalog = ("SELECT p.proname,p.provolatile,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace "
                    + "WHERE n.nspname IN ('" + schemas[0] + "','" + schemas[1] + "') AND p.proname LIKE '" + prefix + "_%' ORDER BY p.proname")
         compare("declared_and_default_volatility", catalog,
-                [[names[kind], value] for kind, value in (("default", "v"), ("immutable", "i"), ("stable", "s"), ("volatile", "v"))])
-        compare("function_values", f"SELECT {relations['immutable']}(),{relations['stable']}(),{relations['volatile']}(),{relations['default']}(1)", [[1, 2, 3, "STABLE VOLATILE IMMUTABLE"]])
+                [[names[kind], value, False] for kind, value in (("default", "v"), ("immutable", "i"), ("stable", "s"), ("volatile", "v"))])
+        compare("function_values", f"SELECT {relations['immutable']}(),{relations['stable']}(),{relations['volatile']}(),{relations['default']}(1)", [[1, 2, 3, "SECURITY DEFINER"]])
         for connection in (reference, target):
             query(connection, f"CREATE OR REPLACE FUNCTION {relations['immutable']}() RETURNS INT STABLE LANGUAGE sql AS $$SELECT 42$$")
         compare("replacement_updates_metadata", catalog,
-                [[names[kind], value] for kind, value in (("default", "v"), ("immutable", "s"), ("stable", "s"), ("volatile", "v"))])
+                [[names[kind], value, False] for kind, value in (("default", "v"), ("immutable", "s"), ("stable", "s"), ("volatile", "v"))])
         compare("replacement_value", f"SELECT {relations['immutable']}()", [[42]])
     finally:
         for backend, relation in reversed(created):

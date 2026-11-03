@@ -4111,7 +4111,18 @@ impl<'db> SqlEngine<'db> {
             };
             result = Some(routine_engine.execute_query(query)?);
         }
-        let result = result.unwrap_or_else(|| SqlResult::new(Vec::new(), Vec::new()));
+        let mut result = result.unwrap_or_else(|| SqlResult::new(Vec::new(), Vec::new()));
+        // The relation's columns are the declared `RETURNS TABLE` columns, by
+        // position; the body's own select-list names (`coalesce`, `p`) never
+        // leak out. Otherwise `SELECT x FROM f()` read a missing column.
+        if let Some(declared) = super::materialize::declared_table_function_columns(
+            self.db_ref(),
+            table.rsplit('.').next().unwrap_or(table),
+        ) {
+            if declared.len() == result.columns.len() {
+                result.columns = declared.into_iter().map(|(name, _)| name).collect();
+            }
+        }
         let alias_name = table_alias
             .map(|alias| alias.name.value.clone())
             .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(table).to_string());

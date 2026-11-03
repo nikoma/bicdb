@@ -3600,6 +3600,26 @@ pub(crate) fn apply_carrier_function_dependency_grants(
     db: &mut BicDb,
     runtime_role: &str,
 ) -> Result<()> {
+    // A pass grants tables that reachable functions read or write, and those
+    // grants make more policies, CHECK constraints, defaults and triggers
+    // reachable (Carrier's helper for the outbox tables is reachable only
+    // that way). Repeat until a pass grants nothing new; grants only ever
+    // accumulate, so this terminates.
+    let mut granted = list_privileges(db)?.len();
+    loop {
+        apply_carrier_function_dependency_grants_pass(db, runtime_role)?;
+        let now = list_privileges(db)?.len();
+        if now == granted {
+            return Ok(());
+        }
+        granted = now;
+    }
+}
+
+fn apply_carrier_function_dependency_grants_pass(
+    db: &mut BicDb,
+    runtime_role: &str,
+) -> Result<()> {
     let runtime_role = normalize_role_name(runtime_role);
     let mut patterns = HashMap::<String, regex::Regex>::new();
     ensure_known_role(&list_roles(db)?, &runtime_role)?;

@@ -2389,12 +2389,19 @@ impl<'db> SqlSession<'db> {
                             &format!("function {name}"),
                             action,
                         )?;
-                    } else {
+                    } else if is_native_extension_function(name) {
                         self.require_object_ownership(
                             BOOTSTRAP_ROLE_NAME,
                             &format!("function {name}"),
                             action,
                         )?;
+                    } else {
+                        // PostgreSQL rejects a grant on a routine that does
+                        // not exist; accepting it would hide a broken
+                        // provisioning script.
+                        return Err(SqlError::undefined_function(format!(
+                            "function {name} does not exist"
+                        )));
                     }
                 }
                 // `grant_targets` cannot produce these today; if it ever does,
@@ -2519,4 +2526,16 @@ impl<'db> SqlSession<'db> {
         }
         Ok(())
     }
+}
+
+/// Extension functions (pgcrypto, uuid-ossp, pg_trgm) that BicDB evaluates
+/// natively instead of recording them as catalog routines. Provisioning
+/// scripts grant and revoke them like any other function.
+fn is_native_extension_function(name: &str) -> bool {
+    let bare = name.split('(').next().unwrap_or(name).trim();
+    let bare = bare.rsplit('.').next().unwrap_or(bare).trim_matches('"');
+    matches!(
+        bare.to_ascii_lowercase().as_str(),
+        "digest" | "hmac" | "gen_random_bytes" | "gen_random_uuid" | "uuid_generate_v4" | "similarity"
+    )
 }

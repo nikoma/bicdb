@@ -1244,7 +1244,10 @@ pub(crate) fn pg_attribute_rows_for_attrelids(
         .into_iter()
         .map(|sequence| sequence_oid(&sequence.name))
         .collect::<BTreeSet<_>>();
-    let schemas = relation_schemas(db)?;
+    // Load only the requested relations' schemas: deserializing and cloning
+    // every table and view schema per lookup made catalog joins against
+    // pg_attribute (driver and ORM introspection at startup) cost seconds.
+    let mut all_schemas: Option<Vec<TableSchema>> = None;
     let composite_columns = list_user_types(db)?
         .into_iter()
         .filter_map(|user_type| {
@@ -1262,12 +1265,23 @@ pub(crate) fn pg_attribute_rows_for_attrelids(
     let mut rows = Vec::new();
     for attrelid in attrelids {
         if let Some(relation) = relation_by_oid.get(attrelid) {
-            rows.extend(pg_attribute_rows_with_grants(
-                db,
-                relation,
-                *attrelid,
-                columns_for_relation(&schemas, relation),
-            )?);
+            let own_schema = match load_schema(db, relation)? {
+                Some(schema) => Some(schema),
+                None => load_view(db, relation)?
+                    .map(|view| catalog_view_schema(db, view))
+                    .transpose()?,
+            }
+            .filter(|schema| schema_is_relation(schema, relation));
+            let columns = match own_schema {
+                Some(schema) => columns_for_relation(std::slice::from_ref(&schema), relation),
+                None => {
+                    if all_schemas.is_none() {
+                        all_schemas = Some(relation_schemas(db)?);
+                    }
+                    columns_for_relation(all_schemas.as_deref().unwrap_or_default(), relation)
+                }
+            };
+            rows.extend(pg_attribute_rows_with_grants(db, relation, *attrelid, columns)?);
         } else if sequence_oids.contains(attrelid) {
             rows.extend(pg_attribute_rows_for_sequence(*attrelid));
         } else if let Some(columns) = composite_columns.get(attrelid) {
@@ -6760,18 +6774,21 @@ pub(crate) fn proc_row(
     ])
 }
 
+/// Whether `schema` is the catalog relation named `relation` (as
+/// `columns_for_relation` matches it).
+fn schema_is_relation(schema: &TableSchema, relation: &str) -> bool {
+    let (schema_name, relation_name) = relation_schema_and_name(relation);
+    schema.name.as_str() == relation
+        || (schema.name.as_str() == relation_name && schema.schema_name.as_str() == schema_name)
+}
+
 pub(crate) fn columns_for_relation(schemas: &[TableSchema], relation: &str) -> Vec<ColumnSchema> {
     if graph_virtual_table_names().contains(&relation) {
         return graph_virtual_table_columns(relation);
     }
-    let (schema_name, relation_name) = relation_schema_and_name(relation);
     schemas
         .iter()
-        .find(|schema| {
-            schema.name.as_str() == relation
-                || (schema.name.as_str() == relation_name
-                    && schema.schema_name.as_str() == schema_name)
-        })
+        .find(|schema| schema_is_relation(schema, relation))
         .map(|schema| {
             schema
                 .columns

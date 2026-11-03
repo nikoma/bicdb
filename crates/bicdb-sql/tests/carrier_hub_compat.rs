@@ -1011,3 +1011,176 @@ fn plpgsql_uuid_v7_with_bit_operations() {
         vec![SqlValue::Int(1), SqlValue::Int(9), SqlValue::Int(5)]
     );
 }
+
+#[test]
+fn function_dependency_grants_reach_policies_of_tables_granted_through_functions() {
+    // The Hub's outbox tables are granted to the runtime role only because a
+    // function it may execute writes them; their RLS policy then calls a
+    // helper the role must be able to execute. One block has to grant both.
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE ROLE carrier_app LOGIN NOSUPERUSER NOBYPASSRLS",
+        "CREATE TABLE outbox_effects (id INT PRIMARY KEY, org_id TEXT NOT NULL)",
+        "CREATE FUNCTION outbox_policy_allows(row_org_id TEXT) RETURNS BOOLEAN LANGUAGE sql STABLE \
+         AS $f$ SELECT row_org_id = current_setting('app.tenant', true) $f$",
+        "ALTER TABLE outbox_effects ENABLE ROW LEVEL SECURITY",
+        "CREATE POLICY outbox_effects_all ON outbox_effects FOR ALL \
+         USING (outbox_policy_allows(org_id)) WITH CHECK (outbox_policy_allows(org_id))",
+        "CREATE FUNCTION outbox_apply(effect_id INT) RETURNS VOID LANGUAGE plpgsql \
+         AS $f$ BEGIN INSERT INTO outbox_effects (id, org_id) \
+         VALUES (effect_id, current_setting('app.tenant', true)); END $f$",
+        "REVOKE ALL ON TABLE outbox_effects FROM PUBLIC, carrier_app",
+        "REVOKE EXECUTE ON FUNCTION outbox_policy_allows(text) FROM PUBLIC, carrier_app",
+        "REVOKE EXECUTE ON FUNCTION outbox_apply(int) FROM PUBLIC, carrier_app",
+        "GRANT EXECUTE ON FUNCTION outbox_apply(int) TO carrier_app",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    session
+        .execute(
+            "DO $carrier_grant_function_dependencies$\nDECLARE\n  runtime_role_oid OID := 'carrier_app'::regrole::oid;\nBEGIN\n  \
+             -- carrier_runtime_function_dependency_work\n  -- carrier_runtime_relation_dependency_work\nEND\n\
+             $carrier_grant_function_dependencies$",
+        )
+        .unwrap();
+    assert_eq!(
+        session_rows(
+            &mut session,
+            "SELECT has_table_privilege('carrier_app', 'outbox_effects', 'INSERT'), \
+             has_function_privilege('carrier_app', 'outbox_policy_allows(text)', 'EXECUTE')"
+        ),
+        vec![vec![SqlValue::Bool(true), SqlValue::Bool(true)]]
+    );
+    session.execute("SET app.tenant = 'org-a'").unwrap();
+    session.execute("SET SESSION AUTHORIZATION carrier_app").unwrap();
+    session.execute("SELECT outbox_apply(1)").unwrap();
+    // outbox_apply only inserts, so the role got INSERT, not SELECT.
+    session.execute("RESET SESSION AUTHORIZATION").unwrap();
+    assert_eq!(
+        session_rows(&mut session, "SELECT count(*) FROM outbox_effects"),
+        vec![vec![SqlValue::Int(1)]]
+    );
+}
+
+#[test]
+fn grant_on_a_missing_function_is_an_error() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute("CREATE ROLE carrier_app LOGIN NOSUPERUSER NOBYPASSRLS")
+        .unwrap();
+    let missing = session
+        .execute("GRANT EXECUTE ON FUNCTION no_such_function(integer) TO carrier_app")
+        .unwrap_err();
+    assert_eq!(missing.sqlstate(), "42883");
+    // Natively evaluated extension functions still accept grants (Carrier's
+    // role SQL grants pgcrypto's hmac and digest).
+    for sql in [
+        "REVOKE EXECUTE ON FUNCTION public.hmac(bytea, bytea, text) FROM PUBLIC",
+        "GRANT EXECUTE ON FUNCTION public.digest(bytea, text) TO carrier_app",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+}
+
+#[test]
+fn describe_types_guarded_table_functions_from_their_declaration() {
+    // Carrier's projection status and metrics functions raise unless their
+    // arguments name an authorized hub. Describe binds NULL arguments, so it
+    // must type the result from RETURNS TABLE instead of running the body.
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    {
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute(
+                "CREATE FUNCTION guarded_metrics(requested_org_id TEXT, requested_hub_id UUID) \
+                 RETURNS TABLE (hub_id UUID, document_count BIGINT, measured_at TIMESTAMPTZ) \
+                 LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path = public, pg_temp \
+                 AS $f$ BEGIN \
+                 IF requested_org_id IS NULL THEN \
+                 RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'metrics are unavailable'; \
+                 END IF; \
+                 RETURN QUERY SELECT requested_hub_id, 0::bigint, statement_timestamp(); END $f$",
+            )
+            .unwrap();
+    }
+    let columns = bicdb_sql::infer_query_result_columns_for_describe(
+        &db,
+        "SELECT hub_id, document_count, measured_at FROM guarded_metrics($1, $2)",
+    )
+    .unwrap();
+    assert_eq!(
+        columns,
+        Some(vec![
+            ("hub_id".to_string(), Some("uuid".to_string())),
+            ("document_count".to_string(), Some("int8".to_string())),
+            ("measured_at".to_string(), Some("timestamptz".to_string())),
+        ])
+    );
+}
+
+#[test]
+fn sql_table_function_columns_are_the_declared_returns_table_columns() {
+    // Carrier's SQL table functions select `document.id` and similar while
+    // declaring `document_id`: the relation's columns must be the declared
+    // ones, positionally, in every position the call can appear.
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session
+        .execute(
+            "CREATE FUNCTION renamed_rows(a TEXT) RETURNS TABLE (x TEXT, y TEXT) LANGUAGE sql STABLE \
+             AS $f$ SELECT coalesce(a, 'n') AS p, upper(a) $f$",
+        )
+        .unwrap();
+    let expected = vec![vec![
+        SqlValue::String("v".to_string()),
+        SqlValue::String("V".to_string()),
+    ]];
+    for sql in [
+        "SELECT x, y FROM renamed_rows('v')",
+        "SELECT r.x, r.y FROM renamed_rows('v') AS r",
+        "SELECT t.x, t.y FROM (SELECT x, y FROM renamed_rows('v')) AS t",
+        "SELECT * FROM (SELECT * FROM renamed_rows('v')) AS t",
+    ] {
+        let result = session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
+        assert_eq!(result.columns, vec!["x", "y"], "{sql}");
+        assert_eq!(result.rows, expected, "{sql}");
+    }
+}
+
+#[test]
+fn limit_stops_select_list_evaluation_early() {
+    // `SELECT f(x) FROM t LIMIT n` ran f for every row before the LIMIT
+    // applied; an expensive per-row role check cost the whole table.
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        // Single-digit keys scan in the same order as their values.
+        "CREATE TABLE items (id INT PRIMARY KEY)",
+        "INSERT INTO items SELECT generate_series(1, 9)",
+        "CREATE FUNCTION only_first_three(v INT) RETURNS INT LANGUAGE plpgsql STABLE \
+         AS $f$ BEGIN IF v > 3 THEN RAISE EXCEPTION 'evaluated past the limit'; END IF; \
+         RETURN v; END $f$",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    for sql in [
+        "SELECT only_first_three(id) FROM items LIMIT 3",
+        "SELECT only_first_three(id) FROM items ORDER BY id LIMIT 2 OFFSET 1",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    // Window functions still see every row.
+    assert_eq!(
+        session_rows(&mut session, "SELECT count(*) OVER () FROM items LIMIT 1"),
+        vec![vec![SqlValue::Int(9)]]
+    );
+}

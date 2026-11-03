@@ -1122,6 +1122,21 @@ impl<'db> SqlEngine<'db> {
             apply_row_limit(&mut result.rows, query)?;
             return Ok(result);
         }
+        // Rows past `offset + limit` are never returned, so do not project
+        // them: a select list calling an expensive function (Carrier's
+        // per-document role check) otherwise ran for every row before LIMIT.
+        // DISTINCT, row locks and window functions need every row.
+        if locks.is_none()
+            && matches!(
+                select.distinct.as_ref(),
+                None | Some(sqlparser::ast::Distinct::All)
+            )
+            && !select_has_window_functions(select, query)?
+        {
+            if let Some(bound) = order_by_keep_bound(query)? {
+                row_set.rows.truncate(bound);
+            }
+        }
         let result = self.project_slot_row_select_with_wildcard(
             locking_projection.as_deref().unwrap_or(&select.projection),
             &row_set.rows,
@@ -2340,6 +2355,35 @@ impl<'db> SqlEngine<'db> {
                     alias: alias_name.to_ascii_lowercase(),
                     row_type: is_base_table.then(|| short.to_ascii_lowercase()),
                     columns,
+                });
+                Some(())
+            }
+            TableFactor::Table {
+                name,
+                alias,
+                args: Some(_),
+                with_ordinality: false,
+                ..
+            } => {
+                // A catalog function declared `RETURNS TABLE (...)`: its result
+                // columns are part of its signature. Describing from them never
+                // runs the body, which may raise on the NULL arguments Describe
+                // would otherwise bind (Carrier's guarded table functions do).
+                let routine = relation_name(name).ok()?;
+                let short = routine.rsplit('.').next().unwrap_or(&routine).to_string();
+                let columns = declared_table_function_columns(self.db_ref(), &short)?;
+                let alias_name = alias
+                    .as_ref()
+                    .map(|alias| alias.name.value.clone())
+                    .unwrap_or_else(|| short.clone());
+                let alias_columns = alias
+                    .as_ref()
+                    .map(|alias| alias.columns.as_slice())
+                    .unwrap_or(&[]);
+                env.push(RelationColumns {
+                    alias: alias_name.to_ascii_lowercase(),
+                    row_type: None,
+                    columns: rename_relation_columns(columns, alias_columns)?,
                 });
                 Some(())
             }
@@ -3851,4 +3895,30 @@ fn validate_distinct_on_order(
         }
     }
     Ok(())
+}
+
+/// Result columns of a catalog function declared `RETURNS TABLE (...)`, read
+/// from its stored definition (names lowercased, PostgreSQL type names).
+pub(crate) fn declared_table_function_columns(
+    db: &BicDb,
+    name: &str,
+) -> Option<Vec<(String, Option<String>)>> {
+    let routine = load_routine(db, RoutineKind::Function, name).ok()??;
+    let statements = Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition).ok()?;
+    let [Statement::CreateFunction(create)] = statements.as_slice() else {
+        return None;
+    };
+    let data_type = match create.return_type.as_ref()? {
+        FunctionReturnType::DataType(data_type) | FunctionReturnType::SetOf(data_type) => data_type,
+    };
+    let DataType::Table(Some(columns)) = data_type else {
+        return None;
+    };
+    columns
+        .iter()
+        .map(|column| {
+            let pg_type = routine_type_schema(&column.data_type).ok()?.pg_type;
+            Some((column.name.value.to_ascii_lowercase(), Some(pg_type)))
+        })
+        .collect()
 }

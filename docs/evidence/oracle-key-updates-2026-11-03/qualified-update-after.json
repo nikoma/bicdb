@@ -1,0 +1,48 @@
+{
+  "format": 1,
+  "cases": [
+    {
+      "profile": "postgres",
+      "id": "non_primary_update",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "id": "primary_update",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "id": "read_after_updates",
+      "success": true,
+      "rows": [
+        [
+          2,
+          "B"
+        ]
+      ]
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "id": "non_primary_update",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "id": "primary_update",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "id": "read_after_updates",
+      "success": true,
+      "rows": [
+        [
+          2,
+          "B"
+        ]
+      ]
+    }
+  ],
+  "runtime_binary_sha256": "fd11dd44be1dc61c2a7c81ad1ca831df293a08b97036e129e09a3e3b7c826fa6"
+}

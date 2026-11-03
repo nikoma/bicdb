@@ -1,0 +1,91 @@
+{
+  "format": 1,
+  "scope": "Unchanged original procedure definitions and actual NULL-argument CALL diagnostics on an isolated copy only; source metadata read from Oracle, no source application procedures executed",
+  "application_qualified": false,
+  "source_execution_compared": false,
+  "disposable_copy_only": true,
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "runtime_binary_sha256": "fd11dd44be1dc61c2a7c81ad1ca831df293a08b97036e129e09a3e3b7c826fa6",
+  "accepted": 57,
+  "total": 62,
+  "completed": true,
+  "procedures": [
+    {
+      "name": "AD_SEQUENCE_DOC",
+      "argument_count": 3,
+      "call_succeeded": false,
+      "sqlstate": "P0001"
+    },
+    {
+      "name": "AD_SEQUENCE_DOCTYPE",
+      "argument_count": 3,
+      "call_succeeded": false,
+      "sqlstate": "42601"
+    },
+    {
+      "name": "AD_SEQUENCE_NEXT",
+      "argument_count": 3,
+      "call_succeeded": false,
+      "sqlstate": "P0001"
+    },
+    {
+      "name": "C_ACCTSCHEMA_DEFAULT_COPY",
+      "argument_count": 2,
+      "call_succeeded": false,
+      "sqlstate": "42601"
+    },
+    {
+      "name": "C_BP_GROUP_ACCT_COPY",
+      "argument_count": 2,
+      "call_succeeded": false,
+      "sqlstate": "42601"
+    },
+    {
+      "name": "C_ORDER_DRILLDOWN",
+      "argument_count": 1,
+      "call_succeeded": false,
+      "sqlstate": "42601"
+    },
+    {
+      "name": "DBA_AFTERIMPORT",
+      "argument_count": 0,
+      "call_succeeded": false,
+      "sqlstate": "0A000"
+    },
+    {
+      "name": "DBA_CLEANUP",
+      "argument_count": 0,
+      "call_succeeded": false,
+      "sqlstate": "42601"
+    },
+    {
+      "name": "DBA_RECOMPILE",
+      "argument_count": 1,
+      "call_succeeded": false,
+      "sqlstate": "42601"
+    },
+    {
+      "name": "FACT_ACCT_BALANCE_UPDATE",
+      "argument_count": 1,
+      "call_succeeded": false,
+      "sqlstate": "0A000"
+    },
+    {
+      "name": "M_PRODUCT_CATEGORY_ACCT_COPY",
+      "argument_count": 2,
+      "call_succeeded": false,
+      "sqlstate": "42601"
+    },
+    {
+      "name": "M_PRODUCT_DELETE",
+      "argument_count": 1,
+      "call_succeeded": true
+    },
+    {
+      "name": "NEXTID",
+      "argument_count": 3,
+      "call_succeeded": false,
+      "sqlstate": "0A000"
+    }
+  ]
+}

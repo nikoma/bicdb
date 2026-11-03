@@ -1,0 +1,1549 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "native_bicdb": true,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "initial_typed_values",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "10"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "10"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "ordered_shift_into_vacated_keys",
+      "reference": {
+        "affected": 2
+      },
+      "bicdb": {
+        "affected": 2
+      },
+      "matched": true
+    },
+    {
+      "id": "ordered_shift_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            },
+            {
+              "number": "10"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            },
+            {
+              "number": "10"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "20"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qualified_alias",
+      "reference": {
+        "affected": 1
+      },
+      "bicdb": {
+        "affected": 1
+      },
+      "matched": true
+    },
+    {
+      "id": "qualified_alias_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "existing_key",
+      "reference": {
+        "error_code": "23505"
+      },
+      "bicdb": {
+        "error_code": "23505"
+      },
+      "matched": true
+    },
+    {
+      "id": "existing_key_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "batch_duplicate",
+      "reference": {
+        "error_code": "23505"
+      },
+      "bicdb": {
+        "error_code": "23505"
+      },
+      "matched": true
+    },
+    {
+      "id": "batch_duplicate_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "immediate_key_swap",
+      "reference": {
+        "error_code": "23505"
+      },
+      "bicdb": {
+        "error_code": "23505"
+      },
+      "matched": true
+    },
+    {
+      "id": "immediate_key_swap_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "null_key",
+      "reference": {
+        "error_code": "23502"
+      },
+      "bicdb": {
+        "error_code": "23502"
+      },
+      "matched": true
+    },
+    {
+      "id": "null_key_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "check_error",
+      "reference": {
+        "error_code": "23514"
+      },
+      "bicdb": {
+        "error_code": "23514"
+      },
+      "matched": true
+    },
+    {
+      "id": "check_error_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "secondary_unique_error",
+      "reference": {
+        "error_code": "23505"
+      },
+      "bicdb": {
+        "error_code": "23505"
+      },
+      "matched": true
+    },
+    {
+      "id": "secondary_unique_error_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "secondary_key_swap",
+      "reference": {
+        "error_code": "23505"
+      },
+      "bicdb": {
+        "error_code": "23505"
+      },
+      "matched": true
+    },
+    {
+      "id": "secondary_key_swap_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "key_identity",
+      "reference": {
+        "affected": 1
+      },
+      "bicdb": {
+        "affected": 1
+      },
+      "matched": true
+    },
+    {
+      "id": "key_identity_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "no_match",
+      "reference": {
+        "affected": 0
+      },
+      "bicdb": {
+        "affected": 0
+      },
+      "matched": true
+    },
+    {
+      "id": "no_match_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "1"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "defaults",
+      "reference": {
+        "affected": 1
+      },
+      "bicdb": {
+        "affected": 1
+      },
+      "matched": true
+    },
+    {
+      "id": "defaults_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "9"
+            },
+            {
+              "number": "7"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "9"
+            },
+            {
+              "number": "7"
+            },
+            "first",
+            {
+              "number": "123456789012345678901234.123456"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "composite_move",
+      "reference": {
+        "affected": 1
+      },
+      "bicdb": {
+        "affected": 1
+      },
+      "matched": true
+    },
+    {
+      "id": "composite_move_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "3.75"
+            },
+            "y",
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3.75"
+            },
+            "y",
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "foreign_key_error",
+      "reference": {
+        "error_code": "23503"
+      },
+      "bicdb": {
+        "error_code": "23503"
+      },
+      "matched": true
+    },
+    {
+      "id": "foreign_key_error_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_key_and_numeric_values",
+      "reference": {
+        "affected": 1
+      },
+      "bicdb": {
+        "affected": 1
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_values_state",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "29"
+            },
+            {
+              "number": "7"
+            },
+            "first",
+            {
+              "number": "99999999999999999999.654321"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "29"
+            },
+            {
+              "number": "7"
+            },
+            "first",
+            {
+              "number": "99999999999999999999.654321"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "transaction_key_move",
+      "reference": {
+        "affected": 1
+      },
+      "bicdb": {
+        "affected": 1
+      },
+      "matched": true
+    },
+    {
+      "id": "transaction_read",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "19"
+            },
+            {
+              "number": "7"
+            },
+            "first",
+            {
+              "number": "99999999999999999999.654321"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "19"
+            },
+            {
+              "number": "7"
+            },
+            "first",
+            {
+              "number": "99999999999999999999.654321"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "rollback_restored",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "29"
+            },
+            {
+              "number": "7"
+            },
+            "first",
+            {
+              "number": "99999999999999999999.654321"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "20"
+            },
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "number": "29"
+            },
+            {
+              "number": "7"
+            },
+            "first",
+            {
+              "number": "99999999999999999999.654321"
+            },
+            {
+              "timestamp": "2024-02-29T12:34:56.123456"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "transaction_reference_error",
+      "reference": {
+        "error_code": "23503"
+      },
+      "bicdb": {
+        "error_code": "23503"
+      },
+      "matched": true
+    },
+    {
+      "id": "prior_transaction_write_preserved",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "20"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "20"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "prior_write_rolled_back",
+      "reference": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "update_column_grant_without_insert_delete",
+      "postgres": {
+        "affected": 1
+      },
+      "bicdb": {
+        "affected": 1
+      },
+      "matched": true
+    },
+    {
+      "id": "insert_still_denied",
+      "postgres": {
+        "error_code": "42501"
+      },
+      "bicdb": {
+        "error_code": "42501"
+      },
+      "matched": true
+    },
+    {
+      "id": "delete_still_denied",
+      "postgres": {
+        "error_code": "42501"
+      },
+      "bicdb": {
+        "error_code": "42501"
+      },
+      "matched": true
+    },
+    {
+      "id": "ungranted_assignment_denied",
+      "postgres": {
+        "error_code": "42501"
+      },
+      "bicdb": {
+        "error_code": "42501"
+      },
+      "matched": true
+    },
+    {
+      "id": "acl_state",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "reading_without_select_denied",
+      "postgres": {
+        "error_code": "42501"
+      },
+      "bicdb": {
+        "error_code": "42501"
+      },
+      "matched": true
+    },
+    {
+      "id": "constant_without_select_allowed",
+      "postgres": {
+        "affected": 1
+      },
+      "bicdb": {
+        "affected": 1
+      },
+      "matched": true
+    },
+    {
+      "id": "constant_state",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "10"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "rls_update_using",
+      "postgres": {
+        "affected": 1
+      },
+      "bicdb": {
+        "affected": 1
+      },
+      "matched": true
+    },
+    {
+      "id": "rls_check_failure",
+      "postgres": {
+        "error_code": "42501"
+      },
+      "bicdb": {
+        "error_code": "42501"
+      },
+      "matched": true
+    },
+    {
+      "id": "rls_check_preserves_state",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            "other"
+          ],
+          [
+            {
+              "number": "11"
+            },
+            "bicdb_key_98fdf7595d85_writer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            "other"
+          ],
+          [
+            {
+              "number": "11"
+            },
+            "bicdb_key_98fdf7595d85_writer"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "rls_no_select_policy_column_read",
+      "postgres": {
+        "affected": 0
+      },
+      "bicdb": {
+        "affected": 0
+      },
+      "matched": true
+    },
+    {
+      "id": "rls_no_select_policy_constant",
+      "postgres": {
+        "affected": 1
+      },
+      "bicdb": {
+        "affected": 1
+      },
+      "matched": true
+    },
+    {
+      "id": "rls_owner_state",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            "other"
+          ],
+          [
+            {
+              "number": "13"
+            },
+            "bicdb_key_98fdf7595d85_writer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            "other"
+          ],
+          [
+            {
+              "number": "13"
+            },
+            "bicdb_key_98fdf7595d85_writer"
+          ]
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "core": {
+    "matched": 37,
+    "total": 37
+  },
+  "matched": 51,
+  "total": 51,
+  "runtime_binary_sha256": "fd11dd44be1dc61c2a7c81ad1ca831df293a08b97036e129e09a3e3b7c826fa6"
+}

@@ -120,6 +120,14 @@ sequence procedure is tested with minimal dependencies, including its missing-ro
 application error. Definitions remain 57/62; full application execution and the
 remaining compatibility workstreams are not established. The running application
 database is not upgraded by this qualification.
+The [qualified key-update qualification](evidence/oracle-key-updates-2026-11-03/README.md)
+removes generated SQL from primary-key moves, preserving UPDATE authorization,
+row policies, typed values and rollback across named schemas. The combined
+passing corpus reaches 1,127 Oracle comparisons and 214 native PostgreSQL controls.
+Independent references distinguish Oracle statement-end uniqueness from PostgreSQL immediate
+checks, including ordered shifts. Referenced parent keys, triggers, FROM/RETURNING,
+concurrent moves and deferred-constraint modes remain outside this qualification.
+No application database upgrade or full application acceptance is implied.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source

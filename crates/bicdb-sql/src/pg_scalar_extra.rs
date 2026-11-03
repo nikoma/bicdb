@@ -609,6 +609,9 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
     ) {
         return oracle_decode::evaluate(name, args).map(Some);
     }
+    if name == "bicdb_oracle_tm_to_char" {
+        return oracle::number_formats::evaluate(args).map(Some);
+    }
     if name == "bicdb_oracle_default_to_char" {
         return oracle_concat::default_to_char(args).map(Some);
     }

@@ -190,6 +190,7 @@ struct Environment {
     defer_bind_types: bool,
     text_patterns: bool,
     statement_provenance: bool,
+    number_formats: bool,
     collection_namespace: Option<String>,
     collections: BTreeMap<String, super::collections::CollectionBinding>,
     variables: BTreeMap<String, Kind>,
@@ -904,6 +905,7 @@ pub(super) fn lower_sql_builtins(
         character_conversion: true,
         nvl: true,
         statement_provenance: true,
+        number_formats: true,
         sql_builtins_only: true,
         text_patterns: true,
         defer_bind_types: oids.is_none(),
@@ -1001,6 +1003,22 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
         ControlFlow::Continue(())
     }
     fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<SqlError> {
+        if self.env.number_formats && super::number_formats::input(expr).is_some() {
+            let input = super::number_formats::input(expr).expect("checked input");
+            let kind = match self.kind(input) {
+                Kind::Number | Kind::Null => "number",
+                Kind::Text => "text",
+                Kind::Date | Kind::Timestamp(_) => "date",
+                Kind::Unknown if self.env.sql_builtins_only && self.env.defer_bind_types => "defer",
+                _ => "unsupported",
+            };
+            if kind != "defer" {
+                if let Err(error) = super::number_formats::lower_expression(expr, kind) {
+                    return ControlFlow::Break(error);
+                }
+            }
+        }
+
         if let Err(error) = super::session_context::lower_expression(expr) {
             return ControlFlow::Break(error);
         }
@@ -1415,6 +1433,7 @@ pub(crate) fn lower(
 ) -> Result<()> {
     let mut env = Environment {
         collection_namespace: collection_namespace.map(str::to_string),
+        number_formats: super::number_formats::enabled(),
         statement_provenance,
         text_patterns,
         v4_semantics,

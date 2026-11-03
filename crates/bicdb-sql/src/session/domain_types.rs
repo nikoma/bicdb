@@ -2221,6 +2221,10 @@ impl<'db> SqlSession<'db> {
                 "DO language {language} is not supported"
             )));
         }
+        let _number_formats = oracle::number_formats::Scope::new(
+            oracle::preview_routine_language_version(&language)
+                .is_some_and(|version| version >= 24),
+        );
         let _context = oracle::session_context::Scope::new(
             oracle::preview_routine_language_version(&language)
                 .is_some_and(|version| version >= 22),

@@ -188,6 +188,7 @@ struct Environment {
     nvl: bool,
     sql_builtins_only: bool,
     defer_bind_types: bool,
+    text_patterns: bool,
     collection_namespace: Option<String>,
     collections: BTreeMap<String, super::collections::CollectionSchema>,
     variables: BTreeMap<String, Kind>,
@@ -356,6 +357,9 @@ impl Resolve<'_> {
                         }
                     }
                     Some("bicdb_oracle_national_value") => return Kind::NationalText,
+                    Some("concat" | "pg_catalog.concat" | "concat_ws" | "pg_catalog.concat_ws") => {
+                        return Kind::Text
+                    }
                     Some("bicdb_oracle_current_sqlerrm") => return Kind::Text,
                     Some(
                         "chr"
@@ -871,6 +875,7 @@ pub(super) fn lower_sql_builtins(
         character_conversion: true,
         nvl: true,
         sql_builtins_only: true,
+        text_patterns: true,
         defer_bind_types: oids.is_none(),
         ..Environment::default()
     };
@@ -954,6 +959,33 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
         ControlFlow::Continue(())
     }
     fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<SqlError> {
+        if self.env.text_patterns {
+            let conversion = super::text_patterns::convert_text_arguments(expr, |value| {
+                let kind = match self.kind(value) {
+                    Kind::Text | Kind::Null => return Ok(value.clone()),
+                    Kind::Number => "number",
+                    Kind::Date => "date",
+                    Kind::Unknown if self.env.sql_builtins_only && self.env.defer_bind_types => return Ok(value.clone()),
+                    Kind::NationalText | Kind::FixedNationalText => return Err(unsupported("national-character text patterns require a UTF16 execution contract")),
+                    _ => return Err(unsupported("text patterns require resolved character, NUMBER or logical DATE input; use an explicit conversion")),
+                };
+                let context = if self.sql_depth > 0 || !self.queries.is_empty() {
+                    "sql"
+                } else {
+                    "plsql"
+                };
+                expression(&format!(
+                    "bicdb_oracle_default_to_char({},'{kind}','{context}')",
+                    render_sql(value)
+                ))
+            });
+            if let Err(error) = conversion {
+                return ControlFlow::Break(error);
+            }
+            if let Err(error) = super::text_patterns::lower_expression(expr) {
+                return ControlFlow::Break(error);
+            }
+        }
         if let Some(namespace) = self.env.collection_namespace.as_deref() {
             if self.sql_depth == 0 && self.queries.is_empty() {
                 if let Err(error) =
@@ -1312,6 +1344,7 @@ fn statements(
 pub(crate) fn lower(
     db: &BicDb,
     collection_namespace: Option<&str>,
+    text_patterns: bool,
     v4_semantics: bool,
     concatenation: bool,
     number_arithmetic: bool,
@@ -1325,6 +1358,7 @@ pub(crate) fn lower(
 ) -> Result<()> {
     let mut env = Environment {
         collection_namespace: collection_namespace.map(str::to_string),
+        text_patterns,
         v4_semantics,
         concatenation,
         number_arithmetic,

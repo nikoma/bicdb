@@ -26,27 +26,8 @@ impl<'db> SqlSession<'db> {
         let (return_type, returns_set) = raw_routine_return_type(trimmed)?;
         let language = raw_routine_language(trimmed)?;
         match language.as_str() {
-            "sql"
-            | "plpgsql"
-            | oracle::PREVIEW_ROUTINE_LANGUAGE
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V13
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V15
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V17
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V18
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V16
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V14
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V12
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V11
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V10
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V9
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V8
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V6
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V5
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V4
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V3
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V2
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V1 => {}
+            "sql" | "plpgsql" => {}
+            other if oracle::preview_routine_language_version(other).is_some() => {}
             other => {
                 return Err(SqlError::Unsupported(format!(
                     "procedural language {other} is not supported"
@@ -215,27 +196,8 @@ impl<'db> SqlSession<'db> {
         let name = normalize_object_name(&object_name(&header.name)?);
         let language = raw_routine_language(trimmed)?;
         match language.as_str() {
-            "sql"
-            | "plpgsql"
-            | oracle::PREVIEW_ROUTINE_LANGUAGE
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V13
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V15
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V17
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V18
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V16
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V14
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V12
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V11
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V10
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V9
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V8
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V6
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V5
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V4
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V3
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V2
-            | oracle::PREVIEW_ROUTINE_LANGUAGE_V1 => {}
+            "sql" | "plpgsql" => {}
+            other if oracle::preview_routine_language_version(other).is_some() => {}
             other => {
                 return Err(SqlError::Unsupported(format!(
                     "procedural language {other} is not supported"
@@ -554,12 +516,9 @@ impl<'db> SqlSession<'db> {
     ) -> Result<Option<RoutineSchema>> {
         let (schema, name) = routine_schema_and_name(&object_name(name_ast)?);
         let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
-            let schema = if matches!(
-                oracle::preview_routine_language_version(&routine.language),
-                Some(
-                    2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19
-                )
-            ) {
+            let schema = if oracle::preview_routine_language_version(&routine.language)
+                .is_some_and(|version| version >= 2)
+            {
                 relation_schema_name(name_ast)
             } else {
                 schema.clone()

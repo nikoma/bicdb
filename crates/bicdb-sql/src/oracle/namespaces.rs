@@ -31,28 +31,8 @@ fn qualify_impl<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str, calls: 
                 Statement::CreateView(view) => self.pre_visit_relation(&mut view.name)?,
                 Statement::CreateFunction(function)
                     if function.language.as_ref().is_some_and(|language| {
-                        matches!(
-                            preview_routine_language_version(&ident_value(language)),
-                            Some(
-                                2 | 3
-                                    | 4
-                                    | 5
-                                    | 6
-                                    | 7
-                                    | 8
-                                    | 9
-                                    | 10
-                                    | 11
-                                    | 12
-                                    | 13
-                                    | 14
-                                    | 15
-                                    | 16
-                                    | 17
-                                    | 18
-                                    | 19
-                            )
-                        )
+                        preview_routine_language_version(&ident_value(language))
+                            .is_some_and(|version| version >= 2)
                     }) =>
                 {
                     self.pre_visit_relation(&mut function.name)?

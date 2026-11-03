@@ -158,10 +158,9 @@ impl<'db> SqlSession<'db> {
         or_replace: bool,
     ) -> Result<()> {
         oracle::validate_routine_language(self.db_ref(), &routine.language)?;
-        if matches!(
-            oracle::preview_routine_language_version(&routine.language),
-            Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19)
-        ) {
+        if oracle::preview_routine_language_version(&routine.language)
+            .is_some_and(|version| version >= 2)
+        {
             routine.schema = oracle::routines::function_namespace(&routine)?;
         }
         if oracle::typed_preview_routine_language(&routine.language) {

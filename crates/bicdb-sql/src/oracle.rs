@@ -31,6 +31,7 @@ mod rownum;
 mod source_tokens;
 pub(crate) mod syntax;
 pub(crate) mod temporal_columns;
+pub(crate) mod text_patterns;
 
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
 pub const ORACLE_PREVIEW_PROFILE: &str = "oracle-preview-v1";
@@ -161,7 +162,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V15: &str = "bicdb_oracle_preview_v15"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V16: &str = "bicdb_oracle_preview_v16";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V17: &str = "bicdb_oracle_preview_v17";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V18: &str = "bicdb_oracle_preview_v18";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v19";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V19: &str = "bicdb_oracle_preview_v19";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v20";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -180,7 +182,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V15_OID: i64 = 999_414;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V16_OID: i64 = 999_415;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V17_OID: i64 = 999_416;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V18_OID: i64 = 999_417;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_418;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V19_OID: i64 = 999_418;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_419;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -207,16 +210,14 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V16 => Some(16),
         PREVIEW_ROUTINE_LANGUAGE_V17 => Some(17),
         PREVIEW_ROUTINE_LANGUAGE_V18 => Some(18),
-        PREVIEW_ROUTINE_LANGUAGE => Some(19),
+        PREVIEW_ROUTINE_LANGUAGE_V19 => Some(19),
+        PREVIEW_ROUTINE_LANGUAGE => Some(20),
         _ => None,
     }
 }
 
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
-    matches!(
-        preview_routine_language_version(language),
-        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19)
-    )
+    preview_routine_language_version(language).is_some_and(|version| version >= 3)
 }
 
 pub(crate) fn preview_routine_language_enabled(db: &BicDb) -> Result<bool> {
@@ -421,6 +422,9 @@ fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
         "chr",
         "to_char",
         "bicdb_oracle_national_value",
+        "bicdb_oracle_trim",
+        "bicdb_oracle_regexp_substr",
+        "bicdb_oracle_regexp_replace",
     ]
     .iter()
     .any(|name| sql.to_ascii_lowercase().contains(name))
@@ -1299,6 +1303,12 @@ fn canonical_tokens_with_routine_types(
                         i += 3;
                         continue;
                     }
+                    "TRIM" | "REGEXP_SUBSTR" | "REGEXP_REPLACE" if preview
+                        && (i == 0 || source[i - 1] != Token::Period)
+                        && source.get(i + 1) == Some(&Token::LParen) => pieces.push(w.value.to_ascii_lowercase()),
+                    "BOTH" | "LEADING" | "TRAILING" if preview && i >= 2
+                        && source[i - 1] == Token::LParen && word(&source[i - 2], "TRIM")
+                        && (i < 3 || source[i - 3] != Token::Period) => pieces.push(upper),
                     "CLOB" if preview => pieces.push("TEXT".into()),
                     "BLOB" if preview => pieces.push("BYTEA".into()),
                     "OCTET_LENGTH" if preview => pieces.push("octet_length".into()),
@@ -1671,6 +1681,9 @@ fn lower_native(db: &BicDb, sql: &str, preview: bool, namespace: Option<&str>) -
     }
     let result = visit_expressions_mut(&mut statements, |expr| {
         if preview {
+            if let Err(error) = text_patterns::lower_expression(expr) {
+                return ControlFlow::Break(error);
+            }
             if let Err(error) = temporal_columns::lower_date_expression(expr) {
                 return ControlFlow::Break(error);
             }

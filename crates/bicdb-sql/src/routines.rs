@@ -135,10 +135,9 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             &mut exception_handlers,
         );
     }
-    if matches!(
-        oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19)
-    ) {
+    if oracle::preview_routine_language_version(&routine.language)
+        .is_some_and(|version| version >= 2)
+    {
         oracle::routines::bind_function_namespace(
             db,
             routine,
@@ -156,10 +155,10 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
                 )
             })?,
             oracle::collections::routine_constructors_enabled().then_some(routine.schema.as_str()),
-            matches!(
-                oracle::preview_routine_language_version(&routine.language),
-                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19)
-            ),
+            oracle::preview_routine_language_version(&routine.language)
+                .is_some_and(|version| version >= 20),
+            oracle::preview_routine_language_version(&routine.language)
+                .is_some_and(|version| version >= 4),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 7),
             oracle::preview_routine_language_version(&routine.language)

@@ -28,28 +28,8 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
         || !function.language.as_ref().is_some_and(|language| {
             preview_routine_language_version(&ident_value(language))
                 == preview_routine_language_version(&routine.language)
-                && matches!(
-                    preview_routine_language_version(&routine.language),
-                    Some(
-                        2 | 3
-                            | 4
-                            | 5
-                            | 6
-                            | 7
-                            | 8
-                            | 9
-                            | 10
-                            | 11
-                            | 12
-                            | 13
-                            | 14
-                            | 15
-                            | 16
-                            | 17
-                            | 18
-                            | 19
-                    )
-                )
+                && preview_routine_language_version(&routine.language)
+                    .is_some_and(|version| version >= 2)
         })
     {
         return Err(SqlError::InvalidSql(

@@ -93,6 +93,8 @@ def run(oracle, bicdb, schema, prefix, suite='namespaces'):
         from routine_concat import fixture as make_fixture
     elif suite == 'case':
         from routine_case import fixture as make_fixture
+    elif suite == 'view_anchors':
+        from view_anchors import fixture as make_fixture
     elif suite == 'anchors':
         from routine_anchors import fixture as make_fixture
     elif suite == 'temporal':
@@ -236,7 +238,7 @@ def main():
     parser.add_argument('--oracle-config', required=True, type=Path)
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN')
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--suite', choices=('namespaces', 'temporal', 'calendar', 'week', 'anchors', 'case', 'concat', 'cursors', 'numberops', 'decode', 'columns', 'characters', 'nvl', 'procedures', 'grammar', 'errors'), default='namespaces')
+    parser.add_argument('--suite', choices=('namespaces', 'temporal', 'calendar', 'week', 'anchors', 'view_anchors', 'case', 'concat', 'cursors', 'numberops', 'decode', 'columns', 'characters', 'nvl', 'procedures', 'grammar', 'errors'), default='namespaces')
     args = parser.parse_args()
     report = dict(format=1, success=False)
     try:

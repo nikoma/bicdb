@@ -89,8 +89,18 @@ pub(super) fn lower(
         }
     }
     let physical = relation_name_from_parts(&parts)?;
-    let schema = load_schema(db, &physical)?
-        .ok_or_else(|| unsupported(format!("unknown %TYPE table {}", parts.join("."))))?;
+    let schema = if let Some(schema) = load_schema(db, &physical)? {
+        schema
+    } else if let Some(view) = load_view(db, &physical)? {
+        // Use persisted descriptors without evaluating the view. Views inherit
+        // source column modifiers through normal CREATE VIEW processing.
+        catalog_view_schema(db, view)?
+    } else {
+        return Err(unsupported(format!(
+            "unknown %TYPE table {}",
+            parts.join(".")
+        )));
+    };
     let column = schema
         .columns
         .iter()
@@ -198,6 +208,42 @@ mod tests {
             execute(&mut db, sql);
         }
         db
+    }
+
+    #[test]
+    fn view_anchors_use_descriptors_without_executing_the_query() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = database(root.path());
+        execute(&mut db, "CREATE VIEW red.anchor_view AS SELECT value AS renamed,1/0 AS unused FROM red.anchor_rows");
+        execute(&mut db,"CREATE FUNCTION red.view_anchor(p VARCHAR2) RETURN VARCHAR2 IS v anchor_view.renamed%TYPE;BEGIN v:=p;RETURN v;END;");
+        assert_eq!(
+            execute(&mut db, "SELECT red.view_anchor('abc') FROM DUAL").rows[0][0].to_cell(),
+            "abc"
+        );
+        assert_eq!(
+            execute(&mut db, "SELECT red.view_anchor(NULL) FROM DUAL").rows[0][0],
+            SqlValue::Null
+        );
+        let sql = lower_profile_sql(
+            &db,
+            "SELECT red.view_anchor('abcd') FROM DUAL",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute(&sql)
+                .unwrap_err()
+                .sqlstate(),
+            "22001"
+        );
+        assert!(lower_profile_sql(&db,"CREATE FUNCTION red.missing_view_column RETURN NUMBER IS v anchor_view.missing%TYPE;BEGIN RETURN 0;END;",ORACLE_PREVIEW_PROFILE).is_err());
+        drop(db);
+        let mut db = BicDb::open(root.path()).unwrap();
+        assert_eq!(
+            execute(&mut db, "SELECT red.view_anchor('é') FROM DUAL").rows[0][0].to_cell(),
+            "é"
+        );
     }
 
     #[test]

@@ -1,0 +1,313 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "native_bicdb": true,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "detail",
+      "expected": {
+        "sqlstate": "22012",
+        "message": "native original",
+        "detail": "native detail",
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "postgres": {
+        "sqlstate": "22012",
+        "message": "native original",
+        "detail": "native detail",
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "bicdb": {
+        "sqlstate": "22012",
+        "message": "native original",
+        "detail": "native detail",
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "matched": true
+    },
+    {
+      "id": "trailing",
+      "expected": {
+        "sqlstate": "P0001",
+        "message": "native trailing ",
+        "detail": null,
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "postgres": {
+        "sqlstate": "P0001",
+        "message": "native trailing ",
+        "detail": null,
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "bicdb": {
+        "sqlstate": "P0001",
+        "message": "native trailing ",
+        "detail": null,
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "matched": true
+    },
+    {
+      "id": "restore",
+      "expected": {
+        "sqlstate": "22012",
+        "message": "outer",
+        "detail": null,
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "postgres": {
+        "sqlstate": "22012",
+        "message": "outer",
+        "detail": null,
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "bicdb": {
+        "sqlstate": "22012",
+        "message": "outer",
+        "detail": null,
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "matched": true
+    },
+    {
+      "id": "constraint",
+      "expected": {
+        "sqlstate": "23505",
+        "message": "constraint original",
+        "detail": null,
+        "table": "native_table",
+        "column": "native_column",
+        "constraint": "native_unique"
+      },
+      "postgres": {
+        "sqlstate": "23505",
+        "message": "constraint original",
+        "detail": null,
+        "table": "native_table",
+        "column": "native_column",
+        "constraint": "native_unique"
+      },
+      "bicdb": {
+        "sqlstate": "23505",
+        "message": "constraint original",
+        "detail": null,
+        "table": "native_table",
+        "column": "native_column",
+        "constraint": "native_unique"
+      },
+      "matched": true
+    },
+    {
+      "id": "outside",
+      "expected": {
+        "sqlstate": "0Z002",
+        "message": "RAISE without parameters cannot be used outside an exception handler",
+        "detail": null,
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "postgres": {
+        "sqlstate": "0Z002",
+        "message": "RAISE without parameters cannot be used outside an exception handler",
+        "detail": null,
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "bicdb": {
+        "sqlstate": "0Z002",
+        "message": "RAISE without parameters cannot be used outside an exception handler",
+        "detail": null,
+        "table": null,
+        "column": null,
+        "constraint": null
+      },
+      "matched": true
+    },
+    {
+      "id": "user_variables",
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "17"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "17"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "17"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "native_call",
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "42"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "42"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "42"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "native_call_effect",
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "-20100"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "-20100"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-20100"
+            }
+          ]
+        ],
+        "type_oids": [
+          1700
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "recovery",
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ],
+        "type_oids": [
+          23
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "matched": 9,
+  "total": 9,
+  "runtime_binary_sha256": "9272d26f82be564c9f3fcfbeefabdb584da4c0449f3b0b04b9a95509f69f16f5"
+}

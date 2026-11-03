@@ -1,0 +1,104 @@
+{
+  "format": 1,
+  "success": true,
+  "runtime_binary_sha256": "9272d26f82be564c9f3fcfbeefabdb584da4c0449f3b0b04b9a95509f69f16f5",
+  "matched": 978,
+  "total": 978,
+  "suites": [
+    {
+      "suite": "case",
+      "matched": 34,
+      "total": 34,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "anchors",
+      "matched": 41,
+      "total": 41,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "week",
+      "matched": 102,
+      "total": 102,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "calendar",
+      "matched": 36,
+      "total": 36,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "temporal",
+      "matched": 29,
+      "total": 29,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "namespaces",
+      "matched": 24,
+      "total": 24,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "concat",
+      "matched": 76,
+      "total": 76,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "cursors",
+      "matched": 36,
+      "total": 36,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "numberops",
+      "matched": 218,
+      "total": 218,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "decode",
+      "matched": 57,
+      "total": 57,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "columns",
+      "matched": 21,
+      "total": 21,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "characters",
+      "matched": 119,
+      "total": 119,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "nvl",
+      "matched": 93,
+      "total": 93,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "procedures",
+      "matched": 26,
+      "total": 26,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "grammar",
+      "matched": 14,
+      "total": 14,
+      "oracle_database_version": "23.26.3.0.0"
+    },
+    {
+      "suite": "decode_sql",
+      "matched": 52,
+      "total": 52
+    }
+  ]
+}

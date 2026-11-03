@@ -1,0 +1,2640 @@
+{
+  "format": 1,
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "fixture_prefix": "BICDB_GR_E359A4B11D",
+  "fixture_sha256": "c5612730dad0373005750e334d78175b818fe3dd68ec58d994132e7a4de10988",
+  "total": 108,
+  "matched": 108,
+  "cases": [
+    {
+      "id": "code_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20000|ORA-20000: hello"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20000|ORA-20000: hello"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20000|ORA-20000: hello"
+        ]
+      ]
+    },
+    {
+      "id": "code_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20999|ORA-20999: hello"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20999|ORA-20999: hello"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20999|ORA-20999: hello"
+        ]
+      ]
+    },
+    {
+      "id": "code_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-21000|ORA-21000: error number argument to raise_application_error of -19999 is out of range"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-21000|ORA-21000: error number argument to raise_application_error of -19999 is out of range"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-21000|ORA-21000: error number argument to raise_application_error of -19999 is out of range"
+        ]
+      ]
+    },
+    {
+      "id": "code_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-21000|ORA-21000: error number argument to raise_application_error of -21000 is out of range"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-21000|ORA-21000: error number argument to raise_application_error of -21000 is out of range"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-21000|ORA-21000: error number argument to raise_application_error of -21000 is out of range"
+        ]
+      ]
+    },
+    {
+      "id": "code_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-21000|ORA-21000: error number argument to raise_application_error of 0 is out of range"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-21000|ORA-21000: error number argument to raise_application_error of 0 is out of range"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-21000|ORA-21000: error number argument to raise_application_error of 0 is out of range"
+        ]
+      ]
+    },
+    {
+      "id": "code_5",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-21000|ORA-21000: error number argument to raise_application_error of 0 is out of range"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-21000|ORA-21000: error number argument to raise_application_error of 0 is out of range"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-21000|ORA-21000: error number argument to raise_application_error of 0 is out of range"
+        ]
+      ]
+    },
+    {
+      "id": "code_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20000|ORA-20000: hello"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20000|ORA-20000: hello"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20000|ORA-20000: hello"
+        ]
+      ]
+    },
+    {
+      "id": "code_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20001|ORA-20001: hello"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20001|ORA-20001: hello"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20001|ORA-20001: hello"
+        ]
+      ]
+    },
+    {
+      "id": "code_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20000|ORA-20000: hello"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20000|ORA-20000: hello"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20000|ORA-20000: hello"
+        ]
+      ]
+    },
+    {
+      "id": "code_9",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-1426|ORA-01426: numeric overflow"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-1426|ORA-01426: numeric overflow"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-1426|ORA-01426: numeric overflow"
+        ]
+      ]
+    },
+    {
+      "id": "code_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20000|ORA-20000: hello"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20000|ORA-20000: hello"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20000|ORA-20000: hello"
+        ]
+      ]
+    },
+    {
+      "id": "code_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-6502|ORA-06502: PL/SQL: value or conversion error: character to number conversion error"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-6502|ORA-06502: PL/SQL: value or conversion error: character to number conversion error"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-6502|ORA-06502: PL/SQL: value or conversion error: character to number conversion error"
+        ]
+      ]
+    },
+    {
+      "id": "msg_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: "
+        ]
+      ]
+    },
+    {
+      "id": "msg_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: "
+        ]
+      ]
+    },
+    {
+      "id": "msg_14",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        ]
+      ]
+    },
+    {
+      "id": "msg_15",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        ]
+      ]
+    },
+    {
+      "id": "msg_16",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        ]
+      ]
+    },
+    {
+      "id": "msg_17",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        ]
+      ]
+    },
+    {
+      "id": "msg_18",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+        ]
+      ]
+    },
+    {
+      "id": "msg_19",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+        ]
+      ]
+    },
+    {
+      "id": "msg_20",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+        ]
+      ]
+    },
+    {
+      "id": "msg_21",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+        ]
+      ]
+    },
+    {
+      "id": "msg_22",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+        ]
+      ]
+    },
+    {
+      "id": "flag_TRUE",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: hello"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: hello"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: hello"
+        ]
+      ]
+    },
+    {
+      "id": "stack_TRUE",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20102|ORA-20102: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20102|ORA-20102: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20102|ORA-20102: outer"
+        ]
+      ]
+    },
+    {
+      "id": "flag_FALSE",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: hello"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: hello"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: hello"
+        ]
+      ]
+    },
+    {
+      "id": "stack_FALSE",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20102|ORA-20102: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20102|ORA-20102: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20102|ORA-20102: outer"
+        ]
+      ]
+    },
+    {
+      "id": "flag_NULL",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: hello"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: hello"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: hello"
+        ]
+      ]
+    },
+    {
+      "id": "stack_NULL",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20102|ORA-20102: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20102|ORA-20102: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20102|ORA-20102: outer"
+        ]
+      ]
+    },
+    {
+      "id": "outside",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "0|ORA-0000: normal, successful completion"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0|ORA-0000: normal, successful completion"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "0|ORA-0000: normal, successful completion"
+        ]
+      ]
+    },
+    {
+      "id": "rethrow",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20101|ORA-20101: inner"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20101|ORA-20101: inner"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20101|ORA-20101: inner"
+        ]
+      ]
+    },
+    {
+      "id": "qualified",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20103|ORA-20103: qualified"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20103|ORA-20103: qualified"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20103|ORA-20103: qualified"
+        ]
+      ]
+    },
+    {
+      "id": "sysqualified",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20104|ORA-20104: sysqualified"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20104|ORA-20104: sysqualified"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20104|ORA-20104: sysqualified"
+        ]
+      ]
+    },
+    {
+      "id": "named_arguments",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20105|ORA-20105: named"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20105|ORA-20105: named"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20105|ORA-20105: named"
+        ]
+      ]
+    },
+    {
+      "id": "number_message",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20107|ORA-20107: 12.5"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20107|ORA-20107: 12.5"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20107|ORA-20107: 12.5"
+        ]
+      ]
+    },
+    {
+      "id": "date_message",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20108|ORA-20108: 29-FEB-24"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20108|ORA-20108: 29-FEB-24"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20108|ORA-20108: 29-FEB-24"
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: tail"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: tail"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: tail"
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100:   head"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100:   head"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100:   head"
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: "
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: \thello\t"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: \thello\t"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: \thello\t"
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: line"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: line"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: line"
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_6",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\r"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\r"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: x\r"
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_7",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\n\t"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\n\t"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: x\n\t"
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_8",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\t"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\t"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: x\t"
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_10",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\u000b"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\u000b"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: x\u000b"
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_11",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\f"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\f"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: x\f"
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_12",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\r"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: x\r"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: x\r"
+        ]
+      ]
+    },
+    {
+      "id": "whitespace_13",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: \nx"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: \nx"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: \nx"
+        ]
+      ]
+    },
+    {
+      "id": "context_48",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "0|ORA-0000: normal, successful completion"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0|ORA-0000: normal, successful completion"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "0|ORA-0000: normal, successful completion"
+        ]
+      ]
+    },
+    {
+      "id": "context_49",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: handled"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: handled"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: handled"
+        ]
+      ]
+    },
+    {
+      "id": "context_50",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "0|ORA-0000: normal, successful completion"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0|ORA-0000: normal, successful completion"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "0|ORA-0000: normal, successful completion"
+        ]
+      ]
+    },
+    {
+      "id": "context_51",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20101|ORA-20101: inner/-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20101|ORA-20101: inner/-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20101|ORA-20101: inner/-20100|ORA-20100: "
+        ]
+      ]
+    },
+    {
+      "id": "context_52",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "42"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "42"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "42"
+        ]
+      ]
+    },
+    {
+      "id": "context_53",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "0"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "0"
+        ]
+      ]
+    },
+    {
+      "id": "context_54",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "0|ORA-0000: normal, successful completion"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0|ORA-0000: normal, successful completion"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "0|ORA-0000: normal, successful completion"
+        ]
+      ]
+    },
+    {
+      "id": "context_55",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20105|ORA-20105: init"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20105|ORA-20105: init"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20105|ORA-20105: init"
+        ]
+      ]
+    },
+    {
+      "id": "context_56",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "ORA-20100: outer/done/ORA-20100: "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "ORA-20100: outer/done/ORA-20100: "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "ORA-20100: outer/done/ORA-20100: "
+        ]
+      ]
+    },
+    {
+      "id": "context_57",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100"
+        ]
+      ]
+    },
+    {
+      "id": "context_58",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "0|ORA-0000: normal, successful completion/-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0|ORA-0000: normal, successful completion/-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "0|ORA-0000: normal, successful completion/-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "context_59",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "done/-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "done/-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "done/-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "context_60",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "ORA-20100: outer/-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "ORA-20100: outer/-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "ORA-20100: outer/-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20100_FALSE_False",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: "
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20100_FALSE_True",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: "
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20100_TRUE_False",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20100_TRUE_True",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20100_NULL_False",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20100_NULL_True",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20101_FALSE_False",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: "
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20101_FALSE_True",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: "
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20101_TRUE_False",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20101_TRUE_True",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20101_NULL_False",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_nested_-20101_NULL_True",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_native_division",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_native_nodata",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_native_rethrow",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_0_successful_sql",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_1_invalid_inner_range",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: "
+        ]
+      ]
+    },
+    {
+      "id": "buffer_1_invalid_inner_text",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_1_invalid_inner_overflow",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: outer"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: outer"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_1_invalid_outer_range",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-21000|ORA-21000: error number argument to raise_application_error of  is out of range"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-21000|ORA-21000: error number argument to raise_application_error of  is out of range"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-21000|ORA-21000: error number argument to raise_application_error of  is out of range"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_1_invalid_outer_division",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-1476|ORA-01476: divisor is equal to zero"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-1476|ORA-01476: divisor is equal to zero"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-1476|ORA-01476: divisor is equal to zero"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_1_invalid_outer_nodata",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "100|ORA-01403: no data found"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "100|ORA-01403: no data found"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "100|ORA-01403: no data found"
+        ]
+      ]
+    },
+    {
+      "id": "buffer_1_through_native_handler",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-20100|ORA-20100: "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-20100|ORA-20100: "
+        ]
+      ]
+    },
+    {
+      "id": "buffer_cleared_conversion",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "-6502|ORA-06502: PL/SQL: value or conversion error"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "-6502|ORA-06502: PL/SQL: value or conversion error"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "-6502|ORA-06502: PL/SQL: value or conversion error"
+        ]
+      ]
+    },
+    {
+      "id": "driver_err",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20109,
+            "message": "ORA-20109: driver message"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20109,
+            "message": "ORA-20109: driver message"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20109: driver message",
+      "matched": true
+    },
+    {
+      "id": "driver_keep",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: outer"
+          },
+          {
+            "code": -20101,
+            "message": "ORA-20101: inner"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: outer"
+          },
+          {
+            "code": -20101,
+            "message": "ORA-20101: inner"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20102: outer",
+      "matched": true
+    },
+    {
+      "id": "driver_replace",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: outer"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: outer"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20102: outer",
+      "matched": true
+    },
+    {
+      "id": "driver_null_keep",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: outer"
+          },
+          {
+            "code": -20101,
+            "message": "ORA-20101: inner"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: outer"
+          },
+          {
+            "code": -20101,
+            "message": "ORA-20101: inner"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20102: outer",
+      "matched": true
+    },
+    {
+      "id": "driver_long",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20110,
+            "message": "ORA-20110: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20110,
+            "message": "ORA-20110: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20110: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "matched": true
+    },
+    {
+      "id": "driver_unicode",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20111,
+            "message": "ORA-20111: ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20111,
+            "message": "ORA-20111: ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20111: ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "matched": true
+    },
+    {
+      "id": "driver_trailing",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20112,
+            "message": "ORA-20112: tail"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20112,
+            "message": "ORA-20112: tail"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20112: tail",
+      "matched": true
+    },
+    {
+      "id": "driver_multiline",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20113,
+            "message": "ORA-20113: a\nb"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20113,
+            "message": "ORA-20113: a\nb"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20113: a\nb",
+      "matched": true
+    },
+    {
+      "id": "driver_buffer_0_rethrow_outer_FALSE",
+      "oracle": {
+        "stack": [
+          {
+            "code": -21002,
+            "message": "ORA-21002: attempted to reraise a cleared error"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -21002,
+            "message": "ORA-21002: attempted to reraise a cleared error"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-21002: attempted to reraise a cleared error",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -21002,
+          "message": "ORA-21002: attempted to reraise a cleared error"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_0_history_FALSE",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: second"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: second"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20102: second",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -20102,
+          "message": "ORA-20102: second"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_0_rethrow_outer_TRUE",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20100: outer",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_0_history_TRUE",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: second"
+          },
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: second"
+          },
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20102: second",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -20102,
+          "message": "ORA-20102: second"
+        },
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_0_rethrow_outer_NULL",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20100: outer",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_0_history_NULL",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: second"
+          },
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: second"
+          },
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20102: second",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -20102,
+          "message": "ORA-20102: second"
+        },
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_1_keep_after_clear_TRUE",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: new"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: new"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20102: new",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -20102,
+          "message": "ORA-20102: new"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_1_keep_after_clear_NULL",
+      "oracle": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: new"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -20102,
+            "message": "ORA-20102: new"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-20102: new",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -20102,
+          "message": "ORA-20102: new"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_2_range",
+      "oracle": {
+        "stack": [
+          {
+            "code": -21002,
+            "message": "ORA-21002: attempted to reraise a cleared error"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -21002,
+            "message": "ORA-21002: attempted to reraise a cleared error"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-21002: attempted to reraise a cleared error",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -21002,
+          "message": "ORA-21002: attempted to reraise a cleared error"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_2_division",
+      "oracle": {
+        "stack": [
+          {
+            "code": -21002,
+            "message": "ORA-21002: attempted to reraise a cleared error"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -21002,
+            "message": "ORA-21002: attempted to reraise a cleared error"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-21002: attempted to reraise a cleared error",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -21002,
+          "message": "ORA-21002: attempted to reraise a cleared error"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_2_nodata",
+      "oracle": {
+        "stack": [
+          {
+            "code": -21002,
+            "message": "ORA-21002: attempted to reraise a cleared error"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -21002,
+            "message": "ORA-21002: attempted to reraise a cleared error"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-21002: attempted to reraise a cleared error",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -21002,
+          "message": "ORA-21002: attempted to reraise a cleared error"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_2_text",
+      "oracle": {
+        "stack": [
+          {
+            "code": -21002,
+            "message": "ORA-21002: attempted to reraise a cleared error"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -21002,
+            "message": "ORA-21002: attempted to reraise a cleared error"
+          }
+        ]
+      },
+      "sqlstate": "P0001",
+      "message_primary": "ORA-21002: attempted to reraise a cleared error",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -21002,
+          "message": "ORA-21002: attempted to reraise a cleared error"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_2_invalid_range_TRUE",
+      "oracle": {
+        "stack": [
+          {
+            "code": -21000,
+            "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+          },
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -21000,
+            "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+          },
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "sqlstate": "22023",
+      "message_primary": "ORA-21000: error number argument to raise_application_error of -1 is out of range",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -21000,
+          "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+        },
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_2_invalid_range_FALSE",
+      "oracle": {
+        "stack": [
+          {
+            "code": -21000,
+            "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -21000,
+            "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+          }
+        ]
+      },
+      "sqlstate": "22023",
+      "message_primary": "ORA-21000: error number argument to raise_application_error of -1 is out of range",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -21000,
+          "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+        }
+      ]
+    },
+    {
+      "id": "driver_buffer_2_invalid_range_NULL",
+      "oracle": {
+        "stack": [
+          {
+            "code": -21000,
+            "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+          },
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "bicdb": {
+        "stack": [
+          {
+            "code": -21000,
+            "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+          },
+          {
+            "code": -20100,
+            "message": "ORA-20100: outer"
+          }
+        ]
+      },
+      "sqlstate": "22023",
+      "message_primary": "ORA-21000: error number argument to raise_application_error of -1 is out of range",
+      "matched": true,
+      "expected_stack": [
+        {
+          "code": -21000,
+          "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+        },
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ]
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "scope": "Fixed-preview RAISE_APPLICATION_ERROR codes, rounding, ranges, selected argument conversions, message byte boundaries, current SQLCODE/SQLERRM and scoped nested call/handler context. PG error metadata records logical Oracle codes/messages; full diagnostic catalog and Oracle call-site backtraces are unqualified.",
+  "oracle_nls_language": "AMERICAN",
+  "oracle_nls_numeric_characters": ".,",
+  "oracle_nls_concat": {
+    "NLS_CALENDAR": "GREGORIAN",
+    "NLS_DATE_FORMAT": "DD-MON-RR",
+    "NLS_DATE_LANGUAGE": "AMERICAN",
+    "NLS_LENGTH_SEMANTICS": "BYTE"
+  },
+  "oracle_database_character_set": "AL32UTF8",
+  "routine_compiler": "bicdb_oracle_preview_v14",
+  "runtime_binary_sha256": "9272d26f82be564c9f3fcfbeefabdb584da4c0449f3b0b04b9a95509f69f16f5"
+}

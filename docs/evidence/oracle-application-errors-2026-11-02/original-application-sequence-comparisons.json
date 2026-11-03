@@ -1,0 +1,198 @@
+{
+  "format": 1,
+  "source_execution_compared": true,
+  "disposable_target_copy_only": true,
+  "application_qualified": false,
+  "scope": "Unchanged original AD_SEQUENCE_NEXT body against actual imported application AD_SEQUENCE data, with both source and target changes rolled back; full constraint migration and concurrent allocation remain unqualified",
+  "runtime_binary_sha256": "9272d26f82be564c9f3fcfbeefabdb584da4c0449f3b0b04b9a95509f69f16f5",
+  "source_sha256": "2a174da91b8afd59124f39b630d1f8346b521392d141e7ee75687ce73d195cfe",
+  "cases": [
+    {
+      "client_id": 1000000,
+      "sequence_name": "AD_Client",
+      "oracle_before": [
+        [
+          {
+            "number": "1000000"
+          },
+          {
+            "number": "200000"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "bicdb_before": [
+        [
+          {
+            "number": "1000000"
+          },
+          {
+            "number": "200000"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_output": {
+        "number": "1000000"
+      },
+      "bicdb_output": {
+        "number": "1000000"
+      },
+      "output_type_oids": [
+        1700
+      ],
+      "oracle_after": [
+        [
+          {
+            "number": "1000001"
+          },
+          {
+            "number": "200000"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "bicdb_after": [
+        [
+          {
+            "number": "1000001"
+          },
+          {
+            "number": "200000"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_rolled_back": [
+        [
+          {
+            "number": "1000000"
+          },
+          {
+            "number": "200000"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "bicdb_rolled_back": [
+        [
+          {
+            "number": "1000000"
+          },
+          {
+            "number": "200000"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "client_id": 1,
+      "sequence_name": "AD_Client",
+      "oracle_before": [
+        [
+          {
+            "number": "1000000"
+          },
+          {
+            "number": "200000"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "bicdb_before": [
+        [
+          {
+            "number": "1000000"
+          },
+          {
+            "number": "200000"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_output": {
+        "number": "200000"
+      },
+      "bicdb_output": {
+        "number": "200000"
+      },
+      "output_type_oids": [
+        1700
+      ],
+      "oracle_after": [
+        [
+          {
+            "number": "1000000"
+          },
+          {
+            "number": "200001"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "bicdb_after": [
+        [
+          {
+            "number": "1000000"
+          },
+          {
+            "number": "200001"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "oracle_rolled_back": [
+        [
+          {
+            "number": "1000000"
+          },
+          {
+            "number": "200000"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "bicdb_rolled_back": [
+        [
+          {
+            "number": "1000000"
+          },
+          {
+            "number": "200000"
+          },
+          {
+            "number": "1"
+          }
+        ]
+      ],
+      "matched": true
+    }
+  ],
+  "matched": 2,
+  "total": 2,
+  "success": true
+}

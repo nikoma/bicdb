@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "scope": "Source observations; NUL and invalid packed CHR transport are outside the passing corpus",
+  "cases": [
+    {
+      "message": "'tail '",
+      "handled": "ORA-20100: tail"
+    },
+    {
+      "message": "'  head  '",
+      "handled": "ORA-20100:   head"
+    },
+    {
+      "message": "' '",
+      "handled": "ORA-20100: "
+    },
+    {
+      "message": "CHR(9)||'hello'||CHR(9)",
+      "handled": "ORA-20100: \thello\t"
+    },
+    {
+      "message": "'line'||CHR(10)",
+      "handled": "ORA-20100: line"
+    },
+    {
+      "message": "NULL",
+      "handled": "ORA-20100: "
+    },
+    {
+      "message": "'x'||CHR(13)",
+      "handled": "ORA-20100: x\r"
+    },
+    {
+      "message": "'x'||CHR(10)||CHR(9)",
+      "handled": "ORA-20100: x\n\t"
+    },
+    {
+      "message": "'x'||CHR(9)||CHR(10)",
+      "handled": "ORA-20100: x\t"
+    },
+    {
+      "message": "'x'||CHR(160)",
+      "handled": "ORA-20100: x"
+    },
+    {
+      "message": "'x'||CHR(11)",
+      "handled": "ORA-20100: x\u000b"
+    },
+    {
+      "message": "'x'||CHR(12)",
+      "handled": "ORA-20100: x\f"
+    },
+    {
+      "message": "'x'||CHR(13)||CHR(10)",
+      "handled": "ORA-20100: x\r"
+    },
+    {
+      "message": "CHR(10)||'x'",
+      "handled": "ORA-20100: \nx"
+    },
+    {
+      "message": "'x'||CHR(0)",
+      "handled": "ORA-20100: x\u0000"
+    }
+  ]
+}

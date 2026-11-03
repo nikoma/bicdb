@@ -1,0 +1,46 @@
+{
+  "format": 1,
+  "isolated_database_only": true,
+  "application_database_opened_with_old_reader": false,
+  "new_runtime_sha256": "9272d26f82be564c9f3fcfbeefabdb584da4c0449f3b0b04b9a95509f69f16f5",
+  "old_runtime_sha256": "29c3bcff1a19cee418c6f10c6dfbe05650e15bdb2bd99fdd7608081b5c999533",
+  "readers": [
+    {
+      "label": "new",
+      "calls": [
+        {
+          "sql": "CALL procedure_reader(65,NULL)",
+          "value": "65"
+        },
+        {
+          "sql": "CALL procedure_reader(49835,NULL)",
+          "value": "49835"
+        },
+        {
+          "sql": "CALL procedure_reader(NULL,NULL)",
+          "value": "7"
+        }
+      ],
+      "recovery": true
+    },
+    {
+      "label": "old",
+      "calls": [
+        {
+          "sql": "CALL procedure_reader(65,NULL)",
+          "sqlstate": "0A000"
+        },
+        {
+          "sql": "CALL procedure_reader(49835,NULL)",
+          "sqlstate": "0A000"
+        },
+        {
+          "sql": "CALL procedure_reader(NULL,NULL)",
+          "sqlstate": "0A000"
+        }
+      ],
+      "recovery": true
+    }
+  ],
+  "success": true
+}

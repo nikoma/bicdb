@@ -111,6 +111,15 @@ NULL-argument application-copy procedure probes still fail; definition acceptanc
 remains 57/62. This qualification builds a development candidate without upgrading
 the running application database. Five separately tracked semantic mismatches
 remain unchanged on the candidate.
+The [application-error qualification](evidence/oracle-application-errors-2026-11-02/README.md)
+adds version-14 RAISE_APPLICATION_ERROR and bounded current SQLCODE/SQLERRM,
+including saved-message lifetimes, reraising and SQL/PL entry boundaries.
+The generated corpus reaches 1,086 matches with Oracle and 163 independent native
+PostgreSQL controls. Native rethrow diagnostics are preserved. The original
+sequence procedure is tested with minimal dependencies, including its missing-row
+application error. Definitions remain 57/62; full application execution and the
+remaining compatibility workstreams are not established. The running application
+database is not upgraded by this qualification.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source
@@ -139,7 +148,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 14. Triggers | Row/statement/compound/INSTEAD OF/system triggers, order, transition state, mutating-table rules and transactional effects | Outstanding for Oracle; sample triggers explicitly deferred |
 | 15. Session state | NLS, temporary tables, cursors, sequence visibility and cache behavior, pool reset, reconnect and isolation | Partial: sample sequences; broader Oracle state semantics unqualified |
 | 16. Drivers and frameworks | PostgreSQL simple/extended/binary protocol, bindings, metadata and representative application/framework acceptance | Partial: tokio-postgres/psycopg HR acceptance and bounded procedure output/DATE bind metadata over PostgreSQL drivers; full application acceptance outstanding, Oracle Net/TTC conditional on unchanged-driver scope |
-| 17. Catalogs and errors | USER_/ALL_/DBA_ objects, source, arguments, dependencies, compile errors, ORA diagnostics and SQLCODE/SQLERRM | Outstanding |
+| 17. Catalogs and errors | USER_/ALL_/DBA_ objects, source, arguments, dependencies, compile errors, ORA diagnostics and SQLCODE/SQLERRM | Partial: version-14 application errors, bounded current diagnostics and PostgreSQL error metadata; broader error catalog, SQLERRM(code), EXCEPTION_INIT, backtraces and Oracle catalogs outstanding |
 | 18. Security | Roles/grants, definer/invoker rights, context/VPD, auditing, encryption, external identity and key rotation under adversarial tests | Unqualified for Oracle semantics; native security does not establish compatibility |
 | 19. Physical and specialized objects | Partition/index maintenance and materialized refresh; assess external tables, object/collection types, XML, spatial, text and queues for target workloads | Unqualified; unsupported reference features need a full/appropriate Oracle edition |
 | 20. Optimizer and performance | Statistics, pruning, indexes, joins, spill and hint policy; measured representative workload and peak/batch SLOs | Partial: typed-index join regression; no Oracle workload qualification |

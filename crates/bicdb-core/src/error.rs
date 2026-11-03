@@ -122,6 +122,9 @@ pub enum BicDbError {
     #[error("transaction conflict: {0}")]
     TransactionConflict(String),
 
+    #[error("transaction deadlock: {0}")]
+    TransactionDeadlock(String),
+
     #[error("MVCC version chain fault: {0}")]
     VersionChain(String),
 

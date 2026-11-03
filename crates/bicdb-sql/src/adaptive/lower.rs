@@ -90,7 +90,7 @@ fn slot_of(ids: &HashMap<String, u32>, name: &str) -> Option<u32> {
 }
 
 pub(crate) fn lower_routine(ir: &RoutineIR) -> Option<LoweredProc> {
-    if !ir.exception_handlers.is_empty() {
+    if ir.oracle_autonomous || !ir.exception_handlers.is_empty() {
         return None;
     }
 

@@ -81,7 +81,7 @@ use bicdb_sql::{
     copy_cluster_role_catalog, ensure_primary_key_indexes, ensure_unique_constraint_indexes,
     format_pg_lsn, infer_parameter_types, infer_query_result_columns_for_describe,
     infer_query_result_types, is_role_membership_ddl, parse_database_ddl,
-    parse_pg_canonical_special, parse_transaction_control, pg_type_from_data_type,
+    parse_pg_canonical_special, parse_transaction_control_for_profile, pg_type_from_data_type,
     postgres_jsonb_text, routine_exception_counts_snapshot, split_sql_statements, DatabaseDdl,
     PgBinaryCodec, PgBitString, PgCanonicalValue, PgDate, PgFloat8, PgGeometric, PgInterval,
     PgIpAddress, PgMacAddress, PgNetwork, PgNetworkKind, PgNumeric, PgPoint, PgRange, PgRangeBound,
@@ -3168,7 +3168,10 @@ fn execute_server_query(
         if statements.len() > 1 {
             let first = normalize_executable_sql(&statements[0]);
             let begins = is_transaction_control_candidate(&first)
-                && parse_transaction_control(&statements[0])? == Some(TransactionControl::Begin);
+                && parse_transaction_control_for_profile(
+                    &statements[0],
+                    &server.config.sql_profile,
+                )? == Some(TransactionControl::Begin);
             if state.in_transaction || begins {
                 for statement in &statements[..statements.len() - 1] {
                     if matches!(
@@ -3678,6 +3681,7 @@ fn execute_server_sql_for_describe_inner(
     session_state: &SqlSessionGucState,
     security_context: Option<&SecurityContext>,
 ) -> Result<SqlResult> {
+    let _description = bicdb_sql::SqlDescriptionScope::enter();
     if let Some(result) = delegation::delegation_description(sql)? {
         return Ok(result);
     }
@@ -3708,7 +3712,7 @@ fn execute_server_db_sql(
     security_context: Option<&SecurityContext>,
 ) -> Result<SqlResult> {
     if is_read_only_sql_for_shared_execution(sql) {
-        let (result, pending) = {
+        let (result, pending, independent) = {
             let db = server.read_db()?;
             let tx = db.begin_transaction()?;
             let mut session = sql_session_shared_for_server(server, &db)
@@ -3719,12 +3723,17 @@ fn execute_server_db_sql(
                 .with_deferred_commit();
             let result = session.execute(sql);
             let pending = session.take_pending_transaction();
-            (result, pending)
+            (
+                result,
+                pending,
+                session.last_statement_had_independent_execution(),
+            )
         };
         if let Some(tx) = pending {
             tx.rollback()?;
         }
-        if !matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access")
+        if independent
+            || !matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access")
         {
             return result.map_err(PgWireError::from);
         }
@@ -3815,7 +3824,7 @@ fn execute_server_db_sql_for_state_inner(
             Some(slot)
         };
         let started = Instant::now();
-        let (result, pending, session_state, cache) = {
+        let (result, pending, session_state, cache, independent, independent_sequence) = {
             let db = server.read_db()?;
             let mut session = with_connection_guc_state(
                 sql_session_shared_for_server(server, &db),
@@ -3838,10 +3847,28 @@ fn execute_server_db_sql_for_state_inner(
             let result = session.execute(sql);
             let session_state = session.session_guc_state();
             let pending = session.take_pending_transaction();
+            let independent = session.last_statement_had_independent_execution();
+            let independent_sequence = session.last_independent_commit_sequence();
             let cache = session.into_catalog_cache();
-            (result, pending, session_state, cache)
+            (
+                result,
+                pending,
+                session_state,
+                cache,
+                independent,
+                independent_sequence,
+            )
         };
         catalog_cache = cache;
+        state.last_commit_seq = state.last_commit_seq.max(independent_sequence);
+        if independent && result.is_err() {
+            state.session_state = session_state;
+            state.catalog_cache = catalog_cache;
+            if let Some(tx) = pending {
+                tx.rollback()?;
+            }
+            return result.map_err(PgWireError::from);
+        }
         // Needs exclusive access (DDL / non-transactional) or hit a genuine SQL
         // error: hand off to the exclusive path, which re-runs and surfaces it.
         let Ok(res) = result else {
@@ -3927,6 +3954,11 @@ fn execute_server_db_sql_for_state_inner(
                 finalization?;
                 server.sync_quorum.wait_for(commit_seq)?;
                 return Ok(res);
+            }
+            Err(error @ BicDbError::TransactionConflict(_)) if independent => {
+                state.session_state = session_state;
+                state.catalog_cache = catalog_cache;
+                return Err(error.into());
             }
             Err(BicDbError::TransactionConflict(_)) => {
                 // Lost the first-committer-wins race. Do NOT debit the gate here:
@@ -4023,7 +4055,15 @@ fn execute_server_transaction_sql(
     let catalog_cache = std::mem::take(&mut state.catalog_cache);
     let ddl_undo_log = std::mem::take(&mut state.tx_ddl_undo);
     let mut notifications = Vec::new();
-    let (result, session_state, pending_tx, catalog_cache, ddl_undo_log) = {
+    let (
+        result,
+        session_state,
+        pending_tx,
+        catalog_cache,
+        ddl_undo_log,
+        independent,
+        independent_sequence,
+    ) = {
         let db = server.read_db_for_transaction_progress()?;
         let mut session =
             with_connection_guc_state(sql_session_shared_for_server(server, &db), server, state)
@@ -4036,6 +4076,8 @@ fn execute_server_transaction_sql(
         let session_state = session.session_guc_state();
         let pending_tx = session.take_pending_transaction();
         let ddl_undo_log = session.take_ddl_undo_log();
+        let independent = session.last_statement_had_independent_execution();
+        let independent_sequence = session.last_independent_commit_sequence();
         let catalog_cache = session.into_catalog_cache();
         (
             result,
@@ -4043,9 +4085,13 @@ fn execute_server_transaction_sql(
             pending_tx,
             catalog_cache,
             ddl_undo_log,
+            independent,
+            independent_sequence,
         )
     };
-    let ran_exclusive = matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access");
+    state.last_commit_seq = state.last_commit_seq.max(independent_sequence);
+    let ran_exclusive = !independent
+        && matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access");
     let (result, session_state, pending_tx, catalog_cache, ddl_undo_log) = if ran_exclusive {
         let Some(tx) = pending_tx else {
             return Err(PgWireError::Server(
@@ -4064,6 +4110,9 @@ fn execute_server_transaction_sql(
             .with_pending_transaction(tx);
         let result = session.execute(sql);
         notifications = session.take_pending_notifications();
+        state.last_commit_seq = state
+            .last_commit_seq
+            .max(session.last_independent_commit_sequence());
         let session_state = session.session_guc_state();
         let pending_tx = session.take_pending_transaction();
         let ddl_undo_log = session.take_ddl_undo_log();
@@ -4170,6 +4219,7 @@ fn with_connection_guc_state<'db>(
     session
         .with_security_context(state.security_context.clone())
         .with_session_guc_state(state.session_state.clone())
+        .with_snapshot_floor(state.last_commit_seq)
         .with_runtime(Arc::new(PgWireSqlRuntime {
             connection_id: state.connection_id,
             in_transaction: state.in_transaction,
@@ -4340,7 +4390,10 @@ fn execute_server_sql_with_options_normalized(
     let deadline = (!role_permit.timeout.is_zero()).then(|| Instant::now() + role_permit.timeout);
     let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline);
     let transaction_control = if is_transaction_control_candidate(normalized) {
-        Some(parse_transaction_control(sql).map_err(PgWireError::from)?)
+        Some(
+            parse_transaction_control_for_profile(sql, &server.config.sql_profile)
+                .map_err(PgWireError::from)?,
+        )
     } else {
         None
     };
@@ -4351,16 +4404,39 @@ fn execute_server_sql_with_options_normalized(
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if transaction_control == Some(Some(TransactionControl::Begin)) {
             let result = begin_buffered_transaction(server, state);
-            state.tx_fixed_snapshot = isolation_fixes_snapshot(normalized);
+            if result.is_ok() && isolation_fixes_snapshot(normalized) {
+                state
+                    .tx
+                    .as_mut()
+                    .unwrap()
+                    .set_snapshot_isolation(true, state.last_commit_seq)?;
+                state.tx_fixed_snapshot = true;
+            }
             result
         } else if transaction_control == Some(Some(TransactionControl::SetTransaction)) {
             if state.failed_transaction {
                 Err(PgWireError::InFailedTransaction)
             } else {
-                if state.in_transaction && isolation_fixes_snapshot(normalized) {
-                    state.tx_fixed_snapshot = true;
+                if !state.in_transaction
+                    && server.config.sql_profile == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE
+                {
+                    begin_buffered_transaction(server, state)?;
                 }
-                Ok(SqlResult::command("SET"))
+                if state.in_transaction {
+                    let result = execute_server_transaction_sql(
+                        server,
+                        state,
+                        sql,
+                        normalized,
+                        &cancellation,
+                    );
+                    state.tx_fixed_snapshot = state.tx.as_ref().is_some_and(|tx| {
+                        tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted
+                    });
+                    result
+                } else {
+                    Ok(SqlResult::command("SET"))
+                }
             }
         } else if let Some(ending) = transaction_end {
             let (result, chain) = match ending {

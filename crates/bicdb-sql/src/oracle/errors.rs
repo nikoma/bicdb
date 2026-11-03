@@ -38,6 +38,10 @@ fn error(
     }
 }
 
+pub(crate) fn database_error(code: i32, state: &'static str, text: &str) -> SqlError {
+    error(code, state, text, None)
+}
+
 pub(crate) fn transport_detail(error: &SqlError) -> String {
     let mut stack = Vec::new();
     let mut current = Some(error);

@@ -640,13 +640,21 @@ pub(crate) fn classify_alter_table_migration(
 }
 
 pub fn parse_transaction_control(sql: &str) -> Result<Option<TransactionControl>> {
+    parse_transaction_control_for_profile(sql, oracle::POSTGRES_PROFILE)
+}
+
+/// Parse transport transaction commands under the database's fixed SQL profile.
+pub fn parse_transaction_control_for_profile(
+    sql: &str,
+    profile: &str,
+) -> Result<Option<TransactionControl>> {
     let statements = parse_statements(sql)?;
     let [statement] = statements.as_slice() else {
         return Ok(None);
     };
     match statement {
         Statement::StartTransaction { modes, .. } => {
-            validate_start_transaction_modes(modes)?;
+            validate_profile_transaction_modes(modes, profile == oracle::ORACLE_PREVIEW_PROFILE)?;
             Ok(Some(TransactionControl::Begin))
         }
         Statement::Set(Set::SetTransaction {
@@ -657,11 +665,33 @@ pub fn parse_transaction_control(sql: &str) -> Result<Option<TransactionControl>
                     "transaction snapshots are not supported".to_string(),
                 ));
             }
-            validate_set_transaction_modes(modes)?;
+            validate_profile_transaction_modes(modes, profile == oracle::ORACLE_PREVIEW_PROFILE)?;
             Ok(Some(TransactionControl::SetTransaction))
         }
         _ => Ok(None),
     }
+}
+
+pub(crate) fn validate_profile_transaction_modes(
+    modes: &[TransactionMode],
+    oracle_preview: bool,
+) -> Result<()> {
+    if !oracle_preview {
+        return validate_transaction_modes(modes);
+    }
+    // Oracle SERIALIZABLE provides snapshot isolation. PostgreSQL SERIALIZABLE
+    // remains unsupported here; it requires its separate concurrency contract.
+    let modes = modes
+        .iter()
+        .filter(|mode| {
+            !matches!(
+                mode,
+                TransactionMode::IsolationLevel(TransactionIsolationLevel::Serializable)
+            )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    validate_transaction_modes(&modes)
 }
 
 pub(crate) fn validate_start_transaction_modes(modes: &[TransactionMode]) -> Result<()> {

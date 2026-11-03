@@ -561,10 +561,46 @@ contains 15 independently checked Oracle expectations.
 This is declaration support for the tested routine subset, not a complete
 PL/SQL compiler. Native routine execution, namespace, overload, privilege and
 error contracts still apply. Oracle AUTHID/rights semantics are not qualified.
-Packages and autonomous transactions still fail explicitly. Other routine bodies can require additional expression, cursor,
+Packages still fail explicitly. Version-15 standalone autonomous routines have
+the bounded contract described below. Other routine bodies can require additional expression, cursor,
 exception or application-schema adaptations. Accepted DDL alone is not proof
 that every routine compiles and executes: migration acceptance must exercise
 each required routine and its dependencies through the application driver.
+
+## Independent routine transactions
+
+New compiler-version-15 standalone functions and procedures accept a declaration
+of `PRAGMA AUTONOMOUS_TRANSACTION;`. The persisted definition retains that
+declaration and a versioned language identity. Older readers cannot silently
+execute the new routine as an ordinary caller transaction.
+
+The interpreter suspends its caller and opens a separate transaction. Child
+COMMIT and ROLLBACK affect that child; earlier child commits survive later
+errors, enclosing rollbacks and restart. Returning with uncommitted activity
+raises ORA-06519 and rolls the remaining child work back. Successful zero-row
+UPDATE/DELETE, savepoints and locking reads count as activity. An ordinary
+read-only call and a caught failed INSERT need no commit. Formal argument
+defaults execute before suspending the caller; declaration initializers execute
+inside the callee. Diagnostic context is shared independently of data visibility.
+
+The caller retains its writes and locks. A child waiting on a suspended
+ancestor's row lock raises ORA-00060 without releasing the parent's lock.
+READ COMMITTED callers refresh visibility after child commits. Oracle-preview
+`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE` pins the caller's snapshot;
+child transactions still use their own current snapshots. Changing isolation
+after row locking or mutation raises ORA-01453. This is a bounded Oracle
+snapshot-isolation implementation, not PostgreSQL SERIALIZABLE support or a
+qualification of concurrent Oracle serialization failures.
+
+PostgreSQL transport Describe skips independent bodies and their omitted
+defaults. Execution does not speculatively replay a statement after entering an
+independent routine, including a failed commit attempt. Child execution uses
+shared core APIs; operations requiring exclusive database access, including
+child DDL and some sequence APIs, remain unsupported. Independent PostgreSQL
+notification delivery is explicitly rejected. Packages, broad rights/session
+state, distributed child commits and comprehensive failure injection remain
+programme work. Native LANGUAGE plpgsql and the bounded HR profile retain their
+separate contracts.
 
 Routine DROP statements use ordinary DDL processing rather than the procedural
 body lowerer. Qualified names are checked against the recorded namespace;

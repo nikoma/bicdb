@@ -31,6 +31,7 @@ impl<'db> SqlSession<'db> {
             | oracle::PREVIEW_ROUTINE_LANGUAGE
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V13
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V14
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V12
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V11
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V10
@@ -215,6 +216,7 @@ impl<'db> SqlSession<'db> {
             | oracle::PREVIEW_ROUTINE_LANGUAGE
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V13
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V14
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V12
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V11
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V10
@@ -311,6 +313,14 @@ impl<'db> SqlSession<'db> {
                     .filter(|(p, _)| p.mode != RoutineArgMode::Out)
                     .map(|(param, expr)| match expr {
                         Some(expr) => self.eval_session_expr(expr),
+                        None if routine.ir.oracle_autonomous
+                            && crate::statement_context::describing() =>
+                        {
+                            Ok(SqlValue::Null)
+                        }
+                        None if routine.ir.oracle_autonomous => self.eval_session_expr(
+                            param.default_expr.as_ref().expect("validated default"),
+                        ),
                         None => eval_constant_expr(
                             param.default_expr.as_ref().expect("validated default"),
                         ),
@@ -356,7 +366,7 @@ impl<'db> SqlSession<'db> {
         // verbatim. When enabled, record per-signature hotness and run any
         // registered specialized module in shadow against the interpreter's
         // result. The interpreter remains authoritative.
-        if adaptive::enabled() {
+        if adaptive::enabled() && !routine.ir.oracle_autonomous {
             let schema_gen = self.db_ref().collection_generation(SCHEMA_COLLECTION);
             let routine_gen = self.db_ref().collection_generation(ROUTINE_COLLECTION);
             let sig = adaptive::routine_signature(&name, &args);
@@ -538,7 +548,7 @@ impl<'db> SqlSession<'db> {
         let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
             let schema = if matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14)
+                Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15)
             ) {
                 relation_schema_name(name_ast)
             } else {

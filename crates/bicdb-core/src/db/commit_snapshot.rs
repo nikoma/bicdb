@@ -1324,6 +1324,11 @@ impl BicDb {
             match shard.get(&key).copied() {
                 Some(owner) if owner != tx_id => {
                     last_owner = Some(owner);
+                    if max_attempts > 0 && self.transaction_suspensions.would_cycle(tx_id, owner) {
+                        return Err(BicDbError::TransactionDeadlock(
+                            "row lock would wait for suspended execution".into(),
+                        ));
+                    }
                     // Age-based policies prevent multi-record cycles by only
                     // allowing waits in one transaction-id direction. The
                     // optional graph policy instead checks registered waits

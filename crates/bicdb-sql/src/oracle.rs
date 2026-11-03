@@ -6,6 +6,7 @@ use sqlparser::{dialect::OracleDialect, keywords::Keyword};
 
 mod anchored_types;
 pub mod assessment;
+pub(crate) mod autonomous;
 #[cfg(test)]
 mod character_tests;
 mod date_trunc;
@@ -72,7 +73,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V10: &str = "bicdb_oracle_preview_v10"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V11: &str = "bicdb_oracle_preview_v11";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V12: &str = "bicdb_oracle_preview_v12";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V13: &str = "bicdb_oracle_preview_v13";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v14";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V14: &str = "bicdb_oracle_preview_v14";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v15";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -86,7 +88,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V10_OID: i64 = 999_409;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V11_OID: i64 = 999_410;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V12_OID: i64 = 999_411;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V13_OID: i64 = 999_412;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_413;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V14_OID: i64 = 999_413;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_414;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -108,7 +111,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V11 => Some(11),
         PREVIEW_ROUTINE_LANGUAGE_V12 => Some(12),
         PREVIEW_ROUTINE_LANGUAGE_V13 => Some(13),
-        PREVIEW_ROUTINE_LANGUAGE => Some(14),
+        PREVIEW_ROUTINE_LANGUAGE_V14 => Some(14),
+        PREVIEW_ROUTINE_LANGUAGE => Some(15),
         _ => None,
     }
 }
@@ -116,7 +120,7 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
     matches!(
         preview_routine_language_version(language),
-        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14)
+        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15)
     )
 }
 
@@ -528,12 +532,22 @@ fn lower_oracle_sql(
         }
         return Err(unsupported("expected one DEALLOCATE statement"));
     }
+    // Transaction modes belong to the PG transport grammar. Keep their tokens
+    // contextual rather than reserving ISOLATION/LEVEL as Oracle identifiers.
+    if preview
+        && (word(&source[0], "SET") && source.get(1).is_some_and(|t| word(t, "TRANSACTION"))
+            || word(&source[0], "BEGIN") && !procedural)
+    {
+        if parse_transaction_control_for_profile(sql, ORACLE_PREVIEW_PROFILE)?.is_some() {
+            return Ok(parse_statements(sql)?[0].to_string());
+        }
+    }
     if source
         .iter()
-        .any(|t| word(t, "PACKAGE") || word(t, "AUTONOMOUS_TRANSACTION"))
+        .any(|t| word(t, "PACKAGE") || !preview && word(t, "AUTONOMOUS_TRANSACTION"))
     {
         return Err(unsupported(
-            "packages and autonomous transactions are not implemented",
+            "packages and HR-profile autonomous transactions are not implemented",
         ));
     }
     if source
@@ -1019,6 +1033,19 @@ fn canonical_tokens_with_routine_types(
     let mut i = 0;
     while i < source.len() {
         let t = &source[i];
+        // This is declaration syntax only. Do not reserve either identifier
+        // globally or reinterpret a quoted variable/type declaration as a pragma.
+        if preview
+            && word(t, "PRAGMA")
+            && source
+                .get(i + 1)
+                .is_some_and(|t| word(t, "AUTONOMOUS_TRANSACTION"))
+            && source.get(i + 2) == Some(&Token::SemiColon)
+        {
+            pieces.push("PRAGMA AUTONOMOUS_TRANSACTION".into());
+            i += 2;
+            continue;
+        }
         if let Some((reference, consumed)) = source_tokens::sequence(&source[i..], namespace)? {
             pieces.push(reference);
             i += consumed;
@@ -1765,9 +1792,24 @@ mod tests {
                 .to_cell(),
             "a"
         );
+        let autonomous = lower_profile_sql(&db,
+            "CREATE FUNCTION independent_id RETURN NUMBER AS PRAGMA AUTONOMOUS_TRANSACTION; BEGIN RETURN 1; END;",
+            ORACLE_PREVIEW_PROFILE).unwrap();
+        assert!(autonomous.contains(PREVIEW_ROUTINE_LANGUAGE));
+        SqlSession::new(&mut db).execute(&autonomous).unwrap();
+        let call = lower_profile_sql(
+            &db,
+            "SELECT independent_id() FROM DUAL",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db).execute(&call).unwrap().rows[0][0].to_cell(),
+            "1"
+        );
         assert!(lower_profile_sql(&db,
-            "CREATE FUNCTION unsafe_id RETURN NUMBER AS PRAGMA AUTONOMOUS_TRANSACTION; BEGIN RETURN 1; END;",
-            ORACLE_PREVIEW_PROFILE).is_err());
+            "CREATE FUNCTION independent_id RETURN NUMBER AS PRAGMA AUTONOMOUS_TRANSACTION; BEGIN RETURN 1; END;",
+            ORACLE_HR_PROFILE).is_err());
         assert!(lower_profile_sql(
             &db,
             "CREATE FUNCTION not_hr RETURN NUMBER AS BEGIN RETURN 1; END;",

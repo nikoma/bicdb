@@ -440,3 +440,14 @@ schema must already exist on both dedicated databases; role-management privilege
 are required for the temporary role. Fixtures remove their own tables, role and
 grants; they retain the supplied schema. Parent keys referenced by foreign keys,
 row triggers, UPDATE FROM/RETURNING and concurrent key moves remain unqualified.
+
+`autonomous_transactions.py --oracle-config /private/reference.json --output
+/private/autonomous-transactions.json` compares independent commit/rollback,
+parent/observer visibility, nested calls, active-return errors, caught failures,
+locking reads, parent-lock deadlocks, SERIALIZABLE snapshots and default-argument
+ownership with Oracle. Set BICDB_PG_DSN privately to a dedicated preview database.
+The matching source schema must already exist on the target. The fixture uses
+two connections to each database and removes its uniquely named routines and
+table. It does not run source application routines or qualify a complete
+application. Native PostgreSQL behavior is checked by the separate native
+control fixtures; transport Describe and restart are covered by Rust tests.

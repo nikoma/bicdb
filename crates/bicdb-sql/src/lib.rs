@@ -184,6 +184,8 @@ pub use type_codec::{
 
 // Phase-1 mechanical module split: each module below was extracted verbatim
 // from this file. `pub use` glob re-exports keep every existing path resolving.
+mod statement_context;
+pub use statement_context::SqlDescriptionScope;
 mod session;
 pub use session::*;
 mod runtime;
@@ -2160,6 +2162,7 @@ fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::CollectionAlreadyExists(_) => "42P07",
         BicDbError::InvalidCollectionName(_) => "42602",
         BicDbError::TransactionConflict(_) => "40001",
+        BicDbError::TransactionDeadlock(_) => "40P01",
         BicDbError::TransactionNotPending => "25P01",
         BicDbError::ReadOnlyStandby(_) => "25006",
         BicDbError::QueryCanceled | BicDbError::QueryTimedOut => "57014",
@@ -4393,6 +4396,7 @@ struct RoutineIR {
     oracle_date_return: bool,
     oracle_statement_rollback: bool,
     oracle_error_diagnostics: Option<oracle::errors::Diagnostics>,
+    oracle_autonomous: bool,
 }
 
 fn routine_block_may_write(statements: &[RoutineStmt]) -> bool {

@@ -47,6 +47,7 @@ mod index_build;
 mod pitr_maintenance;
 mod row_lock_waiters;
 mod spatial_paged;
+mod transaction_suspension;
 mod wait_graph;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use parking_lot::{Condvar, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -65,6 +66,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+pub use transaction_suspension::TransactionSuspension;
 
 use petgraph::algo::{astar, dijkstra};
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -3761,6 +3763,7 @@ pub struct BicDb {
     // applied watermark (all later commits invisible to new snapshots).
     unique_claims: ShardedMutexMap<(String, Vec<u8>), u64>,
     wait_graph: wait_graph::WaitForGraph,
+    transaction_suspensions: Arc<transaction_suspension::Suspensions>,
     /// In-flight half-open ranges for exclusion constraints. Claims prevent two
     /// concurrent committers from both validating against a pre-image that lacks
     /// the other's row; non-overlapping ranges remain fully concurrent.
@@ -10280,6 +10283,7 @@ impl BicDb {
             )),
             unique_claims: ShardedMutexMap::with_shards(orch_shard_count()),
             wait_graph: wait_graph::WaitForGraph::default(),
+            transaction_suspensions: Arc::new(transaction_suspension::Suspensions::default()),
             exclusion_claims: Mutex::new(Vec::new()),
             active_snapshots: Arc::new(ActiveSnapshots::with_shards(orch_shard_count())),
             tx_log,
@@ -14254,6 +14258,29 @@ impl Transaction {
         self.isolation
     }
 
+    /// Select statement-refresh or fixed-snapshot reads before this transaction
+    /// acquires row locks or writes. Trusted serializable transactions keep
+    /// their stronger read validation and cannot be changed through this API.
+    pub fn set_snapshot_isolation(&mut self, fixed: bool, floor: u64) -> Result<()> {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        if self.isolation == TransactionIsolation::Serializable
+            || self.write_len() != 0
+            || self.lock_len() != 0
+        {
+            return Err(BicDbError::TransactionConflict(
+                "isolation cannot change after row locking or mutation".into(),
+            ));
+        }
+        self.isolation = TransactionIsolation::ReadCommitted;
+        self.refresh_read_committed_snapshot_after(floor)?;
+        if fixed {
+            self.isolation = TransactionIsolation::RepeatableRead;
+        }
+        Ok(())
+    }
+
     /// Register a relation whose rows or predicates influenced this
     /// transaction. This is a no-op below serializable isolation.
     pub fn record_serializable_read(&mut self, relation: &str) -> Result<()> {
@@ -14270,6 +14297,12 @@ impl Transaction {
     /// committed watermark before its next host statement. Pending writes stay
     /// overlaid on the refreshed snapshot and retain their conflict metadata.
     pub fn refresh_read_committed_snapshot(&mut self) -> Result<()> {
+        self.refresh_read_committed_snapshot_after(0)
+    }
+
+    /// Refresh with an already-durable commit produced by this session even
+    /// while an unrelated lower commit delays the contiguous watermark.
+    pub fn refresh_read_committed_snapshot_after(&mut self, floor: u64) -> Result<()> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -14285,13 +14318,15 @@ impl Transaction {
                     .map(|paged| paged.latest_snapshot()),
             )
         };
+        let applied_snapshot = snapshot;
+        let snapshot = snapshot.max(floor);
         if snapshot <= self.snapshot_tx.0 {
             return Ok(());
         }
         self.active_snapshots.incr(snapshot);
         self.active_snapshots.decr_remove(self.snapshot_tx.0);
         self.snapshot_tx = TransactionId(snapshot);
-        self.applied_snapshot = snapshot;
+        self.applied_snapshot = applied_snapshot;
         self.paged_snapshot = paged_snapshot;
         Ok(())
     }
@@ -16429,7 +16464,14 @@ impl Transaction {
         Ok(())
     }
 
-    pub fn commit(mut self) -> Result<()> {
+    pub fn commit(self) -> Result<()> {
+        self.commit_with_sequence().map(|_| ())
+    }
+
+    /// Commit durably and return the exact local visibility sequence.
+    /// Independently committing SQL calls use it to carry read-your-writes
+    /// across their caller's suspended transaction.
+    pub fn commit_with_sequence(mut self) -> Result<u64> {
         let db = self.db;
         // Safety: see db_mut; this avoids holding a borrow through `self`.
         let commit_seq = unsafe { db.as_ref() }.commit_transaction(&mut self)?;
@@ -16441,7 +16483,7 @@ impl Transaction {
         self.finalize_committed_broker_outbox();
         self.finalize_committed_memory_jobs()?;
         unsafe { db.as_ref() }.auto_checkpoint_if_due();
-        Ok(())
+        Ok(commit_seq)
     }
 
     /// Checkpoint the range command as locally applied only after the caller's

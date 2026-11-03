@@ -921,6 +921,14 @@ pub struct SqlSession<'db> {
     /// PL/SQL expression calls have different character-result boundaries
     /// from calls made by SQL, including SQL inside a routine.
     pub(crate) in_routine_expression: bool,
+    pub(crate) oracle_autonomous: bool,
+    pub(crate) oracle_autonomous_active: bool,
+    pub(crate) oracle_autonomous_epoch: u64,
+    pub(crate) oracle_autonomous_lock_epoch: u64,
+    pub(crate) oracle_suspension: Option<Arc<bicdb_core::TransactionSuspension>>,
+    independent_commits_observed: bool,
+    independent_execution_observed: bool,
+    latest_independent_sequence: u64,
     /// For that child session, the caller's transaction (if any), read through
     /// `read_tx`.
     pub(crate) parent_tx: Option<&'db Transaction>,
@@ -2195,6 +2203,14 @@ impl<'db> SqlSession<'db> {
             tx: None,
             row_routine_call: false,
             in_routine_expression: false,
+            oracle_autonomous: false,
+            oracle_autonomous_active: false,
+            oracle_autonomous_epoch: 0,
+            oracle_autonomous_lock_epoch: 0,
+            oracle_suspension: None,
+            independent_commits_observed: false,
+            independent_execution_observed: false,
+            latest_independent_sequence: 0,
             parent_tx: None,
             savepoints: Vec::new(),
             ddl_undo: Vec::new(),
@@ -2379,7 +2395,10 @@ impl<'db> SqlSession<'db> {
         if self.row_routine_call {
             return Err(row_routine_write_error());
         }
-        Ok(self.db_ref().begin_transaction_after(self.snapshot_floor)?)
+        Ok(self.db_ref().begin_transaction_after(
+            self.snapshot_floor
+                .max(crate::statement_context::latest_independent_commit()),
+        )?)
     }
 
     /// The transaction this session reads through: its own, or for a per-row
@@ -2494,7 +2513,7 @@ impl<'db> SqlSession<'db> {
         }
     }
 
-    fn begin_guc_transaction(&mut self) {
+    pub(crate) fn begin_guc_transaction(&mut self) {
         let mut state = self.take_session_guc_state();
         state.begin_transaction();
         self.install_session_guc_state(state);
@@ -2769,11 +2788,41 @@ impl<'db> SqlSession<'db> {
         // Statement-scoped only: CREATE/DROP INDEX between statements must
         // not be answered from a stale arbiter.
         self.conflict_arbiter_memo.borrow_mut().take();
-        self.with_implicit_guc_statement(|session| {
+        let effects = crate::statement_context::StatementScope::enter();
+        let result = self.with_implicit_guc_statement(|session| {
             let mut result = session.execute_profiled(sql)?;
             session.apply_bytea_output(&mut result);
             Ok(result)
-        })
+        });
+        self.independent_commits_observed = effects.independently_committed();
+        self.independent_execution_observed = effects.independent_execution();
+        self.latest_independent_sequence = effects.latest_sequence();
+        self.observe_independent_commit()?;
+        result
+    }
+
+    /// Whether this statement crossed an independent durable commit boundary.
+    /// A server must not automatically replay such a statement on fallback.
+    pub fn last_statement_had_independent_commits(&self) -> bool {
+        self.independent_commits_observed
+    }
+    /// Independent calls must not be automatically replayed, including when a
+    /// commit returns a delivery error after its durability boundary.
+    pub fn last_statement_had_independent_execution(&self) -> bool {
+        self.independent_execution_observed
+    }
+    pub fn last_independent_commit_sequence(&self) -> u64 {
+        self.latest_independent_sequence
+    }
+
+    fn observe_independent_commit(&mut self) -> Result<()> {
+        self.snapshot_floor = self.snapshot_floor.max(self.latest_independent_sequence);
+        if self.independent_commits_observed {
+            if let Some(tx) = self.tx.as_mut() {
+                tx.refresh_read_committed_snapshot_after(self.latest_independent_sequence)?;
+            }
+        }
+        Ok(())
     }
 
     fn apply_bytea_output(&self, result: &mut SqlResult) {
@@ -2828,18 +2877,25 @@ impl<'db> SqlSession<'db> {
     /// measuring parser or SQL-string construction cost.
     pub fn execute_statement_ast(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.db_ref().check_recovery_state()?;
-        self.with_implicit_guc_statement(|session| {
+        let effects = crate::statement_context::StatementScope::enter();
+        let result = self.with_implicit_guc_statement(|session| {
             let mut result = session.execute_statement(statement)?;
             session.apply_bytea_output(&mut result);
             Ok(result)
-        })
+        });
+        self.independent_commits_observed = effects.independently_committed();
+        self.independent_execution_observed = effects.independent_execution();
+        self.latest_independent_sequence = effects.latest_sequence();
+        self.observe_independent_commit()?;
+        result
     }
 
     /// Execute a stored procedure directly from its already-typed arguments,
     /// bypassing SQL text parsing and `CALL` AST construction.
     pub fn call_procedure(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlResult> {
         self.db_ref().check_recovery_state()?;
-        self.with_implicit_guc_statement(|session| {
+        let effects = crate::statement_context::StatementScope::enter();
+        let result = self.with_implicit_guc_statement(|session| {
             let name = name.to_ascii_lowercase();
             let routine = resolve_routine_cached(session.db_ref(), RoutineKind::Procedure, &name)?
                 .ok_or_else(|| {
@@ -2849,7 +2905,12 @@ impl<'db> SqlSession<'db> {
             session.execute_with_routine_security(&routine.schema, |session| {
                 session.execute_plpgsql_procedure(&routine.ir, args)
             })
-        })
+        });
+        self.independent_commits_observed = effects.independently_committed();
+        self.independent_execution_observed = effects.independent_execution();
+        self.latest_independent_sequence = effects.latest_sequence();
+        self.observe_independent_commit()?;
+        result
     }
 
     pub(crate) fn execute_inner(&mut self, sql: &str) -> Result<SqlResult> {
@@ -3288,15 +3349,19 @@ impl<'db> SqlSession<'db> {
                 None,
             ));
         }
-        match statement {
+        let result = match statement {
             Statement::StartTransaction { modes, .. } => {
-                validate_start_transaction_modes(modes)?;
+                validate_profile_transaction_modes(
+                    modes,
+                    oracle::preview_routine_language_enabled(self.db_ref())?,
+                )?;
                 if self.tx.is_some() {
                     return Err(SqlError::Unsupported(
                         "nested transactions are not supported".to_string(),
                     ));
                 }
                 self.tx = Some(self.begin_session_transaction()?);
+                self.apply_transaction_modes(modes)?;
                 Ok(SqlResult::command("BEGIN"))
             }
             Statement::Commit { .. } => self.commit(),
@@ -3313,11 +3378,26 @@ impl<'db> SqlSession<'db> {
                 .execute_raw_reset(&statement.to_string())?
                 .ok_or_else(|| SqlError::InvalidSql("invalid RESET statement".into())),
             statement => self.execute_statement(statement),
+        };
+        if self.oracle_autonomous
+            && result.is_ok()
+            && matches!(
+                statement,
+                Statement::Insert(_)
+                    | Statement::Update(_)
+                    | Statement::Delete(_)
+                    | Statement::Savepoint { .. }
+            )
+        {
+            self.oracle_autonomous_active = true;
         }
+        result
     }
 
     /// Internal rollback cleanup must run even if the statement was canceled.
-    fn rollback_current_transaction(&mut self) -> Result<SqlResult> {
+    pub(crate) fn rollback_current_transaction(&mut self) -> Result<SqlResult> {
+        self.oracle_autonomous_active = false;
+        self.oracle_autonomous_epoch += 1;
         // A rolled-back transaction's deferred constraint triggers
         // drop with the transaction itself.
         let tx_rollback = self
@@ -3334,6 +3414,11 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn commit(&mut self) -> Result<SqlResult> {
+        if self.oracle_autonomous && !self.pending_notifications.is_empty() {
+            return Err(SqlError::Unsupported(
+                "independent notification delivery is not implemented".into(),
+            ));
+        }
         // Deferred constraint triggers fire now, with the transaction still
         // open, so their checks see the complete write set and their failures
         // abort the commit like any failed statement.
@@ -3352,13 +3437,23 @@ impl<'db> SqlSession<'db> {
                 return Err(error);
             }
         }
+        let mut committed_sequence = 0;
         if let Some(tx) = self.tx.take() {
-            if let Err(error) = tx.commit() {
-                let _ddl_rollback = self.rollback_ddl_to_len(0);
-                self.savepoints.clear();
-                self.rollback_guc_transaction();
-                return Err(error.into());
+            match tx.commit_with_sequence() {
+                Ok(sequence) => committed_sequence = sequence,
+                Err(error) => {
+                    let _ddl_rollback = self.rollback_ddl_to_len(0);
+                    self.savepoints.clear();
+                    self.rollback_guc_transaction();
+                    return Err(error.into());
+                }
             }
+        }
+        if self.oracle_autonomous {
+            self.oracle_autonomous_epoch += 1;
+            self.oracle_autonomous_active = false;
+            crate::statement_context::note_independent_commit(committed_sequence);
+            self.snapshot_floor = self.snapshot_floor.max(committed_sequence);
         }
         self.ddl_undo.clear();
         self.savepoints.clear();
@@ -4083,6 +4178,38 @@ impl<'db> SqlSession<'db> {
         Ok(())
     }
 
+    fn apply_transaction_modes(&mut self, modes: &[TransactionMode]) -> Result<()> {
+        let oracle_preview = oracle::preview_routine_language_enabled(self.db_ref())?;
+        validate_profile_transaction_modes(modes, oracle_preview)?;
+        let fixed = modes.iter().find_map(|mode| match mode {
+            TransactionMode::IsolationLevel(level) => Some(matches!(
+                level,
+                TransactionIsolationLevel::RepeatableRead | TransactionIsolationLevel::Serializable
+            )),
+            _ => None,
+        });
+        let Some(fixed) = fixed else {
+            return Ok(());
+        };
+        if oracle_preview && self.tx.is_none() {
+            self.tx = Some(self.begin_session_transaction()?);
+        }
+        let floor = self
+            .snapshot_floor
+            .max(crate::statement_context::latest_independent_commit());
+        if let Some(tx) = self.tx.as_mut() {
+            if oracle_preview && (tx.write_len() != 0 || tx.lock_len() != 0) {
+                return Err(oracle::errors::database_error(
+                    -1453,
+                    "25001",
+                    "SET TRANSACTION must be first statement of transaction",
+                ));
+            }
+            tx.set_snapshot_isolation(fixed, floor)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn execute_set(&mut self, set: &Set) -> Result<SqlResult> {
         match set {
             Set::SetTransaction {
@@ -4093,7 +4220,7 @@ impl<'db> SqlSession<'db> {
                         "transaction snapshots are not supported".to_string(),
                     ));
                 }
-                validate_set_transaction_modes(modes)?;
+                self.apply_transaction_modes(modes)?;
             }
             Set::SingleAssignment {
                 scope,

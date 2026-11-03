@@ -3224,6 +3224,33 @@ impl<'db> SqlSession<'db> {
         ir: &RoutineIR,
         args: &[SqlValue],
     ) -> Result<SqlResult> {
+        if ir.oracle_autonomous {
+            if crate::statement_context::describing() {
+                let outputs = ir
+                    .params
+                    .iter()
+                    .filter(|p| matches!(p.mode, RoutineArgMode::Out | RoutineArgMode::InOut))
+                    .collect::<Vec<_>>();
+                if outputs.is_empty() {
+                    return Ok(SqlResult::command("CALL"));
+                }
+                return Ok(SqlResult::new(
+                    outputs
+                        .iter()
+                        .map(|p| p.name.clone().unwrap_or_default())
+                        .collect(),
+                    vec![vec![SqlValue::Null; outputs.len()]],
+                )
+                .with_column_types(
+                    outputs
+                        .iter()
+                        .map(|p| p.type_schema.as_ref().map(|t| t.pg_type.clone()))
+                        .collect(),
+                ));
+            }
+            let args = self.autonomous_arguments(ir, args)?;
+            return self.execute_autonomous(|child| child.execute_plpgsql_procedure_ir(ir, &args));
+        }
         if self.tx.is_none()
             && (routine_declarations_may_write(&ir.declarations)
                 || routine_block_may_write(&ir.statements)
@@ -3403,6 +3430,24 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_plpgsql_function_value(
+        &mut self,
+        routine: &RoutineSchema,
+        ir: &RoutineIR,
+        args: &[SqlValue],
+    ) -> Result<SqlValue> {
+        if ir.oracle_autonomous {
+            if crate::statement_context::describing() {
+                return Ok(SqlValue::Null);
+            }
+            let args = self.autonomous_arguments(ir, args)?;
+            return self.execute_autonomous(|child| {
+                child.execute_plpgsql_function_value_in_context(routine, ir, &args)
+            });
+        }
+        self.execute_plpgsql_function_value_in_context(routine, ir, args)
+    }
+
+    fn execute_plpgsql_function_value_in_context(
         &mut self,
         routine: &RoutineSchema,
         ir: &RoutineIR,
@@ -3757,6 +3802,10 @@ impl<'db> SqlSession<'db> {
         frame: &mut RoutineFrame,
         statement: &RoutineStmt,
     ) -> Result<RoutineControl> {
+        self.ensure_autonomous_transaction()?;
+        let was_active = self.oracle_autonomous_active;
+        let epoch = self.oracle_autonomous_epoch;
+        let lock_epoch = self.oracle_autonomous_lock_epoch;
         let mut profile = SqlProfileScope::new_routine_statement(statement);
         // A failed SQL/expression statement is atomic in Oracle. Structural
         // statements must not undo successful statements in their nested body.
@@ -3780,13 +3829,35 @@ impl<'db> SqlSession<'db> {
         };
         let ddl_undo_len = self.ddl_undo.len();
         let savepoint_len = self.savepoints.len();
-        let result = self.execute_routine_statement_inner(frame, statement);
+        let result = self
+            .execute_routine_statement_inner(frame, statement)
+            .map_err(|error| {
+                if self.oracle_autonomous
+                    && matches!(&error, SqlError::BicDb(BicDbError::TransactionDeadlock(_)))
+                {
+                    oracle::errors::database_error(
+                        -60,
+                        "40P01",
+                        "deadlock detected while waiting for resource",
+                    )
+                } else {
+                    error
+                }
+            });
         if atomic && result.is_err() {
-            if let (Some(tx), Some(mark)) = (self.tx.as_mut(), transaction) {
-                tx.rollback_to_mark(mark)?;
+            if self.oracle_autonomous && epoch != self.oracle_autonomous_epoch {
+                // A nested ordinary call may have committed this autonomous
+                // transaction. Only work after its last commit can roll back.
+                self.rollback_current_transaction()?;
+            } else {
+                if let (Some(tx), Some(mark)) = (self.tx.as_mut(), transaction) {
+                    tx.rollback_to_mark(mark)?;
+                }
+                self.rollback_ddl_to_len(ddl_undo_len)?;
+                self.savepoints.truncate(savepoint_len);
+                self.oracle_autonomous_active =
+                    was_active || lock_epoch != self.oracle_autonomous_lock_epoch;
             }
-            self.rollback_ddl_to_len(ddl_undo_len)?;
-            self.savepoints.truncate(savepoint_len);
         }
         profile.finish_control(&result);
         result

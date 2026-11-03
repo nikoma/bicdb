@@ -2037,3 +2037,184 @@ async fn character_functions_preserve_prepared_pg_transport_and_reopen_contracts
         }
     }
 }
+
+#[tokio::test]
+async fn autonomous_transactions_preserve_parent_and_prepared_statement_boundaries() {
+    let root = tempfile::tempdir().unwrap();
+    for attempt in 0..2 {
+        let server = Running::with_profile(root.path(), "oracle-preview-v1");
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb")
+            .options("-c bicdb.sql_profile=oracle-preview-v1");
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let task = tokio::spawn(async move {
+            connection.await.unwrap();
+        });
+        let (observer, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let observe_task = tokio::spawn(async move {
+            connection.await.unwrap();
+        });
+        if attempt == 0 {
+            for ddl in [
+                "CREATE TABLE auto_wire_log(id NUMBER PRIMARY KEY)",
+                "CREATE PROCEDURE auto_wire_ok(p_id NUMBER) IS PRAGMA AUTONOMOUS_TRANSACTION;BEGIN INSERT INTO auto_wire_log VALUES(p_id);COMMIT;END;",
+                "CREATE PROCEDURE auto_wire_err(p_id NUMBER) IS PRAGMA AUTONOMOUS_TRANSACTION;BEGIN INSERT INTO auto_wire_log VALUES(p_id);COMMIT;RAISE_APPLICATION_ERROR(-20101,'committed child failure');END;",
+                "CREATE FUNCTION auto_wire_fn RETURN NUMBER IS PRAGMA AUTONOMOUS_TRANSACTION;BEGIN INSERT INTO auto_wire_log VALUES(3);COMMIT;RETURN 42;END;",
+                "CREATE TABLE auto_wire_counter(n NUMBER)",
+                "INSERT INTO auto_wire_counter VALUES(0)",
+                "CREATE PROCEDURE auto_wire_increment IS PRAGMA AUTONOMOUS_TRANSACTION;BEGIN UPDATE auto_wire_counter SET n=n+1;COMMIT;END;",
+            ] {client.batch_execute(ddl).await.unwrap_or_else(|e|panic!("{ddl}: {e}"));}
+            let call = client.prepare("CALL auto_wire_ok(1)").await.unwrap();
+            assert_eq!(
+                observer
+                    .query_one(
+                        "SELECT CAST(COUNT(*) AS VARCHAR2(20)) FROM auto_wire_log",
+                        &[]
+                    )
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "0"
+            );
+            client.execute(&call, &[]).await.unwrap();
+            let function = client
+                .prepare("SELECT CAST(auto_wire_fn() AS VARCHAR2(20)) FROM DUAL")
+                .await
+                .unwrap();
+            assert_eq!(
+                observer
+                    .query_one(
+                        "SELECT CAST(COUNT(*) AS VARCHAR2(20)) FROM auto_wire_log",
+                        &[]
+                    )
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "1"
+            );
+            assert_eq!(
+                client
+                    .query_one(&function, &[])
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "42"
+            );
+            let error = client
+                .batch_execute("CALL auto_wire_err(2)")
+                .await
+                .unwrap_err();
+            assert_eq!(error.code().unwrap().code(), "P0001");
+            assert_eq!(
+                error.as_db_error().unwrap().message(),
+                "ORA-20101: committed child failure"
+            );
+            client
+                .batch_execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+                .await
+                .unwrap();
+            client.batch_execute("CALL auto_wire_ok(6)").await.unwrap();
+            for (connection, expected) in [(&client, "0"), (&observer, "1")] {
+                assert_eq!(
+                    connection
+                        .query_one(
+                            "SELECT CAST(COUNT(*) AS VARCHAR2(20)) FROM auto_wire_log WHERE id=6",
+                            &[]
+                        )
+                        .await
+                        .unwrap()
+                        .get::<_, String>(0),
+                    expected
+                );
+            }
+            client.batch_execute("ROLLBACK").await.unwrap();
+            client
+                .batch_execute("DELETE FROM auto_wire_log WHERE id=6")
+                .await
+                .unwrap();
+            client
+                .batch_execute("BEGIN;INSERT INTO auto_wire_log VALUES(9)")
+                .await
+                .unwrap();
+            client.batch_execute("CALL auto_wire_ok(4)").await.unwrap();
+            client
+                .batch_execute("CALL auto_wire_increment()")
+                .await
+                .unwrap();
+            client
+                .batch_execute("CALL auto_wire_increment()")
+                .await
+                .unwrap();
+            assert_eq!(
+                observer
+                    .query_one("SELECT CAST(n AS VARCHAR2(20)) FROM auto_wire_counter", &[])
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "2"
+            );
+            assert_eq!(
+                observer
+                    .query_one(
+                        "SELECT CAST(COUNT(*) AS VARCHAR2(20)) FROM auto_wire_log WHERE id=9",
+                        &[]
+                    )
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "0"
+            );
+            assert_eq!(
+                observer
+                    .query_one(
+                        "SELECT CAST(COUNT(*) AS VARCHAR2(20)) FROM auto_wire_log WHERE id=4",
+                        &[]
+                    )
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "1"
+            );
+            client
+                .batch_execute("ROLLBACK;BEGIN;INSERT INTO auto_wire_log VALUES(9)")
+                .await
+                .unwrap();
+            let error = client
+                .batch_execute("CALL auto_wire_err(5)")
+                .await
+                .unwrap_err();
+            assert_eq!(error.code().unwrap().code(), "P0001");
+            client.batch_execute("ROLLBACK").await.unwrap();
+        }
+        assert_eq!(
+            observer
+                .query_one(
+                    "SELECT CAST(COUNT(*) AS VARCHAR2(20)) FROM auto_wire_log",
+                    &[]
+                )
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "5"
+        );
+        assert_eq!(
+            observer
+                .query_one(
+                    "SELECT CAST(COUNT(*) AS VARCHAR2(20)) FROM auto_wire_log WHERE id=9",
+                    &[]
+                )
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "0"
+        );
+        drop(client);
+        drop(observer);
+        task.await.unwrap();
+        observe_task.await.unwrap();
+    }
+}

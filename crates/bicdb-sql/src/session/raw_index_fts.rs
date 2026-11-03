@@ -834,6 +834,12 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_query(&mut self, query: &Query) -> Result<SqlResult> {
+        if self.oracle_autonomous && query_has_row_locks(query) {
+            // A locking read starts an Oracle transaction even if SELECT INTO
+            // subsequently raises NO_DATA_FOUND and its handler catches it.
+            self.oracle_autonomous_active = true;
+            self.oracle_autonomous_lock_epoch = self.oracle_autonomous_lock_epoch.wrapping_add(1);
+        }
         let previous = std::mem::replace(&mut self.in_routine_expression, false);
         let result = self.execute_query_in_sql(query);
         self.in_routine_expression = previous;

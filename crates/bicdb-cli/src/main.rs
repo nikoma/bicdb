@@ -230,6 +230,11 @@ enum Command {
         #[command(subcommand)]
         command: CellCommand,
     },
+    /// Generate Ed25519 package keys and sign application packages.
+    AppPackage {
+        #[command(subcommand)]
+        command: app_command::AppPackageCommand,
+    },
     /// Install, inspect, and run signed ABI-v2 BicDB applications.
     App {
         /// BicDB database directory shared by the application host and pgwire.
@@ -3477,6 +3482,7 @@ fn main() -> Result<()> {
     match command {
         Command::Oracle { command } => oracle_command::run(command)?,
         Command::Cell { command } => run_cell_command(command)?,
+        Command::AppPackage { command } => app_command::run_package_command(command)?,
         Command::App {
             path,
             package_root,

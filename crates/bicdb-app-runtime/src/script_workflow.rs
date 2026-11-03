@@ -15,7 +15,7 @@ use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(test)]
 #[path = "script_route_tests.rs"]
-mod route_tests;
+pub(crate) mod route_tests;
 #[cfg(test)]
 #[path = "script_workflow_tests.rs"]
 mod tests;

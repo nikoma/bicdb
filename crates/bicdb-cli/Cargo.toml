@@ -41,6 +41,7 @@ bicdb-sync = { path = "../bicdb-sync", version = "1.0.438-beta" }
 clap.workspace = true
 ctrlc.workspace = true
 crossterm.workspace = true
+ed25519-dalek.workspace = true
 hex.workspace = true
 libc.workspace = true
 mimalloc = "0.1"

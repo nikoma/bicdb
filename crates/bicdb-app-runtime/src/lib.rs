@@ -10,6 +10,7 @@ mod auth;
 mod bounded_sql;
 mod host;
 mod http;
+mod management;
 mod openapi;
 mod otlp;
 mod package;
@@ -36,6 +37,7 @@ pub use http::{
     ApplicationHttpRequest, ApplicationHttpResponse, HttpAdmissionCheck, HttpHostPolicy,
     HttpServerHandle, TrustedHttpHandler,
 };
+pub use management::{ManagementHttpHandler, MANAGEMENT_PATH_PREFIX};
 pub use openapi::generate_openapi;
 pub use otlp::{OtlpObservability, OtlpObservabilityConfig};
 pub use package::{

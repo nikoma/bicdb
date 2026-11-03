@@ -1046,6 +1046,20 @@ impl ApplicationRuntime {
         diagnostics
     }
 
+    /// Decode an unverified package from bytes with the install size limits.
+    pub fn read_package_bytes(&self, bytes: &[u8]) -> Result<ApplicationPackage> {
+        self.verifier.read_package(bytes)
+    }
+
+    /// Number of prior snapshots available to `rollback`.
+    pub fn history_len(&self, application: &str) -> usize {
+        self.history
+            .lock()
+            .expect("package history poisoned")
+            .get(&normalized(application))
+            .map_or(0, VecDeque::len)
+    }
+
     pub fn inspect(&self, application: &str) -> Result<RuntimeDiagnostic> {
         let name = normalized(application);
         self.active

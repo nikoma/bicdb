@@ -26,7 +26,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-const API_V1: &str = r#"
+pub(crate) const API_V1: &str = r#"
 interface Note { id: string; body: string }
 function listNotes(request: any) {
   const notes: Note[] = db.execute("list_notes", []);
@@ -81,7 +81,7 @@ fn route(name: &str, method: &str, template: &str, export: &str) -> Value {
     })
 }
 
-fn package(version: &str, source: &str, key: &SigningKey) -> ApplicationPackage {
+pub(crate) fn package(version: &str, source: &str, key: &SigningKey) -> ApplicationPackage {
     let dependency_lock = br#"{"format":1,"packages":[]}"#.to_vec();
     let sbom = br#"{"bomFormat":"CycloneDX","specVersion":"1.5"}"#.to_vec();
     let provenance = br#"{"builder":"bicdb-script-route-test"}"#.to_vec();
@@ -212,7 +212,7 @@ fn package(version: &str, source: &str, key: &SigningKey) -> ApplicationPackage 
     package
 }
 
-fn sign(package: &mut ApplicationPackage, key: &SigningKey) {
+pub(crate) fn sign(package: &mut ApplicationPackage, key: &SigningKey) {
     let metadata = &mut package.manifest.application.as_deref_mut().unwrap().package;
     metadata.package_sha256 = "0".repeat(64);
     metadata.signature = "unsigned-placeholder".to_string();
@@ -249,14 +249,14 @@ impl EgressProvider for Hooks {
     }
 }
 
-struct Harness {
-    root: tempfile::TempDir,
-    db: Arc<RwLock<BicDb>>,
-    key: SigningKey,
+pub(crate) struct Harness {
+    pub(crate) root: tempfile::TempDir,
+    pub(crate) db: Arc<RwLock<BicDb>>,
+    pub(crate) key: SigningKey,
 }
 
 impl Harness {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path().join("database")).unwrap();
         SqlSession::new(&mut db)
@@ -290,7 +290,7 @@ impl Harness {
         }
     }
 
-    fn runtime(&self) -> Arc<ApplicationRuntime> {
+    pub(crate) fn runtime(&self) -> Arc<ApplicationRuntime> {
         let mut trusted = TrustedSigningKeys::default();
         trusted
             .insert_ed25519("release", self.key.verifying_key().as_bytes())
@@ -314,14 +314,14 @@ impl Harness {
     }
 }
 
-fn caller(tenant: &str) -> ActorContext {
+pub(crate) fn caller(tenant: &str) -> ActorContext {
     let mut actor = actor(crate::host::now_ms() + 30_000);
     actor.roles.insert("editor".to_string());
     actor.tenant_id = Some(tenant.to_string());
     actor
 }
 
-fn call(
+pub(crate) fn call(
     runtime: &ApplicationRuntime,
     tenant: &str,
     method: HttpMethod,
@@ -355,14 +355,14 @@ fn call(
     )
 }
 
-fn json_body(response: &crate::ApplicationHttpResponse) -> &Value {
+pub(crate) fn json_body(response: &crate::ApplicationHttpResponse) -> &Value {
     match &response.body {
         HttpResponseBodyV2::Json(value) => value,
         other => panic!("expected JSON body, found {other:?}"),
     }
 }
 
-fn note_ids(runtime: &ApplicationRuntime, tenant: &str) -> (u64, Vec<String>) {
+pub(crate) fn note_ids(runtime: &ApplicationRuntime, tenant: &str) -> (u64, Vec<String>) {
     let response = call(
         runtime,
         tenant,

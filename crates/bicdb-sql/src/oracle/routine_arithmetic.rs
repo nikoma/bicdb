@@ -840,6 +840,12 @@ impl Resolve<'_> {
                 ));
             }
         }
+        // The standalone DML pass extends temporal provenance only. Preserve
+        // existing numeric predicates and increment shapes for indexed lookup
+        // and read-committed write repair.
+        if self.env.sql_builtins_only {
+            return Ok(());
+        }
         if left_kind == Kind::Number && right_kind.day_operand()
             || right_kind == Kind::Number && left_kind.day_operand()
         {

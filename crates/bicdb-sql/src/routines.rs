@@ -19,7 +19,7 @@ pub(crate) fn routine_record_value(columns: &[String], row: &[SqlValue]) -> SqlV
         .zip(row.iter())
         .map(|(column, value)| (column.clone(), sql_value_to_json(value.clone())))
         .collect::<JsonMap<String, JsonValue>>();
-    SqlValue::Json(JsonValue::Object(values))
+    SqlValue::Json(JsonValue::Object(values).into())
 }
 
 pub(crate) fn routine_exception_matches(handler: &RoutineExceptionHandler, sqlstate: &str) -> bool {

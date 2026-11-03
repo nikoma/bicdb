@@ -313,7 +313,7 @@ pub(crate) fn eval_json_function_value(name: &str, args: &[SqlValue]) -> Result<
             } else if name == "to_json" {
                 json_text_result(sql_value_to_json_text(&args[0]))?
             } else {
-                SqlValue::Json(sql_value_to_json(&args[0]))
+                SqlValue::Json(sql_value_to_json(&args[0]).into())
             }
         }
         "json_array_length" | "jsonb_array_length" => json_array_length(name, args)?,
@@ -501,7 +501,7 @@ fn numeric_arguments_as_json_numbers(
             continue;
         };
         normalized.get_or_insert_with(|| args.to_vec())[index] =
-            SqlValue::Json(JsonValue::Number(number));
+            SqlValue::Json(JsonValue::Number(number).into());
     }
     normalized
 }
@@ -557,7 +557,7 @@ fn normalize_jsonb_literal_arguments(
             continue;
         };
         normalized[position] = serde_json::from_str(raw)
-            .map(SqlValue::Json)
+            .map(SqlValue::json)
             .map_err(|error| SqlError::InvalidTextRepresentation(error.to_string()))?;
         changed = true;
     }
@@ -602,7 +602,7 @@ pub(crate) fn apply_json_returning_pg_type(
     match pg_type {
         "json" => json_text_result(raw),
         "jsonb" => serde_json::from_str(&raw)
-            .map(SqlValue::Json)
+            .map(SqlValue::json)
             .map_err(|error| SqlError::InvalidTextRepresentation(error.to_string())),
         "text" | "varchar" | "bpchar" => Ok(SqlValue::String(raw)),
         "bytea" => Ok(SqlValue::String(crate::format_bytea_hex(raw.as_bytes()))),
@@ -845,7 +845,7 @@ pub(crate) fn composite_to_json(
             .iter()
             .map(|(field, value)| (field.clone(), sql_value_to_json(value)))
             .collect::<JsonMap<_, _>>();
-        return Ok(SqlValue::Json(JsonValue::Object(object)));
+        return Ok(SqlValue::Json(JsonValue::Object(object).into()));
     }
 
     let separator = if pretty { ",\n " } else { "," };
@@ -895,7 +895,7 @@ fn build_object_with_unique(args: &[SqlValue], binary: bool, unique: bool) -> Re
         }
     }
     if binary {
-        Ok(SqlValue::Json(JsonValue::Object(object)))
+        Ok(SqlValue::Json(JsonValue::Object(object).into()))
     } else {
         json_text_result(format!("{{{}}}", text_entries.join(", ")))
     }
@@ -905,7 +905,7 @@ fn build_array(args: &[SqlValue], binary: bool) -> Result<SqlValue> {
     if binary {
         return Ok(SqlValue::Json(JsonValue::Array(
             args.iter().map(sql_value_to_json).collect(),
-        )));
+        ).into()));
     }
     json_text_result(format!(
         "[{}]",
@@ -1023,7 +1023,7 @@ fn jsonb_object(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
         };
         object.insert(key.to_string(), value);
     }
-    Ok(SqlValue::Json(JsonValue::Object(object)))
+    Ok(SqlValue::Json(JsonValue::Object(object).into()))
 }
 
 fn json_object_pairs_from_single_array<'a>(
@@ -1059,8 +1059,8 @@ fn json_object_pairs_from_single_array<'a>(
 
 fn sql_array_json<'a>(name: &str, value: &'a SqlValue) -> Result<&'a [JsonValue]> {
     match value {
-        SqlValue::Json(JsonValue::Array(values)) => Ok(values),
-        SqlValue::Json(JsonValue::Object(object)) => object
+        SqlValue::Json(json) if json.is_array() => Ok(json.as_array().expect("checked array")),
+        SqlValue::Json(json) if json.is_object() => json
             .get("$bicdb_array_input")
             .and_then(|input| input.get("value"))
             .and_then(JsonValue::as_array)
@@ -1095,7 +1095,9 @@ fn json_array_length(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
                 "cannot get array length of a non-array",
             )),
         },
-        SqlValue::Json(JsonValue::Array(values)) => Ok(SqlValue::Int(values.len() as i64)),
+        SqlValue::Json(json) if json.is_array() => {
+            Ok(SqlValue::Int(json.as_array().map_or(0, Vec::len) as i64))
+        }
         SqlValue::Json(_) => Err(data_error(
             "22023",
             "cannot get array length of a non-array",
@@ -1179,7 +1181,7 @@ fn json_extract_path(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
             .collect::<Result<Vec<_>>>()?;
         return json_text_path_result(value, &path, as_text);
     }
-    let mut current = match &args[0] {
+    let mut current: &JsonValue = match &args[0] {
         SqlValue::Json(value) if binary => value,
         _ => {
             return Err(argument_type_error(
@@ -1230,7 +1232,7 @@ fn json_extract_path(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
         });
     }
     if binary {
-        Ok(SqlValue::Json(current.clone()))
+        Ok(SqlValue::json(current.clone()))
     } else {
         Ok(SqlValue::JsonText(PgJsonText::from_value(current.clone())))
     }
@@ -1302,7 +1304,7 @@ fn json_format_input(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
     let raw = match &args[0] {
         SqlValue::JsonText(value) if !encoded => return Ok(SqlValue::JsonText(value.clone())),
         SqlValue::Json(value) if !encoded => {
-            return Ok(SqlValue::JsonText(PgJsonText::from_value(value.clone())));
+            return Ok(SqlValue::JsonText(PgJsonText::from_value((**value).clone())));
         }
         SqlValue::String(value) if value.starts_with("\\x") => {
             let bytes = crate::parse_bytea_text(value).map_err(|_| {
@@ -1467,13 +1469,13 @@ fn jsonb_set(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
         Some(_) => return Err(argument_type_error(name, 4, "boolean")),
     };
 
-    if !matches!(target, JsonValue::Object(_) | JsonValue::Array(_)) {
+    if !matches!(&**target, JsonValue::Object(_) | JsonValue::Array(_)) {
         return Err(data_error("22023", "cannot set path in scalar"));
     }
 
     // PostgreSQL returns an empty container unchanged before inspecting path
     // elements when creation is disabled.
-    let target_is_empty = match target {
+    let target_is_empty = match &**target {
         JsonValue::Object(values) => values.is_empty(),
         JsonValue::Array(values) => values.is_empty(),
         _ => false,
@@ -1486,7 +1488,7 @@ fn jsonb_set(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
     }
 
     let mut result = target.clone();
-    set_json_path(&mut result, &path, 0, new_value, create_if_missing)?;
+    set_json_path(std::sync::Arc::make_mut(&mut result), &path, 0, new_value, create_if_missing)?;
     Ok(SqlValue::Json(result))
 }
 
@@ -1517,7 +1519,7 @@ fn jsonb_set_lax(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
             let mut set_args = vec![
                 args[0].clone(),
                 args[1].clone(),
-                SqlValue::Json(JsonValue::Null),
+                SqlValue::Json(JsonValue::Null.into()),
             ];
             if let Some(create) = args.get(3) {
                 set_args.push(create.clone());
@@ -1552,14 +1554,14 @@ fn jsonb_insert(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
         Some(SqlValue::Bool(value)) => *value,
         Some(_) => return Err(argument_type_error(name, 4, "boolean")),
     };
-    if !matches!(target, JsonValue::Object(_) | JsonValue::Array(_)) {
+    if !matches!(&**target, JsonValue::Object(_) | JsonValue::Array(_)) {
         return Err(data_error("22023", "cannot set path in scalar"));
     }
     if path.is_empty() {
         return Ok(SqlValue::Json(target.clone()));
     }
     let mut result = target.clone();
-    insert_json_path(&mut result, &path, 0, new_value, insert_after)?;
+    insert_json_path(std::sync::Arc::make_mut(&mut result), &path, 0, new_value, insert_after)?;
     Ok(SqlValue::Json(result))
 }
 
@@ -1688,7 +1690,7 @@ fn jsonb_binary_wrapper(
                             _ => Err(argument_type_error(name, index + 2, "text")),
                         })
                         .collect::<Result<Vec<_>>>()?,
-                ))
+                ).into())
             };
             crate::eval_json_delete_value(args[0].clone(), keys)
         }
@@ -1785,7 +1787,7 @@ fn jsonb_strip_nulls(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
     };
 
     let mut result = target.clone();
-    strip_json_nulls(&mut result, strip_in_arrays);
+    strip_json_nulls(std::sync::Arc::make_mut(&mut result), strip_in_arrays);
     Ok(SqlValue::Json(result))
 }
 
@@ -1856,7 +1858,7 @@ pub(crate) fn sql_value_to_json(value: &SqlValue) -> JsonValue {
         SqlValue::String(value) => JsonValue::String(value.clone()),
         SqlValue::TsQuery(value) => JsonValue::String(value.to_postgres_text()),
         SqlValue::JsonText(value) => value.parsed().clone(),
-        SqlValue::Json(value) => value.clone(),
+        SqlValue::Json(value) => (**value).clone(),
         SqlValue::Geometry(value) => JsonValue::String(value.to_wkt()),
         SqlValue::Composite(value) => JsonValue::Object(
             value
@@ -1899,7 +1901,9 @@ fn non_finite_float(value: f64) -> &'static str {
 
 fn json_path(name: &str, value: &SqlValue) -> Result<Vec<Option<String>>> {
     match value {
-        SqlValue::Json(JsonValue::Array(elements)) => elements
+        SqlValue::Json(json) if json.is_array() => json
+            .as_array()
+            .expect("checked array")
             .iter()
             .map(|element| match element {
                 JsonValue::Null => Ok(None),
@@ -1918,7 +1922,7 @@ fn parse_text_array_path(name: &str, value: &str) -> Result<Vec<Option<String>>>
         let parsed = serde_json::from_str::<JsonValue>(trimmed).map_err(|_| {
             SqlError::InvalidTextRepresentation(format!("malformed array literal: \"{value}\""))
         })?;
-        return json_path(name, &SqlValue::Json(parsed));
+        return json_path(name, &SqlValue::Json(parsed.into()));
     }
     if trimmed == "{}" {
         return Ok(Vec::new());
@@ -2089,7 +2093,7 @@ mod tests {
         assert_eq!(eval_json_function_value("not_json", &[]).unwrap(), None);
         assert_eq!(
             evaluate("pg_catalog.jsonb_build_array", vec![]).unwrap(),
-            SqlValue::Json(json!([]))
+            SqlValue::json(json!([]))
         );
     }
 
@@ -2101,11 +2105,11 @@ mod tests {
                 vec![
                     SqlValue::Int(1),
                     SqlValue::Null,
-                    SqlValue::Json(json!({"nested": true})),
+                    SqlValue::json(json!({"nested": true})),
                 ],
             )
             .unwrap(),
-            SqlValue::Json(json!([1, null, {"nested": true}]))
+            SqlValue::json(json!([1, null, {"nested": true}]))
         );
         assert_eq!(
             evaluate(
@@ -2138,10 +2142,10 @@ mod tests {
         );
         assert_eq!(
             evaluate("to_jsonb", vec![SqlValue::String("{\"a\":1}".into())]).unwrap(),
-            SqlValue::Json(json!("{\"a\":1}"))
+            SqlValue::json(json!("{\"a\":1}"))
         );
         assert_eq!(
-            evaluate("to_json", vec![SqlValue::Json(json!({"a": 1}))]).unwrap(),
+            evaluate("to_json", vec![SqlValue::json(json!({"a": 1}))]).unwrap(),
             SqlValue::JsonText(PgJsonText::parse(r#"{"a": 1}"#.to_string()).unwrap())
         );
     }
@@ -2149,14 +2153,14 @@ mod tests {
     #[test]
     fn array_length_handles_null_and_rejects_other_json_shapes() {
         assert_eq!(
-            evaluate("jsonb_array_length", vec![SqlValue::Json(json!([1, 2, 3]))]).unwrap(),
+            evaluate("jsonb_array_length", vec![SqlValue::json(json!([1, 2, 3]))]).unwrap(),
             SqlValue::Int(3)
         );
         assert_eq!(
             evaluate("jsonb_array_length", vec![SqlValue::Null]).unwrap(),
             SqlValue::Null
         );
-        let error = evaluate("jsonb_array_length", vec![SqlValue::Json(json!({}))]).unwrap_err();
+        let error = evaluate("jsonb_array_length", vec![SqlValue::json(json!({}))]).unwrap_err();
         assert_eq!(error.sqlstate(), "22023");
     }
 
@@ -2166,67 +2170,67 @@ mod tests {
             evaluate(
                 "jsonb_set",
                 vec![
-                    SqlValue::Json(json!({"a": 1})),
-                    SqlValue::Json(json!(["a"])),
-                    SqlValue::Json(json!(2)),
+                    SqlValue::json(json!({"a": 1})),
+                    SqlValue::json(json!(["a"])),
+                    SqlValue::json(json!(2)),
                 ],
             )
             .unwrap(),
-            SqlValue::Json(json!({"a": 2}))
+            SqlValue::json(json!({"a": 2}))
         );
         assert_eq!(
             evaluate(
                 "jsonb_set",
                 vec![
-                    SqlValue::Json(json!({"a": 1})),
+                    SqlValue::json(json!({"a": 1})),
                     SqlValue::String("{b}".into()),
-                    SqlValue::Json(json!(2)),
+                    SqlValue::json(json!(2)),
                     SqlValue::Bool(false),
                 ],
             )
             .unwrap(),
-            SqlValue::Json(json!({"a": 1}))
+            SqlValue::json(json!({"a": 1}))
         );
         assert_eq!(
             evaluate(
                 "jsonb_set",
                 vec![
-                    SqlValue::Json(json!({"a": 1})),
+                    SqlValue::json(json!({"a": 1})),
                     SqlValue::String("{b}".into()),
-                    SqlValue::Json(json!(2)),
+                    SqlValue::json(json!(2)),
                 ],
             )
             .unwrap(),
-            SqlValue::Json(json!({"a": 1, "b": 2}))
+            SqlValue::json(json!({"a": 1, "b": 2}))
         );
         assert_eq!(
             evaluate(
                 "jsonb_set",
                 vec![
-                    SqlValue::Json(json!({})),
+                    SqlValue::json(json!({})),
                     SqlValue::String("{a,b}".into()),
-                    SqlValue::Json(json!(1)),
+                    SqlValue::json(json!(1)),
                 ],
             )
             .unwrap(),
-            SqlValue::Json(json!({}))
+            SqlValue::json(json!({}))
         );
     }
 
     #[test]
     fn jsonb_set_matches_negative_and_out_of_range_array_indexes() {
-        let target = SqlValue::Json(json!([0, 1, 2]));
+        let target = SqlValue::json(json!([0, 1, 2]));
         assert_eq!(
             evaluate(
                 "jsonb_set",
                 vec![
                     target.clone(),
                     SqlValue::String("{-1}".into()),
-                    SqlValue::Json(json!(9)),
+                    SqlValue::json(json!(9)),
                 ],
             )
             .unwrap(),
-            SqlValue::Json(json!([0, 1, 9]))
+            SqlValue::json(json!([0, 1, 9]))
         );
         assert_eq!(
             evaluate(
@@ -2234,11 +2238,11 @@ mod tests {
                 vec![
                     target.clone(),
                     SqlValue::String("{99}".into()),
-                    SqlValue::Json(json!(9)),
+                    SqlValue::json(json!(9)),
                 ],
             )
             .unwrap(),
-            SqlValue::Json(json!([0, 1, 2, 9]))
+            SqlValue::json(json!([0, 1, 2, 9]))
         );
         assert_eq!(
             evaluate(
@@ -2246,24 +2250,24 @@ mod tests {
                 vec![
                     target,
                     SqlValue::String("{-99}".into()),
-                    SqlValue::Json(json!(9)),
+                    SqlValue::json(json!(9)),
                 ],
             )
             .unwrap(),
-            SqlValue::Json(json!([9, 0, 1, 2]))
+            SqlValue::json(json!([9, 0, 1, 2]))
         );
         assert_eq!(
             evaluate(
                 "jsonb_set",
                 vec![
-                    SqlValue::Json(json!([0, 1, 2])),
+                    SqlValue::json(json!([0, 1, 2])),
                     SqlValue::String("{99}".into()),
-                    SqlValue::Json(json!(9)),
+                    SqlValue::json(json!(9)),
                     SqlValue::Bool(false),
                 ],
             )
             .unwrap(),
-            SqlValue::Json(json!([0, 1, 2]))
+            SqlValue::json(json!([0, 1, 2]))
         );
     }
 
@@ -2275,7 +2279,7 @@ mod tests {
                 vec![
                     SqlValue::Null,
                     SqlValue::String("{a}".into()),
-                    SqlValue::Json(json!(1)),
+                    SqlValue::json(json!(1)),
                 ],
             )
             .unwrap(),
@@ -2284,9 +2288,9 @@ mod tests {
         let error = evaluate(
             "jsonb_set",
             vec![
-                SqlValue::Json(json!(1)),
+                SqlValue::json(json!(1)),
                 SqlValue::String("{}".into()),
-                SqlValue::Json(json!(2)),
+                SqlValue::json(json!(2)),
             ],
         )
         .unwrap_err();
@@ -2296,21 +2300,21 @@ mod tests {
             evaluate(
                 "jsonb_set",
                 vec![
-                    SqlValue::Json(json!({})),
-                    SqlValue::Json(json!([null])),
-                    SqlValue::Json(json!(1)),
+                    SqlValue::json(json!({})),
+                    SqlValue::json(json!([null])),
+                    SqlValue::json(json!(1)),
                     SqlValue::Bool(false),
                 ],
             )
             .unwrap(),
-            SqlValue::Json(json!({}))
+            SqlValue::json(json!({}))
         );
         let null_path_element = evaluate(
             "jsonb_set",
             vec![
-                SqlValue::Json(json!({})),
-                SqlValue::Json(json!([null])),
-                SqlValue::Json(json!(1)),
+                SqlValue::json(json!({})),
+                SqlValue::json(json!([null])),
+                SqlValue::json(json!(1)),
             ],
         )
         .unwrap_err();
@@ -2319,21 +2323,21 @@ mod tests {
 
     #[test]
     fn strip_nulls_recurses_and_optionally_removes_array_nulls() {
-        let target = SqlValue::Json(json!({
+        let target = SqlValue::json(json!({
             "a": null,
             "b": [{"c": null, "d": 1}, null, [null, 2]]
         }));
         assert_eq!(
             evaluate("jsonb_strip_nulls", vec![target.clone()]).unwrap(),
-            SqlValue::Json(json!({"b": [{"d": 1}, null, [null, 2]]}))
+            SqlValue::json(json!({"b": [{"d": 1}, null, [null, 2]]}))
         );
         assert_eq!(
             evaluate("jsonb_strip_nulls", vec![target, SqlValue::Bool(true)],).unwrap(),
-            SqlValue::Json(json!({"b": [{"d": 1}, [2]]}))
+            SqlValue::json(json!({"b": [{"d": 1}, [2]]}))
         );
         assert_eq!(
-            evaluate("jsonb_strip_nulls", vec![SqlValue::Json(JsonValue::Null)]).unwrap(),
-            SqlValue::Json(JsonValue::Null)
+            evaluate("jsonb_strip_nulls", vec![SqlValue::Json(JsonValue::Null.into())]).unwrap(),
+            SqlValue::Json(JsonValue::Null.into())
         );
     }
 
@@ -2342,7 +2346,7 @@ mod tests {
         assert_eq!(
             evaluate(
                 "jsonb_pretty",
-                vec![SqlValue::Json(json!([{"f1": 1, "f2": null}, 2]))],
+                vec![SqlValue::json(json!([{"f1": 1, "f2": null}, 2]))],
             )
             .unwrap(),
             SqlValue::String(

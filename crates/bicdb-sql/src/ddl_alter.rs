@@ -4599,7 +4599,10 @@ pub(crate) fn record_from_fields(
             continue;
         }
         if column == "payload" && !json_column {
-            if let SqlValue::Json(JsonValue::Array(values)) = value {
+            if let Some(JsonValue::Array(values)) = match &value {
+                SqlValue::Json(json) if json.is_array() => Some((**json).clone()),
+                _ => None,
+            } {
                 payload = Some(
                     values
                         .into_iter()

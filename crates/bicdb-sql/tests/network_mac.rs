@@ -75,8 +75,8 @@ fn assert_mac_row(session: &mut SqlSession<'_>) {
         vec![vec![
             SqlValue::String("08:00:2b:01:02:03".to_string()),
             SqlValue::String("08:00:2b:ff:fe:01:02:03".to_string()),
-            SqlValue::Json(json!(["08:00:2b:01:02:03", "08:00:2b:01:02:04"])),
-            SqlValue::Json(json!([
+            SqlValue::json(json!(["08:00:2b:01:02:03", "08:00:2b:01:02:04"])),
+            SqlValue::json(json!([
                 "08:00:2b:ff:fe:01:02:03",
                 "08:00:2b:01:02:03:04:05"
             ])),

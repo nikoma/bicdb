@@ -1243,7 +1243,7 @@ pub fn resolve_oid_alias_array_value(
     let SqlValue::Json(value) = cast_value_to_array(value, "text")? else {
         unreachable!("array casts return JSON")
     };
-    map_oid_alias_array_json(value, &|value| {
+    map_oid_alias_array_json(SqlValue::into_json_value(value), &|value| {
         let input = match value {
             JsonValue::String(value) => SqlValue::String(value),
             JsonValue::Number(value) => SqlValue::Int(
@@ -1263,7 +1263,7 @@ pub fn resolve_oid_alias_array_value(
             sql_value_i64(&resolved).expect("OID alias resolver returns an integer"),
         ))
     })
-    .map(SqlValue::Json)
+    .map(SqlValue::json)
 }
 
 pub fn render_oid_alias_array_value(
@@ -1274,7 +1274,7 @@ pub fn render_oid_alias_array_value(
     let SqlValue::Json(value) = value else {
         return Err(invalid_array_text("catalog-reference array value"));
     };
-    map_oid_alias_array_json(value.clone(), &|value| {
+    map_oid_alias_array_json((**value).clone(), &|value| {
         let input = match value {
             JsonValue::String(value) => SqlValue::String(value),
             JsonValue::Number(value) => SqlValue::Int(
@@ -1291,7 +1291,7 @@ pub fn render_oid_alias_array_value(
         };
         render_oid_alias_value(db, element_type, &input).map(JsonValue::String)
     })
-    .map(SqlValue::Json)
+    .map(SqlValue::json)
 }
 
 pub fn render_oid_alias_value(db: &BicDb, pg_type: &str, value: &SqlValue) -> Result<String> {

@@ -242,7 +242,7 @@ impl StoredTypedSqlValue {
             SqlValue::Float(value) => Self::Float(value),
             SqlValue::String(value) => Self::String(value),
             SqlValue::JsonText(value) => Self::JsonText(value.raw),
-            SqlValue::Json(value) => Self::Json(value),
+            SqlValue::Json(value) => Self::Json(SqlValue::into_json_value(value)),
             SqlValue::Geometry(value) => Self::Geometry(value),
             SqlValue::TsQuery(value) => Self::TsQuery(value.to_postgres_text()),
             SqlValue::Composite(value) => {
@@ -259,7 +259,7 @@ impl StoredTypedSqlValue {
             Self::Float(value) => SqlValue::Float(value),
             Self::String(value) => SqlValue::String(value),
             Self::JsonText(value) => SqlValue::JsonText(PgJsonText::parse(value)?),
-            Self::Json(value) => SqlValue::Json(value),
+            Self::Json(value) => SqlValue::Json(value.into()),
             Self::Geometry(value) => SqlValue::Geometry(value),
             Self::TsQuery(value) => SqlValue::TsQuery(PgTsQuery::from_postgres_text(&value)?),
             Self::Composite(value) => SqlValue::Composite(value.into_sql()?),
@@ -655,12 +655,12 @@ pub(crate) fn column_value_matches_type(value: &SqlValue, column: &ColumnSchema)
         "interval" => matches!(value, SqlValue::String(_)),
         "bytea" => matches!(
             value,
-            SqlValue::String(_) | SqlValue::Json(JsonValue::Array(_))
-        ),
+            SqlValue::String(_)
+        ) || matches!(value, SqlValue::Json(json) if json.is_array()),
         "bit" | "varbit" => matches!(value, SqlValue::String(_)),
         "json" => matches!(value, SqlValue::JsonText(_) | SqlValue::Json(_)),
         "jsonb" => matches!(value, SqlValue::Json(_)),
-        "vector" => matches!(value, SqlValue::Json(JsonValue::Array(_))),
+        "vector" => matches!(value, SqlValue::Json(json) if json.is_array()),
         _ => true,
     }
 }
@@ -2365,7 +2365,7 @@ pub(crate) fn record_schema_column_value(
             }
         } else if column.pg_type == "jsonb" {
             if let Some(value) = record.metadata.get(&column.name) {
-                return SqlValue::Json(value.clone());
+                return SqlValue::Json(value.clone().into());
             }
             if let Some(value) = legacy_payload_json_column_value(record, &column.name) {
                 return value;
@@ -2397,7 +2397,7 @@ pub(crate) fn record_schema_column_value(
             .metadata
             .get(&column.name)
             .cloned()
-            .map(SqlValue::Json)
+            .map(SqlValue::json)
             .or_else(|| legacy_payload_json_column_value(record, &column.name))
             .unwrap_or(SqlValue::Null);
     }
@@ -2436,7 +2436,7 @@ pub(crate) fn record_schema_column_value(
         "vector" => record
             .vector
             .as_ref()
-            .map(|vector| SqlValue::Json(vector_json(vector)))
+            .map(|vector| SqlValue::Json(vector_json(vector).into()))
             .unwrap_or(SqlValue::Null),
         "geometry" => SqlValue::Null,
         _ => {
@@ -2444,7 +2444,7 @@ pub(crate) fn record_schema_column_value(
                 record
                     .vector
                     .as_ref()
-                    .map(|vector| SqlValue::Json(vector_json(vector)))
+                    .map(|vector| SqlValue::Json(vector_json(vector).into()))
                     .unwrap_or(SqlValue::Null)
             } else {
                 SqlValue::Null
@@ -2472,7 +2472,7 @@ pub(crate) fn is_json_pg_type(pg_type: &str) -> bool {
 pub(crate) fn payload_bytes_json_value(payload: &[u8]) -> SqlValue {
     SqlValue::Json(JsonValue::Array(
         payload.iter().map(|byte| JsonValue::from(*byte)).collect(),
-    ))
+    ).into())
 }
 
 pub(crate) fn legacy_payload_json_column_value(record: &Record, column: &str) -> Option<SqlValue> {
@@ -3036,7 +3036,9 @@ pub(crate) fn is_vector_column(schema: Option<&TableSchema>, column: &str) -> bo
 pub(crate) fn sql_value_to_vector(value: &SqlValue) -> Result<Vec<f32>> {
     let vector = match value {
         SqlValue::String(value) => parse_vector_literal(value),
-        SqlValue::Json(JsonValue::Array(values)) => values
+        SqlValue::Json(json) if json.is_array() => json
+            .as_array()
+            .expect("checked array")
             .iter()
             .map(|value| {
                 value.as_f64().map(|value| value as f32).ok_or_else(|| {
@@ -3385,7 +3387,7 @@ pub(crate) fn eval_routing_function_value(
             let start = spatial_geometry("shortest_path", &args[1])?;
             let end = spatial_geometry("shortest_path", &args[2])?;
             let path = db.shortest_path(graph, &start, &end)?;
-            Ok(Some(SqlValue::Json(serde_json::to_value(path)?)))
+            Ok(Some(SqlValue::Json(serde_json::to_value(path)?.into())))
         }
         "route_distance" => {
             require_arg_count("route_distance", args, 3)?;
@@ -3402,20 +3404,19 @@ pub(crate) fn eval_routing_function_value(
             let stops = routing_stop_array("optimize_route", &args[1])?;
             Ok(Some(SqlValue::Json(serde_json::to_value(
                 db.optimize_route(graph, &stops)?,
-            )?)))
+            )?.into())))
         }
         _ => Ok(None),
     }
 }
 
 pub(crate) fn sql_array_value(values: Vec<SqlValue>) -> Result<SqlValue> {
-    Ok(SqlValue::Json(
+    Ok(SqlValue::json(JsonValue::Array(
         values
             .into_iter()
             .map(sql_value_to_json)
-            .collect::<Vec<_>>()
-            .into(),
-    ))
+            .collect::<Vec<_>>(),
+    )))
 }
 
 pub(crate) fn routing_graph_name<'a>(function: &str, value: &'a SqlValue) -> Result<&'a str> {
@@ -3430,7 +3431,9 @@ pub(crate) fn routing_graph_name<'a>(function: &str, value: &'a SqlValue) -> Res
 
 pub(crate) fn routing_stop_array(function: &str, value: &SqlValue) -> Result<Vec<Geometry>> {
     match value {
-        SqlValue::Json(JsonValue::Array(values)) => values
+        SqlValue::Json(json) if json.is_array() => json
+            .as_array()
+            .expect("checked array")
             .iter()
             .enumerate()
             .map(|(index, value)| routing_stop_json(function, index, value))
@@ -3449,7 +3452,7 @@ pub(crate) fn routing_stop_json(
 ) -> Result<Geometry> {
     match value {
         JsonValue::String(value) => spatial_geometry(function, &SqlValue::String(value.clone())),
-        JsonValue::Object(_) => spatial_geometry(function, &SqlValue::Json(value.clone())),
+        JsonValue::Object(_) => spatial_geometry(function, &SqlValue::Json(value.clone().into())),
         other => Err(SqlError::InvalidSql(format!(
             "{function} stop {index} must be WKT text or GeoJSON geometry, got {other}"
         ))),
@@ -3503,7 +3506,7 @@ pub(crate) fn spatial_geometry(function: &str, value: &SqlValue) -> Result<Geome
             }
         }
         SqlValue::Json(value) => {
-            Geometry::from_geojson_value(value.clone()).map_err(SqlError::from)
+            Geometry::from_geojson_value((**value).clone()).map_err(SqlError::from)
         }
         other => Err(SqlError::InvalidSql(format!(
             "{function} expects a geometry value, WKT text, or GeoJSON object, got {}",
@@ -4044,7 +4047,7 @@ pub(crate) fn sql_value_to_json(value: SqlValue) -> JsonValue {
         SqlValue::String(value) => JsonValue::String(value),
         SqlValue::TsQuery(value) => JsonValue::String(value.to_postgres_text()),
         SqlValue::JsonText(value) => value.parsed,
-        SqlValue::Json(value) => value,
+        SqlValue::Json(value) => SqlValue::into_json_value(value),
         SqlValue::Geometry(value) => value.to_geojson_value(),
         SqlValue::Composite(value) => JsonValue::Object(
             value
@@ -4684,14 +4687,14 @@ pub(crate) fn storage_json_to_sql_value(value: &JsonValue, pg_type: &str) -> Sql
                 .map(|dimension| dimension.lower_bound)
                 .collect::<Vec<_>>();
             if lower_bounds.iter().any(|lower_bound| *lower_bound != 1) {
-                return SqlValue::Json(serde_json::json!({
+                return SqlValue::json(serde_json::json!({
                     "$bicdb_array_input": {
                         "lower_bounds": lower_bounds,
                         "value": output,
                     }
-                }));
+                }).into());
             }
-            return SqlValue::Json(output);
+            return SqlValue::Json(output.into());
         }
     }
     if matches!(pg_type, "bytea" | "bit" | "varbit") {
@@ -4962,6 +4965,7 @@ fn array_storage_input(value: SqlValue, pg_type: &str) -> Result<(JsonValue, Opt
             "invalid input syntax for type {pg_type}"
         )));
     };
+    let value = SqlValue::into_json_value(value);
     if let Some(input) = value.get("$bicdb_array_input") {
         let legacy = input.get("value").cloned().ok_or_else(|| {
             SqlError::InvalidTextRepresentation(format!("invalid input syntax for type {pg_type}"))

@@ -71,13 +71,13 @@ fn constraint_arrays_expose_one_based_composite_foreign_key_columns() {
     assert_eq!(
         result.rows,
         vec![vec![
-            SqlValue::Json(json!([2, 3])),
-            SqlValue::Json(json!([1, 2])),
+            SqlValue::json(json!([2, 3])),
+            SqlValue::json(json!([1, 2])),
             SqlValue::Int(1)
         ]]
     );
     let result = sql.execute("SELECT (SELECT array_agg(a.attname ORDER BY idx) FROM (SELECT idx,c.conkey[idx] AS element FROM generate_subscripts(c.conkey,1) AS idx) keys JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=keys.element) FROM pg_constraint c WHERE c.conname='pair_fk'").unwrap();
-    assert_eq!(result.rows, vec![vec![SqlValue::Json(json!(["x", "y"]))]]);
+    assert_eq!(result.rows, vec![vec![SqlValue::json(json!(["x", "y"]))]]);
     let result = sql.execute("SELECT column_name FROM information_schema.key_column_usage WHERE constraint_name='pair_fk' ORDER BY ordinal_position").unwrap();
     assert_eq!(
         result.rows,

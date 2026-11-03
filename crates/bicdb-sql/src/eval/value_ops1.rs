@@ -1894,12 +1894,14 @@ pub(crate) fn json_typeof_value(value: &SqlValue) -> SqlValue {
             JsonValue::Array(_) => "array",
             JsonValue::Object(_) => "object",
         },
-        SqlValue::Json(JsonValue::Null) => "null",
-        SqlValue::Json(JsonValue::Bool(_)) => "boolean",
-        SqlValue::Json(JsonValue::Number(_)) => "number",
-        SqlValue::Json(JsonValue::String(_)) => "string",
-        SqlValue::Json(JsonValue::Array(_)) => "array",
-        SqlValue::Json(JsonValue::Object(_)) => "object",
+        SqlValue::Json(json) => match &**json {
+            JsonValue::Null => "null",
+            JsonValue::Bool(_) => "boolean",
+            JsonValue::Number(_) => "number",
+            JsonValue::String(_) => "string",
+            JsonValue::Array(_) => "array",
+            JsonValue::Object(_) => "object",
+        },
         _ => return SqlValue::Null,
     };
     SqlValue::String(value_type.to_string())
@@ -2017,7 +2019,7 @@ pub(crate) fn eval_session_function_value(
         // verified Carrier operation envelope; this does not grant writes.
         // Unbound logins fall through to the authored function.
         "carrier_private.current_context" if args.is_empty() => {
-            Ok(trusted_identity_context(session_gucs).map(SqlValue::Json))
+            Ok(trusted_identity_context(session_gucs).map(SqlValue::json))
         }
         "current_trusted_tenant" => Err(SqlError::InvalidSql(format!(
             "current_trusted_tenant expects no arguments, got {}",
@@ -3789,7 +3791,7 @@ pub(crate) fn text_length_value(value: &SqlValue, octets: bool) -> SqlValue {
     }
     if octets {
         let len = match value {
-            SqlValue::Json(JsonValue::Array(values)) => values.len(),
+            SqlValue::Json(json) if json.is_array() => json.as_array().map_or(0, Vec::len),
             other => other.to_cell().len(),
         };
         SqlValue::Int(len as i64)

@@ -43,7 +43,7 @@ fn stored_identity_helpers_work_inside_table_function_arguments() {
             .execute("SELECT carrier_private.current_roles()")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(serde_json::json!(["registrar"]))]]
+        vec![vec![SqlValue::json(serde_json::json!(["registrar"]))]]
     );
     let result = session.execute("SELECT bool_or(role_key = 'registrar') FROM jsonb_array_elements_text(carrier_private.current_roles()) AS roles(role_key)").unwrap();
     assert_eq!(result.rows, vec![vec![SqlValue::Bool(true)]]);

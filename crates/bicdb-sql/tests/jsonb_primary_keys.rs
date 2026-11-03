@@ -220,7 +220,7 @@ fn legacy_payload_field_jsonb_is_read_from_record_payload() {
     assert_eq!(
         result.rows,
         vec![vec![
-            SqlValue::Json(json!([1, 2, 255])),
+            SqlValue::json(json!([1, 2, 255])),
             SqlValue::String("2".to_string()),
         ]]
     );
@@ -257,7 +257,7 @@ fn legacy_noncanonical_jsonb_primary_key_remains_addressable_and_unique() {
     assert_eq!(
         selected.rows,
         vec![vec![
-            SqlValue::Json(json!(1.0)),
+            SqlValue::json(json!(1.0)),
             SqlValue::String("legacy".to_string()),
         ]]
     );

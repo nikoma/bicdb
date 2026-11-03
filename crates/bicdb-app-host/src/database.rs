@@ -397,10 +397,10 @@ impl Database {
                     Value::Number(v) => v.as_i64().map(SqlValue::Int).unwrap_or_else(|| {
                         v.as_f64()
                             .map(SqlValue::Float)
-                            .unwrap_or_else(|| SqlValue::Json(Value::Number(v.clone())))
+                            .unwrap_or_else(|| SqlValue::json(Value::Number(v.clone())))
                     }),
                     Value::String(v) => SqlValue::String(v.clone()),
-                    other => SqlValue::Json(other.clone()),
+                    other => SqlValue::json(other.clone()),
                 })
                 .collect();
             session = session.with_positional_parameters(parameters);

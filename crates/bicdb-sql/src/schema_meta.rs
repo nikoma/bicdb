@@ -4332,11 +4332,11 @@ impl RoutineFrame {
     pub(crate) fn assign(&mut self, name: &str, value: SqlValue) -> Result<()> {
         if let Some((root, path)) = name.split_once('.') {
             let mut row = self.get(root);
-            if let SqlValue::Json(JsonValue::Object(_)) = &row {
+            if matches!(&row, SqlValue::Json(json) if json.is_object()) {
                 let SqlValue::Json(json) = &mut row else {
                     unreachable!()
                 };
-                let mut field = json;
+                let mut field = std::sync::Arc::make_mut(json);
                 for part in path.split('.') {
                     let object = field.as_object_mut().ok_or_else(|| {
                         SqlError::InvalidSql(format!(
@@ -4451,7 +4451,7 @@ impl RoutineFrame {
             .and_then(|id| self.slot_values.get(id.0))
             .cloned();
         #[cfg(test)]
-        if matches!(value, Some(SqlValue::Json(JsonValue::Array(_)))) {
+        if matches!(&value, Some(SqlValue::Json(json)) if json.is_array()) {
             SQL_ROUTINE_SLOT_ARRAY_CLONES.with(|clones| *clones.borrow_mut() += 1);
         }
         value
@@ -4669,7 +4669,10 @@ pub(crate) fn routine_array_set_value(
     let current = std::mem::replace(slot, SqlValue::Null);
     let mut array = match current {
         SqlValue::Null => Vec::new(),
-        SqlValue::Json(JsonValue::Array(values)) => values,
+        SqlValue::Json(json) if json.is_array() => match SqlValue::into_json_value(json) {
+            JsonValue::Array(values) => values,
+            _ => unreachable!("checked array"),
+        },
         SqlValue::String(text) => {
             let Some(values) = pg_int_vector_values(&text) else {
                 *slot = SqlValue::String(text);
@@ -4690,7 +4693,7 @@ pub(crate) fn routine_array_set_value(
         array.resize(offset + 1, JsonValue::Null);
     }
     array[offset] = sql_value_to_json(value);
-    *slot = SqlValue::Json(JsonValue::Array(array));
+    *slot = SqlValue::Json(JsonValue::Array(array).into());
     Ok(())
 }
 
@@ -4747,7 +4750,7 @@ pub(crate) fn assign_routine_targets_with_columns(
                     .zip(row.iter())
                     .map(|(column, value)| (column.clone(), crate::jsonb::sql_value_to_json(value)))
                     .collect(),
-            )),
+            ).into()),
             None => SqlValue::Null,
         };
         frame.assign(&targets[0], value)?;

@@ -343,8 +343,8 @@ fn text_search_arrays_copy_catalogs_and_reopen_preserve_type_identity() {
             SqlValue::String("arrays".into()),
             SqlValue::String("'alpha':1".into()),
             tsquery("alpha"),
-            SqlValue::Json(serde_json::json!(["'fat':1A", "'rat':2"])),
-            SqlValue::Json(serde_json::json!(["'fat' & 'rat'", null])),
+            SqlValue::json(serde_json::json!(["'fat':1A", "'rat':2"]).into()),
+            SqlValue::json(serde_json::json!(["'fat' & 'rat'", null]).into()),
         ]
     );
     assert_eq!(
@@ -440,7 +440,7 @@ fn text_search_vector_transforms_and_ranking_match_postgres() {
     assert_eq!(row[1], SqlValue::String("'a':1C 'b':2B".into()));
     assert_eq!(row[2], SqlValue::String("'b':2".into()));
     assert_eq!(row[3], SqlValue::String("'a':1A,3C".into()));
-    assert_eq!(row[4], SqlValue::Json(serde_json::json!(["a", "b"])));
+    assert_eq!(row[4], SqlValue::json(serde_json::json!(["a", "b"]).into()));
     assert_eq!(row[5], SqlValue::String("'bar' 'foo'".into()));
     let ranks = row[6..]
         .iter()
@@ -502,10 +502,10 @@ fn text_search_headline_rewrite_and_json_match_postgres() {
             tsquery("b & (x | y)"),
             tsquery("x"),
             SqlValue::String("'chees':5 'fat':2 'rat':3".into()),
-            SqlValue::Json(serde_json::json!({
+            SqlValue::json(serde_json::json!({
                 "a": "The Fat <b>Rats</b>",
                 "b": ["<b>cheese</b>", null, 12]
-            })),
+            }).into()),
         ]]
     );
 }

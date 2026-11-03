@@ -150,9 +150,9 @@ impl Database {
                     .as_i64()
                     .map(SqlValue::Int)
                     .or_else(|| value.as_f64().map(SqlValue::Float))
-                    .unwrap_or_else(|| SqlValue::Json(value.clone().into())),
+                    .unwrap_or_else(|| SqlValue::json(Value::Number(value.clone()))),
                 Value::String(value) => SqlValue::String(value.clone()),
-                other => SqlValue::Json(other.clone()),
+                other => SqlValue::json(other.clone()),
             })
             .collect::<Vec<_>>();
         let result = live.subscription.poll_with(&db, |sql| {

@@ -3171,14 +3171,14 @@ fn postgres_jsonb_scalar_null_path_and_containment_semantics_match() {
     assert_eq!(
         extracted.rows,
         vec![vec![
-            SqlValue::Json(json!(null)),
+            SqlValue::json(json!(null)),
             SqlValue::Null,
-            SqlValue::Json(json!(10)),
+            SqlValue::json(json!(10)),
             SqlValue::String("10".to_string()),
-            SqlValue::Json(json!(20)),
+            SqlValue::json(json!(20)),
             SqlValue::Null,
-            SqlValue::Json(json!("value")),
-            SqlValue::Json(json!(1)),
+            SqlValue::json(json!("value")),
+            SqlValue::json(json!(1)),
         ]]
     );
     assert_eq!(
@@ -3216,7 +3216,7 @@ fn postgres_jsonb_scalar_null_path_and_containment_semantics_match() {
     assert_eq!(
         constants.rows,
         vec![vec![
-            SqlValue::Json(json!(20)),
+            SqlValue::json(json!(20)),
             SqlValue::Null,
             SqlValue::Bool(false),
             SqlValue::Bool(true),
@@ -3261,22 +3261,22 @@ fn postgres_jsonb_total_ordering_matches_container_semantics() {
             .unwrap()
             .rows,
         vec![
-            vec![SqlValue::Json(json!([]))],
-            vec![SqlValue::Json(json!(null))],
-            vec![SqlValue::Json(json!("a"))],
-            vec![SqlValue::Json(json!("b"))],
-            vec![SqlValue::Json(json!(-1))],
-            vec![SqlValue::Json(json!(0))],
-            vec![SqlValue::Json(json!(1))],
-            vec![SqlValue::Json(json!(false))],
-            vec![SqlValue::Json(json!(true))],
-            vec![SqlValue::Json(json!([1]))],
-            vec![SqlValue::Json(json!([1, 1]))],
-            vec![SqlValue::Json(json!([1, 2]))],
-            vec![SqlValue::Json(json!({}))],
-            vec![SqlValue::Json(json!({"a": 1}))],
-            vec![SqlValue::Json(json!({"a": 2}))],
-            vec![SqlValue::Json(json!({"b": 0}))],
+            vec![SqlValue::json(json!([]))],
+            vec![SqlValue::json(json!(null))],
+            vec![SqlValue::json(json!("a"))],
+            vec![SqlValue::json(json!("b"))],
+            vec![SqlValue::json(json!(-1))],
+            vec![SqlValue::json(json!(0))],
+            vec![SqlValue::json(json!(1))],
+            vec![SqlValue::json(json!(false))],
+            vec![SqlValue::json(json!(true))],
+            vec![SqlValue::json(json!([1]))],
+            vec![SqlValue::json(json!([1, 1]))],
+            vec![SqlValue::json(json!([1, 2]))],
+            vec![SqlValue::json(json!({}))],
+            vec![SqlValue::json(json!({"a": 1}))],
+            vec![SqlValue::json(json!({"a": 2}))],
+            vec![SqlValue::json(json!({"b": 0}))],
         ]
     );
 
@@ -3326,9 +3326,9 @@ fn postgres_jsonb_subscripts_are_zero_based_and_support_object_keys() {
             .unwrap()
             .rows,
         vec![vec![
-            SqlValue::Json(json!(10)),
-            SqlValue::Json(json!(20)),
-            SqlValue::Json(json!("zero")),
+            SqlValue::json(json!(10)),
+            SqlValue::json(json!(20)),
+            SqlValue::json(json!("zero")),
             SqlValue::Null,
             SqlValue::String("first".to_string()),
         ]]
@@ -3339,7 +3339,7 @@ fn postgres_jsonb_subscripts_are_zero_based_and_support_object_keys() {
             .execute("SELECT ('[10,20]'::jsonb)[0], ('[10,20]'::jsonb)['1']")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(json!(10)), SqlValue::Json(json!(20))]]
+        vec![vec![SqlValue::json(json!(10)), SqlValue::json(json!(20))]]
     );
 }
 
@@ -3364,13 +3364,13 @@ fn postgres_jsonb_mutation_and_catalog_functions_match() {
     assert_eq!(
         result.rows,
         vec![vec![
-            SqlValue::Json(json!({"a": "1", "b": null})),
-            SqlValue::Json(json!(20)),
+            SqlValue::json(json!({"a": "1", "b": null})),
+            SqlValue::json(json!(20)),
             SqlValue::Null,
-            SqlValue::Json(json!([0, 9, 1, 2])),
-            SqlValue::Json(json!([0, 1, 9, 2])),
-            SqlValue::Json(json!({"a": null})),
-            SqlValue::Json(json!({})),
+            SqlValue::json(json!([0, 9, 1, 2])),
+            SqlValue::json(json!([0, 1, 9, 2])),
+            SqlValue::json(json!({"a": null})),
+            SqlValue::json(json!({})),
             SqlValue::Bool(true),
             SqlValue::Bool(true),
         ]]
@@ -3421,17 +3421,17 @@ fn postgres_jsonb_composite_primary_keys_preserve_json_identity() {
         result.rows,
         vec![
             vec![
-                SqlValue::Json(json!("x")),
+                SqlValue::json(json!("x")),
                 SqlValue::String("string".to_string()),
                 SqlValue::String("a".to_string()),
             ],
             vec![
-                SqlValue::Json(json!(null)),
+                SqlValue::json(json!(null)),
                 SqlValue::String("null".to_string()),
                 SqlValue::String("b".to_string()),
             ],
             vec![
-                SqlValue::Json(json!(["null", "b"])),
+                SqlValue::json(json!(["null", "b"])),
                 SqlValue::String("array".to_string()),
                 SqlValue::String("c".to_string()),
             ],
@@ -3494,14 +3494,14 @@ fn postgres_json_constructors_mutation_and_carrier_operators_match() {
     assert_eq!(
         functions.rows,
         vec![vec![
-            SqlValue::Json(json!({"a": 1, "missing": null})),
-            SqlValue::Json(json!([1, null, "x"])),
+            SqlValue::json(json!({"a": 1, "missing": null})),
+            SqlValue::json(json!([1, null, "x"])),
             SqlValue::JsonText(PgJsonText::parse(r#"{"a" : true}"#.to_string()).unwrap()),
             SqlValue::Int(3),
             SqlValue::Int(2),
-            SqlValue::Json(json!({"a": [1, 9]})),
-            SqlValue::Json(json!({"b": [null, 1]})),
-            SqlValue::Json(json!("plain text")),
+            SqlValue::json(json!({"a": [1, 9]})),
+            SqlValue::json(json!({"b": [null, 1]})),
+            SqlValue::json(json!("plain text")),
         ]]
     );
     assert_eq!(
@@ -3542,20 +3542,20 @@ fn postgres_json_constructors_mutation_and_carrier_operators_match() {
         operators.rows,
         vec![vec![
             SqlValue::String("10".to_string()),
-            SqlValue::Json(json!(null)),
+            SqlValue::json(json!(null)),
             SqlValue::Bool(true),
             SqlValue::Bool(true),
-            SqlValue::Json(json!({"b": 2})),
-            SqlValue::Json(json!(["b"])),
-            SqlValue::Json(json!([10, 20])),
-            SqlValue::Json(json!({"a": {"b": [10]}})),
-            SqlValue::Json(json!({"b": 2})),
-            SqlValue::Json(json!(["b", 1])),
+            SqlValue::json(json!({"b": 2})),
+            SqlValue::json(json!(["b"])),
+            SqlValue::json(json!([10, 20])),
+            SqlValue::json(json!({"a": {"b": [10]}})),
+            SqlValue::json(json!({"b": 2})),
+            SqlValue::json(json!(["b", 1])),
             SqlValue::Bool(true),
             SqlValue::Bool(true),
             SqlValue::Bool(false),
-            SqlValue::Json(json!([1, 2])),
-            SqlValue::Json(json!([{"a": 1}, 2])),
+            SqlValue::json(json!([1, 2])),
+            SqlValue::json(json!([{"a": 1}, 2])),
         ]]
     );
     assert_eq!(operators.column_types[0], Some("text".to_string()));
@@ -3583,10 +3583,10 @@ fn postgres_json_constructors_mutation_and_carrier_operators_match() {
     assert_eq!(
         lazy_delete_paths.rows,
         vec![vec![
-            SqlValue::Json(json!({})),
-            SqlValue::Json(json!({})),
-            SqlValue::Json(json!([])),
-            SqlValue::Json(json!({"a": 1})),
+            SqlValue::json(json!({})),
+            SqlValue::json(json!({})),
+            SqlValue::json(json!([])),
+            SqlValue::json(json!({"a": 1})),
         ]]
     );
 
@@ -3620,9 +3620,9 @@ fn postgres_json_constructors_mutation_and_carrier_operators_match() {
     assert_eq!(
         dynamic_paths.rows,
         vec![vec![
-            SqlValue::Json(json!(1)),
+            SqlValue::json(json!(1)),
             SqlValue::String("1".to_string()),
-            SqlValue::Json(json!(1)),
+            SqlValue::json(json!(1)),
         ]]
     );
     assert_eq!(
@@ -3676,9 +3676,9 @@ fn postgres_jsonb_agg_null_ordering_distinct_and_grouping_match() {
     assert_eq!(
         ordered.rows,
         vec![vec![
-            SqlValue::Json(json!(["gamma", "alpha", "beta", "delta", null])),
-            SqlValue::Json(json!([null, "delta", "beta", "alpha", "gamma"])),
-            SqlValue::Json(json!(["alpha", "gamma", "beta", "delta", null])),
+            SqlValue::json(json!(["gamma", "alpha", "beta", "delta", null])),
+            SqlValue::json(json!([null, "delta", "beta", "alpha", "gamma"])),
+            SqlValue::json(json!(["alpha", "gamma", "beta", "delta", null])),
             SqlValue::JsonText(
                 PgJsonText::parse(r#"["gamma", "alpha", "beta", "delta", null]"#.to_string())
                     .unwrap()
@@ -3718,7 +3718,7 @@ fn postgres_jsonb_agg_null_ordering_distinct_and_grouping_match() {
         vec![
             vec![
                 SqlValue::String("g1".to_string()),
-                SqlValue::Json(json!([
+                SqlValue::json(json!([
                     {"label": "gamma", "rank": 1},
                     {"label": "alpha", "rank": 1},
                     {"label": "beta", "rank": 1}
@@ -3726,7 +3726,7 @@ fn postgres_jsonb_agg_null_ordering_distinct_and_grouping_match() {
             ],
             vec![
                 SqlValue::String("g2".to_string()),
-                SqlValue::Json(json!([
+                SqlValue::json(json!([
                     {"label": null, "rank": 3},
                     {"label": "delta", "rank": 2}
                 ])),
@@ -3753,7 +3753,7 @@ fn postgres_jsonb_agg_null_ordering_distinct_and_grouping_match() {
         .unwrap();
     assert_eq!(
         distinct.rows,
-        vec![vec![SqlValue::Json(json!(["admin", "editor", null]))]]
+        vec![vec![SqlValue::json(json!(["admin", "editor", null]))]]
     );
     assert_eq!(distinct.column_types, vec![Some("jsonb".to_string())]);
 
@@ -3785,7 +3785,7 @@ fn postgres_jsonb_agg_null_ordering_distinct_and_grouping_match() {
             .execute("SELECT jsonb_agg(DISTINCT value) FROM jsonb_distinct_numbers")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(json!([
+        vec![vec![SqlValue::json(json!([
             1,
             9007199254740992_i64,
             9007199254740993_i64

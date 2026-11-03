@@ -820,7 +820,7 @@ fn routine_frame_array_element_assignment_preserves_generic_array_semantics() {
         .unwrap();
     assert_eq!(
         frame.get("flexible_values"),
-        SqlValue::Json(json!([null, 7]))
+        SqlValue::json(json!([null, 7]))
     );
 
     frame
@@ -828,7 +828,7 @@ fn routine_frame_array_element_assignment_preserves_generic_array_semantics() {
         .unwrap();
     assert_eq!(
         frame.get("flexible_values"),
-        SqlValue::Json(json!(["left", 7]))
+        SqlValue::json(json!(["left", 7]))
     );
 }
 
@@ -842,7 +842,7 @@ fn routine_into_transfers_text_and_array_allocations_to_slots() {
     let array_pointer = array.as_ptr();
     let row = vec![
         SqlValue::String(text),
-        SqlValue::Json(JsonValue::Array(array)),
+        SqlValue::Json(JsonValue::Array(array).into()),
     ];
     assign_routine_targets_with_columns(&mut frame, &targets, &[], Some(row)).unwrap();
     let stored_text = frame
@@ -857,7 +857,7 @@ fn routine_into_transfers_text_and_array_allocations_to_slots() {
         .slot_values()
         .iter()
         .find_map(|value| match value {
-            SqlValue::Json(JsonValue::Array(array)) => Some(array),
+            SqlValue::Json(json) => json.as_array(),
             _ => None,
         })
         .unwrap();
@@ -896,7 +896,7 @@ fn routine_frame_slot_array_assignment_mutates_without_cloning_existing_array() 
             (0..64)
                 .map(|idx| JsonValue::Number(serde_json::Number::from(idx)))
                 .collect()
-        ))
+        ).into())
     );
 }
 
@@ -911,7 +911,7 @@ fn routine_frame_array_element_assignment_converts_pg_integer_vectors() {
 
     assert_eq!(
         frame.get("arbitrary_vector"),
-        SqlValue::Json(json!([3, 9, 5]))
+        SqlValue::json(json!([3, 9, 5]))
     );
 }
 
@@ -2727,7 +2727,7 @@ fn delete_using_primary_key_predicate_uses_candidate_lookup() {
 
     assert_eq!(
         direct_result.rows,
-        vec![vec![SqlValue::Json(json!([1, 3]))]]
+        vec![vec![SqlValue::json(json!([1, 3]))]]
     );
     assert_eq!(direct_stats.full_scan_count, 0);
     assert!(direct_stats.index_lookup_count > 0);
@@ -2786,7 +2786,7 @@ fn delete_using_primary_key_predicate_uses_candidate_lookup() {
     };
     let stats = SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
 
-    assert_eq!(result.rows, vec![vec![SqlValue::Json(json!([1, 1]))]]);
+    assert_eq!(result.rows, vec![vec![SqlValue::json(json!([1, 1]))]]);
     assert_eq!(stats.full_scan_count, 0);
     assert!(stats.index_lookup_count > 0);
 }
@@ -3704,13 +3704,13 @@ fn update_from_routine_bound_unnest_uses_composite_key_lookup() {
         session.routine_vars = Arc::new(BTreeMap::from([
             (
                 "chosen_items".to_string(),
-                SqlValue::Json(json!([11, 12, 13])),
+                SqlValue::json(json!([11, 12, 13])),
             ),
             (
                 "chosen_buckets".to_string(),
-                SqlValue::Json(json!([7, 7, 8])),
+                SqlValue::json(json!([7, 7, 8])),
             ),
-            ("deltas".to_string(), SqlValue::Json(json!([5, 6, 7]))),
+            ("deltas".to_string(), SqlValue::json(json!([5, 6, 7]))),
         ]));
         session
             .execute(
@@ -3740,7 +3740,7 @@ fn update_from_routine_bound_unnest_uses_composite_key_lookup() {
 
     assert_eq!(
         result.rows,
-        vec![vec![SqlValue::Json(json!([495, 494, 493]))]]
+        vec![vec![SqlValue::json(json!([495, 494, 493]))]]
     );
     assert_eq!(stats.full_scan_count, 0);
     assert!(stats.index_lookup_count > 0);
@@ -4169,16 +4169,16 @@ fn schema_bound_row_materialization_preserves_record_fields() {
     );
     assert_eq!(
         row.get("slot_alias.metadata"),
-        Some(&SqlValue::Json(json!({"inner": true})))
+        Some(&SqlValue::json(json!({"inner": true})))
     );
     assert_eq!(row.get("slot_alias.timestamp"), Some(&SqlValue::Int(123)));
     assert_eq!(
         row.get("slot_alias.payload"),
-        Some(&SqlValue::Json(json!([1, 2])))
+        Some(&SqlValue::json(json!([1, 2])))
     );
     assert_eq!(
         row.get("slot_alias.embedding"),
-        Some(&SqlValue::Json(json!([0.5, 1.5])))
+        Some(&SqlValue::json(json!([0.5, 1.5])))
     );
 }
 
@@ -4352,9 +4352,9 @@ fn data_modifying_cte_grouped_aggregate_with_correlated_lookup_is_generic() {
     assert_eq!(
         result.rows,
         vec![vec![
-            SqlValue::Json(json!([10, 20])),
-            SqlValue::Json(json!([1000, 2000])),
-            SqlValue::Json(json!([9, 8])),
+            SqlValue::json(json!([10, 20])),
+            SqlValue::json(json!([1000, 2000])),
+            SqlValue::json(json!([9, 8])),
         ]]
     );
     assert_eq!(stats.full_scan_count, 0);
@@ -4437,7 +4437,7 @@ fn left_join_from_derived_rows_uses_right_primary_key_lookup() {
         let mut session = SqlSession::new(&mut db);
         session.routine_vars = Arc::new(BTreeMap::from([(
             "requested_keys".to_string(),
-            SqlValue::Json(json!([11, 12, 9999])),
+            SqlValue::json(json!([11, 12, 9999])),
         )]));
         session
             .execute(
@@ -4452,7 +4452,7 @@ fn left_join_from_derived_rows_uses_right_primary_key_lookup() {
 
     assert_eq!(
         result.rows,
-        vec![vec![SqlValue::Json(json!([110, 120, null]))]]
+        vec![vec![SqlValue::json(json!([110, 120, null]))]]
     );
     assert_eq!(stats.full_scan_count, 0);
     assert!(stats.index_lookup_count > 0);

@@ -800,7 +800,7 @@ fn plpgsql_array_assignments_feed_unnest_queries_generically() {
             .execute("CALL arbitrary_array_probe()")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Int(9), SqlValue::Json(json!([4, 5])),]]
+        vec![vec![SqlValue::Int(9), SqlValue::json(json!([4, 5])),]]
     );
 }
 
@@ -853,7 +853,7 @@ fn plpgsql_delete_using_cte_returning_feeds_select_into_generically() {
             .execute("CALL arbitrary_delete_probe()")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(json!([1, 3]))]]
+        vec![vec![SqlValue::json(json!([1, 3]))]]
     );
     assert_eq!(
         session

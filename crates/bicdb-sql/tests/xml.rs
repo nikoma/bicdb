@@ -71,9 +71,9 @@ fn xpath_and_xml_conventional_functions_match_postgres_shapes() {
     assert_eq!(
         result.rows,
         vec![vec![
-            SqlValue::Json(json!(["one", "two"])),
+            SqlValue::json(json!(["one", "two"])),
             SqlValue::Bool(true),
-            SqlValue::Json(json!([r#"<r:item xmlns:r="urn:test" id="1">A</r:item>"#])),
+            SqlValue::json(json!([r#"<r:item xmlns:r="urn:test" id="1">A</r:item>"#])),
             SqlValue::String("<a/><b/>".into()),
             SqlValue::String("<!--reviewed-->".into()),
         ]]
@@ -100,7 +100,7 @@ fn xml_dtd_entities_are_validated_without_external_io() {
         result.rows,
         vec![vec![
             SqlValue::String(r#"<!DOCTYPE foo [<!ENTITY x "bar">]><foo>&x;</foo>"#.into()),
-            SqlValue::Json(json!(["bar"])),
+            SqlValue::json(json!(["bar"])),
             SqlValue::String(
                 r#"<!DOCTYPE foo SYSTEM "file:///etc/passwd"><foo>&external;</foo>"#.into()
             ),
@@ -281,7 +281,7 @@ fn xml_storage_arrays_catalog_and_restart_are_stable() {
         result.rows,
         vec![vec![
             SqlValue::String("<?xml version=\"1.1\"?><root><value>saved</value></root>".into()),
-            SqlValue::Json(json!(["<a/>", null, "<b/>"])),
+            SqlValue::json(json!(["<a/>", null, "<b/>"])),
         ]]
     );
     assert_eq!(

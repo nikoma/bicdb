@@ -1747,7 +1747,7 @@ fn texts(values: &[&str]) -> SqlValue {
             .iter()
             .map(|v| serde_json::Value::String(v.to_string()))
             .collect(),
-    ))
+    ).into())
 }
 
 /// One column's (value, planner type, statically described type) — the last is what pgwire's

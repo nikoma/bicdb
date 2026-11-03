@@ -3694,7 +3694,7 @@ pub(crate) fn typed_cell_to_sql_value(cell: &bicdb_core::TypedCell) -> Option<Sq
 }
 
 pub(crate) fn typed_json_cell_to_sql_value(cell: &bicdb_core::TypedCell) -> Option<SqlValue> {
-    Some(SqlValue::Json(match cell {
+    Some(SqlValue::json(match cell {
         bicdb_core::TypedCell::Null => JsonValue::Null,
         bicdb_core::TypedCell::Bool(value) => JsonValue::Bool(*value),
         bicdb_core::TypedCell::Int(value) => JsonValue::from(*value),

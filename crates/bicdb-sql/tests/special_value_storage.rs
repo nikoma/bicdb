@@ -76,7 +76,7 @@ fn special_values_use_canonical_storage_and_remain_legacy_compatible() {
         SqlValue::String("[2024-02-29,2025-01-01)".to_string()),
         SqlValue::Int(1700),
         SqlValue::Int(4_294_967_295),
-        SqlValue::Json(json!(["192.0.2.1", "2001:db8::1/64"])),
+        SqlValue::json(json!(["192.0.2.1", "2001:db8::1/64"])),
     ];
     assert_eq!(
         SqlSession::new(&mut db)

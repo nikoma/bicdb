@@ -63,7 +63,7 @@ pub(crate) fn eval_broker_function_value(
             let receipt = db
                 .with_broker(|broker| broker.publish(&queue, payload, headers))
                 .map_err(SqlError::from)?;
-            Ok(Some(SqlValue::Json(receipt_to_json(&receipt))))
+            Ok(Some(SqlValue::Json(receipt_to_json(&receipt).into())))
         }
         "broker_publish_with" => {
             expect_args(name, args, 3, 3)?;
@@ -86,7 +86,7 @@ pub(crate) fn eval_broker_function_value(
             let receipt = db
                 .with_broker(|broker| broker.publish_with(&queue, payload, publish_options))
                 .map_err(SqlError::from)?;
-            Ok(Some(SqlValue::Json(receipt_to_json(&receipt))))
+            Ok(Some(SqlValue::Json(receipt_to_json(&receipt).into())))
         }
         "broker_publish_on_commit" => {
             expect_args(name, args, 2, 3)?;
@@ -137,7 +137,7 @@ pub(crate) fn eval_broker_function_value(
                 .map_err(SqlError::from)?;
             Ok(Some(SqlValue::Json(JsonValue::Array(
                 batch.iter().map(message_to_json).collect(),
-            ))))
+            ).into())))
         }
         "broker_ack" => {
             expect_args(name, args, 4, 4)?;
@@ -195,14 +195,14 @@ pub(crate) fn eval_broker_function_value(
             authorize(&queue, BrokerAccess::Consume)?;
             let info = db.with_broker(|broker| broker.group_info(&queue, &group));
             Ok(Some(match info {
-                Some(info) => SqlValue::Json(json!({
+                Some(info) => SqlValue::json(json!({
                     "queue": info.queue,
                     "group": info.group,
                     "created_at_ms": info.created_at,
                     "last_delivered_sequence": info.last_delivered_sequence,
                     "in_flight": info.in_flight,
                     "pending_redelivery": info.pending_redelivery,
-                })),
+                }).into()),
                 None => SqlValue::Null,
             }))
         }
@@ -223,7 +223,7 @@ pub(crate) fn eval_broker_function_value(
                         })
                     })
                     .collect(),
-            ))))
+            ).into())))
         }
         "broker_configure_queue" => {
             expect_args(name, args, 2, 2)?;
@@ -255,14 +255,14 @@ pub(crate) fn eval_broker_function_value(
             authorize(&queue, BrokerAccess::Admin)?;
             let config = db.with_broker(|broker| broker.queue_config(&queue));
             Ok(Some(match config {
-                Some(config) => SqlValue::Json(json!({
+                Some(config) => SqlValue::json(json!({
                     "default_max_attempts": config.default_max_attempts,
                     "retention_max_messages": config.retention_max_messages,
                     "retention_max_age_ms": config.retention_max_age_ms,
                     "publish_roles": config.publish_roles,
                     "consume_roles": config.consume_roles,
                     "admin_roles": config.admin_roles,
-                })),
+                }).into()),
                 None => SqlValue::Null,
             }))
         }
@@ -273,13 +273,13 @@ pub(crate) fn eval_broker_function_value(
             let report = db
                 .with_broker(|broker| broker.trim(&queue))
                 .map_err(SqlError::from)?;
-            Ok(Some(SqlValue::Json(json!({
+            Ok(Some(SqlValue::json(json!({
                 "removed_messages": report.removed_messages,
                 "removed_control_events": report.removed_control_events,
                 "through_sequence": report.through_sequence,
                 "bytes_before": report.bytes_before,
                 "bytes_after": report.bytes_after,
-            }))))
+            }).into())))
         }
         "broker_redrive_dead_letters" => {
             expect_args(name, args, 2, 3)?;
@@ -292,7 +292,7 @@ pub(crate) fn eval_broker_function_value(
                 .map_err(SqlError::from)?;
             Ok(Some(SqlValue::Json(JsonValue::Array(
                 receipts.iter().map(receipt_to_json).collect(),
-            ))))
+            ).into())))
         }
         "broker_peek" => {
             expect_args(name, args, 1, 3)?;
@@ -317,7 +317,7 @@ pub(crate) fn eval_broker_function_value(
                         })
                     })
                     .collect(),
-            ))))
+            ).into())))
         }
         "broker_stats" => {
             expect_args(name, args, 0, 0)?;
@@ -334,7 +334,7 @@ pub(crate) fn eval_broker_function_value(
                         .is_ok()
                 })
             });
-            Ok(Some(SqlValue::Json(json!({
+            Ok(Some(SqlValue::json(json!({
                 "queues": stats.queues.iter().map(|queue| json!({
                     "queue": queue.queue,
                     "retained_messages": queue.retained_messages,
@@ -351,7 +351,7 @@ pub(crate) fn eval_broker_function_value(
                         "dead_letters": group.dead_letters,
                     })).collect::<Vec<_>>(),
                 })).collect::<Vec<_>>(),
-            }))))
+            }).into())))
         }
         "broker_purge_dead_letters" => {
             expect_args(name, args, 2, 2)?;
@@ -405,7 +405,7 @@ fn text_arg(name: &str, args: &[SqlValue], index: usize) -> Result<String> {
 fn json_arg(name: &str, args: &[SqlValue], index: usize) -> Result<JsonValue> {
     match args.get(index) {
         Some(SqlValue::JsonText(value)) => Ok(value.parsed().clone()),
-        Some(SqlValue::Json(value)) => Ok(value.clone()),
+        Some(SqlValue::Json(value)) => Ok((**value).clone()),
         Some(SqlValue::String(text)) => serde_json::from_str(text).map_err(|error| {
             SqlError::InvalidSql(format!(
                 "{name} argument {} is not valid JSON: {error}",
@@ -470,12 +470,12 @@ fn deferred_or_immediate_publish(
             let message_id = tx
                 .buffer_broker_publish(queue, payload, options)
                 .map_err(SqlError::from)?;
-            Ok(Some(SqlValue::Json(json!({
+            Ok(Some(SqlValue::json(json!({
                 "message_id": message_id.to_string(),
                 "sequence": JsonValue::Null,
                 "deduplicated": false,
                 "deferred": true,
-            }))))
+            }).into())))
         }
         None => {
             let receipt = db
@@ -483,7 +483,7 @@ fn deferred_or_immediate_publish(
                 .map_err(SqlError::from)?;
             let mut receipt = receipt_to_json(&receipt);
             receipt["deferred"] = JsonValue::Bool(false);
-            Ok(Some(SqlValue::Json(receipt)))
+            Ok(Some(SqlValue::Json(receipt.into())))
         }
     }
 }

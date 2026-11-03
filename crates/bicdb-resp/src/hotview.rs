@@ -130,7 +130,7 @@ fn result_to_json_bytes(result: &SqlResult) -> Vec<u8> {
 /// Mirror of the SQL layer's own JSON mapping (that fn is private there).
 pub fn sql_value_to_json(value: &SqlValue) -> Value {
     match value {
-        SqlValue::Json(inner) => inner.clone(),
+        SqlValue::Json(inner) => (**inner).clone(),
         other => serde_json::to_value(other).unwrap_or(Value::Null),
     }
 }

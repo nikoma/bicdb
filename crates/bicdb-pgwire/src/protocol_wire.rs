@@ -530,7 +530,7 @@ pub(crate) fn type_oid(result: &SqlResult, column: usize) -> i32 {
         Some(SqlValue::Int(_)) => 20,
         Some(SqlValue::Float(_)) => 701,
         Some(SqlValue::JsonText(_)) => 114,
-        Some(SqlValue::Json(JsonValue::Array(_))) => 1009,
+        Some(SqlValue::Json(json)) if json.is_array() => 1009,
         Some(SqlValue::Json(_)) => 114,
         Some(SqlValue::Geometry(_)) => 25,
         Some(SqlValue::TsQuery(_)) => 3615,
@@ -1031,7 +1031,7 @@ pub(crate) fn postgres_jsonb_text_result(value: &SqlValue) -> String {
 
 pub(crate) fn postgres_vector_values(value: &SqlValue) -> Result<Vec<f32>> {
     let parsed = match value {
-        SqlValue::Json(JsonValue::Array(values)) => JsonValue::Array(values.clone()),
+        SqlValue::Json(json) if json.is_array() => (**json).clone(),
         SqlValue::String(value) => serde_json::from_str::<JsonValue>(value).map_err(|error| {
             PgWireError::Protocol(format!("invalid vector result {value:?}: {error}"))
         })?,
@@ -1107,6 +1107,7 @@ pub(crate) fn postgres_array_text_result_with_delimiter(
 ) -> Result<String> {
     match value {
         SqlValue::Json(value) => {
+            let value: &JsonValue = value;
             let (array, lower_bounds) = if let Some(input) = value.get("$bicdb_array_input") {
                 let array = input
                     .get("value")
@@ -1552,7 +1553,7 @@ pub(crate) fn encode_binary_catalog_vector_result(
                 put_i32(&mut output, 0);
                 return Ok(output);
             }
-            SqlValue::Json(serde_json::json!({
+            SqlValue::json(serde_json::json!({
                 "$bicdb_array_input": {
                     "lower_bounds": [0],
                     "value": values,
@@ -1884,7 +1885,7 @@ pub(crate) fn encode_binary_array_result_inner(
         let value = if let Some(composite) = bicdb_sql::pg_composite_from_array_json(element) {
             SqlValue::Composite(composite)
         } else if matches!(element_oid, 114 | 3802) {
-            SqlValue::Json(element.clone())
+            SqlValue::json(element.clone())
         } else {
             match element {
                 JsonValue::Bool(value) => SqlValue::Bool(*value),
@@ -1897,7 +1898,7 @@ pub(crate) fn encode_binary_array_result_inner(
                     ))
                 })?),
                 JsonValue::String(value) => SqlValue::String(value.clone()),
-                value => SqlValue::Json(value.clone()),
+                value => SqlValue::json(value.clone()),
             }
         };
         let encoded = match db {
@@ -1919,6 +1920,7 @@ pub(crate) fn binary_array_result_parts(
             "array result with element oid {element_oid} requires an array value"
         )));
     };
+    let value: &JsonValue = value;
     let (value, lower_bounds) = if let Some(input) = value.get("$bicdb_array_input") {
         let value = input
             .get("value")

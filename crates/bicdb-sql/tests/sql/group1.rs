@@ -326,9 +326,9 @@ fn postgres_text_array_columns_support_auth_style_queries() {
             .unwrap()
             .rows,
         vec![vec![
-            SqlValue::Json(json!(["x"])),
-            SqlValue::Json(json!(["x"])),
-            SqlValue::Json(json!(["x"])),
+            SqlValue::json(json!(["x"])),
+            SqlValue::json(json!(["x"])),
+            SqlValue::json(json!(["x"])),
             SqlValue::Int(1),
             SqlValue::Int(1),
             SqlValue::Null,
@@ -355,7 +355,7 @@ fn postgres_text_array_columns_support_auth_style_queries() {
         .unwrap();
     assert_eq!(
         removed.rows,
-        vec![vec![SqlValue::Json(json!(["openid", "email"]))]]
+        vec![vec![SqlValue::json(json!(["openid", "email"]))]]
     );
 
     session
@@ -379,7 +379,7 @@ fn postgres_text_array_columns_support_auth_style_queries() {
             .execute("SELECT labels FROM varchar_array_rows WHERE id = 'one'")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(json!(["alpha", "beta"]))]]
+        vec![vec![SqlValue::json(json!(["alpha", "beta"]))]]
     );
     assert_eq!(
         session
@@ -490,14 +490,14 @@ fn postgres_polymorphic_array_functions_work_in_all_expression_contexts() {
             .unwrap()
             .rows,
         vec![vec![
-            SqlValue::Json(json!(["a", "b", "c"])),
-            SqlValue::Json(json!(["a", "b", "c"])),
-            SqlValue::Json(json!(["a", "b", "c"])),
-            SqlValue::Json(json!(["a", "a"])),
-            SqlValue::Json(json!(["z", null, "z"])),
+            SqlValue::json(json!(["a", "b", "c"])),
+            SqlValue::json(json!(["a", "b", "c"])),
+            SqlValue::json(json!(["a", "b", "c"])),
+            SqlValue::json(json!(["a", "a"])),
+            SqlValue::json(json!(["z", null, "z"])),
             SqlValue::Int(2),
             SqlValue::Int(3),
-            SqlValue::Json(json!([1, 3])),
+            SqlValue::json(json!([1, 3])),
             SqlValue::Int(4),
             SqlValue::Int(2),
             SqlValue::String("[1:2][1:2]".to_string()),
@@ -521,7 +521,7 @@ fn postgres_polymorphic_array_functions_work_in_all_expression_contexts() {
             .execute("INSERT INTO provenance_rows (id) VALUES ('defaulted') RETURNING source_ids")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(json!(["default-source"]))]]
+        vec![vec![SqlValue::json(json!(["default-source"]))]]
     );
     assert_eq!(
         session
@@ -537,7 +537,7 @@ fn postgres_polymorphic_array_functions_work_in_all_expression_contexts() {
             )
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(json!([
+        vec![vec![SqlValue::json(json!([
             "default-source",
             "update-source"
         ]))]]
@@ -562,7 +562,7 @@ fn postgres_polymorphic_array_functions_work_in_all_expression_contexts() {
             )
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(json!(["first", "second"]))]]
+        vec![vec![SqlValue::json(json!(["first", "second"]))]]
     );
 }
 
@@ -1509,9 +1509,9 @@ fn insert_uses_non_sequence_column_defaults_when_columns_are_omitted() {
     assert_eq!(
         result.rows[0][1..],
         [
-            SqlValue::Json(json!({})),
+            SqlValue::json(json!({})),
             SqlValue::Bool(false),
-            SqlValue::Json(json!([])),
+            SqlValue::json(json!([])),
         ]
     );
 }

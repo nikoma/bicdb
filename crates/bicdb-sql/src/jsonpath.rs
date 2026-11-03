@@ -1907,7 +1907,7 @@ fn jsonpath_args(
         return Ok(None);
     }
     let target = match &args[0] {
-        SqlValue::Json(value) => value.clone(),
+        SqlValue::Json(value) => (**value).clone(),
         SqlValue::JsonText(value) => value.parsed().clone(),
         value => serde_json::from_str(&value.to_cell())
             .map_err(|_| SqlError::invalid_text_representation("jsonb", value.to_cell()))?,
@@ -1924,7 +1924,7 @@ fn jsonpath_args(
     let path = JsonPath::parse(raw_path)?;
     let variables = match args.get(2) {
         None => Map::new(),
-        Some(SqlValue::Json(JsonValue::Object(object))) => object.clone(),
+        Some(SqlValue::Json(json)) if json.is_object() => json.as_object().expect("checked object").clone(),
         Some(SqlValue::JsonText(value)) => value
             .parsed()
             .as_object()
@@ -2005,11 +2005,11 @@ pub(crate) fn eval_jsonpath_function_value(
                 ))
             }
         },
-        "jsonb_path_query_array" => SqlValue::Json(JsonValue::Array(values)),
+        "jsonb_path_query_array" => SqlValue::Json(JsonValue::Array(values).into()),
         "jsonb_path_query_first" => values
             .into_iter()
             .next()
-            .map(SqlValue::Json)
+            .map(SqlValue::json)
             .unwrap_or(SqlValue::Null),
         _ => unreachable!(),
     };
@@ -2033,7 +2033,7 @@ pub(crate) fn eval_jsonpath_operator_value(
         &[
             target,
             path,
-            SqlValue::Json(json!({})),
+            SqlValue::json(json!({}).into()),
             SqlValue::Bool(true),
         ],
     )?
@@ -2049,7 +2049,7 @@ pub(crate) fn eval_jsonpath_query_values(name: &str, args: &[SqlValue]) -> Resul
         return Ok(Vec::new());
     };
     match path.query(&target, &variables, timezone_aware) {
-        Ok(values) => Ok(values.into_iter().map(SqlValue::Json).collect()),
+        Ok(values) => Ok(values.into_iter().map(SqlValue::json).collect()),
         Err(_) if silent => Ok(Vec::new()),
         Err(error) => Err(error),
     }

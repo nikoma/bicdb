@@ -542,40 +542,43 @@ pub(crate) fn division_by_zero() -> SqlError {
 }
 
 pub(crate) fn eval_json_concat(left: &SqlValue, right: &SqlValue) -> Option<SqlValue> {
-    match (left, right) {
-        (SqlValue::Json(JsonValue::Object(left)), SqlValue::Json(JsonValue::Object(right))) => {
+    let as_json = |value: &SqlValue| match value {
+        SqlValue::Json(json) => Some(json.clone()),
+        _ => None,
+    };
+    let (left_json, right_json) = (as_json(left), as_json(right));
+    match (left_json.as_deref(), right_json.as_deref()) {
+        (Some(JsonValue::Object(left)), Some(JsonValue::Object(right))) => {
             let mut merged = left.clone();
             for (key, value) in right {
                 merged.insert(key.clone(), value.clone());
             }
-            Some(SqlValue::Json(JsonValue::Object(merged)))
+            Some(SqlValue::json(JsonValue::Object(merged)))
         }
-        (SqlValue::Json(JsonValue::Array(left)), SqlValue::Json(JsonValue::Array(right))) => {
+        (Some(JsonValue::Array(left)), Some(JsonValue::Array(right))) => {
             let mut merged = left.clone();
             merged.extend(right.iter().cloned());
-            Some(SqlValue::Json(JsonValue::Array(merged)))
+            Some(SqlValue::json(JsonValue::Array(merged)))
         }
-        (SqlValue::Json(JsonValue::Array(left)), right) => {
+        (Some(JsonValue::Array(left)), _) => {
             let mut merged = left.clone();
             merged.push(sql_value_to_json(right.clone()));
-            Some(SqlValue::Json(JsonValue::Array(merged)))
+            Some(SqlValue::json(JsonValue::Array(merged)))
         }
-        (left, SqlValue::Json(JsonValue::Array(right))) => {
+        (_, Some(JsonValue::Array(right))) => {
             let mut merged = vec![sql_value_to_json(left.clone())];
             merged.extend(right.iter().cloned());
-            Some(SqlValue::Json(JsonValue::Array(merged)))
+            Some(SqlValue::json(JsonValue::Array(merged)))
         }
-        (SqlValue::Json(left), SqlValue::Json(right)) => {
-            Some(SqlValue::Json(JsonValue::Array(vec![
-                left.clone(),
-                right.clone(),
-            ])))
-        }
-        (SqlValue::Json(left), right) => Some(SqlValue::Json(JsonValue::Array(vec![
+        (Some(left), Some(right)) => Some(SqlValue::json(JsonValue::Array(vec![
+            left.clone(),
+            right.clone(),
+        ]))),
+        (Some(left), None) => Some(SqlValue::json(JsonValue::Array(vec![
             left.clone(),
             sql_value_to_json(right.clone()),
         ]))),
-        (left, SqlValue::Json(right)) => Some(SqlValue::Json(JsonValue::Array(vec![
+        (None, Some(right)) => Some(SqlValue::json(JsonValue::Array(vec![
             sql_value_to_json(left.clone()),
             right.clone(),
         ]))),
@@ -1157,8 +1160,8 @@ pub(crate) fn float_and_numeric(left: &SqlValue, right: &SqlValue) -> Option<(f6
 
 pub(crate) fn array_values_for_comparison(value: &SqlValue) -> Option<Vec<SqlValue>> {
     match value {
-        SqlValue::Json(JsonValue::Array(values)) => {
-            Some(values.iter().map(json_to_sql_value).collect())
+        SqlValue::Json(json) if json.is_array() => {
+            Some(json.as_array()?.iter().map(json_to_sql_value).collect())
         }
         SqlValue::String(value) if value.trim_start().starts_with(['{', '[']) => {
             parse_array_literal(value).ok().map(|values| {
@@ -1781,7 +1784,7 @@ pub(crate) fn quantified_operand_value(value: SqlValue, pg_type: Option<&str>) -
         .ok_or_else(|| SqlError::InvalidSql("invalid vector array operand".into()))?;
     Ok(SqlValue::Json(JsonValue::Array(
         values.into_iter().map(sql_value_to_json).collect(),
-    )))
+    ).into()))
 }
 
 pub(crate) fn eval_quantified_truth(
@@ -1851,10 +1854,10 @@ pub(crate) fn eval_quantified_values_truth<'a>(
 
 pub(crate) fn array_like_values(value: &SqlValue) -> Option<Vec<SqlValue>> {
     match value {
-        SqlValue::Json(JsonValue::Array(values)) => {
-            Some(values.iter().map(json_to_sql_value).collect())
+        SqlValue::Json(json) if json.is_array() => {
+            Some(json.as_array()?.iter().map(json_to_sql_value).collect())
         }
-        SqlValue::Json(JsonValue::Object(object)) => object
+        SqlValue::Json(json) if json.is_object() => json
             .get("$bicdb_array_input")?
             .get("value")?
             .as_array()
@@ -1927,7 +1930,7 @@ where
                         table: composite.type_name.clone(),
                         column: ident.value.clone(),
                     })?,
-                SqlValue::Json(JsonValue::Object(object)) => object
+                SqlValue::Json(json) if json.is_object() => json
                     .get(&ident.value)
                     .map(json_to_sql_value)
                     .unwrap_or(SqlValue::Null),
@@ -1949,7 +1952,10 @@ where
             array_subscript_dimension += 1;
         }
     }
-    if let SqlValue::Json(JsonValue::Object(object)) = &value {
+    if let Some(object) = match &value {
+        SqlValue::Json(json) => json.as_object(),
+        _ => None,
+    } {
         if let Some(input) = object
             .get("$bicdb_array_input")
             .and_then(JsonValue::as_object)
@@ -1964,7 +1970,7 @@ where
             }
             if array_slice_mode {
                 if let Some(array) = input.get("value") {
-                    return Ok(SqlValue::Json(array.clone()));
+                    return Ok(SqlValue::Json(array.clone().into()));
                 }
             }
         }
@@ -1996,7 +2002,10 @@ pub(crate) fn eval_single_index_value(
         0,
         &mut |_| Ok(index.clone()),
     )?;
-    if let SqlValue::Json(JsonValue::Object(object)) = &value {
+    if let Some(object) = match &value {
+        SqlValue::Json(json) => json.as_object(),
+        _ => None,
+    } {
         if object
             .get("$bicdb_array_input")
             .and_then(JsonValue::as_object)
@@ -2116,12 +2125,12 @@ where
                 .get((index - array_lower) as usize)
                 .map(json_to_sql_value)
                 .unwrap_or(SqlValue::Null);
-            if matches!(value, SqlValue::Json(JsonValue::Array(_))) && lower_bounds.len() > 1 {
+            if matches!(&value, SqlValue::Json(json) if json.is_array()) && lower_bounds.len() > 1 {
                 let SqlValue::Json(value) = value else {
                     unreachable!()
                 };
                 Ok(array_json_value_with_lower_bounds(
-                    value,
+                    SqlValue::into_json_value(value),
                     lower_bounds[1..].to_vec(),
                 ))
             } else {
@@ -2131,7 +2140,7 @@ where
         Subscript::Index { index } => {
             let index = eval_subscript_bound(eval(index)?)?;
             if index < array_lower || index > array_upper {
-                return Ok(SqlValue::Json(JsonValue::Array(Vec::new())));
+                return Ok(SqlValue::Json(JsonValue::Array(Vec::new()).into()));
             }
             let value = values[(index - array_lower) as usize].clone();
             let mut bounds = vec![1];
@@ -2169,7 +2178,7 @@ where
             let start = lower.max(array_lower);
             let end = upper.min(array_upper);
             if start > end {
-                return Ok(SqlValue::Json(JsonValue::Array(Vec::new())));
+                return Ok(SqlValue::Json(JsonValue::Array(Vec::new()).into()));
             }
             let mut sliced = Vec::new();
             let mut idx = start;
@@ -2233,7 +2242,8 @@ where
         value => value.to_cell(),
     };
     let selected = match value {
-        SqlValue::Json(JsonValue::Array(values)) => key.parse::<i64>().ok().and_then(|index| {
+        SqlValue::Json(json) if json.is_array() => key.parse::<i64>().ok().and_then(|index| {
+            let values = json.as_array()?;
             let index = if index < 0 {
                 i64::try_from(values.len()).ok()?.checked_add(index)?
             } else {
@@ -2244,7 +2254,7 @@ where
                 .and_then(|index| values.get(index))
                 .cloned()
         }),
-        SqlValue::Json(JsonValue::Object(values)) => values.get(&key).cloned(),
+        SqlValue::Json(json) if json.is_object() => json.get(&key).cloned(),
         SqlValue::Json(_) => None,
         value => {
             return Err(SqlError::Unsupported(format!(
@@ -2253,7 +2263,7 @@ where
             )));
         }
     };
-    Ok(selected.map(SqlValue::Json).unwrap_or(SqlValue::Null))
+    Ok(selected.map(SqlValue::json).unwrap_or(SqlValue::Null))
 }
 
 pub(crate) fn eval_string_subscript_value<F>(

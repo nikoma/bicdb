@@ -586,7 +586,9 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
         }
         "json" => match value {
             SqlValue::JsonText(value) => Ok(SqlValue::JsonText(value)),
-            SqlValue::Json(value) => Ok(SqlValue::JsonText(PgJsonText::from_value(value))),
+            SqlValue::Json(value) => Ok(SqlValue::JsonText(PgJsonText::from_value(
+                SqlValue::into_json_value(value),
+            ))),
             SqlValue::Geometry(value) => Ok(SqlValue::JsonText(PgJsonText::from_value(
                 value.to_geojson_value(),
             ))),
@@ -613,7 +615,7 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                     }
                     value.parsed
                 }
-                SqlValue::Json(value) => value,
+                SqlValue::Json(value) => SqlValue::into_json_value(value),
                 SqlValue::Geometry(value) => value.to_geojson_value(),
                 SqlValue::String(value) => serde_json::from_str(&value).map_err(|_| {
                     SqlError::invalid_text_representation(
@@ -624,7 +626,7 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
                 other => sql_value_to_json(other),
             };
             validate_jsonb_numeric_range(&value)?;
-            Ok(SqlValue::Json(value))
+            Ok(SqlValue::json(value))
         }
         "char" => {
             if let Some(byte) = pg_internal_char_byte(&value) {
@@ -653,10 +655,12 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
             };
             Ok(pg_internal_char_value(byte))
         }
-        "vector" => Ok(SqlValue::Json(vector_json(&sql_value_to_vector(&value)?))),
+        "vector" => Ok(SqlValue::Json(vector_json(&sql_value_to_vector(&value)?).into())),
         "bytea" => match value {
-            SqlValue::Json(JsonValue::Array(values)) => values
-                .into_iter()
+            SqlValue::Json(json) if json.is_array() => json
+                .as_array()
+                .expect("checked array")
+                .iter()
                 .map(|value| value.as_u64().and_then(|value| u8::try_from(value).ok()))
                 .collect::<Option<Vec<_>>>()
                 .map(|bytes| SqlValue::String(format_bytea_hex(&bytes)))
@@ -1206,9 +1210,13 @@ pub(crate) fn cast_value_to_array_with_delimiter(
     element_type: &str,
     delimiter: char,
 ) -> Result<SqlValue> {
+    let value = match value {
+        SqlValue::Json(json) => Ok(SqlValue::into_json_value(json)),
+        other => Err(other),
+    };
     let (value, lower_bounds) = match value {
-        SqlValue::Json(value @ JsonValue::Array(_)) => (value, None),
-        SqlValue::Json(JsonValue::Object(mut object)) => {
+        Ok(value @ JsonValue::Array(_)) => (value, None),
+        Ok(JsonValue::Object(mut object)) => {
             let input = object
                 .remove("$bicdb_array_input")
                 .and_then(|value| value.as_object().cloned())
@@ -1229,11 +1237,15 @@ pub(crate) fn cast_value_to_array_with_delimiter(
                 .ok_or_else(|| invalid_array_text("internal array value"))?;
             (value, Some(lower_bounds))
         }
-        SqlValue::String(value) => {
+        Err(SqlValue::String(value)) => {
             let parsed = parse_pg_array_value_with_delimiter(&value, delimiter)?;
             (parsed.value, parsed.lower_bounds)
         }
         other => {
+            let other = match other {
+                Ok(json) => SqlValue::json(json),
+                Err(value) => value,
+            };
             return Err(SqlError::InvalidTextRepresentation(format!(
                 "cannot cast {} to {element_type}[]",
                 other.to_cell()
@@ -1242,14 +1254,14 @@ pub(crate) fn cast_value_to_array_with_delimiter(
     };
     let casted = cast_array_json(value, element_type)?;
     if let Some(lower_bounds) = lower_bounds {
-        return Ok(SqlValue::Json(serde_json::json!({
+        return Ok(SqlValue::json(serde_json::json!({
             "$bicdb_array_input": {
                 "lower_bounds": lower_bounds,
                 "value": casted,
             }
-        })));
+        }).into()));
     }
-    Ok(SqlValue::Json(casted))
+    Ok(SqlValue::Json(casted.into()))
 }
 
 pub(crate) fn parse_array_literal(value: &str) -> Result<Vec<JsonValue>> {
@@ -1342,7 +1354,7 @@ pub(crate) fn cast_vector_array_json(value: JsonValue) -> Result<JsonValue> {
         JsonValue::Array(values)
             if !values.is_empty() && values.iter().all(JsonValue::is_number) =>
         {
-            let vector = sql_value_to_vector(&SqlValue::Json(JsonValue::Array(values)))?;
+            let vector = sql_value_to_vector(&SqlValue::Json(JsonValue::Array(values).into()))?;
             Ok(JsonValue::String(vector_json(&vector).to_string()))
         }
         JsonValue::Array(values) => values
@@ -1698,7 +1710,7 @@ pub(crate) fn sql_value_to_json_ref(value: &SqlValue) -> JsonValue {
         }
         SqlValue::TsQuery(value) => JsonValue::String(value.to_postgres_text()),
         SqlValue::JsonText(value) => value.parsed().clone(),
-        SqlValue::Json(value) => value.clone(),
+        SqlValue::Json(value) => (**value).clone(),
         SqlValue::Geometry(value) => value.to_geojson_value(),
         SqlValue::Composite(value) => JsonValue::Object(
             value
@@ -2403,7 +2415,7 @@ pub(crate) fn json_extract_path_value(
         return SqlValue::Null;
     };
     if !as_text {
-        return SqlValue::Json(value.clone());
+        return SqlValue::Json(value.clone().into());
     }
     match value {
         JsonValue::Null => SqlValue::Null,
@@ -2481,7 +2493,7 @@ pub(crate) fn eval_json_existence_value(
             "JSON existence operator requires a jsonb left operand".to_string(),
         ));
     };
-    let exists = |key: &str| match &value {
+    let exists = |key: &str| match &*value {
         JsonValue::Object(values) => values.contains_key(key),
         JsonValue::Array(values) => values
             .iter()
@@ -2515,13 +2527,18 @@ pub(crate) fn eval_json_delete_value(left: SqlValue, right: SqlValue) -> Result<
     if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let SqlValue::Json(mut value) = left else {
+    let SqlValue::Json(value) = left else {
         return Err(SqlError::InvalidSql(
             "jsonb deletion requires a jsonb left operand".to_string(),
         ));
     };
-    match (&mut value, right) {
-        (JsonValue::Object(values), SqlValue::Json(JsonValue::Array(keys))) => {
+    let mut value = SqlValue::into_json_value(value);
+    let right_keys = match &right {
+        SqlValue::Json(json) => json.as_array().cloned(),
+        _ => None,
+    };
+    match (&mut value, right, right_keys) {
+        (JsonValue::Object(values), _, Some(keys)) => {
             for key in keys {
                 match key {
                     JsonValue::Null => {}
@@ -2536,7 +2553,7 @@ pub(crate) fn eval_json_delete_value(left: SqlValue, right: SqlValue) -> Result<
                 }
             }
         }
-        (JsonValue::Array(values), SqlValue::Json(JsonValue::Array(keys))) => {
+        (JsonValue::Array(values), _, Some(keys)) => {
             let mut removals = Vec::new();
             for key in keys {
                 match key {
@@ -2555,23 +2572,23 @@ pub(crate) fn eval_json_delete_value(left: SqlValue, right: SqlValue) -> Result<
                     .is_some_and(|value| removals.iter().any(|key| key == value))
             });
         }
-        (JsonValue::Object(values), SqlValue::String(key)) => {
+        (JsonValue::Object(values), SqlValue::String(key), _) => {
             values.remove(&key);
         }
-        (JsonValue::Array(values), SqlValue::String(item)) => {
+        (JsonValue::Array(values), SqlValue::String(item), _) => {
             values.retain(|value| value.as_str() != Some(&item));
         }
-        (JsonValue::Array(values), SqlValue::Int(index)) => {
+        (JsonValue::Array(values), SqlValue::Int(index), _) => {
             if let Some(index) = json_array_index(values.len(), index) {
                 values.remove(index);
             }
         }
-        (JsonValue::Object(_), SqlValue::Int(_)) => {
+        (JsonValue::Object(_), SqlValue::Int(_), _) => {
             return Err(SqlError::InvalidSql(
                 "cannot delete from object using integer index".to_string(),
             ));
         }
-        (JsonValue::Object(_) | JsonValue::Array(_), _) => {
+        (JsonValue::Object(_) | JsonValue::Array(_), _, _) => {
             return Err(SqlError::InvalidSql(
                 "jsonb deletion requires text or integer on the right".to_string(),
             ));
@@ -2582,7 +2599,7 @@ pub(crate) fn eval_json_delete_value(left: SqlValue, right: SqlValue) -> Result<
             ));
         }
     }
-    Ok(SqlValue::Json(value))
+    Ok(SqlValue::json(value))
 }
 
 pub(crate) fn eval_json_delete_path_value(left: SqlValue, right: SqlValue) -> Result<SqlValue> {
@@ -2596,7 +2613,7 @@ pub(crate) fn eval_json_delete_path_value(left: SqlValue, right: SqlValue) -> Re
     };
     let path = json_text_array_path(&right)?;
     if !path.is_empty() {
-        delete_json_path(&mut value, &path, 0)?;
+        delete_json_path(std::sync::Arc::make_mut(&mut value), &path, 0)?;
     }
     Ok(SqlValue::Json(value))
 }

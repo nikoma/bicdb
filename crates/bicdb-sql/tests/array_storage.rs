@@ -156,7 +156,7 @@ fn array_operations_preserve_bounds_and_support_element_and_slice_assignment() {
             .unwrap()
             .rows,
         vec![vec![
-            SqlValue::Json(json!({
+            SqlValue::json(json!({
                 "$bicdb_array_input": {
                     "lower_bounds": [-1],
                     "value": [7, 8, 9, 30],
@@ -164,7 +164,7 @@ fn array_operations_preserve_bounds_and_support_element_and_slice_assignment() {
             })),
             SqlValue::String("[-1:2]".to_string()),
             SqlValue::String("after, where preserved".to_string()),
-            SqlValue::Json(json!({
+            SqlValue::json(json!({
                 "$bicdb_array_input": {
                     "lower_bounds": [0, 5],
                     "value": [[11, 2], [3, 4]],
@@ -172,7 +172,7 @@ fn array_operations_preserve_bounds_and_support_element_and_slice_assignment() {
             })),
             SqlValue::Null,
             SqlValue::Int(11),
-            SqlValue::Json(json!([[11]])),
+            SqlValue::json(json!([[11]])),
             SqlValue::Bool(true),
             SqlValue::Bool(true),
         ]]
@@ -233,14 +233,14 @@ fn arrays_preserve_rank_dimensions_lower_bounds_and_typed_elements() {
     );
 
     let expected = vec![
-        SqlValue::Json(json!({
+        SqlValue::json(json!({
             "$bicdb_array_input": {
                 "lower_bounds": [0, 5],
                 "value": [[1, 2], [3, 4]],
             }
         })),
-        SqlValue::Json(json!(["0.10", null, "9007199254740993.0100"])),
-        SqlValue::Json(json!(["alpha,beta", "Grüße"])),
+        SqlValue::json(json!(["0.10", null, "9007199254740993.0100"])),
+        SqlValue::json(json!(["alpha,beta", "Grüße"])),
     ];
     assert_eq!(
         SqlSession::new(&mut db)
@@ -266,8 +266,8 @@ fn arrays_preserve_rank_dimensions_lower_bounds_and_typed_elements() {
             .unwrap()
             .rows,
         vec![vec![
-            SqlValue::Json(json!([7, 8])),
-            SqlValue::Json(json!(["1.20"])),
+            SqlValue::json(json!([7, 8])),
+            SqlValue::json(json!(["1.20"])),
         ]]
     );
 
@@ -303,7 +303,7 @@ fn array_updates_replace_dimensions_and_ragged_arrays_fail_closed() {
             .execute("SELECT matrix FROM array_values WHERE id = 'entry'")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(json!({
+        vec![vec![SqlValue::json(json!({
             "$bicdb_array_input": {
                 "lower_bounds": [-2, 8],
                 "value": [[10, 11], [12, 13]],
@@ -357,8 +357,8 @@ fn catalog_vectors_and_nested_arrays_validate_and_survive_restart() {
             vec![vec![
                 SqlValue::String("1 2 -3".to_string()),
                 SqlValue::String("1 2 4294967295".to_string()),
-                SqlValue::Json(json!(["1 2", "-3 4"])),
-                SqlValue::Json(json!(["1 2", "4294967295"])),
+                SqlValue::json(json!(["1 2", "-3 4"])),
+                SqlValue::json(json!(["1 2", "4294967295"])),
             ]],
         );
         assert_eq!(
@@ -403,7 +403,7 @@ fn arrays_enforce_postgres_dimension_and_bound_limits() {
             .execute("SELECT '{{{{{{1}}}}}}'::int4[]")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(json!([[[[[[1]]]]]]))]],
+        vec![vec![SqlValue::json(json!([[[[[[1]]]]]]))]],
     );
     assert_eq!(
         session
@@ -428,7 +428,7 @@ fn arrays_enforce_postgres_dimension_and_bound_limits() {
     );
     assert_eq!(
         session.execute("SELECT '{}'::int4[]").unwrap().rows,
-        vec![vec![SqlValue::Json(json!([]))]],
+        vec![vec![SqlValue::json(json!([]))]],
     );
     assert_eq!(
         session
@@ -580,7 +580,7 @@ fn every_registered_array_type_is_persistent_and_storable() {
                 .unwrap()
                 .rows,
             vec![vec![
-                SqlValue::Json(json!(["[1.0,2.0,3.0]", null, "[4.0,5.0,6.0]"])),
+                SqlValue::json(json!(["[1.0,2.0,3.0]", null, "[4.0,5.0,6.0]"])),
                 SqlValue::String("vector[]".to_string()),
             ]]
         );
@@ -606,7 +606,7 @@ fn every_registered_array_type_is_persistent_and_storable() {
             .execute("SELECT values FROM registered_vector_values WHERE id = 1")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(json!([
+        vec![vec![SqlValue::json(json!([
             "[1.0,2.0,3.0]",
             null,
             "[4.0,5.0,6.0]"

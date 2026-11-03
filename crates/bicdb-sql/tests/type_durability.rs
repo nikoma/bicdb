@@ -179,10 +179,10 @@ fn assert_canonical_row(result: &SqlResult) {
             SqlValue::String("2024-02-29 23:59:58.123".to_string()),
             SqlValue::String("2024-02-29 23:59:58.123+00".to_string()),
             SqlValue::String("2 days".to_string()),
-            SqlValue::Json(json!({"nested": {"amount": "12.30"}, "ok": true})),
-            SqlValue::Json(json!(["alpha", "beta"])),
-            SqlValue::Json(json!(["018f22d0-4510-7cc8-9a21-3e78ea2b9c44"])),
-            SqlValue::Json(json!(["0.10", "9007199254740993.01"])),
+            SqlValue::json(json!({"nested": {"amount": "12.30"}, "ok": true})),
+            SqlValue::json(json!(["alpha", "beta"])),
+            SqlValue::json(json!(["018f22d0-4510-7cc8-9a21-3e78ea2b9c44"])),
+            SqlValue::json(json!(["0.10", "9007199254740993.01"])),
         ]
     );
 }
@@ -211,15 +211,15 @@ fn assert_durable_enum(db: &mut BicDb, type_oid: i64, array_oid: i64) {
         vec![
             vec![
                 SqlValue::String("medium".to_string()),
-                SqlValue::Json(json!(["medium"])),
+                SqlValue::json(json!(["medium"])),
             ],
             vec![
                 SqlValue::String("low".to_string()),
-                SqlValue::Json(json!(["low", null])),
+                SqlValue::json(json!(["low", null])),
             ],
             vec![
                 SqlValue::String("high".to_string()),
-                SqlValue::Json(json!(["medium", "high"])),
+                SqlValue::json(json!(["medium", "high"])),
             ],
         ]
     );
@@ -273,7 +273,7 @@ fn assert_durable_domain(db: &mut BicDb, type_oid: i64, array_oid: i64) {
         vec![vec![
             SqlValue::String("12.346".to_string()),
             SqlValue::String("[0:1]".to_string()),
-            SqlValue::Json(json!({
+            SqlValue::json(json!({
                 "$bicdb_array_input": {
                     "lower_bounds": [0],
                     "value": ["1.235", "2.000"]

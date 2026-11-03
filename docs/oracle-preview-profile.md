@@ -22,6 +22,8 @@ wire encoding and error contracts apply. Cluster mode is not qualified here.
 The preview adds logical application-schema support to the HR front end:
 
 - Schema-qualified tables and PostgreSQL COPY transport.
+- Initial CONNECT BY hierarchy and LEVEL generator support, including PRIOR,
+  NOCYCLE and ORDER SIBLINGS BY; see the hierarchy execution contract below.
 - `CLOB` mapped to native `text`, `BLOB` to native `bytea`.
 - Durable BYTE/CHAR length units and STANDARD byte capacity for new
   `VARCHAR2`/`CHAR` columns; see the character-column contract below.
@@ -738,6 +740,28 @@ covers literals, prepared parameters, COPY, UPDATE error recovery, reopen and
 reader fencing. Routine-local BYTE constraints and BYTE `%TYPE` propagation,
 casts, national table types, EXTENDED/NLS configuration, legacy reconciliation,
 Oracle dictionary views and application workflow qualification remain open.
+
+## Hierarchy execution
+
+The [initial hierarchy contract](evidence/oracle-hierarchy-execution-2026-11-03/README.md)
+qualifies 19 reference cases. It includes START WITH root filtering, PRIOR in
+either direction, depth-first sibling ordering, post-traversal WHERE filtering,
+NOCYCLE parent flags, cycle errors and bounded LEVEL generators. A zero, negative
+or NULL generator bound retains its root unless START WITH excludes it.
+Nested queries own their pseudocolumn bindings; wildcards exclude private state.
+Unqualified SYS_GUID() returns independently generated 16-byte values.
+
+Saved hierarchy views and routines use durable profile format 4, which retains
+the temporal and character capabilities of earlier formats. Older readers
+refuse it at startup. Pseudocolumns retain numeric PostgreSQL metadata after
+reopening saved definitions. Native PostgreSQL execution rejects CONNECT BY;
+the separate HR profile still rejects hierarchy syntax.
+
+Path/root/leaf functions, broader join placement, nondefault collations,
+sequences within hierarchy projections and complete grammar compatibility
+remain unqualified. Traversal checks cancellation and the configured aggregate
+scan node budget. This feature does not supply Oracle collection or regular
+expression semantics, or establish full application qualification.
 
 
 Legacy character provenance can now be reconciled from the exported source

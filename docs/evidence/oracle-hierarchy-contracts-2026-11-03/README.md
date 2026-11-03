@@ -1,5 +1,9 @@
 # Hierarchy contract inventory
 
+This is the historical preimplementation checkpoint. The subsequent
+[execution qualification](../oracle-hierarchy-execution-2026-11-03/README.md)
+extends the fixture to 19 cases and implements the initial subset.
+
 The public fixture establishes 16 executable Oracle hierarchy contracts before
 the hierarchy implementation. They cover depth-first sibling ordering, subtree
 root levels, both PRIOR directions, post-traversal WHERE filtering, recursive

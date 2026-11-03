@@ -227,6 +227,13 @@ unsupported-feature errors. In particular, nonpositive/NULL generator bounds
 retain a root unless START WITH removes it; native series generation alone is
 not equivalent. Distinct rows can share a PRIOR cycle key, while volatile PRIOR
 values change cycle behavior. This checkpoint leaves the 61/62 definition baseline unchanged.
+The [hierarchy execution qualification](evidence/oracle-hierarchy-execution-2026-11-03/README.md)
+advances this subset to 19/19 reference matches, including nested scopes and
+wildcards. Saved hierarchy views and routine cursors survive reopen, numeric
+driver metadata is preserved, and older readers refuse the new format-4 profile.
+Definition acceptance remains 61/62; DETERMINISTIC is now the first rejected
+declaration in the remaining routine. Collections, regular expressions and full
+application execution remain open.
 The [full character-copy verification](evidence/oracle-character-full-copy-2026-11-03/README.md)
 completes reconciliation of all 910 affected tables and 7,150 declarations.
 A byte-identical disk copy passes full 915-table/185,537-row fingerprints and

@@ -1,0 +1,1292 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "runtime_binary_sha256": "80a427ba73d69ce17294168adb3dd6d96042e2a0f9f6514556fd1b38241be729",
+  "source_qualified": true,
+  "matched": 19,
+  "total": 19,
+  "success": true,
+  "cleanup_errors": [],
+  "application_qualified": false,
+  "source_commit": "bbceb3d",
+  "scope": "Initial hierarchy traversal and generator contracts, persisted view/routine reopen, PostgreSQL type metadata and older-reader fencing",
+  "cases": [
+    {
+      "id": "depth_first_siblings",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "subtree_root_level",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "reverse_prior",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "where_retains_descendants",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "4"
+            },
+            {
+              "number": "3"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "connect_predicate_prunes",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "5"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "cycle_error",
+      "oracle": {
+        "code": "ORA-01436"
+      },
+      "bicdb_sqlstate": "54001",
+      "bicdb": {
+        "code": "ORA-01436"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "nocycle",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            },
+            {
+              "number": "1"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "10"
+            },
+            {
+              "number": "1"
+            },
+            {
+              "number": "0"
+            }
+          ],
+          [
+            {
+              "number": "11"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "generator_positive",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "generator_zero_keeps_root",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "generator_negative_keeps_root",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "generator_null_keeps_root",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "start_with_can_remove_root",
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "multiple_generator_roots",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "4"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "number": "8"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "4"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "number": "8"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "duplicate_prior_values_share_cycle_key",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            "A",
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            "A",
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "constant_prior_cycle",
+      "oracle": {
+        "code": "ORA-01436"
+      },
+      "bicdb_sqlstate": "54001",
+      "bicdb": {
+        "code": "ORA-01436"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "volatile_prior_changes_cycle_key",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "nested_hierarchy_keeps_level_scope",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            },
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            },
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "qualified_wildcard_hides_internal_columns",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "wildcard_over_nested_generator",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "saved_definitions": {
+    "format": 1,
+    "application_qualified": false,
+    "success": true,
+    "new_binary_sha256": "80a427ba73d69ce17294168adb3dd6d96042e2a0f9f6514556fd1b38241be729",
+    "persisted_view_and_routine": true,
+    "saved_view_pg_type_oid": 20,
+    "new_reader_reopen": true,
+    "prior_reader_refuses_saved_definitions": true,
+    "prior_reader_exit_code": 1
+  },
+  "definition_probe": {
+    "accepted": 61,
+    "total": 62,
+    "source_execution_compared": false,
+    "null_call_diagnostics_succeeded": 1,
+    "null_call_diagnostics_total": 14,
+    "rejected": [
+      {
+        "name": "TOTABLEOFVARCHAR2",
+        "sqlstate": "42601",
+        "message": "invalid SQL: sql parser error: Expected: end of statement, found: \"DETERMINISTIC\" at Line: 1, Column: 119"
+      }
+    ]
+  },
+  "retained_regressions": [
+    {
+      "id": "character-columns-comparison",
+      "success": true,
+      "matched": 138,
+      "total": 138,
+      "cases": 138
+    },
+    {
+      "id": "character-columns-reader-comparison",
+      "success": true,
+      "cases": 6
+    },
+    {
+      "id": "character-import-comparison",
+      "success": true,
+      "cases": 3
+    },
+    {
+      "id": "dynamic-retained-decode-sql-comparison",
+      "success": true,
+      "matched": 52,
+      "total": 52,
+      "cases": 52
+    },
+    {
+      "id": "dynamic-retained-key-oracle",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "dynamic-retained-autonomous-comparison",
+      "success": true,
+      "matched": 38,
+      "total": 38,
+      "cases": 38
+    },
+    {
+      "id": "dynamic-sql-comparison",
+      "success": true,
+      "matched": 36,
+      "total": 36,
+      "cases": 36
+    },
+    {
+      "id": "national-characters-comparison",
+      "success": true,
+      "matched": 96,
+      "total": 96,
+      "cases": 96
+    },
+    {
+      "id": "national-native-controls",
+      "success": true,
+      "matched": 19,
+      "total": 19,
+      "cases": 19
+    },
+    {
+      "id": "dictionary-native-catalog-controls",
+      "success": true,
+      "matched": 6,
+      "total": 6,
+      "cases": 6
+    },
+    {
+      "id": "dynamic-retained-key-native",
+      "success": true,
+      "matched": 51,
+      "total": 51,
+      "cases": 51
+    },
+    {
+      "id": "dynamic-native-controls",
+      "success": true,
+      "matched": 13,
+      "total": 13,
+      "cases": 13
+    },
+    {
+      "id": "national-original-counter-comparison",
+      "success": true,
+      "matched": 14,
+      "total": 14,
+      "cases": 14
+    },
+    {
+      "id": "dynamic-original-record-comparison",
+      "success": true,
+      "matched": 8,
+      "total": 8,
+      "cases": 8
+    },
+    {
+      "id": "dynamic-original-sequence-comparison",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "view-anchor-reference-anchors-comparison",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "view-anchor-reference-view_anchors-comparison",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "dynamic-retained-routine-anchors-comparison",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "dynamic-retained-routine-calendar-comparison",
+      "success": true,
+      "matched": 36,
+      "total": 36,
+      "cases": 36
+    },
+    {
+      "id": "dynamic-retained-routine-case-comparison",
+      "success": true,
+      "matched": 34,
+      "total": 34,
+      "cases": 34
+    },
+    {
+      "id": "dynamic-retained-routine-characters-comparison",
+      "success": true,
+      "matched": 119,
+      "total": 119,
+      "cases": 119
+    },
+    {
+      "id": "dynamic-retained-routine-columns-comparison",
+      "success": true,
+      "matched": 21,
+      "total": 21,
+      "cases": 21
+    },
+    {
+      "id": "dynamic-retained-routine-concat-comparison",
+      "success": true,
+      "matched": 76,
+      "total": 76,
+      "cases": 76
+    },
+    {
+      "id": "dynamic-retained-routine-cursors-comparison",
+      "success": true,
+      "matched": 36,
+      "total": 36,
+      "cases": 36
+    },
+    {
+      "id": "dynamic-retained-routine-decode-comparison",
+      "success": true,
+      "matched": 57,
+      "total": 57,
+      "cases": 57
+    },
+    {
+      "id": "dynamic-retained-routine-errors-comparison",
+      "success": true,
+      "matched": 108,
+      "total": 108,
+      "cases": 108
+    },
+    {
+      "id": "dynamic-retained-routine-grammar-comparison",
+      "success": true,
+      "matched": 14,
+      "total": 14,
+      "cases": 14
+    },
+    {
+      "id": "dynamic-retained-routine-namespaces-comparison",
+      "success": true,
+      "matched": 24,
+      "total": 24,
+      "cases": 24
+    },
+    {
+      "id": "dynamic-retained-routine-numberops-comparison",
+      "success": true,
+      "matched": 218,
+      "total": 218,
+      "cases": 218
+    },
+    {
+      "id": "dynamic-retained-routine-nvl-comparison",
+      "success": true,
+      "matched": 93,
+      "total": 93,
+      "cases": 93
+    },
+    {
+      "id": "dynamic-retained-routine-procedures-comparison",
+      "success": true,
+      "matched": 26,
+      "total": 26,
+      "cases": 26
+    },
+    {
+      "id": "dynamic-retained-routine-temporal-comparison",
+      "success": true,
+      "matched": 29,
+      "total": 29,
+      "cases": 29
+    },
+    {
+      "id": "dynamic-retained-routine-week-comparison",
+      "success": true,
+      "matched": 102,
+      "total": 102,
+      "cases": 102
+    },
+    {
+      "id": "dynamic-retained-native-characters",
+      "success": true,
+      "matched": 22,
+      "total": 22,
+      "cases": 22
+    },
+    {
+      "id": "dynamic-retained-native-columns",
+      "success": true,
+      "matched": 6,
+      "total": 6,
+      "cases": 6
+    },
+    {
+      "id": "dynamic-retained-native-concat",
+      "success": true,
+      "matched": 62,
+      "total": 62,
+      "cases": 62
+    },
+    {
+      "id": "dynamic-retained-native-cursors",
+      "success": true,
+      "matched": 30,
+      "total": 30,
+      "cases": 30
+    },
+    {
+      "id": "dynamic-retained-native-decode",
+      "success": true,
+      "matched": 12,
+      "total": 12,
+      "cases": 12
+    },
+    {
+      "id": "dynamic-retained-native-errors",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "dynamic-retained-native-grammar",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "dynamic-retained-native-procedures",
+      "success": true,
+      "matched": 13,
+      "total": 13,
+      "cases": 13
+    },
+    {
+      "id": "routine-character-buffers-comparison",
+      "success": true,
+      "matched": 53,
+      "total": 53,
+      "cases": 53
+    },
+    {
+      "id": "routine-character-readers-comparison",
+      "success": true,
+      "cases": 7
+    },
+    {
+      "id": "alter-batch-native-controls",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "character-reconcile-native-view-controls",
+      "success": true,
+      "matched": 5,
+      "total": 5,
+      "cases": 5
+    },
+    {
+      "id": "character-reconcile-fixture",
+      "success": true,
+      "total": 9,
+      "cases": 9
+    }
+  ],
+  "python_tests": {
+    "passed": 58,
+    "failed": 0
+  },
+  "static_checks": {
+    "format": true,
+    "diff_whitespace": true,
+    "licenses": true,
+    "open_core_boundary": true
+  },
+  "known_dictionary_gaps": {
+    "matched": 0,
+    "total": 11
+  },
+  "rust_tests": {
+    "passed": 1346,
+    "failed": 0,
+    "ignored": 3,
+    "batches": 11
+  },
+  "resource_guards": [
+    {
+      "id": "hierarchy-full-validation-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 4651257856,
+      "minimum_observed_available_bytes": 21626933248
+    },
+    {
+      "id": "hierarchy-typed-server-build-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 4583473152,
+      "minimum_observed_available_bytes": 21431074816
+    },
+    {
+      "id": "hierarchy-retained-references-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 1138159616,
+      "minimum_observed_available_bytes": 24545165312
+    },
+    {
+      "id": "hierarchy-additional-references-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 391868416,
+      "minimum_observed_available_bytes": 24459051008
+    },
+    {
+      "id": "hierarchy-typed-comparison-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 166014976,
+      "minimum_observed_available_bytes": 25236758528
+    },
+    {
+      "id": "hierarchy-typed-application-probe-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 1106956288,
+      "minimum_observed_available_bytes": 24774668288
+    }
+  ]
+}

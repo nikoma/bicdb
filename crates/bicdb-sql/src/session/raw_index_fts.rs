@@ -2389,6 +2389,13 @@ impl<'db> SqlSession<'db> {
                             &format!("function {name}"),
                             action,
                         )?;
+                    } else if let Some(procedure) = load_routine(self.db_ref(), RoutineKind::Procedure, name)? {
+                        // `GRANT ... ON FUNCTION` naming a procedure keeps working.
+                        self.require_object_ownership(
+                            procedure.owner(),
+                            &format!("procedure {name}"),
+                            action,
+                        )?;
                     } else if is_native_extension_function(name) {
                         self.require_object_ownership(
                             BOOTSTRAP_ROLE_NAME,

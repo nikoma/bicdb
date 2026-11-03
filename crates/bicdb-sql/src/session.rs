@@ -3129,11 +3129,47 @@ impl<'db> SqlSession<'db> {
     }
 
     fn execute_statement_list(&mut self, statements: &[Statement]) -> Result<SqlResult> {
+        self.execute_statement_list_checked(statements, true)
+    }
+
+    /// Executes `statements`; with `check_columns`, each statement's column
+    /// references are resolved first (42703/42P01 for names no relation in
+    /// scope provides) right before it runs, so earlier DDL in the batch is
+    /// visible.
+    fn execute_statement_list_checked(
+        &mut self,
+        statements: &[Statement],
+        check_columns: bool,
+    ) -> Result<SqlResult> {
         let mut last_result = None;
         for statement in statements {
+            if check_columns && self.column_references_checkable() {
+                self.sql_engine().check_statement_column_references(statement)?;
+            }
             last_result = Some(self.execute_parsed_statement(statement)?);
         }
         last_result.ok_or_else(|| SqlError::InvalidSql("empty SQL statement".to_string()))
+    }
+
+    /// Column references are checked for client statements only: routine and
+    /// trigger bodies resolve their variables through frames this check does
+    /// not model.
+    fn column_references_checkable(&self) -> bool {
+        self.routine_vars.is_empty()
+            && self.routine_slots.is_none()
+            && self.trigger_depth == 0
+            && !self.in_routine_expression
+            && !self.row_routine_call
+    }
+
+    /// Catalog generations a column-reference check result depends on.
+    fn column_check_stamp(&self) -> [u64; 3] {
+        let db = self.db_ref();
+        [
+            db.collection_generation(SCHEMA_COLLECTION),
+            db.collection_generation(VIEW_COLLECTION),
+            db.collection_generation(ROUTINE_COLLECTION),
+        ]
     }
 
     /// The statement list for `sql` from the template cache, with its
@@ -3162,9 +3198,16 @@ impl<'db> SqlSession<'db> {
                 crate::statement_cache::CachedTemplate::prepare(parsed, literals.len())?
             }
         };
-        let result = cached
-            .bind(&literals)
-            .and_then(|()| self.execute_statement_list(&cached.statements));
+        // The template's column references are checked once per catalog
+        // state, not on every execution of the statement.
+        let stamp = self.column_check_stamp();
+        let check_columns = cached.columns_checked != Some(stamp);
+        let result = cached.bind(&literals).and_then(|()| {
+            self.execute_statement_list_checked(&cached.statements, check_columns)
+        });
+        if result.is_ok() && check_columns && self.column_references_checkable() {
+            cached.columns_checked = Some(stamp);
+        }
         // Back into the cache whatever the outcome (a nested execution of the
         // same text may have inserted its own copy meanwhile; ours wins).
         self.parsed_statement_cache.insert(template, cached);

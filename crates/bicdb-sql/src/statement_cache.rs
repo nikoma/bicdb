@@ -217,6 +217,8 @@ pub(crate) fn templatize(sql: &str) -> Option<(String, Vec<BoundLiteral>)> {
 #[derive(Debug, Clone)]
 pub(crate) struct CachedTemplate {
     pub(crate) statements: Vec<Statement>,
+    /// Catalog generations under which the column references were checked.
+    pub(crate) columns_checked: Option<[u64; 3]>,
     /// (value-node ordinal in visit order, index into the lifted literals).
     literal_slots: Vec<(usize, usize)>,
 }
@@ -249,6 +251,7 @@ impl CachedTemplate {
             ))),
             None => Ok(Self {
                 statements,
+                columns_checked: None,
                 literal_slots: slots,
             }),
         }

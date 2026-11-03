@@ -10,6 +10,7 @@
 use crate::*;
 pub(crate) mod flashback;
 mod joins_windows;
+pub(crate) mod column_check;
 pub(crate) mod materialize;
 mod pg_catalog;
 mod predicates_locators;

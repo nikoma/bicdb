@@ -447,6 +447,124 @@ mod tests {
         remove_user(path, "reader").unwrap();
     }
 
+    fn metadata_protocol_progress_with_queued_writer(profile: &str) {
+        let directory = tempfile::tempdir().unwrap();
+        let server = PgWireServer::open(
+            directory.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        std::thread::scope(|scope| {
+            let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+            let (start_tx, start_rx) = std::sync::mpsc::channel();
+            let (done_tx, done_rx) = std::sync::mpsc::channel();
+            let (phase_tx, phase_rx) = std::sync::mpsc::channel();
+            let worker_server = Arc::clone(&server);
+            let worker = scope.spawn(move || {
+                let mut state = ConnectionState::new(1, "bicdb".into(), None);
+                begin_buffered_transaction(&worker_server, &mut state).unwrap();
+                ready_tx.send(()).unwrap();
+                start_rx.recv().unwrap();
+                phase_tx.send("parse").unwrap();
+                let mut parse = b"p\0SELECT CAST($1 AS INTEGER)\0".to_vec();
+                parse.extend(1_i16.to_be_bytes());
+                parse.extend(23_i32.to_be_bytes());
+                let parsed = parse_message(&parse, &worker_server, &state).unwrap();
+                let prepared = FxHashMap::from_iter([("p".into(), parsed.statement)]);
+                phase_tx.send("bind").unwrap();
+                let mut bind = b"\0p\0".to_vec();
+                bind.extend(0_i16.to_be_bytes());
+                bind.extend(1_i16.to_be_bytes());
+                bind.extend(1_i32.to_be_bytes());
+                bind.push(b'1');
+                bind.extend(0_i16.to_be_bytes());
+                bind_message(&bind, &prepared, &worker_server).unwrap();
+                phase_tx.send("describe-query").unwrap();
+                execute_server_sql_for_describe_with_session(
+                    &worker_server,
+                    "SELECT 1",
+                    &state.session_state,
+                    None,
+                )
+                .unwrap();
+                let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+                let _peer = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+                let mut stream = ClientStream::plain(listener.accept().unwrap().0);
+                let result = SqlResult::new(vec!["n".into()], vec![vec![SqlValue::Int(1)]])
+                    .with_column_types(vec![Some("integer".into())]);
+                phase_tx.send("describe-result").unwrap();
+                describe_result(&mut stream, &worker_server, &result, &[], Some("SELECT 1"))
+                    .unwrap();
+                phase_tx.send("encode-result").unwrap();
+                write_query_result(
+                    &mut stream,
+                    &worker_server,
+                    &result,
+                    &[],
+                    Some("SELECT 1"),
+                    true,
+                    true,
+                )
+                .unwrap();
+                phase_tx.send("simple-commit").unwrap();
+                handle_frontend_message(
+                    &mut stream,
+                    &worker_server,
+                    &mut state,
+                    b'Q',
+                    b"COMMIT\0".to_vec(),
+                )
+                .unwrap();
+                assert!(!state.in_transaction);
+                done_tx.send(()).unwrap();
+            });
+            let ready = ready_rx.recv_timeout(Duration::from_secs(5));
+            // This guard models the query waiting for the transaction's row.
+            let reader = server.db.read();
+            let writer_server = Arc::clone(&server);
+            let writer = scope.spawn(move || {
+                drop(writer_server.db.write());
+            });
+            let deadline = Instant::now() + Duration::from_secs(2);
+            let queued = loop {
+                if server.db.try_read().is_none() {
+                    break true;
+                }
+                if Instant::now() >= deadline {
+                    break false;
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            };
+            let _ = start_tx.send(());
+            let progressed = done_rx.recv_timeout(Duration::from_secs(1));
+            let phases = phase_rx.try_iter().collect::<Vec<_>>();
+            // Release before asserting/joining, including on the regression's
+            // failure path, so a failed check cannot strand either thread.
+            drop(reader);
+            writer.join().unwrap();
+            worker.join().unwrap();
+            assert!(ready.is_ok() && queued, "writer queue was not established");
+            assert!(
+                progressed.is_ok(),
+                "{profile}: protocol progress stopped at {phases:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn postgres_metadata_protocol_progresses_with_queued_writer() {
+        metadata_protocol_progress_with_queued_writer("postgres");
+    }
+
+    #[test]
+    fn oracle_metadata_protocol_progresses_with_queued_writer() {
+        metadata_protocol_progress_with_queued_writer("oracle-preview-v1");
+    }
+
     fn automatic_test_supervisor() -> ClusterSupervisor {
         BalancedDistributionHostService::default()
             .supervisor()

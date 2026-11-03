@@ -23,7 +23,7 @@ pub(crate) fn check(
     let Some(bound) = bound(settings)? else {
         return Ok(());
     };
-    let db = server.read_db()?;
+    let db = server.read_db_for_transaction_progress()?;
     if !db.replication_verification_healthy() {
         return Err(PgWireError::QueryRejected(
             "replica verification failed; fresh snapshot required".into(),

@@ -702,7 +702,7 @@ pub(crate) fn execute_server_virtual_query_for_normalized(
             )))
         }
         "select * from bicdb_region" => {
-            let db = server.read_db()?;
+            let db = server.read_db_for_transaction_progress()?;
             let age = server
                 .replica_read_watermark
                 .lock()
@@ -1025,7 +1025,7 @@ pub(crate) fn execute_server_virtual_query_for_normalized(
             )))
         }
         "select * from bicdb_ha_status" => {
-            let db = server.read_db()?;
+            let db = server.read_db_for_transaction_progress()?;
             let status = db.ha_status()?;
             Ok(Some(SqlResult::new(
                 vec![
@@ -2173,7 +2173,7 @@ pub(crate) fn parse_message(
     let name = read_cstr(payload, &mut idx)?;
     let sql = read_cstr(payload, &mut idx)?;
     let mut sql = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
-        let db = server.read_db()?;
+        let db = server.read_db_for_transaction_progress()?;
         bicdb_sql::oracle::lower_session_sql(
             &db,
             &sql,
@@ -2193,7 +2193,7 @@ pub(crate) fn parse_message(
     for _ in 0..param_count {
         param_type_oids.push(read_i32(payload, &mut idx)?);
     }
-    let db = server.read_db()?;
+    let db = server.read_db_for_transaction_progress()?;
     sql = bicdb_sql::oracle::lower_typed_native_sql(
         &db,
         &sql,
@@ -2250,7 +2250,7 @@ pub(crate) fn bind_message(
         )));
     }
     validate_format_arity(&param_formats, param_count, "parameter")?;
-    let db = server.read_db()?;
+    let db = server.read_db_for_transaction_progress()?;
     let mut params = Vec::with_capacity(param_count);
     for param_idx in 0..param_count {
         let len = read_i32(payload, &mut idx)?;

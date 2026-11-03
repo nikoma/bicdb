@@ -2265,7 +2265,7 @@ pub(crate) fn write_query_result(
     }
     let mut stats = StreamWriteStats::default();
     if !result.columns.is_empty() {
-        let db = server.read_db()?;
+        let db = server.read_db_for_transaction_progress()?;
         validate_format_arity(result_formats, result.columns.len(), "result")?;
         let column_types = result_column_types_with_db(&db, result, source_sql)?;
         // Element-oid resolution is constant per column but consults the type
@@ -2316,7 +2316,7 @@ pub(crate) fn describe_result(
     if result.columns.is_empty() {
         no_data(stream)
     } else {
-        let db = server.read_db()?;
+        let db = server.read_db_for_transaction_progress()?;
         validate_format_arity(result_formats, result.columns.len(), "result")?;
         let column_types = result_column_types_with_db(&db, result, source_sql)?;
         row_description_with_db(stream, &db, result, &column_types, result_formats)

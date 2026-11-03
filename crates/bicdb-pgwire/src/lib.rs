@@ -2526,7 +2526,12 @@ fn handle_frontend_message(
             let query = cstring_payload(&payload)?;
             let lowered;
             let query = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
-                let result = server.read_db().and_then(|db| {
+                let database = if state.in_transaction {
+                    server.read_db_for_transaction_progress()
+                } else {
+                    server.read_db()
+                };
+                let result = database.and_then(|db| {
                     bicdb_sql::oracle::lower_session_sql(
                         &db,
                         query,
@@ -3289,7 +3294,7 @@ fn execute_server_query(
                 }
                 let result = execute_copy_query(server, state, &copy)?;
                 copy_out_response(stream, &result)?;
-                let db = server.read_db()?;
+                let db = server.read_db_for_transaction_progress()?;
                 let column_types = result_column_types_with_db(&db, &result, None)?;
                 let deadline = (!server.config.query_timeout.is_zero())
                     .then(|| Instant::now() + server.config.query_timeout);
@@ -3695,7 +3700,7 @@ fn execute_server_sql_for_describe_inner(
         return Ok(result);
     }
     {
-        let db = server.read_db()?;
+        let db = server.read_db_for_transaction_progress()?;
         if let Some(columns) = infer_query_result_columns_for_describe(&db, sql)? {
             let (names, types): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
             return Ok(SqlResult::empty(names).with_column_types(types));
@@ -3707,6 +3712,7 @@ fn execute_server_sql_for_describe_inner(
         &CancellationToken::uncancelable(),
         session_state,
         security_context,
+        true,
     )
 }
 
@@ -3716,10 +3722,15 @@ fn execute_server_db_sql(
     cancellation: &CancellationToken,
     session_state: &SqlSessionGucState,
     security_context: Option<&SecurityContext>,
+    metadata_progress: bool,
 ) -> Result<SqlResult> {
     if is_read_only_sql_for_shared_execution(sql) {
         let (result, pending, independent) = {
-            let db = server.read_db()?;
+            let db = if metadata_progress {
+                server.read_db_for_transaction_progress()?
+            } else {
+                server.read_db()?
+            };
             let tx = db.begin_transaction()?;
             let mut session = sql_session_shared_for_server(server, &db)
                 .with_security_context(security_context.cloned())
@@ -3738,7 +3749,8 @@ fn execute_server_db_sql(
         if let Some(tx) = pending {
             tx.rollback()?;
         }
-        if independent
+        if metadata_progress
+            || independent
             || !matches!(&result, Err(SqlError::Unsupported(message)) if message == "operation requires exclusive database access")
         {
             return result.map_err(PgWireError::from);

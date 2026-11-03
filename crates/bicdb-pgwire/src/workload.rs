@@ -170,7 +170,7 @@ pub(crate) fn admit(
             let cost = match estimated {
                 Some(cost) => cost,
                 None => {
-                    let db = server.read_db()?;
+                    let db = server.read_db_for_transaction_progress()?;
                     let cost = estimate(&db, sql)?;
                     estimated = Some(cost);
                     cost

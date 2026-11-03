@@ -1620,8 +1620,8 @@ impl PgWireServer {
     }
 
     /// Acquire shared database access for work that must let an already-open
-    /// transaction make progress (statement execution, deferred triggers, or
-    /// commit). `parking_lot::RwLock::read` is writer-fair: once a background
+    /// transaction make progress (protocol metadata and result encoding,
+    /// statement execution, deferred triggers, or commit). `parking_lot::RwLock::read` is writer-fair: once a background
     /// DDL/checkpoint writer queues, it blocks new readers. That ordering can
     /// deadlock if an existing reader is waiting for a row owned by the
     /// transaction trying to acquire this guard. Recursive read acquisition

@@ -1248,7 +1248,7 @@ pub(crate) fn start_dispatcher(server: Arc<PgWireServer>) -> Result<()> {
                         let memory = bicdb_core::query_budget::QueryMemoryScope::new(role_permit.memory_bytes);
                         let mut eval = |sql: &str, _enforce: bool| {
                             cancellation.check()?;
-                            execute_server_db_sql(&server, sql, &cancellation, &entry.session_state, entry.security_context.as_ref())
+                            execute_server_db_sql(&server, sql, &cancellation, &entry.session_state, entry.security_context.as_ref(), false)
                         };
                         let round = entry.subscription.change_round(&db_changes, &mut eval, &previous, durable)?;
                         cancellation.check()?;

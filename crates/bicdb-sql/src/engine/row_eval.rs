@@ -898,6 +898,9 @@ impl<'db> SqlEngine<'db> {
                     {
                         return Ok(value);
                     }
+                    if let Some(value) = outer_row.scalar_value_for_relation_alias(&ident.value) {
+                        return Ok(value);
+                    }
                 }
                 Ok(SqlValue::Null)
             }
@@ -1811,6 +1814,9 @@ impl<'db> SqlEngine<'db> {
                 if let Some(value) = outer_row.value_from_parts(&parts) {
                     return Ok(Some(value));
                 }
+                if let Some(value) = outer_row.scalar_value_for_relation_alias(&ident.value) {
+                    return Ok(Some(value));
+                }
                 Ok(routine_var_from_ident(&self.routine_vars, ident).or(Some(SqlValue::Null)))
             }
             Expr::CompoundIdentifier(idents) => {
@@ -2453,6 +2459,9 @@ impl<'db> SqlEngine<'db> {
                     if let Some(value) =
                         outer_row.value_from_parts(std::slice::from_ref(&ident.value))
                     {
+                        return Ok(value);
+                    }
+                    if let Some(value) = outer_row.scalar_value_for_relation_alias(&ident.value) {
                         return Ok(value);
                     }
                 }

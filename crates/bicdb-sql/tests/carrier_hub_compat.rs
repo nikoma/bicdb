@@ -1241,3 +1241,41 @@ fn inner_join_with_where_pinned_primary_key_returns_the_joined_row() {
         ]
     );
 }
+
+#[test]
+fn correlated_subqueries_see_an_outer_set_returning_function_alias() {
+    // `FROM jsonb_array_elements(rules) e` names the element `e`; a subquery
+    // reading `e->>'role'` from the outer row saw NULL and never matched (the
+    // Hub's generated-app access rules: no role ever applied).
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE role_assignments (id INT PRIMARY KEY, user_id INT, role TEXT, scope TEXT)",
+        "CREATE TABLE records (id INT PRIMARY KEY, data JSONB)",
+        "INSERT INTO role_assignments VALUES (1, 1, 'kitchen', NULL), (2, 2, 'teacher', '3b')",
+        "INSERT INTO records VALUES (10, '{\"class\": \"3b\"}'), (11, '{\"class\": \"4a\"}')",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let visible = |user: i64| {
+        format!(
+            "SELECT count(*) FROM records r WHERE EXISTS (
+               SELECT 1 FROM jsonb_array_elements('[\"owner\", {{\"role\": \"kitchen\"}}, {{\"role\": \"teacher\", \"where_field\": \"class\"}}]'::jsonb) e
+               WHERE jsonb_typeof(e) = 'object' AND EXISTS (
+                 SELECT 1 FROM role_assignments a
+                 WHERE a.user_id = {user} AND a.role = e->>'role'
+                 AND (e->>'where_field' IS NULL OR (a.scope IS NOT NULL AND r.data->>(e->>'where_field') = a.scope))))"
+        )
+    };
+    assert_eq!(session_rows(&mut session, &visible(1)), vec![vec![SqlValue::Int(2)]]);
+    assert_eq!(session_rows(&mut session, &visible(2)), vec![vec![SqlValue::Int(1)]]);
+    assert_eq!(session_rows(&mut session, &visible(3)), vec![vec![SqlValue::Int(0)]]);
+    assert_eq!(
+        session_rows(
+            &mut session,
+            "SELECT (SELECT count(*) FROM role_assignments a WHERE a.role = x) FROM jsonb_array_elements_text('[\"kitchen\"]'::jsonb) x"
+        ),
+        vec![vec![SqlValue::Int(1)]]
+    );
+}

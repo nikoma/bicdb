@@ -450,6 +450,18 @@ impl OuterSlotRow {
         value
     }
 
+    /// `alias` naming the single column of an outer relation, the way a
+    /// scalar set-returning function's alias names its value
+    /// (`FROM jsonb_array_elements(x) e` ... `(SELECT ... WHERE col = e->>'k')`).
+    /// Marks the slot read, so a subquery that uses it counts as correlated.
+    pub(crate) fn scalar_value_for_relation_alias(&self, alias: &str) -> Option<SqlValue> {
+        let Some(Some(id)) = self.lookup.cols.qualifier(alias) else {
+            return None;
+        };
+        self.mark_read(id.0);
+        self.values.get(id.0).cloned()
+    }
+
     /// Marks every column `value_from_parts(parts)` may consult; whether a
     /// later candidate is consulted can depend on an earlier one's value.
     fn mark_parts(&self, parts: &[String], hit: bool) {

@@ -250,6 +250,29 @@ mod tests {
         );
     }
     #[test]
+    fn query_dispatch_requires_the_durable_preview_profile() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let q = query("SELECT id FROM (SELECT 1 AS id) roots CONNECT BY LEVEL<=3");
+        assert_eq!(
+            SqlEngine::new(&db)
+                .execute_query(&q)
+                .unwrap_err()
+                .sqlstate(),
+            "42601"
+        );
+        oracle::ensure_database_profile(&mut db, oracle::ORACLE_PREVIEW_PROFILE).unwrap();
+        let result = SqlEngine::new(&db).execute_query(&q).unwrap();
+        assert_eq!(
+            result.rows,
+            vec![
+                vec![SqlValue::Int(1)],
+                vec![SqlValue::Int(1)],
+                vec![SqlValue::Int(1)]
+            ]
+        );
+    }
+    #[test]
     fn sql_cycle_keys_and_null_generator_bounds_preserve_root_semantics() {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();

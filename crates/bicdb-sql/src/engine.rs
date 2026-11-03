@@ -4211,6 +4211,28 @@ impl<'db> SqlEngine<'db> {
             return self.execute_query_with_ctes(query, with);
         }
 
+        if let SetExpr::Select(select) = query.body.as_ref() {
+            if !select.connect_by.is_empty() {
+                if !oracle::preview_routine_language_enabled(self.db_ref())? {
+                    return Err(SqlError::InvalidSql(
+                        "hierarchical clauses require the Oracle preview profile".into(),
+                    ));
+                }
+                if !query.locks.is_empty() {
+                    return Err(SqlError::Unsupported(
+                        "hierarchy row locking requires separate qualification".into(),
+                    ));
+                }
+                let limit = max_aggregate_scan_rows();
+                return self.execute_hierarchy_query(
+                    select,
+                    query,
+                    false,
+                    if limit == 0 { usize::MAX } else { limit },
+                );
+            }
+        }
+
         if !query.locks.is_empty() {
             return self.execute_locking_query(query);
         }

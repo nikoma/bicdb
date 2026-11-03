@@ -1,0 +1,544 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "uninitialized_count",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-6531"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-6531"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_count",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "null_element_count",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "extend_default",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "extend_zero",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "extend_negative",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-6502"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-6502"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "extend_fraction",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "extend_null",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "assign_before_extend",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-6533"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-6533"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "assign_zero",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-6532"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-6532"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "assign_byte_overflow",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-6502"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-6502"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "extend_copy",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "extend_copy_empty",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-6533"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-6533"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "extend_copy_zero_invalid",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "extend_copy_negative",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-6502"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-6502"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "assign_null_index",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-6502"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-6502"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "assign_fraction_index",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "read_before_extend",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-6533"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-6533"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "count_parentheses",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "extended_element_is_null",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "copied_element_values",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "nested_type_shadow",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "query_alias_count_keeps_sql_scope",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "8"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "8"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "application_qualified": false,
+  "target_protocol": "prepared",
+  "success": true,
+  "scope": "Dense named nested-table PL/SQL methods, element access and Oracle errors; no sparse collection qualification",
+  "matched": 23,
+  "total": 23,
+  "source_qualified": true,
+  "runtime_binary_sha256": "089ddacc751cf62860b8374e433fd9fe4a19ea2bbc9fcdfb1dfcd2090e5fe9ea"
+}

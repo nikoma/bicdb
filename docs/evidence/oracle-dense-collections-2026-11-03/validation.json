@@ -1,0 +1,474 @@
+{
+  "format": 1,
+  "runtime_source_commit": "577c17d87c428c7f25707aab20e6787758e840db",
+  "runtime_binary_sha256": "089ddacc751cf62860b8374e433fd9fe4a19ea2bbc9fcdfb1dfcd2090e5fe9ea",
+  "application_qualified": false,
+  "published_release": false,
+  "verified_application_deployment": false,
+  "routine_compiler": "bicdb_oracle_preview_v19",
+  "retained_reference_reports": [
+    {
+      "report": "character-columns-comparison.json",
+      "success": true,
+      "matched": 138,
+      "total": 138
+    },
+    {
+      "report": "character-columns-reader-comparison.json",
+      "success": true,
+      "matched": null,
+      "total": 6
+    },
+    {
+      "report": "character-import-comparison.json",
+      "success": true,
+      "matched": null,
+      "total": 3
+    },
+    {
+      "report": "dynamic-retained-decode-sql-comparison.json",
+      "success": true,
+      "matched": 52,
+      "total": 52
+    },
+    {
+      "report": "dynamic-retained-key-oracle.json",
+      "success": true,
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "report": "dynamic-retained-autonomous-comparison.json",
+      "success": true,
+      "matched": 38,
+      "total": 38
+    },
+    {
+      "report": "dynamic-sql-comparison.json",
+      "success": true,
+      "matched": 36,
+      "total": 36
+    },
+    {
+      "report": "national-characters-comparison.json",
+      "success": true,
+      "matched": 96,
+      "total": 96
+    },
+    {
+      "report": "national-native-controls.json",
+      "success": true,
+      "matched": 19,
+      "total": 19
+    },
+    {
+      "report": "dictionary-native-catalog-controls.json",
+      "success": true,
+      "matched": 6,
+      "total": 6
+    },
+    {
+      "report": "dynamic-retained-key-native.json",
+      "success": true,
+      "matched": 51,
+      "total": 51
+    },
+    {
+      "report": "dynamic-native-controls.json",
+      "success": true,
+      "matched": 13,
+      "total": 13
+    },
+    {
+      "report": "national-original-counter-comparison.json",
+      "success": true,
+      "matched": 14,
+      "total": 14
+    },
+    {
+      "report": "dynamic-original-record-comparison.json",
+      "success": true,
+      "matched": 8,
+      "total": 8
+    },
+    {
+      "report": "dynamic-original-sequence-comparison.json",
+      "success": true,
+      "matched": 9,
+      "total": 9
+    },
+    {
+      "report": "view-anchor-reference-anchors-comparison.json",
+      "success": true,
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "report": "view-anchor-reference-view_anchors-comparison.json",
+      "success": true,
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "report": "dynamic-retained-routine-anchors-comparison.json",
+      "success": true,
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "report": "dynamic-retained-routine-calendar-comparison.json",
+      "success": true,
+      "matched": 36,
+      "total": 36
+    },
+    {
+      "report": "dynamic-retained-routine-case-comparison.json",
+      "success": true,
+      "matched": 34,
+      "total": 34
+    },
+    {
+      "report": "dynamic-retained-routine-characters-comparison.json",
+      "success": true,
+      "matched": 119,
+      "total": 119
+    },
+    {
+      "report": "dynamic-retained-routine-columns-comparison.json",
+      "success": true,
+      "matched": 21,
+      "total": 21
+    },
+    {
+      "report": "dynamic-retained-routine-concat-comparison.json",
+      "success": true,
+      "matched": 76,
+      "total": 76
+    },
+    {
+      "report": "dynamic-retained-routine-cursors-comparison.json",
+      "success": true,
+      "matched": 36,
+      "total": 36
+    },
+    {
+      "report": "dynamic-retained-routine-decode-comparison.json",
+      "success": true,
+      "matched": 57,
+      "total": 57
+    },
+    {
+      "report": "dynamic-retained-routine-errors-comparison.json",
+      "success": true,
+      "matched": 108,
+      "total": 108
+    },
+    {
+      "report": "dynamic-retained-routine-grammar-comparison.json",
+      "success": true,
+      "matched": 14,
+      "total": 14
+    },
+    {
+      "report": "dynamic-retained-routine-namespaces-comparison.json",
+      "success": true,
+      "matched": 24,
+      "total": 24
+    },
+    {
+      "report": "dynamic-retained-routine-numberops-comparison.json",
+      "success": true,
+      "matched": 218,
+      "total": 218
+    },
+    {
+      "report": "dynamic-retained-routine-nvl-comparison.json",
+      "success": true,
+      "matched": 93,
+      "total": 93
+    },
+    {
+      "report": "dynamic-retained-routine-procedures-comparison.json",
+      "success": true,
+      "matched": 26,
+      "total": 26
+    },
+    {
+      "report": "dynamic-retained-routine-temporal-comparison.json",
+      "success": true,
+      "matched": 29,
+      "total": 29
+    },
+    {
+      "report": "dynamic-retained-routine-week-comparison.json",
+      "success": true,
+      "matched": 102,
+      "total": 102
+    },
+    {
+      "report": "dynamic-retained-native-characters.json",
+      "success": true,
+      "matched": 22,
+      "total": 22
+    },
+    {
+      "report": "dynamic-retained-native-columns.json",
+      "success": true,
+      "matched": 6,
+      "total": 6
+    },
+    {
+      "report": "dynamic-retained-native-concat.json",
+      "success": true,
+      "matched": 62,
+      "total": 62
+    },
+    {
+      "report": "dynamic-retained-native-cursors.json",
+      "success": true,
+      "matched": 30,
+      "total": 30
+    },
+    {
+      "report": "dynamic-retained-native-decode.json",
+      "success": true,
+      "matched": 12,
+      "total": 12
+    },
+    {
+      "report": "dynamic-retained-native-errors.json",
+      "success": true,
+      "matched": 9,
+      "total": 9
+    },
+    {
+      "report": "dynamic-retained-native-grammar.json",
+      "success": true,
+      "matched": 9,
+      "total": 9
+    },
+    {
+      "report": "dynamic-retained-native-procedures.json",
+      "success": true,
+      "matched": 13,
+      "total": 13
+    },
+    {
+      "report": "hierarchy-comparison.json",
+      "success": true,
+      "matched": 19,
+      "total": 19
+    },
+    {
+      "report": "routine-character-buffers-comparison.json",
+      "success": true,
+      "matched": 53,
+      "total": 53
+    },
+    {
+      "report": "routine-character-readers-comparison.json",
+      "success": true,
+      "matched": null,
+      "total": 7
+    },
+    {
+      "report": "alter-batch-native-controls.json",
+      "success": true,
+      "matched": 9,
+      "total": 9
+    },
+    {
+      "report": "character-reconcile-native-view-controls.json",
+      "success": true,
+      "matched": 5,
+      "total": 5
+    },
+    {
+      "report": "character-reconcile-fixture.json",
+      "success": true,
+      "matched": null,
+      "total": 9
+    },
+    {
+      "report": "function-attributes-comparison.json",
+      "success": true,
+      "matched": 10,
+      "total": 10
+    },
+    {
+      "report": "function-attributes-native-controls.json",
+      "success": true,
+      "matched": 4,
+      "total": 4
+    },
+    {
+      "report": "routine-security-native-controls.json",
+      "success": true,
+      "matched": 5,
+      "total": 5
+    }
+  ],
+  "memory_guards": [
+    {
+      "report": "dense-collection-final-full-validation-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 4671160320,
+      "minimum_observed_available_bytes": 23731576832,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "dense-collection-final-server-build-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 4449075200,
+      "minimum_observed_available_bytes": 23731576832,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "dense-collection-final-retained-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 1146777600,
+      "minimum_observed_available_bytes": 26488504320,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "dense-collection-sql-retained-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 504709120,
+      "minimum_observed_available_bytes": 26981253120,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "dense-original-final-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 1082855424,
+      "minimum_observed_available_bytes": 26487181312,
+      "minimum_required_available_bytes": 8589934592
+    }
+  ],
+  "oracle_methods": {
+    "matched": 23,
+    "total": 23
+  },
+  "oracle_function_results": {
+    "matched": 7,
+    "total": 7
+  },
+  "postgres_routine_types": {
+    "matched": 11,
+    "total": 11
+  },
+  "oracle_collection_sql": {
+    "matched": 15,
+    "total": 15
+  },
+  "postgres_domain_transport": {
+    "matched": 7,
+    "total": 7
+  },
+  "collection_readers": {
+    "passed": 11
+  },
+  "sql_collection_readers": {
+    "passed": 6
+  },
+  "rust": {
+    "passed": 1372,
+    "failed": 0,
+    "existing_ignored": 3,
+    "batches": [
+      {
+        "passed": 522,
+        "failed": 0,
+        "ignored": 3
+      },
+      {
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 29,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 17,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 60,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 419,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 119,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 25,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 169,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      }
+    ]
+  },
+  "python": {
+    "passed": 58,
+    "failed": 0
+  },
+  "static_checks": {
+    "rustfmt": true,
+    "diff_check": true,
+    "licenses": true,
+    "open_core_boundary": true
+  },
+  "application_definitions": {
+    "accepted": 62,
+    "total": 62,
+    "complete_execution_qualified": false
+  },
+  "original_csv_function": {
+    "source_qualified": true,
+    "matched": 0,
+    "total": 5,
+    "source_collection_type_registered_on_disposable_copy": true,
+    "fresh_creation_adaptation": true,
+    "edition_annotation_not_modeled": true,
+    "blocker": "Oracle TRIM grammar and regular-expression semantics"
+  },
+  "known_open_gaps": {
+    "dictionary_matched": 0,
+    "dictionary_total": 11,
+    "nvl_conversion_matched": 2,
+    "nvl_conversion_total": 7,
+    "full_application_qualified": false
+  },
+  "regression_fixed": "Re-deriving custom return metadata now establishes the stored language national-character scope; Oracle NVARCHAR2 physical VARCHAR metadata and same-named native domains remain distinct.",
+  "ci": "Local validation; GitHub CI not claimed"
+}

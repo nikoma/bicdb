@@ -1,0 +1,208 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "cases": [
+    {
+      "id": "quoted_enum_value",
+      "postgres": {
+        "rows": [
+          [
+            "ok"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "ok"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "table_prefix_array_domain",
+      "postgres": {
+        "rows": [
+          [
+            "{a,NULL}"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "{a,NULL}"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "whole_null_domain",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "valid_domain_result",
+      "postgres": {
+        "rows": [
+          [
+            "3"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "3"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "invalid_domain_result",
+      "postgres": {
+        "sqlstate": "23514"
+      },
+      "bicdb": {
+        "sqlstate": "23514"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "native_numeric_return_modifier",
+      "postgres": {
+        "rows": [
+          [
+            "12.345"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "12.345"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "registered_local_array_and_shadow_restore",
+      "postgres": {
+        "rows": [
+          [
+            "{outer}"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "{outer}"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "registered_local_domain_constraint",
+      "postgres": {
+        "sqlstate": "23514"
+      },
+      "bicdb": {
+        "sqlstate": "23514"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "native_array_growth",
+      "postgres": {
+        "rows": [
+          [
+            "1,NULL,7"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "1,NULL,7"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "quoted_enum_return_catalog",
+      "postgres": {
+        "rows": [
+          [
+            "MiXeD_0910b531db"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "MiXeD_0910b531db"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "table_prefix_return_catalog",
+      "postgres": {
+        "rows": [
+          [
+            "table_of_labels_0910b531db"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "table_of_labels_0910b531db"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "application_qualified": false,
+  "target_protocol": "prepared",
+  "success": true,
+  "scope": "Native registered return coercion, quoted identities and return catalog types; no domain result-OID parity qualification",
+  "matched": 11,
+  "total": 11,
+  "source_qualified": true,
+  "runtime_binary_sha256": "089ddacc751cf62860b8374e433fd9fe4a19ea2bbc9fcdfb1dfcd2090e5fe9ea"
+}

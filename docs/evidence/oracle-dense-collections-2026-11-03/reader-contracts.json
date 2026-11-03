@@ -1,0 +1,53 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "089ddacc751cf62860b8374e433fd9fe4a19ea2bbc9fcdfb1dfcd2090e5fe9ea",
+  "prior_binary_sha256": "276e81f421a0aae9405fe50d0b7ef7aa2d3195a7d3323eb5721bd5b7643109a6",
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "prior_scalar_executes",
+      "success": true
+    },
+    {
+      "id": "prior_constructor_refused",
+      "success": true
+    },
+    {
+      "id": "new_reader_executes_legacy_scalar",
+      "success": true
+    },
+    {
+      "id": "new_reader_preserves_legacy_constructor_fence",
+      "success": true
+    },
+    {
+      "id": "new_dense_methods_execute",
+      "success": true
+    },
+    {
+      "id": "prior_reader_still_executes_legacy_scalar",
+      "success": true
+    },
+    {
+      "id": "prior_reader_refuses_new_compiler",
+      "success": true
+    },
+    {
+      "id": "new_reader_reopens_both_versions",
+      "success": true
+    },
+    {
+      "id": "prior_native_return_reports_unregistered_folded_type",
+      "success": true
+    },
+    {
+      "id": "new_reader_repairs_saved_native_return_without_redefinition",
+      "success": true
+    },
+    {
+      "id": "native_return_repair_survives_reopen",
+      "success": true
+    }
+  ],
+  "success": true
+}

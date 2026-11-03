@@ -834,3 +834,26 @@ assignment, TABLE(collection), multiset operations, collection type replacement,
 object elements, sparse collections and original application function execution
 still require implementation and reference tests. Compiler language version 18
 remains unchanged at this checkpoint.
+
+
+## Dense procedural nested tables
+
+The [procedural collection contract](evidence/oracle-dense-collections-2026-11-03/README.md)
+extends registered nested-table types to routine variables, constructors, typed
+parameters and function results. Version-19 routines support COUNT, EXTEND,
+indexed reads and indexed assignment with qualified NULL, rounding, bounds and
+element-capacity errors. Nested declarations and SQL query aliases retain their
+scope. Existing routines keep their stored compiler version; the previous reader
+refuses version-19 execution while retaining its own definitions.
+
+EXTEND enforces platform limits of 100,000 elements and an estimated 8 MiB before
+allocation, reporting SQLSTATE 54000. Sparse collections and other collection
+methods, TABLE(collection), object elements, VARRAYs and replacement semantics
+remain outside the contract. The original application CSV function still needs
+Oracle TRIM and regular-expression support, and full application execution is
+not qualified.
+
+Custom native PostgreSQL routine types preserve quoted identities and domain
+constraints. Older saved return metadata can be recovered from its declaration
+without redefining a function. This does not establish complete native array-domain
+assignment, custom identifiers containing literal dots, or domain result-OID parity.

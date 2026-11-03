@@ -1,0 +1,129 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "declare_collection",
+      "sql": "CREATE TYPE \"IDEMPIERE_QUAL\".\"BICDB_CR_859CE4C0_T\" AS TABLE OF VARCHAR2(8 BYTE)",
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "declare_value",
+      "sql": "CREATE FUNCTION \"IDEMPIERE_QUAL\".\"BICDB_CR_859CE4C0_VALUE\" RETURN \"BICDB_CR_859CE4C0_T\" AS BEGIN RETURN \"BICDB_CR_859CE4C0_T\"('\u00e9',NULL);END;",
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "declare_empty",
+      "sql": "CREATE FUNCTION \"IDEMPIERE_QUAL\".\"BICDB_CR_859CE4C0_EMPTY\" RETURN \"BICDB_CR_859CE4C0_T\" AS BEGIN RETURN \"BICDB_CR_859CE4C0_T\"();END;",
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "declare_null",
+      "sql": "CREATE FUNCTION \"IDEMPIERE_QUAL\".\"BICDB_CR_859CE4C0_NULL\" RETURN \"BICDB_CR_859CE4C0_T\" AS BEGIN RETURN NULL;END;",
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "result_value",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_CR_859CE4C0_VALUE\"() FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            [
+              "\u00e9",
+              null
+            ]
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            [
+              "\u00e9",
+              null
+            ]
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "result_empty",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_CR_859CE4C0_EMPTY\"() FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            []
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            []
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "result_null",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_CR_859CE4C0_NULL\"() FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "application_qualified": false,
+  "target_protocol": "prepared",
+  "success": true,
+  "scope": "Collection-valued function declarations, owner-bound constructors and result transport; no PL/SQL methods",
+  "matched": 7,
+  "total": 7,
+  "source_qualified": true,
+  "runtime_binary_sha256": "089ddacc751cf62860b8374e433fd9fe4a19ea2bbc9fcdfb1dfcd2090e5fe9ea"
+}

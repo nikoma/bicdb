@@ -1,0 +1,247 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "scope": "Observed fixed-NLS PL/SQL application errors and current diagnostics; not general error catalog or call-site backtraces",
+  "cases": [
+    {
+      "id": "code_0",
+      "statement": "RAISE_APPLICATION_ERROR(-20000,'hello');",
+      "expected": "-20000|ORA-20000: hello"
+    },
+    {
+      "id": "code_1",
+      "statement": "RAISE_APPLICATION_ERROR(-20999,'hello');",
+      "expected": "-20999|ORA-20999: hello"
+    },
+    {
+      "id": "code_2",
+      "statement": "RAISE_APPLICATION_ERROR(-19999,'hello');",
+      "expected": "-21000|ORA-21000: error number argument to raise_application_error of -19999 is out of range"
+    },
+    {
+      "id": "code_3",
+      "statement": "RAISE_APPLICATION_ERROR(-21000,'hello');",
+      "expected": "-21000|ORA-21000: error number argument to raise_application_error of -21000 is out of range"
+    },
+    {
+      "id": "code_4",
+      "statement": "RAISE_APPLICATION_ERROR(0,'hello');",
+      "expected": "-21000|ORA-21000: error number argument to raise_application_error of 0 is out of range"
+    },
+    {
+      "id": "code_5",
+      "statement": "RAISE_APPLICATION_ERROR(NULL,'hello');",
+      "expected": "-21000|ORA-21000: error number argument to raise_application_error of 0 is out of range"
+    },
+    {
+      "id": "code_6",
+      "statement": "RAISE_APPLICATION_ERROR(-20000.4,'hello');",
+      "expected": "-20000|ORA-20000: hello"
+    },
+    {
+      "id": "code_7",
+      "statement": "RAISE_APPLICATION_ERROR(-20000.5,'hello');",
+      "expected": "-20001|ORA-20001: hello"
+    },
+    {
+      "id": "code_8",
+      "statement": "RAISE_APPLICATION_ERROR(-19999.5,'hello');",
+      "expected": "-20000|ORA-20000: hello"
+    },
+    {
+      "id": "code_9",
+      "statement": "RAISE_APPLICATION_ERROR(1e40,'hello');",
+      "expected": "-1426|ORA-01426: numeric overflow"
+    },
+    {
+      "id": "code_10",
+      "statement": "RAISE_APPLICATION_ERROR('-20000','hello');",
+      "expected": "-20000|ORA-20000: hello"
+    },
+    {
+      "id": "code_11",
+      "statement": "RAISE_APPLICATION_ERROR('bad','hello');",
+      "expected": "-6502|ORA-06502: PL/SQL: value or conversion error: character to number conversion error"
+    },
+    {
+      "id": "msg_12",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,NULL);",
+      "expected": "-20100|ORA-20100: "
+    },
+    {
+      "id": "msg_13",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'');",
+      "expected": "-20100|ORA-20100: "
+    },
+    {
+      "id": "msg_14",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,RPAD('x',2047,'x'));",
+      "expected": "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "id": "msg_15",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,RPAD('x',2048,'x'));",
+      "expected": "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "id": "msg_16",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,RPAD('x',2049,'x'));",
+      "expected": "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "id": "msg_17",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,RPAD('x',3000,'x'));",
+      "expected": "-20100|ORA-20100: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "id": "msg_18",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,RPAD('é',255,'é'));",
+      "expected": "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+    },
+    {
+      "id": "msg_19",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,RPAD('é',256,'é'));",
+      "expected": "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+    },
+    {
+      "id": "msg_20",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,RPAD('é',512,'é'));",
+      "expected": "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+    },
+    {
+      "id": "msg_21",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,RPAD('é',1024,'é'));",
+      "expected": "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+    },
+    {
+      "id": "msg_22",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,RPAD('é',1025,'é'));",
+      "expected": "-20100|ORA-20100: éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+    },
+    {
+      "id": "flag_TRUE",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'hello',TRUE);",
+      "expected": "-20100|ORA-20100: hello"
+    },
+    {
+      "id": "stack_TRUE",
+      "statement": "BEGIN RAISE_APPLICATION_ERROR(-20101,'inner'); EXCEPTION WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20102,'outer',TRUE); END;",
+      "expected": "-20102|ORA-20102: outer"
+    },
+    {
+      "id": "flag_FALSE",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'hello',FALSE);",
+      "expected": "-20100|ORA-20100: hello"
+    },
+    {
+      "id": "stack_FALSE",
+      "statement": "BEGIN RAISE_APPLICATION_ERROR(-20101,'inner'); EXCEPTION WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20102,'outer',FALSE); END;",
+      "expected": "-20102|ORA-20102: outer"
+    },
+    {
+      "id": "flag_NULL",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'hello',NULL);",
+      "expected": "-20100|ORA-20100: hello"
+    },
+    {
+      "id": "stack_NULL",
+      "statement": "BEGIN RAISE_APPLICATION_ERROR(-20101,'inner'); EXCEPTION WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-20102,'outer',NULL); END;",
+      "expected": "-20102|ORA-20102: outer"
+    },
+    {
+      "id": "outside",
+      "statement": null,
+      "expected": "0|ORA-0000: normal, successful completion"
+    },
+    {
+      "id": "rethrow",
+      "statement": "BEGIN RAISE_APPLICATION_ERROR(-20101,'inner'); EXCEPTION WHEN OTHERS THEN RAISE; END;",
+      "expected": "-20101|ORA-20101: inner"
+    },
+    {
+      "id": "qualified",
+      "statement": "DBMS_STANDARD.RAISE_APPLICATION_ERROR(-20103,'qualified');",
+      "expected": "-20103|ORA-20103: qualified"
+    },
+    {
+      "id": "sysqualified",
+      "statement": "SYS.DBMS_STANDARD.RAISE_APPLICATION_ERROR(-20104,'sysqualified');",
+      "expected": "-20104|ORA-20104: sysqualified"
+    },
+    {
+      "id": "named_arguments",
+      "statement": "RAISE_APPLICATION_ERROR(msg=>'named',num=>-20105,keeperrorstack=>TRUE);",
+      "expected": "-20105|ORA-20105: named"
+    },
+    {
+      "id": "number_message",
+      "statement": "RAISE_APPLICATION_ERROR(-20107,12.500);",
+      "expected": "-20107|ORA-20107: 12.5"
+    },
+    {
+      "id": "date_message",
+      "statement": "RAISE_APPLICATION_ERROR(-20108,DATE '2024-02-29');",
+      "expected": "-20108|ORA-20108: 29-FEB-24"
+    },
+    {
+      "id": "whitespace_0",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'tail ');",
+      "expected": "-20100|ORA-20100: tail"
+    },
+    {
+      "id": "whitespace_1",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'  head  ');",
+      "expected": "-20100|ORA-20100:   head"
+    },
+    {
+      "id": "whitespace_2",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,' ');",
+      "expected": "-20100|ORA-20100: "
+    },
+    {
+      "id": "whitespace_3",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,CHR(9)||'hello'||CHR(9));",
+      "expected": "-20100|ORA-20100: \thello\t"
+    },
+    {
+      "id": "whitespace_4",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'line'||CHR(10));",
+      "expected": "-20100|ORA-20100: line"
+    },
+    {
+      "id": "whitespace_6",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'x'||CHR(13));",
+      "expected": "-20100|ORA-20100: x\r"
+    },
+    {
+      "id": "whitespace_7",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'x'||CHR(10)||CHR(9));",
+      "expected": "-20100|ORA-20100: x\n\t"
+    },
+    {
+      "id": "whitespace_8",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'x'||CHR(9)||CHR(10));",
+      "expected": "-20100|ORA-20100: x\t"
+    },
+    {
+      "id": "whitespace_10",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'x'||CHR(11));",
+      "expected": "-20100|ORA-20100: x\u000b"
+    },
+    {
+      "id": "whitespace_11",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'x'||CHR(12));",
+      "expected": "-20100|ORA-20100: x\f"
+    },
+    {
+      "id": "whitespace_12",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,'x'||CHR(13)||CHR(10));",
+      "expected": "-20100|ORA-20100: x\r"
+    },
+    {
+      "id": "whitespace_13",
+      "statement": "RAISE_APPLICATION_ERROR(-20100,CHR(10)||'x');",
+      "expected": "-20100|ORA-20100: \nx"
+    }
+  ]
+}

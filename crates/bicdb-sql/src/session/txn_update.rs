@@ -3562,6 +3562,10 @@ impl<'db> SqlSession<'db> {
         ir: &RoutineIR,
         args: &[SqlValue],
     ) -> Result<RoutineFrame> {
+        let _diagnostics = ir
+            .oracle_error_diagnostics
+            .as_ref()
+            .map(|_| oracle::errors::DiagnosticScope::new(self.oracle_exception.clone()));
         let generation = crate::eval::expr_type_scope()
             .map(|(generation, _)| generation)
             .unwrap_or_else(|| routine_memo_generation(self.db_ref()));
@@ -3584,6 +3588,7 @@ impl<'db> SqlSession<'db> {
         });
         let mut frame = RoutineFrame::from_template(&template, args)?;
         frame.oracle_statement_rollback = ir.oracle_statement_rollback;
+        frame.oracle_error_diagnostics = ir.oracle_error_diagnostics.clone();
         Ok(frame)
     }
 
@@ -3851,7 +3856,24 @@ impl<'db> SqlSession<'db> {
             );
         }
         record_handled_routine_exception(&sqlstate);
-        self.execute_routine_statements(frame, &handler.statements)
+        if frame.oracle_statement_rollback && self.oracle_exception.is_none() {
+            self.oracle_error_tokens.clear();
+        }
+        let error = if frame.oracle_statement_rollback {
+            oracle::errors::capture(self, error)
+        } else {
+            error
+        };
+        let error = Arc::new(error);
+        let previous = frame.active_exception.replace(error.clone());
+        let previous_oracle = self.oracle_exception.clone();
+        if frame.oracle_statement_rollback {
+            self.oracle_exception = Some(error);
+        }
+        let result = self.execute_routine_statements(frame, &handler.statements);
+        frame.active_exception = previous;
+        self.oracle_exception = previous_oracle;
+        result
     }
 
     pub(crate) fn execute_routine_statements(
@@ -4117,6 +4139,33 @@ impl<'db> SqlSession<'db> {
                 self.close_routine_cursor(frame, name)?;
                 Ok(RoutineControl::Continue)
             }
+            RoutineStmt::OracleBuiltin { builtin, arguments } => {
+                let values = arguments
+                    .iter()
+                    .map(|arg| self.eval_routine_expr(frame, arg))
+                    .collect::<Result<Vec<_>>>()?;
+                match builtin {
+                    oracle::errors::Builtin::RaiseApplicationError => {
+                        Err(oracle::errors::invoke(self, &values))
+                    }
+                }
+            }
+            RoutineStmt::Rethrow => Err(frame
+                .active_exception
+                .clone()
+                .map(|error| {
+                    if frame.oracle_statement_rollback {
+                        oracle::errors::reraise(self, error)
+                    } else {
+                        SqlError::Rethrown(error)
+                    }
+                })
+                .unwrap_or_else(|| SqlError::RaisedException {
+                    sqlstate: "0Z002".into(),
+                    message: "RAISE without parameters cannot be used outside an exception handler"
+                        .into(),
+                    detail: None,
+                })),
             RoutineStmt::RaiseException {
                 message,
                 arguments,
@@ -4474,6 +4523,10 @@ impl<'db> SqlSession<'db> {
         frame: &mut RoutineFrame,
         expr: &RoutineExpr,
     ) -> Result<SqlValue> {
+        let _diagnostics = frame
+            .oracle_error_diagnostics
+            .as_ref()
+            .map(|_| oracle::errors::DiagnosticScope::new(self.oracle_exception.clone()));
         let previous = std::mem::replace(&mut self.in_routine_expression, true);
         let result = self.eval_routine_expr_inner(frame, expr);
         self.in_routine_expression = previous;
@@ -4593,11 +4646,16 @@ impl<'db> SqlSession<'db> {
         frame: &mut RoutineFrame,
         query: &Query,
     ) -> Result<SqlResult> {
+        let oracle_context = self.oracle_exception.take();
+        let oracle_tokens = std::mem::take(&mut self.oracle_error_tokens);
+        let _diagnostics = oracle::errors::DiagnosticScope::new(None);
         let previous = self.bind_routine_frame(frame);
         let owned = std::mem::replace(&mut self.ir_owned_statement, true);
         let result = self.execute_query(query);
         self.ir_owned_statement = owned;
         self.unbind_routine_frame(previous);
+        self.oracle_exception = oracle_context;
+        self.oracle_error_tokens = oracle_tokens;
         result
     }
 
@@ -4606,6 +4664,9 @@ impl<'db> SqlSession<'db> {
         frame: &mut RoutineFrame,
         statement: &Statement,
     ) -> Result<SqlResult> {
+        let call = matches!(statement, Statement::Call(_));
+        let _diagnostics =
+            call.then(|| oracle::errors::DiagnosticScope::new(self.oracle_exception.clone()));
         // CALL in a procedural block copies OUT/INOUT results back to the
         // original writable variables. SQL CALL at the wire boundary instead
         // returns those values as a row. Validate destinations before effects.
@@ -4669,9 +4730,20 @@ impl<'db> SqlSession<'db> {
         };
         let previous = self.bind_routine_frame(frame);
         let owned = std::mem::replace(&mut self.ir_owned_statement, true);
+        let oracle_context = (!call).then(|| {
+            (
+                self.oracle_exception.take(),
+                std::mem::take(&mut self.oracle_error_tokens),
+            )
+        });
+        let _sql_diagnostics = (!call).then(|| oracle::errors::DiagnosticScope::new(None));
         let result = self.execute_parsed_statement(statement);
         self.ir_owned_statement = owned;
         self.unbind_routine_frame(previous);
+        if let Some((error, tokens)) = oracle_context {
+            self.oracle_exception = error;
+            self.oracle_error_tokens = tokens;
+        }
         let result = result?;
         if !outputs.is_empty() {
             let row = result.rows.first().ok_or_else(|| {
@@ -4698,11 +4770,16 @@ impl<'db> SqlSession<'db> {
         frame: &mut RoutineFrame,
         query: &Query,
     ) -> Result<SqlResult> {
+        let oracle_context = self.oracle_exception.take();
+        let oracle_tokens = std::mem::take(&mut self.oracle_error_tokens);
+        let _diagnostics = oracle::errors::DiagnosticScope::new(None);
         let previous = self.bind_routine_frame(frame);
         let owned = std::mem::replace(&mut self.ir_owned_statement, false);
         let result = self.execute_query(query);
         self.ir_owned_statement = owned;
         self.unbind_routine_frame(previous);
+        self.oracle_exception = oracle_context;
+        self.oracle_error_tokens = oracle_tokens;
         result
     }
 

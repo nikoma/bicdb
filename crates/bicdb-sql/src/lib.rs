@@ -1117,6 +1117,8 @@ fn routine_statement_profile_kind(statement: &RoutineStmt) -> String {
         RoutineStmt::RaiseException { .. } => "ROUTINE_RAISE_EXCEPTION".to_string(),
         RoutineStmt::ReturnQuery(_) => "ROUTINE_RETURN_QUERY".to_string(),
         RoutineStmt::Return(_) => "ROUTINE_RETURN".to_string(),
+        RoutineStmt::OracleBuiltin { .. } => "ORACLE_BUILTIN".into(),
+        RoutineStmt::Rethrow => "ROUTINE_RETHROW".into(),
     }
 }
 
@@ -1187,6 +1189,15 @@ fn routine_statement_profile_signature(statement: &RoutineStmt) -> String {
             format!("RAISE EXCEPTION {message:?} USING ERRCODE = {sqlstate:?}")
         }
         RoutineStmt::ReturnQuery(query) => format!("RETURN QUERY {query}"),
+        RoutineStmt::OracleBuiltin { builtin, arguments } => format!(
+            "{builtin:?}({})",
+            arguments
+                .iter()
+                .map(|v| v.expr.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        RoutineStmt::Rethrow => "RAISE".into(),
         RoutineStmt::Return(expr) => expr
             .as_ref()
             .map(|expr| format!("RETURN {expr}"))
@@ -1904,6 +1915,25 @@ pub enum SqlError {
         message: String,
         detail: Option<String>,
     },
+
+    #[error("{message}")]
+    OracleError {
+        code: i32,
+        sqlstate: &'static str,
+        message: String,
+        previous: Option<Arc<SqlError>>,
+        message_valid: Arc<std::sync::atomic::AtomicBool>,
+    },
+
+    #[error("{inner}")]
+    OracleContext {
+        #[source]
+        inner: Arc<SqlError>,
+        valid: Arc<std::sync::atomic::AtomicBool>,
+    },
+
+    #[error(transparent)]
+    Rethrown(Arc<SqlError>),
 }
 
 impl SqlError {
@@ -2025,6 +2055,9 @@ impl SqlError {
 
     pub fn sqlstate(&self) -> &str {
         match self {
+            Self::OracleError { sqlstate, .. } => sqlstate,
+            Self::OracleContext { inner, .. } => inner.sqlstate(),
+            Self::Rethrown(error) => error.sqlstate(),
             Self::ConstraintViolation { sqlstate, .. } => sqlstate,
             Self::InvalidSavepoint { .. } => "3B001",
             Self::DuplicateRole { .. } => "42710",
@@ -2048,6 +2081,11 @@ impl SqlError {
 
     pub fn fields(&self) -> Vec<SqlErrorField> {
         match self {
+            Self::OracleError { .. } => vec![SqlErrorField::Detail(
+                oracle::errors::transport_detail(self),
+            )],
+            Self::Rethrown(error) => error.fields(),
+            Self::OracleContext { inner, .. } => inner.fields(),
             Self::RaisedException {
                 detail: Some(detail),
                 ..
@@ -4139,6 +4177,11 @@ impl RoutineExpr {
     }
 
     fn bind(&mut self, scope: &BoundExprScope) {
+        if oracle::errors::contains_diagnostics(&self.expr) {
+            self.bound = None;
+            self.user_calls.clear();
+            return;
+        }
         match scope.bind_with_user_calls(&self.expr) {
             Some((bound, user_calls)) => {
                 self.bound = Some(bound);
@@ -4166,6 +4209,7 @@ enum RoutineDecl {
     },
     Variable {
         name: String,
+        source_name: String,
         pg_type: Option<String>,
         type_modifier: Option<PgTypeModifier>,
         default_expr: Option<RoutineExpr>,
@@ -4291,6 +4335,11 @@ enum RoutineStmt {
         /// constraint violation's fields.
         error_fields: Box<RaiseErrorFields>,
     },
+    OracleBuiltin {
+        builtin: oracle::errors::Builtin,
+        arguments: Vec<RoutineExpr>,
+    },
+    Rethrow,
     ReturnQuery(Query),
     Return(Option<RoutineExpr>),
 }
@@ -4330,6 +4379,7 @@ struct RoutineIR {
     exception_handlers: Vec<RoutineExceptionHandler>,
     oracle_date_return: bool,
     oracle_statement_rollback: bool,
+    oracle_error_diagnostics: Option<oracle::errors::Diagnostics>,
 }
 
 fn routine_block_may_write(statements: &[RoutineStmt]) -> bool {
@@ -4395,6 +4445,8 @@ fn routine_statement_may_write(statement: &RoutineStmt) -> bool {
         | RoutineStmt::FetchCursor { .. }
         | RoutineStmt::CloseCursor { .. }
         | RoutineStmt::RaiseException { .. }
+        | RoutineStmt::OracleBuiltin { .. }
+        | RoutineStmt::Rethrow
         | RoutineStmt::Return(_) => false,
     }
 }
@@ -4469,6 +4521,8 @@ fn set_expr_may_write(expr: &SetExpr) -> bool {
 struct RoutineFrame {
     // Derived from the stored routine language, never from its caller's profile.
     oracle_statement_rollback: bool,
+    active_exception: Option<Arc<SqlError>>,
+    oracle_error_diagnostics: Option<oracle::errors::Diagnostics>,
     assignment_types: Arc<FxHashMap<String, RoutineTypeSchema>>,
     oracle_dates: Option<Arc<FxHashSet<String>>>,
     values: Arc<BTreeMap<String, SqlValue>>,

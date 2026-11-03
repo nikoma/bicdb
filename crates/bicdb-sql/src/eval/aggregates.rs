@@ -1656,7 +1656,9 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             | "bicdb_oracle_decode_text"
             | "bicdb_oracle_concat"
             | "bicdb_oracle_default_to_char"
+            | "bicdb_oracle_current_sqlerrm"
             | "to_char" => return Some("text".to_string()),
+            "bicdb_oracle_current_sqlcode" => return Some("int4".into()),
             "strpos" => return Some("int4".to_string()),
             // reverse/btrim/ltrim/rtrim keep their bytea-aware typing below.
             "lpad" | "rpad" | "repeat" => return Some("text".to_string()),

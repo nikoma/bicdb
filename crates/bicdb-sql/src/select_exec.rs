@@ -1696,6 +1696,8 @@ pub(crate) fn expr_contains_volatile_function(expr: &Expr) -> bool {
                     | "pg_catalog.statement_timestamp"
                     | "clock_timestamp"
                     | "pg_catalog.clock_timestamp"
+                    | "bicdb_oracle_current_sqlcode"
+                    | "bicdb_oracle_current_sqlerrm"
                     | "gen_random_uuid"
                     | "pg_catalog.gen_random_uuid"
                     | "gen_random_bytes"

@@ -282,6 +282,8 @@ impl Resolve<'_> {
             Expr::Function(function) => {
                 let name = object_name_lowercase(&function.name).ok();
                 match name.as_deref() {
+                    Some("bicdb_oracle_current_sqlcode") => return Kind::Number,
+                    Some("bicdb_oracle_current_sqlerrm") => return Kind::Text,
                     Some(
                         "chr"
                         | "pg_catalog.chr"
@@ -1012,6 +1014,29 @@ fn statements(
             RoutineStmt::Return(Some(expr)) | RoutineStmt::DynamicExecute(expr) => {
                 visit(db, env, &mut expr.expr)?
             }
+            RoutineStmt::OracleBuiltin { arguments, .. } => {
+                for arg in arguments.iter_mut() {
+                    visit(db, env, &mut arg.expr)?;
+                }
+                let resolve = Resolve {
+                    db,
+                    env,
+                    queries: Vec::new(),
+                    sql_depth: 0,
+                    statement_from: Vec::new(),
+                };
+                let message = &mut arguments[1].expr;
+                let kind=match resolve.kind(message) {
+                    Kind::Date=>Some("date"),Kind::Number=>Some("number"),
+                    Kind::Text|Kind::Null=>None,
+                    _=>return Err(SqlError::Unsupported("RAISE_APPLICATION_ERROR msg requires a resolved character, NUMBER or logical DATE operand".into())),
+                };
+                if let Some(kind) = kind {
+                    *message = expression(&format!(
+                        "bicdb_oracle_default_to_char({message},'{kind}','plsql')"
+                    ))?;
+                }
+            }
             RoutineStmt::RaiseException {
                 arguments, detail, ..
             } => {
@@ -1023,6 +1048,7 @@ fn statements(
                 }
             }
             RoutineStmt::ContinueLoop
+            | RoutineStmt::Rethrow
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
             | RoutineStmt::FetchCursor { .. }

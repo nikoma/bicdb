@@ -404,3 +404,21 @@ checks PostgreSQL CALL inputs, named ordering, writable outputs, metadata, defau
 and recovery. Use `ORACLE_CONTROL_PG_DSN` and `BICDB_PG_DSN` for dedicated native
 databases. Both runners remove their uniquely named objects. Neither establishes
 full Oracle PL/SQL, complete overload resolution or application qualification.
+
+
+The `routine_namespaces.py --suite errors` fixture compares fixed-preview
+RAISE_APPLICATION_ERROR inputs, numeric rounding and ranges, messages, current
+SQLCODE/SQLERRM and nested handler/call context against actual Oracle. It checks
+saved-message invalidation, cleared-error reraising, direct PL/SQL versus SQL
+entry, local name shadowing, dynamic diagnostic reads, parameter defaults and
+UTF-8 byte limits. Raw procedure calls compare logical error stacks with the
+PostgreSQL driver's primary message, SQLSTATE and JSON `oracle_error_stack`
+DETAIL field. Multiline messages are preserved. Source fixtures record the
+observed American diagnostic language and fixed preview NLS environment.
+
+`postgres_errors.py --output /private/native-errors.json` independently checks
+native rethrow messages, SQLSTATE, DETAIL, constraint fields, nested handlers,
+trailing spaces, user variable names, procedure calls and recovery. Set
+`ORACLE_CONTROL_PG_DSN` and `BICDB_PG_DSN` to dedicated native databases. Both
+fixtures remove their uniquely named objects. Full Oracle error catalogs,
+SQLERRM(code), EXCEPTION_INIT and Oracle backtraces remain unqualified.

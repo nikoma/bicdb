@@ -169,6 +169,7 @@ impl<'db> SqlSession<'db> {
             let mut frame =
                 RoutineFrame::new_with_symbols(&routine.ir.params, &[], &routine.ir.symbol_names)?;
             frame.oracle_statement_rollback = routine.ir.oracle_statement_rollback;
+            frame.oracle_error_diagnostics = routine.ir.oracle_error_diagnostics.clone();
             // PostgreSQL exposes trigger variables before a PL/pgSQL block's
             // declarations are initialized. Generated trigger functions use
             // that ordering for defaults such as

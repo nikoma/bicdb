@@ -3118,7 +3118,9 @@ impl<'db> SqlEngine<'db> {
             | "bicdb_oracle_decode_key"
             | "bicdb_oracle_decode_text"
             | "bicdb_oracle_concat"
-            | "bicdb_oracle_default_to_char" => Some("text".to_string()),
+            | "bicdb_oracle_default_to_char"
+            | "bicdb_oracle_current_sqlerrm" => Some("text".to_string()),
+            "bicdb_oracle_current_sqlcode" => Some("int4".into()),
             "nextval" | "currval" | "setval" => Some("int8".to_string()),
             "starts_with" => Some("bool".to_string()),
             "pow" | "cbrt" | "exp" | "ln" | "log" => Some("float8".to_string()),

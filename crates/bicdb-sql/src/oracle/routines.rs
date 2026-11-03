@@ -30,7 +30,7 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
                 == preview_routine_language_version(&routine.language)
                 && matches!(
                     preview_routine_language_version(&routine.language),
-                    Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13)
+                    Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14)
                 )
         })
     {
@@ -168,6 +168,11 @@ fn bind_namespace_statements(
                 bind_relations(db, statement, schema, calls)?
             }
             RoutineStmt::Return(Some(expr)) => bind_relations(db, &mut expr.expr, schema, calls)?,
+            RoutineStmt::OracleBuiltin { arguments, .. } => {
+                for arg in arguments {
+                    bind_relations(db, &mut arg.expr, schema, calls)?;
+                }
+            }
             RoutineStmt::RaiseException {
                 arguments, detail, ..
             } => {
@@ -185,6 +190,7 @@ fn bind_namespace_statements(
                 ))
             }
             RoutineStmt::ContinueLoop
+            | RoutineStmt::Rethrow
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
             | RoutineStmt::FetchCursor { .. }
@@ -428,6 +434,11 @@ fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
             RoutineStmt::Return(Some(expr)) | RoutineStmt::DynamicExecute(expr) => {
                 lower_expression(&mut expr.expr, types)
             }
+            RoutineStmt::OracleBuiltin { arguments, .. } => {
+                for arg in arguments {
+                    lower_expression(&mut arg.expr, types);
+                }
+            }
             RoutineStmt::RaiseException {
                 arguments, detail, ..
             } => {
@@ -439,6 +450,7 @@ fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
                 }
             }
             RoutineStmt::ContinueLoop
+            | RoutineStmt::Rethrow
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
             | RoutineStmt::SelectInto { .. }

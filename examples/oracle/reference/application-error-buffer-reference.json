@@ -1,0 +1,346 @@
+{
+  "format": 1,
+  "scope": "Actual Oracle nested error validity, message clearing, stack retention and cleared rethrow observations",
+  "cases": [
+    {
+      "id": "0_nested_-20100_FALSE_False",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20100,'inner',FALSE); EXCEPTION WHEN OTHERS THEN NULL; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: "
+    },
+    {
+      "id": "0_nested_-20100_FALSE_True",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20100,'inner',FALSE); EXCEPTION WHEN OTHERS THEN t:=TO_CHAR(SQLCODE)||'|'||SQLERRM; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: "
+    },
+    {
+      "id": "0_nested_-20100_TRUE_False",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20100,'inner',TRUE); EXCEPTION WHEN OTHERS THEN NULL; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_nested_-20100_TRUE_True",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20100,'inner',TRUE); EXCEPTION WHEN OTHERS THEN t:=TO_CHAR(SQLCODE)||'|'||SQLERRM; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_nested_-20100_NULL_False",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20100,'inner',NULL); EXCEPTION WHEN OTHERS THEN NULL; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_nested_-20100_NULL_True",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20100,'inner',NULL); EXCEPTION WHEN OTHERS THEN t:=TO_CHAR(SQLCODE)||'|'||SQLERRM; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_nested_-20101_FALSE_False",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner',FALSE); EXCEPTION WHEN OTHERS THEN NULL; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: "
+    },
+    {
+      "id": "0_nested_-20101_FALSE_True",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner',FALSE); EXCEPTION WHEN OTHERS THEN t:=TO_CHAR(SQLCODE)||'|'||SQLERRM; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: "
+    },
+    {
+      "id": "0_nested_-20101_TRUE_False",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner',TRUE); EXCEPTION WHEN OTHERS THEN NULL; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_nested_-20101_TRUE_True",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner',TRUE); EXCEPTION WHEN OTHERS THEN t:=TO_CHAR(SQLCODE)||'|'||SQLERRM; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_nested_-20101_NULL_False",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner',NULL); EXCEPTION WHEN OTHERS THEN NULL; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_nested_-20101_NULL_True",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner',NULL); EXCEPTION WHEN OTHERS THEN t:=TO_CHAR(SQLCODE)||'|'||SQLERRM; END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_native_division",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN v:=1/0; EXCEPTION WHEN OTHERS THEN t:=TO_CHAR(SQLCODE)||'|'||SQLERRM;END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_native_nodata",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN SELECT 1 INTO v FROM DUAL WHERE 1=0; EXCEPTION WHEN OTHERS THEN t:=TO_CHAR(SQLCODE)||'|'||SQLERRM;END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_native_rethrow",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE; EXCEPTION WHEN OTHERS THEN t:=TO_CHAR(SQLCODE)||'|'||SQLERRM;END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_successful_sql",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN SELECT 1 INTO v FROM DUAL;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "0_rethrow_outer_FALSE",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner',FALSE);EXCEPTION WHEN OTHERS THEN NULL;END;RAISE;END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -21002,
+          "message": "ORA-21002: attempted to reraise a cleared error"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "0_history_FALSE",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'first',TRUE);EXCEPTION WHEN OTHERS THEN NULL;END;RAISE_APPLICATION_ERROR(-20102,'second',FALSE);END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -20102,
+          "message": "ORA-20102: second"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "0_rethrow_outer_TRUE",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner',TRUE);EXCEPTION WHEN OTHERS THEN NULL;END;RAISE;END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "0_history_TRUE",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'first',TRUE);EXCEPTION WHEN OTHERS THEN NULL;END;RAISE_APPLICATION_ERROR(-20102,'second',TRUE);END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -20102,
+          "message": "ORA-20102: second"
+        },
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "0_rethrow_outer_NULL",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner',NULL);EXCEPTION WHEN OTHERS THEN NULL;END;RAISE;END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "0_history_NULL",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'first',TRUE);EXCEPTION WHEN OTHERS THEN NULL;END;RAISE_APPLICATION_ERROR(-20102,'second',NULL);END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -20102,
+          "message": "ORA-20102: second"
+        },
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "1_invalid_inner_range",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-1,'bad');EXCEPTION WHEN OTHERS THEN NULL;END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: "
+    },
+    {
+      "id": "1_invalid_inner_text",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR('bad','bad');EXCEPTION WHEN OTHERS THEN NULL;END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "1_invalid_inner_overflow",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(1e40,'bad');EXCEPTION WHEN OTHERS THEN NULL;END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: outer"
+    },
+    {
+      "id": "1_invalid_outer_range",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-1,'bad');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner');EXCEPTION WHEN OTHERS THEN NULL;END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-21000|ORA-21000: error number argument to raise_application_error of  is out of range"
+    },
+    {
+      "id": "1_invalid_outer_division",
+      "body": "BEGIN BEGIN v:=1/0;EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner');EXCEPTION WHEN OTHERS THEN NULL;END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-1476|ORA-01476: divisor is equal to zero"
+    },
+    {
+      "id": "1_invalid_outer_nodata",
+      "body": "BEGIN BEGIN SELECT 1 INTO v FROM DUAL WHERE 1=0;EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner');EXCEPTION WHEN OTHERS THEN NULL;END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "100|ORA-01403: no data found"
+    },
+    {
+      "id": "1_through_native_handler",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN v:=1/0;EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner');EXCEPTION WHEN OTHERS THEN NULL;END;END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-20100|ORA-20100: "
+    },
+    {
+      "id": "1_keep_after_clear_TRUE",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'cleared');EXCEPTION WHEN OTHERS THEN NULL;END;RAISE_APPLICATION_ERROR(-20102,'new',TRUE);END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -20102,
+          "message": "ORA-20102: new"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "1_keep_after_clear_NULL",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'cleared');EXCEPTION WHEN OTHERS THEN NULL;END;RAISE_APPLICATION_ERROR(-20102,'new',NULL);END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -20102,
+          "message": "ORA-20102: new"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "2_range",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-1,'bad');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner');EXCEPTION WHEN OTHERS THEN NULL;END;RAISE;END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -21002,
+          "message": "ORA-21002: attempted to reraise a cleared error"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "2_division",
+      "body": "BEGIN BEGIN v:=1/0;EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner');EXCEPTION WHEN OTHERS THEN NULL;END;RAISE;END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -21002,
+          "message": "ORA-21002: attempted to reraise a cleared error"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "2_nodata",
+      "body": "BEGIN BEGIN SELECT 1 INTO v FROM DUAL WHERE 1=0;EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner');EXCEPTION WHEN OTHERS THEN NULL;END;RAISE;END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -21002,
+          "message": "ORA-21002: attempted to reraise a cleared error"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "2_text",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR('bad','bad');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner');EXCEPTION WHEN OTHERS THEN NULL;END;RAISE;END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -21002,
+          "message": "ORA-21002: attempted to reraise a cleared error"
+        }
+      ],
+      "pg_sqlstate": "P0001"
+    },
+    {
+      "id": "2_invalid_range_TRUE",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-1,'inner',TRUE);END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -21000,
+          "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+        },
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ],
+      "pg_sqlstate": "22023"
+    },
+    {
+      "id": "2_invalid_range_FALSE",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-1,'inner',FALSE);END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -21000,
+          "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+        }
+      ],
+      "pg_sqlstate": "22023"
+    },
+    {
+      "id": "2_invalid_range_NULL",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR(-20100,'outer');EXCEPTION WHEN OTHERS THEN RAISE_APPLICATION_ERROR(-1,'inner',NULL);END;END;",
+      "unhandled": true,
+      "expected_stack": [
+        {
+          "code": -21000,
+          "message": "ORA-21000: error number argument to raise_application_error of -1 is out of range"
+        },
+        {
+          "code": -20100,
+          "message": "ORA-20100: outer"
+        }
+      ],
+      "pg_sqlstate": "22023"
+    },
+    {
+      "id": "cleared_conversion",
+      "body": "BEGIN BEGIN RAISE_APPLICATION_ERROR('bad','outer');EXCEPTION WHEN OTHERS THEN BEGIN RAISE_APPLICATION_ERROR(-20101,'inner');EXCEPTION WHEN OTHERS THEN NULL;END;RETURN TO_CHAR(SQLCODE)||'|'||SQLERRM;END;END;",
+      "unhandled": false,
+      "expected": "-6502|ORA-06502: PL/SQL: value or conversion error"
+    }
+  ]
+}

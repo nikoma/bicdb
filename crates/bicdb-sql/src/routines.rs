@@ -64,6 +64,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             exception_handlers: Vec::new(),
             oracle_date_return: false,
             oracle_statement_rollback: false,
+            oracle_error_diagnostics: None,
         });
     }
     if !routine_language_is_plpgsql(routine) {
@@ -83,6 +84,18 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     let body = plpgsql_body_from_definition(&routine.definition)?;
     let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
+    let oracle_error_diagnostics =
+        if oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 14) {
+            oracle::errors::lower(&mut statements, &mut exception_handlers)?;
+            oracle::errors::prepare_diagnostics(
+                &mut params,
+                &mut declarations,
+                &mut statements,
+                &mut exception_handlers,
+            )
+        } else {
+            None
+        };
     parameterized_cursors::validate_capabilities(
         &routine.language,
         &declarations,
@@ -105,7 +118,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13)
+        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14)
     ) {
         oracle::routines::bind_function_namespace(
             db,
@@ -125,7 +138,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             })?,
             matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13)
+                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14)
             ),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 7),
@@ -162,6 +175,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
         oracle_date_return,
         oracle_statement_rollback: oracle::preview_routine_language_version(&routine.language)
             .is_some_and(|version| version >= 6),
+        oracle_error_diagnostics,
     })
 }
 
@@ -329,6 +343,8 @@ pub(crate) fn collect_routine_stmt_symbols(
             RoutineStmt::ContinueLoop
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
+            | RoutineStmt::OracleBuiltin { .. }
+            | RoutineStmt::Rethrow
             | RoutineStmt::Sql(_)
             | RoutineStmt::DynamicExecute(_)
             | RoutineStmt::OpenCursor { .. }
@@ -545,6 +561,11 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
                 bind_routine_statement_exprs(body, scope);
             }
             RoutineStmt::Return(Some(expr)) => expr.bind(scope),
+            RoutineStmt::OracleBuiltin { arguments, .. } => {
+                for argument in arguments {
+                    argument.bind(scope);
+                }
+            }
             RoutineStmt::RaiseException {
                 arguments, detail, ..
             } => {
@@ -556,6 +577,7 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
                 }
             }
             RoutineStmt::ContinueLoop
+            | RoutineStmt::Rethrow
             | RoutineStmt::ExitLoop
             | RoutineStmt::Null
             | RoutineStmt::SelectInto { .. }
@@ -1126,6 +1148,7 @@ pub(crate) fn parse_routine_decl(declaration: &str) -> Result<RoutineDecl> {
         .transpose()?;
     Ok(RoutineDecl::Variable {
         name: normalize_object_name(&name),
+        source_name: name,
         pg_type,
         type_modifier,
         default_expr,
@@ -1667,6 +1690,9 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
 }
 
 pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
+    if statement.trim().is_empty() {
+        return Ok(RoutineStmt::Rethrow);
+    }
     if !starts_with_plpgsql_word(statement, "EXCEPTION") {
         if let Ok(RoutineExceptionCondition::SqlState(sqlstate)) =
             routine_exception_condition(statement)

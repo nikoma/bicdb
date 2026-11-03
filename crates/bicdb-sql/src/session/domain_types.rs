@@ -2194,6 +2194,7 @@ impl<'db> SqlSession<'db> {
             &statements,
             &exception_handlers,
         )?;
+        let mut oracle_error_diagnostics = None;
         if oracle_block {
             oracle::routine_arithmetic::prepare_local_declarations(&mut declarations)?;
             routines::nested_blocks::prepare_declared_types(
@@ -2206,6 +2207,15 @@ impl<'db> SqlSession<'db> {
                 &session_user_from_gucs(&self.session_gucs),
             )?
             .unwrap_or_else(default_schema_name);
+            if oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 14) {
+                oracle::errors::lower(&mut statements, &mut exception_handlers)?;
+                oracle_error_diagnostics = oracle::errors::prepare_diagnostics(
+                    &mut [],
+                    &mut declarations,
+                    &mut statements,
+                    &mut exception_handlers,
+                );
+            }
             oracle::routines::bind_block_namespace(
                 Some(self.db_ref()),
                 &mut declarations,
@@ -2262,6 +2272,7 @@ impl<'db> SqlSession<'db> {
         let result = (|| {
             let mut frame = RoutineFrame::new_with_symbols(&[], &[], &symbols)?;
             frame.oracle_statement_rollback = oracle_block;
+            frame.oracle_error_diagnostics = oracle_error_diagnostics;
             let template =
                 RoutineFrameTemplate::build_with_declarations(&[], &symbols, &declarations);
             frame.assignment_types = template.assignment_types;

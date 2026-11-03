@@ -3258,6 +3258,8 @@ fn function_is_volatile(name: &str) -> bool {
             | "currval"
             | "lastval"
             | "clock_timestamp"
+            | "bicdb_oracle_current_sqlcode"
+            | "bicdb_oracle_current_sqlerrm"
             | "timeofday"
             | "gen_random_uuid"
             | "gen_random_bytes"

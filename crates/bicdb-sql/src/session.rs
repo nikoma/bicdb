@@ -932,6 +932,8 @@ pub struct SqlSession<'db> {
     pub(crate) guc_local_restore: HashMap<String, Option<String>>,
     pub(crate) guc_local_settings_restore: SqlSettingsRestore,
     pub(crate) routine_vars: Arc<BTreeMap<String, SqlValue>>,
+    pub(crate) oracle_exception: Option<Arc<SqlError>>,
+    pub(crate) oracle_error_tokens: Vec<std::sync::Weak<std::sync::atomic::AtomicBool>>,
     /// NOTIFY payloads raised by `pg_notify` AFTER INSERT triggers, for the
     /// protocol layer to deliver to listeners once the writes commit.
     pub(crate) pending_notifications: Vec<(String, String)>,
@@ -2202,6 +2204,8 @@ impl<'db> SqlSession<'db> {
             guc_local_restore: HashMap::new(),
             guc_local_settings_restore: SqlSettingsRestore::default(),
             routine_vars: Arc::new(BTreeMap::new()),
+            oracle_exception: None,
+            oracle_error_tokens: Vec::new(),
             pending_notifications: Vec::new(),
             signed_mutation_grants: BTreeMap::new(),
             signed_application_security_guc_compatibility: false,

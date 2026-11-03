@@ -551,6 +551,13 @@ fn trigram_set(text: &str) -> Result<std::collections::BTreeSet<String>> {
 }
 
 pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Option<SqlValue>> {
+    if matches!(
+        name,
+        "bicdb_oracle_current_sqlcode" | "bicdb_oracle_current_sqlerrm"
+    ) {
+        arity(name, args, 0..=0)?;
+        return oracle::errors::current_diagnostic(name).map(Some);
+    }
     if name.starts_with("bicdb_oracle_nvl_") {
         return oracle_nvl::evaluate(name, args).map(Some);
     }

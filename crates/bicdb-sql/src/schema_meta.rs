@@ -4262,6 +4262,8 @@ impl RoutineFrame {
         let slot_count = template.slot_names.len();
         let mut frame = Self {
             oracle_statement_rollback: false,
+            active_exception: None,
+            oracle_error_diagnostics: None,
             assignment_types: Arc::clone(&template.assignment_types),
             oracle_dates: template.oracle_dates.clone(),
             values: Arc::new(BTreeMap::new()),

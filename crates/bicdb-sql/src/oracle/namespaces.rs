@@ -33,7 +33,7 @@ fn qualify_impl<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str, calls: 
                     if function.language.as_ref().is_some_and(|language| {
                         matches!(
                             preview_routine_language_version(&ident_value(language)),
-                            Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13)
+                            Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14)
                         )
                     }) =>
                 {

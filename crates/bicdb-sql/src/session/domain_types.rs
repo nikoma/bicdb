@@ -1250,10 +1250,17 @@ impl<'db> SqlSession<'db> {
         };
         let mut updated_column = column_schema_from_def(self.db_ref(), &synthetic)?;
         let source_metadata_only = using.is_none()
-            && oracle::temporal_columns::source(&updated_column).is_some()
-            && oracle::temporal_columns::source(&previous_column).is_none_or(|source| {
-                Some(source) == oracle::temporal_columns::source(&updated_column)
-            })
+            && (oracle::temporal_columns::source(&updated_column).is_some()
+                && oracle::temporal_columns::source(&previous_column).is_none_or(|source| {
+                    Some(source) == oracle::temporal_columns::source(&updated_column)
+                })
+                || matches!(
+                    updated_column.type_modifier,
+                    Some(PgTypeModifier::OracleCharacterV1 { .. })
+                ) && (matches!(
+                    previous_column.type_modifier,
+                    Some(PgTypeModifier::Character { .. })
+                ) || previous_column.type_modifier == updated_column.type_modifier))
             && previous_column.user_type.is_none()
             && updated_column.user_type.is_none()
             && previous_column.pg_type == updated_column.pg_type

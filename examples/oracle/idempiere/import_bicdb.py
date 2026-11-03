@@ -227,10 +227,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--snapshot', required=True, type=Path)
     parser.add_argument('--pg-dsn-env', default='BICDB_PG_DSN')
-    parser.add_argument('--phase', choices=['tables', 'data', 'verify', 'indexes', 'types'], required=True)
+    parser.add_argument('--phase', choices=['tables', 'data', 'verify', 'indexes', 'types', 'character-types'], required=True)
     parser.add_argument('--report', required=True, type=Path)
     parser.add_argument('--resume', action='store_true', help='validate the prior journal and completed objects before resuming')
+    parser.add_argument('--source-character-set', choices=['AL32UTF8'], help='qualified source environment for character-types')
+    parser.add_argument('--source-string-size', choices=['STANDARD'], help='qualified source environment for character-types')
+    parser.add_argument('--check-only', action='store_true', help='read-only character-types preflight without probe DDL or ALTER')
     args = parser.parse_args()
+    if args.phase == 'character-types':
+        from character_types import migrate
+        return migrate(args)
+    if args.check_only or args.source_character_set or args.source_string_size:
+        parser.error('character environment and check-only options require --phase character-types')
     if args.phase == 'types':
         from temporal_types import migrate
         return migrate(args)

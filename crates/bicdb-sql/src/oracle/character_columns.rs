@@ -217,6 +217,70 @@ mod tests {
     }
 
     #[test]
+    fn source_character_metadata_attaches_without_rewriting_rows_or_views() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        run(&mut db, "CREATE TABLE legacy_units(id NUMBER PRIMARY KEY,v VARCHAR2(3 CHAR),f CHAR(3 CHAR),CHECK(id>0),UNIQUE(v))").unwrap();
+        run(&mut db, "INSERT INTO legacy_units VALUES(1,'é','A')").unwrap();
+        let mut schema = load_schema(&db, "LEGACY_UNITS").unwrap().unwrap();
+        for column in &mut schema.columns {
+            if matches!(
+                column.type_modifier,
+                Some(PgTypeModifier::OracleCharacterV1 { .. })
+            ) {
+                column.type_modifier = Some(PgTypeModifier::Character { length: 3 });
+            }
+        }
+        save_schema(&mut db, &schema).unwrap();
+        run(
+            &mut db,
+            "CREATE VIEW unit_projection AS SELECT v,f FROM legacy_units",
+        )
+        .unwrap();
+        let before = db.scan_collection("LEGACY_UNITS").unwrap();
+        run(
+            &mut db,
+            "ALTER TABLE legacy_units MODIFY(v VARCHAR2(3 BYTE))",
+        )
+        .unwrap();
+        run(&mut db, "ALTER TABLE legacy_units MODIFY(f CHAR(3 BYTE))").unwrap();
+        assert_eq!(db.scan_collection("LEGACY_UNITS").unwrap(), before);
+        assert_eq!(
+            run(&mut db, "SELECT v,f FROM unit_projection")
+                .unwrap()
+                .rows,
+            vec![vec![
+                SqlValue::String("é".into()),
+                SqlValue::String("A  ".into())
+            ]]
+        );
+        // Once the source unit is known, a different unit remains a real type
+        // change and retains the ordinary dependent-view guard.
+        assert!(run(
+            &mut db,
+            "ALTER TABLE legacy_units MODIFY(v VARCHAR2(3 CHAR))"
+        )
+        .is_err());
+        assert_eq!(
+            run(&mut db, "UPDATE legacy_units SET v='😀' WHERE id=1")
+                .unwrap_err()
+                .sqlstate(),
+            "22001"
+        );
+        assert_eq!(
+            run(&mut db, "INSERT INTO legacy_units VALUES(2,'é','A')")
+                .unwrap_err()
+                .sqlstate(),
+            "23505"
+        );
+    }
+
+    #[test]
     fn standard_byte_ceiling_bounds_fixed_padding() {
         let value = coerce(SqlValue::String("é".into()), true, 2000, Unit::Characters)
             .unwrap()

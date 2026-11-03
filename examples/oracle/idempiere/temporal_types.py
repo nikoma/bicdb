@@ -99,10 +99,14 @@ def check_physical_type(columns, table, column, expected_oid, expected_modifiers
         raise ValueError('target physical temporal type differs from the source declaration')
 
 
-def table_fingerprint(cursor, schema, table):
+def table_fingerprint(cursor, schema, table, validate_row=None):
     columns = ','.join(quote(column) for column in table['columns'])
     cursor.execute('SELECT ' + columns + ' FROM ' + quote(schema) + '.' + quote(table['name']), prepare=False)
-    rows = collections.Counter(row_hash(row) for row in cursor)
+    rows = collections.Counter()
+    for row in cursor:
+        if validate_row is not None:
+            validate_row(row)
+        rows[row_hash(row)] += 1
     digest = hashlib.sha256()
     for value, count in sorted(rows.items()):
         digest.update(value)

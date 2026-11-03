@@ -31,6 +31,9 @@ def run(reference, target, schema, prefix):
         ("generator_null_keeps_root", "SELECT LEVEL FROM DUAL CONNECT BY LEVEL<=NULL", [[1]], None),
         ("start_with_can_remove_root", "SELECT LEVEL FROM DUAL START WITH 1=0 CONNECT BY LEVEL<=3", [], None),
         ("multiple_generator_roots", "SELECT LEVEL,COUNT(*) FROM (SELECT 1 AS N FROM DUAL UNION ALL SELECT 2 AS N FROM DUAL) CONNECT BY LEVEL<=3 GROUP BY LEVEL ORDER BY LEVEL", [[1,2],[2,4],[3,8]], None),
+        ("duplicate_prior_values_share_cycle_key", "SELECT ID,LABEL,LEVEL,CONNECT_BY_ISCYCLE FROM (SELECT 1 ID,0 PARENT_ID,'A' LABEL FROM DUAL UNION ALL SELECT 1 ID,1 PARENT_ID,'B' LABEL FROM DUAL) START WITH PARENT_ID=0 CONNECT BY NOCYCLE PRIOR ID=PARENT_ID", [[1,"A",1,1]], None),
+        ("constant_prior_cycle", "SELECT LEVEL FROM DUAL CONNECT BY PRIOR 1=1 AND LEVEL<=3", None, "ORA-01436"),
+        ("volatile_prior_changes_cycle_key", "SELECT LEVEL FROM DUAL CONNECT BY PRIOR SYS_GUID() IS NOT NULL AND LEVEL<=3", [[1],[2],[3]], None),
     ]
     try:
         for index, c in enumerate((reference, target)):

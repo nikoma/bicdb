@@ -4,13 +4,13 @@
   "runtime_binary_sha256": "566674990af56e236de7675b98920b2e07d25b905438b2b9507714cd48f22cf8",
   "source_qualified": true,
   "matched": 0,
-  "total": 13,
+  "total": 16,
   "success": false,
   "cleanup_errors": [],
   "cases": [
     {
       "id": "depth_first_siblings",
-      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_9864B6E5_N\" START WITH PARENT_ID IS NULL CONNECT BY PRIOR ID=PARENT_ID ORDER SIBLINGS BY ID",
+      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_163D7035_N\" START WITH PARENT_ID IS NULL CONNECT BY PRIOR ID=PARENT_ID ORDER SIBLINGS BY ID",
       "oracle": {
         "rows": [
           [
@@ -63,7 +63,7 @@
     },
     {
       "id": "subtree_root_level",
-      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_9864B6E5_N\" START WITH ID=2 CONNECT BY PRIOR ID=PARENT_ID ORDER SIBLINGS BY ID",
+      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_163D7035_N\" START WITH ID=2 CONNECT BY PRIOR ID=PARENT_ID ORDER SIBLINGS BY ID",
       "oracle": {
         "rows": [
           [
@@ -92,7 +92,7 @@
     },
     {
       "id": "reverse_prior",
-      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_9864B6E5_N\" START WITH ID=4 CONNECT BY PRIOR PARENT_ID=ID",
+      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_163D7035_N\" START WITH ID=4 CONNECT BY PRIOR PARENT_ID=ID",
       "oracle": {
         "rows": [
           [
@@ -129,7 +129,7 @@
     },
     {
       "id": "where_retains_descendants",
-      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_9864B6E5_N\" WHERE ID<>2 START WITH PARENT_ID IS NULL CONNECT BY PRIOR ID=PARENT_ID ORDER SIBLINGS BY ID",
+      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_163D7035_N\" WHERE ID<>2 START WITH PARENT_ID IS NULL CONNECT BY PRIOR ID=PARENT_ID ORDER SIBLINGS BY ID",
       "oracle": {
         "rows": [
           [
@@ -174,7 +174,7 @@
     },
     {
       "id": "connect_predicate_prunes",
-      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_9864B6E5_N\" START WITH PARENT_ID IS NULL CONNECT BY PRIOR ID=PARENT_ID AND LEVEL<=2 ORDER SIBLINGS BY ID",
+      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_163D7035_N\" START WITH PARENT_ID IS NULL CONNECT BY PRIOR ID=PARENT_ID AND LEVEL<=2 ORDER SIBLINGS BY ID",
       "oracle": {
         "rows": [
           [
@@ -219,7 +219,7 @@
     },
     {
       "id": "cycle_error",
-      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_9864B6E5_N\" START WITH ID=10 CONNECT BY PRIOR ID=PARENT_ID",
+      "sql": "SELECT ID,LEVEL FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_163D7035_N\" START WITH ID=10 CONNECT BY PRIOR ID=PARENT_ID",
       "oracle": {
         "code": "ORA-01436"
       },
@@ -231,7 +231,7 @@
     },
     {
       "id": "nocycle",
-      "sql": "SELECT ID,LEVEL,CONNECT_BY_ISCYCLE FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_9864B6E5_N\" START WITH ID=10 CONNECT BY NOCYCLE PRIOR ID=PARENT_ID",
+      "sql": "SELECT ID,LEVEL,CONNECT_BY_ISCYCLE FROM \"IDEMPIERE_QUAL\".\"BICDB_HQ_163D7035_N\" START WITH ID=10 CONNECT BY NOCYCLE PRIOR ID=PARENT_ID",
       "oracle": {
         "rows": [
           [
@@ -385,6 +385,71 @@
             },
             {
               "number": "8"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "0A000"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "duplicate_prior_values_share_cycle_key",
+      "sql": "SELECT ID,LABEL,LEVEL,CONNECT_BY_ISCYCLE FROM (SELECT 1 ID,0 PARENT_ID,'A' LABEL FROM DUAL UNION ALL SELECT 1 ID,1 PARENT_ID,'B' LABEL FROM DUAL) START WITH PARENT_ID=0 CONNECT BY NOCYCLE PRIOR ID=PARENT_ID",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            "A",
+            {
+              "number": "1"
+            },
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "0A000"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "constant_prior_cycle",
+      "sql": "SELECT LEVEL FROM DUAL CONNECT BY PRIOR 1=1 AND LEVEL<=3",
+      "oracle": {
+        "code": "ORA-01436"
+      },
+      "bicdb": {
+        "code": "0A000"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "volatile_prior_changes_cycle_key",
+      "sql": "SELECT LEVEL FROM DUAL CONNECT BY PRIOR SYS_GUID() IS NOT NULL AND LEVEL<=3",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "3"
             }
           ]
         ]

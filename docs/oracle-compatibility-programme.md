@@ -221,11 +221,12 @@ Rust batch passes 1,332 tests and all 266 retained PostgreSQL controls pass.
 Dictionary queries remain 0/11, and only one of 14 accepted-procedure NULL-input
 diagnostics completes. Hierarchy, collections and full execution remain open.
 The [hierarchy contract inventory](evidence/oracle-hierarchy-contracts-2026-11-03/README.md)
-qualifies 13 source cases covering root initialization, PRIOR direction, output
-filtering, sibling order and cycle handling. The target remains 0/13 with explicit
+qualifies 16 source cases covering root initialization, PRIOR direction, output
+filtering, sibling order and expression-based cycle handling. The target remains 0/16 with explicit
 unsupported-feature errors. In particular, nonpositive/NULL generator bounds
 retain a root unless START WITH removes it; native series generation alone is
-not equivalent. This checkpoint leaves the 61/62 definition baseline unchanged.
+not equivalent. Distinct rows can share a PRIOR cycle key, while volatile PRIOR
+values change cycle behavior. This checkpoint leaves the 61/62 definition baseline unchanged.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source

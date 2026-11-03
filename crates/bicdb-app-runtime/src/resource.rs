@@ -3639,6 +3639,7 @@ mod tests {
             method,
             template,
             export: "carrier_resource_api".to_string(),
+            script: None,
             resource: Some(contract.name.clone()),
             operation: Some(operation),
             service_call: None,

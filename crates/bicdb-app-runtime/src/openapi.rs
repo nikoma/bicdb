@@ -37,14 +37,24 @@ pub fn generate_openapi(manifest: &ExtensionManifest) -> Result<Value> {
             (Some(contract), Some(operation)) => {
                 resource_operation(route.name.as_str(), contract, operation)
             }
-            _ => json!({
-                "operationId": route.name,
-                "responses": {
-                    "200": { "description": "Application response" },
-                    "default": { "$ref": "#/components/responses/Problem" }
-                },
-                "x-bicdb-export": route.export,
-            }),
+            _ => match &route.script {
+                Some(script) => json!({
+                    "operationId": route.name,
+                    "responses": {
+                        "200": { "description": "Application response" },
+                        "default": { "$ref": "#/components/responses/Problem" }
+                    },
+                    "x-bicdb-script": { "module": script.module, "export": script.export },
+                }),
+                None => json!({
+                    "operationId": route.name,
+                    "responses": {
+                        "200": { "description": "Application response" },
+                        "default": { "$ref": "#/components/responses/Problem" }
+                    },
+                    "x-bicdb-export": route.export,
+                }),
+            },
         };
         paths
             .entry(route.template.clone())

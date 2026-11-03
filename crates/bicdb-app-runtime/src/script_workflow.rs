@@ -14,6 +14,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(test)]
+#[path = "script_route_tests.rs"]
+mod route_tests;
+#[cfg(test)]
 #[path = "script_workflow_tests.rs"]
 mod tests;
 
@@ -34,6 +37,8 @@ struct Host {
     transaction: Option<HostHandle>,
     request_id: u64,
     retry: Option<u64>,
+    /// Durable workflow jobs may request a retry; HTTP route handlers cannot.
+    allow_retry: bool,
     options: ScriptWorkflowOptions,
 }
 type Result<T> = std::result::Result<T, String>;
@@ -210,6 +215,9 @@ impl Host {
                 Ok(Value::Null)
             }
             "jobs.retry" if args.len() == 1 => {
+                if !self.allow_retry {
+                    return Err("jobs.retry is only available to durable workflow jobs".into());
+                }
                 if self.transaction.is_some() {
                     return Err("retry cannot be requested inside a transaction".into());
                 }
@@ -327,35 +335,7 @@ pub fn execute_script_workflow(
     {
         return Err("workflow identity or tenant mismatch".into());
     }
-    let remaining = actor.deadline_unix_ms - now_ms()?;
-    if remaining <= 0 {
-        return Err("workflow deadline exceeded".into());
-    }
-    options.limits.timeout = options
-        .limits
-        .timeout
-        .min(std::time::Duration::from_millis(remaining as u64));
-    let signed_limits = capability.script_limits();
-    options.limits.timeout = options
-        .limits
-        .timeout
-        .min(std::time::Duration::from_millis(signed_limits.timeout_ms));
-    options.limits.memory_bytes = options
-        .limits
-        .memory_bytes
-        .min(signed_limits.memory_bytes.try_into().unwrap_or(usize::MAX));
-    options.limits.source_bytes = options.limits.source_bytes.min(
-        signed_limits
-            .max_input_bytes
-            .try_into()
-            .unwrap_or(usize::MAX),
-    );
-    options.limits.result_bytes = options.limits.result_bytes.min(
-        signed_limits
-            .max_output_bytes
-            .try_into()
-            .unwrap_or(usize::MAX),
-    );
+    clamp_limits(&capability, &mut options.limits)?;
     if script.executable.len() > options.limits.source_bytes
         || serde_json::to_vec(&job.event)
             .map_err(|e| e.to_string())?
@@ -364,22 +344,13 @@ pub fn execute_script_workflow(
     {
         return Err("workflow input limit exceeded".into());
     }
-    let timeout_ms: i64 = options
-        .limits
-        .timeout
-        .as_millis()
-        .try_into()
-        .unwrap_or(i64::MAX);
-    let deadline = capability
-        .actor()
-        .deadline_unix_ms
-        .min(now_ms()?.saturating_add(timeout_ms));
-    capability.replace_actor_deadline_unix_ms(deadline);
+    bind_deadline(&mut capability, &options.limits)?;
     let host = Rc::new(RefCell::new(Host {
         capability,
         transaction: None,
         request_id: 0,
         retry: None,
+        allow_retry: true,
         options: options.clone(),
     }));
     let callback = host.clone();
@@ -431,6 +402,123 @@ pub fn execute_script_workflow(
         }
         Ok(ScriptWorkflowOutcome::Completed(value))
     })
+}
+
+/// First line of an engine error, bounded so diagnostics never echo stacks.
+pub(crate) fn bounded_error_text(message: &str) -> String {
+    let line = message.lines().next().unwrap_or_default().trim();
+    let mut end = line.len().min(512);
+    while !line.is_char_boundary(end) {
+        end -= 1;
+    }
+    line[..end].to_string()
+}
+
+/// Narrow script limits to the caller deadline and the signed manifest limits.
+fn clamp_limits(capability: &CapabilityHost, limits: &mut bicdb_script::Limits) -> Result<()> {
+    let remaining = capability.actor().deadline_unix_ms - now_ms()?;
+    if remaining <= 0 {
+        return Err("workflow deadline exceeded".into());
+    }
+    limits.timeout = limits
+        .timeout
+        .min(std::time::Duration::from_millis(remaining as u64));
+    let signed_limits = capability.script_limits();
+    limits.timeout = limits
+        .timeout
+        .min(std::time::Duration::from_millis(signed_limits.timeout_ms));
+    limits.memory_bytes = limits
+        .memory_bytes
+        .min(signed_limits.memory_bytes.try_into().unwrap_or(usize::MAX));
+    limits.source_bytes = limits.source_bytes.min(
+        signed_limits
+            .max_input_bytes
+            .try_into()
+            .unwrap_or(usize::MAX),
+    );
+    limits.result_bytes = limits.result_bytes.min(
+        signed_limits
+            .max_output_bytes
+            .try_into()
+            .unwrap_or(usize::MAX),
+    );
+    Ok(())
+}
+
+/// Bind the capability host's deadline to the clamped script timeout.
+fn bind_deadline(capability: &mut CapabilityHost, limits: &bicdb_script::Limits) -> Result<i64> {
+    let timeout_ms: i64 = limits.timeout.as_millis().try_into().unwrap_or(i64::MAX);
+    let deadline = capability
+        .actor()
+        .deadline_unix_ms
+        .min(now_ms()?.saturating_add(timeout_ms));
+    capability.replace_actor_deadline_unix_ms(deadline);
+    Ok(deadline)
+}
+
+/// Execute a signed package script route handler for one authenticated
+/// caller. The capability host is built from the caller's actor, so declared
+/// SQL runs under that caller's row-level security; an open transaction is
+/// always rolled back. Engine errors are reduced to their first line.
+pub(crate) fn execute_script_route(
+    javascript: &str,
+    export: &str,
+    request: &Value,
+    mut capability: CapabilityHost,
+    mut options: ScriptWorkflowOptions,
+) -> crate::Result<Value> {
+    use crate::AppRuntimeError;
+    let failed = |message: String| {
+        AppRuntimeError::Extension(bicdb_extension::ExtensionError::Runtime(format!(
+            "script route `{export}` failed: {message}"
+        )))
+    };
+    let timed_out =
+        || AppRuntimeError::Timeout(format!("script route `{export}` exceeded its deadline"));
+    clamp_limits(&capability, &mut options.limits).map_err(|_| timed_out())?;
+    if javascript.len() > options.limits.source_bytes {
+        return Err(failed(
+            "compiled script exceeds the signed input limit".into(),
+        ));
+    }
+    let deadline = bind_deadline(&mut capability, &options.limits).map_err(failed)?;
+    let host = Rc::new(RefCell::new(Host {
+        capability,
+        transaction: None,
+        request_id: 0,
+        retry: None,
+        allow_retry: false,
+        options: options.clone(),
+    }));
+    let callback = host.clone();
+    let result = bicdb_script::execute_entry(
+        javascript,
+        export,
+        request,
+        &options.limits,
+        move |method, args| callback.borrow_mut().call(method, args),
+    );
+    let mut host = host.borrow_mut();
+    let left_open = host.transaction.is_some();
+    host.rollback().map_err(failed)?;
+    let expired = || now_ms().map_or(true, |now| now >= deadline);
+    let value = match result {
+        Ok(value) => value,
+        Err(_) if expired() => return Err(timed_out()),
+        Err(error) => {
+            return Err(failed(bounded_error_text(&error.0)));
+        }
+    };
+    if left_open {
+        return Err(failed("handler left a transaction open".into()));
+    }
+    if expired() {
+        return Err(timed_out());
+    }
+    if serde_json::to_vec(&value)?.len() > options.limits.result_bytes {
+        return Err(failed("result exceeds the signed output limit".into()));
+    }
+    Ok(value)
 }
 
 /// Execute and settle one durable broker delivery. The caller constructs the

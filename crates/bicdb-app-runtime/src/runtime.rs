@@ -200,6 +200,8 @@ pub struct PackageSnapshot {
     pub readiness: ApplicationReadiness,
     pub activated_at_ms: i64,
     modules: BTreeMap<String, Arc<WasmExtension>>,
+    /// Package script name to JavaScript compiled from the signed source.
+    scripts: BTreeMap<String, Arc<str>>,
     manifest: Arc<bicdb_extension::ExtensionManifest>,
     carrier_plan: Option<Arc<ApplicationExecutionPlan>>,
 }

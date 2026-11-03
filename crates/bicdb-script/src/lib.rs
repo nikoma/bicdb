@@ -109,6 +109,35 @@ pub fn execute(
     limits: &Limits,
     host: impl FnMut(&str, serde_json::Value) -> Result<serde_json::Value, String> + 'static,
 ) -> Result<serde_json::Value, ScriptError> {
+    execute_entry(javascript, "workflow", event, limits, host)
+}
+
+/// True when `name` can name a plain global JavaScript function.
+pub fn is_entry_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    name.len() <= 128
+        && bytes
+            .next()
+            .is_some_and(|byte| byte.is_ascii_alphabetic() || matches!(byte, b'_' | b'$'))
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$'))
+        && !matches!(
+            name,
+            "event" | "call" | "sql" | "db" | "http" | "secrets" | "jobs" | "json" | "eval"
+        )
+}
+
+/// Same sandbox as [`execute`], calling the global function `entry(event)`
+/// instead of `workflow(event)`. The entry may return a value or a promise.
+pub fn execute_entry(
+    javascript: &str,
+    entry: &str,
+    event: &serde_json::Value,
+    limits: &Limits,
+    host: impl FnMut(&str, serde_json::Value) -> Result<serde_json::Value, String> + 'static,
+) -> Result<serde_json::Value, ScriptError> {
+    if !is_entry_name(entry) {
+        return Err(ScriptError("invalid entry function name".into()));
+    }
     if javascript.len() > limits.source_bytes
         || limits.memory_bytes == 0
         || limits.timeout.is_zero()
@@ -135,37 +164,55 @@ pub fn execute(
         let run = || -> rquickjs::Result<serde_json::Value> {
             ctx.globals().set("__event", event)?;
             let calls = RefCell::new(0usize);
-            ctx.globals().set("__host", Func::new(move |method: String, arguments: String| -> String {
-                let invoke = || -> Result<serde_json::Value, String> {
-                    *calls.borrow_mut() += 1;
-                    if *calls.borrow() > callback_limits.host_calls || Instant::now() >= deadline {
-                        return Err("host call limit exceeded".into());
+            ctx.globals().set(
+                "__host",
+                Func::new(move |method: String, arguments: String| -> String {
+                    let invoke = || -> Result<serde_json::Value, String> {
+                        *calls.borrow_mut() += 1;
+                        if *calls.borrow() > callback_limits.host_calls
+                            || Instant::now() >= deadline
+                        {
+                            return Err("host call limit exceeded".into());
+                        }
+                        if arguments.len() > callback_limits.result_bytes {
+                            return Err("host argument limit exceeded".into());
+                        }
+                        let value = (host.borrow_mut())(
+                            &method,
+                            serde_json::from_str(&arguments).map_err(|e| e.to_string())?,
+                        )?;
+                        if serde_json::to_vec(&value).map_err(|e| e.to_string())?.len()
+                            > callback_limits.result_bytes
+                        {
+                            return Err("host response limit exceeded".into());
+                        }
+                        Ok(value)
+                    };
+                    match invoke() {
+                        Ok(value) => serde_json::json!({"value":value}).to_string(),
+                        Err(error) => serde_json::json!({"error":error}).to_string(),
                     }
-                    if arguments.len() > callback_limits.result_bytes {
-                        return Err("host argument limit exceeded".into());
-                    }
-                    let value = (host.borrow_mut())(&method, serde_json::from_str(&arguments).map_err(|e| e.to_string())?)?;
-                    if serde_json::to_vec(&value).map_err(|e| e.to_string())?.len() > callback_limits.result_bytes {
-                        return Err("host response limit exceeded".into());
-                    }
-                    Ok(value)
-                };
-                match invoke() {
-                    Ok(value) => serde_json::json!({"value":value}).to_string(),
-                    Err(error) => serde_json::json!({"error":error}).to_string(),
-                }
-            }))?;
+                }),
+            )?;
             ctx.eval::<(), _>(include_str!("bindings.js"))?;
             ctx.eval::<(), _>(javascript.as_bytes())?;
-            let promise: Promise = ctx.eval("Promise.resolve().then(() => workflow(event)).then(value => JSON.stringify(value))")?;
+            let promise: Promise = ctx.eval(format!(
+                "Promise.resolve().then(() => {entry}(event)).then(value => JSON.stringify(value))"
+            ))?;
             for _ in 0..limits.pending_jobs {
-                if Instant::now() >= deadline { break; }
+                if Instant::now() >= deadline {
+                    break;
+                }
                 if let Some(result) = promise.result::<String>() {
                     let result = result?;
-                    if result.len() > limits.result_bytes { return Err(rquickjs::Error::Unknown); }
+                    if result.len() > limits.result_bytes {
+                        return Err(rquickjs::Error::Unknown);
+                    }
                     return serde_json::from_str(&result).map_err(|_| rquickjs::Error::Unknown);
                 }
-                if !ctx.execute_pending_job() { break; }
+                if !ctx.execute_pending_job() {
+                    break;
+                }
             }
             Err(rquickjs::Error::Unknown)
         };

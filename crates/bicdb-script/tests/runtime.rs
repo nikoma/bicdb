@@ -1,4 +1,4 @@
-use bicdb_script::{compile_typescript, execute, Limits};
+use bicdb_script::{compile_typescript, execute, execute_entry, is_entry_name, Limits};
 use serde_json::json;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -117,4 +117,53 @@ fn bounds_execution_microtasks_results_and_host_calls_without_os_access() {
         result,
         json!(["undefined", "undefined", "undefined", "undefined"])
     );
+}
+
+#[test]
+fn named_entry_functions_receive_the_event_and_reject_unsafe_names() {
+    let script = compile_typescript(
+        "async function getItems(request: {path: string}) { return {status: 200, body: request.path}; }\nfunction workflow() { return 'workflow'; }",
+        &Limits::default(),
+    )
+    .unwrap();
+    let value = execute_entry(
+        &script.javascript,
+        "getItems",
+        &json!({"path": "/items"}),
+        &Limits::default(),
+        |_, _| Ok(json!(null)),
+    )
+    .unwrap();
+    assert_eq!(value, json!({"status": 200, "body": "/items"}));
+    assert_eq!(
+        execute(
+            &script.javascript,
+            &json!({}),
+            &Limits::default(),
+            |_, _| Ok(json!(null))
+        )
+        .unwrap(),
+        json!("workflow")
+    );
+    let missing = execute_entry(
+        &script.javascript,
+        "absent",
+        &json!({}),
+        &Limits::default(),
+        |_, _| Ok(json!(null)),
+    )
+    .unwrap_err();
+    assert!(missing.to_string().contains("absent"), "{missing}");
+    for name in ["", "1x", "a-b", "a.b", "f()", "db", "event", "eval"] {
+        assert!(!is_entry_name(name), "{name}");
+        assert!(execute_entry(
+            &script.javascript,
+            name,
+            &json!({}),
+            &Limits::default(),
+            |_, _| Ok(json!(null))
+        )
+        .is_err());
+    }
+    assert!(is_entry_name("getItems") && is_entry_name("_h$1"));
 }

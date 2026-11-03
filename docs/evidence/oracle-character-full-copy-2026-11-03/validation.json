@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "d6efa6ebdb23c834fb8a2877fd6625781370774820bfca67d1a2f3dde7c71366",
+  "storage_filesystem": "ext2/ext3",
+  "application_qualified": false,
+  "source_trial_connection_closed_during_after_inventory": true,
+  "persistent_copy_reopen_qualified": true,
+  "passes": [
+    {
+      "phase": "first_open",
+      "tables": 915,
+      "rows": 185537,
+      "character_declarations": 7150,
+      "all_fingerprints_matched": true
+    },
+    {
+      "phase": "reopen",
+      "tables": 915,
+      "rows": 185537,
+      "character_declarations": 7150,
+      "all_fingerprints_matched": true
+    }
+  ],
+  "success": true,
+  "source_files_verified": 997,
+  "byte_identical_copy": true,
+  "original_source_snapshot_preserved": true,
+  "host_crash_durability_qualified": false,
+  "source_application_execution_qualified": false,
+  "minimum_available_gib": 8,
+  "peak_owned_group_rss_bytes": 2182946816,
+  "minimum_observed_available_bytes": 23391551488
+}

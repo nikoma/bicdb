@@ -227,6 +227,12 @@ unsupported-feature errors. In particular, nonpositive/NULL generator bounds
 retain a root unless START WITH removes it; native series generation alone is
 not equivalent. Distinct rows can share a PRIOR cycle key, while volatile PRIOR
 values change cycle behavior. This checkpoint leaves the 61/62 definition baseline unchanged.
+The [full character-copy verification](evidence/oracle-character-full-copy-2026-11-03/README.md)
+completes reconciliation of all 910 affected tables and 7,150 declarations.
+A byte-identical disk copy passes full 915-table/185,537-row fingerprints and
+declaration checks on two independent opens. The migration trial's earlier
+after-inventory connection closure remains unexplained; long-session reliability,
+host-crash durability and application workflows remain unqualified.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source

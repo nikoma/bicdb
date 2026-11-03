@@ -1786,15 +1786,15 @@ pub(crate) fn json_record_function_rows(
         Some(SqlValue::Json(json)) if json.is_object() => {
             let object = json.as_object().expect("checked object");
             alias
-            .columns
-            .iter()
-            .map(|column| {
-                object
-                    .get(&column.name.value)
-                    .map(json_to_sql_value)
-                    .unwrap_or(SqlValue::Null)
-            })
-            .collect()
+                .columns
+                .iter()
+                .map(|column| {
+                    object
+                        .get(&column.name.value)
+                        .map(json_to_sql_value)
+                        .unwrap_or(SqlValue::Null)
+                })
+                .collect()
         }
         Some(_) => {
             return Err(json_set_function_type_error(
@@ -1900,7 +1900,9 @@ fn json_record_raw_input(raw: &str, pg_type: &str) -> Result<SqlValue> {
     Ok(match value.parsed() {
         JsonValue::Null => SqlValue::Null,
         JsonValue::String(value) => SqlValue::String(value.clone()),
-        JsonValue::Array(_) if pg_type.ends_with("[]") => SqlValue::Json(value.parsed().clone().into()),
+        JsonValue::Array(_) if pg_type.ends_with("[]") => {
+            SqlValue::Json(value.parsed().clone().into())
+        }
         _ if pg_type == "json" => SqlValue::JsonText(value),
         _ if pg_type == "jsonb" => SqlValue::JsonText(value),
         _ => SqlValue::String(value.raw().trim().to_string()),

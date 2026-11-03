@@ -892,11 +892,14 @@ fn routine_frame_slot_array_assignment_mutates_without_cloning_existing_array() 
     );
     assert_eq!(
         frame.get("flexible_values"),
-        SqlValue::Json(JsonValue::Array(
-            (0..64)
-                .map(|idx| JsonValue::Number(serde_json::Number::from(idx)))
-                .collect()
-        ).into())
+        SqlValue::Json(
+            JsonValue::Array(
+                (0..64)
+                    .map(|idx| JsonValue::Number(serde_json::Number::from(idx)))
+                    .collect()
+            )
+            .into()
+        )
     );
 }
 

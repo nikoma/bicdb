@@ -1071,14 +1071,17 @@ pub(crate) fn pg_stats_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>
 }
 
 fn pg_stats_anyarray(values: Vec<JsonValue>, element_oid: i32) -> SqlValue {
-    SqlValue::json(serde_json::json!({
-        "$bicdb_array_input": {
-            "value": values,
-            "lower_bounds": [1],
-            "element_oid": element_oid,
-            "declared_type": "anyarray",
-        }
-    }).into())
+    SqlValue::json(
+        serde_json::json!({
+            "$bicdb_array_input": {
+                "value": values,
+                "lower_bounds": [1],
+                "element_oid": element_oid,
+                "declared_type": "anyarray",
+            }
+        })
+        .into(),
+    )
 }
 
 pub(crate) fn catalog_name_matches(names: Option<&BTreeSet<String>>, name: &str) -> bool {
@@ -5647,13 +5650,16 @@ pub(crate) fn constraint_column_names(
 }
 
 pub(crate) fn sql_string_array_value(values: &[String]) -> SqlValue {
-    SqlValue::Json(JsonValue::Array(
-        values
-            .iter()
-            .cloned()
-            .map(JsonValue::String)
-            .collect::<Vec<_>>(),
-    ).into())
+    SqlValue::Json(
+        JsonValue::Array(
+            values
+                .iter()
+                .cloned()
+                .map(JsonValue::String)
+                .collect::<Vec<_>>(),
+        )
+        .into(),
+    )
 }
 
 pub(crate) fn constraint_definition_value(

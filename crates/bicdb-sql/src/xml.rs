@@ -779,12 +779,15 @@ pub(crate) fn eval_xml_function_value(
                     SqlValue::Json(value) => Some(&**value),
                     _ => None,
                 });
-                SqlValue::Json(JsonValue::Array(
-                    xpath_results(&xml_text(&args[1]), &xml_text(&args[0]), namespaces)?
-                        .into_iter()
-                        .map(JsonValue::String)
-                        .collect(),
-                ).into())
+                SqlValue::Json(
+                    JsonValue::Array(
+                        xpath_results(&xml_text(&args[1]), &xml_text(&args[0]), namespaces)?
+                            .into_iter()
+                            .map(JsonValue::String)
+                            .collect(),
+                    )
+                    .into(),
+                )
             }
         }
         "xpath_exists" | "bicdb_xmlexists" => {

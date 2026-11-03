@@ -100,7 +100,10 @@ fn json_aggregate_filter_works_in_bound_and_unbound_row_execution() {
                FROM (SELECT value, ord, active FROM filter_items) rows"#,
         )
         .unwrap();
-    assert_eq!(unbound.rows, vec![vec![SqlValue::json(json!(["d", "a"]).into())]]);
+    assert_eq!(
+        unbound.rows,
+        vec![vec![SqlValue::json(json!(["d", "a"]).into())]]
+    );
 
     let empty = session
         .execute(
@@ -265,12 +268,15 @@ fn carrier_jsonb_role_filter_accepts_missing_empty_and_visible_roles() {
 
     assert_eq!(
         result.rows,
-        vec![vec![SqlValue::json(json!([
-            {"id": "public"},
-            {"id": "member", "required_role": "member", "roles": ["member"]},
-            {"id": "empty-roles", "roles": []},
-            {"id": "scalar-roles", "roles": "member"}
-        ]).into())]]
+        vec![vec![SqlValue::json(
+            json!([
+                {"id": "public"},
+                {"id": "member", "required_role": "member", "roles": ["member"]},
+                {"id": "empty-roles", "roles": []},
+                {"id": "scalar-roles", "roles": "member"}
+            ])
+            .into()
+        )]]
     );
 }
 

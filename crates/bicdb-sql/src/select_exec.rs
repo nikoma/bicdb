@@ -3211,9 +3211,9 @@ pub(crate) fn finish_json_agg(
         values.push(value);
     }
     if binary {
-        Ok(SqlValue::Json(JsonValue::Array(
-            values.into_iter().map(sql_value_to_json).collect(),
-        ).into()))
+        Ok(SqlValue::Json(
+            JsonValue::Array(values.into_iter().map(sql_value_to_json).collect()).into(),
+        ))
     } else {
         let raw = format!(
             "[{}]",

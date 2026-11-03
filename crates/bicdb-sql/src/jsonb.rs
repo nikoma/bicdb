@@ -903,9 +903,9 @@ fn build_object_with_unique(args: &[SqlValue], binary: bool, unique: bool) -> Re
 
 fn build_array(args: &[SqlValue], binary: bool) -> Result<SqlValue> {
     if binary {
-        return Ok(SqlValue::Json(JsonValue::Array(
-            args.iter().map(sql_value_to_json).collect(),
-        ).into()));
+        return Ok(SqlValue::Json(
+            JsonValue::Array(args.iter().map(sql_value_to_json).collect()).into(),
+        ));
     }
     json_text_result(format!(
         "[{}]",
@@ -1304,7 +1304,9 @@ fn json_format_input(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
     let raw = match &args[0] {
         SqlValue::JsonText(value) if !encoded => return Ok(SqlValue::JsonText(value.clone())),
         SqlValue::Json(value) if !encoded => {
-            return Ok(SqlValue::JsonText(PgJsonText::from_value((**value).clone())));
+            return Ok(SqlValue::JsonText(PgJsonText::from_value(
+                (**value).clone(),
+            )));
         }
         SqlValue::String(value) if value.starts_with("\\x") => {
             let bytes = crate::parse_bytea_text(value).map_err(|_| {
@@ -1488,7 +1490,13 @@ fn jsonb_set(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
     }
 
     let mut result = target.clone();
-    set_json_path(std::sync::Arc::make_mut(&mut result), &path, 0, new_value, create_if_missing)?;
+    set_json_path(
+        std::sync::Arc::make_mut(&mut result),
+        &path,
+        0,
+        new_value,
+        create_if_missing,
+    )?;
     Ok(SqlValue::Json(result))
 }
 
@@ -1561,7 +1569,13 @@ fn jsonb_insert(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
         return Ok(SqlValue::Json(target.clone()));
     }
     let mut result = target.clone();
-    insert_json_path(std::sync::Arc::make_mut(&mut result), &path, 0, new_value, insert_after)?;
+    insert_json_path(
+        std::sync::Arc::make_mut(&mut result),
+        &path,
+        0,
+        new_value,
+        insert_after,
+    )?;
     Ok(SqlValue::Json(result))
 }
 
@@ -1681,16 +1695,19 @@ fn jsonb_binary_wrapper(
             let keys = if args.len() == 2 {
                 args[1].clone()
             } else {
-                SqlValue::Json(JsonValue::Array(
-                    args[1..]
-                        .iter()
-                        .enumerate()
-                        .map(|(index, value)| match value {
-                            SqlValue::String(value) => Ok(JsonValue::String(value.clone())),
-                            _ => Err(argument_type_error(name, index + 2, "text")),
-                        })
-                        .collect::<Result<Vec<_>>>()?,
-                ).into())
+                SqlValue::Json(
+                    JsonValue::Array(
+                        args[1..]
+                            .iter()
+                            .enumerate()
+                            .map(|(index, value)| match value {
+                                SqlValue::String(value) => Ok(JsonValue::String(value.clone())),
+                                _ => Err(argument_type_error(name, index + 2, "text")),
+                            })
+                            .collect::<Result<Vec<_>>>()?,
+                    )
+                    .into(),
+                )
             };
             crate::eval_json_delete_value(args[0].clone(), keys)
         }
@@ -2336,7 +2353,11 @@ mod tests {
             SqlValue::json(json!({"b": [{"d": 1}, [2]]}))
         );
         assert_eq!(
-            evaluate("jsonb_strip_nulls", vec![SqlValue::Json(JsonValue::Null.into())]).unwrap(),
+            evaluate(
+                "jsonb_strip_nulls",
+                vec![SqlValue::Json(JsonValue::Null.into())]
+            )
+            .unwrap(),
             SqlValue::Json(JsonValue::Null.into())
         );
     }

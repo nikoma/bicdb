@@ -3192,13 +3192,16 @@ pub(crate) fn eval_fts_function_value(
         }
         "tsvector_to_array" => {
             require_argument_count(name, args, 1)?;
-            SqlValue::Json(serde_json::Value::Array(
-                sql_value_tsvector(&args[0])?
-                    .lexemes
-                    .into_iter()
-                    .map(|lexeme| serde_json::Value::String(lexeme.text))
-                    .collect(),
-            ).into())
+            SqlValue::Json(
+                serde_json::Value::Array(
+                    sql_value_tsvector(&args[0])?
+                        .lexemes
+                        .into_iter()
+                        .map(|lexeme| serde_json::Value::String(lexeme.text))
+                        .collect(),
+                )
+                .into(),
+            )
         }
         "ts_rank" | "ts_rank_cd" => {
             let (weights, vector, query, normalization) = rank_arguments(args)?;
@@ -3287,9 +3290,13 @@ pub(crate) fn eval_fts_db_function_value(
         }
         let index = sql_value_str(&args[0])?;
         let status = db.full_text_build_lifecycle(&index)?;
-        return Ok(Some(SqlValue::Json(serde_json::to_value(status).map_err(
-            |error| SqlError::InvalidSql(format!("FTS lifecycle serialization failed: {error}")),
-        )?.into())));
+        return Ok(Some(SqlValue::Json(
+            serde_json::to_value(status)
+                .map_err(|error| {
+                    SqlError::InvalidSql(format!("FTS lifecycle serialization failed: {error}"))
+                })?
+                .into(),
+        )));
     }
     if name == "bicdb_fts_fold" {
         if args.len() != 1 {

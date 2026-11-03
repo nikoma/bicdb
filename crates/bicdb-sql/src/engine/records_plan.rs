@@ -2081,10 +2081,12 @@ impl<'db> SqlEngine<'db> {
                 if !self.expr_matches_table_column(left, table, alias, Some(schema), column)? {
                     continue;
                 }
-                let Ok(JsonValue::Array(elements)) = eval_constant_expr(right).and_then(|value| match value {
-                    SqlValue::Json(json) => Ok(SqlValue::into_json_value(json)),
-                    _ => Err(SqlError::InvalidSql("not an array".into())),
-                }) else {
+                let Ok(JsonValue::Array(elements)) =
+                    eval_constant_expr(right).and_then(|value| match value {
+                        SqlValue::Json(json) => Ok(SqlValue::into_json_value(json)),
+                        _ => Err(SqlError::InvalidSql("not an array".into())),
+                    })
+                else {
                     continue;
                 };
                 if elements.len() > MAX_IN_LIST_LOOKUPS {

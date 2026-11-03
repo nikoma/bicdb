@@ -1742,12 +1742,15 @@ fn memoized_subqueries_keep_null_semantics_and_correlated_ones_still_run_per_row
 }
 
 fn texts(values: &[&str]) -> SqlValue {
-    SqlValue::Json(serde_json::Value::Array(
-        values
-            .iter()
-            .map(|v| serde_json::Value::String(v.to_string()))
-            .collect(),
-    ).into())
+    SqlValue::Json(
+        serde_json::Value::Array(
+            values
+                .iter()
+                .map(|v| serde_json::Value::String(v.to_string()))
+                .collect(),
+        )
+        .into(),
+    )
 }
 
 /// One column's (value, planner type, statically described type) — the last is what pgwire's

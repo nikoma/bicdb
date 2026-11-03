@@ -502,10 +502,13 @@ fn text_search_headline_rewrite_and_json_match_postgres() {
             tsquery("b & (x | y)"),
             tsquery("x"),
             SqlValue::String("'chees':5 'fat':2 'rat':3".into()),
-            SqlValue::json(serde_json::json!({
-                "a": "The Fat <b>Rats</b>",
-                "b": ["<b>cheese</b>", null, 12]
-            }).into()),
+            SqlValue::json(
+                serde_json::json!({
+                    "a": "The Fat <b>Rats</b>",
+                    "b": ["<b>cheese</b>", null, 12]
+                })
+                .into()
+            ),
         ]]
     );
 }

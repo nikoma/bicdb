@@ -401,9 +401,7 @@ pub(crate) fn concat_array_values(left: &SqlValue, right: &SqlValue) -> Result<S
 }
 
 pub(crate) fn array_value(values: Vec<SqlValue>) -> SqlValue {
-    SqlValue::Json(JsonValue::Array(
-        values.into_iter().map(sql_value_to_json).collect(),
-    ).into())
+    SqlValue::Json(JsonValue::Array(values.into_iter().map(sql_value_to_json).collect()).into())
 }
 
 pub(crate) fn array_value_with_lower_bounds(
@@ -421,12 +419,15 @@ pub(crate) fn array_json_value_with_lower_bounds(
     if value.as_array().is_some_and(Vec::is_empty) || lower_bounds.iter().all(|lower| *lower == 1) {
         SqlValue::Json(value.into())
     } else {
-        SqlValue::json(serde_json::json!({
-            "$bicdb_array_input": {
-                "lower_bounds": lower_bounds,
-                "value": value,
-            }
-        }).into())
+        SqlValue::json(
+            serde_json::json!({
+                "$bicdb_array_input": {
+                    "lower_bounds": lower_bounds,
+                    "value": value,
+                }
+            })
+            .into(),
+        )
     }
 }
 
@@ -2049,7 +2050,12 @@ pub(crate) fn cast_value_to_user_range_array(
         array: false,
         ..user_type.clone()
     };
-    canonicalize(std::sync::Arc::make_mut(&mut json), &scalar_type, definition, multirange)?;
+    canonicalize(
+        std::sync::Arc::make_mut(&mut json),
+        &scalar_type,
+        definition,
+        multirange,
+    )?;
     Ok(SqlValue::Json(json))
 }
 
@@ -2198,11 +2204,9 @@ pub(crate) fn cast_value_to_composite_array(
         );
         return Ok(SqlValue::json(value));
     }
-    Ok(SqlValue::Json(cast_elements(
-        value,
-        &scalar_type,
-        attributes,
-    )?.into()))
+    Ok(SqlValue::Json(
+        cast_elements(value, &scalar_type, attributes)?.into(),
+    ))
 }
 
 pub(crate) fn composite_array_element_json(value: SqlValue) -> JsonValue {

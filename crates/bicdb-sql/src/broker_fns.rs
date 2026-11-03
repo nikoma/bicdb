@@ -135,9 +135,9 @@ pub(crate) fn eval_broker_function_value(
                     )
                 })
                 .map_err(SqlError::from)?;
-            Ok(Some(SqlValue::Json(JsonValue::Array(
-                batch.iter().map(message_to_json).collect(),
-            ).into())))
+            Ok(Some(SqlValue::Json(
+                JsonValue::Array(batch.iter().map(message_to_json).collect()).into(),
+            )))
         }
         "broker_ack" => {
             expect_args(name, args, 4, 4)?;
@@ -195,14 +195,17 @@ pub(crate) fn eval_broker_function_value(
             authorize(&queue, BrokerAccess::Consume)?;
             let info = db.with_broker(|broker| broker.group_info(&queue, &group));
             Ok(Some(match info {
-                Some(info) => SqlValue::json(json!({
-                    "queue": info.queue,
-                    "group": info.group,
-                    "created_at_ms": info.created_at,
-                    "last_delivered_sequence": info.last_delivered_sequence,
-                    "in_flight": info.in_flight,
-                    "pending_redelivery": info.pending_redelivery,
-                }).into()),
+                Some(info) => SqlValue::json(
+                    json!({
+                        "queue": info.queue,
+                        "group": info.group,
+                        "created_at_ms": info.created_at,
+                        "last_delivered_sequence": info.last_delivered_sequence,
+                        "in_flight": info.in_flight,
+                        "pending_redelivery": info.pending_redelivery,
+                    })
+                    .into(),
+                ),
                 None => SqlValue::Null,
             }))
         }
@@ -212,18 +215,21 @@ pub(crate) fn eval_broker_function_value(
             let group = text_arg(name, args, 1)?;
             authorize(&queue, BrokerAccess::Consume)?;
             let dead = db.with_broker(|broker| broker.dead_letters(&queue, &group));
-            Ok(Some(SqlValue::Json(JsonValue::Array(
-                dead.iter()
-                    .map(|stored| {
-                        json!({
-                            "dlq_event_id": stored.event.id.to_string(),
-                            "payload": stored.event.payload,
-                            "broker": stored.event.metadata.get("broker").cloned()
-                                .unwrap_or(JsonValue::Null),
+            Ok(Some(SqlValue::Json(
+                JsonValue::Array(
+                    dead.iter()
+                        .map(|stored| {
+                            json!({
+                                "dlq_event_id": stored.event.id.to_string(),
+                                "payload": stored.event.payload,
+                                "broker": stored.event.metadata.get("broker").cloned()
+                                    .unwrap_or(JsonValue::Null),
+                            })
                         })
-                    })
-                    .collect(),
-            ).into())))
+                        .collect(),
+                )
+                .into(),
+            )))
         }
         "broker_configure_queue" => {
             expect_args(name, args, 2, 2)?;
@@ -255,14 +261,17 @@ pub(crate) fn eval_broker_function_value(
             authorize(&queue, BrokerAccess::Admin)?;
             let config = db.with_broker(|broker| broker.queue_config(&queue));
             Ok(Some(match config {
-                Some(config) => SqlValue::json(json!({
-                    "default_max_attempts": config.default_max_attempts,
-                    "retention_max_messages": config.retention_max_messages,
-                    "retention_max_age_ms": config.retention_max_age_ms,
-                    "publish_roles": config.publish_roles,
-                    "consume_roles": config.consume_roles,
-                    "admin_roles": config.admin_roles,
-                }).into()),
+                Some(config) => SqlValue::json(
+                    json!({
+                        "default_max_attempts": config.default_max_attempts,
+                        "retention_max_messages": config.retention_max_messages,
+                        "retention_max_age_ms": config.retention_max_age_ms,
+                        "publish_roles": config.publish_roles,
+                        "consume_roles": config.consume_roles,
+                        "admin_roles": config.admin_roles,
+                    })
+                    .into(),
+                ),
                 None => SqlValue::Null,
             }))
         }
@@ -273,13 +282,16 @@ pub(crate) fn eval_broker_function_value(
             let report = db
                 .with_broker(|broker| broker.trim(&queue))
                 .map_err(SqlError::from)?;
-            Ok(Some(SqlValue::json(json!({
-                "removed_messages": report.removed_messages,
-                "removed_control_events": report.removed_control_events,
-                "through_sequence": report.through_sequence,
-                "bytes_before": report.bytes_before,
-                "bytes_after": report.bytes_after,
-            }).into())))
+            Ok(Some(SqlValue::json(
+                json!({
+                    "removed_messages": report.removed_messages,
+                    "removed_control_events": report.removed_control_events,
+                    "through_sequence": report.through_sequence,
+                    "bytes_before": report.bytes_before,
+                    "bytes_after": report.bytes_after,
+                })
+                .into(),
+            )))
         }
         "broker_redrive_dead_letters" => {
             expect_args(name, args, 2, 3)?;
@@ -290,9 +302,9 @@ pub(crate) fn eval_broker_function_value(
             let receipts = db
                 .with_broker(|broker| broker.redrive_dead_letters(&queue, &group, max))
                 .map_err(SqlError::from)?;
-            Ok(Some(SqlValue::Json(JsonValue::Array(
-                receipts.iter().map(receipt_to_json).collect(),
-            ).into())))
+            Ok(Some(SqlValue::Json(
+                JsonValue::Array(receipts.iter().map(receipt_to_json).collect()).into(),
+            )))
         }
         "broker_peek" => {
             expect_args(name, args, 1, 3)?;
@@ -301,23 +313,26 @@ pub(crate) fn eval_broker_function_value(
             let max = optional_int_arg(name, args, 2)?.unwrap_or(50).max(0) as usize;
             authorize(&queue, BrokerAccess::Consume)?;
             let messages = db.with_broker(|broker| broker.peek(&queue, from_sequence, max));
-            Ok(Some(SqlValue::Json(JsonValue::Array(
-                messages
-                    .iter()
-                    .map(|message| {
-                        json!({
-                            "sequence": message.sequence,
-                            "message_id": message.message_id.to_string(),
-                            "payload": message.payload,
-                            "headers": message.headers,
-                            "idempotency_key": message.idempotency_key,
-                            "created_at_ms": message.created_at,
-                            "available_at_ms": message.available_at,
-                            "max_attempts": message.max_attempts,
+            Ok(Some(SqlValue::Json(
+                JsonValue::Array(
+                    messages
+                        .iter()
+                        .map(|message| {
+                            json!({
+                                "sequence": message.sequence,
+                                "message_id": message.message_id.to_string(),
+                                "payload": message.payload,
+                                "headers": message.headers,
+                                "idempotency_key": message.idempotency_key,
+                                "created_at_ms": message.created_at,
+                                "available_at_ms": message.available_at,
+                                "max_attempts": message.max_attempts,
+                            })
                         })
-                    })
-                    .collect(),
-            ).into())))
+                        .collect(),
+                )
+                .into(),
+            )))
         }
         "broker_stats" => {
             expect_args(name, args, 0, 0)?;
@@ -334,24 +349,27 @@ pub(crate) fn eval_broker_function_value(
                         .is_ok()
                 })
             });
-            Ok(Some(SqlValue::json(json!({
-                "queues": stats.queues.iter().map(|queue| json!({
-                    "queue": queue.queue,
-                    "retained_messages": queue.retained_messages,
-                    "next_sequence": queue.next_sequence,
-                    "configured": queue.configured,
-                    "groups": queue.groups.iter().map(|group| json!({
-                        "group": group.group,
-                        "created_at_ms": group.created_at,
-                        "last_delivered_sequence": group.last_delivered_sequence,
-                        "in_flight": group.in_flight,
-                        "pending_redelivery": group.pending_redelivery,
-                        "settled_floor": group.settled_floor,
-                        "lag": group.lag,
-                        "dead_letters": group.dead_letters,
+            Ok(Some(SqlValue::json(
+                json!({
+                    "queues": stats.queues.iter().map(|queue| json!({
+                        "queue": queue.queue,
+                        "retained_messages": queue.retained_messages,
+                        "next_sequence": queue.next_sequence,
+                        "configured": queue.configured,
+                        "groups": queue.groups.iter().map(|group| json!({
+                            "group": group.group,
+                            "created_at_ms": group.created_at,
+                            "last_delivered_sequence": group.last_delivered_sequence,
+                            "in_flight": group.in_flight,
+                            "pending_redelivery": group.pending_redelivery,
+                            "settled_floor": group.settled_floor,
+                            "lag": group.lag,
+                            "dead_letters": group.dead_letters,
+                        })).collect::<Vec<_>>(),
                     })).collect::<Vec<_>>(),
-                })).collect::<Vec<_>>(),
-            }).into())))
+                })
+                .into(),
+            )))
         }
         "broker_purge_dead_letters" => {
             expect_args(name, args, 2, 2)?;
@@ -470,12 +488,15 @@ fn deferred_or_immediate_publish(
             let message_id = tx
                 .buffer_broker_publish(queue, payload, options)
                 .map_err(SqlError::from)?;
-            Ok(Some(SqlValue::json(json!({
-                "message_id": message_id.to_string(),
-                "sequence": JsonValue::Null,
-                "deduplicated": false,
-                "deferred": true,
-            }).into())))
+            Ok(Some(SqlValue::json(
+                json!({
+                    "message_id": message_id.to_string(),
+                    "sequence": JsonValue::Null,
+                    "deduplicated": false,
+                    "deferred": true,
+                })
+                .into(),
+            )))
         }
         None => {
             let receipt = db

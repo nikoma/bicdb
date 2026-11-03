@@ -4744,13 +4744,18 @@ pub(crate) fn assign_routine_targets_with_columns(
     }
     if targets.len() == 1 && columns.len() > 1 {
         let value = match row.as_ref() {
-            Some(row) => SqlValue::Json(JsonValue::Object(
-                columns
-                    .iter()
-                    .zip(row.iter())
-                    .map(|(column, value)| (column.clone(), crate::jsonb::sql_value_to_json(value)))
-                    .collect(),
-            ).into()),
+            Some(row) => SqlValue::Json(
+                JsonValue::Object(
+                    columns
+                        .iter()
+                        .zip(row.iter())
+                        .map(|(column, value)| {
+                            (column.clone(), crate::jsonb::sql_value_to_json(value))
+                        })
+                        .collect(),
+                )
+                .into(),
+            ),
             None => SqlValue::Null,
         };
         frame.assign(&targets[0], value)?;

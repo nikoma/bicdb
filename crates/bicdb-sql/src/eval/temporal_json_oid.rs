@@ -655,7 +655,9 @@ pub(crate) fn cast_value_to_pg_type(value: SqlValue, pg_type: &str) -> Result<Sq
             };
             Ok(pg_internal_char_value(byte))
         }
-        "vector" => Ok(SqlValue::Json(vector_json(&sql_value_to_vector(&value)?).into())),
+        "vector" => Ok(SqlValue::Json(
+            vector_json(&sql_value_to_vector(&value)?).into(),
+        )),
         "bytea" => match value {
             SqlValue::Json(json) if json.is_array() => json
                 .as_array()
@@ -1254,12 +1256,15 @@ pub(crate) fn cast_value_to_array_with_delimiter(
     };
     let casted = cast_array_json(value, element_type)?;
     if let Some(lower_bounds) = lower_bounds {
-        return Ok(SqlValue::json(serde_json::json!({
-            "$bicdb_array_input": {
-                "lower_bounds": lower_bounds,
-                "value": casted,
-            }
-        }).into()));
+        return Ok(SqlValue::json(
+            serde_json::json!({
+                "$bicdb_array_input": {
+                    "lower_bounds": lower_bounds,
+                    "value": casted,
+                }
+            })
+            .into(),
+        ));
     }
     Ok(SqlValue::Json(casted.into()))
 }

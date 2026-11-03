@@ -1359,10 +1359,11 @@ impl<'db> SqlEngine<'db> {
             ) = (key.as_slice(), unwrap_nested_expr(term))
             {
                 if self.expr_matches_table_column(left, table, alias, Some(schema), column)? {
-                    if let Ok(JsonValue::Array(elements)) = eval_constant_expr(right).and_then(|value| match value {
-                        SqlValue::Json(json) => Ok(SqlValue::into_json_value(json)),
-                        _ => Err(SqlError::InvalidSql("not an array".into())),
-                    })
+                    if let Ok(JsonValue::Array(elements)) =
+                        eval_constant_expr(right).and_then(|value| match value {
+                            SqlValue::Json(json) => Ok(SqlValue::into_json_value(json)),
+                            _ => Err(SqlError::InvalidSql("not an array".into())),
+                        })
                     {
                         let mut rowids = Vec::with_capacity(elements.len());
                         let mut usable = true;

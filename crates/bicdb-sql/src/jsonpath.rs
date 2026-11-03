@@ -1924,7 +1924,9 @@ fn jsonpath_args(
     let path = JsonPath::parse(raw_path)?;
     let variables = match args.get(2) {
         None => Map::new(),
-        Some(SqlValue::Json(json)) if json.is_object() => json.as_object().expect("checked object").clone(),
+        Some(SqlValue::Json(json)) if json.is_object() => {
+            json.as_object().expect("checked object").clone()
+        }
         Some(SqlValue::JsonText(value)) => value
             .parsed()
             .as_object()

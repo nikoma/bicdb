@@ -653,10 +653,10 @@ pub(crate) fn column_value_matches_type(value: &SqlValue, column: &ColumnSchema)
             matches!(value, SqlValue::Int(_) | SqlValue::String(_))
         }
         "interval" => matches!(value, SqlValue::String(_)),
-        "bytea" => matches!(
-            value,
-            SqlValue::String(_)
-        ) || matches!(value, SqlValue::Json(json) if json.is_array()),
+        "bytea" => {
+            matches!(value, SqlValue::String(_))
+                || matches!(value, SqlValue::Json(json) if json.is_array())
+        }
         "bit" | "varbit" => matches!(value, SqlValue::String(_)),
         "json" => matches!(value, SqlValue::JsonText(_) | SqlValue::Json(_)),
         "jsonb" => matches!(value, SqlValue::Json(_)),
@@ -2470,9 +2470,9 @@ pub(crate) fn is_json_pg_type(pg_type: &str) -> bool {
 }
 
 pub(crate) fn payload_bytes_json_value(payload: &[u8]) -> SqlValue {
-    SqlValue::Json(JsonValue::Array(
-        payload.iter().map(|byte| JsonValue::from(*byte)).collect(),
-    ).into())
+    SqlValue::Json(
+        JsonValue::Array(payload.iter().map(|byte| JsonValue::from(*byte)).collect()).into(),
+    )
 }
 
 pub(crate) fn legacy_payload_json_column_value(record: &Record, column: &str) -> Option<SqlValue> {
@@ -3402,9 +3402,9 @@ pub(crate) fn eval_routing_function_value(
             require_arg_count("optimize_route", args, 2)?;
             let graph = routing_graph_name("optimize_route", &args[0])?;
             let stops = routing_stop_array("optimize_route", &args[1])?;
-            Ok(Some(SqlValue::Json(serde_json::to_value(
-                db.optimize_route(graph, &stops)?,
-            )?.into())))
+            Ok(Some(SqlValue::Json(
+                serde_json::to_value(db.optimize_route(graph, &stops)?)?.into(),
+            )))
         }
         _ => Ok(None),
     }
@@ -4687,12 +4687,15 @@ pub(crate) fn storage_json_to_sql_value(value: &JsonValue, pg_type: &str) -> Sql
                 .map(|dimension| dimension.lower_bound)
                 .collect::<Vec<_>>();
             if lower_bounds.iter().any(|lower_bound| *lower_bound != 1) {
-                return SqlValue::json(serde_json::json!({
-                    "$bicdb_array_input": {
-                        "lower_bounds": lower_bounds,
-                        "value": output,
-                    }
-                }).into());
+                return SqlValue::json(
+                    serde_json::json!({
+                        "$bicdb_array_input": {
+                            "lower_bounds": lower_bounds,
+                            "value": output,
+                        }
+                    })
+                    .into(),
+                );
             }
             return SqlValue::Json(output.into());
         }

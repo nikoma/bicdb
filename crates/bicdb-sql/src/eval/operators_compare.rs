@@ -1782,9 +1782,9 @@ pub(crate) fn quantified_operand_value(value: SqlValue, pg_type: Option<&str>) -
     }
     let values = pg_int_vector_values(&value.to_cell())
         .ok_or_else(|| SqlError::InvalidSql("invalid vector array operand".into()))?;
-    Ok(SqlValue::Json(JsonValue::Array(
-        values.into_iter().map(sql_value_to_json).collect(),
-    ).into()))
+    Ok(SqlValue::Json(
+        JsonValue::Array(values.into_iter().map(sql_value_to_json).collect()).into(),
+    ))
 }
 
 pub(crate) fn eval_quantified_truth(

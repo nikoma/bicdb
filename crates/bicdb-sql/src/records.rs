@@ -424,6 +424,28 @@ pub(crate) fn validate_record_local_constraints(
     validate_checks(table, schema, record, check_engine)
 }
 
+/// Validate every row against the same schema without deep-cloning cached
+/// CHECK expressions once per row. Keep the single-row error ordering,
+/// including column errors before a malformed stored CHECK on the first row.
+pub(crate) fn validate_record_batch_local_constraints(
+    table: &str,
+    schema: &TableSchema,
+    records: &[Record],
+    check_engine: Option<&SqlEngine<'_>>,
+) -> Result<()> {
+    let Some((first, rest)) = records.split_first() else {
+        return Ok(());
+    };
+    validate_record_columns(table, schema, first)?;
+    let checks = prepare_check_expressions(schema)?;
+    validate_prepared_checks(table, schema, first, &checks, check_engine)?;
+    for record in rest {
+        validate_record_columns(table, schema, record)?;
+        validate_prepared_checks(table, schema, record, &checks, check_engine)?;
+    }
+    Ok(())
+}
+
 fn validate_record_columns(table: &str, schema: &TableSchema, record: &Record) -> Result<()> {
     // One decode per column serves both the NOT NULL and the type check
     // (each used to decode every column from storage JSON on its own); the
@@ -680,7 +702,14 @@ pub(crate) fn validate_checks(
     )
 }
 
+#[cfg(test)]
+thread_local! {
+    static CHECK_PREPARATION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 fn prepare_check_expressions(schema: &TableSchema) -> Result<Vec<(&str, Expr)>> {
+    #[cfg(test)]
+    CHECK_PREPARATION_CALLS.with(|calls| calls.set(calls.get() + 1));
     schema
         .constraints
         .iter()
@@ -5760,4 +5789,37 @@ fn fold_policy_init_plans<'e>(
         return Err(error);
     }
     Ok(std::borrow::Cow::Owned(folded))
+}
+
+#[cfg(test)]
+mod alter_check_batches_tests {
+    use super::*;
+
+    #[test]
+    fn alter_type_prepares_checks_once_and_rejects_invalid_value_atomically() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE batch_checks(id TEXT PRIMARY KEY,v INTEGER NOT NULL,CONSTRAINT positive CHECK(v>0),CONSTRAINT upper_bound CHECK(v<=500))").unwrap();
+        let records = (1..=500)
+            .map(|n| Record::new(format!("r{n:04}")).with_metadata(serde_json::json!({"v":n})))
+            .collect::<Vec<_>>();
+        db.batch_insert("batch_checks", records).unwrap();
+        let before = db.scan_collection("batch_checks").unwrap();
+        CHECK_PREPARATION_CALLS.with(|calls| calls.set(0));
+        let error = SqlSession::new(&mut db)
+            .execute("ALTER TABLE batch_checks ALTER COLUMN v TYPE BIGINT USING v+1")
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), "23514");
+        CHECK_PREPARATION_CALLS
+            .with(|calls| assert_eq!(calls.get(), 1, "ALTER prepared CHECK expressions per row"));
+        assert_eq!(
+            load_schema(&db, "batch_checks").unwrap().unwrap().columns[1].pg_type,
+            "int4"
+        );
+        assert_eq!(db.scan_collection("batch_checks").unwrap(), before);
+    }
 }

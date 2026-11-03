@@ -1466,9 +1466,12 @@ impl<'db> SqlSession<'db> {
         records: &[Record],
     ) -> Result<()> {
         let check_engine = self.sql_engine();
-        for record in records {
-            validate_record_local_constraints(&schema.name, schema, record, Some(&check_engine))?;
-        }
+        validate_record_batch_local_constraints(
+            &schema.name,
+            schema,
+            records,
+            Some(&check_engine),
+        )?;
         for arbiter in unique_arbiters_for_table(self.db_ref(), &schema.name, schema).iter() {
             let mut seen = BTreeSet::new();
             for record in records {

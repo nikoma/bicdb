@@ -83,6 +83,11 @@ pub(super) fn lower(
         return Err(unsupported("%TYPE requires [schema.]table.column"));
     }
     let column_name = parts.pop().expect("anchor column");
+    // A public synonym is considered only for the originally unqualified
+    // relation. An explicit application-schema prefix must not fall through
+    // to SYS when that schema has no such object.
+    let dictionary_fallback =
+        preserve_modifiers && (parts.len() == 1 || parts.first().is_some_and(|name| name == "SYS"));
     if parts.len() == 1 {
         if let Some(schema) = namespace {
             parts.insert(0, schema.to_string());
@@ -96,6 +101,15 @@ pub(super) fn lower(
         // source column modifiers through normal CREATE VIEW processing.
         catalog_view_schema(db, view)?
     } else {
+        if dictionary_fallback {
+            if let Some(data_type) = dictionary::anchor_type(
+                parts.last().expect("anchor relation"),
+                &column_name,
+                preserve_date,
+            )? {
+                return Ok(Some((data_type, used + 2)));
+            }
+        }
         return Err(unsupported(format!(
             "unknown %TYPE table {}",
             parts.join(".")

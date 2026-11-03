@@ -12,6 +12,7 @@ pub(crate) mod character_columns;
 mod character_tests;
 mod date_trunc;
 mod decode;
+mod dictionary;
 mod dual;
 pub(crate) mod dynamic_sql;
 pub(crate) mod errors;

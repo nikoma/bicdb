@@ -309,6 +309,46 @@ mod tests {
     }
 
     #[test]
+    fn native_qualified_view_dependencies_resolve_actual_namespace() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                "CREATE SCHEMA guard_a",
+                "CREATE SCHEMA guard_b",
+                r#"CREATE TABLE guard_a."Quoted.Items"(v VARCHAR(3))"#,
+                r#"CREATE TABLE guard_b."Quoted.Items"(v VARCHAR(3))"#,
+                r#"CREATE VIEW guard_b."Quoted.View" AS SELECT v AS label FROM guard_a."Quoted.Items""#,
+            ] {
+                session.execute(sql).unwrap();
+            }
+            assert_eq!(
+                session
+                    .execute(r#"ALTER TABLE guard_a."Quoted.Items" ALTER COLUMN v TYPE VARCHAR(4)"#)
+                    .unwrap_err()
+                    .sqlstate(),
+                "0A000"
+            );
+            session
+                .execute(r#"ALTER TABLE guard_b."Quoted.Items" ALTER COLUMN v TYPE VARCHAR(4)"#)
+                .unwrap();
+        }
+        for (namespace, modifier) in [("guard_a", 7), ("guard_b", 8)] {
+            let name =
+                relation_name_from_parts(&[namespace.into(), "Quoted.Items".into()]).unwrap();
+            assert_eq!(
+                load_schema(&db, &name).unwrap().unwrap().columns[0].catalog_typmod(),
+                modifier
+            );
+        }
+    }
+
+    #[test]
     fn native_character_assignment_keeps_postgres_trailing_space_rules() {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open_with_config(

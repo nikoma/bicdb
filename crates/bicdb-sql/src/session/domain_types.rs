@@ -1711,9 +1711,21 @@ impl<'db> SqlSession<'db> {
         column_name: &str,
     ) -> Result<()> {
         for view in list_views(self.db_ref())? {
-            if sql_contains_identifier(&view.query_sql, table)
-                && sql_contains_identifier(&view.query_sql, column_name)
-            {
+            // Stored SQL uses logical, possibly qualified names. The physical
+            // collection name for a non-public schema is not a SQL token.
+            let statements = parse_statements(&view.query_sql)?;
+            let references_table = sqlparser::ast::visit_relations(&statements, |name| {
+                let matches = relation_name(name).is_ok_and(|candidate| candidate == table)
+                    || name.0.len() == 1
+                        && object_name(name).is_ok_and(|candidate| candidate == table);
+                if matches {
+                    std::ops::ControlFlow::Break(())
+                } else {
+                    std::ops::ControlFlow::Continue(())
+                }
+            })
+            .is_break();
+            if references_table && sql_contains_identifier(&view.query_sql, column_name) {
                 return Err(SqlError::Unsupported(format!(
                     "cannot alter type of a column used by view or rule: view {} depends on column \"{column_name}\"",
                     view.name

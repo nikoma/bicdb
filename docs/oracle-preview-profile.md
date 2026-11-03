@@ -849,11 +849,37 @@ refuses version-19 execution while retaining its own definitions.
 EXTEND enforces platform limits of 100,000 elements and an estimated 8 MiB before
 allocation, reporting SQLSTATE 54000. Sparse collections and other collection
 methods, TABLE(collection), object elements, VARRAYs and replacement semantics
-remain outside the contract. The original application CSV function still needs
-Oracle TRIM and regular-expression support, and full application execution is
-not qualified.
+remain outside the contract. This checkpoint did not qualify the original CSV
+function; the subsequent text-pattern contract below covers five source-compared
+calls. Full application execution remains unqualified.
 
 Custom native PostgreSQL routine types preserve quoted identities and domain
 constraints. Older saved return metadata can be recovered from its declaration
 without redefining a function. This does not establish complete native array-domain
 assignment, custom identifiers containing literal dots, or domain result-OID parity.
+
+
+## Bounded text patterns and compiler version 20
+
+The [text-pattern contract](evidence/oracle-text-patterns-2026-11-03/README.md)
+adds the Oracle TRIM grammar and one-character trim semantics, REGEXP_SUBSTR
+positions/occurrences/captures, and REGEXP_REPLACE's global default and optional
+replacement. Match parameters, NULL options, integer truncation, original-input
+anchors and zero-length matches have source comparisons. Character arguments
+reuse the existing NUMBER/logical DATE conversion rules, including PostgreSQL
+prepared parameter typing. Native PostgreSQL TRIM and regex defaults remain
+independently covered.
+
+This is a bounded character-pattern contract: national UTF16 matching, linguistic
+NLS behavior, LOB return types and the complete Oracle regex dialect remain open.
+Unsupported dialect constructs are refused; platform compilation and output
+limits are explicit. Version-19 routines retain their prior expression and
+embedded-SQL behavior. The previous reader refuses version-20 routine execution.
+Capability checks use the finite registered language set, so unknown future
+versions remain rejected.
+
+The original CSV collection function now matches five Oracle calls on a
+disposable application copy with an explicitly adapted fresh collection type.
+The original intersection function remains unqualified (0/11 calls) pending
+MULTISET INTERSECT and IS NOT EMPTY. The retained listener, complete application
+schema and business workflows are separate requirements.

@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "6894a9d82967ed2bb22876cebe41956542694ad0a8ff23f924c5e2b317152d81",
+  "prior_binary_sha256": "089ddacc751cf62860b8374e433fd9fe4a19ea2bbc9fcdfb1dfcd2090e5fe9ea",
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "prior_writer_uses_legacy_first_match",
+      "success": true
+    },
+    {
+      "id": "new_reader_keeps_legacy_expressions_queries_and_collections",
+      "success": true
+    },
+    {
+      "id": "new_compiler_uses_oracle_global_default",
+      "success": true
+    },
+    {
+      "id": "language_oids_are_stable_and_distinct",
+      "success": true
+    },
+    {
+      "id": "prior_reader_still_executes_legacy_definitions",
+      "success": true
+    },
+    {
+      "id": "prior_reader_refuses_new_compiler_execution",
+      "success": true
+    },
+    {
+      "id": "new_reader_reopens_both_saved_versions",
+      "success": true
+    }
+  ],
+  "success": true
+}

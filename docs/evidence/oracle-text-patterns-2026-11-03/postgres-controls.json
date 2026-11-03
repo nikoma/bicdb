@@ -1,0 +1,110 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "application_qualified": false,
+  "target_protocol": "prepared",
+  "cases": [
+    {
+      "id": "trim_character_set",
+      "sql": "SELECT TRIM('ab' FROM 'ababa')",
+      "postgres": {
+        "value": ""
+      },
+      "bicdb": {
+        "value": ""
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_empty_result",
+      "sql": "SELECT TRIM(' ')",
+      "postgres": {
+        "value": ""
+      },
+      "bicdb": {
+        "value": ""
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "replace_default_first",
+      "sql": "SELECT regexp_replace('a1b2c3','[0-9]','x')",
+      "postgres": {
+        "value": "axb2c3"
+      },
+      "bicdb": {
+        "value": "axb2c3"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "replace_global_flag",
+      "sql": "SELECT regexp_replace('a1b2c3','[0-9]','x','g')",
+      "postgres": {
+        "value": "axbxcx"
+      },
+      "bicdb": {
+        "value": "axbxcx"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "replace_null_flags",
+      "sql": "SELECT regexp_replace('abc','a','x',NULL::text)",
+      "postgres": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "replace_empty_result",
+      "sql": "SELECT regexp_replace('a','a','')",
+      "postgres": {
+        "value": ""
+      },
+      "bicdb": {
+        "value": ""
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "qualified_default_first",
+      "sql": "SELECT pg_catalog.regexp_replace('a1b2c3','[0-9]','x')",
+      "postgres": {
+        "value": "axb2c3"
+      },
+      "bicdb": {
+        "value": "axb2c3"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_null_input",
+      "sql": "SELECT TRIM('ab' FROM NULL::text)",
+      "postgres": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "source_qualified": true,
+  "matched": 8,
+  "total": 8,
+  "runtime_binary_sha256": "6894a9d82967ed2bb22876cebe41956542694ad0a8ff23f924c5e2b317152d81"
+}

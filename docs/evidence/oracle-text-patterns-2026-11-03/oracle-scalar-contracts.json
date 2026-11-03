@@ -1,0 +1,1103 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "application_qualified": false,
+  "target_protocol": "prepared",
+  "cases": [
+    {
+      "id": "trim_both",
+      "sql": "SELECT TRIM('\"' FROM '\"a\"') FROM DUAL",
+      "oracle": {
+        "value": "a"
+      },
+      "bicdb": {
+        "value": "a"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_leading",
+      "sql": "SELECT TRIM(LEADING '\"' FROM '\"\"a\"') FROM DUAL",
+      "oracle": {
+        "value": "a\""
+      },
+      "bicdb": {
+        "value": "a\""
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_trailing",
+      "sql": "SELECT TRIM(TRAILING '\"' FROM '\"a\"\"') FROM DUAL",
+      "oracle": {
+        "value": "\"a"
+      },
+      "bicdb": {
+        "value": "\"a"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_spaces",
+      "sql": "SELECT TRIM(' a ') FROM DUAL",
+      "oracle": {
+        "value": "a"
+      },
+      "bicdb": {
+        "value": "a"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_other_space",
+      "sql": "SELECT TRIM('\"' FROM '\" a \"') FROM DUAL",
+      "oracle": {
+        "value": " a "
+      },
+      "bicdb": {
+        "value": " a "
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_multiple",
+      "sql": "SELECT TRIM('ab' FROM 'ababa') FROM DUAL",
+      "oracle": {
+        "code": "ORA-30001"
+      },
+      "bicdb": {
+        "code": "ORA-30001"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_null_multiple",
+      "sql": "SELECT TRIM('ab' FROM CAST(NULL AS VARCHAR2(8))) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_null_trim",
+      "sql": "SELECT TRIM(CAST(NULL AS VARCHAR2(8)) FROM 'a') FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_empty_trim",
+      "sql": "SELECT TRIM('' FROM 'a') FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_emoji",
+      "sql": "SELECT TRIM('\ud83d\ude00' FROM '\ud83d\ude00a\ud83d\ude00') FROM DUAL",
+      "oracle": {
+        "value": "a"
+      },
+      "bicdb": {
+        "value": "a"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "trim_combining",
+      "sql": "SELECT TRIM('a\u0301' FROM 'a\u0301x') FROM DUAL",
+      "oracle": {
+        "code": "ORA-30001"
+      },
+      "bicdb": {
+        "code": "ORA-30001"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_replace_two",
+      "sql": "SELECT REGEXP_REPLACE('a,b,c','[^,]*') FROM DUAL",
+      "oracle": {
+        "value": ",,"
+      },
+      "bicdb": {
+        "value": ",,"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_replace_default_all",
+      "sql": "SELECT REGEXP_REPLACE('a1b2c3','[0-9]','x') FROM DUAL",
+      "oracle": {
+        "value": "axbxcx"
+      },
+      "bicdb": {
+        "value": "axbxcx"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_replace_occurrence",
+      "sql": "SELECT REGEXP_REPLACE('a1b2c3','[0-9]','x',1,2) FROM DUAL",
+      "oracle": {
+        "value": "a1bxc3"
+      },
+      "bicdb": {
+        "value": "a1bxc3"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_replace_null_pattern",
+      "sql": "SELECT REGEXP_REPLACE('abc',NULL,'x') FROM DUAL",
+      "oracle": {
+        "value": "abc"
+      },
+      "bicdb": {
+        "value": "abc"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_replace_empty",
+      "sql": "SELECT REGEXP_REPLACE('abc','.*') FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_first",
+      "sql": "SELECT REGEXP_SUBSTR('a,b','(\".*?\"|.*?)(,|$)',1,1,NULL,1) FROM DUAL",
+      "oracle": {
+        "value": "a"
+      },
+      "bicdb": {
+        "value": "a"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_second",
+      "sql": "SELECT REGEXP_SUBSTR('a,b','(\".*?\"|.*?)(,|$)',1,2,NULL,1) FROM DUAL",
+      "oracle": {
+        "value": "b"
+      },
+      "bicdb": {
+        "value": "b"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_end",
+      "sql": "SELECT REGEXP_SUBSTR('a,b','(\".*?\"|.*?)(,|$)',1,3,NULL,1) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_quoted",
+      "sql": "SELECT REGEXP_SUBSTR('\"a,b\",c','(\".*?\"|.*?)(,|$)',1,1,NULL,1) FROM DUAL",
+      "oracle": {
+        "value": "\"a,b\""
+      },
+      "bicdb": {
+        "value": "\"a,b\""
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_empty_field",
+      "sql": "SELECT REGEXP_SUBSTR('a,,c','(\".*?\"|.*?)(,|$)',1,2,NULL,1) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_unicode_pos",
+      "sql": "SELECT REGEXP_SUBSTR('\u00e9\ud83d\ude00x','.',2,1) FROM DUAL",
+      "oracle": {
+        "value": "\ud83d\ude00"
+      },
+      "bicdb": {
+        "value": "\ud83d\ude00"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_missing_group",
+      "sql": "SELECT REGEXP_SUBSTR('abc','(a)',1,1,NULL,2) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_invalid_pos",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',0) FROM DUAL",
+      "oracle": {
+        "code": "ORA-01428"
+      },
+      "bicdb": {
+        "code": "ORA-01428"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_invalid_occurrence",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',1,0) FROM DUAL",
+      "oracle": {
+        "code": "ORA-01428"
+      },
+      "bicdb": {
+        "code": "ORA-01428"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_null_pos",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',NULL) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_flags_i",
+      "sql": "SELECT REGEXP_SUBSTR('AbC','b',1,1,'i') FROM DUAL",
+      "oracle": {
+        "value": "b"
+      },
+      "bicdb": {
+        "value": "b"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_invalid_flags",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',1,1,'z') FROM DUAL",
+      "oracle": {
+        "code": "ORA-01760"
+      },
+      "bicdb": {
+        "code": "ORA-01760"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_substr_null_pattern",
+      "sql": "SELECT REGEXP_SUBSTR('abc',NULL) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "regex_replace_backref",
+      "sql": "SELECT REGEXP_REPLACE('abc123','([a-z]+)([0-9]+)','\\2-\\1') FROM DUAL",
+      "oracle": {
+        "value": "123-abc"
+      },
+      "bicdb": {
+        "value": "123-abc"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_substr_fraction_pos",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',1.9) FROM DUAL",
+      "oracle": {
+        "value": "a"
+      },
+      "bicdb": {
+        "value": "a"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_substr_fraction_occ",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',1,1.9) FROM DUAL",
+      "oracle": {
+        "value": "a"
+      },
+      "bicdb": {
+        "value": "a"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_substr_neg_fraction_pos",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',-0.5) FROM DUAL",
+      "oracle": {
+        "code": "ORA-01428"
+      },
+      "bicdb": {
+        "code": "ORA-01428"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_substr_neg_group",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',1,1,NULL,-1) FROM DUAL",
+      "oracle": {
+        "code": "ORA-01428"
+      },
+      "bicdb": {
+        "code": "ORA-01428"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_substr_big_group",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',1,1,NULL,10) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_substr_null_occ",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',1,NULL) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_substr_bad_parenthesis",
+      "sql": "SELECT REGEXP_SUBSTR('abc','(') FROM DUAL",
+      "oracle": {
+        "code": "ORA-12725"
+      },
+      "bicdb": {
+        "code": "ORA-12725"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_substr_bad_bracket",
+      "sql": "SELECT REGEXP_SUBSTR('abc','[') FROM DUAL",
+      "oracle": {
+        "code": "ORA-12726"
+      },
+      "bicdb": {
+        "code": "ORA-12726"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_substr_long_pattern",
+      "sql": "SELECT REGEXP_SUBSTR('abc',RPAD('a',513,'a')) FROM DUAL",
+      "oracle": {
+        "code": "ORA-12733"
+      },
+      "bicdb": {
+        "code": "ORA-12733"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_replace_pos",
+      "sql": "SELECT REGEXP_REPLACE('abcabc','a','x',3) FROM DUAL",
+      "oracle": {
+        "value": "abcxbc"
+      },
+      "bicdb": {
+        "value": "abcxbc"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_replace_null_occ",
+      "sql": "SELECT REGEXP_REPLACE('abc','a','x',1,NULL) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_replace_null_pos",
+      "sql": "SELECT REGEXP_REPLACE('abc','a','x',NULL) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_replace_negative_occ",
+      "sql": "SELECT REGEXP_REPLACE('abc','a','x',1,-1) FROM DUAL",
+      "oracle": {
+        "code": "ORA-01428"
+      },
+      "bicdb": {
+        "code": "ORA-01428"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_replace_empty_replacement",
+      "sql": "SELECT REGEXP_REPLACE('ababa','a','') FROM DUAL",
+      "oracle": {
+        "value": "bb"
+      },
+      "bicdb": {
+        "value": "bb"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_flags_ic",
+      "sql": "SELECT REGEXP_SUBSTR('ABC','a',1,1,'ic') FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_flags_ci",
+      "sql": "SELECT REGEXP_SUBSTR('ABC','a',1,1,'ci') FROM DUAL",
+      "oracle": {
+        "value": "A"
+      },
+      "bicdb": {
+        "value": "A"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_substr_dot_newline",
+      "sql": "SELECT REGEXP_SUBSTR(CHR(10),'.') FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "edge_substr_dot_newline_n",
+      "sql": "SELECT REGEXP_SUBSTR(CHR(10),'.',1,1,'n') FROM DUAL",
+      "oracle": {
+        "value": "\n"
+      },
+      "bicdb": {
+        "value": "\n"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "priority_null_source_bad_pos",
+      "sql": "SELECT REGEXP_SUBSTR(CAST(NULL AS VARCHAR2(8)),'.',0) FROM DUAL",
+      "oracle": {
+        "code": "ORA-01428"
+      },
+      "bicdb": {
+        "code": "ORA-01428"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "priority_null_source_bad_regex",
+      "sql": "SELECT REGEXP_SUBSTR(CAST(NULL AS VARCHAR2(8)),'(') FROM DUAL",
+      "oracle": {
+        "code": "ORA-12725"
+      },
+      "bicdb": {
+        "code": "ORA-12725"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "priority_null_pattern_bad_pos",
+      "sql": "SELECT REGEXP_SUBSTR('abc',NULL,0) FROM DUAL",
+      "oracle": {
+        "code": "ORA-01428"
+      },
+      "bicdb": {
+        "code": "ORA-01428"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "priority_replace_null_pattern_bad_pos",
+      "sql": "SELECT REGEXP_REPLACE('abc',NULL,'x',0) FROM DUAL",
+      "oracle": {
+        "code": "ORA-01428"
+      },
+      "bicdb": {
+        "code": "ORA-01428"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "priority_null_source_bad_trim",
+      "sql": "SELECT TRIM('ab' FROM CAST(NULL AS VARCHAR2(8))) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "priority_replace_unrecognized_escape",
+      "sql": "SELECT REGEXP_REPLACE('a','a','\\q') FROM DUAL",
+      "oracle": {
+        "value": "\\q"
+      },
+      "bicdb": {
+        "value": "\\q"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "priority_replace_ampersand",
+      "sql": "SELECT REGEXP_REPLACE('a','a','\\&') FROM DUAL",
+      "oracle": {
+        "value": "\\&"
+      },
+      "bicdb": {
+        "value": "\\&"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "priority_replace_nonexistent_group",
+      "sql": "SELECT REGEXP_REPLACE('a','a','\\1x') FROM DUAL",
+      "oracle": {
+        "value": "\\1x"
+      },
+      "bicdb": {
+        "value": "\\1x"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "priority_substr_null_group",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',1,1,NULL,NULL) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scope_null_position_bad_regex",
+      "sql": "SELECT REGEXP_SUBSTR('abc','(',NULL) FROM DUAL",
+      "oracle": {
+        "code": "ORA-12725"
+      },
+      "bicdb": {
+        "code": "ORA-12725"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scope_null_occurrence_bad_regex",
+      "sql": "SELECT REGEXP_SUBSTR('abc','(',1,NULL) FROM DUAL",
+      "oracle": {
+        "code": "ORA-12725"
+      },
+      "bicdb": {
+        "code": "ORA-12725"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scope_replace_missing_group_one_slash",
+      "sql": "SELECT REGEXP_REPLACE('a','a',CHR(92)||'1x') FROM DUAL",
+      "oracle": {
+        "value": "\\1x"
+      },
+      "bicdb": {
+        "value": "\\1x"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scope_replace_unknown_escape_one_slash",
+      "sql": "SELECT REGEXP_REPLACE('a','a',CHR(92)||'q') FROM DUAL",
+      "oracle": {
+        "value": "\\q"
+      },
+      "bicdb": {
+        "value": "\\q"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scope_replace_ampersand_one_slash",
+      "sql": "SELECT REGEXP_REPLACE('a','a',CHR(92)||'&') FROM DUAL",
+      "oracle": {
+        "value": "\\&"
+      },
+      "bicdb": {
+        "value": "\\&"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "anchor_substr_anchor_position",
+      "sql": "SELECT REGEXP_SUBSTR('abc','^.',2) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "anchor_replace_anchor_position",
+      "sql": "SELECT REGEXP_REPLACE('abc','^','x',2) FROM DUAL",
+      "oracle": {
+        "value": "abc"
+      },
+      "bicdb": {
+        "value": "abc"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "anchor_substr_dollar_position",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.$',2) FROM DUAL",
+      "oracle": {
+        "value": "c"
+      },
+      "bicdb": {
+        "value": "c"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "anchor_substr_occurrence_empty",
+      "sql": "SELECT REGEXP_SUBSTR('ab','.*?',1,2) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "anchor_replace_optional_capture",
+      "sql": "SELECT REGEXP_REPLACE('b','(a)?b',CHR(92)||'1x') FROM DUAL",
+      "oracle": {
+        "value": "x"
+      },
+      "bicdb": {
+        "value": "x"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_replace_empty_after_nonempty",
+      "sql": "SELECT REGEXP_REPLACE('a','a*','x') FROM DUAL",
+      "oracle": {
+        "value": "xx"
+      },
+      "bicdb": {
+        "value": "xx"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_replace_empty_after_nonempty_suffix",
+      "sql": "SELECT REGEXP_REPLACE('ab','a*','x') FROM DUAL",
+      "oracle": {
+        "value": "xxbx"
+      },
+      "bicdb": {
+        "value": "xxbx"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_replace_all_empty",
+      "sql": "SELECT REGEXP_REPLACE('ab','.*?','x') FROM DUAL",
+      "oracle": {
+        "value": "xaxbx"
+      },
+      "bicdb": {
+        "value": "xaxbx"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_replace_empty_unicode",
+      "sql": "SELECT REGEXP_REPLACE('\ud83d\ude00\u00e9','x*','-') FROM DUAL",
+      "oracle": {
+        "value": "-\ud83d\ude00-\u00e9-"
+      },
+      "bicdb": {
+        "value": "-\ud83d\ude00-\u00e9-"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_replace_nonoverlap_position",
+      "sql": "SELECT REGEXP_REPLACE('abc','..','x',2) FROM DUAL",
+      "oracle": {
+        "value": "ax"
+      },
+      "bicdb": {
+        "value": "ax"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_substr_nonoverlap_position",
+      "sql": "SELECT REGEXP_SUBSTR('abc','..',2) FROM DUAL",
+      "oracle": {
+        "value": "bc"
+      },
+      "bicdb": {
+        "value": "bc"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "alternative_alternation_short_first",
+      "sql": "SELECT REGEXP_SUBSTR('ab','a|ab') FROM DUAL",
+      "oracle": {
+        "value": "a"
+      },
+      "bicdb": {
+        "value": "a"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "alternative_alternation_empty_first",
+      "sql": "SELECT REGEXP_SUBSTR('b','a*|b') FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "alternative_greedy_then_lazy",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.*|.*?') FROM DUAL",
+      "oracle": {
+        "value": "abc"
+      },
+      "bicdb": {
+        "value": "abc"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "alternative_lazy_then_greedy",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.*?|.*') FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "conversion_replace_end_position",
+      "sql": "SELECT REGEXP_REPLACE('abc','$','x',4) FROM DUAL",
+      "oracle": {
+        "value": "abc"
+      },
+      "bicdb": {
+        "value": "abc"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "conversion_replace_beyond_position",
+      "sql": "SELECT REGEXP_REPLACE('abc','$','x',5) FROM DUAL",
+      "oracle": {
+        "value": "abc"
+      },
+      "bicdb": {
+        "value": "abc"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "conversion_replace_empty_end_position",
+      "sql": "SELECT REGEXP_REPLACE('abc','a*','x',4) FROM DUAL",
+      "oracle": {
+        "value": "abc"
+      },
+      "bicdb": {
+        "value": "abc"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "conversion_replace_unicode_end_position",
+      "sql": "SELECT REGEXP_REPLACE('\ud83d\ude00','$','x',2) FROM DUAL",
+      "oracle": {
+        "value": "\ud83d\ude00"
+      },
+      "bicdb": {
+        "value": "\ud83d\ude00"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "conversion_trim_numeric",
+      "sql": "SELECT TRIM(0.5) FROM DUAL",
+      "oracle": {
+        "value": ".5"
+      },
+      "bicdb": {
+        "value": ".5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "conversion_substr_numeric",
+      "sql": "SELECT REGEXP_SUBSTR(0.5,'.') FROM DUAL",
+      "oracle": {
+        "value": "."
+      },
+      "bicdb": {
+        "value": "."
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "conversion_replace_numeric_source",
+      "sql": "SELECT REGEXP_REPLACE(0.5,'[.]','x') FROM DUAL",
+      "oracle": {
+        "value": "x5"
+      },
+      "bicdb": {
+        "value": "x5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "conversion_replace_numeric_replacement",
+      "sql": "SELECT REGEXP_REPLACE('a','a',0.5) FROM DUAL",
+      "oracle": {
+        "value": ".5"
+      },
+      "bicdb": {
+        "value": ".5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bind_numeric_source",
+      "sql": "SELECT REGEXP_SUBSTR(%s,'.') FROM DUAL",
+      "parameters": [
+        {
+          "numeric": "0.5"
+        }
+      ],
+      "oracle_sql": "SELECT REGEXP_SUBSTR(:1,'.') FROM DUAL",
+      "oracle": {
+        "value": "."
+      },
+      "bicdb": {
+        "value": "."
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bind_numeric_replacement",
+      "sql": "SELECT REGEXP_REPLACE('a','a',%s) FROM DUAL",
+      "parameters": [
+        {
+          "numeric": "0.5"
+        }
+      ],
+      "oracle_sql": "SELECT REGEXP_REPLACE('a','a',:1) FROM DUAL",
+      "oracle": {
+        "value": ".5"
+      },
+      "bicdb": {
+        "value": ".5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bind_unicode_source",
+      "sql": "SELECT REGEXP_SUBSTR(%s,'.',2) FROM DUAL",
+      "parameters": [
+        "\u00e9\ud83d\ude00x"
+      ],
+      "oracle_sql": "SELECT REGEXP_SUBSTR(:1,'.',2) FROM DUAL",
+      "oracle": {
+        "value": "\ud83d\ude00"
+      },
+      "bicdb": {
+        "value": "\ud83d\ude00"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bind_null_flags",
+      "sql": "SELECT REGEXP_SUBSTR('abc','.',1,1,%s) FROM DUAL",
+      "parameters": [
+        null
+      ],
+      "oracle_sql": "SELECT REGEXP_SUBSTR('abc','.',1,1,:1) FROM DUAL",
+      "oracle": {
+        "value": "a"
+      },
+      "bicdb": {
+        "value": "a"
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "matched": 89,
+  "total": 89,
+  "source_qualified": true,
+  "runtime_binary_sha256": "6894a9d82967ed2bb22876cebe41956542694ad0a8ff23f924c5e2b317152d81",
+  "baseline_observation": false
+}

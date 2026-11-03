@@ -1,0 +1,135 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "runtime_binary_sha256": "6894a9d82967ed2bb22876cebe41956542694ad0a8ff23f924c5e2b317152d81",
+  "source_execution_compared": true,
+  "cases": [
+    {
+      "id": "overlap",
+      "oracle": {
+        "value": "Y"
+      },
+      "bicdb": {
+        "code": "42601"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "disjoint",
+      "oracle": {
+        "value": "N"
+      },
+      "bicdb": {
+        "code": "42601"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "duplicates",
+      "oracle": {
+        "value": "Y"
+      },
+      "bicdb": {
+        "code": "42601"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "nulls",
+      "oracle": {
+        "value": "Y"
+      },
+      "bicdb": {
+        "code": "42601"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "null_nonnull",
+      "oracle": {
+        "value": "N"
+      },
+      "bicdb": {
+        "code": "42601"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "empty_null",
+      "oracle": {
+        "value": "Y"
+      },
+      "bicdb": {
+        "code": "42601"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "quoted_comma",
+      "oracle": {
+        "value": "Y"
+      },
+      "bicdb": {
+        "code": "42601"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "empty_fields",
+      "oracle": {
+        "value": "Y"
+      },
+      "bicdb": {
+        "code": "42601"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "case_sensitive",
+      "oracle": {
+        "value": "N"
+      },
+      "bicdb": {
+        "code": "42601"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "whitespace",
+      "oracle": {
+        "value": "N"
+      },
+      "bicdb": {
+        "code": "42601"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "last_match",
+      "oracle": {
+        "value": "Y"
+      },
+      "bicdb": {
+        "code": "42601"
+      },
+      "source_qualified": true,
+      "matched": false
+    }
+  ],
+  "fresh_creation_adaptation": true,
+  "edition_annotation_not_modeled": true,
+  "source_qualified": true,
+  "matched": 0,
+  "total": 11,
+  "success": false
+}

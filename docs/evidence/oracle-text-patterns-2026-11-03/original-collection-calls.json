@@ -1,0 +1,109 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "source_execution_compared": true,
+  "scope": "Read-only original collection function values on the dedicated Oracle reference and an isolated BicDB copy; no application procedures invoked",
+  "runtime_binary_sha256": "6894a9d82967ed2bb22876cebe41956542694ad0a8ff23f924c5e2b317152d81",
+  "cases": [
+    {
+      "id": "plain",
+      "expected": [
+        "a",
+        "b"
+      ],
+      "oracle": [
+        "a",
+        "b"
+      ],
+      "bicdb": [
+        "a",
+        "b"
+      ],
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "null",
+      "expected": [
+        null
+      ],
+      "oracle": [
+        null
+      ],
+      "bicdb": [
+        null
+      ],
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty",
+      "expected": [
+        null
+      ],
+      "oracle": [
+        null
+      ],
+      "bicdb": [
+        null
+      ],
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "quoted_comma",
+      "expected": [
+        "a,b",
+        " c"
+      ],
+      "oracle": [
+        "a,b",
+        " c"
+      ],
+      "bicdb": [
+        "a,b",
+        " c"
+      ],
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_fields",
+      "expected": [
+        null,
+        null
+      ],
+      "oracle": [
+        null,
+        null
+      ],
+      "bicdb": [
+        null,
+        null
+      ],
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "definitions": [
+    {
+      "name": "ISINTERSECTCSV",
+      "accepted": true
+    },
+    {
+      "name": "TOTABLEOFVARCHAR2",
+      "accepted": true
+    }
+  ],
+  "type_adaptations": [
+    {
+      "name": "TABLE_OF_VARCHAR2",
+      "fresh_creation": true,
+      "source_edition_annotation_not_modeled": true,
+      "registered_oid": 800000
+    }
+  ],
+  "source_qualified": true,
+  "matched": 5,
+  "total": 5
+}

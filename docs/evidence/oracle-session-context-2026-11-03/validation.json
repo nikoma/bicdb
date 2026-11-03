@@ -1,0 +1,550 @@
+{
+  "format": 1,
+  "runtime_source_commit": "28015e1fa417423d03376972f2ccb4d5ce69b754",
+  "runtime_binary_sha256": "02448c9eb226d505dc195c25f8a6491fc125fbdcf0229f0863f1479e508c2c41",
+  "application_qualified": false,
+  "published_release": false,
+  "verified_application_deployment": false,
+  "routine_compiler": "bicdb_oracle_preview_v22",
+  "retained_reference_reports": [
+    {
+      "report": "character-columns-comparison.json",
+      "success": true,
+      "matched": 138,
+      "total": 138
+    },
+    {
+      "report": "character-columns-reader-comparison.json",
+      "success": true,
+      "matched": null,
+      "total": 6
+    },
+    {
+      "report": "character-import-comparison.json",
+      "success": true,
+      "matched": null,
+      "total": 3
+    },
+    {
+      "report": "dynamic-retained-decode-sql-comparison.json",
+      "success": true,
+      "matched": 52,
+      "total": 52
+    },
+    {
+      "report": "dynamic-retained-key-oracle.json",
+      "success": true,
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "report": "dynamic-retained-autonomous-comparison.json",
+      "success": true,
+      "matched": 38,
+      "total": 38
+    },
+    {
+      "report": "dynamic-sql-comparison.json",
+      "success": true,
+      "matched": 36,
+      "total": 36
+    },
+    {
+      "report": "national-characters-comparison.json",
+      "success": true,
+      "matched": 96,
+      "total": 96
+    },
+    {
+      "report": "national-native-controls.json",
+      "success": true,
+      "matched": 19,
+      "total": 19
+    },
+    {
+      "report": "dictionary-native-catalog-controls.json",
+      "success": true,
+      "matched": 6,
+      "total": 6
+    },
+    {
+      "report": "dynamic-retained-key-native.json",
+      "success": true,
+      "matched": 51,
+      "total": 51
+    },
+    {
+      "report": "dynamic-native-controls.json",
+      "success": true,
+      "matched": 13,
+      "total": 13
+    },
+    {
+      "report": "national-original-counter-comparison.json",
+      "success": true,
+      "matched": 14,
+      "total": 14
+    },
+    {
+      "report": "dynamic-original-record-comparison.json",
+      "success": true,
+      "matched": 8,
+      "total": 8
+    },
+    {
+      "report": "dynamic-original-sequence-comparison.json",
+      "success": true,
+      "matched": 9,
+      "total": 9
+    },
+    {
+      "report": "view-anchor-reference-anchors-comparison.json",
+      "success": true,
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "report": "view-anchor-reference-view_anchors-comparison.json",
+      "success": true,
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "report": "dynamic-retained-routine-anchors-comparison.json",
+      "success": true,
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "report": "dynamic-retained-routine-calendar-comparison.json",
+      "success": true,
+      "matched": 36,
+      "total": 36
+    },
+    {
+      "report": "dynamic-retained-routine-case-comparison.json",
+      "success": true,
+      "matched": 34,
+      "total": 34
+    },
+    {
+      "report": "dynamic-retained-routine-characters-comparison.json",
+      "success": true,
+      "matched": 119,
+      "total": 119
+    },
+    {
+      "report": "dynamic-retained-routine-columns-comparison.json",
+      "success": true,
+      "matched": 21,
+      "total": 21
+    },
+    {
+      "report": "dynamic-retained-routine-concat-comparison.json",
+      "success": true,
+      "matched": 76,
+      "total": 76
+    },
+    {
+      "report": "dynamic-retained-routine-cursors-comparison.json",
+      "success": true,
+      "matched": 36,
+      "total": 36
+    },
+    {
+      "report": "dynamic-retained-routine-decode-comparison.json",
+      "success": true,
+      "matched": 57,
+      "total": 57
+    },
+    {
+      "report": "dynamic-retained-routine-errors-comparison.json",
+      "success": true,
+      "matched": 108,
+      "total": 108
+    },
+    {
+      "report": "dynamic-retained-routine-grammar-comparison.json",
+      "success": true,
+      "matched": 14,
+      "total": 14
+    },
+    {
+      "report": "dynamic-retained-routine-namespaces-comparison.json",
+      "success": true,
+      "matched": 24,
+      "total": 24
+    },
+    {
+      "report": "dynamic-retained-routine-numberops-comparison.json",
+      "success": true,
+      "matched": 218,
+      "total": 218
+    },
+    {
+      "report": "dynamic-retained-routine-nvl-comparison.json",
+      "success": true,
+      "matched": 93,
+      "total": 93
+    },
+    {
+      "report": "dynamic-retained-routine-procedures-comparison.json",
+      "success": true,
+      "matched": 26,
+      "total": 26
+    },
+    {
+      "report": "dynamic-retained-routine-temporal-comparison.json",
+      "success": true,
+      "matched": 29,
+      "total": 29
+    },
+    {
+      "report": "dynamic-retained-routine-week-comparison.json",
+      "success": true,
+      "matched": 102,
+      "total": 102
+    },
+    {
+      "report": "dynamic-retained-native-characters.json",
+      "success": true,
+      "matched": 22,
+      "total": 22
+    },
+    {
+      "report": "dynamic-retained-native-columns.json",
+      "success": true,
+      "matched": 6,
+      "total": 6
+    },
+    {
+      "report": "dynamic-retained-native-concat.json",
+      "success": true,
+      "matched": 62,
+      "total": 62
+    },
+    {
+      "report": "dynamic-retained-native-cursors.json",
+      "success": true,
+      "matched": 30,
+      "total": 30
+    },
+    {
+      "report": "dynamic-retained-native-decode.json",
+      "success": true,
+      "matched": 12,
+      "total": 12
+    },
+    {
+      "report": "dynamic-retained-native-errors.json",
+      "success": true,
+      "matched": 9,
+      "total": 9
+    },
+    {
+      "report": "dynamic-retained-native-grammar.json",
+      "success": true,
+      "matched": 9,
+      "total": 9
+    },
+    {
+      "report": "dynamic-retained-native-procedures.json",
+      "success": true,
+      "matched": 13,
+      "total": 13
+    },
+    {
+      "report": "hierarchy-comparison.json",
+      "success": true,
+      "matched": 19,
+      "total": 19
+    },
+    {
+      "report": "routine-character-buffers-comparison.json",
+      "success": true,
+      "matched": 53,
+      "total": 53
+    },
+    {
+      "report": "routine-character-readers-comparison.json",
+      "success": true,
+      "matched": null,
+      "total": 7
+    },
+    {
+      "report": "alter-batch-native-controls.json",
+      "success": true,
+      "matched": 9,
+      "total": 9
+    },
+    {
+      "report": "character-reconcile-native-view-controls.json",
+      "success": true,
+      "matched": 5,
+      "total": 5
+    },
+    {
+      "report": "character-reconcile-fixture.json",
+      "success": true,
+      "matched": null,
+      "total": 9
+    },
+    {
+      "report": "function-attributes-comparison.json",
+      "success": true,
+      "matched": 10,
+      "total": 10
+    },
+    {
+      "report": "function-attributes-native-controls.json",
+      "success": true,
+      "matched": 4,
+      "total": 4
+    },
+    {
+      "report": "routine-security-native-controls.json",
+      "success": true,
+      "matched": 5,
+      "total": 5
+    }
+  ],
+  "memory_guards": [
+    {
+      "report": "session-context-full-validation-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 4527226880,
+      "minimum_observed_available_bytes": 20703817728,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "session-context-final-server-build-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 1800749056,
+      "minimum_observed_available_bytes": 23040909312,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "session-context-reference-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 16527360,
+      "minimum_observed_available_bytes": 27166040064,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "session-context-retained-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 1151475712,
+      "minimum_observed_available_bytes": 20687605760,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "session-context-extras-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 1103654912,
+      "minimum_observed_available_bytes": 20573876224,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "session-context-wire-recheck-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 1972531200,
+      "minimum_observed_available_bytes": 26265665536,
+      "minimum_required_available_bytes": 8589934592
+    }
+  ],
+  "oracle_session_context": {
+    "matched": 33,
+    "total": 33,
+    "prior_matched": 0,
+    "prior_binary_sha256": "1bf941451c86e27b13a4c2889d3abd3829ebaef04ce64765ee1248f509ed9dbb"
+  },
+  "postgres_session_context": {
+    "matched": 8,
+    "total": 8
+  },
+  "oracle_multisets": {
+    "matched": 42,
+    "total": 42
+  },
+  "postgres_multisets": {
+    "matched": 12,
+    "total": 12
+  },
+  "oracle_text_patterns": {
+    "matched": 89,
+    "total": 89
+  },
+  "postgres_text_patterns": {
+    "matched": 8,
+    "total": 8
+  },
+  "oracle_collection_methods": {
+    "matched": 23,
+    "total": 23
+  },
+  "oracle_collection_results": {
+    "matched": 7,
+    "total": 7
+  },
+  "postgres_routine_types": {
+    "matched": 11,
+    "total": 11
+  },
+  "oracle_collection_sql": {
+    "matched": 15,
+    "total": 15
+  },
+  "postgres_domain_transport": {
+    "matched": 7,
+    "total": 7
+  },
+  "session_context_readers": {
+    "passed": 13
+  },
+  "collection_readers": {
+    "passed": 11
+  },
+  "sql_collection_readers": {
+    "passed": 6
+  },
+  "rust": {
+    "passed": 1400,
+    "failed": 0,
+    "existing_ignored": 3,
+    "batches": [
+      {
+        "passed": 549,
+        "failed": 0,
+        "ignored": 3
+      },
+      {
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 29,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 17,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 60,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 419,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 119,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 26,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 169,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      }
+    ]
+  },
+  "python": {
+    "passed": 58,
+    "failed": 0
+  },
+  "static_checks": {
+    "rustfmt": true,
+    "diff_check": true,
+    "licenses": true,
+    "open_core_boundary": true
+  },
+  "application_definitions": {
+    "accepted": 62,
+    "total": 62,
+    "complete_execution_qualified": false,
+    "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7"
+  },
+  "original_csv_function": {
+    "source_qualified": true,
+    "matched": 5,
+    "total": 5,
+    "fresh_collection_type_creation_adaptation": true,
+    "edition_annotation_not_modeled": true
+  },
+  "original_intersection_function": {
+    "source_qualified": true,
+    "matched": 11,
+    "total": 11,
+    "fresh_collection_type_creation_adaptation": true,
+    "edition_annotation_not_modeled": true
+  },
+  "known_open_gaps": {
+    "dictionary_matched": 0,
+    "dictionary_total": 11,
+    "nvl_conversion_matched": 2,
+    "nvl_conversion_total": 7,
+    "original_intersection_matched": 11,
+    "original_intersection_total": 11,
+    "full_application_qualified": false
+  },
+  "session_context_scope": {
+    "namespace": "USERENV",
+    "attributes": [
+      "CURRENT_USER",
+      "SESSION_USER",
+      "CURRENT_SCHEMA",
+      "DB_NAME",
+      "DB_DOMAIN",
+      "HOST",
+      "IP_ADDRESS"
+    ],
+    "default_byte_limit": 256,
+    "maximum_byte_limit": 4000,
+    "host_provided_by_pgwire": false,
+    "accepted_peer_address": true,
+    "complete_userenv_qualified": false
+  },
+  "application_startup": {
+    "qualified": false,
+    "loaded_original_routines": 62,
+    "http_ready": false,
+    "login_completed": false,
+    "client_address_forgery_test_passed": true,
+    "unqualified_gaps": [
+      "Statistics-query concatenation normalization is pathologically slow.",
+      "Date arithmetic in DELETE predicates is not lowered.",
+      "Full-startup sequence contention remains unqualified despite synthetic and actual-schema controlled reservation probes passing."
+    ],
+    "staged_copy_only": true,
+    "canonical_snapshot_unchanged": true
+  },
+  "earlier_attempts": "The first focused API run found a missing canonical-token integration and was fixed; the first wire test omitted the required profile startup flag and was corrected. Neither is counted as a passing validation run. The actual JVM run was stopped after recording the next statistics-query bottleneck; its memory guard is not a completed application qualification.",
+  "ci": "Local validation; GitHub CI not claimed"
+}

@@ -31,7 +31,8 @@ original CSV collection function. The [multiset checkpoint](evidence/oracle-mult
 adds version-21 named nested-table operators and empty predicates. The original
 intersection function now matches 11/11 read-only source calls; the CSV function
 retains 5/5. Dictionary rows, constraints, complete application execution and
-business workflows remain incomplete.
+business workflows remain incomplete. The [session-context checkpoint](evidence/oracle-session-context-2026-11-03/README.md)
+adds bounded version-22 USERENV inspection and immutable connection facts.
 The milestones below retain their results at the time each was measured.
 
 The original 913 tables and 185,292 rows loaded and passed complete value

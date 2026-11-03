@@ -16,6 +16,7 @@ mod dictionary;
 mod dual;
 pub(crate) mod dynamic_sql;
 pub(crate) mod errors;
+mod hierarchy;
 mod namespaces;
 pub(crate) mod national;
 mod nvl;

@@ -1,0 +1,276 @@
+{
+  "format": 1,
+  "runtime_source_commit": "9e279015955f049ad244f752082db1cf93e71902",
+  "runtime_binary_sha256": "703bbf047b5d6d8d1931e7ca64c22e9ecb29e61c7ab245ad94d12aa4cbfbe572",
+  "application_qualified": false,
+  "published_release": false,
+  "verified_application_deployment": false,
+  "routine_compiler": "bicdb_oracle_preview_v24",
+  "metadata_format": 5,
+  "reference_reports": {
+    "oracle": {
+      "report": "oracle-comparison.json",
+      "matched": 3,
+      "total": 3
+    },
+    "postgres": {
+      "report": "postgres-comparison.json",
+      "matched": 3,
+      "total": 3
+    },
+    "retained_number_formats": {
+      "report": "retained-number-formats.json",
+      "matched": 55,
+      "total": 55
+    }
+  },
+  "memory_guards": [
+    {
+      "report": "row-wait-focused-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 4506542080,
+      "minimum_observed_available_bytes": 23889829888,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "row-wait-metadata-focused-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 2367463424,
+      "minimum_observed_available_bytes": 26574761984,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "row-wait-final-server-build-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 2366078976,
+      "minimum_observed_available_bytes": 26716995584,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "row-wait-final-wire-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 2068946944,
+      "minimum_observed_available_bytes": 18606374912,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "row-wait-final-references-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 397320192,
+      "minimum_observed_available_bytes": 23920500736,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "row-wait-maintenance-jdbc-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 2736414720,
+      "minimum_observed_available_bytes": 18605973504,
+      "minimum_required_available_bytes": 8589934592
+    }
+  ],
+  "focused": {
+    "test_executions": 36,
+    "batches": [
+      {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "core_sql_source_unchanged_since": "a4b84d9397b34b31c60e7d4f35f8799b0e2814cc",
+    "alternate_configurations": [
+      "default",
+      "wait-graph",
+      "key notifications with 250000us wait period"
+    ],
+    "counts_include_repeated_configuration_runs": true
+  },
+  "protocol": {
+    "test_executions": 316,
+    "batches": [
+      {
+        "passed": 121,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 26,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 169,
+        "failed": 0,
+        "ignored": 0
+      }
+    ]
+  },
+  "python": {
+    "passed": 58,
+    "failed": 0
+  },
+  "static_checks": {
+    "rustfmt": true,
+    "diff_check": true,
+    "licenses": true,
+    "open_core_boundary": true
+  },
+  "prior_premature_conflict_probe": {
+    "binary_sha256": "feac9812bc4f4c900fa95d6c6f3086e35bf99aa290bb5225182b227b636fa7a6",
+    "results": [
+      {
+        "profile": "postgres",
+        "owner_hold_seconds": 10,
+        "success": false,
+        "sqlstate": "40001",
+        "elapsed_seconds": 6.023
+      },
+      {
+        "profile": "oracle-preview-v1",
+        "owner_hold_seconds": 10,
+        "success": false,
+        "sqlstate": "40001",
+        "elapsed_seconds": 6.011
+      }
+    ]
+  },
+  "metadata_regression": {
+    "before": {
+      "passed": 0,
+      "failed": 2,
+      "blocked_stage": "Parse"
+    },
+    "after": {
+      "passed": 2,
+      "failed": 0
+    },
+    "profiles": [
+      "postgres",
+      "oracle-preview-v1"
+    ],
+    "stages": [
+      "Parse",
+      "Bind",
+      "query Describe",
+      "result Describe",
+      "row encoding",
+      "simple COMMIT"
+    ]
+  },
+  "earlier_reference_attempts": [
+    {
+      "report": "row-wait-initial-source-cancel-window.json",
+      "source_qualified": false,
+      "matched": 2,
+      "total": 3,
+      "cancellation_observation": {
+        "id": "explicit_cancel",
+        "completed_before_owner_release": false,
+        "outcome": "cancelled",
+        "sqlstate": null,
+        "oracle_code": 1013,
+        "elapsed_seconds": 2.266,
+        "connection_recovers": true
+      }
+    },
+    {
+      "report": "row-wait-oob-source-comparison.json",
+      "source_qualified": false,
+      "matched": 2,
+      "total": 3,
+      "cancellation_observation": {
+        "id": "explicit_cancel",
+        "completed_before_owner_release": false,
+        "outcome": "cancelled",
+        "sqlstate": null,
+        "oracle_code": 1013,
+        "elapsed_seconds": 5.271,
+        "connection_recovers": true
+      }
+    },
+    {
+      "report": "row-wait-five-second-cancel-observation.json",
+      "source_qualified": false,
+      "matched": 2,
+      "total": 3,
+      "cancellation_observation": {
+        "id": "explicit_cancel",
+        "completed_before_owner_release": false,
+        "outcome": "cancelled",
+        "sqlstate": null,
+        "oracle_code": 1013,
+        "elapsed_seconds": 5.288,
+        "connection_recovers": true
+      }
+    }
+  ],
+  "reference_fixture_correction": "Initial two- and five-second source cancellation windows were too short. A separate measurement observed six seconds on a reused Oracle connection. The final twelve-second window still requires completion while the owner holds its row and recovery afterward. Earlier failures are not counted as qualification.",
+  "jdbc": {
+    "runtime_binary_sha256": "703bbf047b5d6d8d1931e7ca64c22e9ecb29e61c7ab245ad94d12aa4cbfbe572",
+    "driver": "PostgreSQL JDBC 42.7.8",
+    "workers": 12,
+    "reservations": 360,
+    "counters": 3,
+    "expected_delta_per_counter": 120,
+    "expected_distinct_allocations_per_counter": 120,
+    "duplicate_allocation_assertions": true,
+    "final_totals_match": true,
+    "source_java_sha256": "f3c247765c4b9a3e867f04b5abaa127e7ad7089bdca69de4725cc34ac7490ac4",
+    "target_only": true,
+    "full_application_qualified": false,
+    "production_performance_qualified": false
+  },
+  "scope": {
+    "blocking_select_row_locks": true,
+    "cancellation": true,
+    "row_cycles": true,
+    "metadata_progress_behind_queued_writer": true,
+    "all_dml_waits_qualified": false,
+    "all_deadlock_classes_qualified": false,
+    "full_isolation_qualified": false,
+    "full_oracle_error_payloads_qualified": false,
+    "full_application_qualified": false
+  },
+  "ci": "Local validation; GitHub CI and a published release are not claimed"
+}

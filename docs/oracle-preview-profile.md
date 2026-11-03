@@ -988,3 +988,14 @@ The default PostgreSQL formatter is unchanged. Eight native controls preserve
 the previous BicDB results, while five match PostgreSQL and three explicitly
 record existing literal-letter format gaps. This is not complete native format
 parity or complete Oracle/NLS coercion. Full application workflows remain open.
+
+
+## Blocking locking reads
+
+The [SQL row-lock contract](evidence/sql-row-lock-waits-2026-11-03/README.md)
+removes the implicit internal retry deadline from blocking SELECT FOR UPDATE in
+both SQL profiles. Waits honor query cancellation and deadlines; a live row-lock
+wait graph detects cycles. READ COMMITTED refresh, NOWAIT, SKIP LOCKED, row
+policies and rollback remain independently exercised. This is a common execution
+fix, not a new routine compiler or durable metadata version. Broader DML waits,
+metadata-lock interactions and complete concurrency qualification remain open.

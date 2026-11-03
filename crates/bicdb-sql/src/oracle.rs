@@ -7,6 +7,7 @@ use sqlparser::{dialect::OracleDialect, keywords::Keyword};
 mod anchored_types;
 pub mod assessment;
 pub(crate) mod autonomous;
+pub(crate) mod character_columns;
 #[cfg(test)]
 mod character_tests;
 mod date_trunc;
@@ -35,14 +36,39 @@ fn metadata_v2() -> JsonValue {
     serde_json::json!({"format":2,"profile":ORACLE_PREVIEW_PROFILE,"features":["oracle_temporal_columns_v1"]})
 }
 
+fn metadata_v3() -> JsonValue {
+    serde_json::json!({"format":3,"profile":ORACLE_PREVIEW_PROFILE,"features":["oracle_temporal_columns_v1","oracle_character_columns_v1"]})
+}
+fn metadata_v3_enabled(db: &BicDb) -> Result<bool> {
+    Ok(db
+        .get(PROFILE_COLLECTION, "profile")?
+        .is_some_and(|r| r.metadata == metadata_v3()))
+}
+fn enable_metadata_v3(db: &mut BicDb) -> Result<()> {
+    if !preview_routine_language_enabled(db)? {
+        return Err(unsupported(
+            "Oracle character columns require the durable preview profile",
+        ));
+    }
+    if !metadata_v3_enabled(db)? {
+        db.insert(
+            PROFILE_COLLECTION,
+            Record::new("profile").with_metadata(metadata_v3()),
+        )?;
+    }
+    Ok(())
+}
 fn matches_profile(metadata: &JsonValue, profile: &str) -> bool {
     *metadata == serde_json::json!({"format":1,"profile":profile})
-        || profile == ORACLE_PREVIEW_PROFILE && *metadata == metadata_v2()
+        || profile == ORACLE_PREVIEW_PROFILE
+            && (*metadata == metadata_v2() || *metadata == metadata_v3())
 }
 
 fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
-        Ok(Some(record)) => Ok(record.metadata == metadata_v2()),
+        Ok(Some(record)) => {
+            Ok(record.metadata == metadata_v2() || record.metadata == metadata_v3())
+        }
         Ok(None) | Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
     }
@@ -1129,7 +1155,9 @@ fn canonical_tokens_with_routine_types(
                     && matches!(upper.as_str(), "VARCHAR2" | "CHAR")
                     && source.get(i + 1) == Some(&Token::LParen)
                     && matches!(source.get(i + 2), Some(Token::Number(..)))
-                    && source.get(i + 3).is_some_and(|t| word(t, "CHAR"))
+                    && source
+                        .get(i + 3)
+                        .is_some_and(|t| word(t, "CHAR") || word(t, "BYTE"))
                     && source.get(i + 4) == Some(&Token::RParen)
                 {
                     let name = if upper == "VARCHAR2" {
@@ -1137,7 +1165,12 @@ fn canonical_tokens_with_routine_types(
                     } else {
                         "CHAR"
                     };
-                    pieces.push(format!("{name}({})", source[i + 2]));
+                    let unit = if word(&source[i + 3], "CHAR") {
+                        "CHARACTERS"
+                    } else {
+                        "OCTETS"
+                    };
+                    pieces.push(format!("{name}({} {unit})", source[i + 2]));
                     i += 5;
                     continue;
                 }

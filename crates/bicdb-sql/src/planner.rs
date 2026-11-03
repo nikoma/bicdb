@@ -1080,9 +1080,9 @@ impl InsertValuesTemplate {
             };
             let column = &schema.columns[index];
             let value = cast_value_to_column_type(value, column).map_err(|error| match error {
-                error @ (SqlError::ConstraintViolation { .. } | SqlError::DataException { .. }) => {
-                    error
-                }
+                error @ (SqlError::ConstraintViolation { .. }
+                | SqlError::DataException { .. }
+                | SqlError::OracleError { .. }) => error,
                 error => SqlError::TypeMismatch {
                     table: table.to_string(),
                     column: column.name.clone(),
@@ -1210,9 +1210,9 @@ impl InsertValuesTemplate {
             };
             let column = &schema.columns[index];
             let value = cast_value_to_column_type(value, column).map_err(|error| match error {
-                error @ (SqlError::ConstraintViolation { .. } | SqlError::DataException { .. }) => {
-                    error
-                }
+                error @ (SqlError::ConstraintViolation { .. }
+                | SqlError::DataException { .. }
+                | SqlError::OracleError { .. }) => error,
                 error => SqlError::TypeMismatch {
                     table: table.to_string(),
                     column: column.name.clone(),

@@ -286,9 +286,9 @@ pub(crate) fn set_record_column(
         .unwrap_or(column);
     if let Some(column_schema) = schema_column {
         value = cast_value_to_column_type(value, column_schema).map_err(|error| match error {
-            error @ (SqlError::ConstraintViolation { .. } | SqlError::DataException { .. }) => {
-                error
-            }
+            error @ (SqlError::ConstraintViolation { .. }
+            | SqlError::DataException { .. }
+            | SqlError::OracleError { .. }) => error,
             error => SqlError::TypeMismatch {
                 table: schema.map(|schema| schema.name.clone()).unwrap_or_default(),
                 column: column_schema.name.clone(),

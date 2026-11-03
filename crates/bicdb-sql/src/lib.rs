@@ -2976,6 +2976,11 @@ struct ColumnSchema {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum PgTypeModifier {
+    OracleCharacterV1 {
+        fixed: bool,
+        length: u32,
+        unit: oracle::character_columns::Unit,
+    },
     /// Compiler-local national-character provenance. Routine physical signatures
     /// erase this modifier; the versioned source definition recreates it.
     OracleNationalV1 {
@@ -3019,7 +3024,9 @@ impl PgTypeModifier {
                 let encoded_scale = i32::from(*scale) & 0x7ff;
                 i64::from(((i32::from(*precision) << 16) | encoded_scale) + 4)
             }
-            Self::Character { length } => i64::from(*length) + 4,
+            Self::Character { length } | Self::OracleCharacterV1 { length, .. } => {
+                i64::from(*length) + 4
+            }
             Self::Bit { length } => i64::from(*length),
             Self::Temporal { precision } | Self::OracleTemporalV1 { precision, .. } => {
                 i64::from(*precision)
@@ -3223,12 +3230,29 @@ impl ColumnSchema {
             return None;
         }
         match self.type_modifier.as_ref() {
-            Some(PgTypeModifier::Character { length }) => Some(i64::from(*length)),
+            Some(
+                PgTypeModifier::Character { length }
+                | PgTypeModifier::OracleCharacterV1 { length, .. },
+            ) => Some(i64::from(*length)),
             _ => None,
         }
     }
 
     fn character_octet_length(&self) -> Option<i64> {
+        if let Some(PgTypeModifier::OracleCharacterV1 {
+            fixed,
+            length,
+            unit,
+        }) = self.type_modifier
+        {
+            let declared = i64::from(length)
+                * if unit == oracle::character_columns::Unit::Characters {
+                    4
+                } else {
+                    1
+                };
+            return Some(declared.min(if fixed { 2000 } else { 4000 }));
+        }
         match self.pg_type.as_str() {
             "text" | "bpchar" | "varchar" => Some(
                 self.character_maximum_length()

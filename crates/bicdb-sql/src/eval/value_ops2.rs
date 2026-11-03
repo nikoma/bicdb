@@ -2460,6 +2460,14 @@ pub(crate) fn apply_pg_type_modifier_with_context(
     if matches!(value, SqlValue::Null) {
         return Ok(value);
     }
+    if let Some(PgTypeModifier::OracleCharacterV1 {
+        fixed,
+        length,
+        unit,
+    }) = modifier
+    {
+        return oracle::character_columns::coerce(value, *fixed, *length, *unit);
+    }
     if let Some(PgTypeModifier::OracleTemporalV1 { source, precision }) = modifier {
         if *source == oracle::temporal_columns::Source::Date {
             return pg_scalar_extra::oracle_date_coerce(value);

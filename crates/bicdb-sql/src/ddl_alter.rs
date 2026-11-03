@@ -88,7 +88,8 @@ pub(crate) fn alter_table_alter_column(
                 ));
             }
             let (pg_type, vector_dim) = pg_type_from_data_type(data_type)?;
-            let type_modifier = pg_type_modifier_from_data_type(data_type)?;
+            let type_modifier = oracle::character_columns::modifier(db, data_type)?
+                .or(pg_type_modifier_from_data_type(data_type)?);
             let column_name = schema.columns[idx].name.clone();
             schema.columns[idx].pg_type = pg_type;
             schema.columns[idx].type_modifier = type_modifier;
@@ -96,7 +97,11 @@ pub(crate) fn alter_table_alter_column(
             for mut record in db.scan_collection(table)? {
                 let current = record_column_value(&record, schema, &column_name);
                 if !matches!(current, SqlValue::Null) {
-                    let converted = if using.is_some() {
+                    let converted = if using.is_some()
+                        && !matches!(
+                            schema.columns[idx].type_modifier,
+                            Some(PgTypeModifier::OracleCharacterV1 { .. })
+                        ) {
                         cast_value(current, data_type)?
                     } else {
                         cast_value_to_column_type(current, &schema.columns[idx])?
@@ -1540,6 +1545,9 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
             _ => None,
         });
     let mut type_modifier = pg_type_modifier_from_data_type(&column.data_type)?;
+    if let Some(source) = oracle::character_columns::modifier(db, &column.data_type)? {
+        type_modifier = Some(source);
+    }
     if let Some(source) = oracle::temporal_columns::modifier(db, &column.data_type)? {
         pg_type = oracle::temporal_columns::physical_type(&source).into();
         type_modifier = Some(source);
@@ -4555,9 +4563,9 @@ pub(crate) fn record_from_fields(
         let json_column = column_schema.is_some_and(|column| is_json_pg_type(&column.pg_type));
         let value = if let Some(column_schema) = column_schema {
             cast_value_to_column_type(value, column_schema).map_err(|error| match error {
-                error @ (SqlError::ConstraintViolation { .. } | SqlError::DataException { .. }) => {
-                    error
-                }
+                error @ (SqlError::ConstraintViolation { .. }
+                | SqlError::DataException { .. }
+                | SqlError::OracleError { .. }) => error,
                 error => SqlError::TypeMismatch {
                     table: table.to_string(),
                     column: column_schema.name.clone(),

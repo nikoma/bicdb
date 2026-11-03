@@ -93,6 +93,20 @@ pub(crate) fn catalog_type(db: &BicDb, args: &[SqlValue]) -> Result<SqlValue> {
     else {
         return Ok(SqlValue::Null);
     };
+    if let Some(PgTypeModifier::OracleCharacterV1 {
+        fixed,
+        length,
+        unit,
+    }) = column.type_modifier
+    {
+        let kind = if fixed { "CHAR" } else { "VARCHAR2" };
+        let unit = if unit == super::character_columns::Unit::Bytes {
+            "BYTE"
+        } else {
+            "CHAR"
+        };
+        return Ok(SqlValue::String(format!("{kind}({length} {unit})")));
+    }
     let value = match column.type_modifier {
         Some(PgTypeModifier::OracleTemporalV1 {
             source: Source::Date,

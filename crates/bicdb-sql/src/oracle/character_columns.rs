@@ -142,6 +142,7 @@ mod tests {
             assert_eq!(error.sqlstate(), "22001", "{sql}: {error}");
         }
         assert!(metadata_v3_enabled(&db).unwrap());
+        assert_eq!(run(&mut db, r#"SELECT bicdb_oracle_column_type('"CHAR_UNITS"','B'),bicdb_oracle_column_type('"CHAR_UNITS"','C') FROM DUAL"#).unwrap().rows[0],vec![SqlValue::String("VARCHAR2(3 BYTE)".into()),SqlValue::String("VARCHAR2(3 CHAR)".into())]);
         let schema = load_schema(&db, "CHAR_UNITS").unwrap().unwrap();
         assert_eq!(schema.columns[1].character_octet_length(), Some(3));
         assert_eq!(schema.columns[2].character_octet_length(), Some(12));

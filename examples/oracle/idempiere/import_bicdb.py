@@ -28,7 +28,10 @@ def oracle_type(column):
         if precision is None and scale is None: return 'NUMBER'
         return f"NUMBER({int(precision) if precision is not None else 38},{int(scale or 0)})"
     if kind in {'VARCHAR2', 'CHAR'}:
-        return f"{kind}({int(column['characters'])} CHAR)"
+        unit = {'B': 'BYTE', 'C': 'CHAR'}.get(column.get('character_unit'))
+        if unit is None:
+            raise ValueError('character length-unit provenance is required')
+        return f"{kind}({int(column['characters'])} {unit})"
     if kind in {'DATE', 'CLOB', 'BLOB'} or kind.startswith('TIMESTAMP('): return kind
     if kind == 'RAW': return 'BYTEA'
     raise ValueError(f"unsupported source column type {kind}")
@@ -44,7 +47,7 @@ def table_ddl(schema, table, columns, constraints):
             definition += ' DEFAULT ' + column['default'].strip()
         if column['nullable'] == 'N': definition += ' NOT NULL'
         parts.append(definition)
-        if column['character_unit'] == 'B' or column['type'] == 'RAW':
+        if column['type'] == 'RAW':
             value = quote(column['name'])
             if column['type'] == 'RAW':
                 # CHECK evaluation needs the binary overload explicitly; the
@@ -126,6 +129,43 @@ def probe_constraint_null_support(cursor, schema):
     finally:
         if created:
             cursor.execute('DROP TABLE ' + table, prepare=False)
+
+
+def verify_character_column_units(cursor, schema, table, columns):
+    columns = [column for column in columns if column['type'] in {'VARCHAR2', 'CHAR'}]
+    if not columns: return []
+    relation = quote(schema) + '.' + quote(table)
+    expressions = ','.join('bicdb_oracle_column_type(%s,%s)' for _ in columns)
+    arguments = [value for column in columns for value in (relation, column['name'])]
+    cursor.execute('SELECT ' + expressions, arguments)
+    row = cursor.fetchone()
+    expected = tuple(oracle_type(column) for column in columns)
+    if row is None or tuple(row) != expected:
+        raise ValueError('target character provenance differs; reconcile legacy columns before resuming: ' + table)
+    return [table + '.' + column['name'] for column in columns]
+
+
+def probe_character_column_support(cursor, schema):
+    """Require byte capacity and byte-aware fixed padding before importing data."""
+    import uuid
+    name = 'BICDB_CHARACTER_PROBE_' + uuid.uuid4().hex[:12].upper()
+    table = quote(schema) + '.' + quote(name)
+    created = False
+    try:
+        cursor.execute('CREATE TABLE ' + table + '(b VARCHAR2(1 BYTE),c VARCHAR2(1 CHAR),f CHAR(3 BYTE))', prepare=False)
+        created = True
+        try:
+            cursor.execute('INSERT INTO ' + table + '(b) VALUES(%s)', ('😀',), prepare=False)
+        except Exception as error:
+            if getattr(error, 'sqlstate', None) != '22001': raise
+        else:
+            raise ValueError('target does not enforce Oracle byte capacity')
+        cursor.execute('INSERT INTO ' + table + '(c,f) VALUES(%s,%s)', ('😀','é'), prepare=False)
+        cursor.execute('SELECT c,f FROM ' + table, prepare=False)
+        if cursor.fetchall() != [('😀','é ')]:
+            raise ValueError('target does not preserve character units and byte-aware padding')
+    finally:
+        if created: cursor.execute('DROP TABLE ' + table, prepare=False)
 
 
 def decode(value):
@@ -235,12 +275,21 @@ def main():
             with connection.cursor() as cursor:
                 if args.phase == 'tables' and not args.resume:
                     cursor.execute('CREATE SCHEMA ' + quote(schema))
+                if args.phase == 'tables' and args.resume:
+                    # Reject legacy provenance before a capability probe can
+                    # advance the target's durable metadata format.
+                    for table in manifest['tables']:
+                        if table['name'] in report['completed']:
+                            verify_character_column_units(cursor,schema,table['name'],by_table[table['name']])
                 if args.phase == 'tables':
+                    probe_character_column_support(cursor, schema)
                     probe_constraint_null_support(cursor, schema)
                 report['verified_nullable_unique_constraints'] = []
+                report['verified_character_columns'] = []
                 for table in manifest['tables']:
                     name = table['name']
                     if args.phase != 'tables' or name in report['completed']:
+                        report['verified_character_columns'].extend(verify_character_column_units(cursor,schema,name,by_table[name]))
                         report['verified_nullable_unique_constraints'].extend(verify_constraint_null_policies(
                             cursor, schema, name, by_table[name], checks[name]))
                     if name in report['completed']:
@@ -255,6 +304,7 @@ def main():
                     print(f"{args.phase}: {name}", flush=True)
                     if args.phase == 'tables':
                         cursor.execute(table_ddl(schema, name, by_table[name], checks[name]), prepare=False)
+                        report['verified_character_columns'].extend(verify_character_column_units(cursor,schema,name,by_table[name]))
                         report['verified_nullable_unique_constraints'].extend(verify_constraint_null_policies(
                             cursor, schema, name, by_table[name], checks[name]))
                     elif args.phase == 'verify':

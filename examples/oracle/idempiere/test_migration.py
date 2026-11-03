@@ -37,6 +37,30 @@ class MigrationTests(unittest.TestCase):
             self.assertEqual(json.loads(path.read_text())['completed'], ['A', 'B'])
             self.assertFalse(path.with_name('report.json.tmp').exists())
 
+    def test_character_migration_preserves_units_without_padding_workarounds(self):
+        for kind in ['VARCHAR2','CHAR']:
+            for unit, expected in [('B','BYTE'),('C','CHAR')]:
+                column=dict(name='V',type=kind,characters=3,character_unit=unit,bytes=3 if unit=='B' else 12,virtual='NO',default=None,nullable='Y')
+                self.assertEqual(target.oracle_type(column),kind+'(3 '+expected+')')
+                ddl=target.table_ddl('S','T',[column],[])
+                self.assertIn(kind+'(3 '+expected+')',ddl)
+                self.assertNotIn('octet_length',ddl)
+        with self.assertRaisesRegex(ValueError,'provenance'):
+            target.oracle_type(dict(type='VARCHAR2',characters=3))
+
+    def test_resume_rejects_lost_character_provenance(self):
+        column=dict(name='B',type='VARCHAR2',character_unit='B',characters=3)
+        class Cursor:
+            def __init__(self,row): self.row=row
+            def execute(self,sql,args): self.args=args
+            def fetchone(self): return self.row
+        cursor=Cursor(('VARCHAR2(3 BYTE)',))
+        self.assertEqual(target.verify_character_column_units(cursor,'S','T',[column]),['T.B'])
+        self.assertEqual(cursor.args,['"S"."T"','B'])
+        for row in [None,(None,),('VARCHAR2(3 CHAR)',)]:
+            with self.assertRaisesRegex(ValueError,'provenance'):
+                target.verify_character_column_units(Cursor(row),'S','T',[column])
+
     def test_unknown_value_encodings_and_types_fail(self):
         with self.assertRaises(ValueError): target.decode({'unknown': 'value'})
         with self.assertRaises(ValueError): target.decode({'bytes': '?'})

@@ -2286,6 +2286,8 @@ impl<'db> SqlSession<'db> {
                 self.db_ref(),
                 oracle::collections::routine_constructors_enabled().then_some(schema.as_str()),
                 oracle::preview_routine_language_version(&language)
+                    .is_some_and(|version| version >= 23),
+                oracle::preview_routine_language_version(&language)
                     .is_some_and(|version| version >= 20),
                 true,
                 oracle::preview_routine_language_version(&language)

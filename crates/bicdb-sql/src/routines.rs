@@ -164,6 +164,8 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             })?,
             oracle::collections::routine_constructors_enabled().then_some(routine.schema.as_str()),
             oracle::preview_routine_language_version(&routine.language)
+                .is_some_and(|version| version >= 23),
+            oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 20),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 4),

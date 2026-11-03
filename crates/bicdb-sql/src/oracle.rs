@@ -14,6 +14,8 @@ pub(crate) mod collections;
 mod date_trunc;
 mod decode;
 mod dictionary;
+#[cfg(test)]
+mod dml_temporal_tests;
 mod dual;
 pub(crate) mod dynamic_sql;
 pub(crate) mod errors;
@@ -30,6 +32,7 @@ pub(crate) mod routines;
 mod rownum;
 pub(crate) mod session_context;
 mod source_tokens;
+mod sql_concat;
 pub(crate) mod syntax;
 pub(crate) mod temporal_columns;
 pub(crate) mod text_patterns;
@@ -166,7 +169,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V18: &str = "bicdb_oracle_preview_v18"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V19: &str = "bicdb_oracle_preview_v19";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V20: &str = "bicdb_oracle_preview_v20";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V21: &str = "bicdb_oracle_preview_v21";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v22";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V22: &str = "bicdb_oracle_preview_v22";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v23";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -188,7 +192,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V18_OID: i64 = 999_417;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V19_OID: i64 = 999_418;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V20_OID: i64 = 999_419;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V21_OID: i64 = 999_420;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_421;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V22_OID: i64 = 999_421;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_422;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -218,7 +223,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V19 => Some(19),
         PREVIEW_ROUTINE_LANGUAGE_V20 => Some(20),
         PREVIEW_ROUTINE_LANGUAGE_V21 => Some(21),
-        PREVIEW_ROUTINE_LANGUAGE => Some(22),
+        PREVIEW_ROUTINE_LANGUAGE_V22 => Some(22),
+        PREVIEW_ROUTINE_LANGUAGE => Some(23),
         _ => None,
     }
 }
@@ -1703,17 +1709,7 @@ fn lower_native(db: &BicDb, sql: &str, preview: bool, namespace: Option<&str>) -
                 return ControlFlow::Break(error);
             }
         }
-        if let Expr::BinaryOp {
-            left,
-            op: BinaryOperator::StringConcat,
-            right,
-        } = expr
-        {
-            match expression(&format!("NULLIF(concat({left},{right}), '')")) {
-                Ok(lowered) => *expr = lowered,
-                Err(e) => return ControlFlow::Break(e),
-            }
-        }
+        sql_concat::lower_expression(expr);
         ControlFlow::Continue(())
     });
     if let ControlFlow::Break(e) = result {

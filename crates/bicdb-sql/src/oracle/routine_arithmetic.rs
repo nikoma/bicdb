@@ -189,6 +189,7 @@ struct Environment {
     sql_builtins_only: bool,
     defer_bind_types: bool,
     text_patterns: bool,
+    statement_provenance: bool,
     collection_namespace: Option<String>,
     collections: BTreeMap<String, super::collections::CollectionBinding>,
     variables: BTreeMap<String, Kind>,
@@ -236,6 +237,22 @@ impl Resolve<'_> {
         } else {
             return None;
         };
+        if self.env.statement_provenance && self.queries.is_empty() {
+            if let Ok(statements) = parse_statements(&sql) {
+                if let Some(Statement::Query(query)) = statements.first() {
+                    if let Some(logical) = temporal_columns::logical_in_query(self.db, query, expr)
+                    {
+                        return Some(match logical.source {
+                            temporal_columns::Source::Date => Kind::Date,
+                            temporal_columns::Source::Timestamp => {
+                                Kind::Timestamp(logical.precision)
+                            }
+                            temporal_columns::Source::TimestampWithTimeZone => Kind::Other,
+                        });
+                    }
+                }
+            }
+        }
         infer_query_result_types(self.db, &sql)
             .ok()
             .flatten()?
@@ -874,6 +891,7 @@ pub(super) fn lower_sql_builtins(
         decode: true,
         character_conversion: true,
         nvl: true,
+        statement_provenance: true,
         sql_builtins_only: true,
         text_patterns: true,
         defer_bind_types: oids.is_none(),
@@ -915,6 +933,18 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
         self.statement_from.push(if self.env.decode {
             match statement {
                 Statement::Update(update) => Some(update.table.to_string()),
+                Statement::Delete(delete) if self.env.statement_provenance => {
+                    let from = match &delete.from {
+                        FromTable::WithFromKeyword(from) | FromTable::WithoutKeyword(from) => from,
+                    };
+                    Some(
+                        from.iter()
+                            .chain(delete.using.iter().flatten())
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    )
+                }
                 Statement::CreateIndex(index) => Some(index.table_name.to_string()),
                 _ => None,
             }
@@ -1358,6 +1388,7 @@ fn statements(
 pub(crate) fn lower(
     db: &BicDb,
     collection_namespace: Option<&str>,
+    statement_provenance: bool,
     text_patterns: bool,
     v4_semantics: bool,
     concatenation: bool,
@@ -1372,6 +1403,7 @@ pub(crate) fn lower(
 ) -> Result<()> {
     let mut env = Environment {
         collection_namespace: collection_namespace.map(str::to_string),
+        statement_provenance,
         text_patterns,
         v4_semantics,
         concatenation,

@@ -943,3 +943,31 @@ version 22 has language OID 999421; the version-21 OID remains 999420. Older
 readers refuse the new compiler and lowered view helpers. This does not implement
 application-defined contexts, SYS_SESSION_ROLES, all USERENV attributes, Oracle
 authentication protocols, linguistic conversion or complete application startup.
+
+
+## SQL concatenation trees and DML temporal provenance, compiler version 23
+
+The [startup expression contract](evidence/oracle-startup-expressions-2026-11-03/README.md)
+keeps SQL concatenation chains in a shallow expression tree. It preserves operand
+order, scalar subqueries and Oracle NULL/empty-string behavior, and avoids
+reparsing recursively nested generated function calls. Qualified and modified
+user calls retain their boundaries. The ordinary PostgreSQL frontend is unchanged.
+
+Resolved target-row types now support DATE arithmetic in DELETE predicates and
+related typed builtins, including aliases, NVL, DECODE and TO_CHAR. The SQL
+TIMESTAMP-plus-number conversion yields DATE and drops fractional seconds, as
+observed on the reference. Numeric DML expressions keep their previous shapes.
+The source comparisons cover 16 concatenation cases and 11 DML cases; they do
+not qualify all DML syntax, correlated DML, datetime/NLS behavior or performance.
+
+Version-23 routines receive the new DML provenance capability. Version-22 routines
+retain their earlier behavior. Language OID 999422 is registered while the previous
+OID remains 999421. Older readers refuse the new routine compiler and can execute
+the equivalent shallow concatenation view using their existing scalar functions.
+No additional durable metadata format is introduced.
+
+A development candidate reached the original Oracle-schema application's admin
+desktop over the PostgreSQL driver. Login and window navigation remain unreliable
+under the full background workload. TM9 formatting, driver session controls,
+transaction failures and complete business workflows remain open. Accepted routine
+definitions and a displayed desktop are separate from complete application operation.

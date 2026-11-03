@@ -122,7 +122,10 @@ pub(crate) fn raise_application_error(
     let message = match message {
         SqlValue::Null => String::new(),
         SqlValue::String(value) => value.clone(),
-        SqlValue::Int(_) | SqlValue::Float(_) | SqlValue::Json(JsonValue::Number(_)) => {
+        value
+            if matches!(value, SqlValue::Int(_) | SqlValue::Float(_))
+                || matches!(value, SqlValue::Json(json) if json.is_number()) =>
+        {
             eval_pg_scalar_extra(
                 "bicdb_oracle_default_to_char",
                 &[

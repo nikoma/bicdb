@@ -2374,6 +2374,10 @@ pub(crate) fn list_routines(db: &BicDb) -> Result<Vec<RoutineSchema>> {
 }
 
 pub(crate) fn save_routine(db: &mut BicDb, routine: &RoutineSchema) -> Result<()> {
+    if oracle::preview_routine_language_version(&routine.language).is_some() {
+        let body = plpgsql_body_from_definition(&routine.definition)?;
+        oracle::prepare_hierarchy_save(db, &body)?;
+    }
     ensure_routine_collection(db)?;
     db.insert(
         ROUTINE_COLLECTION,

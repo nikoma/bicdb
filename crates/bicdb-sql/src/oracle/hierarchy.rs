@@ -125,6 +125,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn persisted_hierarchy_fence_keeps_temporal_and_character_capabilities() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        prepare_hierarchy_save(&mut db, "SELECT 'CONNECT BY' FROM DUAL").unwrap();
+        assert!(!metadata_v3_enabled(&db).unwrap());
+        prepare_hierarchy_save(
+            &mut db,
+            "SELECT LEVEL FROM DUAL CONNECT /* comment */ BY LEVEL<=3",
+        )
+        .unwrap();
+        assert!(metadata_v2_enabled(&db).unwrap());
+        assert!(metadata_v3_enabled(&db).unwrap());
+        enable_metadata_v2(&mut db).unwrap();
+        enable_metadata_v3(&mut db).unwrap();
+        assert_eq!(
+            db.get(PROFILE_COLLECTION, "profile")
+                .unwrap()
+                .unwrap()
+                .metadata,
+            metadata_v4()
+        );
+        assert!(!matches_profile(&metadata_v4(), POSTGRES_PROFILE));
+        drop(db);
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        assert_eq!(
+            db.get(PROFILE_COLLECTION, "profile")
+                .unwrap()
+                .unwrap()
+                .metadata,
+            metadata_v4()
+        );
+    }
+
+    #[test]
     fn sibling_order_and_levels_are_depth_first() {
         let result = traverse(
             vec![Ok(Node { row: 1, key: 1 }), Ok(Node { row: 5, key: 5 })],

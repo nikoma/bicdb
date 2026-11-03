@@ -4128,6 +4128,7 @@ pub(crate) fn list_views(db: &BicDb) -> Result<Vec<ViewSchema>> {
 
 pub(crate) fn save_view(db: &mut BicDb, view: &ViewSchema) -> Result<()> {
     require_user_relation_name(&view.name)?;
+    oracle::prepare_hierarchy_save(db, &view.query_sql)?;
     ensure_view_collection(db)?;
     db.insert(
         VIEW_COLLECTION,

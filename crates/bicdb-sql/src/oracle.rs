@@ -42,10 +42,30 @@ fn metadata_v2() -> JsonValue {
 fn metadata_v3() -> JsonValue {
     serde_json::json!({"format":3,"profile":ORACLE_PREVIEW_PROFILE,"features":["oracle_temporal_columns_v1","oracle_character_columns_v1"]})
 }
+fn metadata_v4() -> JsonValue {
+    serde_json::json!({"format":4,"profile":ORACLE_PREVIEW_PROFILE,"features":["oracle_temporal_columns_v1","oracle_character_columns_v1","oracle_hierarchical_queries_v1"]})
+}
+pub(crate) fn prepare_hierarchy_save(db: &mut BicDb, sql: &str) -> Result<()> {
+    if !preview_routine_language_enabled(db)? {
+        return Ok(());
+    }
+    let source = tokens(sql)?;
+    if !source
+        .windows(2)
+        .any(|w| word(&w[0], "CONNECT") && word(&w[1], "BY"))
+    {
+        return Ok(());
+    }
+    db.insert(
+        PROFILE_COLLECTION,
+        Record::new("profile").with_metadata(metadata_v4()),
+    )?;
+    Ok(())
+}
 fn metadata_v3_enabled(db: &BicDb) -> Result<bool> {
     Ok(db
         .get(PROFILE_COLLECTION, "profile")?
-        .is_some_and(|r| r.metadata == metadata_v3()))
+        .is_some_and(|r| r.metadata == metadata_v3() || r.metadata == metadata_v4()))
 }
 fn enable_metadata_v3(db: &mut BicDb) -> Result<()> {
     if !preview_routine_language_enabled(db)? {
@@ -64,14 +84,16 @@ fn enable_metadata_v3(db: &mut BicDb) -> Result<()> {
 fn matches_profile(metadata: &JsonValue, profile: &str) -> bool {
     *metadata == serde_json::json!({"format":1,"profile":profile})
         || profile == ORACLE_PREVIEW_PROFILE
-            && (*metadata == metadata_v2() || *metadata == metadata_v3())
+            && (*metadata == metadata_v2()
+                || *metadata == metadata_v3()
+                || *metadata == metadata_v4())
 }
 
 fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
-        Ok(Some(record)) => {
-            Ok(record.metadata == metadata_v2() || record.metadata == metadata_v3())
-        }
+        Ok(Some(record)) => Ok(record.metadata == metadata_v2()
+            || record.metadata == metadata_v3()
+            || record.metadata == metadata_v4()),
         Ok(None) | Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
     }

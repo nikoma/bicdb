@@ -93,7 +93,7 @@ def observe(factory, hold_seconds=10):
         assert started.wait(5)
         time.sleep(.25)
         waiter.cancel()
-        row["completed_before_owner_release"] = done.wait(2)
+        row["completed_before_owner_release"] = done.wait(12)
         owner.rollback()
         thread.join(20)
         assert not thread.is_alive(), "cancelled worker did not finish"
@@ -164,6 +164,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", choices=["oracle", "postgres"], required=True)
     parser.add_argument("--oracle-config", type=Path)
+    parser.add_argument("--oracle-disable-oob", action="store_true", help="use in-band breaks on the Oracle reference connection")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.reference == "oracle" and args.oracle_config is None:
@@ -182,13 +183,22 @@ def main():
         if not password.is_absolute():
             password = args.oracle_config.parent / password
         def source_factory():
-            conn = oracledb.connect(user=config["user"], password=password.read_text().strip(), host=config["host"], port=config["port"], service_name=config["service_name"])
+            conn = oracledb.connect(user=config["user"], password=password.read_text().strip(), host=config["host"], port=config["port"], service_name=config["service_name"], disable_oob=args.oracle_disable_oob)
             conn.call_timeout = 15000
             return conn
     else:
         source_factory = pg_factory(os.environ["ORACLE_CONTROL_PG_DSN"])
-    report = run(source_factory, pg_factory(os.environ["BICDB_PG_DSN"]))
+    target_factory = pg_factory(os.environ["BICDB_PG_DSN"])
+    with target_factory() as probe:
+        profile = probe.info.parameter_status("bicdb_sql_profile")
+        expected = "oracle-preview-v1" if args.reference == "oracle" else "postgres"
+        if profile != expected:
+            raise RuntimeError("target SQL profile does not match the selected reference")
+    report = run(source_factory, target_factory)
+    report["target_sql_profile"] = profile
     report["reference"] = args.reference
+    if args.reference == "oracle":
+        report["oracle_disable_oob"] = args.oracle_disable_oob
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps({key: report[key] for key in ["success", "matched", "total"]}))
     return 0 if report["success"] else 1

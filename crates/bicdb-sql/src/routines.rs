@@ -40,6 +40,9 @@ pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
 }
 
 fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) -> Result<RoutineIR> {
+    let _characters = oracle::routine_characters::Scope::new(
+        oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 18),
+    );
     let _national = oracle::national::Scope::new(
         oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 17),
     );
@@ -126,7 +129,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17)
+        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18)
     ) {
         oracle::routines::bind_function_namespace(
             db,
@@ -146,7 +149,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             })?,
             matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17)
+                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18)
             ),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 7),
@@ -1160,11 +1163,17 @@ pub(crate) fn parse_routine_decl(declaration: &str) -> Result<RoutineDecl> {
         (left, right) => left.or(right),
     };
     let type_declaration = rest[..initializer.map_or(rest.len(), |(start, _)| start)].trim();
-    let details = raw_routine_type_details(type_declaration).ok();
+    let details = raw_routine_type_details(type_declaration);
+    let details = if oracle::routine_characters::enabled() {
+        Some(details?)
+    } else {
+        details.ok()
+    };
     let declared_date = details.as_ref().is_some_and(|(_, date)| *date);
     let type_schema = details.map(|(schema, _)| schema);
     let pg_type = type_schema.as_ref().map(|schema| schema.pg_type.clone());
     let mut type_modifier = type_schema.and_then(|schema| schema.type_modifier);
+    oracle::routine_characters::local_modifier(&mut type_modifier)?;
     oracle::national::local_modifier(&mut type_modifier)?;
     let default_expr = initializer
         .map(|(_, expr_start)| &rest[expr_start..])

@@ -2460,6 +2460,14 @@ pub(crate) fn apply_pg_type_modifier_with_context(
     if matches!(value, SqlValue::Null) {
         return Ok(value);
     }
+    if let Some(PgTypeModifier::OracleRoutineCharacterV1 {
+        fixed,
+        length,
+        unit,
+    }) = modifier
+    {
+        return oracle::routine_characters::coerce(value, *fixed, *length, *unit);
+    }
     if let Some(PgTypeModifier::OracleCharacterV1 {
         fixed,
         length,

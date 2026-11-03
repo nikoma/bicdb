@@ -745,6 +745,9 @@ pub(crate) fn routine_return_type_schema(
 }
 
 pub(crate) fn routine_type_schema(data_type: &DataType) -> Result<RoutineTypeSchema> {
+    if let Some(schema) = oracle::routine_characters::routine_type(data_type)? {
+        return Ok(schema);
+    }
     if let Some(schema) = oracle::national::routine_type(data_type)? {
         return Ok(schema);
     }

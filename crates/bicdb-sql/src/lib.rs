@@ -2976,6 +2976,12 @@ struct ColumnSchema {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum PgTypeModifier {
+    /// Compiler-local PL/SQL buffer units; never a physical table declaration.
+    OracleRoutineCharacterV1 {
+        fixed: bool,
+        length: Option<u32>,
+        unit: oracle::character_columns::Unit,
+    },
     OracleCharacterV1 {
         fixed: bool,
         length: u32,
@@ -3019,7 +3025,10 @@ enum PgTypeModifier {
 impl PgTypeModifier {
     fn catalog_value(&self) -> i64 {
         match self {
-            Self::OracleNationalV1 { length, .. } => length.map_or(-1, |n| i64::from(n) + 4),
+            Self::OracleNationalV1 { length, .. }
+            | Self::OracleRoutineCharacterV1 { length, .. } => {
+                length.map_or(-1, |n| i64::from(n) + 4)
+            }
             Self::Numeric { precision, scale } => {
                 let encoded_scale = i32::from(*scale) & 0x7ff;
                 i64::from(((i32::from(*precision) << 16) | encoded_scale) + 4)

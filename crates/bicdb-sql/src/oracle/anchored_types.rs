@@ -121,6 +121,20 @@ pub(super) fn lower(
         }
     }
     let data_type = if preserve_modifiers {
+        if let Some(PgTypeModifier::OracleCharacterV1 {
+            fixed,
+            length,
+            unit,
+        }) = column.type_modifier
+        {
+            let kind = if fixed { "CHAR" } else { "VARCHAR" };
+            let unit = if unit == character_columns::Unit::Bytes {
+                "OCTETS"
+            } else {
+                "CHARACTERS"
+            };
+            return Ok(Some((format!("{kind}({length} {unit})"), used + 2)));
+        }
         column.formatted_pg_type()
     } else {
         column.pg_type.clone()

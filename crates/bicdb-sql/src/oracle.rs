@@ -21,6 +21,7 @@ mod nvl;
 mod outer_joins;
 pub(crate) mod procedures;
 pub(crate) mod routine_arithmetic;
+pub(crate) mod routine_characters;
 pub(crate) mod routines;
 mod rownum;
 mod source_tokens;
@@ -104,7 +105,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V13: &str = "bicdb_oracle_preview_v13"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V14: &str = "bicdb_oracle_preview_v14";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V15: &str = "bicdb_oracle_preview_v15";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V16: &str = "bicdb_oracle_preview_v16";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v17";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V17: &str = "bicdb_oracle_preview_v17";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v18";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -121,7 +123,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V13_OID: i64 = 999_412;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V14_OID: i64 = 999_413;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V15_OID: i64 = 999_414;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V16_OID: i64 = 999_415;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_416;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V17_OID: i64 = 999_416;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_417;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -146,7 +149,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V14 => Some(14),
         PREVIEW_ROUTINE_LANGUAGE_V15 => Some(15),
         PREVIEW_ROUTINE_LANGUAGE_V16 => Some(16),
-        PREVIEW_ROUTINE_LANGUAGE => Some(17),
+        PREVIEW_ROUTINE_LANGUAGE_V17 => Some(17),
+        PREVIEW_ROUTINE_LANGUAGE => Some(18),
         _ => None,
     }
 }
@@ -154,7 +158,7 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
     matches!(
         preview_routine_language_version(language),
-        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17)
+        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18)
     )
 }
 

@@ -1103,7 +1103,9 @@ fn routine_statement_profile_kind(statement: &RoutineStmt) -> String {
                 sql_profile_statement_kind_from_ast(statement)
             )
         }
-        RoutineStmt::DynamicExecute(_) => "ROUTINE_DYNAMIC_EXECUTE".to_string(),
+        RoutineStmt::DynamicExecute(_) | RoutineStmt::OracleDynamicExecute(_) => {
+            "ROUTINE_DYNAMIC_EXECUTE".to_string()
+        }
         RoutineStmt::If { .. } => "ROUTINE_IF".to_string(),
         RoutineStmt::Case { .. } => "ROUTINE_CASE".to_string(),
         RoutineStmt::ForLoop { .. } => "ROUTINE_FOR_LOOP".to_string(),
@@ -1161,6 +1163,9 @@ fn routine_statement_profile_signature(statement: &RoutineStmt) -> String {
             )
         }
         RoutineStmt::DynamicExecute(expr) => format!("EXECUTE {expr}"),
+        RoutineStmt::OracleDynamicExecute(dynamic) => {
+            format!("EXECUTE IMMEDIATE {}", dynamic.command)
+        }
         RoutineStmt::If { condition, .. } => format!("IF {condition}"),
         RoutineStmt::Case { expression, .. } => format!("CASE {expression}"),
         RoutineStmt::ForLoop {
@@ -4285,6 +4290,7 @@ enum RoutineStmt {
         targets: Vec<String>,
     },
     DynamicExecute(RoutineExpr),
+    OracleDynamicExecute(Box<oracle::dynamic_sql::Immediate>),
     If {
         condition: RoutineExpr,
         then_body: Vec<RoutineStmt>,
@@ -4430,7 +4436,7 @@ fn routine_statement_may_write(statement: &RoutineStmt) -> bool {
         RoutineStmt::Sql(statement) | RoutineStmt::SqlInto { statement, .. } => {
             statement_may_write(statement)
         }
-        RoutineStmt::DynamicExecute(_) => true,
+        RoutineStmt::DynamicExecute(_) | RoutineStmt::OracleDynamicExecute(_) => true,
         RoutineStmt::SelectInto { query, .. } => query_may_write(query),
         RoutineStmt::Perform { query } | RoutineStmt::ReturnQuery(query) => query_may_write(query),
         RoutineStmt::QueryForLoop { query, body, .. } => {

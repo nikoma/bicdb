@@ -2039,6 +2039,85 @@ async fn character_functions_preserve_prepared_pg_transport_and_reopen_contracts
 }
 
 #[tokio::test]
+async fn dynamic_sql_preserves_bound_text_describe_and_restart() {
+    let root = tempfile::tempdir().unwrap();
+    for attempt in 0..2 {
+        let server = Running::with_profile(root.path(), "oracle-preview-v1");
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb")
+            .options("-c bicdb.sql_profile=oracle-preview-v1");
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let task = tokio::spawn(async move {
+            connection.await.unwrap();
+        });
+        if attempt == 0 {
+            for sql in ["CREATE TABLE dyn_wire_rows(id NUMBER PRIMARY KEY)",
+                "CREATE PROCEDURE dyn_wire_write IS PRAGMA AUTONOMOUS_TRANSACTION;BEGIN EXECUTE IMMEDIATE 'INSERT INTO dyn_wire_rows VALUES(:1)' USING 1;COMMIT;END;",
+                "CREATE FUNCTION dyn_wire_echo(p VARCHAR2) RETURN VARCHAR2 IS v VARCHAR2(200);BEGIN EXECUTE IMMEDIATE 'SELECT :value FROM DUAL' INTO v USING p;RETURN v;END;"] {
+                client.batch_execute(sql).await.unwrap_or_else(|e|panic!("{sql}: {e}"));
+            }
+            let prepared = client.prepare("CALL dyn_wire_write()").await.unwrap();
+            assert_eq!(
+                client
+                    .query_one(
+                        "SELECT CAST(COUNT(*) AS VARCHAR2(20)) FROM dyn_wire_rows",
+                        &[]
+                    )
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                "0"
+            );
+            client.execute(&prepared, &[]).await.unwrap();
+        }
+        let echo = client
+            .prepare("SELECT CAST(dyn_wire_echo($1) AS VARCHAR2(200)) FROM DUAL")
+            .await
+            .unwrap();
+        for value in [
+            "O'Reilly",
+            "O''Reilly",
+            "x');DELETE FROM dyn_wire_rows;--",
+            "ñΩ",
+        ] {
+            assert_eq!(
+                client
+                    .query_one(&echo, &[&value])
+                    .await
+                    .unwrap()
+                    .get::<_, String>(0),
+                value
+            );
+        }
+        assert_eq!(
+            client
+                .query_one(&echo, &[&""])
+                .await
+                .unwrap()
+                .get::<_, Option<String>>(0),
+            None
+        );
+        assert_eq!(
+            client
+                .query_one(
+                    "SELECT CAST(COUNT(*) AS VARCHAR2(20)) FROM dyn_wire_rows",
+                    &[]
+                )
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "1"
+        );
+        drop(client);
+        task.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn autonomous_transactions_preserve_parent_and_prepared_statement_boundaries() {
     let root = tempfile::tempdir().unwrap();
     for attempt in 0..2 {

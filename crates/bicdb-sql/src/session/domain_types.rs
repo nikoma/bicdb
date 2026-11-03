@@ -2187,6 +2187,9 @@ impl<'db> SqlSession<'db> {
         let _grammar = oracle::syntax::Scope::new(
             oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 13),
         );
+        let _dynamic = oracle::dynamic_sql::Scope::new(
+            oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 16),
+        );
         let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
         routines::parameterized_cursors::validate_capabilities(
             &language,

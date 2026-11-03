@@ -3616,10 +3616,7 @@ pub(crate) fn apply_carrier_function_dependency_grants(
     }
 }
 
-fn apply_carrier_function_dependency_grants_pass(
-    db: &mut BicDb,
-    runtime_role: &str,
-) -> Result<()> {
+fn apply_carrier_function_dependency_grants_pass(db: &mut BicDb, runtime_role: &str) -> Result<()> {
     let runtime_role = normalize_role_name(runtime_role);
     let mut patterns = HashMap::<String, regex::Regex>::new();
     ensure_known_role(&list_roles(db)?, &runtime_role)?;

@@ -203,6 +203,15 @@ impl Resolve<'_> {
     fn kind(&self, expr: &Expr) -> Kind {
         match expr {
             Expr::Nested(expr) => self.kind(expr),
+            Expr::Substring { expr, .. } | Expr::Overlay { expr, .. } | Expr::Trim { expr, .. } => {
+                // These are dedicated AST nodes, not Function calls. Their
+                // character result type must retain procedural input types
+                // when SQL metadata cannot resolve a host variable.
+                match self.kind(expr) {
+                    Kind::Text | Kind::Null => Kind::Text,
+                    _ => Kind::Unknown,
+                }
+            }
             Expr::Identifier(ident) => self
                 .query_kind(expr)
                 .or_else(|| {
@@ -288,10 +297,12 @@ impl Resolve<'_> {
                         "chr"
                         | "pg_catalog.chr"
                         | "bicdb_oracle_chr"
+                        | "bicdb_oracle_concat"
                         | "bicdb_oracle_default_to_char",
                     ) => return Kind::Text,
                     Some(
-                        "substr" | "substring" | "trim" | "btrim" | "ltrim" | "rtrim" | "reverse",
+                        "substr" | "substring" | "trim" | "btrim" | "ltrim" | "rtrim" | "reverse"
+                        | "lower" | "upper",
                     ) if self.env.concatenation => {
                         if function_args(function)
                             .first()
@@ -492,7 +503,16 @@ impl Resolve<'_> {
                         Kind::Text | Kind::Null => Ok("text"),
                         Kind::Number => Ok("number"),
                         Kind::Date => Ok("date"),
-                        _ => Err(SqlError::Unsupported("Oracle concatenation requires resolved character, NUMBER or logical DATE operands; use an explicit conversion for other types".into())),
+                        resolved => {
+                            let label = match operand {
+                                Expr::Identifier(name) => {
+                                    format!("identifier {}", ident_value(name))
+                                }
+                                Expr::Function(function) => format!("function {}", function.name),
+                                _ => "expression".into(),
+                            };
+                            Err(SqlError::Unsupported(format!("Oracle concatenation requires resolved character, NUMBER or logical DATE operands; use an explicit conversion for other types ({label}: {resolved:?})")))
+                        }
                     }
                 };
                 let context = if self.sql_depth > 0 || !self.queries.is_empty() {
@@ -501,7 +521,9 @@ impl Resolve<'_> {
                     "plsql"
                 };
                 *expr = expression(&format!(
-                    "bicdb_oracle_concat({left},{right},'{}','{}','{context}')",
+                    "bicdb_oracle_concat({},{},'{}','{}','{context}')",
+                    super::render_sql(left.as_ref()),
+                    super::render_sql(right.as_ref()),
                     kind(left)?,
                     kind(right)?
                 ))?;
@@ -1010,6 +1032,12 @@ fn statements(
             | RoutineStmt::ReturnQuery(query) => visit(db, env, query)?,
             RoutineStmt::Sql(statement) | RoutineStmt::SqlInto { statement, .. } => {
                 visit(db, env, statement)?
+            }
+            RoutineStmt::OracleDynamicExecute(dynamic) => {
+                visit(db, env, &mut dynamic.command.expr)?;
+                for bind in &mut dynamic.using {
+                    visit(db, env, &mut bind.expr)?;
+                }
             }
             RoutineStmt::Return(Some(expr)) | RoutineStmt::DynamicExecute(expr) => {
                 visit(db, env, &mut expr.expr)?

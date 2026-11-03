@@ -2536,6 +2536,11 @@ fn is_native_extension_function(name: &str) -> bool {
     let bare = bare.rsplit('.').next().unwrap_or(bare).trim_matches('"');
     matches!(
         bare.to_ascii_lowercase().as_str(),
-        "digest" | "hmac" | "gen_random_bytes" | "gen_random_uuid" | "uuid_generate_v4" | "similarity"
+        "digest"
+            | "hmac"
+            | "gen_random_bytes"
+            | "gen_random_uuid"
+            | "uuid_generate_v4"
+            | "similarity"
     )
 }

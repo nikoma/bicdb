@@ -352,7 +352,7 @@ mod tests {
         let mut db = BicDb::open(root.path()).unwrap();
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
         let mut session = SqlSession::new(&mut db);
-        for version in 1..=15 {
+        for version in 1..=16 {
             let name = format!("bicdb_oracle_preview_v{version}");
             let oid = 999399 + version;
             assert_eq!(pg_language_oid(&name), oid);

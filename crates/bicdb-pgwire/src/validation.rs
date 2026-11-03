@@ -3342,6 +3342,13 @@ mod tests {
             let mut setup = sql_session_for_server(&server, &mut db);
             setup.execute("CREATE ROLE arbitrary_user LOGIN").unwrap();
             setup
+                .execute("GRANT CREATE ON SCHEMA public TO arbitrary_user")
+                .unwrap();
+            // Create the fixture as its caller. A procedure cannot receive
+            // PostgreSQL's GRANT ... ON FUNCTION; ownership supplies the
+            // permissions needed by this catalog-cache test.
+            setup.execute("SET ROLE arbitrary_user").unwrap();
+            setup
                 .execute(
                     "CREATE TABLE arbitrary_pgwire_catalog_cache_rows (
                         row_key INT PRIMARY KEY,
@@ -3370,16 +3377,6 @@ mod tests {
                     END;
                     $$
                     LANGUAGE 'plpgsql'",
-                )
-                .unwrap();
-            setup
-                .execute(
-                    "GRANT EXECUTE ON FUNCTION arbitrary_pgwire_catalog_cache_probe(INTEGER, INTEGER) TO arbitrary_user",
-                )
-                .unwrap();
-            setup
-                .execute(
-                    "GRANT SELECT ON TABLE arbitrary_pgwire_catalog_cache_rows TO arbitrary_user",
                 )
                 .unwrap();
         }

@@ -205,6 +205,12 @@ fn visit_body(body: &mut [RoutineStmt], names: &BTreeSet<String>, symbols: &mut 
                     rewrite(&mut expr.expr, names, symbols);
                 }
             }
+            RoutineStmt::OracleDynamicExecute(dynamic) => {
+                rewrite(&mut dynamic.command.expr, names, symbols);
+                for bind in &mut dynamic.using {
+                    rewrite(&mut bind.expr, names, symbols);
+                }
+            }
             RoutineStmt::Return(Some(expr)) | RoutineStmt::DynamicExecute(expr) => {
                 rewrite(&mut expr.expr, names, symbols)
             }

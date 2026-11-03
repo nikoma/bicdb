@@ -12,6 +12,7 @@ mod character_tests;
 mod date_trunc;
 mod decode;
 mod dual;
+pub(crate) mod dynamic_sql;
 pub(crate) mod errors;
 mod namespaces;
 mod nvl;
@@ -74,7 +75,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V11: &str = "bicdb_oracle_preview_v11"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V12: &str = "bicdb_oracle_preview_v12";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V13: &str = "bicdb_oracle_preview_v13";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V14: &str = "bicdb_oracle_preview_v14";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v15";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V15: &str = "bicdb_oracle_preview_v15";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v16";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -89,7 +91,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V11_OID: i64 = 999_410;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V12_OID: i64 = 999_411;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V13_OID: i64 = 999_412;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V14_OID: i64 = 999_413;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_414;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V15_OID: i64 = 999_414;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_415;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -112,7 +115,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V12 => Some(12),
         PREVIEW_ROUTINE_LANGUAGE_V13 => Some(13),
         PREVIEW_ROUTINE_LANGUAGE_V14 => Some(14),
-        PREVIEW_ROUTINE_LANGUAGE => Some(15),
+        PREVIEW_ROUTINE_LANGUAGE_V15 => Some(15),
+        PREVIEW_ROUTINE_LANGUAGE => Some(16),
         _ => None,
     }
 }
@@ -120,7 +124,7 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
     matches!(
         preview_routine_language_version(language),
-        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15)
+        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16)
     )
 }
 
@@ -301,7 +305,7 @@ pub fn lower_session_sql(
     lower_query_locks(db, &mut statements)?;
     Ok(statements
         .iter()
-        .map(ToString::to_string)
+        .map(render_sql)
         .collect::<Vec<_>>()
         .join("; "))
 }
@@ -323,7 +327,7 @@ fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
     routine_arithmetic::lower_sql_builtins(db, &mut statements, oids)?;
     Ok(statements
         .iter()
-        .map(ToString::to_string)
+        .map(render_sql)
         .collect::<Vec<_>>()
         .join("; "))
 }
@@ -478,10 +482,42 @@ fn tokens(sql: &str) -> Result<Vec<Token>> {
         .map_err(|e| unsupported(e.to_string()))
 }
 
+fn render_token(token: &Token) -> String {
+    // Tokenizer values are decoded; Token::Display deliberately prints them
+    // verbatim. Re-render through the AST's quoting rules before reparsing SQL.
+    match token {
+        Token::SingleQuotedString(value) => format!("'{}'", value.replace('\'', "''")),
+        Token::NationalStringLiteral(value) => format!("N'{}'", value.replace('\'', "''")),
+        Token::Word(word) if word.quote_style == Some('"') => {
+            format!("\"{}\"", word.value.replace('"', "\"\""))
+        }
+        _ => token.to_string(),
+    }
+}
+
+/// sqlparser's generic Display accepts both escaped and decoded values and
+/// treats adjacent quotes as already escaped. Our parser uses decoded values;
+/// double every quote on a serialization-only copy before invoking Display.
+fn render_sql<T: Clone + sqlparser::ast::VisitMut + std::fmt::Display>(node: &T) -> String {
+    let mut copy = node.clone();
+    let _ = visit_expressions_mut(&mut copy, |expr| {
+        if let Expr::Value(value) = expr {
+            match &mut value.value {
+                Value::SingleQuotedString(text) | Value::NationalStringLiteral(text) => {
+                    *text = text.replace('\'', "''")
+                }
+                _ => {}
+            }
+        }
+        ControlFlow::<()>::Continue(())
+    });
+    copy.to_string()
+}
+
 fn join(tokens: &[Token]) -> String {
     tokens
         .iter()
-        .map(ToString::to_string)
+        .map(render_token)
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -1046,6 +1082,12 @@ fn canonical_tokens_with_routine_types(
             i += 2;
             continue;
         }
+        if preview && word(t, "EXECUTE") && source.get(i + 1).is_some_and(|t| word(t, "IMMEDIATE"))
+        {
+            pieces.push("EXECUTE IMMEDIATE".into());
+            i += 2;
+            continue;
+        }
         if let Some((reference, consumed)) = source_tokens::sequence(&source[i..], namespace)? {
             pieces.push(reference);
             i += consumed;
@@ -1153,10 +1195,10 @@ fn canonical_tokens_with_routine_types(
                         "\"{}\"",
                         w.value.to_uppercase().replace('"', "\"\"")
                     )),
-                    _ => pieces.push(t.to_string()),
+                    _ => pieces.push(render_token(t)),
                 }
             } else {
-                pieces.push(t.to_string());
+                pieces.push(render_token(t));
             }
         } else if matches!(t,Token::SingleQuotedString(value) if value.is_empty()) {
             pieces.push(
@@ -1168,7 +1210,7 @@ fn canonical_tokens_with_routine_types(
                 .into(),
             );
         } else {
-            pieces.push(t.to_string());
+            pieces.push(render_token(t));
         }
         i += 1;
     }
@@ -1468,7 +1510,7 @@ fn lower_native(db: &BicDb, sql: &str, preview: bool, namespace: Option<&str>) -
     dual::lower(&mut statements, true)?;
     Ok(statements
         .iter()
-        .map(ToString::to_string)
+        .map(render_sql)
         .collect::<Vec<_>>()
         .join("; "))
 }

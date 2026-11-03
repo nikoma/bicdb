@@ -30,7 +30,7 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
                 == preview_routine_language_version(&routine.language)
                 && matches!(
                     preview_routine_language_version(&routine.language),
-                    Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15)
+                    Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16)
                 )
         })
     {
@@ -182,6 +182,13 @@ fn bind_namespace_statements(
                 if let Some(detail) = detail {
                     bind_relations(db, &mut detail.expr, schema, calls)?;
                 }
+            }
+            RoutineStmt::OracleDynamicExecute(dynamic) => {
+                bind_relations(db, &mut dynamic.command.expr, schema, calls)?;
+                for bind in &mut dynamic.using {
+                    bind_relations(db, &mut bind.expr, schema, calls)?;
+                }
+                dynamic.namespace = Some(schema.into());
             }
             RoutineStmt::DynamicExecute(_) => {
                 return Err(SqlError::Unsupported(
@@ -430,6 +437,12 @@ fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
             }
             RoutineStmt::QueryForLoop { body, .. } | RoutineStmt::Loop { body } => {
                 lower_statements(body, types)
+            }
+            RoutineStmt::OracleDynamicExecute(dynamic) => {
+                lower_expression(&mut dynamic.command.expr, types);
+                for bind in &mut dynamic.using {
+                    lower_expression(&mut bind.expr, types);
+                }
             }
             RoutineStmt::Return(Some(expr)) | RoutineStmt::DynamicExecute(expr) => {
                 lower_expression(&mut expr.expr, types)

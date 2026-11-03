@@ -31,6 +31,7 @@ impl<'db> SqlSession<'db> {
             | oracle::PREVIEW_ROUTINE_LANGUAGE
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V13
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V15
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V14
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V12
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V11
@@ -216,6 +217,7 @@ impl<'db> SqlSession<'db> {
             | oracle::PREVIEW_ROUTINE_LANGUAGE
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V7
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V13
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V15
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V14
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V12
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V11
@@ -548,7 +550,7 @@ impl<'db> SqlSession<'db> {
         let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
             let schema = if matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15)
+                Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16)
             ) {
                 relation_schema_name(name_ast)
             } else {

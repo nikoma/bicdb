@@ -3097,7 +3097,20 @@ impl<'db> SqlSession<'db> {
             } else {
                 session.execute_plpgsql_function_value(&routine.schema, &routine.ir, args)
             }
-        })?;
+        });
+        // Oracle's SQL call boundary converts an unhandled NO_DATA_FOUND to a
+        // null result. PL/SQL callers still receive it and may handle it.
+        let value = match value {
+            Err(error)
+                if sql_boundary
+                    && error.sqlstate() == "P0002"
+                    && oracle::preview_routine_language_version(&routine.schema.language)
+                        .is_some_and(|v| v >= 16) =>
+            {
+                SqlValue::Null
+            }
+            other => other?,
+        };
         if oracle::preview_routine_language_version(&routine.schema.language)
             .is_some_and(|version| version >= 7)
             && matches!(
@@ -3954,6 +3967,9 @@ impl<'db> SqlSession<'db> {
                 )?;
                 frame.set(ROUTINE_FOUND_VAR, SqlValue::Bool(found));
                 Ok(RoutineControl::Continue)
+            }
+            RoutineStmt::OracleDynamicExecute(dynamic) => {
+                self.execute_oracle_dynamic(frame, dynamic)
             }
             RoutineStmt::DynamicExecute(expr) => {
                 let value = self.eval_routine_expr(frame, expr)?;

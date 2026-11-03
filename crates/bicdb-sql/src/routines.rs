@@ -83,6 +83,9 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             }
         }
     }
+    let _dynamic = oracle::dynamic_sql::Scope::new(
+        oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 16),
+    );
     let body = plpgsql_body_from_definition(&routine.definition)?;
     let (body, oracle_autonomous) = oracle::autonomous::prepare_body(&body, &routine.language)?;
     let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
@@ -120,7 +123,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15)
+        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16)
     ) {
         oracle::routines::bind_function_namespace(
             db,
@@ -140,7 +143,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             })?,
             matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15)
+                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16)
             ),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 7),
@@ -350,6 +353,7 @@ pub(crate) fn collect_routine_stmt_symbols(
             | RoutineStmt::Rethrow
             | RoutineStmt::Sql(_)
             | RoutineStmt::DynamicExecute(_)
+            | RoutineStmt::OracleDynamicExecute(_)
             | RoutineStmt::OpenCursor { .. }
             | RoutineStmt::CloseCursor { .. }
             | RoutineStmt::RaiseException { .. }
@@ -593,6 +597,12 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
             | RoutineStmt::Return(None) => {}
             // Dynamic SQL is evaluated against the materialized routine frame at
             // execution time; binding it as a row expression loses routine vars.
+            RoutineStmt::OracleDynamicExecute(dynamic) => {
+                dynamic.command.bind(scope);
+                for bind in &mut dynamic.using {
+                    bind.bind(scope);
+                }
+            }
             RoutineStmt::DynamicExecute(_) => {}
         }
     }
@@ -1628,6 +1638,11 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
                 "{feature} are not implemented"
             )));
+        }
+    }
+    if oracle::dynamic_sql::enabled() {
+        if let Some(dynamic) = oracle::dynamic_sql::parse(statement)? {
+            return Ok(RoutineStmt::OracleDynamicExecute(Box::new(dynamic)));
         }
     }
     if let Some(rest) = strip_prefix_ci(statement, "EXECUTE") {

@@ -1054,7 +1054,9 @@ fn function_dependency_grants_reach_policies_of_tables_granted_through_functions
         vec![vec![SqlValue::Bool(true), SqlValue::Bool(true)]]
     );
     session.execute("SET app.tenant = 'org-a'").unwrap();
-    session.execute("SET SESSION AUTHORIZATION carrier_app").unwrap();
+    session
+        .execute("SET SESSION AUTHORIZATION carrier_app")
+        .unwrap();
     session.execute("SELECT outbox_apply(1)").unwrap();
     // outbox_apply only inserts, so the role got INSERT, not SELECT.
     session.execute("RESET SESSION AUTHORIZATION").unwrap();
@@ -1082,7 +1084,9 @@ fn grant_on_a_missing_function_is_an_error() {
         "REVOKE EXECUTE ON FUNCTION public.hmac(bytea, bytea, text) FROM PUBLIC",
         "GRANT EXECUTE ON FUNCTION public.digest(bytea, text) TO carrier_app",
     ] {
-        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
 }
 
@@ -1170,13 +1174,17 @@ fn limit_stops_select_list_evaluation_early() {
          AS $f$ BEGIN IF v > 3 THEN RAISE EXCEPTION 'evaluated past the limit'; END IF; \
          RETURN v; END $f$",
     ] {
-        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
     for sql in [
         "SELECT only_first_three(id) FROM items LIMIT 3",
         "SELECT only_first_three(id) FROM items ORDER BY id LIMIT 2 OFFSET 1",
     ] {
-        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
     // Window functions still see every row.
     assert_eq!(

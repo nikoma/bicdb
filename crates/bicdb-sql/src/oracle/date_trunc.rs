@@ -101,7 +101,7 @@ pub(super) fn lower(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<Strin
     rewrite_with_parameters(db, &mut statements, oids)?;
     Ok(statements
         .iter()
-        .map(ToString::to_string)
+        .map(super::render_sql)
         .collect::<Vec<_>>()
         .join("; "))
 }
@@ -190,7 +190,7 @@ fn rewrite_with_parameters(
                 });
                 probe = ast
                     .iter()
-                    .map(ToString::to_string)
+                    .map(super::render_sql)
                     .collect::<Vec<_>>()
                     .join("; ");
             }

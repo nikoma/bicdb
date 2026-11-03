@@ -1,12 +1,12 @@
 //! Depth-first hierarchy expansion with caller-supplied SQL cycle-key equality.
 use super::*;
 
-pub(super) struct Node<K> {
+pub(crate) struct Node<K> {
     pub row: usize,
     pub key: K,
 }
 
-pub(super) struct Visit {
+pub(crate) struct Visit {
     pub row: usize,
     pub level: usize,
     pub cycle: bool,
@@ -15,7 +15,7 @@ pub(super) struct Visit {
 /// Keys contain evaluated PRIOR expressions, rather than physical row IDs.
 /// The SQL caller supplies ordering, expression evaluation, typed key equality
 /// and cancellation. Disabling cycle checks implements non-PRIOR expansion.
-pub(super) fn traverse<K, Roots, Children, Expand, Equal, Cancel>(
+pub(crate) fn traverse<K, Roots, Children, Expand, Equal, Cancel>(
     roots: Roots,
     mut expand: Expand,
     mut equal: Equal,

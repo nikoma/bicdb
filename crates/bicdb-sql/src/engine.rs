@@ -10,6 +10,7 @@
 use crate::*;
 pub(crate) mod column_check;
 pub(crate) mod flashback;
+mod hierarchy;
 mod joins_windows;
 pub(crate) mod materialize;
 mod pg_catalog;

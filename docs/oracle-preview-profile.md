@@ -700,3 +700,10 @@ diagnostics remain 1/13. The original counter improvement is isolated execution
 evidence, not application startup or business-workflow acceptance. The running
 application remains unchanged. Earlier compiler-version sections above retain
 their historical qualification boundaries.
+
+Named view-column `%TYPE` anchors also resolve stored descriptors without
+executing the view. The [view-anchor qualification](evidence/oracle-view-anchors-2026-11-03/README.md)
+checks the existing scalar precision, quoted-name and signature contracts through
+views. Oracle dictionary views and their security/visibility rules remain
+separate work; view anchors alone do not remove the dictionary dependency from
+an application.

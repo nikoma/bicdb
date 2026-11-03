@@ -161,6 +161,10 @@ Definitions remain 60/62 and NULL-input diagnostics remain 1/13; the running
 application is not upgraded or qualified. Broader national SQL/NLS semantics,
 hierarchical queries, collections, dictionary anchors and the other workstreams
 remain incomplete.
+The [view-anchor prerequisite](evidence/oracle-view-anchors-2026-11-03/README.md)
+adds metadata-only named view-column %TYPE resolution, qualified by 41 Oracle
+cases and 41 retained table-anchor cases. It does not implement dictionary
+views or advance application definition/runtime acceptance.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source

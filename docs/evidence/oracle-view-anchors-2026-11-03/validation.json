@@ -1,0 +1,25 @@
+{
+  "format": 1,
+  "engine_source_commit": "9429552c79b9483f0badc18776e3301b1ded9a2d",
+  "runtime_binary_sha256": "54e5599b30ab944d9b9177b9ab64d1da5fb89fde04b54dd0aafea952766c5fed",
+  "oracle_view_anchor_matches": 41,
+  "retained_table_anchor_matches": 41,
+  "independent_native_postgres_controls": 19,
+  "sql_unit_passed": 466,
+  "sql_unit_existing_ignored": 3,
+  "oracle_driver_passed": 25,
+  "python_reference_passed": 25,
+  "prior_binary_reference_setup_error": "0A000",
+  "dictionary_views_implemented": false,
+  "application_qualified": false,
+  "application_database_updated": false,
+  "release_published": false,
+  "cleanup_reclaimed_bytes": 638758360,
+  "resources": {
+    "minimum_observed_available_bytes": 24906485760,
+    "peak_owned_group_rss_bytes": 4070322176,
+    "build_jobs": 1,
+    "incremental": false,
+    "minimum_available_gib": 8
+  }
+}

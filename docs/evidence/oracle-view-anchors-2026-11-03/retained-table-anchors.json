@@ -1,0 +1,1044 @@
+{
+  "format": 1,
+  "oracle_database_version": "23.26.3.0.0",
+  "bicdb_profile": "oracle-preview-v1",
+  "fixture_prefix": "BICDB_GR_DB39BFB0DE",
+  "fixture_sha256": "0f76be7cc98294bf59e573e2a4082d1ba489d0ce95dab69d89dab4e07fcc1401",
+  "total": 41,
+  "matched": 41,
+  "cases": [
+    {
+      "id": "num_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "12.35"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "num_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-12.35"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-12.35"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "-12.35"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "num_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "999.99"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "999.99"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "999.99"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "num_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-999.99"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-999.99"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "-999.99"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "num_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0.01"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0.01"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "0.01"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "num_null",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "num_overflow",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22003"
+      }
+    },
+    {
+      "id": "qualified_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "12.35"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "qualified_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-12.35"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-12.35"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "-12.35"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "qualified_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "999.99"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "999.99"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "999.99"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "qualified_3",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-999.99"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-999.99"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "-999.99"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "qualified_4",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0.01"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0.01"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "0.01"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "qualified_null",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "qualified_overflow",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22003"
+      }
+    },
+    {
+      "id": "text_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "abc"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "abc"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "abc"
+        ]
+      ]
+    },
+    {
+      "id": "text_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "a  "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "a  "
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "a  "
+        ]
+      ]
+    },
+    {
+      "id": "text_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9\u00e9\u00e9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9\u00e9\u00e9"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "\u00e9\u00e9\u00e9"
+        ]
+      ]
+    },
+    {
+      "id": "text_null",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "text_overflow",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "StringDataRightTruncation",
+        "code": "22001"
+      },
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22001"
+      }
+    },
+    {
+      "id": "text_unicode_overflow",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "StringDataRightTruncation",
+        "code": "22001"
+      },
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22001"
+      }
+    },
+    {
+      "id": "not_null_and_default_not_inherited",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "argument_size_not_inherited",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "abcdef"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "abcdef"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "abcdef"
+        ]
+      ]
+    },
+    {
+      "id": "argument_null",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "return_text_size_not_inherited",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            "abcdef"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "abcdef"
+          ]
+        ]
+      },
+      "expected": [
+        [
+          "abcdef"
+        ]
+      ]
+    },
+    {
+      "id": "return_text_null",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "return_numeric_overflow",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22003"
+      }
+    },
+    {
+      "id": "return_numeric_rounding",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "12.35"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "return_numeric_negative_rounding",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "-12.35"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "-12.35"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "-12.35"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "return_numeric_rounding_overflow",
+      "matched": true,
+      "oracle": {
+        "error": "DatabaseError",
+        "code": "ORA-06502"
+      },
+      "bicdb": {
+        "error": "NumericValueOutOfRange",
+        "code": "22003"
+      },
+      "expected_error": {
+        "oracle": "ORA-06502",
+        "bicdb": "22003"
+      }
+    },
+    {
+      "id": "case_negative_return",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "12.35"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "case_positive_return",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "12.35"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "case_null_return",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "numeric_return_handler_rounding",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "12.35"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "numeric_return_handler_overflow",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "0"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "numeric_literal_return",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "123456789012345678901234.57"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123456789012345678901234.57"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "123456789012345678901234.57"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "return_numeric_null",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    },
+    {
+      "id": "recovery_after_errors",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "12.35"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "12.35"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "number_argument_0",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12.345"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "12.345"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "12.345"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "number_argument_1",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1000.123"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1000.123"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "1000.123"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "number_argument_2",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "999.995"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "999.995"
+            }
+          ]
+        ]
+      },
+      "expected": [
+        [
+          {
+            "number": "999.995"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "number_argument_null",
+      "matched": true,
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected": [
+        [
+          null
+        ]
+      ]
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "scope": "Table-column %TYPE local precision and character length, quoted names and argument sizing; not logical temporal provenance, variable anchors, DDL lifecycle or cross-schema privileges",
+  "oracle_nls_numeric_characters": ".,",
+  "routine_compiler": "bicdb_oracle_preview_v17",
+  "runtime_binary_sha256": "54e5599b30ab944d9b9177b9ab64d1da5fb89fde04b54dd0aafea952766c5fed"
+}

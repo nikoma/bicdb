@@ -19,10 +19,11 @@ select special engine behavior.
 
 The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used
 for [iDempiere seed development](evidence/idempiere-seed-2026-11-01/README.md).
-The latest [dictionary type-anchor checkpoint](evidence/oracle-dictionary-type-anchors-2026-11-03/README.md)
-accepts **61/62 unchanged routine definitions** through PostgreSQL drivers.
-The remaining definition needs hierarchical queries and collection behavior;
-dictionary rows, constraints, complete execution and workflows remain incomplete.
+The latest [function-attribute checkpoint](evidence/oracle-function-attributes-2026-11-03/README.md)
+accepts **62/62 unchanged routine definitions** through PostgreSQL drivers.
+Collection return-type registration and behavior still block execution of the
+final accepted function. Dictionary rows, constraints, complete execution and
+workflows remain incomplete.
 The milestones below retain their results at the time each was measured.
 
 The original 913 tables and 185,292 rows loaded and passed complete value
@@ -234,6 +235,13 @@ driver metadata is preserved, and older readers refuse the new format-4 profile.
 Definition acceptance remains 61/62; DETERMINISTIC is now the first rejected
 declaration in the remaining routine. Collections, regular expressions and full
 application execution remain open.
+The [function-attribute qualification](evidence/oracle-function-attributes-2026-11-03/README.md)
+maps DETERMINISTIC declarations to native IMMUTABLE, preserves declared routine
+volatility metadata and advances definition acceptance to 62/62. Ten Oracle and
+four independent PostgreSQL cases match, and six reader checks pass. Five
+read-only original collection calls qualify on Oracle but remain 0/5 on BicDB
+because the collection result type is not registered. The 1/14 NULL-input
+procedure diagnostics and full application qualification remain unchanged.
 The [full character-copy verification](evidence/oracle-character-full-copy-2026-11-03/README.md)
 completes reconciliation of all 910 affected tables and 7,150 declarations.
 A byte-identical disk copy passes full 915-table/185,537-row fingerprints and

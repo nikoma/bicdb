@@ -763,6 +763,22 @@ remain unqualified. Traversal checks cancellation and the configured aggregate
 scan node budget. This feature does not supply Oracle collection or regular
 expression semantics, or establish full application qualification.
 
+## Function declaration attributes
+
+The [function-attribute contract](evidence/oracle-function-attributes-2026-11-03/README.md)
+qualifies DETERMINISTIC function headers through PostgreSQL drivers. The compiler
+preserves the promise as a native IMMUTABLE declaration, with header-scoped token
+binding that leaves quoted parameters, type names and body text intact. Current
+user-routine catalog metadata reports the declared IMMUTABLE/STABLE/VOLATILE
+classification; the omitted PostgreSQL default and procedures report VOLATILE.
+Existing-reader value interoperability is preserved by the native representation.
+Other Oracle declaration attributes and optimizer behavior remain unqualified.
+
+The original application definition inventory is now 62/62. Its collection
+return type remains unregistered for PostgreSQL transport, and the original
+collection execution probes remain 0/5. Definition acceptance does not establish
+full schema, runtime or workflow acceptance.
+
 
 Legacy character provenance can now be reconciled from the exported source
 catalog through the migration tool's `character-types` phase. It validates the

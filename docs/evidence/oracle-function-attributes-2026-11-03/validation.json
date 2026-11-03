@@ -1,0 +1,880 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "548e88f03102c881902fbd1e491e646312864d0061757d40998de866addc995d",
+  "source_commit": "888b174",
+  "application_qualified": false,
+  "oracle": {
+    "oracle_version": "23.26.3.0.0",
+    "source_qualified": true,
+    "matched": 10,
+    "total": 10,
+    "success": true,
+    "cleanup_errors": [],
+    "cases": [
+      {
+        "id": "numeric_declaration",
+        "oracle": {
+          "rows": []
+        },
+        "bicdb": {
+          "rows": []
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "parameterless_declaration",
+        "oracle": {
+          "rows": []
+        },
+        "bicdb": {
+          "rows": []
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "quoted_parameter_declaration",
+        "oracle": {
+          "rows": []
+        },
+        "bicdb": {
+          "rows": []
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "numeric_value",
+        "oracle": {
+          "rows": [
+            [
+              {
+                "number": "5"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "5"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "fractional_value",
+        "oracle": {
+          "rows": [
+            [
+              {
+                "number": "13.5"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "13.5"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "null_value",
+        "oracle": {
+          "rows": [
+            [
+              null
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              null
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "parameterless_value",
+        "oracle": {
+          "rows": [
+            [
+              {
+                "number": "7"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "7"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "quoted_parameter_value",
+        "oracle": {
+          "rows": [
+            [
+              {
+                "number": "8"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "8"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "replace_declaration",
+        "oracle": {
+          "rows": []
+        },
+        "bicdb": {
+          "rows": []
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "replacement_value",
+        "oracle": {
+          "rows": [
+            [
+              {
+                "number": "9"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "9"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      }
+    ]
+  },
+  "postgres": {
+    "postgres_version_num": 180004,
+    "source_qualified": true,
+    "matched": 4,
+    "total": 4,
+    "success": true,
+    "cleanup_errors": [],
+    "cases": [
+      {
+        "id": "declared_and_default_volatility",
+        "postgres": {
+          "rows": [
+            [
+              "attrs_a345619877_default",
+              "v"
+            ],
+            [
+              "attrs_a345619877_immutable",
+              "i"
+            ],
+            [
+              "attrs_a345619877_stable",
+              "s"
+            ],
+            [
+              "attrs_a345619877_volatile",
+              "v"
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              "attrs_a345619877_default",
+              "v"
+            ],
+            [
+              "attrs_a345619877_immutable",
+              "i"
+            ],
+            [
+              "attrs_a345619877_stable",
+              "s"
+            ],
+            [
+              "attrs_a345619877_volatile",
+              "v"
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "function_values",
+        "postgres": {
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "2"
+              },
+              {
+                "number": "3"
+              },
+              "STABLE VOLATILE IMMUTABLE"
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "2"
+              },
+              {
+                "number": "3"
+              },
+              "STABLE VOLATILE IMMUTABLE"
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "replacement_updates_metadata",
+        "postgres": {
+          "rows": [
+            [
+              "attrs_a345619877_default",
+              "v"
+            ],
+            [
+              "attrs_a345619877_immutable",
+              "s"
+            ],
+            [
+              "attrs_a345619877_stable",
+              "s"
+            ],
+            [
+              "attrs_a345619877_volatile",
+              "v"
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              "attrs_a345619877_default",
+              "v"
+            ],
+            [
+              "attrs_a345619877_immutable",
+              "s"
+            ],
+            [
+              "attrs_a345619877_stable",
+              "s"
+            ],
+            [
+              "attrs_a345619877_volatile",
+              "v"
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "replacement_value",
+        "postgres": {
+          "rows": [
+            [
+              {
+                "number": "42"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "42"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      }
+    ]
+  },
+  "reader_interoperability": {
+    "format": 1,
+    "runtime_binary_sha256": "548e88f03102c881902fbd1e491e646312864d0061757d40998de866addc995d",
+    "prior_binary_sha256": "80a427ba73d69ce17294168adb3dd6d96042e2a0f9f6514556fd1b38241be729",
+    "application_qualified": false,
+    "cases": [
+      {
+        "id": "new_reader_executes_existing_compiler_routine",
+        "success": true
+      },
+      {
+        "id": "new_reader_executes_deterministic_function",
+        "success": true
+      },
+      {
+        "id": "new_reader_exposes_immutable_declaration",
+        "success": true
+      },
+      {
+        "id": "prior_reader_executes_existing_routine_after_update",
+        "success": true
+      },
+      {
+        "id": "prior_reader_executes_native_immutable_representation",
+        "success": true
+      },
+      {
+        "id": "current_reopen_preserves_values_and_declared_metadata",
+        "success": true
+      }
+    ],
+    "success": true
+  },
+  "definition_probe": {
+    "accepted": 62,
+    "total": 62,
+    "source_execution_compared": false,
+    "null_input_diagnostics_completed": 1,
+    "null_input_diagnostics_total": 14
+  },
+  "original_collection_diagnostic": {
+    "format": 1,
+    "application_qualified": false,
+    "source_execution_compared": true,
+    "scope": "Read-only original collection function values on the dedicated Oracle reference and an isolated BicDB copy; no application procedures invoked",
+    "runtime_binary_sha256": "548e88f03102c881902fbd1e491e646312864d0061757d40998de866addc995d",
+    "cases": [
+      {
+        "id": "plain",
+        "expected": [
+          "a",
+          "b"
+        ],
+        "oracle": [
+          "a",
+          "b"
+        ],
+        "bicdb": {
+          "code": "08P01",
+          "message": "invalid PostgreSQL wire message: result or parameter type \"table_of_varchar2\" is not registered"
+        },
+        "source_qualified": true,
+        "matched": false
+      },
+      {
+        "id": "null",
+        "expected": [
+          null
+        ],
+        "oracle": [
+          null
+        ],
+        "bicdb": {
+          "code": "08P01",
+          "message": "invalid PostgreSQL wire message: result or parameter type \"table_of_varchar2\" is not registered"
+        },
+        "source_qualified": true,
+        "matched": false
+      },
+      {
+        "id": "empty",
+        "expected": [
+          null
+        ],
+        "oracle": [
+          null
+        ],
+        "bicdb": {
+          "code": "08P01",
+          "message": "invalid PostgreSQL wire message: result or parameter type \"table_of_varchar2\" is not registered"
+        },
+        "source_qualified": true,
+        "matched": false
+      },
+      {
+        "id": "quoted_comma",
+        "expected": [
+          "a,b",
+          " c"
+        ],
+        "oracle": [
+          "a,b",
+          " c"
+        ],
+        "bicdb": {
+          "code": "08P01",
+          "message": "invalid PostgreSQL wire message: result or parameter type \"table_of_varchar2\" is not registered"
+        },
+        "source_qualified": true,
+        "matched": false
+      },
+      {
+        "id": "empty_fields",
+        "expected": [
+          null,
+          null
+        ],
+        "oracle": [
+          null,
+          null
+        ],
+        "bicdb": {
+          "code": "08P01",
+          "message": "invalid PostgreSQL wire message: result or parameter type \"table_of_varchar2\" is not registered"
+        },
+        "source_qualified": true,
+        "matched": false
+      }
+    ],
+    "definitions": [
+      {
+        "name": "ISINTERSECTCSV",
+        "accepted": true
+      },
+      {
+        "name": "TOTABLEOFVARCHAR2",
+        "accepted": true
+      }
+    ],
+    "source_qualified": true,
+    "matched": 0,
+    "total": 5
+  },
+  "rust_tests": {
+    "passed": 1349,
+    "failed": 0,
+    "ignored": 3,
+    "batches": 11
+  },
+  "python_tests": {
+    "passed": 58,
+    "failed": 0
+  },
+  "static_checks": {
+    "format": true,
+    "diff_whitespace": true,
+    "licenses": true,
+    "open_core_boundary": true
+  },
+  "retained_regressions": [
+    {
+      "id": "character-columns-comparison",
+      "success": true,
+      "matched": 138,
+      "total": 138,
+      "cases": 138
+    },
+    {
+      "id": "character-columns-reader-comparison",
+      "success": true,
+      "cases": 6
+    },
+    {
+      "id": "character-import-comparison",
+      "success": true,
+      "cases": 3
+    },
+    {
+      "id": "dynamic-retained-decode-sql-comparison",
+      "success": true,
+      "matched": 52,
+      "total": 52,
+      "cases": 52
+    },
+    {
+      "id": "dynamic-retained-key-oracle",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "dynamic-retained-autonomous-comparison",
+      "success": true,
+      "matched": 38,
+      "total": 38,
+      "cases": 38
+    },
+    {
+      "id": "dynamic-sql-comparison",
+      "success": true,
+      "matched": 36,
+      "total": 36,
+      "cases": 36
+    },
+    {
+      "id": "national-characters-comparison",
+      "success": true,
+      "matched": 96,
+      "total": 96,
+      "cases": 96
+    },
+    {
+      "id": "national-native-controls",
+      "success": true,
+      "matched": 19,
+      "total": 19,
+      "cases": 19
+    },
+    {
+      "id": "dictionary-native-catalog-controls",
+      "success": true,
+      "matched": 6,
+      "total": 6,
+      "cases": 6
+    },
+    {
+      "id": "dynamic-retained-key-native",
+      "success": true,
+      "matched": 51,
+      "total": 51,
+      "cases": 51
+    },
+    {
+      "id": "dynamic-native-controls",
+      "success": true,
+      "matched": 13,
+      "total": 13,
+      "cases": 13
+    },
+    {
+      "id": "national-original-counter-comparison",
+      "success": true,
+      "matched": 14,
+      "total": 14,
+      "cases": 14
+    },
+    {
+      "id": "dynamic-original-record-comparison",
+      "success": true,
+      "matched": 8,
+      "total": 8,
+      "cases": 8
+    },
+    {
+      "id": "dynamic-original-sequence-comparison",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "view-anchor-reference-anchors-comparison",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "view-anchor-reference-view_anchors-comparison",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "dynamic-retained-routine-anchors-comparison",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "dynamic-retained-routine-calendar-comparison",
+      "success": true,
+      "matched": 36,
+      "total": 36,
+      "cases": 36
+    },
+    {
+      "id": "dynamic-retained-routine-case-comparison",
+      "success": true,
+      "matched": 34,
+      "total": 34,
+      "cases": 34
+    },
+    {
+      "id": "dynamic-retained-routine-characters-comparison",
+      "success": true,
+      "matched": 119,
+      "total": 119,
+      "cases": 119
+    },
+    {
+      "id": "dynamic-retained-routine-columns-comparison",
+      "success": true,
+      "matched": 21,
+      "total": 21,
+      "cases": 21
+    },
+    {
+      "id": "dynamic-retained-routine-concat-comparison",
+      "success": true,
+      "matched": 76,
+      "total": 76,
+      "cases": 76
+    },
+    {
+      "id": "dynamic-retained-routine-cursors-comparison",
+      "success": true,
+      "matched": 36,
+      "total": 36,
+      "cases": 36
+    },
+    {
+      "id": "dynamic-retained-routine-decode-comparison",
+      "success": true,
+      "matched": 57,
+      "total": 57,
+      "cases": 57
+    },
+    {
+      "id": "dynamic-retained-routine-errors-comparison",
+      "success": true,
+      "matched": 108,
+      "total": 108,
+      "cases": 108
+    },
+    {
+      "id": "dynamic-retained-routine-grammar-comparison",
+      "success": true,
+      "matched": 14,
+      "total": 14,
+      "cases": 14
+    },
+    {
+      "id": "dynamic-retained-routine-namespaces-comparison",
+      "success": true,
+      "matched": 24,
+      "total": 24,
+      "cases": 24
+    },
+    {
+      "id": "dynamic-retained-routine-numberops-comparison",
+      "success": true,
+      "matched": 218,
+      "total": 218,
+      "cases": 218
+    },
+    {
+      "id": "dynamic-retained-routine-nvl-comparison",
+      "success": true,
+      "matched": 93,
+      "total": 93,
+      "cases": 93
+    },
+    {
+      "id": "dynamic-retained-routine-procedures-comparison",
+      "success": true,
+      "matched": 26,
+      "total": 26,
+      "cases": 26
+    },
+    {
+      "id": "dynamic-retained-routine-temporal-comparison",
+      "success": true,
+      "matched": 29,
+      "total": 29,
+      "cases": 29
+    },
+    {
+      "id": "dynamic-retained-routine-week-comparison",
+      "success": true,
+      "matched": 102,
+      "total": 102,
+      "cases": 102
+    },
+    {
+      "id": "dynamic-retained-native-characters",
+      "success": true,
+      "matched": 22,
+      "total": 22,
+      "cases": 22
+    },
+    {
+      "id": "dynamic-retained-native-columns",
+      "success": true,
+      "matched": 6,
+      "total": 6,
+      "cases": 6
+    },
+    {
+      "id": "dynamic-retained-native-concat",
+      "success": true,
+      "matched": 62,
+      "total": 62,
+      "cases": 62
+    },
+    {
+      "id": "dynamic-retained-native-cursors",
+      "success": true,
+      "matched": 30,
+      "total": 30,
+      "cases": 30
+    },
+    {
+      "id": "dynamic-retained-native-decode",
+      "success": true,
+      "matched": 12,
+      "total": 12,
+      "cases": 12
+    },
+    {
+      "id": "dynamic-retained-native-errors",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "dynamic-retained-native-grammar",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "dynamic-retained-native-procedures",
+      "success": true,
+      "matched": 13,
+      "total": 13,
+      "cases": 13
+    },
+    {
+      "id": "routine-character-buffers-comparison",
+      "success": true,
+      "matched": 53,
+      "total": 53,
+      "cases": 53
+    },
+    {
+      "id": "routine-character-readers-comparison",
+      "success": true,
+      "cases": 7
+    },
+    {
+      "id": "alter-batch-native-controls",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "character-reconcile-native-view-controls",
+      "success": true,
+      "matched": 5,
+      "total": 5,
+      "cases": 5
+    },
+    {
+      "id": "character-reconcile-fixture",
+      "success": true,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "hierarchy-comparison",
+      "success": true,
+      "matched": 19,
+      "total": 19,
+      "cases": 19
+    }
+  ],
+  "hierarchy_saved_definition_readers": {
+    "format": 1,
+    "application_qualified": false,
+    "success": true,
+    "new_binary_sha256": "548e88f03102c881902fbd1e491e646312864d0061757d40998de866addc995d",
+    "persisted_view_and_routine": true,
+    "saved_view_pg_type_oid": 20,
+    "new_reader_reopen": true,
+    "prior_reader_refuses_saved_definitions": true,
+    "prior_reader_exit_code": 1
+  },
+  "resource_guards": [
+    {
+      "id": "function-attributes-full-validation-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 4616482816,
+      "minimum_observed_available_bytes": 21994184704
+    },
+    {
+      "id": "function-attributes-server-build-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 4434464768,
+      "minimum_observed_available_bytes": 22058823680
+    },
+    {
+      "id": "function-attributes-retained-references-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 1138311168,
+      "minimum_observed_available_bytes": 24591659008
+    },
+    {
+      "id": "function-attributes-additional-references-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 400035840,
+      "minimum_observed_available_bytes": 24612356096
+    },
+    {
+      "id": "function-attributes-application-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 1109352448,
+      "minimum_observed_available_bytes": 22965600256
+    }
+  ]
+}

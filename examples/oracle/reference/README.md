@@ -470,3 +470,17 @@ ORACLE_CONTROL_PG_DSN and BICDB_PG_DSN privately. Both fixtures remove only thei
 own created functions. General national SQL table types, national literals,
 NLS settings, positional operations and larger NCHAR declarations remain outside
 this bounded contract.
+
+`dictionary_contracts.py --oracle-config /private/reference.json --output
+/private/dictionary.json` records dictionary and character-capacity contracts
+against dedicated Oracle and preview schemas. This is currently a failing
+acceptance fixture: USER_TABLES/USER_TAB_COLUMNS and Oracle BYTE capacity remain
+unimplemented. Its nonzero status and mismatches must be retained explicitly.
+It also records native target descriptors without counting them as Oracle matches.
+
+`postgres_catalog_columns.py --schemas catalog_a catalog_b --output /private/native-columns.json` independently
+checks logical names, identical table names in different schemas, schema filters
+and view columns against PostgreSQL. It uses ORACLE_CONTROL_PG_DSN and a native
+BICDB_PG_DSN with two pre-existing dedicated schemas, and removes its own tables
+and view while retaining those schemas. Restricted-role visibility
+is outside this owner/admin fixture.

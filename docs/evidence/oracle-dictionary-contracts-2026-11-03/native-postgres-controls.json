@@ -1,0 +1,222 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "cases": [
+    {
+      "id": "both_schemas",
+      "postgres": [
+        [
+          "bicdb_cat_cols_a",
+          "catalog_fixture",
+          "id",
+          "integer",
+          null
+        ],
+        [
+          "bicdb_cat_cols_a",
+          "catalog_fixture",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ],
+        [
+          "bicdb_cat_cols_b",
+          "catalog_fixture",
+          "id",
+          "integer",
+          null
+        ],
+        [
+          "bicdb_cat_cols_b",
+          "catalog_fixture",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          "bicdb_cat_cols_a",
+          "catalog_fixture",
+          "id",
+          "integer",
+          null
+        ],
+        [
+          "bicdb_cat_cols_a",
+          "catalog_fixture",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ],
+        [
+          "bicdb_cat_cols_b",
+          "catalog_fixture",
+          "id",
+          "integer",
+          null
+        ],
+        [
+          "bicdb_cat_cols_b",
+          "catalog_fixture",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "first_schema",
+      "postgres": [
+        [
+          "bicdb_cat_cols_a",
+          "catalog_fixture",
+          "id",
+          "integer",
+          null
+        ],
+        [
+          "bicdb_cat_cols_a",
+          "catalog_fixture",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          "bicdb_cat_cols_a",
+          "catalog_fixture",
+          "id",
+          "integer",
+          null
+        ],
+        [
+          "bicdb_cat_cols_a",
+          "catalog_fixture",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "second_schema",
+      "postgres": [
+        [
+          "bicdb_cat_cols_b",
+          "catalog_fixture",
+          "id",
+          "integer",
+          null
+        ],
+        [
+          "bicdb_cat_cols_b",
+          "catalog_fixture",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          "bicdb_cat_cols_b",
+          "catalog_fixture",
+          "id",
+          "integer",
+          null
+        ],
+        [
+          "bicdb_cat_cols_b",
+          "catalog_fixture",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "view",
+      "postgres": [
+        [
+          "bicdb_cat_cols_a",
+          "catalog_projection",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          "bicdb_cat_cols_a",
+          "catalog_projection",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "missing_schema",
+      "postgres": [],
+      "bicdb": [],
+      "matched": true
+    },
+    {
+      "id": "column_filter",
+      "postgres": [
+        [
+          "bicdb_cat_cols_b",
+          "catalog_fixture",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          "bicdb_cat_cols_b",
+          "catalog_fixture",
+          "label",
+          "character varying",
+          {
+            "number": "3"
+          }
+        ]
+      ],
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "scope": "Owner/admin catalog name and schema-filter parity; restricted-role catalog visibility is separate qualification",
+  "matched": 6,
+  "total": 6,
+  "runtime_binary_sha256": "a7f530bddd9d34e5617a8a57befff800ffc2fcf124a9e4939b3d5fe931c5f797"
+}

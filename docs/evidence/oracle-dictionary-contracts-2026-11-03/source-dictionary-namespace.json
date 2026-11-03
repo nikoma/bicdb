@@ -1,0 +1,8 @@
+{
+  "oracle_version": "23.26.3.0.0",
+  "scope": "Dedicated read-only session; no persistent objects changed",
+  "before_dual_count": 0,
+  "after_current_schema_sys_dual_count": 0,
+  "current_schema_changed": true,
+  "user_unchanged": true
+}

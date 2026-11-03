@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "engine_source_commit": "e4a62fd654ea3c6920493f62f9e2f651f08271ab",
+  "fixture_source_commit": "f68c4513f1b85ebd15e341a1b07da3c993343681",
+  "runtime_binary_sha256": "a7f530bddd9d34e5617a8a57befff800ffc2fcf124a9e4939b3d5fe931c5f797",
+  "rust_passed": 1313,
+  "rust_existing_ignored": 3,
+  "python_reference_passed": 25,
+  "native_postgres_catalog_matched": 6,
+  "native_postgres_catalog_total": 6,
+  "oracle_dictionary_matched": 0,
+  "oracle_dictionary_total": 11,
+  "oracle_dictionary_source_qualified": true,
+  "character_assignment_matched": 1,
+  "character_assignment_total": 2,
+  "dictionary_views_implemented": false,
+  "oracle_byte_capacity_implemented": false,
+  "application_qualified": false,
+  "application_database_updated": false,
+  "application_baseline_requalified": false,
+  "release_published": false,
+  "initial_native_attempt": {
+    "cases_matched": 6,
+    "success": false,
+    "cleanup_errors": 2,
+    "reason": "DROP SCHEMA cleanup is unsupported; fixture now requires pre-existing dedicated schemas and removes only its own tables and view, preserving all six catalog assertions."
+  },
+  "cleanup_reclaimed_bytes": 2902296560,
+  "remaining_oracle_build_cache_du_h": "6.8G",
+  "resources": {
+    "build_jobs": 1,
+    "incremental": false,
+    "minimum_available_gib": 8,
+    "minimum_observed_available_bytes": 24980140032,
+    "peak_owned_group_rss_bytes": 4233740288
+  }
+}

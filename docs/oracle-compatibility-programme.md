@@ -165,6 +165,13 @@ The [view-anchor prerequisite](evidence/oracle-view-anchors-2026-11-03/README.md
 adds metadata-only named view-column %TYPE resolution, qualified by 41 Oracle
 cases and 41 retained table-anchor cases. It does not implement dictionary
 views or advance application definition/runtime acceptance.
+The [dictionary contract inventory](evidence/oracle-dictionary-contracts-2026-11-03/README.md)
+fixes logical names and schema filtering in native column catalogs, qualified
+against six PostgreSQL cases. Its Oracle dictionary fixture remains 0/11 and
+its separate BYTE/CHAR assignment checks remain 1/2. Source observations show
+that byte/character length provenance and byte-capacity enforcement must be
+preserved before dictionary lengths can be generated reliably. Dictionary
+views, visibility and source defaults remain implementation work.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source

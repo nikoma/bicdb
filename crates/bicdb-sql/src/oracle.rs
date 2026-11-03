@@ -1229,6 +1229,16 @@ fn canonical_tokens_with_routine_types(
                     continue;
                 }
                 match upper.as_str() {
+                    "SYS_GUID" if preview
+                        && (i == 0 || source[i - 1] != Token::Period)
+                        && source.get(i + 1) == Some(&Token::LParen)
+                        && source.get(i + 2) == Some(&Token::RParen) => {
+                        // RAW(16), generated independently on every evaluation.
+                        // Keep qualified application functions in their namespace.
+                        pieces.push("gen_random_bytes(16)".into());
+                        i += 3;
+                        continue;
+                    }
                     "CLOB" if preview => pieces.push("TEXT".into()),
                     "BLOB" if preview => pieces.push("BYTEA".into()),
                     "OCTET_LENGTH" if preview => pieces.push("octet_length".into()),

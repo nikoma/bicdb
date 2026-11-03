@@ -1,4 +1,5 @@
 """Oracle hierarchy contracts: roots, PRIOR direction, filtering and cycles."""
+import json
 import re
 from compare import canonical
 from routine_namespaces import identifier
@@ -34,6 +35,9 @@ def run(reference, target, schema, prefix):
         ("duplicate_prior_values_share_cycle_key", "SELECT ID,LABEL,LEVEL,CONNECT_BY_ISCYCLE FROM (SELECT 1 ID,0 PARENT_ID,'A' LABEL FROM DUAL UNION ALL SELECT 1 ID,1 PARENT_ID,'B' LABEL FROM DUAL) START WITH PARENT_ID=0 CONNECT BY NOCYCLE PRIOR ID=PARENT_ID", [[1,"A",1,1]], None),
         ("constant_prior_cycle", "SELECT LEVEL FROM DUAL CONNECT BY PRIOR 1=1 AND LEVEL<=3", None, "ORA-01436"),
         ("volatile_prior_changes_cycle_key", "SELECT LEVEL FROM DUAL CONNECT BY PRIOR SYS_GUID() IS NOT NULL AND LEVEL<=3", [[1],[2],[3]], None),
+        ("nested_hierarchy_keeps_level_scope", "SELECT LEVEL,(SELECT MAX(LEVEL) FROM DUAL CONNECT BY LEVEL<=2) MX FROM DUAL CONNECT BY LEVEL<=3", [[1,2],[2,2],[3,2]], None),
+        ("qualified_wildcard_hides_internal_columns", "SELECT T.*,LEVEL FROM (SELECT 7 ID FROM DUAL) T CONNECT BY LEVEL<=2", [[7,1],[7,2]], None),
+        ("wildcard_over_nested_generator", "SELECT * FROM (SELECT LEVEL L FROM DUAL CONNECT BY LEVEL<=2) CONNECT BY LEVEL<=2", [[1],[1],[2],[2],[1],[2]], None),
     ]
     try:
         for index, c in enumerate((reference, target)):
@@ -48,7 +52,16 @@ def run(reference, target, schema, prefix):
                     row[label] = dict(rows=query(c, sql))
                 except Exception as e:
                     detail = e.args[0] if e.args else None
-                    row[label] = dict(code=getattr(e, "sqlstate", None) or getattr(detail, "full_code", None))
+                    code = getattr(e, "sqlstate", None) or getattr(detail, "full_code", None)
+                    if label == "bicdb" and getattr(e, "diag", None):
+                        row["bicdb_sqlstate"] = code
+                        try:
+                            stack = json.loads(e.diag.message_detail or "{}").get("oracle_error_stack", [])
+                            if stack and isinstance(stack[0].get("code"), int):
+                                code = f"ORA-{abs(stack[0]['code']):05d}"
+                        except (ValueError, TypeError, AttributeError):
+                            pass
+                    row[label] = dict(code=code)
             expected = dict(code=error) if error else dict(rows=[[canonical(v) for v in r] for r in expected])
             row["source_qualified"] = row["oracle"] == expected
             row["matched"] = row["source_qualified"] and row["oracle"] == row["bicdb"]
@@ -86,7 +99,7 @@ def main():
         with source.cursor() as cur:
             cur.execute("SELECT SYS_CONTEXT('USERENV','CURRENT_SCHEMA') FROM DUAL")
             schema = cur.fetchone()[0]
-        with psycopg.connect(os.environ["BICDB_PG_DSN"], autocommit=True, connect_timeout=10, options="-c bicdb.sql_profile=oracle-preview-v1") as target:
+        with psycopg.connect(os.environ["BICDB_PG_DSN"], autocommit=True, connect_timeout=10, options="-c bicdb.sql_profile=oracle-preview-v1 -c statement_timeout=10000") as target:
             if target.info.parameter_status("bicdb_sql_profile") != "oracle-preview-v1":
                 raise RuntimeError("Oracle-preview target required")
             report = run(source, target, schema, "BICDB_HQ_" + uuid.uuid4().hex[:8].upper())

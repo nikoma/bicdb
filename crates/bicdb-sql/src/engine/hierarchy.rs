@@ -73,16 +73,33 @@ impl<'db> SqlEngine<'db> {
         }
         let mut output_select = select.clone();
         output_select.connect_by.clear();
-        if output_select.projection.iter().any(|item| {
-            matches!(
-                item,
-                SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _)
-            )
-        }) {
-            return Err(SqlError::Unsupported(
-                "hierarchy wildcard binding requires original-source projection metadata".into(),
-            ));
+        // Bind stars against source columns before adding traversal state, so
+        // private LEVEL/cycle slots can never leak through a wildcard.
+        let mut projection = Vec::new();
+        for item in &output_select.projection {
+            let columns = match item {
+                SelectItem::Wildcard(_) => base
+                    .columns
+                    .iter()
+                    .filter(|column| !is_postgres_system_column(column))
+                    .map(|column| (column.clone(), row_wildcard_output_column(column)))
+                    .collect::<Vec<_>>(),
+                SelectItem::QualifiedWildcard(qualifier, _) => {
+                    qualified_wildcard_columns(qualifier, &base.columns)?
+                }
+                _ => {
+                    projection.push(item.clone());
+                    continue;
+                }
+            };
+            for (source, output) in columns {
+                projection.push(SelectItem::ExprWithAlias {
+                    expr: Expr::Identifier(Ident::with_quote('"', source)),
+                    alias: Ident::with_quote('"', output),
+                });
+            }
         }
+        output_select.projection = projection;
         let mut used: BTreeSet<String> = base
             .columns
             .iter()
@@ -122,37 +139,18 @@ impl<'db> SqlEngine<'db> {
             }
             ControlFlow::<()>::Continue(())
         });
-        let mut rewrite_pseudo = |expr: &mut Expr| {
-            if let Expr::Function(function) = expr {
-                if function_args(function).is_empty() {
-                    let column = match function.name.to_string().to_ascii_lowercase().as_str() {
-                        "bicdb_oracle_hierarchy_level" => Some(&level_column),
-                        "bicdb_oracle_hierarchy_cycle" => Some(&cycle_column),
-                        _ => None,
-                    };
-                    if let Some(column) = column {
-                        *expr = Expr::Identifier(Ident::with_quote('"', column));
-                    }
-                }
-            }
-            if let Expr::Identifier(id) = expr {
-                if id.quote_style.is_none() {
-                    if id.value.eq_ignore_ascii_case("LEVEL") {
-                        *id = Ident::with_quote('"', &level_column);
-                    } else if id.value.eq_ignore_ascii_case("CONNECT_BY_ISCYCLE") {
-                        *id = Ident::with_quote('"', &cycle_column);
-                    }
-                }
-            }
-            ControlFlow::<()>::Continue(())
-        };
+        let source_types = self.from_relation_columns(&select.from).unwrap_or_default();
+        let prior_types = priors
+            .iter()
+            .map(|expr| self.infer_env_expr_type(expr, &source_types))
+            .collect::<Vec<_>>();
         let mut output_query = query.clone();
-        let _ = visit_expressions_mut(&mut output_select, &mut rewrite_pseudo);
-        let _ = visit_expressions_mut(&mut output_query, &mut rewrite_pseudo);
-        let _ = visit_expressions_mut(&mut conditions, &mut rewrite_pseudo);
-        let _ = visit_expressions_mut(&mut priors, &mut rewrite_pseudo);
+        rewrite_pseudocolumns(&mut output_select, false, &level_column, &cycle_column);
+        rewrite_pseudocolumns(&mut output_query, true, &level_column, &cycle_column);
+        rewrite_pseudocolumns(&mut conditions, false, &level_column, &cycle_column);
+        rewrite_pseudocolumns(&mut priors, false, &level_column, &cycle_column);
         if let Some(start) = &mut start {
-            let _ = visit_expressions_mut(start, &mut rewrite_pseudo);
+            rewrite_pseudocolumns(start, false, &level_column, &cycle_column);
         }
         if siblings {
             output_query.order_by = None;
@@ -208,7 +206,7 @@ impl<'db> SqlEngine<'db> {
                     Some(key(&row).map(|key| oracle::hierarchy::Node { row: index, key }))
                 }))
             },
-            |a, b| tuple_values_not_distinct(a, b),
+            |a, b| sql_rows_not_distinct_typed(a, b, &prior_types),
             || self.check_cancellation(),
             (!priors.is_empty()).then_some(nocycle),
             maximum_nodes,
@@ -231,6 +229,68 @@ impl<'db> SqlEngine<'db> {
             },
         )
     }
+}
+
+/// Every nested query owns its hierarchy bindings. The outer materializer must
+/// leave its pseudocolumn markers for that query's own execution to resolve.
+fn rewrite_pseudocolumns<T: sqlparser::ast::VisitMut>(
+    node: &mut T,
+    root_query: bool,
+    level: &str,
+    cycle: &str,
+) {
+    struct Rewrite<'a> {
+        depth: usize,
+        level: &'a str,
+        cycle: &'a str,
+    }
+    impl sqlparser::ast::VisitorMut for Rewrite<'_> {
+        type Break = ();
+        fn pre_visit_query(&mut self, _: &mut Query) -> ControlFlow<()> {
+            self.depth += 1;
+            ControlFlow::Continue(())
+        }
+        fn post_visit_query(&mut self, _: &mut Query) -> ControlFlow<()> {
+            self.depth -= 1;
+            ControlFlow::Continue(())
+        }
+        fn pre_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<()> {
+            if self.depth != 1 {
+                return ControlFlow::Continue(());
+            }
+            let name = match expr {
+                Expr::Function(function) if function_args(function).is_empty() => {
+                    match function.name.to_string().to_ascii_lowercase().as_str() {
+                        "bicdb_oracle_hierarchy_level" => Some(self.level),
+                        "bicdb_oracle_hierarchy_cycle" => Some(self.cycle),
+                        _ => None,
+                    }
+                }
+                Expr::Identifier(id) if id.quote_style.is_none() => {
+                    if id.value.eq_ignore_ascii_case("LEVEL") {
+                        Some(self.level)
+                    } else if id.value.eq_ignore_ascii_case("CONNECT_BY_ISCYCLE") {
+                        Some(self.cycle)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+            if let Some(name) = name {
+                *expr = Expr::Identifier(Ident::with_quote('"', name));
+            }
+            ControlFlow::Continue(())
+        }
+    }
+    let _ = sqlparser::ast::VisitMut::visit(
+        node,
+        &mut Rewrite {
+            depth: usize::from(!root_query),
+            level,
+            cycle,
+        },
+    );
 }
 
 #[cfg(test)]

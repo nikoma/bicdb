@@ -226,6 +226,68 @@ mod tests {
     }
 
     #[test]
+    fn nested_hierarchies_and_wildcards_keep_query_local_state() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        for (sql, columns, expected) in [
+            ("SELECT LEVEL,(SELECT MAX(LEVEL) FROM DUAL CONNECT BY LEVEL<=2) MX FROM DUAL CONNECT BY LEVEL<=3", vec!["LEVEL","MX"], vec![vec!["1","2"],vec!["2","2"],vec!["3","2"]]),
+            ("SELECT T.*,LEVEL FROM (SELECT 7 ID FROM DUAL) T CONNECT BY LEVEL<=2", vec!["ID","LEVEL"], vec![vec!["7","1"],vec!["7","2"]]),
+            ("SELECT * FROM (SELECT LEVEL L FROM DUAL CONNECT BY LEVEL<=2) CONNECT BY LEVEL<=2", vec!["L"], vec![vec!["1"],vec!["1"],vec!["2"],vec!["2"],vec!["1"],vec!["2"]]),
+        ] {
+            let lowered = lower_profile_sql(&db, sql, ORACLE_PREVIEW_PROFILE).unwrap();
+            let result = SqlSession::new(&mut db).execute(&lowered).unwrap();
+            assert_eq!(result.columns, columns, "{sql}");
+            assert_eq!(result.rows.iter().map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>()).collect::<Vec<_>>(), expected, "{sql}");
+        }
+    }
+
+    #[test]
+    fn volatile_raw_keys_do_not_create_false_hierarchy_cycles() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let sql = lower_profile_sql(
+            &db,
+            "SELECT LEVEL FROM DUAL CONNECT BY PRIOR SYS_GUID() IS NOT NULL AND LEVEL<=3",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        let result = SqlSession::new(&mut db).execute(&sql).unwrap();
+        assert_eq!(
+            result.rows,
+            vec![
+                vec![SqlValue::Int(1)],
+                vec![SqlValue::Int(2)],
+                vec![SqlValue::Int(3)]
+            ]
+        );
+        let sql = lower_profile_sql(
+            &db,
+            "SELECT SYS_GUID(),SYS_GUID() FROM DUAL",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        let result = SqlSession::new(&mut db).execute(&sql).unwrap();
+        assert_ne!(result.rows[0][0], result.rows[0][1]);
+        for value in &result.rows[0] {
+            let text = value.to_cell();
+            assert!(text.starts_with("\\x"));
+            assert_eq!(text.len(), 34);
+        }
+        let native_root = tempfile::tempdir().unwrap();
+        let mut native = BicDb::open(native_root.path()).unwrap();
+        let mut session = SqlSession::new(&mut native);
+        session
+            .execute("CREATE FUNCTION sys_guid() RETURNS INT LANGUAGE sql AS $$SELECT 7$$")
+            .unwrap();
+        assert_eq!(
+            session.execute("SELECT sys_guid()").unwrap().rows,
+            vec![vec![SqlValue::Int(7)]]
+        );
+    }
+
+    #[test]
     fn persisted_hierarchy_fence_keeps_temporal_and_character_capabilities() {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();

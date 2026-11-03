@@ -1,0 +1,98 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "cases": [
+    {
+      "id": "empty",
+      "binary": false,
+      "postgres": {
+        "value": "{}"
+      },
+      "bicdb": {
+        "value": "{}"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "whole_null",
+      "binary": false,
+      "postgres": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "null_element",
+      "binary": false,
+      "postgres": {
+        "value": "{NULL}"
+      },
+      "bicdb": {
+        "value": "{NULL}"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "text_quoting",
+      "binary": false,
+      "postgres": {
+        "value": "{\"a,b\",\"a\\\"b\",\u00e9,\"\"}"
+      },
+      "bicdb": {
+        "value": "{\"a,b\",\"a\\\"b\",\u00e9,\"\"}"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "nested_domain",
+      "binary": false,
+      "postgres": {
+        "value": "{x,NULL}"
+      },
+      "bicdb": {
+        "value": "{x,NULL}"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "numeric_elements",
+      "binary": false,
+      "postgres": {
+        "value": "{1.20,NULL,-3}"
+      },
+      "bicdb": {
+        "value": "{1.20,NULL,-3}"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "binary_nested_domain",
+      "binary": true,
+      "postgres": {
+        "value": "00000001000000010000001900000002000000010000000178ffffffff"
+      },
+      "bicdb": {
+        "value": "00000001000000010000001900000002000000010000000178ffffffff"
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "application_qualified": false,
+  "scope": "Native array-domain wire representations; logical domain OID parity is not qualified",
+  "success": true,
+  "matched": 7,
+  "total": 7,
+  "source_qualified": true,
+  "runtime_binary_sha256": "276e81f421a0aae9405fe50d0b7ef7aa2d3195a7d3323eb5721bd5b7643109a6"
+}

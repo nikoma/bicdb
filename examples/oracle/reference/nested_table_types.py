@@ -13,7 +13,7 @@ def run(reference, target, schema, prefix):
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{1,24}", prefix):
         raise ValueError("invalid fixture prefix")
     names = {key: identifier(schema) + "." + identifier(prefix + "_" + key)
-             for key in ("BYTES", "CHARS", "NUMS")}
+             for key in ("BYTES", "CHARS", "NUMS", "FIXED")}
     report = dict(format=1, oracle_version=reference.version, cases=[], cleanup_errors=[],
                   application_qualified=False, success=False,
                   scope="Named SQL nested-table declarations and constructors; no PL/SQL method qualification")
@@ -63,13 +63,13 @@ def run(reference, target, schema, prefix):
         report["cases"].append(row)
 
     try:
-        for key, element in (("BYTES", "VARCHAR2(8 BYTE)"), ("CHARS", "VARCHAR2(3 CHAR)"), ("NUMS", "NUMBER")):
+        for key, element in (("BYTES", "VARCHAR2(8 BYTE)"), ("CHARS", "VARCHAR2(3 CHAR)"), ("NUMS", "NUMBER"), ("FIXED", "CHAR(3 CHAR)")):
             record("declare_" + key.lower(), f"CREATE TYPE {names[key]} AS TABLE OF {element}", [], create_key=key)
         # The PostgreSQL transport exposes each registered logical type's OID.
         # Install standard array decoders explicitly for these domain carriers;
         # do not infer or rewrite an unregistered application result type.
         from psycopg.types.array import ArrayLoader
-        for key, base_oid in (("BYTES", 1043), ("CHARS", 1043), ("NUMS", 1700)):
+        for key, base_oid in (("BYTES", 1043), ("CHARS", 1043), ("NUMS", 1700), ("FIXED", 1042)):
             if key not in created[1]:
                 continue
             with target.cursor() as cur:
@@ -85,6 +85,8 @@ def run(reference, target, schema, prefix):
             ("unicode", f"{names['BYTES']}('é','😀')", [["é", "😀"]]),
             ("quotes_and_delimiters", f"{names['BYTES']}('a,b','a\"b','a''b')", [["a,b", 'a"b', "a'b"]]),
             ("character_bound", f"{names['CHARS']}('😀😀😀')", [["😀😀😀"]]),
+            ("fixed_padding", f"{names['FIXED']}('a')", [["a  "]]),
+            ("fixed_unicode_padding", f"{names['FIXED']}('é')", [["é  "]]),
             ("whole_null", f"CAST(NULL AS {names['BYTES']})", [None]),
             ("numeric_elements", f"{names['NUMS']}(0,-3,42,NULL)", [[canonical(0), canonical(-3), canonical(42), None]]),
         ]

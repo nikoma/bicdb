@@ -21,9 +21,11 @@ The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now use
 for [iDempiere seed development](evidence/idempiere-seed-2026-11-01/README.md).
 The latest [function-attribute checkpoint](evidence/oracle-function-attributes-2026-11-03/README.md)
 accepts **62/62 unchanged routine definitions** through PostgreSQL drivers.
-Collection return-type registration and behavior still block execution of the
-final accepted function. Dictionary rows, constraints, complete execution and
-workflows remain incomplete.
+The [SQL collection checkpoint](evidence/oracle-nested-table-sql-2026-11-03/README.md)
+adds registered nested-table declarations and constructors. The application's
+collection type still needs migration and PL/SQL collection execution; the final
+accepted function is not qualified. Dictionary rows, constraints, complete
+execution and workflows remain incomplete.
 The milestones below retain their results at the time each was measured.
 
 The original 913 tables and 185,292 rows loaded and passed complete value

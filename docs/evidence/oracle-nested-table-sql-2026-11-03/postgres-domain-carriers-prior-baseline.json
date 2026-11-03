@@ -1,0 +1,98 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "cases": [
+    {
+      "id": "empty",
+      "binary": false,
+      "postgres": {
+        "value": "{}"
+      },
+      "bicdb": {
+        "value": "[]"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "whole_null",
+      "binary": false,
+      "postgres": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "null_element",
+      "binary": false,
+      "postgres": {
+        "value": "{NULL}"
+      },
+      "bicdb": {
+        "value": "[null]"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "text_quoting",
+      "binary": false,
+      "postgres": {
+        "value": "{\"a,b\",\"a\\\"b\",\u00e9,\"\"}"
+      },
+      "bicdb": {
+        "value": "[\"a,b\",\"a\\\"b\",\"\u00e9\",\"\"]"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "nested_domain",
+      "binary": false,
+      "postgres": {
+        "value": "{x,NULL}"
+      },
+      "bicdb": {
+        "value": "[\"x\",null]"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "numeric_elements",
+      "binary": false,
+      "postgres": {
+        "value": "{1.20,NULL,-3}"
+      },
+      "bicdb": {
+        "value": "[\"1.20\",null,\"-3\"]"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "binary_nested_domain",
+      "binary": true,
+      "postgres": {
+        "value": "00000001000000010000001900000002000000010000000178ffffffff"
+      },
+      "bicdb": {
+        "value": "00000001000000010000001900000002000000010000000178ffffffff"
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "application_qualified": false,
+  "scope": "Native array-domain wire representations; logical domain OID parity is not qualified",
+  "success": false,
+  "matched": 2,
+  "total": 7,
+  "source_qualified": true,
+  "runtime_binary_sha256": "fb6d5e1bcf5bee3c2695e39aca8bc1f40fa218ebe9fb5602bcc63d0e2e551bb7"
+}

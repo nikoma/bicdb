@@ -774,10 +774,12 @@ classification; the omitted PostgreSQL default and procedures report VOLATILE.
 Existing-reader value interoperability is preserved by the native representation.
 Other Oracle declaration attributes and optimizer behavior remain unqualified.
 
-The original application definition inventory is now 62/62. Its collection
-return type remains unregistered for PostgreSQL transport, and the original
-collection execution probes remain 0/5. Definition acceptance does not establish
-full schema, runtime or workflow acceptance.
+The function-attribute checkpoint raised the original application definition
+inventory to 62/62. Its original collection probes recorded 0/5 because the
+application return type was unregistered. The later SQL collection checkpoint
+below adds registration for synthetic SQL contracts; it does not qualify those
+original application calls. Definition acceptance does not establish full schema,
+runtime or workflow acceptance.
 
 ## Routine security declarations
 
@@ -807,3 +809,28 @@ Physical-compatible source attachment preserves existing view descriptors;
 ordinary type changes retain the dependent-view guard, including explicit
 schema-qualified references. This does not implement Oracle view invalidation
 or DDL implicit commits. The other character limitations above remain open.
+
+## Named nested-table SQL types
+
+The [SQL collection contract](evidence/oracle-nested-table-sql-2026-11-03/README.md)
+qualifies `CREATE TYPE name AS TABLE OF element` and registered constructors for
+bounded character elements and NUMBER. Element declarations retain their logical
+character units and numeric modifiers; native array-domain carriers provide the
+PostgreSQL transport. Constructors distinguish an empty collection, a whole NULL
+collection and NULL elements. Oracle empty strings become NULL elements. Character
+limits are enforced without truncation; SQL constructor overflow reports ORA-22814.
+
+Persisting a collection type promotes durable preview metadata to format 5.
+Temporal, character and hierarchy saves preserve this marker. The previous reader
+refuses it, and the current reader reopens the saved types and existing routines.
+Native PostgreSQL domains remain untagged. Their text output now delegates to the
+base type's codec, including arrays and nested domains; their existing binary
+transport remains covered independently. The verification client explicitly
+registers array decoders for the preview's registered logical result OIDs. Native
+PostgreSQL domain result-OID parity is outside this contract.
+
+This is SQL collection qualification. PL/SQL collection methods and indexed
+assignment, TABLE(collection), multiset operations, collection type replacement,
+object elements, sparse collections and original application function execution
+still require implementation and reference tests. Compiler language version 18
+remains unchanged at this checkpoint.

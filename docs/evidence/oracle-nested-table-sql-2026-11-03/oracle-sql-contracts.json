@@ -1,0 +1,333 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "declare_bytes",
+      "sql": "CREATE TYPE \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_BYTES\" AS TABLE OF VARCHAR2(8 BYTE)",
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "declare_chars",
+      "sql": "CREATE TYPE \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_CHARS\" AS TABLE OF VARCHAR2(3 CHAR)",
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "declare_nums",
+      "sql": "CREATE TYPE \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_NUMS\" AS TABLE OF NUMBER",
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "declare_fixed",
+      "sql": "CREATE TYPE \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_FIXED\" AS TABLE OF CHAR(3 CHAR)",
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_BYTES\"() FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            []
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            []
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "null_element",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_BYTES\"(NULL) FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            [
+              null
+            ]
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            [
+              null
+            ]
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_string_element",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_BYTES\"('') FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            [
+              null
+            ]
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            [
+              null
+            ]
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "unicode",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_BYTES\"('\u00e9','\ud83d\ude00') FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            [
+              "\u00e9",
+              "\ud83d\ude00"
+            ]
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            [
+              "\u00e9",
+              "\ud83d\ude00"
+            ]
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "quotes_and_delimiters",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_BYTES\"('a,b','a\"b','a''b') FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            [
+              "a,b",
+              "a\"b",
+              "a'b"
+            ]
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            [
+              "a,b",
+              "a\"b",
+              "a'b"
+            ]
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "character_bound",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_CHARS\"('\ud83d\ude00\ud83d\ude00\ud83d\ude00') FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            [
+              "\ud83d\ude00\ud83d\ude00\ud83d\ude00"
+            ]
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            [
+              "\ud83d\ude00\ud83d\ude00\ud83d\ude00"
+            ]
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "fixed_padding",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_FIXED\"('a') FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            [
+              "a  "
+            ]
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            [
+              "a  "
+            ]
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "fixed_unicode_padding",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_FIXED\"('\u00e9') FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            [
+              "\u00e9  "
+            ]
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            [
+              "\u00e9  "
+            ]
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "whole_null",
+      "sql": "SELECT CAST(NULL AS \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_BYTES\") FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "numeric_elements",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_NUMS\"(0,-3,42,NULL) FROM DUAL",
+      "oracle": {
+        "rows": [
+          [
+            [
+              {
+                "number": "0"
+              },
+              {
+                "number": "-3"
+              },
+              {
+                "number": "42"
+              },
+              null
+            ]
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            [
+              {
+                "number": "0"
+              },
+              {
+                "number": "-3"
+              },
+              {
+                "number": "42"
+              },
+              null
+            ]
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "byte_overflow",
+      "sql": "SELECT \"IDEMPIERE_QUAL\".\"BICDB_NT_C901B9F8_BYTES\"('\ud83d\ude00\ud83d\ude00\ud83d\ude00') FROM DUAL",
+      "oracle": {
+        "code": "ORA-22814",
+        "exception": "DatabaseError"
+      },
+      "bicdb_sqlstate": "22001",
+      "bicdb": {
+        "code": "ORA-22814",
+        "exception": "StringDataRightTruncation"
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "application_qualified": false,
+  "success": true,
+  "scope": "Named SQL nested-table declarations and constructors; no PL/SQL method qualification",
+  "matched": 15,
+  "total": 15,
+  "source_qualified": true,
+  "runtime_binary_sha256": "276e81f421a0aae9405fe50d0b7ef7aa2d3195a7d3323eb5721bd5b7643109a6"
+}

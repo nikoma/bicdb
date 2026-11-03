@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "success": true,
+  "runtime_binary_sha256": "276e81f421a0aae9405fe50d0b7ef7aa2d3195a7d3323eb5721bd5b7643109a6",
+  "prior_binary_sha256": "fb6d5e1bcf5bee3c2695e39aca8bc1f40fa218ebe9fb5602bcc63d0e2e551bb7",
+  "cases": [
+    {
+      "id": "current_reader_executes_legacy_routine",
+      "success": true
+    },
+    {
+      "id": "registered_collection_empty_value",
+      "success": true
+    },
+    {
+      "id": "reopen_preserves_registered_constructor",
+      "success": true
+    },
+    {
+      "id": "reopen_preserves_legacy_routine",
+      "success": true
+    },
+    {
+      "id": "prior_reader_refuses_new_collection_metadata",
+      "success": true
+    },
+    {
+      "id": "current_reader_reopens_after_prior_reader_refusal",
+      "success": true
+    }
+  ]
+}

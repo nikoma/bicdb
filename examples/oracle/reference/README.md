@@ -422,3 +422,21 @@ trailing spaces, user variable names, procedure calls and recovery. Set
 `ORACLE_CONTROL_PG_DSN` and `BICDB_PG_DSN` to dedicated native databases. Both
 fixtures remove their uniquely named objects. Full Oracle error catalogs,
 SQLERRM(code), EXCEPTION_INIT and Oracle backtraces remain unqualified.
+
+`primary_key_updates.py --oracle-config /private/reference.json --output
+/private/key-updates.json` compares schema-qualified primary-key UPDATEs with
+Oracle through PostgreSQL transport. Use the same pre-existing dedicated schema
+on each database. The fixture checks aliases, bound decimal inputs, old-row
+assignment values, defaults, composite keys, uniqueness, foreign-key errors,
+statement recovery and explicit rollback. Oracle permits statement-end key swaps;
+PostgreSQL immediate checks can reject them. Each backend has independent
+expectations, including ordered shifts into keys vacated by preceding rows.
+
+`postgres_primary_key_updates.py --schema reference_schema --output
+/private/native-key-updates.json` compares native BicDB with PostgreSQL, including
+column UPDATE grants, UPDATE-only authorization, RLS USING/WITH CHECK and SELECT
+visibility. Set ORACLE_CONTROL_PG_DSN and BICDB_PG_DSN privately. The supplied
+schema must already exist on both dedicated databases; role-management privileges
+are required for the temporary role. Fixtures remove their own tables, role and
+grants; they retain the supplied schema. Parent keys referenced by foreign keys,
+row triggers, UPDATE FROM/RETURNING and concurrent key moves remain unqualified.

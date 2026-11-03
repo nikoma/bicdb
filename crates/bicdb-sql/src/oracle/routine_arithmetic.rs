@@ -959,6 +959,9 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
         ControlFlow::Continue(())
     }
     fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<SqlError> {
+        if let Err(error) = super::session_context::lower_expression(expr) {
+            return ControlFlow::Break(error);
+        }
         if self.env.text_patterns {
             let conversion = super::text_patterns::convert_text_arguments(expr, |value| {
                 let kind = match self.kind(value) {

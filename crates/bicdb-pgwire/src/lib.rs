@@ -1843,6 +1843,8 @@ fn initialize_client_with_server_admitted(
                 "session_authorization"
                     | "role"
                     | "bicdb.initial_session_authorization"
+                    | "bicdb.connection_client_address"
+                    | "bicdb.connection_client_host"
                     | "bicdb.rls_check_as"
                     | "bicdb_version"
                     | "server_version"
@@ -1870,6 +1872,10 @@ fn initialize_client_with_server_admitted(
             "on".to_string(),
         );
     }
+    state.session_state.insert_session_guc(
+        "bicdb.connection_client_address".into(),
+        peer_addr.ip().to_string(),
+    );
     state.cancel_token = cancel_token;
     data_server
         .connections

@@ -88,6 +88,14 @@ pub(crate) fn eval_db_catalog_function_value(
     session_gucs: Option<&HashMap<String, String>>,
 ) -> Result<Option<SqlValue>> {
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    if bare_name == "bicdb_oracle_sys_context" {
+        if let Some(gucs) = session_gucs {
+            return oracle::session_context::evaluate(db, args, gucs).map(Some);
+        }
+        return Err(SqlError::Unsupported(
+            "SYS_CONTEXT requires a session execution context".into(),
+        ));
+    }
     // These evaluators receive values only and cannot access database state.
     // Resolve registered Oracle scalar helpers before the administrative gate;
     // unknown names still pass through the normal privilege checks below.

@@ -2576,6 +2576,8 @@ pub(crate) const INITIAL_SESSION_AUTHORIZATION_GUC: &str = "bicdb.initial_sessio
 // decisions are made as this role while expressions still evaluate with the
 // session's identity, matching PostgreSQL's checkAsUser behavior. Reserved;
 // not settable from SQL.
+pub(crate) const SESSION_CLIENT_ADDRESS_GUC: &str = "bicdb.connection_client_address";
+pub(crate) const SESSION_CLIENT_HOST_GUC: &str = "bicdb.connection_client_host";
 pub(crate) const RLS_CHECK_AS_GUC: &str = "bicdb.rls_check_as";
 
 pub(crate) fn rls_check_user_from_gucs(gucs: &HashMap<String, String>) -> String {

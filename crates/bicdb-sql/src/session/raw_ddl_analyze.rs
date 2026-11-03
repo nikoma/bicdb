@@ -972,9 +972,12 @@ impl<'db> SqlSession<'db> {
             "session_authorization" => self.apply_set_session_authorization(Some(&value.to_cell())),
             // Reserved identity plumbing; forging either would allow RLS or
             // SET SESSION AUTHORIZATION privilege escalation.
-            INITIAL_SESSION_AUTHORIZATION_GUC | RLS_CHECK_AS_GUC => Err(SqlError::BicDb(
-                BicDbError::Authorization(format!("parameter \"{setting}\" cannot be changed")),
-            )),
+            INITIAL_SESSION_AUTHORIZATION_GUC
+            | RLS_CHECK_AS_GUC
+            | SESSION_CLIENT_ADDRESS_GUC
+            | SESSION_CLIENT_HOST_GUC => Err(SqlError::BicDb(BicDbError::Authorization(format!(
+                "parameter \"{setting}\" cannot be changed"
+            )))),
             // Custom (dotted) GUCs are settable like in PostgreSQL; they are
             // the primary identity vehicle for GUC-driven RLS policies.
             other if other.contains('.') => {

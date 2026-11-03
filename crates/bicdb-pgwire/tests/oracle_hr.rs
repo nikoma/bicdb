@@ -2297,3 +2297,60 @@ async fn autonomous_transactions_preserve_parent_and_prepared_statement_boundari
         observe_task.await.unwrap();
     }
 }
+
+#[tokio::test]
+async fn oracle_session_context_uses_peer_metadata_and_refuses_client_forgery() {
+    let root = tempfile::tempdir().unwrap();
+    let running = Running::with_profile(root.path(), "oracle-preview-v1");
+    let (client, connection) = tokio_postgres::Config::new()
+        .host("127.0.0.1")
+        .port(running.port)
+        .user("bicdb")
+        .dbname("bicdb")
+        .options("-c bicdb.sql_profile=oracle-preview-v1 -c bicdb.connection_client_address=203.0.113.9 -c bicdb.connection_client_host=forged.example")
+        .connect(tokio_postgres::NoTls).await.unwrap();
+    let connection = tokio::spawn(async move {
+        connection.await.unwrap();
+    });
+    let prepared = client
+        .prepare("SELECT SYS_CONTEXT($1,$2) FROM DUAL")
+        .await
+        .unwrap();
+    for command in ["RESET ALL", "DISCARD ALL"] {
+        let row = client
+            .query_one(&prepared, &[&"USERENV", &"IP_ADDRESS"])
+            .await
+            .unwrap();
+        assert_eq!(row.get::<_, String>(0), "127.0.0.1");
+        assert_eq!(
+            row.columns()[0].type_(),
+            &tokio_postgres::types::Type::VARCHAR
+        );
+        let host = client
+            .query_one("SELECT SYS_CONTEXT('USERENV','HOST') FROM DUAL", &[])
+            .await
+            .unwrap();
+        assert_eq!(host.get::<_, Option<String>>(0), None);
+        for key in [
+            "bicdb.connection_client_address",
+            "bicdb.connection_client_host",
+        ] {
+            let error = client
+                .execute(&format!("SELECT set_config('{key}','forged',false)"), &[])
+                .await
+                .unwrap_err();
+            assert_eq!(error.code().unwrap().code(), "42501");
+        }
+        client.batch_execute(command).await.unwrap();
+        // DISCARD drops prepared statements, so check the final value via a
+        // fresh statement and leave the loop before reusing a discarded one.
+        let row = client
+            .query_one("SELECT SYS_CONTEXT('USERENV','IP_ADDRESS') FROM DUAL", &[])
+            .await
+            .unwrap();
+        assert_eq!(row.get::<_, String>(0), "127.0.0.1");
+    }
+    drop(client);
+    connection.await.unwrap();
+    drop(running);
+}

@@ -2221,6 +2221,10 @@ impl<'db> SqlSession<'db> {
                 "DO language {language} is not supported"
             )));
         }
+        let _context = oracle::session_context::Scope::new(
+            oracle::preview_routine_language_version(&language)
+                .is_some_and(|version| version >= 22),
+        );
         let _multisets = oracle::collections::multisets::Scope::new(
             oracle::preview_routine_language_version(&language)
                 .is_some_and(|version| version >= 21),

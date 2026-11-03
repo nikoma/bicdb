@@ -28,6 +28,7 @@ pub(crate) mod routine_arithmetic;
 pub(crate) mod routine_characters;
 pub(crate) mod routines;
 mod rownum;
+pub(crate) mod session_context;
 mod source_tokens;
 pub(crate) mod syntax;
 pub(crate) mod temporal_columns;
@@ -164,7 +165,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V17: &str = "bicdb_oracle_preview_v17"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V18: &str = "bicdb_oracle_preview_v18";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V19: &str = "bicdb_oracle_preview_v19";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V20: &str = "bicdb_oracle_preview_v20";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v21";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V21: &str = "bicdb_oracle_preview_v21";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v22";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -185,7 +187,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V17_OID: i64 = 999_416;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V18_OID: i64 = 999_417;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V19_OID: i64 = 999_418;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V20_OID: i64 = 999_419;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_420;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V21_OID: i64 = 999_420;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_421;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -214,7 +217,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V18 => Some(18),
         PREVIEW_ROUTINE_LANGUAGE_V19 => Some(19),
         PREVIEW_ROUTINE_LANGUAGE_V20 => Some(20),
-        PREVIEW_ROUTINE_LANGUAGE => Some(21),
+        PREVIEW_ROUTINE_LANGUAGE_V21 => Some(21),
+        PREVIEW_ROUTINE_LANGUAGE => Some(22),
         _ => None,
     }
 }
@@ -1308,7 +1312,7 @@ fn canonical_tokens_with_routine_types(
                     }
                     "MULTISET" if preview && source.get(i + 1).is_some_and(|token| ["INTERSECT","UNION","EXCEPT"].iter().any(|value| word(token,value))) => pieces.push("MULTISET".into()),
                     "EMPTY" if preview && i >= 1 && (word(&source[i-1],"IS") || (i >= 2 && word(&source[i-1],"NOT") && word(&source[i-2],"IS"))) => pieces.push("EMPTY".into()),
-                    "TRIM" | "REGEXP_SUBSTR" | "REGEXP_REPLACE" if preview
+                    "TRIM" | "REGEXP_SUBSTR" | "REGEXP_REPLACE" | "SYS_CONTEXT" if preview
                         && (i == 0 || source[i - 1] != Token::Period)
                         && source.get(i + 1) == Some(&Token::LParen) => pieces.push(w.value.to_ascii_lowercase()),
                     "BOTH" | "LEADING" | "TRAILING" if preview && i >= 2
@@ -1657,6 +1661,7 @@ fn lower_native(db: &BicDb, sql: &str, preview: bool, namespace: Option<&str>) -
     let sql = rewritten.as_deref().unwrap_or(sql);
     let _grammar = syntax::Scope::new(preview);
     let _multisets = collections::multisets::Scope::new(preview);
+    let _context = session_context::Scope::new(preview);
     let mut statements = parse_statements(sql)?;
     if preview {
         syntax::rewrite(db, &mut statements, namespace)?;
@@ -1688,6 +1693,9 @@ fn lower_native(db: &BicDb, sql: &str, preview: bool, namespace: Option<&str>) -
     }
     let result = visit_expressions_mut(&mut statements, |expr| {
         if preview {
+            if let Err(error) = session_context::lower_expression(expr) {
+                return ControlFlow::Break(error);
+            }
             if let Err(error) = text_patterns::lower_expression(expr) {
                 return ControlFlow::Break(error);
             }

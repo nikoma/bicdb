@@ -2250,7 +2250,12 @@ impl<'db> SqlSession<'db> {
         }
         let gucs = Arc::make_mut(&mut self.session_gucs);
         for (setting, value) in settings {
-            if !is_protected_security_setting(&setting) {
+            if !is_protected_security_setting(&setting)
+                && !matches!(
+                    setting.as_str(),
+                    SESSION_CLIENT_ADDRESS_GUC | SESSION_CLIENT_HOST_GUC
+                )
+            {
                 gucs.entry(setting).or_insert(value);
             }
         }
@@ -4770,6 +4775,8 @@ impl<'db> SqlSession<'db> {
                 SESSION_AUTHORIZATION_GUC,
                 CURRENT_ROLE_GUC,
                 INITIAL_SESSION_AUTHORIZATION_GUC,
+                SESSION_CLIENT_ADDRESS_GUC,
+                SESSION_CLIENT_HOST_GUC,
                 "server_version",
                 "server_version_num",
                 "bicdb.sql_profile",
@@ -4841,9 +4848,12 @@ impl<'db> SqlSession<'db> {
             }
             "role" => self.apply_set_role("none"),
             "session_authorization" => self.apply_set_session_authorization(None),
-            INITIAL_SESSION_AUTHORIZATION_GUC | RLS_CHECK_AS_GUC => Err(SqlError::BicDb(
-                BicDbError::Authorization(format!("parameter \"{setting}\" cannot be changed")),
-            )),
+            INITIAL_SESSION_AUTHORIZATION_GUC
+            | RLS_CHECK_AS_GUC
+            | SESSION_CLIENT_ADDRESS_GUC
+            | SESSION_CLIENT_HOST_GUC => Err(SqlError::BicDb(BicDbError::Authorization(format!(
+                "parameter \"{setting}\" cannot be changed"
+            )))),
             other if other.contains('.') => {
                 Arc::make_mut(&mut self.session_gucs).remove(other);
                 Ok(())
@@ -4861,6 +4871,15 @@ impl<'db> SqlSession<'db> {
                 "DISCARD ALL cannot run inside a transaction block".to_string(),
             ));
         }
+        let transport: Vec<_> = [SESSION_CLIENT_ADDRESS_GUC, SESSION_CLIENT_HOST_GUC]
+            .into_iter()
+            .filter_map(|key| {
+                self.session_gucs
+                    .get(key)
+                    .cloned()
+                    .map(|value| (key.to_string(), value))
+            })
+            .collect();
         let database = self.session_gucs.get("database").cloned();
         let initial_user = self
             .session_gucs
@@ -4901,6 +4920,7 @@ impl<'db> SqlSession<'db> {
             Arc::make_mut(&mut self.session_gucs)
                 .insert("bicdb.sql_profile".to_string(), sql_profile);
         }
+        Arc::make_mut(&mut self.session_gucs).extend(transport);
         self.guc_transaction_start = None;
         self.transaction_timestamp_micros = None;
         self.guc_local_restore.clear();

@@ -606,6 +606,36 @@ The [transaction evidence](evidence/oracle-autonomous-transactions-2026-11-03/RE
 separates generated Oracle matches from definition acceptance and failing
 original application calls.
 
+## Bound dynamic statements
+
+New compiler-version-16 standalone routines support a bounded `EXECUTE IMMEDIATE`
+contract. SQL text is parsed at execution under the routine's recorded namespace;
+caller locals are not exposed as SQL identifiers. `USING` and `USING IN` values
+are evaluated separately and remain typed parameter values, including text with
+quotes or SQL syntax. Repeated placeholder names consume positional values for
+these SQL statements. Missing and excess binds raise distinct errors.
+
+SELECT, INSERT, UPDATE and DELETE are supported. A SELECT can assign one row to
+scalar `INTO` targets; zero and multiple rows follow Oracle exception boundaries.
+An unhandled NO_DATA_FOUND crossing a version-16 Oracle function's SQL boundary
+returns NULL, while procedural callers can still handle the exception. Native
+LANGUAGE plpgsql preserves its PostgreSQL error behavior. An unfetched SELECT
+validates the supported relation/name/permission shapes without evaluating its
+projection. This does not qualify every dynamic query shape or bind type.
+
+String rendering preserves decoded quotes across tokenizer, routine and nested
+SQL layers. Concatenation recognizes character host expressions through the
+supported LOWER, UPPER, SUBSTR, TRIM and overlay forms. This does not qualify
+national-character types or general NLS behavior. OUT/IN OUT binds, dynamic
+RETURNING/BULK operations, records, DDL, transaction control, dynamic PL/SQL
+blocks and metadata-only CTE/set-query binding require separate work.
+
+The [dynamic-statement evidence](evidence/oracle-dynamic-sql-2026-11-03/README.md)
+records 36 new Oracle matches, independent PostgreSQL controls and unchanged
+original-function checks. The original definition count remains 60/62; valid
+NEXTIDFUNC execution still fails on its national-character variable dependency.
+The running application is not upgraded by this development qualification.
+
 Routine DROP statements use ordinary DDL processing rather than the procedural
 body lowerer. Qualified names are checked against the recorded namespace;
 removal requires native effective-role ownership or superuser authority.

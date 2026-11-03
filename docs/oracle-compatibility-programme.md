@@ -139,6 +139,17 @@ still fails at the dynamic-SQL namespace guard; hierarchy/collection support,
 dictionary anchors and further runtime dependencies remain. The five separately
 tracked semantic mismatches are unchanged. This is a development candidate,
 with the running application binary and database preserved.
+The [dynamic-statement qualification](evidence/oracle-dynamic-sql-2026-11-03/README.md)
+adds version-16 EXECUTE IMMEDIATE with compiler-bound namespaces, typed positional
+IN binds, scalar query INTO, quote-preserving SQL rendering and SQL/procedural
+NO_DATA_FOUND boundaries. Its 36 new matches bring the passing generated corpus
+to 1,201 Oracle cases, with 227 independent PostgreSQL controls. The unchanged
+TORECORDID body matches eight isolated minimal-dependency checks, and the
+ordinary sequence procedure retains nine matches. These are not application
+workflow acceptance. Definitions remain 60/62, the NULL-call diagnostics remain
+1/13, and a valid NEXTIDFUNC call still fails on national-character variable
+typing. Five separately tracked semantic mismatches persist. Dynamic OUT binds,
+bulk/RETURNING, DDL/PLSQL blocks and broader query/type binding remain incomplete.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source
@@ -160,7 +171,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: application-schema selection, versioned static function/procedure relation binding, CALL namespaces and documented heap adaptation; general resolution and synonyms outstanding |
 | 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Partial: [nested-block contracts](evidence/oracle-nested-block-contracts-2026-11-02/README.md) distinguish new Oracle routine statement rollback from native PostgreSQL block rollback; general transactions, DDL commits and locking qualification outstanding |
 | 9. DDL lifecycle | Oracle implicit commits, replacement, dependency invalidation, invalid-object catalogs and recompilation | Partial: tested procedure replacement after cached calls; Oracle implicit commits, dependencies and invalid-object lifecycle remain outstanding |
-| 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: scoped blocks/declarations and nested handlers, standalone functions and version-12 procedures with OUT/IN OUT copyback, version-8 parameterized bound cursors with query-local formals/defaults and independent native scope checks, declared-type procedural TRUNC and versioned logical DATE arithmetic; full language and application routines outstanding |
+| 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: scoped blocks/declarations and nested handlers, standalone functions and version-12 procedures with OUT/IN OUT copyback, version-8 parameterized bound cursors with query-local formals/defaults and independent native scope checks, version-16 bounded EXECUTE IMMEDIATE with typed IN binds and scalar query INTO, declared-type procedural TRUNC and versioned logical DATE arithmetic; national-character variables, full language and application routines outstanding |
 | 11. Packages | Specs/bodies, visibility, overloads, initialization, session variables and invalidation with pool/session isolation | Outstanding |
 | 12. Autonomous transactions | Independent commit/rollback and lock behavior, nested calls, exceptions and restart tests | Partial: [version-15 standalone routine transactions](evidence/oracle-autonomous-transactions-2026-11-03/README.md), separate parent/observer visibility, active-return errors, parent-lock deadlocks, snapshot boundaries, Describe safeguards and restart; child DDL, package/session-state integration, distributed commits and broader failure qualification outstanding |
 | 13. Supplied package APIs | Qualify used DBMS/UTL APIs, including LOB, SQL, OUTPUT, UTILITY, APPLICATION_INFO, RANDOM, LOCK and SCHEDULER; file/network ACL enforcement | Outstanding |

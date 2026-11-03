@@ -1,0 +1,38 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "source_execution_compared": true,
+  "scope": "First valid system-counter call of unchanged GET_SYSCONFIG, NEXTID and NEXTIDFUNC bodies in generated schemas with minimal dependency tables. Qualification stops at the first target error; subsequent planned calls were not executed.",
+  "source_sha256": {
+    "GET_SYSCONFIG": "371a77923a465ddf5eb64ab6297bb3e3fb4d93bc860af41f3f0ea340f66504fc",
+    "NEXTID": "2909da207a432c9edd296db5b53d0aa2e4bf08ca22c0494d5934ddc35c917171",
+    "NEXTIDFUNC": "c9294765e35fced72635c796d17099c7f3bfbbdd5031d88cbee271e4e2a8e6b4"
+  },
+  "runtime_binary_sha256": "258b4b061d4afe649883dbb33608aa92ac46f3b9a9b582bb3d19dec5782e6d52",
+  "cases": [
+    {
+      "id": "pending_parent_call_0",
+      "oracle": [
+        [
+          {
+            "number": "10"
+          }
+        ]
+      ],
+      "bicdb": {
+        "error_code": "0A000"
+      },
+      "matched": false
+    }
+  ],
+  "cleanup_errors": [],
+  "success": false,
+  "oracle_version": "23.26.3.0.0",
+  "failure": {
+    "error": "FeatureNotSupported",
+    "code": "0A000"
+  },
+  "matched": 0,
+  "total": 1,
+  "remaining_dependency": "National-character variable typing; target reports concatenation operand TABLENAME as Other (0A000)."
+}

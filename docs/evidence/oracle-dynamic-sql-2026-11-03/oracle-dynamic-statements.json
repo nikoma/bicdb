@@ -1,0 +1,658 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "same_name_twice",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "5"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "same_number_twice",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "5"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "missing_bind",
+      "oracle": {
+        "error_code": 1008
+      },
+      "bicdb": {
+        "error_code": "07001"
+      },
+      "matched": true
+    },
+    {
+      "id": "excess_bind",
+      "oracle": {
+        "error_code": 1006
+      },
+      "bicdb": {
+        "error_code": "07002"
+      },
+      "matched": true
+    },
+    {
+      "id": "null_bind",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "9"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "9"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "no_into_division",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "42"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "42"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "into_division",
+      "oracle": {
+        "error_code": 1476
+      },
+      "bicdb": {
+        "error_code": "22012"
+      },
+      "matched": true
+    },
+    {
+      "id": "no_into_invalid",
+      "oracle": {
+        "error_code": 904
+      },
+      "bicdb": {
+        "error_code": "42703"
+      },
+      "matched": true
+    },
+    {
+      "id": "zero_rows_sql_boundary",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "multiple_rows",
+      "oracle": {
+        "error_code": 1422
+      },
+      "bicdb": {
+        "error_code": "P0003"
+      },
+      "matched": true
+    },
+    {
+      "id": "column_count",
+      "oracle": {
+        "error_code": 932
+      },
+      "bicdb": {
+        "error_code": "42804"
+      },
+      "matched": true
+    },
+    {
+      "id": "null_command",
+      "oracle": {
+        "error_code": 6535
+      },
+      "bicdb": {
+        "error_code": "22004"
+      },
+      "matched": true
+    },
+    {
+      "id": "local_names_not_bound",
+      "oracle": {
+        "error_code": 904
+      },
+      "bicdb": {
+        "error_code": "42703"
+      },
+      "matched": true
+    },
+    {
+      "id": "two_statements",
+      "oracle": {
+        "error_code": 3405
+      },
+      "bicdb": {
+        "error_code": "42601"
+      },
+      "matched": true
+    },
+    {
+      "id": "trailing_semicolon",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "using_in",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unreached_branch",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "table_column_not_local",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "character_host_in_static_sql",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_quotes",
+      "oracle": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "literal_quotes",
+      "oracle": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_quote_pairs",
+      "oracle": {
+        "rows": [
+          [
+            "O''Reilly"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "O''Reilly"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "literal_quote_pairs",
+      "oracle": {
+        "rows": [
+          [
+            "O''Reilly"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "O''Reilly"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_sql_like_text",
+      "oracle": {
+        "rows": [
+          [
+            "x');DELETE FROM anything;--"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x');DELETE FROM anything;--"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "literal_sql_like_text",
+      "oracle": {
+        "rows": [
+          [
+            "x');DELETE FROM anything;--"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x');DELETE FROM anything;--"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_unicode",
+      "oracle": {
+        "rows": [
+          [
+            "\u00f1\u03a9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00f1\u03a9"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "literal_unicode",
+      "oracle": {
+        "rows": [
+          [
+            "\u00f1\u03a9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00f1\u03a9"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_bind_like_text",
+      "oracle": {
+        "rows": [
+          [
+            ":1 + :1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            ":1 + :1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "literal_bind_like_text",
+      "oracle": {
+        "rows": [
+          [
+            ":1 + :1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            ":1 + :1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "command_text_layers",
+      "oracle": {
+        "rows": [
+          [
+            "SELECT 'O''Reilly' FROM DUAL"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "SELECT 'O''Reilly' FROM DUAL"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "nested_quote_layers",
+      "oracle": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "no_data_propagates_to_pl_caller",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "99"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "99"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "chained_bind_expression",
+      "oracle": {
+        "rows": [
+          [
+            "start:O''Reilly:end"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "start:O''Reilly:end"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "dynamic_insert",
+      "oracle": {
+        "status": "ok"
+      },
+      "bicdb": {
+        "status": "ok"
+      },
+      "matched": true
+    },
+    {
+      "id": "caller_sees_insert",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ],
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "parent_rollback",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ],
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "matched": 36,
+  "total": 36,
+  "runtime_binary_sha256": "258b4b061d4afe649883dbb33608aa92ac46f3b9a9b582bb3d19dec5782e6d52"
+}

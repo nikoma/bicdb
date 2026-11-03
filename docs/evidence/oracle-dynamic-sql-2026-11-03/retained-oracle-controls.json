@@ -1,0 +1,136 @@
+{
+  "format": 1,
+  "success": true,
+  "runtime_binary_sha256": "258b4b061d4afe649883dbb33608aa92ac46f3b9a9b582bb3d19dec5782e6d52",
+  "matched": 1165,
+  "total": 1165,
+  "suites": [
+    {
+      "suite": "anchors",
+      "matched": 41,
+      "total": 41,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "calendar",
+      "matched": 36,
+      "total": 36,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "case",
+      "matched": 34,
+      "total": 34,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "characters",
+      "matched": 119,
+      "total": 119,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "columns",
+      "matched": 21,
+      "total": 21,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "concat",
+      "matched": 76,
+      "total": 76,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "cursors",
+      "matched": 36,
+      "total": 36,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "decode",
+      "matched": 57,
+      "total": 57,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "errors",
+      "matched": 108,
+      "total": 108,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "grammar",
+      "matched": 14,
+      "total": 14,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "namespaces",
+      "matched": 24,
+      "total": 24,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "numberops",
+      "matched": 218,
+      "total": 218,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "nvl",
+      "matched": 93,
+      "total": 93,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "procedures",
+      "matched": 26,
+      "total": 26,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "temporal",
+      "matched": 29,
+      "total": 29,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "week",
+      "matched": 102,
+      "total": 102,
+      "oracle_database_version": "23.26.3.0.0",
+      "routine_compiler": "bicdb_oracle_preview_v16"
+    },
+    {
+      "suite": "decode_sql",
+      "matched": 52,
+      "total": 52
+    },
+    {
+      "suite": "key_updates",
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "suite": "autonomous",
+      "matched": 38,
+      "total": 38
+    }
+  ]
+}

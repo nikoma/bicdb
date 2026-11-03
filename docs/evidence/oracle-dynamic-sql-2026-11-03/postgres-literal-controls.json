@@ -1,0 +1,233 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "cases": [
+    {
+      "id": "bound_0",
+      "postgres": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "literal_0",
+      "postgres": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_1",
+      "postgres": {
+        "rows": [
+          [
+            "O''Reilly"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "O''Reilly"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "literal_1",
+      "postgres": {
+        "rows": [
+          [
+            "O''Reilly"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "O''Reilly"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_2",
+      "postgres": {
+        "rows": [
+          [
+            "x');DELETE FROM anything;--"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x');DELETE FROM anything;--"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "literal_2",
+      "postgres": {
+        "rows": [
+          [
+            "x');DELETE FROM anything;--"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "x');DELETE FROM anything;--"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_3",
+      "postgres": {
+        "rows": [
+          [
+            "\u00f1\u03a9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00f1\u03a9"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "literal_3",
+      "postgres": {
+        "rows": [
+          [
+            "\u00f1\u03a9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00f1\u03a9"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "bound_4",
+      "postgres": {
+        "rows": [
+          [
+            ":1+:1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            ":1+:1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "literal_4",
+      "postgres": {
+        "rows": [
+          [
+            ":1+:1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            ":1+:1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "native_no_data_is_error",
+      "postgres": {
+        "error_code": "P0002"
+      },
+      "bicdb": {
+        "error_code": "P0002"
+      },
+      "matched": true
+    },
+    {
+      "id": "native_pl_handler",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "99"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "99"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "native_unfetched_query_executes",
+      "postgres": {
+        "error_code": "22012"
+      },
+      "bicdb": {
+        "error_code": "22012"
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "matched": 13,
+  "total": 13,
+  "runtime_binary_sha256": "258b4b061d4afe649883dbb33608aa92ac46f3b9a9b582bb3d19dec5782e6d52"
+}

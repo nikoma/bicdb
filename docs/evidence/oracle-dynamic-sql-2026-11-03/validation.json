@@ -1,0 +1,72 @@
+{
+  "format": 1,
+  "engine_source_commit": "6e5c7a488efa5e18c89165811a17fa5d6305231a",
+  "runtime_binary_sha256": "258b4b061d4afe649883dbb33608aa92ac46f3b9a9b582bb3d19dec5782e6d52",
+  "rust_passed": 1306,
+  "rust_ignored": 3,
+  "python_reference_passed": 25,
+  "python_migration_passed": 22,
+  "new_generated_oracle_cases": 36,
+  "retained_generated_oracle_cases": 1165,
+  "total_passing_generated_oracle_cases": 1201,
+  "independent_postgres_controls": 227,
+  "original_record_minimal_dependency_matched": 8,
+  "original_sequence_minimal_dependency_matched": 9,
+  "original_counter_diagnostic_matched": 0,
+  "original_counter_diagnostic_total": 1,
+  "application_definition_baseline": 60,
+  "application_definition_total": 62,
+  "application_null_diagnostic_calls_succeeded": 1,
+  "application_null_diagnostic_calls_total": 13,
+  "known_semantic_gap_observations": 7,
+  "known_semantic_gap_mismatches": 5,
+  "known_semantic_gaps_unchanged": true,
+  "routine_compiler": "bicdb_oracle_preview_v16",
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true,
+  "public_comparison_entrypoints_executed": true,
+  "initial_integrated_wire_validation": {
+    "passed": 118,
+    "failed": 1,
+    "reason": "Catalog-cache fixture granted FUNCTION rights to a PROCEDURE. Corrected fixture ownership without weakening repeated-CALL/cache assertions; complete affected suite then passed."
+  },
+  "upstream_formatting_corrected": true,
+  "resource_interruption": {
+    "status": "aborted_low_memory",
+    "minimum_observed_available_bytes": 8387506176,
+    "only_owned_process_group_stopped": true
+  },
+  "resources": {
+    "peak_owned_group_rss_bytes": 4312788992,
+    "minimum_observed_available_bytes": 20536614912,
+    "minimum_observed_disk_available_bytes": 170064318464,
+    "minimum_available_gib": 8,
+    "build_jobs": 1,
+    "incremental_compilation": false,
+    "rust_regression_temp_storage": "task-owned tmpfs; removed after validation",
+    "reference_and_restart_temp_storage": "filesystem-backed disposable directories; removed after checks"
+  },
+  "last_validation_cleanup_reclaimed_bytes": 2900190368,
+  "schema_cache_additional_cleanup_reclaimed_bytes": 5364072448,
+  "remaining_schema_build_cache_du_h": "48G",
+  "remaining_oracle_build_cache_du_h": "5.6G",
+  "application_database_updated": false,
+  "application_qualified": false,
+  "development_binary_built": true,
+  "release_published": false,
+  "compiler_interruptions": [
+    {
+      "signal": "SIGTERM",
+      "sql_validation_completed": false,
+      "minimum_observed_available_bytes": 20851499008,
+      "cause": "External termination; guard did not stop the process group. A concurrent host command with a global rustc termination pattern was observed; direct attribution is not established."
+    },
+    {
+      "signal": "SIGTERM",
+      "sql_validation_completed": false,
+      "minimum_observed_available_bytes": 20638130176,
+      "cause": "External termination; guard did not stop the process group. A concurrent host command with a global rustc termination pattern was observed; direct attribution is not established."
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "format": 1,
+  "success": true,
+  "runtime_binary_sha256": "258b4b061d4afe649883dbb33608aa92ac46f3b9a9b582bb3d19dec5782e6d52",
+  "matched": 214,
+  "total": 214,
+  "suites": [
+    {
+      "suite": "characters",
+      "matched": 22,
+      "total": 22,
+      "postgres_version_num": 180004
+    },
+    {
+      "suite": "columns",
+      "matched": 6,
+      "total": 6,
+      "postgres_version_num": 180004
+    },
+    {
+      "suite": "concat",
+      "matched": 62,
+      "total": 62,
+      "postgres_version_num": 180004
+    },
+    {
+      "suite": "cursors",
+      "matched": 30,
+      "total": 30,
+      "postgres_version_num": 180004
+    },
+    {
+      "suite": "decode",
+      "matched": 12,
+      "total": 12,
+      "postgres_version_num": 180004
+    },
+    {
+      "suite": "errors",
+      "matched": 9,
+      "total": 9,
+      "postgres_version_num": 180004
+    },
+    {
+      "suite": "grammar",
+      "matched": 9,
+      "total": 9,
+      "postgres_version_num": 180004
+    },
+    {
+      "suite": "procedures",
+      "matched": 13,
+      "total": 13,
+      "postgres_version_num": 180004
+    },
+    {
+      "suite": "key_updates",
+      "matched": 51,
+      "total": 51,
+      "postgres_version_num": 180004
+    }
+  ]
+}

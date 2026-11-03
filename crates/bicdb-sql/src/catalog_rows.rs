@@ -3277,6 +3277,10 @@ fn pg_proc_rows_uncached(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>>> 
             routine.security_definer,
         );
         row.insert(
+            "provolatile".to_string(),
+            SqlValue::String(routine.declared_volatility().to_string()),
+        );
+        row.insert(
             "pronargdefaults".to_string(),
             SqlValue::Int(
                 parsed_params

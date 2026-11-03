@@ -16,6 +16,7 @@ mod dictionary;
 mod dual;
 pub(crate) mod dynamic_sql;
 pub(crate) mod errors;
+mod function_attributes;
 pub(crate) mod hierarchy;
 mod namespaces;
 pub(crate) mod national;
@@ -1108,6 +1109,11 @@ fn canonical_tokens_with_routine_types(
     preserve_date: bool,
     namespace: Option<&str>,
 ) -> Result<Vec<Token>> {
+    let deterministic = if preview {
+        function_attributes::deterministic_positions(source)
+    } else {
+        BTreeSet::new()
+    };
     let hierarchical = preview
         && source
             .windows(2)
@@ -1138,6 +1144,12 @@ fn canonical_tokens_with_routine_types(
     let mut i = 0;
     while i < source.len() {
         let t = &source[i];
+        if deterministic.contains(&i) {
+            pieces.push("IMMUTABLE".into());
+            i += 1;
+            continue;
+        }
+
         if hierarchical
             && word(t, "ORDER")
             && source.get(i + 1).is_some_and(|t| word(t, "SIBLINGS"))

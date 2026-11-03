@@ -4126,6 +4126,28 @@ impl RoutineTypeSchema {
 }
 
 impl RoutineSchema {
+    /// Read the declaration AST so words inside a body, argument name or
+    /// quoted literal cannot change the catalog's volatility classification.
+    /// Legacy records already retain the full declaration; no rewrite is needed.
+    fn declared_volatility(&self) -> &'static str {
+        if self.kind != RoutineKind::Function {
+            return "v";
+        }
+        let Ok(statements) =
+            Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, &self.definition)
+        else {
+            return "v";
+        };
+        let [Statement::CreateFunction(function)] = statements.as_slice() else {
+            return "v";
+        };
+        match function.behavior.as_ref() {
+            Some(sqlparser::ast::FunctionBehavior::Immutable) => "i",
+            Some(sqlparser::ast::FunctionBehavior::Stable) => "s",
+            Some(sqlparser::ast::FunctionBehavior::Volatile) | None => "v",
+        }
+    }
+
     /// The owning role for OWNERSHIP and display. A routine persisted before
     /// ownership tracking records no owner and is treated as bootstrap-owned,
     /// so only a superuser may alter it — the fail-closed reading.

@@ -9,6 +9,8 @@
 // code compiles unchanged.
 use crate::*;
 
+#[cfg(test)]
+mod attribute_tests;
 pub(crate) mod nested_blocks;
 pub(crate) mod parameterized_cursors;
 mod procedural_case;

@@ -1,0 +1,92 @@
+{
+  "format": 1,
+  "engine_source_commit": "a7763ad67c3357c1ed0c842e82a73168dfd00294",
+  "runtime_binary_sha256": "d6efa6ebdb23c834fb8a2877fd6625781370774820bfca67d1a2f3dde7c71366",
+  "rust_passed": 1329,
+  "rust_existing_ignored": 3,
+  "rust_suite_results": 11,
+  "python_reference_passed": 25,
+  "python_migration_passed": 30,
+  "python_hr_passed": 3,
+  "new_oracle_buffer_matched": 53,
+  "new_oracle_buffer_total": 53,
+  "prior_oracle_buffer_matched": 36,
+  "prior_oracle_buffer_total": 53,
+  "new_cross_reader_checks": 7,
+  "retained_generated_oracle_positive_and_error_contract_cases": 1475,
+  "separate_negative_nvarchar_alias_boundary_cases": 1,
+  "independent_postgres_controls": 266,
+  "source_based_reconciliation_checks": 9,
+  "character_metadata_reader_checks": 6,
+  "importer_checks": 3,
+  "original_counter_matches": 14,
+  "original_record_matches": 8,
+  "original_sequence_matches": 9,
+  "application_definition_baseline": 60,
+  "application_definition_total": 62,
+  "application_null_input_diagnostic_calls_completed": 1,
+  "application_null_input_diagnostic_calls_total": 13,
+  "oracle_dictionary_matched": 0,
+  "oracle_dictionary_total": 11,
+  "separate_character_assignment_matched": 2,
+  "separate_character_assignment_total": 2,
+  "existing_nvl_conversion_mismatches": 5,
+  "sql_package_opt_level": 1,
+  "development_profile": true,
+  "build_jobs": 1,
+  "incremental": false,
+  "minimum_available_gib": 8,
+  "resource_checks": [
+    {
+      "check": "routine-characters-integrated-validation",
+      "peak_owned_group_rss_bytes": 4637593600,
+      "minimum_observed_available_bytes": 14390235136
+    },
+    {
+      "check": "routine-characters-optimized-build",
+      "peak_owned_group_rss_bytes": 6948462592,
+      "minimum_observed_available_bytes": 15849934848
+    },
+    {
+      "check": "routine-characters-run_routine_characters_cli",
+      "peak_owned_group_rss_bytes": 145534976,
+      "minimum_observed_available_bytes": 21968502784
+    },
+    {
+      "check": "routine-characters-probe_routine_character_readers",
+      "peak_owned_group_rss_bytes": 84291584,
+      "minimum_observed_available_bytes": 22148022272
+    },
+    {
+      "check": "routine-characters-run_alter_batch_native",
+      "peak_owned_group_rss_bytes": 149774336,
+      "minimum_observed_available_bytes": 22109822976
+    },
+    {
+      "check": "routine-characters-run_character_view_native",
+      "peak_owned_group_rss_bytes": 395485184,
+      "minimum_observed_available_bytes": 21916483584
+    },
+    {
+      "check": "routine-characters-probe_character_reconciliation",
+      "peak_owned_group_rss_bytes": 211230720,
+      "minimum_observed_available_bytes": 22013341696
+    },
+    {
+      "check": "routine-characters-run_character_final_references",
+      "peak_owned_group_rss_bytes": 1108078592,
+      "minimum_observed_available_bytes": 21311229952
+    }
+  ],
+  "preliminary_padding_expectation_corrected_from_source": true,
+  "preliminary_compiler_sigterm": true,
+  "complete_integrated_retry_passed": true,
+  "application_qualified": false,
+  "application_database_updated": false,
+  "full_application_reconciliation_qualified": false,
+  "development_binary_built": true,
+  "release_published": false,
+  "formatting_passed": true,
+  "license_checks_passed": true,
+  "open_core_boundary_passed": true
+}

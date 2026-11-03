@@ -199,6 +199,14 @@ controls pass, bringing the retained native corpus to 266/266. The full Rust
 batch passes 1,326 tests. A fresh persistent-copy character reconciliation trial
 is pending. This optimization does not change the 60/62 definition inventory,
 the 0/11 dictionary result or application/workflow qualification.
+The [PL/SQL character buffer qualification](evidence/oracle-routine-character-buffers-2026-11-03/README.md)
+adds compiler-version-18 local BYTE/CHAR buffers and preserves both units through
+table-column anchors. All 53 source contracts and seven cross-reader execution
+checks pass; native PostgreSQL and older stored compilers retain their behavior.
+The integrated source passes 1,329 Rust tests and 58 Python tests. SQL column
+limits, routine buffer limits and fixed-width padding remain distinct contracts.
+Dictionary query contents, view-expression type provenance, full NLS behavior
+and application qualification remain open; definitions remain 60/62.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source

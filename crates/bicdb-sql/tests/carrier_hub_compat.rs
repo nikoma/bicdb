@@ -1210,15 +1210,22 @@ fn inner_join_with_where_pinned_primary_key_returns_the_joined_row() {
     ] {
         session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
-    let joined = "SELECT d.title, m.id FROM memberships AS m JOIN docs AS d ON d.hub_id = m.hub_id \
+    let joined =
+        "SELECT d.title, m.id FROM memberships AS m JOIN docs AS d ON d.hub_id = m.hub_id \
                   WHERE m.user_id = 100 AND d.id = ";
     assert_eq!(
         session_rows(&mut session, &format!("{joined}8")),
-        vec![vec![SqlValue::String("doc 8".to_string()), SqlValue::Int(1)]]
+        vec![vec![
+            SqlValue::String("doc 8".to_string()),
+            SqlValue::Int(1)
+        ]]
     );
     assert_eq!(
         session_rows(&mut session, &format!("{joined}7")),
-        vec![vec![SqlValue::String("doc 7".to_string()), SqlValue::Int(3)]]
+        vec![vec![
+            SqlValue::String("doc 7".to_string()),
+            SqlValue::Int(3)
+        ]]
     );
     assert!(session_rows(&mut session, &format!("{joined}99")).is_empty());
     // A LEFT JOIN keeps unmatched left rows as before.

@@ -3899,6 +3899,8 @@ enum UserTypeKind {
         #[serde(default)]
         not_null_constraint_name: Option<String>,
         constraints: Vec<DomainConstraintSchema>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        oracle_collection: Option<oracle::collections::CollectionSchema>,
     },
     Range {
         value: UserRangeValueSchema,
@@ -4100,7 +4102,7 @@ struct RoutineSchema {
     security_definer: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct RoutineTypeSchema {
     pg_type: String,
     #[serde(default)]

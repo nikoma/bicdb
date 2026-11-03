@@ -989,6 +989,14 @@ impl<'db> SqlSession<'db> {
         &mut self,
         create_domain: &sqlparser::ast::CreateDomain,
     ) -> Result<SqlResult> {
+        self.execute_create_domain_with_collection(create_domain, None)
+    }
+
+    pub(crate) fn execute_create_domain_with_collection(
+        &mut self,
+        create_domain: &sqlparser::ast::CreateDomain,
+        oracle_collection: Option<oracle::collections::CollectionSchema>,
+    ) -> Result<SqlResult> {
         let (schema_name, name) = user_type_identity(&create_domain.name)?;
         self.require_schema_create_privilege(&schema_name)?;
         if (schema_name == "pg_catalog" && pg_type_oid_by_name(&name).is_some())
@@ -1087,6 +1095,7 @@ impl<'db> SqlSession<'db> {
                 not_null,
                 not_null_constraint_name,
                 constraints,
+                oracle_collection,
             },
         };
         if let Some(default_expr) = &create_domain.default {

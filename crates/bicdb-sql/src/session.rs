@@ -2921,6 +2921,9 @@ impl<'db> SqlSession<'db> {
         if leading_keyword_bypasses_raw_probes(sql) {
             return self.execute_parsed_sql(sql);
         }
+        if let Some(result) = self.execute_raw_oracle_collection(sql)? {
+            return Ok(result);
+        }
         if let Some(result) = self.execute_raw_reset(sql)? {
             return Ok(result);
         }
@@ -3222,6 +3225,9 @@ impl<'db> SqlSession<'db> {
     ) -> Result<SqlResult> {
         let statements = split_sql_statements(sql);
         if statements.len() <= 1 {
+            if let Some(result) = self.execute_raw_oracle_collection(sql)? {
+                return Ok(result);
+            }
             if let Some(result) = self.execute_raw_extension_catalog(sql)? {
                 return Ok(result);
             }
@@ -3270,6 +3276,10 @@ impl<'db> SqlSession<'db> {
         let mut last_result = None;
         for statement in statements {
             self.cancellation.check()?;
+            if let Some(result) = self.execute_raw_oracle_collection(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
             if let Some(result) = self.execute_raw_extension_catalog(&statement)? {
                 last_result = Some(result);
                 continue;

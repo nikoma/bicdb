@@ -2378,6 +2378,15 @@ pub(crate) fn cast_value_to_domain_scalar(
         let value = cast_value_to_pg_type(value, base_type)?;
         apply_pg_type_modifier_with_context(value, base_type, type_modifier.as_ref(), false)?
     };
+    let value = if let UserTypeKind::Domain {
+        oracle_collection: Some(collection),
+        ..
+    } = &user_type.kind
+    {
+        oracle::collections::coerce(value, collection)?
+    } else {
+        value
+    };
     if !constraints.is_empty() {
         let record = Record::new("domain-value").with_metadata(serde_json::json!({
             "value": sql_value_to_json(value.clone()),

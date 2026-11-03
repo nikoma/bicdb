@@ -70,6 +70,7 @@ fn qualify_impl<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str, calls: 
                         | sqlparser::ast::ObjectType::View
                         | sqlparser::ast::ObjectType::Index
                         | sqlparser::ast::ObjectType::Sequence
+                        | sqlparser::ast::ObjectType::Type
                 ) {
                     for name in names {
                         self.pre_visit_relation(name)?;

@@ -10,6 +10,7 @@ pub(crate) mod autonomous;
 pub(crate) mod character_columns;
 #[cfg(test)]
 mod character_tests;
+pub(crate) mod collections;
 mod date_trunc;
 mod decode;
 mod dictionary;
@@ -46,6 +47,30 @@ fn metadata_v3() -> JsonValue {
 fn metadata_v4() -> JsonValue {
     serde_json::json!({"format":4,"profile":ORACLE_PREVIEW_PROFILE,"features":["oracle_temporal_columns_v1","oracle_character_columns_v1","oracle_hierarchical_queries_v1"]})
 }
+fn metadata_v5() -> JsonValue {
+    serde_json::json!({"format":5,"profile":ORACLE_PREVIEW_PROFILE,"features":["oracle_temporal_columns_v1","oracle_character_columns_v1","oracle_hierarchical_queries_v1","oracle_nested_table_types_v1"]})
+}
+fn metadata_v5_enabled(db: &BicDb) -> Result<bool> {
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+        Ok(record) => Ok(record.is_some_and(|r| r.metadata == metadata_v5())),
+    }
+}
+fn enable_metadata_v5(db: &mut BicDb) -> Result<()> {
+    if !preview_routine_language_enabled(db)? {
+        return Err(unsupported(
+            "Oracle collection types require the durable preview profile",
+        ));
+    }
+    if !metadata_v5_enabled(db)? {
+        db.insert(
+            PROFILE_COLLECTION,
+            Record::new("profile").with_metadata(metadata_v5()),
+        )?;
+    }
+    Ok(())
+}
 pub(crate) fn prepare_hierarchy_save(db: &mut BicDb, sql: &str) -> Result<()> {
     if !preview_routine_language_enabled(db)? {
         return Ok(());
@@ -57,16 +82,18 @@ pub(crate) fn prepare_hierarchy_save(db: &mut BicDb, sql: &str) -> Result<()> {
     {
         return Ok(());
     }
-    db.insert(
-        PROFILE_COLLECTION,
-        Record::new("profile").with_metadata(metadata_v4()),
-    )?;
+    if !metadata_v5_enabled(db)? {
+        db.insert(
+            PROFILE_COLLECTION,
+            Record::new("profile").with_metadata(metadata_v4()),
+        )?;
+    }
     Ok(())
 }
 fn metadata_v3_enabled(db: &BicDb) -> Result<bool> {
-    Ok(db
-        .get(PROFILE_COLLECTION, "profile")?
-        .is_some_and(|r| r.metadata == metadata_v3() || r.metadata == metadata_v4()))
+    Ok(db.get(PROFILE_COLLECTION, "profile")?.is_some_and(|r| {
+        r.metadata == metadata_v3() || r.metadata == metadata_v4() || r.metadata == metadata_v5()
+    }))
 }
 fn enable_metadata_v3(db: &mut BicDb) -> Result<()> {
     if !preview_routine_language_enabled(db)? {
@@ -87,14 +114,16 @@ fn matches_profile(metadata: &JsonValue, profile: &str) -> bool {
         || profile == ORACLE_PREVIEW_PROFILE
             && (*metadata == metadata_v2()
                 || *metadata == metadata_v3()
-                || *metadata == metadata_v4())
+                || *metadata == metadata_v4()
+                || *metadata == metadata_v5())
 }
 
 fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
         Ok(Some(record)) => Ok(record.metadata == metadata_v2()
             || record.metadata == metadata_v3()
-            || record.metadata == metadata_v4()),
+            || record.metadata == metadata_v4()
+            || record.metadata == metadata_v5()),
         Ok(None) | Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
     }
@@ -304,6 +333,9 @@ fn lower_profile_sql_in_namespace(
         },
     )?;
     if profile == ORACLE_PREVIEW_PROFILE {
+        if collections::declaration(db, &lowered)?.is_some() {
+            return Ok(lowered);
+        }
         let lowered = date_trunc::lower(db, &lowered, None)?;
         let lowered = lower_decode(db, &lowered, None)?;
         date_trunc::lower(db, &lowered, None)
@@ -320,6 +352,9 @@ pub fn lower_typed_native_sql(
     oids: &[i32],
 ) -> Result<String> {
     if profile == ORACLE_PREVIEW_PROFILE {
+        if collections::declaration(db, sql)?.is_some() {
+            return Ok(sql.to_string());
+        }
         let lowered = date_trunc::lower(db, sql, Some(oids))?;
         let lowered = lower_decode(db, &lowered, Some(oids))?;
         date_trunc::lower(db, &lowered, Some(oids))
@@ -345,6 +380,9 @@ pub fn lower_session_sql(
     let lowered = lower_profile_sql_in_namespace(db, sql, profile, Some(&schema))?;
     // Anonymous blocks are raw routine source, not a sqlparser Statement.
     // Their scoped SQL is namespace-bound by the interpreter before execution.
+    if collections::declaration(db, &lowered)?.is_some() {
+        return Ok(lowered);
+    }
     if raw_do_block_body(&lowered)?.is_some() {
         return Ok(lowered);
     }
@@ -358,6 +396,7 @@ pub fn lower_session_sql(
     }
     let mut statements = parse_statements(&lowered)?;
     namespaces::qualify_with_calls(&mut statements, &schema);
+    collections::lower_constructors(db, &mut statements, Some(&schema))?;
     date_trunc::rewrite(db, &mut statements)?;
     routine_arithmetic::lower_sql_builtins(db, &mut statements, None)?;
     date_trunc::rewrite(db, &mut statements)?;
@@ -622,6 +661,11 @@ fn lower_oracle_sql(
             .map(|statement| lower_oracle_sql(db, &join(statement), preview, namespace))
             .collect::<Result<Vec<_>>>()
             .map(|statements| statements.join("; "));
+    }
+    if preview {
+        if let Some(sql) = collections::lower_declaration(db, &source, namespace)? {
+            return Ok(sql);
+        }
     }
     // PostgreSQL drivers issue this transport housekeeping command even when
     // the application uses Oracle SQL. Prepared names are protocol identifiers;
@@ -1241,6 +1285,7 @@ fn canonical_tokens_with_routine_types(
                     continue;
                 }
                 match upper.as_str() {
+                    "TYPE" if preview && i == 1 && word(&source[0], "DROP") => pieces.push("TYPE".into()),
                     "SYS_GUID" if preview
                         && (i == 0 || source[i - 1] != Token::Period)
                         && source.get(i + 1) == Some(&Token::LParen)
@@ -1581,6 +1626,9 @@ fn lower_native(db: &BicDb, sql: &str, preview: bool, namespace: Option<&str>) -
     let mut statements = parse_statements(sql)?;
     if preview {
         syntax::rewrite(db, &mut statements, namespace)?;
+    }
+    if preview {
+        collections::lower_constructors(db, &mut statements, namespace)?;
     }
     if preview {
         struct Aliases;

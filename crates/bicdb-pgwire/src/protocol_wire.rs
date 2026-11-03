@@ -942,6 +942,11 @@ pub(crate) fn encode_result_value_with_memo(
 ) -> Result<Vec<u8>> {
     match format {
         0 => {
+            if let Some(base_oid) = bicdb_sql::pg_domain_text_base_oid(db, oid)? {
+                // The existing memo belongs to the logical result OID. Resolve
+                // the carrier with its own memo, including nested domains.
+                return encode_result_value_with_db(db, value, base_oid, format);
+            }
             let element_oid = if oid == 2277 {
                 // anyarray carries its element OID per value — never memoized.
                 anyarray_element_oid(value)

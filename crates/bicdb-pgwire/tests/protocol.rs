@@ -5847,6 +5847,37 @@ fn named_composites_and_arrays_round_trip_text_and_binary_codecs() {
 }
 
 #[test]
+fn domains_over_arrays_use_base_text_representation_through_nested_domains() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_query(
+        &mut client,
+        "CREATE DOMAIN wire_text_list AS text[]; CREATE DOMAIN wire_nested_list AS wire_text_list;",
+    );
+    read_until_ready(&mut client);
+    send_query(&mut client, "SELECT ARRAY['a,b',NULL,'a\"b']::wire_text_list, ARRAY[]::text[]::wire_nested_list, ARRAY['x',NULL]::wire_nested_list;");
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec![
+            "{\"a,b\",NULL,\"a\\\"b\"}".to_string(),
+            "{}".to_string(),
+            "{x,NULL}".to_string(),
+        ]]
+    );
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn enum_and_domain_arrays_round_trip_text_and_binary_codecs() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

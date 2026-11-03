@@ -1824,6 +1824,32 @@ pub fn pg_is_user_type_oid(db: &BicDb, oid: i32) -> Result<bool> {
     Ok(load_user_type_by_oid(db, i64::from(oid))?.is_some())
 }
 
+/// A domain uses its base type's text representation, including domains over
+/// arrays and over other domains. The logical result OID remains registered.
+pub fn pg_domain_text_base_oid(db: &BicDb, oid: i32) -> Result<Option<i32>> {
+    let Some(user_type) = load_user_type_by_oid(db, i64::from(oid))? else {
+        return Ok(None);
+    };
+    if user_type.oid != i64::from(oid) {
+        return Ok(None);
+    }
+    let UserTypeKind::Domain {
+        base_type,
+        base_user_type,
+        ..
+    } = user_type.kind
+    else {
+        return Ok(None);
+    };
+    let base_oid = base_user_type
+        .as_deref()
+        .map(UserTypeColumnSchema::type_oid)
+        .unwrap_or_else(|| pg_type_oid(&base_type));
+    i32::try_from(base_oid)
+        .map(Some)
+        .map_err(|_| SqlError::numeric_value_out_of_range("domain base type OID exceeds int4"))
+}
+
 pub fn pg_user_type_binary_base_oid(db: &BicDb, oid: i32) -> Result<Option<i32>> {
     let Some(user_type) = load_user_type_by_oid(db, i64::from(oid))? else {
         return Ok(None);
@@ -1939,6 +1965,7 @@ pub fn pg_user_range_values(
 
 pub(crate) fn save_user_type(db: &mut BicDb, user_type: &UserTypeSchema) -> Result<()> {
     oracle::temporal_columns::prepare_user_type_save(db, user_type)?;
+    oracle::collections::prepare_save(db, user_type)?;
     ensure_user_type_collection(db)?;
     db.insert(
         USER_TYPE_COLLECTION,

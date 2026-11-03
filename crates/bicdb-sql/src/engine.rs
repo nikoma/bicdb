@@ -40,6 +40,9 @@ struct RelationColumnMetadata {
 /// context. Entries remain `None` only when PostgreSQL's unknown-input rules
 /// have no stronger context; the wire layer then applies the protocol default.
 pub fn infer_parameter_types(db: &BicDb, sql: &str) -> Result<Vec<Option<String>>> {
+    if oracle::collections::declaration(db, sql)?.is_some() {
+        return Ok(Vec::new());
+    }
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     reject_oversized_sql(sql_for_parse)?;
@@ -84,6 +87,9 @@ pub fn infer_query_result_columns(
     db: &BicDb,
     sql: &str,
 ) -> Result<Option<Vec<(String, Option<String>)>>> {
+    if oracle::collections::declaration(db, sql)?.is_some() {
+        return Ok(None);
+    }
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     reject_oversized_sql(sql_for_parse)?;
@@ -129,6 +135,9 @@ fn infer_describe_columns(
     sql: &str,
     explicit_from: bool,
 ) -> Result<Option<Vec<(String, Option<String>)>>> {
+    if oracle::collections::declaration(db, sql)?.is_some() {
+        return Ok(None);
+    }
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     reject_oversized_sql(sql_for_parse)?;

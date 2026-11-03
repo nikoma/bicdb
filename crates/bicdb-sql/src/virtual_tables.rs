@@ -2432,7 +2432,7 @@ impl FieldRef {
                     .metadata
                     .get("metadata")
                     .cloned()
-                    .unwrap_or_else(|| record.metadata.clone()),
+                    .unwrap_or_else(|| record.metadata.clone()).into(),
             ),
             Self::Timestamp => record
                 .timestamp
@@ -2444,7 +2444,7 @@ impl FieldRef {
                 .map(|payload| {
                     SqlValue::Json(JsonValue::Array(
                         payload.iter().map(|byte| JsonValue::from(*byte)).collect(),
-                    ))
+                    ).into())
                 })
                 .or_else(|| {
                     json_path(&record.metadata, &["payload".to_string()]).map(json_to_sql_value)
@@ -2460,7 +2460,7 @@ impl FieldRef {
                             .filter_map(|value| serde_json::Number::from_f64(*value as f64))
                             .map(JsonValue::Number)
                             .collect(),
-                    ))
+                    ).into())
                 })
                 .unwrap_or(SqlValue::Null),
             Self::Geometry => record
@@ -2479,7 +2479,7 @@ impl FieldRef {
                 if pg_type == "jsonb" {
                     return Ok(json_value_for_key_case_insensitive(&record.metadata, name)
                         .cloned()
-                        .map(SqlValue::Json)
+                        .map(SqlValue::json)
                         .or_else(|| legacy_payload_json_column_value(record, name))
                         .unwrap_or_else(|| cast_primary_key_record_id(record, pg_type)));
                 }
@@ -2500,7 +2500,7 @@ impl FieldRef {
                             record
                                 .vector
                                 .as_ref()
-                                .map(|vector| SqlValue::Json(vector_json(vector)))
+                                .map(|vector| SqlValue::Json(vector_json(vector).into()))
                         } else {
                             None
                         }
@@ -2531,7 +2531,7 @@ impl FieldRef {
                             .and_then(JsonValue::as_str);
                         match stored_type {
                             Some("json") => storage_json_to_sql_value(value, "json"),
-                            _ => SqlValue::Json(value.clone()),
+                            _ => SqlValue::Json(value.clone().into()),
                         }
                     })
                     .or_else(|| legacy_payload_json_column_value(record, column))
@@ -5788,9 +5788,10 @@ pub(crate) fn index_value_from_sql(value: SqlValue) -> Result<IndexValue> {
             serde_json::to_string(&value).expect("tsquery index value is serializable"),
         ),
         SqlValue::JsonText(value) => IndexValue::String(value.raw().to_string()),
-        SqlValue::Json(JsonValue::Null) => IndexValue::Null,
-        SqlValue::Json(JsonValue::Bool(value)) => IndexValue::Bool(value),
-        SqlValue::Json(JsonValue::Number(value)) => value
+        SqlValue::Json(json) => match SqlValue::into_json_value(json) {
+        JsonValue::Null => IndexValue::Null,
+        JsonValue::Bool(value) => IndexValue::Bool(value),
+        JsonValue::Number(value) => value
             .as_i64()
             .map(IndexValue::Int)
             .or_else(|| {
@@ -5799,10 +5800,11 @@ pub(crate) fn index_value_from_sql(value: SqlValue) -> Result<IndexValue> {
                     .map(|value| IndexValue::Float(ordered_f64(value)))
             })
             .unwrap_or(IndexValue::Null),
-        SqlValue::Json(JsonValue::String(value)) => IndexValue::String(value),
-        SqlValue::Json(value @ (JsonValue::Array(_) | JsonValue::Object(_))) => {
+        JsonValue::String(value) => IndexValue::String(value),
+        value @ (JsonValue::Array(_) | JsonValue::Object(_)) => {
             IndexValue::String(value.to_string())
         }
+        },
         SqlValue::Geometry(value) => IndexValue::String(value.to_wkt()),
         SqlValue::Composite(value) => {
             return Err(SqlError::Unsupported(format!(

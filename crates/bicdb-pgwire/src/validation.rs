@@ -2295,7 +2295,7 @@ mod tests {
 
     #[test]
     fn json_arrays_render_as_postgres_array_text_for_array_results() {
-        let value = SqlValue::Json(json!(["public", "schema with space", "NULL", "a,b"]));
+        let value = SqlValue::json(json!(["public", "schema with space", "NULL", "a,b"]).into());
 
         assert_eq!(
             String::from_utf8(encode_text_result_value(&value, NAME_ARRAY_OID).unwrap()).unwrap(),
@@ -2303,17 +2303,17 @@ mod tests {
         );
         assert_eq!(
             String::from_utf8(
-                encode_text_result_value(&SqlValue::Json(json!([[1, 2], [3, 4]])), 1007).unwrap()
+                encode_text_result_value(&SqlValue::json(json!([[1, 2], [3, 4]]).into()), 1007).unwrap()
             )
             .unwrap(),
             "{{1,2},{3,4}}"
         );
-        let bounded = SqlValue::Json(json!({
+        let bounded = SqlValue::json(json!({
             "$bicdb_array_input": {
                 "lower_bounds": [0, 5],
                 "value": [[1, 2], [3, 4]],
             }
-        }));
+        }).into());
         assert_eq!(
             String::from_utf8(encode_text_result_value(&bounded, 1007).unwrap()).unwrap(),
             "[0:1][5:6]={{1,2},{3,4}}"
@@ -2415,7 +2415,7 @@ mod tests {
         ];
 
         for (array_oid, value, text, binary_hex, decoded) in cases {
-            let value = SqlValue::Json(value);
+            let value = SqlValue::Json(value.into());
             assert_eq!(
                 encode_text_result_value(&value, array_oid).unwrap(),
                 text.as_bytes(),
@@ -2490,7 +2490,7 @@ mod tests {
         ];
 
         for (array_oid, value, text, binary_hex, decoded) in cases {
-            let value = SqlValue::Json(value);
+            let value = SqlValue::Json(value.into());
             assert_eq!(
                 encode_text_result_value(&value, array_oid).unwrap(),
                 text.as_bytes(),
@@ -2560,7 +2560,7 @@ mod tests {
             quote_sql_string(r#"[1:2]={"portal name",""}"#)
         );
         assert_eq!(
-            encode_binary_result_value(&SqlValue::Json(json!(["portal name", ""])), 2201).unwrap(),
+            encode_binary_result_value(&SqlValue::json(json!(["portal name", ""]).into()), 2201).unwrap(),
             refcursor_array
         );
 
@@ -2848,7 +2848,7 @@ mod tests {
                 "'[1:2]={\"0\",\"18446744073709551615\"}'",
             ),
         ] {
-            let binary = encode_binary_result_value(&SqlValue::Json(values), array_oid).unwrap();
+            let binary = encode_binary_result_value(&SqlValue::Json(values.into()), array_oid).unwrap();
             assert_eq!(i32::from_be_bytes(binary[0..4].try_into().unwrap()), 1);
             assert_eq!(
                 i32::from_be_bytes(binary[8..12].try_into().unwrap()),
@@ -2962,12 +2962,12 @@ mod tests {
             decode_binary_parameter(&payload, 1007).unwrap(),
             quote_sql_string(r#"[0:1][5:6]={{"1",NULL},{"3","4"}}"#)
         );
-        let value = SqlValue::Json(json!({
+        let value = SqlValue::json(json!({
             "$bicdb_array_input": {
                 "lower_bounds": [0, 5],
                 "value": [[1, null], [3, 4]],
             }
-        }));
+        }).into());
         assert_eq!(encode_binary_result_value(&value, 1007).unwrap(), payload);
 
         let empty = [
@@ -2978,7 +2978,7 @@ mod tests {
         .concat();
         assert_eq!(decode_binary_parameter(&empty, 1007).unwrap(), "'{}'");
         assert_eq!(
-            encode_binary_result_value(&SqlValue::Json(json!([])), 1007).unwrap(),
+            encode_binary_result_value(&SqlValue::json(json!([]).into()), 1007).unwrap(),
             empty
         );
     }
@@ -3016,14 +3016,14 @@ mod tests {
             decode_binary_parameter(&null_without_flag, 1007).unwrap(),
             quote_sql_string("[1:1]={NULL}"),
         );
-        assert!(encode_binary_result_value(&SqlValue::Json(json!([[1, 2], [3]])), 1007).is_err());
+        assert!(encode_binary_result_value(&SqlValue::json(json!([[1, 2], [3]]).into()), 1007).is_err());
         assert!(encode_binary_result_value(
-            &SqlValue::Json(json!({
+            &SqlValue::json(json!({
                 "$bicdb_array_input": {
                     "lower_bounds": [0],
                     "value": [[1, 2], [3, 4]],
                 }
-            })),
+            }).into()),
             1007
         )
         .is_err());
@@ -3592,7 +3592,7 @@ $$
             u32::try_from(oid_number).unwrap().to_be_bytes()
         );
 
-        let array = SqlValue::Json(serde_json::json!([oid_number]));
+        let array = SqlValue::json(serde_json::json!([oid_number]).into());
         assert_eq!(
             encode_result_value_with_db(&db, &array, 2210, 0).unwrap(),
             b"{wire_alias_target}"

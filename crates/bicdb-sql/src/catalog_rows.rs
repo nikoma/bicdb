@@ -1071,14 +1071,14 @@ pub(crate) fn pg_stats_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue>
 }
 
 fn pg_stats_anyarray(values: Vec<JsonValue>, element_oid: i32) -> SqlValue {
-    SqlValue::Json(serde_json::json!({
+    SqlValue::json(serde_json::json!({
         "$bicdb_array_input": {
             "value": values,
             "lower_bounds": [1],
             "element_oid": element_oid,
             "declared_type": "anyarray",
         }
-    }))
+    }).into())
 }
 
 pub(crate) fn catalog_name_matches(names: Option<&BTreeSet<String>>, name: &str) -> bool {
@@ -5081,7 +5081,7 @@ pub(crate) fn constraint_array_value(attnums: &[i64]) -> SqlValue {
     if attnums.is_empty() {
         SqlValue::Null
     } else {
-        SqlValue::Json(serde_json::json!(attnums))
+        SqlValue::json(serde_json::json!(attnums).into())
     }
 }
 
@@ -5643,7 +5643,7 @@ pub(crate) fn sql_string_array_value(values: &[String]) -> SqlValue {
             .cloned()
             .map(JsonValue::String)
             .collect::<Vec<_>>(),
-    ))
+    ).into())
 }
 
 pub(crate) fn constraint_definition_value(
@@ -5887,9 +5887,12 @@ pub(crate) fn check_definition_literal_expr(expr: &Expr) -> Option<String> {
 
 pub(crate) fn constraint_attnums_from_value(value: &SqlValue) -> Vec<i64> {
     match value {
-        SqlValue::Json(JsonValue::Array(values)) => {
-            values.iter().filter_map(JsonValue::as_i64).collect()
-        }
+        SqlValue::Json(json) if json.is_array() => json
+            .as_array()
+            .expect("checked array")
+            .iter()
+            .filter_map(JsonValue::as_i64)
+            .collect(),
         SqlValue::String(value) => value
             .split_whitespace()
             .filter_map(|part| part.parse().ok())
@@ -6430,7 +6433,7 @@ pub(crate) fn graph_node_rows(db: &BicDb) -> Vec<BTreeMap<String, SqlValue>> {
                 ("projection", SqlValue::String(projection)),
                 ("id", SqlValue::String(node.id)),
                 ("label", SqlValue::String(node.label)),
-                ("properties", SqlValue::Json(node.properties)),
+                ("properties", SqlValue::Json(node.properties.into())),
             ])
         })
         .collect()
@@ -6446,7 +6449,7 @@ pub(crate) fn graph_edge_rows(db: &BicDb) -> Vec<BTreeMap<String, SqlValue>> {
                 ("from", SqlValue::String(edge.from)),
                 ("to", SqlValue::String(edge.to)),
                 ("label", SqlValue::String(edge.label)),
-                ("properties", SqlValue::Json(edge.properties)),
+                ("properties", SqlValue::Json(edge.properties.into())),
                 (
                     "timestamp",
                     edge.timestamp.map(SqlValue::Int).unwrap_or(SqlValue::Null),

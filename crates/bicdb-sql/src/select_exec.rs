@@ -3061,7 +3061,7 @@ pub(crate) fn finish_json_object_agg(
         }
     }
     if binary {
-        Ok(SqlValue::Json(JsonValue::Object(binary_object)))
+        Ok(SqlValue::Json(JsonValue::Object(binary_object).into()))
     } else {
         Ok(SqlValue::JsonText(
             PgJsonText::parse(format!("{{ {} }}", text_entries.join(", ")))
@@ -3211,7 +3211,7 @@ pub(crate) fn finish_json_agg(
     if binary {
         Ok(SqlValue::Json(JsonValue::Array(
             values.into_iter().map(sql_value_to_json).collect(),
-        )))
+        ).into()))
     } else {
         let raw = format!(
             "[{}]",

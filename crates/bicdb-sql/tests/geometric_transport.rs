@@ -4,13 +4,13 @@ use serde_json::json;
 
 fn expected_arrays() -> Vec<SqlValue> {
     vec![
-        SqlValue::Json(json!(["(1,2)", "(3,4)"])),
-        SqlValue::Json(json!(["{1,2,3}", "{4,5,6}"])),
-        SqlValue::Json(json!(["[(1,2),(3,4)]", "[(5,6),(7,8)]"])),
-        SqlValue::Json(json!(["(3,4),(1,2)", "(7,8),(5,6)"])),
-        SqlValue::Json(json!(["[(1,2),(3,4)]", "((5,6),(7,8))"])),
-        SqlValue::Json(json!(["((1,2),(3,4),(5,6))", "((7,8),(9,10),(11,12))"])),
-        SqlValue::Json(json!(["<(1,2),3>", "<(4,5),6>"])),
+        SqlValue::json(json!(["(1,2)", "(3,4)"])),
+        SqlValue::json(json!(["{1,2,3}", "{4,5,6}"])),
+        SqlValue::json(json!(["[(1,2),(3,4)]", "[(5,6),(7,8)]"])),
+        SqlValue::json(json!(["(3,4),(1,2)", "(7,8),(5,6)"])),
+        SqlValue::json(json!(["[(1,2),(3,4)]", "((5,6),(7,8))"])),
+        SqlValue::json(json!(["((1,2),(3,4),(5,6))", "((7,8),(9,10),(11,12))"])),
+        SqlValue::json(json!(["<(1,2),3>", "<(4,5),6>"])),
     ]
 }
 

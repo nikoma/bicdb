@@ -207,7 +207,7 @@ fn catalog_reference_arrays_store_oids_and_render_names() {
     drop(session);
     assert_eq!(
         render_oid_alias_array_value(&db, "regclass", &value).unwrap(),
-        SqlValue::Json(serde_json::json!(["alias_array_target", "pg_type", null]))
+        SqlValue::json(serde_json::json!(["alias_array_target", "pg_type", null]))
     );
 }
 

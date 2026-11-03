@@ -403,7 +403,7 @@ pub(crate) fn concat_array_values(left: &SqlValue, right: &SqlValue) -> Result<S
 pub(crate) fn array_value(values: Vec<SqlValue>) -> SqlValue {
     SqlValue::Json(JsonValue::Array(
         values.into_iter().map(sql_value_to_json).collect(),
-    ))
+    ).into())
 }
 
 pub(crate) fn array_value_with_lower_bounds(
@@ -419,14 +419,14 @@ pub(crate) fn array_json_value_with_lower_bounds(
     lower_bounds: Vec<i32>,
 ) -> SqlValue {
     if value.as_array().is_some_and(Vec::is_empty) || lower_bounds.iter().all(|lower| *lower == 1) {
-        SqlValue::Json(value)
+        SqlValue::Json(value.into())
     } else {
-        SqlValue::Json(serde_json::json!({
+        SqlValue::json(serde_json::json!({
             "$bicdb_array_input": {
                 "lower_bounds": lower_bounds,
                 "value": value,
             }
-        }))
+        }).into())
     }
 }
 
@@ -938,11 +938,12 @@ pub(crate) fn array_json_parts<'a>(
         return Ok(None);
     }
     match value {
-        SqlValue::Json(value @ JsonValue::Array(_)) => {
+        SqlValue::Json(json) if json.is_array() => {
+            let value: &JsonValue = json;
             Ok(Some((value, vec![1; array_dimensions(value).len()])))
         }
-        SqlValue::Json(JsonValue::Object(object)) => {
-            let input = object
+        SqlValue::Json(json) if json.is_object() => {
+            let input = json
                 .get("$bicdb_array_input")
                 .and_then(JsonValue::as_object)
                 .ok_or_else(|| {
@@ -1394,7 +1395,9 @@ pub(crate) fn cast_value_with_assignment_semantics(
 pub(crate) fn decode_typed_storage_envelope(value: SqlValue) -> SqlValue {
     let stored = match &value {
         SqlValue::Json(stored) => Some(stored.clone()),
-        SqlValue::String(text) => serde_json::from_str::<JsonValue>(text).ok(),
+        SqlValue::String(text) => serde_json::from_str::<JsonValue>(text)
+            .ok()
+            .map(std::sync::Arc::new),
         _ => None,
     };
     let Some(stored) = stored else {
@@ -1771,12 +1774,12 @@ pub(crate) fn postgres_array_text_value(value: &SqlValue, delimiter: char) -> Re
     }
 
     let value = match value {
-        SqlValue::Json(JsonValue::Object(object)) => object
+        SqlValue::Json(json) if json.is_object() => json
             .get("$bicdb_array_input")
             .and_then(JsonValue::as_object)
             .and_then(|input| input.get("value"))
             .ok_or_else(|| invalid_array_text("internal array value"))?,
-        SqlValue::Json(value) => value,
+        SqlValue::Json(value) => &**value,
         _ => return Err(invalid_array_text(&value.to_cell())),
     };
     scalar(value, delimiter)
@@ -2046,7 +2049,7 @@ pub(crate) fn cast_value_to_user_range_array(
         array: false,
         ..user_type.clone()
     };
-    canonicalize(&mut json, &scalar_type, definition, multirange)?;
+    canonicalize(std::sync::Arc::make_mut(&mut json), &scalar_type, definition, multirange)?;
     Ok(SqlValue::Json(json))
 }
 
@@ -2079,7 +2082,7 @@ pub(crate) fn cast_value_to_composite_scalar(
                     .into_iter()
                     .map(|field| field.value)
                     .collect()
-            } else if let JsonValue::Object(values) = value {
+            } else if let JsonValue::Object(values) = &*value {
                 attributes
                     .iter()
                     .map(|attribute| {
@@ -2177,9 +2180,10 @@ pub(crate) fn cast_value_to_composite_array(
             }
         }
     }
-    let SqlValue::Json(mut value) = value else {
+    let SqlValue::Json(value) = value else {
         unreachable!("array coercion always returns JSON")
     };
+    let mut value = SqlValue::into_json_value(value);
     if let Some(input) = value
         .as_object_mut()
         .and_then(|object| object.get_mut("$bicdb_array_input"))
@@ -2192,13 +2196,13 @@ pub(crate) fn cast_value_to_composite_array(
             "value".to_string(),
             cast_elements(array, &scalar_type, attributes)?,
         );
-        return Ok(SqlValue::Json(value));
+        return Ok(SqlValue::json(value));
     }
     Ok(SqlValue::Json(cast_elements(
         value,
         &scalar_type,
         attributes,
-    )?))
+    )?.into()))
 }
 
 pub(crate) fn composite_array_element_json(value: SqlValue) -> JsonValue {
@@ -2321,9 +2325,10 @@ pub(crate) fn cast_value_to_domain_array(
         array: false,
         ..user_type.clone()
     };
-    let SqlValue::Json(mut value) = value else {
+    let SqlValue::Json(value) = value else {
         unreachable!("array coercion always returns JSON")
     };
+    let mut value = SqlValue::into_json_value(value);
     if let Some(input) = value
         .as_object_mut()
         .and_then(|object| object.get_mut("$bicdb_array_input"))
@@ -2333,9 +2338,9 @@ pub(crate) fn cast_value_to_domain_array(
             .remove("value")
             .ok_or_else(|| invalid_array_text("internal domain array"))?;
         input.insert("value".to_string(), cast_elements(array, &scalar_type)?);
-        return Ok(SqlValue::Json(value));
+        return Ok(SqlValue::json(value));
     }
-    Ok(SqlValue::Json(cast_elements(value, &scalar_type)?))
+    Ok(SqlValue::Json(cast_elements(value, &scalar_type)?.into()))
 }
 
 pub(crate) fn cast_value_to_domain_scalar(
@@ -2467,7 +2472,12 @@ pub(crate) fn apply_pg_type_modifier_with_context(
     if modifier.is_some() {
         if let Some(element_type) = pg_type.strip_suffix("[]") {
             if let SqlValue::Json(mut array) = value {
-                apply_array_element_modifier(&mut array, element_type, modifier, explicit_cast)?;
+                apply_array_element_modifier(
+                    std::sync::Arc::make_mut(&mut array),
+                    element_type,
+                    modifier,
+                    explicit_cast,
+                )?;
                 return Ok(SqlValue::Json(array));
             }
             return Ok(value);
@@ -2484,7 +2494,7 @@ pub(crate) fn apply_pg_type_modifier_with_context(
                 ));
             }
         }
-        return Ok(SqlValue::Json(vector_json(&vector)));
+        return Ok(SqlValue::Json(vector_json(&vector).into()));
     }
     if matches!(pg_type, "bpchar" | "varchar") {
         let Some(PgTypeModifier::Character { length }) = modifier else {
@@ -2703,7 +2713,7 @@ pub(crate) fn cast_expr_value_with_db(
         .is_some_and(|target| target.ends_with("[]"))
         && matches!(
             &value,
-            SqlValue::Json(JsonValue::Object(object)) if object.contains_key("$bicdb_array_input")
+            SqlValue::Json(json) if json.as_object().is_some_and(|object| object.contains_key("$bicdb_array_input"))
         );
     if !internal_array_input {
         if let (Some(source), Some(target)) = (source_pg_type.as_deref(), target_pg_type.as_deref())

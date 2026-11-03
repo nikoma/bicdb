@@ -112,7 +112,7 @@ impl<'db> SqlSession<'db> {
             let value = record_column_value(record, schema, &column.name);
             object.insert(column.name.clone(), crate::jsonb::sql_value_to_json(&value));
         }
-        SqlValue::Json(JsonValue::Object(object))
+        SqlValue::Json(JsonValue::Object(object).into())
     }
 
     fn row_triggers_matching(
@@ -266,9 +266,16 @@ impl<'db> SqlSession<'db> {
         original: &SqlValue,
         returned: &SqlValue,
     ) -> Result<()> {
-        let (SqlValue::Json(JsonValue::Object(before)), SqlValue::Json(JsonValue::Object(after))) =
-            (original, returned)
-        else {
+        let (Some(before), Some(after)) = (
+            match original {
+                SqlValue::Json(json) => json.as_object(),
+                _ => None,
+            },
+            match returned {
+                SqlValue::Json(json) => json.as_object(),
+                _ => None,
+            },
+        ) else {
             return Ok(());
         };
         for (column, value) in after {

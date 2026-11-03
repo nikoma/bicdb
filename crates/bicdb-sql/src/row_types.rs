@@ -497,7 +497,7 @@ pub(crate) fn populate_record_value(
     };
     let json = match json {
         SqlValue::Null => return Ok(base),
-        SqlValue::Json(json) => json,
+        SqlValue::Json(json) => SqlValue::into_json_value(json),
         SqlValue::JsonText(json) => json.parsed().clone(),
         SqlValue::String(text) => serde_json::from_str(&text)
             .map_err(|error| SqlError::invalid_text_representation("json", error.to_string()))?,
@@ -533,7 +533,7 @@ pub(crate) fn populate_record_value(
             let value = match object.get(&attribute.name) {
                 // json/jsonb attributes keep the JSON value itself.
                 Some(value) if matches!(attribute.pg_type.as_str(), "json" | "jsonb") => {
-                    SqlValue::Json(value.clone())
+                    SqlValue::Json(value.clone().into())
                 }
                 Some(value) => json_to_sql_value(value),
                 None => base_fields

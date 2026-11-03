@@ -208,7 +208,7 @@ fn named_composite_types_create_cast_store_and_report_catalogs() {
         assert_eq!(selected.rows[0][3], SqlValue::Int(42));
         assert_eq!(
             selected.rows[0][4],
-            SqlValue::Json(serde_json::json!(["admin", "clinician"]))
+            SqlValue::json(serde_json::json!(["admin", "clinician"]).into())
         );
         assert_eq!(
             selected.rows[0][0].to_cell(),
@@ -372,7 +372,7 @@ fn named_composite_attributes_evolve_existing_scalar_array_and_nested_values() {
             .unwrap();
         assert_eq!(added.rows[0][0].to_cell(), "(7,scalar,)");
         assert_eq!(added.rows[0][2].to_cell(), "(\"(9,nested,)\")");
-        let SqlValue::Json(serde_json::Value::Array(array)) = &added.rows[0][1] else {
+        let Some(array) = (match &added.rows[0][1] { SqlValue::Json(json) => json.as_array(), _ => None }) else {
             panic!("composite array was not retained as a typed JSON array")
         };
         let array_value = pg_composite_from_array_json(&array[0]).unwrap();
@@ -395,7 +395,7 @@ fn named_composite_attributes_evolve_existing_scalar_array_and_nested_values() {
         let renamed = session
             .execute("SELECT items, row_to_json(wrapper) FROM dt_evolving_values")
             .unwrap();
-        let SqlValue::Json(serde_json::Value::Array(array)) = &renamed.rows[0][0] else {
+        let Some(array) = (match &renamed.rows[0][0] { SqlValue::Json(json) => json.as_array(), _ => None }) else {
             panic!("composite array was not retained as a typed JSON array")
         };
         let array_value = pg_composite_from_array_json(&array[0]).unwrap();
@@ -443,7 +443,7 @@ fn named_composite_attributes_evolve_existing_scalar_array_and_nested_values() {
         let after_drop = session
             .execute("SELECT items, wrapper FROM dt_evolving_values")
             .unwrap();
-        let SqlValue::Json(serde_json::Value::Array(array)) = &after_drop.rows[0][0] else {
+        let Some(array) = (match &after_drop.rows[0][0] { SqlValue::Json(json) => json.as_array(), _ => None }) else {
             panic!("composite array was not retained as a typed JSON array")
         };
         assert_eq!(

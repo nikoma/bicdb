@@ -564,7 +564,7 @@ fn sql_value_json(value: &SqlValue) -> JsonValue {
         SqlValue::Float(value) => serde_json::Number::from_f64(*value)
             .map(JsonValue::Number)
             .unwrap_or(JsonValue::Null),
-        SqlValue::Json(value) => value.clone(),
+        SqlValue::Json(value) => (**value).clone(),
         _ => JsonValue::String(value.to_cell()),
     }
 }
@@ -776,7 +776,7 @@ pub(crate) fn eval_xml_function_value(
                 SqlValue::Null
             } else {
                 let namespaces = args.get(2).and_then(|value| match value {
-                    SqlValue::Json(value) => Some(value),
+                    SqlValue::Json(value) => Some(&**value),
                     _ => None,
                 });
                 SqlValue::Json(JsonValue::Array(
@@ -784,7 +784,7 @@ pub(crate) fn eval_xml_function_value(
                         .into_iter()
                         .map(JsonValue::String)
                         .collect(),
-                ))
+                ).into())
             }
         }
         "xpath_exists" | "bicdb_xmlexists" => {
@@ -792,7 +792,7 @@ pub(crate) fn eval_xml_function_value(
                 SqlValue::Null
             } else {
                 let namespaces = args.get(2).and_then(|value| match value {
-                    SqlValue::Json(value) => Some(value),
+                    SqlValue::Json(value) => Some(&**value),
                     _ => None,
                 });
                 let package = parse_xpath_document(&xml_text(&args[1]))?;
@@ -848,7 +848,7 @@ pub(crate) fn eval_xml_function_value(
                         .unwrap_or_default(),
                 };
                 let namespaces = args.get(3).and_then(|value| match value {
-                    SqlValue::Json(value) => Some(value),
+                    SqlValue::Json(value) => Some(&**value),
                     _ => None,
                 });
                 let rows = xpath_results(&document, &row_path, namespaces)?;
@@ -912,7 +912,7 @@ pub(crate) fn eval_xml_function_value(
                     }
                     output.push(JsonValue::Object(object));
                 }
-                SqlValue::Json(JsonValue::Array(output))
+                SqlValue::Json(JsonValue::Array(output).into())
             }
         }
         "xml_in" | "bicdb_xmlparse_content" | "bicdb_xmlparse_document" => {

@@ -1546,7 +1546,7 @@ pub(crate) fn json_set_function_values(
     }
     let json = match value {
         SqlValue::Null => return Ok(Vec::new()),
-        SqlValue::Json(value) if !function.accepts_json_text() => value,
+        SqlValue::Json(value) if !function.accepts_json_text() => SqlValue::into_json_value(value),
         _ => {
             return Err(json_set_function_type_error(
                 function,
@@ -1586,7 +1586,7 @@ pub(crate) fn json_set_function_values(
                         if function.accepts_json_text() {
                             SqlValue::JsonText(PgJsonText::from_value(value))
                         } else {
-                            SqlValue::Json(value)
+                            SqlValue::Json(value.into())
                         }
                     })
                     .collect()),
@@ -1684,7 +1684,7 @@ pub(crate) fn json_set_function_rows(
     ) {
         let value = match value {
             SqlValue::Null => return Ok(Vec::new()),
-            SqlValue::Json(value) => value,
+            SqlValue::Json(value) => SqlValue::into_json_value(value),
             _ => {
                 return Err(json_set_function_type_error(
                     function,
@@ -1712,7 +1712,7 @@ pub(crate) fn json_set_function_rows(
             .into_iter()
             .map(|(key, value)| {
                 let value = if matches!(function, JsonSetReturningFunction::JsonbEach) {
-                    SqlValue::Json(value)
+                    SqlValue::Json(value.into())
                 } else {
                     match value {
                         JsonValue::Null => SqlValue::Null,
@@ -1783,7 +1783,9 @@ pub(crate) fn json_record_function_rows(
     })?;
     let base_row = match base {
         None | Some(SqlValue::Null) => vec![SqlValue::Null; alias.columns.len()],
-        Some(SqlValue::Json(JsonValue::Object(object))) => alias
+        Some(SqlValue::Json(json)) if json.is_object() => {
+            let object = json.as_object().expect("checked object");
+            alias
             .columns
             .iter()
             .map(|column| {
@@ -1792,7 +1794,8 @@ pub(crate) fn json_record_function_rows(
                     .map(json_to_sql_value)
                     .unwrap_or(SqlValue::Null)
             })
-            .collect(),
+            .collect()
+        }
         Some(_) => {
             return Err(json_set_function_type_error(
                 call.function,
@@ -1810,7 +1813,7 @@ pub(crate) fn json_record_function_rows(
         }
         SqlValue::JsonText(value) => value,
         SqlValue::Json(value) if !call.function.accepts_json_text() => {
-            PgJsonText::from_value(value)
+            PgJsonText::from_value(SqlValue::into_json_value(value))
         }
         _ => {
             return Err(json_set_function_type_error(
@@ -1897,7 +1900,7 @@ fn json_record_raw_input(raw: &str, pg_type: &str) -> Result<SqlValue> {
     Ok(match value.parsed() {
         JsonValue::Null => SqlValue::Null,
         JsonValue::String(value) => SqlValue::String(value.clone()),
-        JsonValue::Array(_) if pg_type.ends_with("[]") => SqlValue::Json(value.parsed().clone()),
+        JsonValue::Array(_) if pg_type.ends_with("[]") => SqlValue::Json(value.parsed().clone().into()),
         _ if pg_type == "json" => SqlValue::JsonText(value),
         _ if pg_type == "jsonb" => SqlValue::JsonText(value),
         _ => SqlValue::String(value.raw().trim().to_string()),

@@ -19,7 +19,7 @@ fn scalar(db: &mut BicDb, sql: &str) -> SqlValue {
 
 fn scalar_json(db: &mut BicDb, sql: &str) -> JsonValue {
     match scalar(db, sql) {
-        SqlValue::Json(value) => value,
+        SqlValue::Json(value) => SqlValue::into_json_value(value),
         SqlValue::String(text) => serde_json::from_str(&text).expect("json result"),
         other => panic!("expected json from {sql}, got {other:?}"),
     }

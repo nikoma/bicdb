@@ -231,7 +231,7 @@ impl SqlSession<'_> {
             }
         }
         if !params.is_empty() {
-            frame.set(cursor_name, SqlValue::Json(JsonValue::Object(qualified)));
+            frame.set(cursor_name, SqlValue::json(JsonValue::Object(qualified)));
         }
         let result = self.execute_routine_query_unowned(frame, query);
         frame.values = saved_values;

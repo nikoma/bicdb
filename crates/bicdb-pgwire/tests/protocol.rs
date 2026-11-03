@@ -1406,13 +1406,13 @@ fn copy_arrays_roundtrip_quoted_elements_bounds_and_restart() {
             .unwrap()
             .rows,
         vec![vec![
-            SqlValue::Json(json!(["alpha,beta", "brace{value}", null])),
-            SqlValue::Json(json!({
+            SqlValue::json(json!(["alpha,beta", "brace{value}", null]).into()),
+            SqlValue::json(json!({
                 "$bicdb_array_input": {
                     "lower_bounds": [0],
                     "value": [10, 20],
                 }
-            })),
+            }).into()),
             SqlValue::Int(0),
         ]],
     );

@@ -1209,7 +1209,7 @@ mod tests {
             SqlValue::Int(-42),
             SqlValue::Float(2.5),
             SqlValue::String("héllo\0world".to_string()),
-            SqlValue::Json(serde_json::json!({"a": [1, null, "x"]})),
+            SqlValue::json(serde_json::json!({"a": [1, null, "x"]})),
         ];
         let mut buffer = Vec::new();
         write_entry(&mut buffer, b"k", &row).unwrap();

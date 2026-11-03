@@ -555,11 +555,11 @@ fn postgres_current_schemas_function_is_supported() {
             .execute("SELECT current_schemas(false)")
             .unwrap()
             .rows,
-        vec![vec![SqlValue::Json(json!(["public"]))]]
+        vec![vec![SqlValue::json(json!(["public"]))]]
     );
     assert_eq!(
         engine.execute("SELECT current_schemas(true)").unwrap().rows,
-        vec![vec![SqlValue::Json(json!(["pg_catalog", "public"]))]]
+        vec![vec![SqlValue::json(json!(["pg_catalog", "public"]))]]
     );
 }
 

@@ -1285,31 +1285,31 @@ fn rewrite_composite_value(
                     mutation,
                 )
                 .map(composite_array_element_json)
-                .map(SqlValue::Json);
+                .map(SqlValue::json);
             }
-            match value {
+            match SqlValue::into_json_value(value) {
                 JsonValue::Array(values) => values
                     .into_iter()
                     .map(|value| {
                         rewrite_composite_value(
-                            SqlValue::Json(value),
+                            SqlValue::Json(value.into()),
                             target_oid,
                             target_name,
                             mutation,
                         )
                         .map(|value| match value {
-                            SqlValue::Json(value) => value,
+                            SqlValue::Json(value) => SqlValue::into_json_value(value),
                             value => sql_value_to_json(value),
                         })
                     })
                     .collect::<Result<Vec<_>>>()
                     .map(JsonValue::Array)
-                    .map(SqlValue::Json),
+                    .map(SqlValue::json),
                 JsonValue::Object(values) => values
                     .into_iter()
                     .map(|(key, value)| {
                         rewrite_composite_value(
-                            SqlValue::Json(value),
+                            SqlValue::Json(value.into()),
                             target_oid,
                             target_name,
                             mutation,
@@ -1318,7 +1318,7 @@ fn rewrite_composite_value(
                             (
                                 key,
                                 match value {
-                                    SqlValue::Json(value) => value,
+                                    SqlValue::Json(value) => SqlValue::into_json_value(value),
                                     value => sql_value_to_json(value),
                                 },
                             )
@@ -1326,8 +1326,8 @@ fn rewrite_composite_value(
                     })
                     .collect::<Result<serde_json::Map<_, _>>>()
                     .map(JsonValue::Object)
-                    .map(SqlValue::Json),
-                value => Ok(SqlValue::Json(value)),
+                    .map(SqlValue::json),
+                value => Ok(SqlValue::json(value)),
             }
         }
         value => Ok(value),
@@ -1999,7 +1999,7 @@ pub(crate) fn rename_enum_label_in_value(value: &mut SqlValue, from: &str, to: &
             *label = to.to_string();
             true
         }
-        SqlValue::Json(value) => rename_json(value, from, to),
+        SqlValue::Json(value) => rename_json(std::sync::Arc::make_mut(value), from, to),
         _ => false,
     }
 }

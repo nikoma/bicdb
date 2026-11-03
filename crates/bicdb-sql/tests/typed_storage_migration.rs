@@ -95,7 +95,7 @@ fn legacy_typed_storage_migrates_to_the_v1_golden_idempotently() {
     assert_eq!(rows[0][5], SqlValue::String("00101".to_string()));
     assert_eq!(
         rows[0][6],
-        SqlValue::Json(serde_json::json!(["alpha", null, "omega"]))
+        SqlValue::json(serde_json::json!(["alpha", null, "omega"]))
     );
     assert_eq!(rows[0][7], SqlValue::String("2001:db8::1/64".to_string()));
     assert_eq!(rows[0][8], SqlValue::String("[10,20)".to_string()));

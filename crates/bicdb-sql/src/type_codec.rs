@@ -252,7 +252,7 @@ pub(crate) fn canonical_value(spec: &PgTypeSpec, value: &SqlValue) -> Result<PgC
         }
         "jsonb" => PgCanonicalValue::Json(match value {
             SqlValue::JsonText(value) => value.parsed().clone(),
-            SqlValue::Json(value) => value.clone(),
+            SqlValue::Json(value) => (**value).clone(),
             _ => serde_json::from_str(&text).map_err(|_| invalid())?,
         }),
         "xml" => PgCanonicalValue::Xml(crate::normalize_xml(&text)?),
@@ -1437,7 +1437,7 @@ mod tests {
             ("text", SqlValue::String("text".into())),
             ("oid", SqlValue::Int(26)),
             ("oidvector", SqlValue::String("1 2 4294967295".into())),
-            ("json", SqlValue::Json(json!({"b": 2, "a": 1}))),
+            ("json", SqlValue::json(json!({"b": 2, "a": 1}))),
             ("xml", SqlValue::String("<value/>".into())),
             ("cidr", SqlValue::String("192.0.2.0/24".into())),
             ("float4", SqlValue::Float(4.5)),
@@ -1474,7 +1474,7 @@ mod tests {
             ("tsquery", SqlValue::String("alpha & beta".into())),
             ("regconfig", SqlValue::String("english".into())),
             ("regdictionary", SqlValue::String("simple".into())),
-            ("jsonb", SqlValue::Json(json!({"exact": "1.20"}))),
+            ("jsonb", SqlValue::json(json!({"exact": "1.20"}))),
             ("jsonpath", SqlValue::String("$.value ? (@ > 2)".into())),
             ("int4range", SqlValue::String("[1,3)".into())),
             ("numrange", SqlValue::String("[1.20,3.40)".into())),
@@ -1544,7 +1544,7 @@ mod tests {
                 SqlValue::String("{\"1 => 2\": 1.0}".into()),
             ),
             ("pg_mcv_list", SqlValue::String("opaque-mcv-payload".into())),
-            ("vector", SqlValue::Json(json!([1.0, 2.0, 3.0]))),
+            ("vector", SqlValue::json(json!([1.0, 2.0, 3.0]))),
         ];
         let codec = pg_scalar_codec(pg_type_spec("text").unwrap());
         for spec in PG_TYPE_SPECS {
@@ -1579,7 +1579,7 @@ mod tests {
                 let array_context = PgCodecContext::new(array_oid, -1);
                 if spec.pseudo {
                     assert!(codec
-                        .index_key(&SqlValue::Json(json!([])), array_context)
+                        .index_key(&SqlValue::json(json!([])), array_context)
                         .is_err());
                     continue;
                 }
@@ -1592,11 +1592,11 @@ mod tests {
                     (_, SqlValue::String(value)) => json!(value),
                     (_, SqlValue::TsQuery(value)) => json!(value.to_postgres_text()),
                     (_, SqlValue::JsonText(value)) => value.parsed().clone(),
-                    (_, SqlValue::Json(value)) => value.clone(),
+                    (_, SqlValue::Json(value)) => (**value).clone(),
                     (_, SqlValue::Geometry(_)) => unreachable!("no geometry key fixtures"),
                     (_, SqlValue::Composite(_)) => unreachable!("no composite key fixtures"),
                 };
-                let array = SqlValue::Json(json!([element]));
+                let array = SqlValue::json(json!([element]));
                 let first = codec.index_key(&array, array_context).unwrap();
                 assert_eq!(
                     first,

@@ -22,9 +22,9 @@ fn jsonb_array_element_functions_preserve_postgres_null_and_text_semantics() {
     assert_eq!(
         json_values.rows,
         vec![
-            vec![SqlValue::Json(json!(1))],
-            vec![SqlValue::Json(json!(null))],
-            vec![SqlValue::Json(json!({"a": 2}))],
+            vec![SqlValue::json(json!(1))],
+            vec![SqlValue::json(json!(null))],
+            vec![SqlValue::json(json!({"a": 2}))],
         ]
     );
     assert_eq!(json_values.column_types, vec![Some("jsonb".to_string())]);
@@ -39,7 +39,7 @@ fn jsonb_array_element_functions_preserve_postgres_null_and_text_semantics() {
     assert_eq!(
         default_column_names.rows,
         vec![vec![
-            SqlValue::Json(json!(1)),
+            SqlValue::json(json!(1)),
             SqlValue::String("x".to_string()),
         ]]
     );
@@ -124,7 +124,7 @@ fn jsonb_text_elements_support_cognee_scalar_alias_filters_and_aggregation() {
                WHERE val <> ALL(ARRAY['a']::text[])"#,
         )
         .unwrap();
-    assert_eq!(aggregated.rows, vec![vec![SqlValue::Json(json!(["b"]))]]);
+    assert_eq!(aggregated.rows, vec![vec![SqlValue::json(json!(["b"]))]]);
 }
 
 #[test]
@@ -196,20 +196,20 @@ fn cognee_jsonb_tag_selection_and_removal_flow_preserves_edge_cases() {
         vec![
             vec![
                 SqlValue::String("all".to_string()),
-                SqlValue::Json(json!([])),
+                SqlValue::json(json!([])),
             ],
             vec![
                 SqlValue::String("both".to_string()),
-                SqlValue::Json(json!(["b"])),
+                SqlValue::json(json!(["b"])),
             ],
             vec![
                 SqlValue::String("empty".to_string()),
-                SqlValue::Json(json!([])),
+                SqlValue::json(json!([])),
             ],
             vec![SqlValue::String("missing".to_string()), SqlValue::Null,],
             vec![
                 SqlValue::String("none".to_string()),
-                SqlValue::Json(json!(["c"])),
+                SqlValue::json(json!(["c"])),
             ],
         ]
     );
@@ -256,15 +256,15 @@ fn jsonb_array_element_functions_expand_no_from_projections() {
         vec![
             vec![
                 SqlValue::String("constant".to_string()),
-                SqlValue::Json(json!(1)),
+                SqlValue::json(json!(1)),
             ],
             vec![
                 SqlValue::String("constant".to_string()),
-                SqlValue::Json(json!(null)),
+                SqlValue::json(json!(null)),
             ],
             vec![
                 SqlValue::String("constant".to_string()),
-                SqlValue::Json(json!({"a": 2})),
+                SqlValue::json(json!({"a": 2})),
             ],
         ]
     );
@@ -352,9 +352,9 @@ fn jsonb_each_and_typed_record_functions_match_postgres() {
         vec![
             vec![
                 SqlValue::String("b".to_string()),
-                SqlValue::Json(json!(null))
+                SqlValue::json(json!(null))
             ],
-            vec![SqlValue::String("aa".to_string()), SqlValue::Json(json!(1))],
+            vec![SqlValue::String("aa".to_string()), SqlValue::json(json!(1))],
         ]
     );
     assert_eq!(
@@ -459,15 +459,15 @@ fn jsonb_table_functions_are_implicitly_lateral_and_support_explicit_join_kinds(
         vec![
             vec![
                 SqlValue::String("a".to_string()),
-                SqlValue::Json(json!("x")),
+                SqlValue::json(json!("x")),
             ],
             vec![
                 SqlValue::String("a".to_string()),
-                SqlValue::Json(json!("y")),
+                SqlValue::json(json!("y")),
             ],
             vec![
                 SqlValue::String("c".to_string()),
-                SqlValue::Json(json!("z")),
+                SqlValue::json(json!("z")),
             ],
         ]
     );
@@ -789,7 +789,7 @@ fn carrier_element_gallery_lateral_derived_query_matches_declared_and_derived_el
     assert_eq!(result.rows[0][0], SqlValue::String("alpha".to_string()));
     assert_eq!(
         result.rows[0][3],
-        SqlValue::Json(json!([{"id": "declared", "kind": "custom"}]))
+        SqlValue::json(json!([{"id": "declared", "kind": "custom"}]))
     );
     assert_eq!(result.rows[1][0], SqlValue::String("beta".to_string()));
     let SqlValue::Json(elements) = &result.rows[1][3] else {

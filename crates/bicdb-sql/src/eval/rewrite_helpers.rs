@@ -101,9 +101,9 @@ pub(crate) fn json_to_sql_value(value: &JsonValue) -> SqlValue {
             .as_i64()
             .map(SqlValue::Int)
             .or_else(|| value.as_f64().map(SqlValue::Float))
-            .unwrap_or_else(|| SqlValue::Json(value.clone().into())),
+            .unwrap_or_else(|| SqlValue::json(JsonValue::Number(value.clone()))),
         JsonValue::String(value) => SqlValue::String(value.clone()),
-        JsonValue::Array(_) | JsonValue::Object(_) => SqlValue::Json(value.clone()),
+        JsonValue::Array(_) | JsonValue::Object(_) => SqlValue::json(value.clone()),
     }
 }
 

@@ -5788,12 +5788,12 @@ fn raw_sql_parameter(value: Value, field_type: &FieldType) -> Result<SqlValue> {
             .ok_or_else(invalid),
         FieldType::Bytes => match value {
             Value::String(value) => Ok(SqlValue::String(value)),
-            Value::Array(_) => Ok(SqlValue::Json(value)),
+            Value::Array(_) => Ok(SqlValue::json(value)),
             _ => Err(invalid()),
         },
         FieldType::Json | FieldType::Vector { .. } | FieldType::Geometry { .. } => {
             if raw_sql_json_matches(&value, field_type, true) {
-                Ok(SqlValue::Json(value))
+                Ok(SqlValue::json(value))
             } else {
                 Err(invalid())
             }
@@ -5933,7 +5933,7 @@ fn raw_sql_value_json(value: SqlValue) -> Result<Value> {
             })?,
         SqlValue::String(value) => Value::String(value),
         SqlValue::JsonText(value) => value.parsed().clone(),
-        SqlValue::Json(value) => value,
+        SqlValue::Json(value) => SqlValue::into_json_value(value),
         SqlValue::Geometry(value) => serde_json::to_value(value)?,
         SqlValue::TsQuery(value) => serde_json::to_value(value)?,
         SqlValue::Composite(value) => serde_json::to_value(value)?,

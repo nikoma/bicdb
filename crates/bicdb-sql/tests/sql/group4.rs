@@ -1745,7 +1745,7 @@ fn postgres_alter_table_add_composite_primary_key_reports_primary_catalogs() {
             .rows,
         vec![vec![
             SqlValue::String("p".to_string()),
-            SqlValue::Json(json!([1, 2])),
+            SqlValue::json(json!([1, 2])),
         ]]
     );
     assert_eq!(
@@ -1820,7 +1820,7 @@ fn postgres_primary_key_using_index_promotes_existing_unique_index() {
             .rows,
         vec![vec![
             SqlValue::String("p".to_string()),
-            SqlValue::Json(json!([1, 2])),
+            SqlValue::json(json!([1, 2])),
         ]]
     );
     assert_eq!(
@@ -1965,7 +1965,7 @@ fn legacy_unique_pkey_constraint_reports_as_primary_key() {
             .rows,
         vec![vec![
             SqlValue::String("p".to_string()),
-            SqlValue::Json(json!([2])),
+            SqlValue::json(json!([2])),
         ]]
     );
     assert_eq!(
@@ -2144,8 +2144,8 @@ fn gitlab_postgres_foreign_keys_view_uses_catalog_fast_path() {
             SqlValue::String("fk_9ed8a48c44".to_string()),
             SqlValue::String("public.project_push_rules".to_string()),
             SqlValue::String("public.projects".to_string()),
-            SqlValue::Json(json!(["project_id"])),
-            SqlValue::Json(json!(["id"])),
+            SqlValue::json(json!(["project_id"])),
+            SqlValue::json(json!(["id"])),
             SqlValue::String("c".to_string()),
             SqlValue::String("a".to_string()),
             SqlValue::Bool(false),
@@ -2274,7 +2274,7 @@ fn gitlab_postgres_constraints_view_uses_catalog_fast_path_for_partition_checks(
         vec![vec![
             SqlValue::String("ci_build_needs_build_id_key".to_string()),
             SqlValue::String("u".to_string()),
-            SqlValue::Json(json!(["build_id"])),
+            SqlValue::json(json!(["build_id"])),
             SqlValue::String("public.ci_build_needs".to_string()),
             SqlValue::Bool(true),
             SqlValue::Null,
@@ -2295,7 +2295,7 @@ fn gitlab_postgres_constraints_view_uses_catalog_fast_path_for_partition_checks(
             .rows,
         vec![vec![
             SqlValue::String("ci_build_needs_pkey".to_string()),
-            SqlValue::Json(json!(["id", "partition_id"])),
+            SqlValue::json(json!(["id", "partition_id"])),
             SqlValue::String("PRIMARY KEY (id, partition_id)".to_string()),
         ]]
     );
@@ -2322,7 +2322,7 @@ fn gitlab_postgres_constraints_view_uses_catalog_fast_path_for_partition_checks(
             .rows,
         vec![vec![
             SqlValue::String("partitioning_constraint".to_string()),
-            SqlValue::Json(json!(["partition_id"])),
+            SqlValue::json(json!(["partition_id"])),
             SqlValue::Bool(false),
             SqlValue::String("CHECK ((partition_id = ANY (ARRAY[100, 101, 102])))".to_string(),),
         ]]
@@ -2376,8 +2376,8 @@ fn rails_foreign_key_introspection_indexes_catalog_arrays() {
             SqlValue::String("provider_id".to_string()),
             SqlValue::String("id".to_string()),
             SqlValue::String("fk_security_trainings_provider".to_string()),
-            SqlValue::Json(json!([2])),
-            SqlValue::Json(json!([1])),
+            SqlValue::json(json!([2])),
+            SqlValue::json(json!([1])),
         ]]
     );
 }
@@ -2787,7 +2787,7 @@ fn alter_table_common_migration_operations_update_data_and_catalogs() {
         vec![vec![
             SqlValue::String("Ada".to_string()),
             SqlValue::Bool(true),
-            SqlValue::Json(json!({"tier": "gold"})),
+            SqlValue::json(json!({"tier": "gold"})),
         ]]
     );
 
@@ -2813,7 +2813,7 @@ fn alter_table_common_migration_operations_update_data_and_catalogs() {
             SqlValue::String("p1".to_string()),
             SqlValue::String("Ada".to_string()),
             SqlValue::String("36".to_string()),
-            SqlValue::Json(json!({"tier": "gold"})),
+            SqlValue::json(json!({"tier": "gold"})),
         ]]
     );
 

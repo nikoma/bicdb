@@ -2422,7 +2422,7 @@ pub fn pg_composite_from_array_json(value: &JsonValue) -> Option<SqlComposite> {
                         }
                         JsonValue::Number(value) => SqlValue::Float(value.as_f64()?),
                         JsonValue::String(value) => SqlValue::String(value.clone()),
-                        value => SqlValue::Json(value.clone()),
+                        value => SqlValue::Json(value.clone().into()),
                     }
                 },
             })
@@ -2516,7 +2516,7 @@ pub enum SqlValue {
     Float(f64),
     String(String),
     JsonText(PgJsonText),
-    Json(JsonValue),
+    Json(std::sync::Arc<JsonValue>),
     Geometry(Geometry),
     TsQuery(#[serde(serialize_with = "serialize_sql_tsquery")] PgTsQuery),
     Composite(SqlComposite),
@@ -2674,11 +2674,24 @@ enum BulkInsertDefaultValues {
 }
 
 impl SqlValue {
+    /// A jsonb value. JSON documents are shared (cloning a row clones a
+    /// reference); mutate through `Arc::make_mut` (copy-on-write).
+    pub fn json(value: JsonValue) -> SqlValue {
+        SqlValue::Json(std::sync::Arc::new(value))
+    }
+
+    /// The jsonb document by value, copying only when it is shared.
+    pub fn into_json_value(json: std::sync::Arc<JsonValue>) -> JsonValue {
+        std::sync::Arc::unwrap_or_clone(json)
+    }
+}
+
+impl SqlValue {
     pub fn as_f64(&self) -> Option<f64> {
         match self {
             Self::Int(value) => Some(*value as f64),
             Self::Float(value) => Some(*value),
-            Self::Json(JsonValue::Number(value)) => value.as_f64(),
+            Self::Json(json) => json.as_f64(),
             _ => None,
         }
     }

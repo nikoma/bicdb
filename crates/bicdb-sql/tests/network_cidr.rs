@@ -64,7 +64,7 @@ fn assert_cidr_row(session: &mut SqlSession<'_>) {
         vec![vec![
             SqlValue::String("192.0.2.0/24".to_string()),
             SqlValue::String("2001:db8::/32".to_string()),
-            SqlValue::Json(json!([
+            SqlValue::json(json!([
                 "10.0.0.0/8",
                 "192.0.2.0/24",
                 "::ffff:192.0.2.0/120"

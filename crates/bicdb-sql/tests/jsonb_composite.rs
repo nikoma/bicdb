@@ -46,7 +46,7 @@ fn whole_derived_rows_convert_inside_ordered_json_aggregates() {
     );
     assert_eq!(
         result.rows[0][1],
-        SqlValue::Json(json!([
+        SqlValue::json(json!([
             {"id": 1, "name": "first", "payload": {"nested": true}},
             {"id": 2, "name": "second", "payload": null}
         ]))
@@ -83,8 +83,8 @@ fn whole_row_conversion_does_not_change_scalar_to_jsonb() {
             SqlValue::JsonText(
                 PgJsonText::parse(r#"{"id":1,"name":"plain text"}"#.to_string()).unwrap()
             ),
-            SqlValue::Json(json!({"id": 1, "name": "plain text"})),
-            SqlValue::Json(json!("plain text")),
+            SqlValue::json(json!({"id": 1, "name": "plain text"})),
+            SqlValue::json(json!("plain text")),
         ]]
     );
     assert_eq!(
@@ -113,7 +113,7 @@ fn whole_row_conversion_does_not_change_scalar_to_jsonb() {
     );
     assert!(matches!(base_row.rows[0][2], SqlValue::Null));
     assert_eq!(base_row.rows[0][3].to_cell(), base_row.rows[0][0].to_cell());
-    assert_eq!(base_row.rows[0][4], SqlValue::Json(json!("plain text")));
+    assert_eq!(base_row.rows[0][4], SqlValue::json(json!("plain text")));
     assert_eq!(
         base_row.column_types,
         vec![

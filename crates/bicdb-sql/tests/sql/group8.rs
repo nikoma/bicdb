@@ -360,13 +360,13 @@ fn postgres_create_table_like_including_all_partition_by_list_matches_gitlab_par
             vec![
                 SqlValue::String("ci_build_needs_pkey".to_string()),
                 SqlValue::String("p".to_string()),
-                SqlValue::Json(json!([1, 2])),
+                SqlValue::json(json!([1, 2])),
                 SqlValue::Bool(true),
             ],
             vec![
                 SqlValue::String("partitioning_constraint".to_string()),
                 SqlValue::String("c".to_string()),
-                SqlValue::Json(json!([2])),
+                SqlValue::json(json!([2])),
                 SqlValue::Bool(false),
             ],
         ]

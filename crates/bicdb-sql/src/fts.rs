@@ -2488,7 +2488,9 @@ pub(crate) fn fts_doc_terms_parts(value: &SqlValue) -> Result<(u32, u32, Vec<(St
 
 fn sql_value_string_array(value: &SqlValue) -> Result<Vec<String>> {
     match value {
-        SqlValue::Json(serde_json::Value::Array(values)) => values
+        SqlValue::Json(json) if json.is_array() => json
+            .as_array()
+            .expect("checked array")
             .iter()
             .map(|value| match value {
                 serde_json::Value::String(value) => Ok(value.clone()),
@@ -3011,7 +3013,9 @@ fn rank_arguments(args: &[SqlValue]) -> Result<([f32; 4], PgTsVector, PgTsQuery,
 
 fn sql_value_number_array(value: &SqlValue) -> Result<Vec<f32>> {
     match value {
-        SqlValue::Json(serde_json::Value::Array(values)) => values
+        SqlValue::Json(json) if json.is_array() => json
+            .as_array()
+            .expect("checked array")
             .iter()
             .map(|value| {
                 value.as_f64().map(|value| value as f32).ok_or_else(|| {
@@ -3194,7 +3198,7 @@ pub(crate) fn eval_fts_function_value(
                     .into_iter()
                     .map(|lexeme| serde_json::Value::String(lexeme.text))
                     .collect(),
-            ))
+            ).into())
         }
         "ts_rank" | "ts_rank_cd" => {
             let (weights, vector, query, normalization) = rank_arguments(args)?;
@@ -3230,7 +3234,7 @@ pub(crate) fn eval_fts_function_value(
                     SqlValue::String(text_headline(config, text, &query, &options))
                 }
                 SqlValue::Json(value) => {
-                    SqlValue::Json(json_headline(config, value, &query, &options))
+                    SqlValue::Json(json_headline(config, value, &query, &options).into())
                 }
                 SqlValue::JsonText(value) => SqlValue::JsonText(crate::PgJsonText::from_value(
                     json_headline(config, value.parsed(), &query, &options),
@@ -3285,7 +3289,7 @@ pub(crate) fn eval_fts_db_function_value(
         let status = db.full_text_build_lifecycle(&index)?;
         return Ok(Some(SqlValue::Json(serde_json::to_value(status).map_err(
             |error| SqlError::InvalidSql(format!("FTS lifecycle serialization failed: {error}")),
-        )?)));
+        )?.into())));
     }
     if name == "bicdb_fts_fold" {
         if args.len() != 1 {

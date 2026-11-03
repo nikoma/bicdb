@@ -34,10 +34,10 @@ fn jsonpath_scalar_functions_support_modes_filters_variables_and_methods() {
         vec![vec![
             SqlValue::Bool(true),
             SqlValue::Bool(true),
-            SqlValue::Json(json!([2, 3])),
-            SqlValue::Json(json!(20)),
-            SqlValue::Json(json!([2])),
-            SqlValue::Json(json!([])),
+            SqlValue::json(json!([2, 3])),
+            SqlValue::json(json!(20)),
+            SqlValue::json(json!([2])),
+            SqlValue::json(json!([])),
         ]]
     );
     assert_eq!(
@@ -108,8 +108,8 @@ fn jsonb_path_query_is_set_returning_in_projection_and_from() {
     assert_eq!(
         projection.rows,
         vec![
-            vec![SqlValue::Json(json!(2))],
-            vec![SqlValue::Json(json!(3))]
+            vec![SqlValue::json(json!(2))],
+            vec![SqlValue::json(json!(3))]
         ]
     );
 
@@ -125,8 +125,8 @@ fn jsonb_path_query_is_set_returning_in_projection_and_from() {
     assert_eq!(
         from.rows,
         vec![
-            vec![SqlValue::Json(json!(10)), SqlValue::Int(1)],
-            vec![SqlValue::Json(json!(20)), SqlValue::Int(2)],
+            vec![SqlValue::json(json!(10)), SqlValue::Int(1)],
+            vec![SqlValue::json(json!(20)), SqlValue::Int(2)],
         ]
     );
 }
@@ -174,10 +174,10 @@ fn jsonpath_extended_predicates_conversions_subscripts_and_canonical_text_match_
         result.rows,
         vec![vec![
             SqlValue::String(r#"strict $."a"[*]?(@ > $"min")"#.to_string()),
-            SqlValue::Json(json!(["Abc"])),
-            SqlValue::Json(json!(["Abc"])),
-            SqlValue::Json(json!([12.35])),
-            SqlValue::Json(json!([20])),
+            SqlValue::json(json!(["Abc"])),
+            SqlValue::json(json!(["Abc"])),
+            SqlValue::json(json!([12.35])),
+            SqlValue::json(json!([20])),
             SqlValue::Bool(true),
         ]]
     );
@@ -277,7 +277,7 @@ fn jsonpath_storage_copy_arrays_and_restart_preserve_canonical_values() {
             vec![
                 SqlValue::String("inserted".into()),
                 SqlValue::String(r#"strict $."a"[*]?(@ > $"minimum")"#.into()),
-                SqlValue::Json(json!([r#"$."a""#, r#"$."b"[last]"#])),
+                SqlValue::json(json!([r#"$."a""#, r#"$."b"[last]"#])),
             ],
         ]
     );

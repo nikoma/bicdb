@@ -1,0 +1,913 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "fb6d5e1bcf5bee3c2695e39aca8bc1f40fa218ebe9fb5602bcc63d0e2e551bb7",
+  "source_commit": "e88aebd",
+  "application_qualified": false,
+  "postgres_permissions": {
+    "format": 1,
+    "postgres_version_num": 180004,
+    "cleanup_errors": [],
+    "application_qualified": false,
+    "scope": "Function security declarations, body literals, caller permissions and context restoration",
+    "success": true,
+    "matched": 5,
+    "total": 5,
+    "source_qualified": true,
+    "cases": [
+      {
+        "id": "only_explicit_definer_is_classified_as_definer",
+        "postgres": {
+          "rows": [
+            [
+              "rsec_ab6d22719e_default",
+              false
+            ],
+            [
+              "rsec_ab6d22719e_definer",
+              true
+            ],
+            [
+              "rsec_ab6d22719e_invoker",
+              false
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              "rsec_ab6d22719e_default",
+              false
+            ],
+            [
+              "rsec_ab6d22719e_definer",
+              true
+            ],
+            [
+              "rsec_ab6d22719e_invoker",
+              false
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "default_invoker_cannot_read_owner_table",
+        "postgres": {
+          "sqlstate": "42501"
+        },
+        "bicdb": {
+          "sqlstate": "42501"
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "explicit_invoker_cannot_read_owner_table",
+        "postgres": {
+          "sqlstate": "42501"
+        },
+        "bicdb": {
+          "sqlstate": "42501"
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "explicit_definer_can_read_owner_table",
+        "postgres": {
+          "rows": [
+            [
+              {
+                "number": "7"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "7"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "caller_identity_is_restored",
+        "postgres": {
+          "rows": [
+            [
+              "rsec_ab6d22719e_caller"
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              "rsec_ab6d22719e_caller"
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      }
+    ]
+  },
+  "postgres_attributes": {
+    "format": 1,
+    "postgres_version_num": 180004,
+    "cleanup_errors": [],
+    "application_qualified": false,
+    "scope": "Native stored function declaration metadata, execution and replacement",
+    "success": true,
+    "matched": 4,
+    "total": 4,
+    "source_qualified": true,
+    "cases": [
+      {
+        "id": "declared_and_default_volatility",
+        "postgres": {
+          "rows": [
+            [
+              "attrs_b494fd039b_default",
+              "v",
+              false
+            ],
+            [
+              "attrs_b494fd039b_immutable",
+              "i",
+              false
+            ],
+            [
+              "attrs_b494fd039b_stable",
+              "s",
+              false
+            ],
+            [
+              "attrs_b494fd039b_volatile",
+              "v",
+              false
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              "attrs_b494fd039b_default",
+              "v",
+              false
+            ],
+            [
+              "attrs_b494fd039b_immutable",
+              "i",
+              false
+            ],
+            [
+              "attrs_b494fd039b_stable",
+              "s",
+              false
+            ],
+            [
+              "attrs_b494fd039b_volatile",
+              "v",
+              false
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "function_values",
+        "postgres": {
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "2"
+              },
+              {
+                "number": "3"
+              },
+              "SECURITY DEFINER"
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "2"
+              },
+              {
+                "number": "3"
+              },
+              "SECURITY DEFINER"
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "replacement_updates_metadata",
+        "postgres": {
+          "rows": [
+            [
+              "attrs_b494fd039b_default",
+              "v",
+              false
+            ],
+            [
+              "attrs_b494fd039b_immutable",
+              "s",
+              false
+            ],
+            [
+              "attrs_b494fd039b_stable",
+              "s",
+              false
+            ],
+            [
+              "attrs_b494fd039b_volatile",
+              "v",
+              false
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              "attrs_b494fd039b_default",
+              "v",
+              false
+            ],
+            [
+              "attrs_b494fd039b_immutable",
+              "s",
+              false
+            ],
+            [
+              "attrs_b494fd039b_stable",
+              "s",
+              false
+            ],
+            [
+              "attrs_b494fd039b_volatile",
+              "v",
+              false
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "replacement_value",
+        "postgres": {
+          "rows": [
+            [
+              {
+                "number": "42"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "42"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      }
+    ]
+  },
+  "oracle_values": {
+    "format": 1,
+    "oracle_version": "23.26.3.0.0",
+    "cleanup_errors": [],
+    "application_qualified": false,
+    "scope": "Deterministic function declarations and values; no optimizer or application qualification",
+    "success": true,
+    "matched": 10,
+    "total": 10,
+    "source_qualified": true,
+    "cases": [
+      {
+        "id": "numeric_declaration",
+        "oracle": {
+          "rows": []
+        },
+        "bicdb": {
+          "rows": []
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "parameterless_declaration",
+        "oracle": {
+          "rows": []
+        },
+        "bicdb": {
+          "rows": []
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "quoted_parameter_declaration",
+        "oracle": {
+          "rows": []
+        },
+        "bicdb": {
+          "rows": []
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "numeric_value",
+        "oracle": {
+          "rows": [
+            [
+              {
+                "number": "5"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "5"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "fractional_value",
+        "oracle": {
+          "rows": [
+            [
+              {
+                "number": "13.5"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "13.5"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "null_value",
+        "oracle": {
+          "rows": [
+            [
+              null
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              null
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "parameterless_value",
+        "oracle": {
+          "rows": [
+            [
+              {
+                "number": "7"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "7"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "quoted_parameter_value",
+        "oracle": {
+          "rows": [
+            [
+              {
+                "number": "8"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "8"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "replace_declaration",
+        "oracle": {
+          "rows": []
+        },
+        "bicdb": {
+          "rows": []
+        },
+        "source_qualified": true,
+        "matched": true
+      },
+      {
+        "id": "replacement_value",
+        "oracle": {
+          "rows": [
+            [
+              {
+                "number": "9"
+              }
+            ]
+          ]
+        },
+        "bicdb": {
+          "rows": [
+            [
+              {
+                "number": "9"
+              }
+            ]
+          ]
+        },
+        "source_qualified": true,
+        "matched": true
+      }
+    ]
+  },
+  "reader_checks": {
+    "format": 1,
+    "prior_binary_sha256": "548e88f03102c881902fbd1e491e646312864d0061757d40998de866addc995d",
+    "application_qualified": false,
+    "success": true,
+    "prior_reader_observed_incorrect_access": true,
+    "cases": [
+      {
+        "id": "patched_reader_reclassifies_stored_body_literal_flag",
+        "success": true
+      },
+      {
+        "id": "patched_reader_denies_access_without_recreating_function",
+        "success": true
+      },
+      {
+        "id": "patched_reader_keeps_explicit_definer_access",
+        "success": true
+      },
+      {
+        "id": "caller_identity_survives_success_and_error",
+        "success": true
+      },
+      {
+        "id": "current_reopen_keeps_invoker_permissions",
+        "success": true
+      },
+      {
+        "id": "current_reopen_keeps_explicit_definer",
+        "success": true
+      }
+    ]
+  },
+  "prior_wire_observation": {
+    "runtime_binary_sha256": "548e88f03102c881902fbd1e491e646312864d0061757d40998de866addc995d",
+    "source_qualified": true,
+    "matched": 3,
+    "total": 5,
+    "cleanup_errors": []
+  },
+  "rust_tests": {
+    "passed": 1353,
+    "failed": 0,
+    "ignored": 3,
+    "batches": 11
+  },
+  "pre_fix_regressions": {
+    "expected_failed_tests": 2,
+    "resolved": true
+  },
+  "python_tests": {
+    "passed": 58,
+    "failed": 0
+  },
+  "retained_regressions": [
+    {
+      "id": "character-columns-comparison",
+      "success": true,
+      "matched": 138,
+      "total": 138,
+      "cases": 138
+    },
+    {
+      "id": "character-columns-reader-comparison",
+      "success": true,
+      "cases": 6
+    },
+    {
+      "id": "character-import-comparison",
+      "success": true,
+      "cases": 3
+    },
+    {
+      "id": "dynamic-retained-decode-sql-comparison",
+      "success": true,
+      "matched": 52,
+      "total": 52,
+      "cases": 52
+    },
+    {
+      "id": "dynamic-retained-key-oracle",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "dynamic-retained-autonomous-comparison",
+      "success": true,
+      "matched": 38,
+      "total": 38,
+      "cases": 38
+    },
+    {
+      "id": "dynamic-sql-comparison",
+      "success": true,
+      "matched": 36,
+      "total": 36,
+      "cases": 36
+    },
+    {
+      "id": "national-characters-comparison",
+      "success": true,
+      "matched": 96,
+      "total": 96,
+      "cases": 96
+    },
+    {
+      "id": "national-native-controls",
+      "success": true,
+      "matched": 19,
+      "total": 19,
+      "cases": 19
+    },
+    {
+      "id": "dictionary-native-catalog-controls",
+      "success": true,
+      "matched": 6,
+      "total": 6,
+      "cases": 6
+    },
+    {
+      "id": "dynamic-retained-key-native",
+      "success": true,
+      "matched": 51,
+      "total": 51,
+      "cases": 51
+    },
+    {
+      "id": "dynamic-native-controls",
+      "success": true,
+      "matched": 13,
+      "total": 13,
+      "cases": 13
+    },
+    {
+      "id": "national-original-counter-comparison",
+      "success": true,
+      "matched": 14,
+      "total": 14,
+      "cases": 14
+    },
+    {
+      "id": "dynamic-original-record-comparison",
+      "success": true,
+      "matched": 8,
+      "total": 8,
+      "cases": 8
+    },
+    {
+      "id": "dynamic-original-sequence-comparison",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "view-anchor-reference-anchors-comparison",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "view-anchor-reference-view_anchors-comparison",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "dynamic-retained-routine-anchors-comparison",
+      "success": true,
+      "matched": 41,
+      "total": 41,
+      "cases": 41
+    },
+    {
+      "id": "dynamic-retained-routine-calendar-comparison",
+      "success": true,
+      "matched": 36,
+      "total": 36,
+      "cases": 36
+    },
+    {
+      "id": "dynamic-retained-routine-case-comparison",
+      "success": true,
+      "matched": 34,
+      "total": 34,
+      "cases": 34
+    },
+    {
+      "id": "dynamic-retained-routine-characters-comparison",
+      "success": true,
+      "matched": 119,
+      "total": 119,
+      "cases": 119
+    },
+    {
+      "id": "dynamic-retained-routine-columns-comparison",
+      "success": true,
+      "matched": 21,
+      "total": 21,
+      "cases": 21
+    },
+    {
+      "id": "dynamic-retained-routine-concat-comparison",
+      "success": true,
+      "matched": 76,
+      "total": 76,
+      "cases": 76
+    },
+    {
+      "id": "dynamic-retained-routine-cursors-comparison",
+      "success": true,
+      "matched": 36,
+      "total": 36,
+      "cases": 36
+    },
+    {
+      "id": "dynamic-retained-routine-decode-comparison",
+      "success": true,
+      "matched": 57,
+      "total": 57,
+      "cases": 57
+    },
+    {
+      "id": "dynamic-retained-routine-errors-comparison",
+      "success": true,
+      "matched": 108,
+      "total": 108,
+      "cases": 108
+    },
+    {
+      "id": "dynamic-retained-routine-grammar-comparison",
+      "success": true,
+      "matched": 14,
+      "total": 14,
+      "cases": 14
+    },
+    {
+      "id": "dynamic-retained-routine-namespaces-comparison",
+      "success": true,
+      "matched": 24,
+      "total": 24,
+      "cases": 24
+    },
+    {
+      "id": "dynamic-retained-routine-numberops-comparison",
+      "success": true,
+      "matched": 218,
+      "total": 218,
+      "cases": 218
+    },
+    {
+      "id": "dynamic-retained-routine-nvl-comparison",
+      "success": true,
+      "matched": 93,
+      "total": 93,
+      "cases": 93
+    },
+    {
+      "id": "dynamic-retained-routine-procedures-comparison",
+      "success": true,
+      "matched": 26,
+      "total": 26,
+      "cases": 26
+    },
+    {
+      "id": "dynamic-retained-routine-temporal-comparison",
+      "success": true,
+      "matched": 29,
+      "total": 29,
+      "cases": 29
+    },
+    {
+      "id": "dynamic-retained-routine-week-comparison",
+      "success": true,
+      "matched": 102,
+      "total": 102,
+      "cases": 102
+    },
+    {
+      "id": "dynamic-retained-native-characters",
+      "success": true,
+      "matched": 22,
+      "total": 22,
+      "cases": 22
+    },
+    {
+      "id": "dynamic-retained-native-columns",
+      "success": true,
+      "matched": 6,
+      "total": 6,
+      "cases": 6
+    },
+    {
+      "id": "dynamic-retained-native-concat",
+      "success": true,
+      "matched": 62,
+      "total": 62,
+      "cases": 62
+    },
+    {
+      "id": "dynamic-retained-native-cursors",
+      "success": true,
+      "matched": 30,
+      "total": 30,
+      "cases": 30
+    },
+    {
+      "id": "dynamic-retained-native-decode",
+      "success": true,
+      "matched": 12,
+      "total": 12,
+      "cases": 12
+    },
+    {
+      "id": "dynamic-retained-native-errors",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "dynamic-retained-native-grammar",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "dynamic-retained-native-procedures",
+      "success": true,
+      "matched": 13,
+      "total": 13,
+      "cases": 13
+    },
+    {
+      "id": "routine-character-buffers-comparison",
+      "success": true,
+      "matched": 53,
+      "total": 53,
+      "cases": 53
+    },
+    {
+      "id": "routine-character-readers-comparison",
+      "success": true,
+      "cases": 7
+    },
+    {
+      "id": "alter-batch-native-controls",
+      "success": true,
+      "matched": 9,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "character-reconcile-native-view-controls",
+      "success": true,
+      "matched": 5,
+      "total": 5,
+      "cases": 5
+    },
+    {
+      "id": "character-reconcile-fixture",
+      "success": true,
+      "total": 9,
+      "cases": 9
+    },
+    {
+      "id": "hierarchy-comparison",
+      "success": true,
+      "matched": 19,
+      "total": 19,
+      "cases": 19
+    }
+  ],
+  "static_checks": {
+    "format": true,
+    "diff_whitespace": true,
+    "licenses": true,
+    "open_core_boundary": true
+  },
+  "definition_probe": {
+    "accepted": 62,
+    "total": 62,
+    "source_execution_compared": false,
+    "null_input_diagnostics_completed": 1,
+    "null_input_diagnostics_total": 14
+  },
+  "resource_guards": [
+    {
+      "id": "security-attribute-full-validation-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 4629409792,
+      "minimum_observed_available_bytes": 21834309632
+    },
+    {
+      "id": "security-qualified-server-build-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 4582518784,
+      "minimum_observed_available_bytes": 21853237248
+    },
+    {
+      "id": "security-attribute-retained-references-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 1138221056,
+      "minimum_observed_available_bytes": 23984533504
+    },
+    {
+      "id": "security-attribute-additional-references-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 366297088,
+      "minimum_observed_available_bytes": 23959805952
+    },
+    {
+      "id": "security-attribute-application-memory",
+      "status": "completed",
+      "peak_group_rss_bytes": 1104982016,
+      "minimum_observed_available_bytes": 23984713728
+    }
+  ]
+}

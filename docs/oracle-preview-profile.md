@@ -779,6 +779,22 @@ return type remains unregistered for PostgreSQL transport, and the original
 collection execution probes remain 0/5. Definition acceptance does not establish
 full schema, runtime or workflow acceptance.
 
+## Routine security declarations
+
+The [routine security contract](evidence/oracle-routine-security-2026-11-03/README.md)
+derives native invoker/definer authority from declaration attributes. Body text,
+comments, defaults and quoted names do not confer definer privileges. Readers
+recompute cached flags from the saved declaration, including older incorrectly
+classified records, while retaining the recorded owner requirement. Explicit
+definer behavior and caller-context restoration remain supported.
+
+Qualified user functions use their ordinary schema and execute permissions,
+including schemas whose names start with `bicdb_`. Actual administrative
+builtins retain their effective-role checks. Native function permission tests
+match PostgreSQL; independent Oracle value regressions retain their results.
+Oracle AUTHID and package security remain unqualified. The corrected behavior
+requires a patched runtime.
+
 
 Legacy character provenance can now be reconciled from the exported source
 catalog through the migration tool's `character-types` phase. It validates the

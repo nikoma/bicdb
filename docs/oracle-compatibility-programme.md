@@ -242,6 +242,12 @@ four independent PostgreSQL cases match, and six reader checks pass. Five
 read-only original collection calls qualify on Oracle but remain 0/5 on BicDB
 because the collection result type is not registered. The 1/14 NULL-input
 procedure diagnostics and full application qualification remain unchanged.
+The [routine security qualification](evidence/oracle-routine-security-2026-11-03/README.md)
+derives authority from declaration attributes and corrects stale cached flags
+on read. Five native permission cases, six process-reopen checks and independent
+Oracle value regressions pass. Qualified user schemas retain normal execute
+permissions while actual administrative builtins remain role-restricted.
+Definition and application-execution counts are unchanged.
 The [full character-copy verification](evidence/oracle-character-full-copy-2026-11-03/README.md)
 completes reconciliation of all 910 affected tables and 7,150 declarations.
 A byte-identical disk copy passes full 915-table/185,537-row fingerprints and

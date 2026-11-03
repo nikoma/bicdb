@@ -12,6 +12,18 @@ impl<'db> SqlEngine<'db> {
         siblings: bool,
         maximum_nodes: usize,
     ) -> Result<SqlResult> {
+        let mut normalized_query = query.clone();
+        let mut siblings = siblings;
+        if let Some(OrderBy {
+            kind: sqlparser::ast::OrderByKind::Expressions(exprs),
+            ..
+        }) = &mut normalized_query.order_by
+        {
+            if exprs.first().is_some_and(|item|matches!(&item.expr,Expr::Function(function) if function.name.to_string().eq_ignore_ascii_case("bicdb_oracle_sibling_order") && function_args(function).is_empty())) {
+                exprs.remove(0);siblings=true;
+            }
+        }
+        let query = &normalized_query;
         let mut start = None;
         let mut relationships = None;
         let mut nocycle = false;
@@ -111,6 +123,18 @@ impl<'db> SqlEngine<'db> {
             ControlFlow::<()>::Continue(())
         });
         let mut rewrite_pseudo = |expr: &mut Expr| {
+            if let Expr::Function(function) = expr {
+                if function_args(function).is_empty() {
+                    let column = match function.name.to_string().to_ascii_lowercase().as_str() {
+                        "bicdb_oracle_hierarchy_level" => Some(&level_column),
+                        "bicdb_oracle_hierarchy_cycle" => Some(&cycle_column),
+                        _ => None,
+                    };
+                    if let Some(column) = column {
+                        *expr = Expr::Identifier(Ident::with_quote('"', column));
+                    }
+                }
+            }
             if let Expr::Identifier(id) = expr {
                 if id.quote_style.is_none() {
                     if id.value.eq_ignore_ascii_case("LEVEL") {

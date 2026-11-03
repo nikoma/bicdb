@@ -39,5 +39,6 @@ pub(super) fn rewrite<T: sqlparser::ast::VisitMut>(
     namespace: Option<&str>,
 ) -> Result<()> {
     super::outer_joins::lower(db, node, namespace)?;
+    super::hierarchy::bind_pseudocolumns(node)?;
     Ok(())
 }

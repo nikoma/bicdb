@@ -1,6 +1,67 @@
 //! Depth-first hierarchy expansion with caller-supplied SQL cycle-key equality.
 use super::*;
 
+pub(super) fn bind_pseudocolumns<T: sqlparser::ast::VisitMut>(node: &mut T) -> Result<()> {
+    struct Bind {
+        scopes: Vec<bool>,
+    }
+    impl sqlparser::ast::VisitorMut for Bind {
+        type Break = SqlError;
+        fn pre_visit_query(&mut self, query: &mut Query) -> ControlFlow<Self::Break> {
+            self.scopes.push(matches!(query.body.as_ref(),SetExpr::Select(select) if !select.connect_by.is_empty()));
+            ControlFlow::Continue(())
+        }
+        fn post_visit_query(&mut self, _: &mut Query) -> ControlFlow<Self::Break> {
+            self.scopes.pop();
+            ControlFlow::Continue(())
+        }
+        fn pre_visit_select(&mut self, select: &mut Select) -> ControlFlow<Self::Break> {
+            if !select.connect_by.is_empty() {
+                for item in &mut select.projection {
+                    if let SelectItem::UnnamedExpr(Expr::Identifier(id)) = item {
+                        if id.quote_style.is_none()
+                            && (id.value.eq_ignore_ascii_case("LEVEL")
+                                || id.value.eq_ignore_ascii_case("CONNECT_BY_ISCYCLE"))
+                        {
+                            *item = SelectItem::ExprWithAlias {
+                                expr: Expr::Identifier(id.clone()),
+                                alias: Ident::with_quote('"', id.value.to_ascii_uppercase()),
+                            };
+                        }
+                    }
+                }
+            }
+            ControlFlow::Continue(())
+        }
+        fn pre_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<Self::Break> {
+            if self.scopes.last() == Some(&true) {
+                if let Expr::Identifier(id) = expr {
+                    if id.quote_style.is_none() {
+                        let function = if id.value.eq_ignore_ascii_case("LEVEL") {
+                            Some("bicdb_oracle_hierarchy_level()")
+                        } else if id.value.eq_ignore_ascii_case("CONNECT_BY_ISCYCLE") {
+                            Some("bicdb_oracle_hierarchy_cycle()")
+                        } else {
+                            None
+                        };
+                        if let Some(function) = function {
+                            match expression(function) {
+                                Ok(value) => *expr = value,
+                                Err(error) => return ControlFlow::Break(error),
+                            }
+                        }
+                    }
+                }
+            }
+            ControlFlow::Continue(())
+        }
+    }
+    match sqlparser::ast::VisitMut::visit(node, &mut Bind { scopes: Vec::new() }) {
+        ControlFlow::Continue(()) => Ok(()),
+        ControlFlow::Break(error) => Err(error),
+    }
+}
+
 pub(crate) struct Node<K> {
     pub row: usize,
     pub key: K,
@@ -123,6 +184,46 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn profile_binds_level_and_sibling_order_before_native_validation() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let sql = lower_profile_sql(
+            &db,
+            "SELECT LEVEL FROM DUAL CONNECT BY LEVEL<=3",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        let result = SqlSession::new(&mut db).execute(&sql).unwrap();
+        assert_eq!(
+            result.rows,
+            vec![
+                vec![SqlValue::Int(1)],
+                vec![SqlValue::Int(2)],
+                vec![SqlValue::Int(3)]
+            ]
+        );
+        assert_eq!(result.columns, vec!["LEVEL"]);
+        for sql in [
+            "CREATE TABLE hierarchy_rows(id NUMBER,parent_id NUMBER)",
+            "INSERT INTO hierarchy_rows VALUES(1,NULL),(2,1),(3,1),(4,2)",
+        ] {
+            let sql = lower_profile_sql(&db, sql, ORACLE_PREVIEW_PROFILE).unwrap();
+            SqlSession::new(&mut db).execute(&sql).unwrap();
+        }
+        let sql=lower_profile_sql(&db,"SELECT id,LEVEL FROM hierarchy_rows WHERE id<>2 START WITH parent_id IS NULL CONNECT BY PRIOR id=parent_id ORDER SIBLINGS BY id",ORACLE_PREVIEW_PROFILE).unwrap();
+        let result = SqlSession::new(&mut db).execute(&sql).unwrap();
+        assert_eq!(
+            result
+                .rows
+                .iter()
+                .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
+            vec![vec!["1", "1"], vec!["4", "3"], vec!["3", "2"]]
+        );
+    }
 
     #[test]
     fn persisted_hierarchy_fence_keeps_temporal_and_character_capabilities() {

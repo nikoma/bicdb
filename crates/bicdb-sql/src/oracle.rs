@@ -650,9 +650,10 @@ fn lower_oracle_sql(
             "packages and HR-profile autonomous transactions are not implemented",
         ));
     }
-    if source
-        .windows(2)
-        .any(|w| word(&w[0], "CONNECT") && word(&w[1], "BY"))
+    if !preview
+        && source
+            .windows(2)
+            .any(|w| word(&w[0], "CONNECT") && word(&w[1], "BY"))
     {
         return Err(unsupported("hierarchical queries are not implemented"));
     }
@@ -1107,6 +1108,10 @@ fn canonical_tokens_with_routine_types(
     preserve_date: bool,
     namespace: Option<&str>,
 ) -> Result<Vec<Token>> {
+    let hierarchical = preview
+        && source
+            .windows(2)
+            .any(|w| word(&w[0], "CONNECT") && word(&w[1], "BY"));
     let mut pieces = Vec::new();
     let mut decode_scope = Vec::new();
     let mut in_decode = vec![false; source.len()];
@@ -1133,6 +1138,27 @@ fn canonical_tokens_with_routine_types(
     let mut i = 0;
     while i < source.len() {
         let t = &source[i];
+        if hierarchical
+            && word(t, "ORDER")
+            && source.get(i + 1).is_some_and(|t| word(t, "SIBLINGS"))
+            && source.get(i + 2).is_some_and(|t| word(t, "BY"))
+        {
+            pieces.push("ORDER BY bicdb_oracle_sibling_order(),".into());
+            i += 3;
+            continue;
+        }
+        if hierarchical
+            && (i == 0 || source[i - 1] != Token::Period)
+            && (word(t, "CONNECT")
+                || word(t, "PRIOR")
+                || word(t, "NOCYCLE")
+                || word(t, "LEVEL")
+                || word(t, "CONNECT_BY_ISCYCLE"))
+        {
+            pieces.push(t.to_string().to_ascii_uppercase());
+            i += 1;
+            continue;
+        }
         // This is declaration syntax only. Do not reserve either identifier
         // globally or reinterpret a quoted variable/type declaration as a pragma.
         if preview

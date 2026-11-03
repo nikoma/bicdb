@@ -69,7 +69,7 @@ pub(super) fn lower<T: sqlparser::ast::VisitMut>(
             if only_dual {
                 let mut sequence = false;
                 let mut references_row = false;
-                let mut row_context = false;
+                let mut row_context = !select.connect_by.is_empty();
                 let _ = sqlparser::ast::visit_expressions(select, |expr| {
                     match expr {
                         Expr::Function(function)

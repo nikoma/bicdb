@@ -1,0 +1,114 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "cases": [
+    {
+      "id": "referenced_namespace_is_protected",
+      "postgres": {
+        "sqlstate": "0A000"
+      },
+      "bicdb": {
+        "sqlstate": "0A000"
+      },
+      "matched": true
+    },
+    {
+      "id": "same_table_name_in_other_namespace_can_change",
+      "postgres": {
+        "status": "ok"
+      },
+      "bicdb": {
+        "status": "ok"
+      },
+      "matched": true
+    },
+    {
+      "id": "failed_alter_preserves_original_type",
+      "postgres": {
+        "rows": [
+          [
+            "bicdb_cat_cols_a",
+            {
+              "number": "3"
+            }
+          ],
+          [
+            "bicdb_cat_cols_b",
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "bicdb_cat_cols_a",
+            {
+              "number": "3"
+            }
+          ],
+          [
+            "bicdb_cat_cols_b",
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "type_change_succeeds_after_dependency_removed",
+      "postgres": {
+        "status": "ok"
+      },
+      "bicdb": {
+        "status": "ok"
+      },
+      "matched": true
+    },
+    {
+      "id": "final_types_match",
+      "postgres": {
+        "rows": [
+          [
+            "bicdb_cat_cols_a",
+            {
+              "number": "4"
+            }
+          ],
+          [
+            "bicdb_cat_cols_b",
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "bicdb_cat_cols_a",
+            {
+              "number": "4"
+            }
+          ],
+          [
+            "bicdb_cat_cols_b",
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "scope": "Explicit-column view dependency namespace resolution and quoted identifiers; wildcard dependencies and general view invalidation are separate qualification",
+  "matched": 5,
+  "total": 5,
+  "runtime_binary_sha256": "df796b0d2fdbd194d5392b986adc45eabf6a922f9dacfd01c27bd1b0172bf79e"
+}

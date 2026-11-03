@@ -499,3 +499,18 @@ The fixture removes its own tables. It compares saved values, fixed padding,
 capacity errors, prepared UPDATE and PostgreSQL COPY behavior against Oracle
 INSERT behavior, including multibyte and supplementary characters. See the
 [qualification and remaining scope](../../../docs/evidence/oracle-character-columns-2026-11-03/README.md).
+
+
+`postgres_view_dependencies.py` compares explicit-column view dependency guards
+across two pre-existing schemas, including identical quoted table names and
+quoted identifiers containing periods. It checks refused type changes, retained
+catalog widths and successful changes after removing a dependency:
+
+```sh
+python examples/oracle/reference/postgres_view_dependencies.py \
+  --schemas dependency_a dependency_b --output /private/view-dependencies.json
+```
+
+Set ORACLE_CONTROL_PG_DSN privately to PostgreSQL and BICDB_PG_DSN to a native
+PostgreSQL-profile target. The fixture removes its own tables and view. Wildcard
+dependencies and general view invalidation are separate qualification.

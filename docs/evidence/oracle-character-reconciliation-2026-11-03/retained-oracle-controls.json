@@ -1,0 +1,125 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "df796b0d2fdbd194d5392b986adc45eabf6a922f9dacfd01c27bd1b0172bf79e",
+  "success": true,
+  "matched": 1476,
+  "total": 1476,
+  "includes_one_negative_nvarchar_alias_boundary": true,
+  "suites": [
+    {
+      "suite": "anchors",
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "suite": "calendar",
+      "matched": 36,
+      "total": 36
+    },
+    {
+      "suite": "case",
+      "matched": 34,
+      "total": 34
+    },
+    {
+      "suite": "characters",
+      "matched": 119,
+      "total": 119
+    },
+    {
+      "suite": "columns",
+      "matched": 21,
+      "total": 21
+    },
+    {
+      "suite": "concat",
+      "matched": 76,
+      "total": 76
+    },
+    {
+      "suite": "cursors",
+      "matched": 36,
+      "total": 36
+    },
+    {
+      "suite": "decode",
+      "matched": 57,
+      "total": 57
+    },
+    {
+      "suite": "errors",
+      "matched": 108,
+      "total": 108
+    },
+    {
+      "suite": "grammar",
+      "matched": 14,
+      "total": 14
+    },
+    {
+      "suite": "namespaces",
+      "matched": 24,
+      "total": 24
+    },
+    {
+      "suite": "numberops",
+      "matched": 218,
+      "total": 218
+    },
+    {
+      "suite": "nvl",
+      "matched": 93,
+      "total": 93
+    },
+    {
+      "suite": "procedures",
+      "matched": 26,
+      "total": 26
+    },
+    {
+      "suite": "temporal",
+      "matched": 29,
+      "total": 29
+    },
+    {
+      "suite": "week",
+      "matched": 102,
+      "total": 102
+    },
+    {
+      "suite": "decode_sql",
+      "matched": 52,
+      "total": 52
+    },
+    {
+      "suite": "key_updates",
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "suite": "autonomous",
+      "matched": 38,
+      "total": 38
+    },
+    {
+      "suite": "dynamic_sql",
+      "matched": 36,
+      "total": 36
+    },
+    {
+      "suite": "national_routines",
+      "matched": 96,
+      "total": 96
+    },
+    {
+      "suite": "view_anchors",
+      "matched": 41,
+      "total": 41
+    },
+    {
+      "suite": "character_columns",
+      "matched": 138,
+      "total": 138
+    }
+  ]
+}

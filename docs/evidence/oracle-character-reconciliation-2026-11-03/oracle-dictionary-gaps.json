@@ -1,0 +1,451 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "scope": "Dictionary table/view rows, scalar descriptors, byte/character lengths and native descriptor contrast; no application qualification",
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "owned_table",
+      "sql": "SELECT TABLE_NAME FROM USER_TABLES WHERE TABLE_NAME='BICDB_DC_6C55F96BF5_T'",
+      "oracle": {
+        "rows": [
+          [
+            "BICDB_DC_6C55F96BF5_T"
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "42P01"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "view_excluded_from_tables",
+      "sql": "SELECT TABLE_NAME FROM USER_TABLES WHERE TABLE_NAME='BICDB_DC_6C55F96BF5_V'",
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "code": "42P01"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "table_columns",
+      "sql": "SELECT COLUMN_NAME,DATA_TYPE,NULLABLE,COLUMN_ID FROM USER_TAB_COLUMNS WHERE TABLE_NAME='BICDB_DC_6C55F96BF5_T' ORDER BY COLUMN_ID",
+      "oracle": {
+        "rows": [
+          [
+            "N",
+            "NUMBER",
+            "N",
+            {
+              "number": "1"
+            }
+          ],
+          [
+            "B",
+            "VARCHAR2",
+            "Y",
+            {
+              "number": "2"
+            }
+          ],
+          [
+            "C",
+            "VARCHAR2",
+            "Y",
+            {
+              "number": "3"
+            }
+          ],
+          [
+            "F",
+            "CHAR",
+            "Y",
+            {
+              "number": "4"
+            }
+          ],
+          [
+            "D",
+            "DATE",
+            "Y",
+            {
+              "number": "5"
+            }
+          ],
+          [
+            "T",
+            "TIMESTAMP(3)",
+            "Y",
+            {
+              "number": "6"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "42P01"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "view_columns",
+      "sql": "SELECT COLUMN_NAME,DATA_TYPE,COLUMN_ID FROM USER_TAB_COLUMNS WHERE TABLE_NAME='BICDB_DC_6C55F96BF5_V' ORDER BY COLUMN_ID",
+      "oracle": {
+        "rows": [
+          [
+            "N",
+            "NUMBER",
+            {
+              "number": "1"
+            }
+          ],
+          [
+            "B",
+            "VARCHAR2",
+            {
+              "number": "2"
+            }
+          ],
+          [
+            "C",
+            "VARCHAR2",
+            {
+              "number": "3"
+            }
+          ],
+          [
+            "D",
+            "DATE",
+            {
+              "number": "4"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "42P01"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "numeric_precision",
+      "sql": "SELECT DATA_TYPE,DATA_PRECISION,DATA_SCALE,DATA_LENGTH,NULLABLE FROM USER_TAB_COLUMNS WHERE TABLE_NAME='BICDB_DC_6C55F96BF5_T' AND COLUMN_NAME='N'",
+      "oracle": {
+        "rows": [
+          [
+            "NUMBER",
+            {
+              "number": "5"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "22"
+            },
+            "N"
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "42P01"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "defaults",
+      "sql": "SELECT COLUMN_NAME,DATA_DEFAULT FROM USER_TAB_COLUMNS WHERE TABLE_NAME='BICDB_DC_6C55F96BF5_T' AND COLUMN_NAME='N'",
+      "oracle": {
+        "rows": [
+          [
+            "N",
+            "1 "
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "42P01"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "descriptor_B",
+      "sql": "SELECT DATA_TYPE,DATA_LENGTH,CHAR_LENGTH,CHAR_USED,DATA_PRECISION,DATA_SCALE FROM USER_TAB_COLUMNS WHERE TABLE_NAME='BICDB_DC_6C55F96BF5_T' AND COLUMN_NAME='B'",
+      "oracle": {
+        "rows": [
+          [
+            "VARCHAR2",
+            {
+              "number": "3"
+            },
+            {
+              "number": "3"
+            },
+            "B",
+            null,
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "42P01"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "descriptor_C",
+      "sql": "SELECT DATA_TYPE,DATA_LENGTH,CHAR_LENGTH,CHAR_USED,DATA_PRECISION,DATA_SCALE FROM USER_TAB_COLUMNS WHERE TABLE_NAME='BICDB_DC_6C55F96BF5_T' AND COLUMN_NAME='C'",
+      "oracle": {
+        "rows": [
+          [
+            "VARCHAR2",
+            {
+              "number": "12"
+            },
+            {
+              "number": "3"
+            },
+            "C",
+            null,
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "42P01"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "descriptor_F",
+      "sql": "SELECT DATA_TYPE,DATA_LENGTH,CHAR_LENGTH,CHAR_USED,DATA_PRECISION,DATA_SCALE FROM USER_TAB_COLUMNS WHERE TABLE_NAME='BICDB_DC_6C55F96BF5_T' AND COLUMN_NAME='F'",
+      "oracle": {
+        "rows": [
+          [
+            "CHAR",
+            {
+              "number": "2"
+            },
+            {
+              "number": "2"
+            },
+            "B",
+            null,
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "42P01"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "descriptor_D",
+      "sql": "SELECT DATA_TYPE,DATA_LENGTH,CHAR_LENGTH,CHAR_USED,DATA_PRECISION,DATA_SCALE FROM USER_TAB_COLUMNS WHERE TABLE_NAME='BICDB_DC_6C55F96BF5_T' AND COLUMN_NAME='D'",
+      "oracle": {
+        "rows": [
+          [
+            "DATE",
+            {
+              "number": "7"
+            },
+            {
+              "number": "0"
+            },
+            null,
+            null,
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "42P01"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "descriptor_T",
+      "sql": "SELECT DATA_TYPE,DATA_LENGTH,CHAR_LENGTH,CHAR_USED,DATA_PRECISION,DATA_SCALE FROM USER_TAB_COLUMNS WHERE TABLE_NAME='BICDB_DC_6C55F96BF5_T' AND COLUMN_NAME='T'",
+      "oracle": {
+        "rows": [
+          [
+            "TIMESTAMP(3)",
+            {
+              "number": "11"
+            },
+            {
+              "number": "0"
+            },
+            null,
+            null,
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "code": "42P01"
+      },
+      "source_qualified": true,
+      "matched": false
+    }
+  ],
+  "setup_errors": [],
+  "cleanup_errors": [],
+  "success": false,
+  "nls": {
+    "NLS_LENGTH_SEMANTICS": "BYTE"
+  },
+  "character_set": "AL32UTF8",
+  "character_assignment_cases": [
+    {
+      "id": "supplementary_assignment_B",
+      "oracle": {
+        "code": "ORA-12899"
+      },
+      "bicdb": {
+        "code": "22001"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "supplementary_assignment_C",
+      "oracle": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "target_native_descriptors": [
+    [
+      "N",
+      "numeric",
+      null,
+      null
+    ],
+    [
+      "B",
+      "character varying",
+      {
+        "number": "3"
+      },
+      {
+        "number": "3"
+      }
+    ],
+    [
+      "C",
+      "character varying",
+      {
+        "number": "3"
+      },
+      {
+        "number": "12"
+      }
+    ],
+    [
+      "F",
+      "character",
+      {
+        "number": "2"
+      },
+      {
+        "number": "2"
+      }
+    ],
+    [
+      "D",
+      "timestamp",
+      null,
+      null
+    ],
+    [
+      "T",
+      "timestamp",
+      null,
+      null
+    ]
+  ],
+  "target_pg_attribute_descriptors": [
+    [
+      "N",
+      {
+        "number": "1700"
+      },
+      {
+        "number": "327686"
+      }
+    ],
+    [
+      "B",
+      {
+        "number": "1043"
+      },
+      {
+        "number": "7"
+      }
+    ],
+    [
+      "C",
+      {
+        "number": "1043"
+      },
+      {
+        "number": "7"
+      }
+    ],
+    [
+      "F",
+      {
+        "number": "1042"
+      },
+      {
+        "number": "6"
+      }
+    ],
+    [
+      "D",
+      {
+        "number": "1114"
+      },
+      {
+        "number": "0"
+      }
+    ],
+    [
+      "T",
+      {
+        "number": "1114"
+      },
+      {
+        "number": "3"
+      }
+    ]
+  ],
+  "total": 11,
+  "matched": 0,
+  "character_assignment_matched": 2,
+  "character_assignment_total": 2,
+  "source_qualified": true,
+  "runtime_binary_sha256": "df796b0d2fdbd194d5392b986adc45eabf6a922f9dacfd01c27bd1b0172bf79e"
+}

@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "083090d68aaa43ded2a9edf824e67251ac5680eb73c05a63881c94912cb58487",
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "source_character_columns": 7150,
+  "source_character_tables": 910,
+  "read_only_preflight_passed": true,
+  "preflight_fingerprint_inventory_sha256": "a1656dd4fac61e0bdf19a6ff6cd1cdaeba2b93608e478b5d9556d3741283f94f",
+  "preflight_fingerprinted_rows": 185536,
+  "completed_tables_before_resource_interruption": 28,
+  "status": "resource_interrupted_during_apply",
+  "full_application_copy_reconciliation_qualified": false,
+  "application_qualified": false,
+  "application_database_updated": false,
+  "scope": "Interrupted candidate before schema-only undo correction; full application-copy retry is separate qualification"
+}

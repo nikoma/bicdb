@@ -1,0 +1,54 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "df796b0d2fdbd194d5392b986adc45eabf6a922f9dacfd01c27bd1b0172bf79e",
+  "prior_binary_sha256": "00701f07e16628cf30f295e4b13a76adea8fa6c0c4a2faff9281b3a8f2fcbf26",
+  "legacy_reader_sha256": "a7f530bddd9d34e5617a8a57befff800ffc2fcf124a9e4939b3d5fe931c5f797",
+  "application_database_updated": false,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "read_only_preflight_preserves_legacy_reader_provenance_and_rows",
+      "success": true
+    },
+    {
+      "id": "invalid_legacy_bytes_refused_before_probe_ddl_and_reader_fence",
+      "success": true
+    },
+    {
+      "id": "prior_binary_accepts_qualified_fixture",
+      "success": true,
+      "new_public_schema_regression_is_separate": true
+    },
+    {
+      "id": "verification_failure_rolls_back_all_table_declarations_and_values",
+      "success": true,
+      "metadata_format_may_already_be_advanced": true
+    },
+    {
+      "id": "actual_cli_reconciles_source_units_with_unchanged_rows_and_view",
+      "success": true,
+      "columns": 4
+    },
+    {
+      "id": "resume_revalidates_completed_units_and_full_row_multiset",
+      "success": true
+    },
+    {
+      "id": "resume_refuses_target_changes_without_overwriting_them",
+      "success": true
+    },
+    {
+      "id": "reconciled_byte_capacity_matches_oracle_update_error",
+      "success": true,
+      "oracle": "ORA-12899",
+      "bicdb": "22001"
+    },
+    {
+      "id": "reconciled_metadata_and_source_values_survive_restart",
+      "success": true
+    }
+  ],
+  "success": true,
+  "oracle_version": "23.26.3.0.0",
+  "total": 9
+}

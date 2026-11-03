@@ -123,6 +123,48 @@ it without concurrent target DML or DDL. Resume also rejects changes to a
 previously fingerprinted table. This phase activates profile metadata
 format 2; the pre-upgrade backup is needed to return to an older binary.
 
+For legacy CHAR/VARCHAR2 columns, qualify the source character set and SQL
+string size explicitly, stop target writers and schema changes, and retain a
+pre-upgrade backup. The preview currently accepts AL32UTF8 with STANDARD limits.
+The source catalog must retain CHAR_USED, CHAR_LENGTH and DATA_LENGTH; native
+VARCHAR/BPCHAR metadata cannot recover the lost length unit.
+
+```sh
+python3 examples/oracle/idempiere/import_bicdb.py \
+  --snapshot /private/idempiere-snapshot --phase character-types \
+  --source-character-set AL32UTF8 --source-string-size STANDARD \
+  --check-only --report /private/character-preflight.json
+python3 examples/oracle/idempiere/import_bicdb.py \
+  --snapshot /private/idempiere-snapshot --phase character-types \
+  --source-character-set AL32UTF8 --source-string-size STANDARD \
+  --report /private/character-types.json
+```
+
+`--check-only` uses no probe DDL or ALTER. Before any mutation, the apply phase
+also checks all affected base tables: physical types, known logical declarations,
+complete row multisets, byte capacity and fixed padding. It refuses source/type
+mismatches, oversized values, missing fixed padding and conversions that would
+change saved values. Counts that differ from the source export are reported
+separately, preserving valid target application writes.
+
+Apply uses an ordinary source-declared ALTER and a transaction per table, with
+complete before/after fingerprints checked before commit. Compatible provenance
+attachment retains physical descriptors and dependent-view results. This is a
+migration transaction contract; Oracle DDL implicit commits and general view
+invalidation remain separate qualification. New provenance requires profile
+metadata format 3. A capability probe may advance that format even if a later
+apply transaction rolls back, and previously completed tables remain committed.
+The pre-upgrade backup is needed to return to an older reader.
+
+Use `--resume` with the same apply journal and endpoint. Resume validates the
+source manifest, environment, completed table prefix, logical units and current
+row fingerprints before proceeding. A check-only report is a separate journal,
+and cannot be resumed as an apply report. Changes to a previously fingerprinted
+table cause refusal; the tool never overwrites them to match its journal.
+National table columns, configurable NLS/EXTENDED strings, casts, routine BYTE
+capacity and full application execution remain separate workstreams. See the
+[reconciliation evidence](../../../docs/evidence/oracle-character-reconciliation-2026-11-03/README.md).
+
 The `indexes` phase separates constraint-backed indexes from additional logical
 indexes and Oracle's internal LOB storage indexes. The measured seed has 267
 additional logical indexes and 48 LOB storage indexes. It requires a ready, valid

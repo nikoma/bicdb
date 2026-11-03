@@ -181,6 +181,16 @@ remain open. A shared expression-cache ownership correction preserves stable AST
 nodes and excludes synthesized arguments from address-based memoization. Original
 sequence checks retain 9/9 matches. These changes do not advance the 60/62
 application definition baseline or the 1/13 NULL-input diagnostics.
+The [legacy character reconciliation](evidence/oracle-character-reconciliation-2026-11-03/README.md)
+adds read-only source/target preflight, value-preserving table transactions and
+resume validation for CHAR/VARCHAR2 declarations. It also fixes native qualified
+view-dependency checks and removes full-row undo copies for proven metadata-only
+attachments. Nine live reconciliation checks and 257 independent PostgreSQL
+controls pass. All 7,150 declarations across 910 application tables passed the
+initial copy's read-only preflight; its apply run exposed the corrected undo
+memory problem. Full application-copy reconciliation remains pending at this
+checkpoint. Definitions remain 60/62, dictionary contracts remain 0/11, and
+runtime/workflow qualification is still incomplete.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source
@@ -215,7 +225,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 20. Optimizer and performance | Statistics, pruning, indexes, joins, spill and hint policy; measured representative workload and peak/batch SLOs | Partial: typed-index join regression; no Oracle workload qualification |
 | 21. Availability and distributed work | Fencing, replication, recovery, uncertain commits, session recovery, XA/JTA and defined distributed SQL/transaction behavior | Unqualified for Oracle workloads |
 | 22. Backup and flashback | Backup/PITR, historical-query equivalence, retention, corruption handling, restore and disaster-recovery drills | Unqualified for Oracle workloads; native mechanisms require workload validation |
-| 23. Schema and data migration | Dependency ordering, resumable import, exact value/LOB reconciliation, constraints, sequences and schema validation | Partial: reproducible adapted HR import; general migration outstanding |
+| 23. Schema and data migration | Dependency ordering, resumable import, exact value/LOB reconciliation, constraints, sequences and schema validation | Partial: adapted HR and exported application table/data import; resumable index, temporal and source-backed character declaration reconciliation; complete source-value checks; full schema, foreign-key timing/validation and cutover qualification outstanding |
 | 24. Snapshot and CDC | Consistent source position, SCNs, transaction ordering, long transactions, deletes, LOBs, DDL, gaps and replay | Outstanding; source capture tooling and Oracle privileges must be explicit |
 | 25. Cutover and rollback | Write fencing, catch-up, reconciliation, go/no-go criteria, reverse migration and rehearsed rollback | Outstanding |
 | 26. Qualification and operations | Differential/property/application testing, release gates, tooling, documentation, maintenance/support policy and operational runbooks | Partial: local regression suites and reference harness; broad qualification outstanding |

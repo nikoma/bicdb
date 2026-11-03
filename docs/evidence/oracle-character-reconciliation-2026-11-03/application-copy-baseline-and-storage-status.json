@@ -1,0 +1,21 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "df796b0d2fdbd194d5392b986adc45eabf6a922f9dacfd01c27bd1b0172bf79e",
+  "scope": "Persistent application-copy baseline and disk-resource interruption; semantic resume on a temporary RAM copy is separate from persistent-storage qualification",
+  "target_engine": "BicDB",
+  "target_sql_profile": "oracle-preview-v1",
+  "tables_in_saved_before_inventory": 915,
+  "rows_in_saved_before_inventory": 185537,
+  "before_inventory_sha256": "46775dc6a9b112529051c7f9730ffa6148263e4ff203c3da5fbde1eb11f61d6b",
+  "disk_trial_status": "aborted_low_disk",
+  "disk_trial_peak_owned_group_rss_bytes": 3203211264,
+  "disk_trial_minimum_observed_available_bytes": 8738144256,
+  "byte_identical_ram_transfer_verified": true,
+  "ram_transfer_files": 998,
+  "original_disk_checkpoint_preserved": true,
+  "semantic_retry_storage": "temporary_ram",
+  "persistent_storage_qualified": false,
+  "full_application_copy_reconciliation_qualified": false,
+  "application_qualified": false,
+  "application_database_updated": false
+}

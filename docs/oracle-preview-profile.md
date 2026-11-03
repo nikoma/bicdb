@@ -738,3 +738,16 @@ covers literals, prepared parameters, COPY, UPDATE error recovery, reopen and
 reader fencing. Routine-local BYTE constraints and BYTE `%TYPE` propagation,
 casts, national table types, EXTENDED/NLS configuration, legacy reconciliation,
 Oracle dictionary views and application workflow qualification remain open.
+
+
+Legacy character provenance can now be reconciled from the exported source
+catalog through the migration tool's `character-types` phase. It validates the
+qualified environment, exact physical descriptors and complete current values
+before DDL, and verifies each table transaction before committing. Read-only
+preflight, resume refusal and rollback are independently exercised. The
+[reconciliation contract and evidence](evidence/oracle-character-reconciliation-2026-11-03/README.md)
+separate the synthetic fixture from the full application-copy qualification.
+Physical-compatible source attachment preserves existing view descriptors;
+ordinary type changes retain the dependent-view guard, including explicit
+schema-qualified references. This does not implement Oracle view invalidation
+or DDL implicit commits. The other character limitations above remain open.

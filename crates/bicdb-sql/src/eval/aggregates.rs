@@ -1059,6 +1059,12 @@ pub(crate) fn enter_expr_type_scope(generation: u64, routine_ir: usize) -> ExprT
     EXPR_TYPE_SCOPE.with(|scope| ExprTypeScopeGuard(scope.replace(Some((generation, routine_ir)))))
 }
 
+/// Synthetic argument rewrites have no stable node ownership. Keep their
+/// inference out of the address memo while retaining the surrounding scope.
+fn suspend_expr_type_scope() -> ExprTypeScopeGuard {
+    EXPR_TYPE_SCOPE.with(|scope| ExprTypeScopeGuard(scope.replace(None)))
+}
+
 /// The active scope's generation, for other per-node memos to share.
 pub(crate) fn expr_type_scope() -> Option<(u64, usize)> {
     EXPR_TYPE_SCOPE.with(std::cell::Cell::get)
@@ -1281,12 +1287,15 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         return Some(pg_type.to_string());
     }
     if let Expr::Function(function) = expr {
+        // Type memos retain node addresses across calls. Borrow real argument
+        // nodes; never cache the addresses of function_args' temporary clones.
+        let argument_nodes = function_arg_list(function);
         let name = object_name(&function.name).ok()?.to_ascii_lowercase();
         let unqualified_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
         if matches!(
             unqualified_name,
             "current_user" | "current_role" | "session_user" | "user"
-        ) && function_args(function).is_empty()
+        ) && argument_nodes.is_empty()
         {
             return Some("name".to_string());
         }
@@ -1297,13 +1306,11 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
                 | "transaction_timestamp"
                 | "statement_timestamp"
                 | "clock_timestamp"
-        ) && function_args(function).is_empty()
+        ) && argument_nodes.is_empty()
         {
             return Some("timestamptz".to_string());
         }
-        if matches!(unqualified_name, "version" | "bicdb_version")
-            && function_args(function).is_empty()
-        {
+        if matches!(unqualified_name, "version" | "bicdb_version") && argument_nodes.is_empty() {
             return Some("text".to_string());
         }
         // to_timestamp(text, text) and to_timestamp(double precision) both
@@ -1315,7 +1322,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if unqualified_name == "regexp_replace" {
             return Some("text".to_string());
         }
-        if unqualified_name == "pg_backend_pid" && function_args(function).is_empty() {
+        if unqualified_name == "pg_backend_pid" && argument_nodes.is_empty() {
             return Some("int4".to_string());
         }
         if matches!(
@@ -1343,20 +1350,20 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             unqualified_name,
             "coalesce" | "nullif" | "greatest" | "least" | "ifnull"
         ) {
-            let arg_types = function_args(function)
+            let arg_types = argument_nodes
                 .iter()
                 .map(|arg| projected_expr_pg_type(arg, schema))
                 .collect::<Vec<_>>();
             return select_common_builtin_projected_type(&arg_types);
         }
         if unqualified_name == "abs" {
-            return projected_expr_pg_type(function_args(function).first()?, schema);
+            return projected_expr_pg_type(argument_nodes.first()?, schema);
         }
         if matches!(
             unqualified_name,
             "array_append" | "array_remove" | "array_replace"
         ) {
-            let args = function_args(function);
+            let args = argument_nodes;
             let array_type = projected_expr_pg_type(args.first()?, schema)?;
             let mut element_types = vec![array_type.strip_suffix("[]").map(str::to_string)];
             element_types.extend(
@@ -1367,7 +1374,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             return select_common_builtin_projected_type(&element_types)
                 .map(|element| format!("{element}[]"));
         }
-        let geometric_arg_types = function_args(function)
+        let geometric_arg_types = argument_nodes
             .iter()
             .map(|arg| projected_expr_pg_type(arg, schema))
             .collect::<Vec<_>>();
@@ -1384,7 +1391,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             return Some("float8".to_string());
         }
         if unqualified_name == "date_trunc" {
-            return projected_expr_pg_type(function_args(function).get(1)?, schema);
+            return projected_expr_pg_type(argument_nodes.get(1)?, schema);
         }
         if matches!(
             unqualified_name,
@@ -1427,7 +1434,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             unqualified_name,
             "lag" | "lead" | "first_value" | "last_value" | "nth_value"
         ) {
-            return projected_expr_pg_type(function_args(function).first()?, schema);
+            return projected_expr_pg_type(argument_nodes.first()?, schema);
         }
         if matches!(unqualified_name, "percent_rank" | "cume_dist") {
             return Some("float8".to_string());
@@ -1524,7 +1531,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         if matches!(
             unqualified_name,
             "isempty" | "lower_inc" | "upper_inc" | "lower_inf" | "upper_inf"
-        ) && function_args(function)
+        ) && argument_nodes
             .first()
             .and_then(|arg| projected_expr_pg_type(arg, schema))
             .is_some_and(|pg_type| {
@@ -1534,7 +1541,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             return Some("bool".to_string());
         }
         if matches!(unqualified_name, "lower" | "upper") {
-            if let Some(range_type) = function_args(function)
+            if let Some(range_type) = argument_nodes
                 .first()
                 .and_then(|arg| projected_expr_pg_type(arg, schema))
             {
@@ -1544,7 +1551,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             }
         }
         if unqualified_name == "range_merge" {
-            if let Some(arg_type) = function_args(function)
+            if let Some(arg_type) = argument_nodes
                 .first()
                 .and_then(|arg| projected_expr_pg_type(arg, schema))
             {
@@ -1556,7 +1563,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
                 }
             }
         }
-        let function_arg_types = function_args(function)
+        let function_arg_types = argument_nodes
             .iter()
             .map(|arg| projected_expr_pg_type(arg, schema))
             .collect::<Vec<_>>();
@@ -1590,7 +1597,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         }
         if unqualified_name == "set_bit" {
             return Some(
-                match projected_expr_pg_type(function_args(function).first()?, schema) {
+                match projected_expr_pg_type(argument_nodes.first()?, schema) {
                     Some(pg_type) if matches!(pg_type.as_str(), "bit" | "varbit") => {
                         "bit".to_string()
                     }
@@ -1617,26 +1624,27 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             unqualified_name,
             "array_append" | "array_remove" | "array_replace" | "array_cat" | "bicdb_array_assign"
         ) {
-            return projected_expr_pg_type(function_args(function).first()?, schema);
+            return projected_expr_pg_type(argument_nodes.first()?, schema);
         }
         if unqualified_name == "array_prepend" {
-            return projected_expr_pg_type(function_args(function).get(1)?, schema);
+            return projected_expr_pg_type(argument_nodes.get(1)?, schema);
         }
         if matches!(
             unqualified_name,
             "trim_array" | "array_sample" | "array_shuffle"
         ) {
-            return projected_expr_pg_type(function_args(function).first()?, schema);
+            return projected_expr_pg_type(argument_nodes.first()?, schema);
         }
         if unqualified_name == "array_fill" {
-            return projected_arithmetic_operand_pg_type(function_args(function).first()?, schema)
-                .map(|pg_type| {
+            return projected_arithmetic_operand_pg_type(argument_nodes.first()?, schema).map(
+                |pg_type| {
                     if pg_type.ends_with("[]") {
                         pg_type
                     } else {
                         format!("{pg_type}[]")
                     }
-                });
+                },
+            );
         }
         if matches!(
             unqualified_name,
@@ -1671,7 +1679,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             "similarity" => return Some("float4".to_string()),
             "age" | "make_interval" => return Some("interval".to_string()),
             "to_date" => return Some("date".to_string()),
-            "trunc" if function_args(function).len() == 2 => return Some("numeric".to_string()),
+            "trunc" if argument_nodes.len() == 2 => return Some("numeric".to_string()),
             "bicdb_oracle_nvl_number"
             | "bicdb_oracle_decode_number"
             | "bicdb_oracle_number_divide"
@@ -1716,8 +1724,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             unqualified_name,
             "substr" | "substring" | "reverse" | "trim" | "btrim" | "ltrim" | "rtrim"
         ) {
-            return match projected_expr_pg_type(function_args(function).first()?, schema).as_deref()
-            {
+            return match projected_expr_pg_type(argument_nodes.first()?, schema).as_deref() {
                 Some("bytea") => Some("bytea".to_string()),
                 Some("bit" | "varbit") if matches!(unqualified_name, "substr" | "substring") => {
                     Some("bit".to_string())
@@ -1955,15 +1962,8 @@ fn projected_expr_pg_type_with_db_uncached(db: &BicDb, expr: &Expr) -> Option<St
     if let Expr::Function(function) = expr {
         let name = object_name(&function.name).ok()?.to_ascii_lowercase();
         let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
-        // Borrow the positional arguments; `function_args` deep-clones them.
-        let owned_args;
-        let args: Vec<&Expr> = match unnamed_function_arg_exprs(function) {
-            Some(exprs) => exprs.collect(),
-            None => {
-                owned_args = function_args(function);
-                owned_args.iter().collect()
-            }
-        };
+        let argument_nodes = function_arg_list(function);
+        let args: Vec<&Expr> = argument_nodes.iter().collect();
         if matches!(
             bare_name,
             "current_user" | "current_role" | "session_user" | "user"
@@ -2811,21 +2811,25 @@ pub(crate) fn single_function_field(
 /// every argument expression per evaluation was ~2% of TPC-C CPU.
 pub(crate) enum FunctionArgList<'a> {
     Borrowed(Vec<&'a Expr>),
-    Owned(Vec<Expr>),
+    // Keep all evaluators from memoizing the rewritten nodes by address.
+    Owned {
+        args: Vec<Expr>,
+        _scope: ExprTypeScopeGuard,
+    },
 }
 
 impl<'a> FunctionArgList<'a> {
     pub(crate) fn iter(&self) -> Box<dyn Iterator<Item = &Expr> + '_> {
         match self {
             Self::Borrowed(args) => Box::new(args.iter().copied()),
-            Self::Owned(args) => Box::new(args.iter()),
+            Self::Owned { args, .. } => Box::new(args.iter()),
         }
     }
 
     pub(crate) fn len(&self) -> usize {
         match self {
             Self::Borrowed(args) => args.len(),
-            Self::Owned(args) => args.len(),
+            Self::Owned { args, .. } => args.len(),
         }
     }
 
@@ -2836,7 +2840,7 @@ impl<'a> FunctionArgList<'a> {
     pub(crate) fn get(&self, index: usize) -> Option<&Expr> {
         match self {
             Self::Borrowed(args) => args.get(index).copied(),
-            Self::Owned(args) => args.get(index),
+            Self::Owned { args, .. } => args.get(index),
         }
     }
 
@@ -2869,7 +2873,10 @@ pub(crate) fn function_arg_list(function: &Function) -> FunctionArgList<'_> {
         return FunctionArgList::Borrowed(Vec::new());
     };
     if standard_json_object_call(function, args) {
-        return FunctionArgList::Owned(function_args(function));
+        return FunctionArgList::Owned {
+            args: function_args(function),
+            _scope: suspend_expr_type_scope(),
+        };
     }
     FunctionArgList::Borrowed(
         args.args
@@ -3665,11 +3672,20 @@ mod function_arg_list_tests {
 
     #[test]
     fn named_json_object_arguments_still_take_the_owned_rewrite() {
+        let _scope = enter_expr_type_scope(0xb0, 0xb0);
         let function = call("SELECT json_object('a': 1, 'b': x)");
         let list = function_arg_list(&function);
-        assert!(matches!(list, FunctionArgList::Owned(_)));
+        assert!(matches!(list, FunctionArgList::Owned { .. }));
         assert_eq!(list.len(), 4);
         assert_eq!(owned(&list), function_args(&function));
+        assert_eq!(expr_type_scope(), None);
+        {
+            let _nested_scope = enter_expr_type_scope(0xb1, 0xb1);
+            assert_eq!(expr_type_scope(), Some((0xb1, 0xb1)));
+        }
+        assert_eq!(expr_type_scope(), None);
+        drop(list);
+        assert_eq!(expr_type_scope(), Some((0xb0, 0xb0)));
     }
 
     #[test]
@@ -3678,5 +3694,56 @@ mod function_arg_list_tests {
         let list = function_arg_list(&function);
         assert!(matches!(list, FunctionArgList::Borrowed(_)));
         assert_eq!(owned(&list), function_args(&function));
+    }
+}
+
+#[cfg(test)]
+mod type_memo_ownership_tests {
+    use super::*;
+
+    #[test]
+    fn ordinary_function_type_memos_reference_original_ast_nodes() {
+        let statements = Parser::parse_sql(
+            &PostgreSqlDialect {},
+            "SELECT abs(CAST(1 AS NUMERIC)),date_trunc('second',clock_timestamp()),json_object('n': CAST(1 AS NUMERIC))",
+        )
+        .unwrap();
+        let mut owned = BTreeSet::new();
+        let _ = sqlparser::ast::visit_expressions(&statements, |expr| {
+            owned.insert(expr as *const Expr as usize);
+            ControlFlow::<()>::Continue(())
+        });
+        EXPR_TYPE_MEMO.with(|memo| memo.borrow_mut().clear());
+        let _scope = enter_expr_type_scope(0xcafe, 0xcafe);
+        let Statement::Query(query) = &statements[0] else {
+            panic!("query")
+        };
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            panic!("select")
+        };
+        for item in &select.projection {
+            let SelectItem::UnnamedExpr(expr) = item else {
+                panic!("expression")
+            };
+            assert!(projected_expr_pg_type(expr, None).is_some());
+            assert_eq!(expr_type_scope(), Some((0xcafe, 0xcafe)));
+        }
+        let root = tempfile::tempdir().unwrap();
+        let db = BicDb::open(root.path()).unwrap();
+        for item in &select.projection {
+            let SelectItem::UnnamedExpr(expr) = item else {
+                panic!("expression")
+            };
+            assert!(projected_expr_pg_type_with_db(&db, expr).is_some());
+            assert_eq!(expr_type_scope(), Some((0xcafe, 0xcafe)));
+        }
+        EXPR_TYPE_MEMO.with(|memo| {
+            for (_, _, address, _) in memo.borrow().keys() {
+                assert!(
+                    owned.contains(address),
+                    "type memo retained a temporary expression address"
+                );
+            }
+        });
     }
 }

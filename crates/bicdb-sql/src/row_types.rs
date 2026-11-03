@@ -437,7 +437,7 @@ fn populate_record_row_type(
 
 /// A scalar `json[b]_populate_record(base, from_json)` call: its name without
 /// schema and its two argument expressions.
-pub(crate) fn populate_record_call(function: &Function) -> Result<Option<(String, [Expr; 2])>> {
+pub(crate) fn populate_record_call(function: &Function) -> Result<Option<(String, [&Expr; 2])>> {
     let Ok(name) = object_name(&function.name) else {
         return Ok(None);
     };
@@ -449,7 +449,11 @@ pub(crate) fn populate_record_call(function: &Function) -> Result<Option<(String
         .next()
         .unwrap_or(&name)
         .to_ascii_lowercase();
-    let Ok(args) = <[Expr; 2]>::try_from(function_args(function)) else {
+    let args: Vec<_> = crate::eval::unnamed_function_arg_exprs(function)
+        .into_iter()
+        .flatten()
+        .collect();
+    let Ok(args) = <[&Expr; 2]>::try_from(args) else {
         return Err(SqlError::undefined_function(format!(
             "function {short} expects two arguments"
         )));
@@ -466,9 +470,9 @@ pub(crate) fn eval_populate_record_call(
     let Some((name, [base_expr, json_expr])) = populate_record_call(function)? else {
         return Ok(None);
     };
-    let base = eval(&base_expr)?;
-    let json = eval(&json_expr)?;
-    populate_record_value(db, &name, &base_expr, base, json).map(Some)
+    let base = eval(base_expr)?;
+    let json = eval(json_expr)?;
+    populate_record_value(db, &name, base_expr, base, json).map(Some)
 }
 
 /// The record `json[b]_populate_record` returns. JSON keys that name an

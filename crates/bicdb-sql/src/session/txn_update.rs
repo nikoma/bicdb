@@ -2472,9 +2472,9 @@ impl<'db> SqlSession<'db> {
                     return Ok(SqlValue::Null);
                 }
                 if let Some((name, [base_expr, json_expr])) = populate_record_call(function)? {
-                    let base = self.eval_session_expr(&base_expr)?;
-                    let json = self.eval_session_expr(&json_expr)?;
-                    return populate_record_value(self.db_ref(), &name, &base_expr, base, json);
+                    let base = self.eval_session_expr(base_expr)?;
+                    let json = self.eval_session_expr(json_expr)?;
+                    return populate_record_value(self.db_ref(), &name, base_expr, base, json);
                 }
                 validate_common_type_expr(self.db_ref(), expr)?;
                 let mut args = PooledArgs::take();

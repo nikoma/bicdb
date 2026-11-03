@@ -44,6 +44,7 @@ rstar.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
 sha2.workspace = true
 unicode_categories.workspace = true
+unicode-normalization.workspace = true
 uuid.workspace = true
 sqlparser.workspace = true
 sxd-document = { package = "sxd-document-no-unsafe", version = "0.4.2", default-features = false, features = ["no-unsafe"] }

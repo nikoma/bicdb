@@ -2500,6 +2500,9 @@ pub(crate) fn apply_pg_type_modifier_with_context(
         }
         return Ok(SqlValue::Json(vector_json(&vector).into()));
     }
+    if let Some(PgTypeModifier::OracleNationalV1 { fixed, length }) = modifier {
+        return oracle::national::coerce(value, *fixed, *length);
+    }
     if matches!(pg_type, "bpchar" | "varchar") {
         let Some(PgTypeModifier::Character { length }) = modifier else {
             return Ok(value);

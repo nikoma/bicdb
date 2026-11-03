@@ -1441,6 +1441,7 @@ dependencies = [
  "sxd-xpath-no-unsafe",
  "tempfile",
  "thiserror 2.0.18",
+ "unicode-normalization",
  "unicode_categories",
  "uuid",
  "waken_snowball",

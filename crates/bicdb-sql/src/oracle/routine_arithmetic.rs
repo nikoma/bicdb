@@ -22,6 +22,9 @@ pub(super) fn returns_date(routine: &RoutineSchema) -> Result<bool> {
 }
 
 pub(crate) fn prepare_physical_metadata(routine: &mut RoutineSchema) -> Result<()> {
+    let _national = national::Scope::new(
+        preview_routine_language_version(&routine.language).is_some_and(|v| v >= 17),
+    );
     let params = parse_routine_params(&routine.args)?;
     if params.len() != routine.arg_types.len() {
         return Err(SqlError::InvalidSql(
@@ -31,7 +34,21 @@ pub(crate) fn prepare_physical_metadata(routine: &mut RoutineSchema) -> Result<(
     for (param, physical) in params.iter().zip(&mut routine.arg_types) {
         if param.declared_date {
             *physical = raw_routine_type_schema("timestamp(0)")?;
+        } else if param
+            .type_schema
+            .as_ref()
+            .is_some_and(|schema| national::is_modifier(schema.type_modifier.as_ref()))
+        {
+            *physical = RoutineTypeSchema {
+                pg_type: "varchar".into(),
+                type_modifier: None,
+            };
         }
+    }
+    if national::returns_national(routine)? {
+        routine.return_type = "varchar".into();
+        routine.return_type_modifier = None;
+        routine.return_type_declaration = Some("character varying".into());
     }
     if returns_date(routine)? {
         let physical = raw_routine_type_schema("timestamp(0)")?;
@@ -91,6 +108,8 @@ pub(super) enum Kind {
     TemporalUnknown,
     Number,
     Text,
+    NationalText,
+    FixedNationalText,
     Interval,
     Null,
     Other,
@@ -115,13 +134,32 @@ fn pg_kind(kind: &str) -> Kind {
     }
 }
 
+fn schema_kind(schema: &RoutineTypeSchema) -> Kind {
+    if let Some(PgTypeModifier::OracleNationalV1 { fixed, .. }) = &schema.type_modifier {
+        if *fixed {
+            Kind::FixedNationalText
+        } else {
+            Kind::NationalText
+        }
+    } else {
+        pg_kind(&schema.pg_type)
+    }
+}
+
 impl Kind {
+    fn is_national(self) -> bool {
+        matches!(self, Self::NationalText | Self::FixedNationalText)
+    }
     fn common(self, other: Self) -> Self {
         match (self, other) {
             (Self::Null, kind) | (kind, Self::Null) => kind,
             (Self::Timestamp(a), Self::Timestamp(b)) => {
                 Self::Timestamp(a.zip(b).map(|(a, b)| a.max(b)))
             }
+            (Self::Text, Self::NationalText | Self::FixedNationalText)
+            | (Self::NationalText | Self::FixedNationalText, Self::Text)
+            | (Self::NationalText, Self::FixedNationalText)
+            | (Self::FixedNationalText, Self::NationalText) => Self::NationalText,
             (a, b) if a == b => a,
             _ => Self::Unknown,
         }
@@ -133,7 +171,10 @@ impl Kind {
         )
     }
     fn day_operand(self) -> bool {
-        matches!(self, Self::Number | Self::Text | Self::Null)
+        matches!(
+            self,
+            Self::Number | Self::Text | Self::NationalText | Self::FixedNationalText | Self::Null
+        )
     }
 }
 
@@ -208,7 +249,8 @@ impl Resolve<'_> {
                 // character result type must retain procedural input types
                 // when SQL metadata cannot resolve a host variable.
                 match self.kind(expr) {
-                    Kind::Text | Kind::Null => Kind::Text,
+                    kind @ (Kind::Text | Kind::NationalText | Kind::FixedNationalText) => kind,
+                    Kind::Null => Kind::Text,
                     _ => Kind::Unknown,
                 }
             }
@@ -264,7 +306,7 @@ impl Resolve<'_> {
             } => Kind::Timestamp(Some(precision.unwrap_or(6) as u8)),
             Expr::Cast { data_type, .. } => routine_type_schema(data_type)
                 .ok()
-                .map_or(Kind::Unknown, |kind| pg_kind(&kind.pg_type)),
+                .map_or(Kind::Unknown, |kind| schema_kind(&kind)),
             Expr::TypedString(value) => match &value.data_type {
                 DataType::Date => Kind::Date,
                 DataType::Timestamp(
@@ -291,24 +333,45 @@ impl Resolve<'_> {
             Expr::Function(function) => {
                 let name = object_name_lowercase(&function.name).ok();
                 match name.as_deref() {
-                    Some("bicdb_oracle_current_sqlcode") => return Kind::Number,
+                    Some(
+                        "bicdb_oracle_current_sqlcode"
+                        | "bicdb_oracle_national_length"
+                        | "length"
+                        | "lengthb"
+                        | "lengthc"
+                        | "length2"
+                        | "length4",
+                    ) => return Kind::Number,
+                    Some("bicdb_oracle_concat") => {
+                        return if function_args(function)
+                            .iter()
+                            .take(2)
+                            .any(|arg| self.kind(arg).is_national())
+                        {
+                            Kind::NationalText
+                        } else {
+                            Kind::Text
+                        }
+                    }
+                    Some("bicdb_oracle_national_value") => return Kind::NationalText,
                     Some("bicdb_oracle_current_sqlerrm") => return Kind::Text,
                     Some(
                         "chr"
                         | "pg_catalog.chr"
                         | "bicdb_oracle_chr"
-                        | "bicdb_oracle_concat"
                         | "bicdb_oracle_default_to_char",
                     ) => return Kind::Text,
                     Some(
                         "substr" | "substring" | "trim" | "btrim" | "ltrim" | "rtrim" | "reverse"
                         | "lower" | "upper",
                     ) if self.env.concatenation => {
-                        if function_args(function)
-                            .first()
-                            .is_some_and(|arg| self.kind(arg) == Kind::Text)
-                        {
-                            return Kind::Text;
+                        if function_args(function).first().is_some_and(|arg| {
+                            matches!(
+                                self.kind(arg),
+                                Kind::Text | Kind::NationalText | Kind::FixedNationalText
+                            )
+                        }) {
+                            return self.kind(&function_args(function)[0]);
                         }
                     }
                     Some(
@@ -371,6 +434,9 @@ impl Resolve<'_> {
                 }
                 if let Ok(name) = object_name(&function.name) {
                     if let Ok(Some(routine)) = load_routine(self.db, RoutineKind::Function, &name) {
+                        if let Some(schema) = national::return_type(&routine).ok().flatten() {
+                            return schema_kind(&schema);
+                        }
                         if typed_preview_routine_language(&routine.language) {
                             if returns_date(&routine).unwrap_or(false) {
                                 return Kind::Date;
@@ -426,6 +492,51 @@ impl Resolve<'_> {
     }
 
     fn rewrite(&self, expr: &mut Expr) -> Result<()> {
+        if let Expr::BinaryOp { left, op, right } = expr {
+            if matches!(op, BinaryOperator::Eq | BinaryOperator::NotEq) {
+                fn fixed_literal(expr: &Expr) -> bool {
+                    match expr {
+                        Expr::Nested(expr) => fixed_literal(expr),
+                        Expr::Value(v) => matches!(v.value, Value::SingleQuotedString(_)),
+                        _ => false,
+                    }
+                }
+                let left_fixed = self.kind(left) == Kind::FixedNationalText;
+                let right_fixed = self.kind(right) == Kind::FixedNationalText;
+                if (left_fixed && (right_fixed || fixed_literal(right)))
+                    || (right_fixed && fixed_literal(left))
+                {
+                    *expr = expression(&format!(
+                        "rtrim({},' ') {op} rtrim({},' ')",
+                        super::render_sql(left.as_ref()),
+                        super::render_sql(right.as_ref())
+                    ))?;
+                    return Ok(());
+                }
+            }
+        }
+        if let Expr::Substring { expr: operand, .. } | Expr::Overlay { expr: operand, .. } = expr {
+            if self.kind(operand).is_national() {
+                return Err(unsupported(
+                    "national-character substring positions require a UTF16 execution contract",
+                ));
+            }
+        }
+        if let Expr::Function(function) = expr {
+            if object_name_lowercase(&function.name).is_ok_and(|name| {
+                matches!(
+                    name.as_ref(),
+                    "substr" | "substring" | "reverse" | "lpad" | "rpad"
+                )
+            }) && function_args(function)
+                .iter()
+                .any(|arg| self.kind(arg).is_national())
+            {
+                return Err(unsupported(
+                    "national-character positional functions require a UTF16 execution contract",
+                ));
+            }
+        }
         if let Expr::TypedString(value) = expr {
             if self.env.nvl && matches!(value.data_type, DataType::Timestamp(..)) {
                 if let Value::SingleQuotedString(text) = &value.value.value {
@@ -441,6 +552,29 @@ impl Resolve<'_> {
                 }
             }
         }
+        if let Expr::Function(function) = expr {
+            let name = object_name_lowercase(&function.name).ok();
+            if let Some(name @ ("length" | "lengthb" | "lengthc" | "length2" | "length4")) =
+                name.as_deref()
+            {
+                let args = function_args(function);
+                if let [arg] = args.as_slice() {
+                    if self.kind(arg).is_national() {
+                        let mode = match name {
+                            "lengthb" => "bytes",
+                            "lengthc" => "complete",
+                            "length4" => "characters",
+                            _ => "utf16",
+                        };
+                        *expr = expression(&format!(
+                            "bicdb_oracle_national_length({},'{mode}')",
+                            super::render_sql(arg)
+                        ))?;
+                        return Ok(());
+                    }
+                }
+            }
+        }
         if self.env.character_conversion {
             if let Expr::Function(function) = expr {
                 if object_name_lowercase(&function.name).is_ok_and(|name| name == "chr") {
@@ -449,20 +583,52 @@ impl Resolve<'_> {
             }
         }
         if self.env.nvl {
+            let national_result = if let Expr::Function(function) = expr {
+                if object_name_lowercase(&function.name).is_ok_and(|name| name == "nvl") {
+                    let args = function_args(function);
+                    args.first().is_some_and(|arg| self.kind(arg).is_national())
+                        || (args.first().is_some_and(|arg| self.kind(arg) == Kind::Null)
+                            && args.get(1).is_some_and(|arg| self.kind(arg).is_national()))
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
             super::nvl::lower_call(
                 expr,
                 |value| self.kind(value),
                 self.sql_depth > 0 || !self.queries.is_empty(),
                 self.env.defer_bind_types,
             )?;
+            if national_result {
+                *expr = expression(&format!(
+                    "bicdb_oracle_national_value({})",
+                    super::render_sql(expr)
+                ))?;
+            }
         }
         if self.env.decode {
+            let national_result = if let Expr::Function(function) = expr {
+                object_name_lowercase(&function.name).is_ok_and(|name| name == "decode")
+                    && function_args(function)
+                        .get(2)
+                        .is_some_and(|arg| self.kind(arg).is_national())
+            } else {
+                false
+            };
             super::decode::lower_call(
                 expr,
                 |arg| self.kind(arg),
                 self.sql_depth > 0 || !self.queries.is_empty(),
                 self.env.defer_bind_types,
             )?;
+            if national_result {
+                *expr = expression(&format!(
+                    "bicdb_oracle_national_value({})",
+                    super::render_sql(expr)
+                ))?;
+            }
         }
         if self.env.concatenation || self.env.character_conversion {
             if let Expr::Function(function) = expr {
@@ -470,7 +636,7 @@ impl Resolve<'_> {
                     let args = function_args(function);
                     if let [arg] = args.as_slice() {
                         let kind=match self.kind(arg) {
-                            Kind::Number=>"number",Kind::Date=>"date",Kind::Text|Kind::Null=>"text",
+                            Kind::Number=>"number",Kind::Date=>"date",Kind::Text|Kind::NationalText|Kind::FixedNationalText|Kind::Null=>"text",
                             Kind::Unknown if self.env.sql_builtins_only && self.env.defer_bind_types => return Ok(()),
                             _=>return Err(SqlError::Unsupported("default Oracle TO_CHAR requires resolved character, NUMBER or logical DATE input".into())),
                         };
@@ -500,7 +666,9 @@ impl Resolve<'_> {
             {
                 let kind = |operand: &Expr| -> Result<&str> {
                     match self.kind(operand) {
-                        Kind::Text | Kind::Null => Ok("text"),
+                        Kind::Text | Kind::NationalText | Kind::FixedNationalText | Kind::Null => {
+                            Ok("text")
+                        }
                         Kind::Number => Ok("number"),
                         Kind::Date => Ok("date"),
                         resolved => {
@@ -577,7 +745,12 @@ impl Resolve<'_> {
                     let args = function_args(function);
                     if matches!(
                         args.first().map(|arg| self.kind(arg)),
-                        Some(Kind::Number | Kind::Text)
+                        Some(
+                            Kind::Number
+                                | Kind::Text
+                                | Kind::NationalText
+                                | Kind::FixedNationalText
+                        )
                     ) {
                         *expr = date_trunc::numeric_trunc_expr(&args)?;
                         if self.sql_depth == 0 && self.queries.is_empty() {
@@ -864,7 +1037,7 @@ fn prepare_cursor(
             param
                 .type_schema
                 .as_ref()
-                .map_or(Kind::Unknown, |kind| pg_kind(&kind.pg_type))
+                .map_or(Kind::Unknown, schema_kind)
         };
         let name = normalize_object_name(param.name.as_ref().expect("validated formal"));
         scope.variables.insert(name.clone(), kind);
@@ -904,7 +1077,14 @@ fn statements(
                             } else if pg_type.as_deref() == Some("timestamp") {
                                 Kind::Timestamp(temporal_precision(type_modifier.as_ref()))
                             } else {
-                                pg_type.as_deref().map_or(Kind::Unknown, pg_kind)
+                                if national::is_modifier(type_modifier.as_ref()) {
+                                    schema_kind(&RoutineTypeSchema {
+                                        pg_type: pg_type.clone().unwrap_or_default(),
+                                        type_modifier: type_modifier.clone(),
+                                    })
+                                } else {
+                                    pg_type.as_deref().map_or(Kind::Unknown, pg_kind)
+                                }
                             };
                             local_env
                                 .variables
@@ -1037,6 +1217,19 @@ fn statements(
                 visit(db, env, &mut dynamic.command.expr)?;
                 for bind in &mut dynamic.using {
                     visit(db, env, &mut bind.expr)?;
+                    let resolve = Resolve {
+                        db,
+                        env,
+                        queries: Vec::new(),
+                        sql_depth: 0,
+                        statement_from: Vec::new(),
+                    };
+                    if resolve.kind(&bind.expr).is_national() {
+                        bind.expr = expression(&format!(
+                            "bicdb_oracle_national_value({})",
+                            super::render_sql(&bind.expr)
+                        ))?;
+                    }
                 }
             }
             RoutineStmt::Return(Some(expr)) | RoutineStmt::DynamicExecute(expr) => {
@@ -1056,7 +1249,7 @@ fn statements(
                 let message = &mut arguments[1].expr;
                 let kind=match resolve.kind(message) {
                     Kind::Date=>Some("date"),Kind::Number=>Some("number"),
-                    Kind::Text|Kind::Null=>None,
+                    Kind::Text|Kind::NationalText|Kind::FixedNationalText|Kind::Null=>None,
                     _=>return Err(SqlError::Unsupported("RAISE_APPLICATION_ERROR msg requires a resolved character, NUMBER or logical DATE operand".into())),
                 };
                 if let Some(kind) = kind {
@@ -1117,7 +1310,7 @@ pub(crate) fn lower(
                 if schema.pg_type == "timestamp" {
                     Kind::Timestamp(temporal_precision(schema.type_modifier.as_ref()))
                 } else {
-                    pg_kind(&schema.pg_type)
+                    schema_kind(schema)
                 }
             })
         };
@@ -1140,7 +1333,14 @@ pub(crate) fn lower(
                 } else if pg_type.as_deref() == Some("timestamp") {
                     Kind::Timestamp(temporal_precision(type_modifier.as_ref()))
                 } else {
-                    pg_type.as_deref().map_or(Kind::Unknown, pg_kind)
+                    if national::is_modifier(type_modifier.as_ref()) {
+                        schema_kind(&RoutineTypeSchema {
+                            pg_type: pg_type.clone().unwrap_or_default(),
+                            type_modifier: type_modifier.clone(),
+                        })
+                    } else {
+                        pg_type.as_deref().map_or(Kind::Unknown, pg_kind)
+                    }
                 };
                 env.variables.insert(normalize_object_name(name), kind);
             }

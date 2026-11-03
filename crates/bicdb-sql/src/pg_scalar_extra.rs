@@ -561,6 +561,13 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
     if name.starts_with("bicdb_oracle_nvl_") {
         return oracle_nvl::evaluate(name, args).map(Some);
     }
+    if name == "bicdb_oracle_national_value" {
+        arity(name, args, 1..=1)?;
+        return oracle::national::coerce(args[0].clone(), false, None).map(Some);
+    }
+    if name == "bicdb_oracle_national_length" {
+        return oracle::national::length(args).map(Some);
+    }
     if name == "bicdb_oracle_chr" {
         return oracle_chr::evaluate(args).map(Some);
     }

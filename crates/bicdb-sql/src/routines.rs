@@ -40,6 +40,9 @@ pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
 }
 
 fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) -> Result<RoutineIR> {
+    let _national = oracle::national::Scope::new(
+        oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 17),
+    );
     let _grammar = oracle::syntax::Scope::new(
         oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 13),
     );
@@ -123,7 +126,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16)
+        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17)
     ) {
         oracle::routines::bind_function_namespace(
             db,
@@ -143,7 +146,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             })?,
             matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16)
+                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17)
             ),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 7),
@@ -780,7 +783,15 @@ pub(crate) fn parse_routine_param(arg: &str, index: usize) -> Result<RoutinePara
     let declared_date = details.as_ref().is_some_and(|(_, date)| *date);
     let type_schema = details.map(|(schema, _)| schema).map(|mut schema| {
         // PostgreSQL routine argument signatures discard type modifiers.
-        schema.type_modifier = None;
+        schema.type_modifier = match schema.type_modifier {
+            Some(PgTypeModifier::OracleNationalV1 { fixed, .. }) => {
+                Some(PgTypeModifier::OracleNationalV1 {
+                    fixed,
+                    length: None,
+                })
+            }
+            _ => None,
+        };
         schema
     });
     Ok(RoutineParam {
@@ -1153,7 +1164,8 @@ pub(crate) fn parse_routine_decl(declaration: &str) -> Result<RoutineDecl> {
     let declared_date = details.as_ref().is_some_and(|(_, date)| *date);
     let type_schema = details.map(|(schema, _)| schema);
     let pg_type = type_schema.as_ref().map(|schema| schema.pg_type.clone());
-    let type_modifier = type_schema.and_then(|schema| schema.type_modifier);
+    let mut type_modifier = type_schema.and_then(|schema| schema.type_modifier);
+    oracle::national::local_modifier(&mut type_modifier)?;
     let default_expr = initializer
         .map(|(_, expr_start)| &rest[expr_start..])
         .map(|expr| parse_routine_expr(expr.trim()))

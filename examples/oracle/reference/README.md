@@ -451,3 +451,22 @@ two connections to each database and removes its uniquely named routines and
 table. It does not run source application routines or qualify a complete
 application. Native PostgreSQL behavior is checked by the separate native
 control fixtures; transport Describe and restart are covered by Rust tests.
+
+
+`national_characters.py --oracle-config /private/reference.json --output
+/private/national-characters.json` compares version-17 routine-local NVARCHAR2
+and NCHAR behavior with an AL16UTF16 Oracle reference. The supplied schema must
+already exist on the dedicated preview target selected by BICDB_PG_DSN. Fixtures
+check UTF16 lengths, supplementary characters, fixed padding, assignment errors,
+complete-character counts, formal/return provenance, static/dynamic host values,
+and a prepared PostgreSQL-driver return codec. An explicit negative case records
+Oracle's invalid-function error for NVARCHAR and the preview's unsupported-type
+error; it does not claim invalid-object catalog parity.
+
+`postgres_national_controls.py --output /private/native-characters.json` checks
+ordinary VARCHAR assignment, trailing spaces, empty strings, Unicode lengths and
+overflow against PostgreSQL in a separate native-profile target. Set
+ORACLE_CONTROL_PG_DSN and BICDB_PG_DSN privately. Both fixtures remove only their
+own created functions. General national SQL table types, national literals,
+NLS settings, positional operations and larger NCHAR declarations remain outside
+this bounded contract.

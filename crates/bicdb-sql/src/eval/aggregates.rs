@@ -1652,12 +1652,14 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             | "bicdb_oracle_column_type"
             | "chr"
             | "bicdb_oracle_chr"
+            | "bicdb_oracle_national_value"
             | "bicdb_oracle_decode_key"
             | "bicdb_oracle_decode_text"
             | "bicdb_oracle_concat"
             | "bicdb_oracle_default_to_char"
             | "bicdb_oracle_current_sqlerrm"
             | "to_char" => return Some("text".to_string()),
+            "bicdb_oracle_national_length" => return Some("int8".into()),
             "bicdb_oracle_current_sqlcode" => return Some("int4".into()),
             "strpos" => return Some("int4".to_string()),
             // reverse/btrim/ltrim/rtrim keep their bytea-aware typing below.

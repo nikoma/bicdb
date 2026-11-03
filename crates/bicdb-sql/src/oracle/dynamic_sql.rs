@@ -163,6 +163,8 @@ fn bind_sql(sql: &str, kinds: &[String]) -> Result<String> {
             bound += 1;
             output.push(if kind == "unknown" {
                 format!("${bound}")
+            } else if kind == "national" {
+                format!("bicdb_oracle_national_value(${bound})")
             } else {
                 format!("CAST(${bound} AS {kind})")
             });
@@ -333,6 +335,12 @@ impl SqlSession<'_> {
                 SqlValue::String(text) if text.is_empty() => SqlValue::Null,
                 other => other,
             };
+            if matches!(&bind.expr, Expr::Function(function) if object_name_lowercase(&function.name).is_ok_and(|name| name == "bicdb_oracle_national_value"))
+            {
+                kinds.push("national".into());
+                values.push(value);
+                continue;
+            }
             let declared = match &bind.expr {
                 Expr::Identifier(name) => frame
                     .assignment_types

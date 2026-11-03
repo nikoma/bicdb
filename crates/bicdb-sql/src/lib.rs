@@ -2976,6 +2976,12 @@ struct ColumnSchema {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum PgTypeModifier {
+    /// Compiler-local national-character provenance. Routine physical signatures
+    /// erase this modifier; the versioned source definition recreates it.
+    OracleNationalV1 {
+        fixed: bool,
+        length: Option<u32>,
+    },
     /// Versioned Oracle source provenance with a native timestamp codec. An
     /// older schema reader rejects this variant instead of erasing DATE's
     /// assignment semantics. The durable preview marker fences server startup.
@@ -3008,6 +3014,7 @@ enum PgTypeModifier {
 impl PgTypeModifier {
     fn catalog_value(&self) -> i64 {
         match self {
+            Self::OracleNationalV1 { length, .. } => length.map_or(-1, |n| i64::from(n) + 4),
             Self::Numeric { precision, scale } => {
                 let encoded_scale = i32::from(*scale) & 0x7ff;
                 i64::from(((i32::from(*precision) << 16) | encoded_scale) + 4)

@@ -115,6 +115,7 @@ sha1 = "0.10"
 sqlparser = { version = "0.62.0", features = ["visitor"] }
 subtle = "2.6"
 unicode_categories = "0.1"
+unicode-normalization = "0.1.25"
 tempfile = "3.12"
 thiserror = "2.0"
 tokenizers = { version = "0.23.1", default-features = false, features = ["fancy-regex"] }

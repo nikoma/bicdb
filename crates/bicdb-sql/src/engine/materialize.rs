@@ -3159,11 +3159,13 @@ impl<'db> SqlEngine<'db> {
             | "bicdb_oracle_nvl_convert_text"
             | "bicdb_oracle_column_type"
             | "bicdb_oracle_chr"
+            | "bicdb_oracle_national_value"
             | "bicdb_oracle_decode_key"
             | "bicdb_oracle_decode_text"
             | "bicdb_oracle_concat"
             | "bicdb_oracle_default_to_char"
             | "bicdb_oracle_current_sqlerrm" => Some("text".to_string()),
+            "bicdb_oracle_national_length" => Some("int8".into()),
             "bicdb_oracle_current_sqlcode" => Some("int4".into()),
             "nextval" | "currval" | "setval" => Some("int8".to_string()),
             "starts_with" => Some("bool".to_string()),

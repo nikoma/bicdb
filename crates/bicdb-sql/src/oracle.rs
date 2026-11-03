@@ -15,6 +15,7 @@ mod dual;
 pub(crate) mod dynamic_sql;
 pub(crate) mod errors;
 mod namespaces;
+pub(crate) mod national;
 mod nvl;
 mod outer_joins;
 pub(crate) mod procedures;
@@ -76,7 +77,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V12: &str = "bicdb_oracle_preview_v12"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V13: &str = "bicdb_oracle_preview_v13";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V14: &str = "bicdb_oracle_preview_v14";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V15: &str = "bicdb_oracle_preview_v15";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v16";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V16: &str = "bicdb_oracle_preview_v16";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v17";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -92,7 +94,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V12_OID: i64 = 999_411;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V13_OID: i64 = 999_412;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V14_OID: i64 = 999_413;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V15_OID: i64 = 999_414;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_415;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V16_OID: i64 = 999_415;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_416;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -116,7 +119,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V13 => Some(13),
         PREVIEW_ROUTINE_LANGUAGE_V14 => Some(14),
         PREVIEW_ROUTINE_LANGUAGE_V15 => Some(15),
-        PREVIEW_ROUTINE_LANGUAGE => Some(16),
+        PREVIEW_ROUTINE_LANGUAGE_V16 => Some(16),
+        PREVIEW_ROUTINE_LANGUAGE => Some(17),
         _ => None,
     }
 }
@@ -124,7 +128,7 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
     matches!(
         preview_routine_language_version(language),
-        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16)
+        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17)
     )
 }
 
@@ -314,9 +318,15 @@ fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
     if procedures::header(sql)?.is_some() {
         return Ok(sql.to_string());
     }
-    if !["decode", "nvl", "chr", "to_char"]
-        .iter()
-        .any(|name| sql.to_ascii_lowercase().contains(name))
+    if ![
+        "decode",
+        "nvl",
+        "chr",
+        "to_char",
+        "bicdb_oracle_national_value",
+    ]
+    .iter()
+    .any(|name| sql.to_ascii_lowercase().contains(name))
         || raw_do_block_body(sql)?.is_some()
     {
         return Ok(sql.to_string());

@@ -4,7 +4,7 @@ use super::*;
 
 fn type_name(kind: Kind) -> Result<&'static str> {
     match kind {
-        Kind::Text | Kind::Null => Ok("text"),
+        Kind::Text | Kind::NationalText | Kind::FixedNationalText | Kind::Null => Ok("text"),
         Kind::Number => Ok("number"),
         Kind::Date => Ok("date"),
         Kind::Timestamp(_) => Ok("timestamp"),

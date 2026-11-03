@@ -6,7 +6,7 @@ use super::*;
 
 fn kind_name(kind: Kind) -> Result<&'static str> {
     match kind {
-        Kind::Null | Kind::Text => Ok("text"),
+        Kind::Null | Kind::Text | Kind::NationalText | Kind::FixedNationalText => Ok("text"),
         Kind::Number => Ok("number"),
         Kind::Date => Ok("date"),
         Kind::Timestamp(_) => Ok("timestamp"),
@@ -352,7 +352,7 @@ mod tests {
         let mut db = BicDb::open(root.path()).unwrap();
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
         let mut session = SqlSession::new(&mut db);
-        for version in 1..=16 {
+        for version in 1..=17 {
             let name = format!("bicdb_oracle_preview_v{version}");
             let oid = 999399 + version;
             assert_eq!(pg_language_oid(&name), oid);

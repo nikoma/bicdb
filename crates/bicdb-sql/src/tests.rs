@@ -8158,3 +8158,46 @@ fn coalesce_unique_indexes_enforce_text_and_exact_numeric_fallbacks() {
             .is_err());
     }
 }
+
+#[test]
+fn information_schema_columns_preserves_logical_names_and_schema_filters() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        root.path(),
+        bicdb_core::DbConfig::default().with_fsync(false),
+    )
+    .unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE SCHEMA cols_a",
+        "CREATE SCHEMA cols_b",
+        "CREATE TABLE cols_a.same_name(a INTEGER)",
+        "CREATE TABLE cols_b.same_name(b VARCHAR(3))",
+        "CREATE VIEW cols_a.col_view AS SELECT a FROM cols_a.same_name",
+    ] {
+        session.execute(sql).unwrap();
+    }
+    let query="SELECT table_schema,table_name,column_name FROM information_schema.columns WHERE table_name='same_name' ORDER BY table_schema,column_name";
+    let expected = vec![
+        vec![
+            SqlValue::String("cols_a".into()),
+            SqlValue::String("same_name".into()),
+            SqlValue::String("a".into()),
+        ],
+        vec![
+            SqlValue::String("cols_b".into()),
+            SqlValue::String("same_name".into()),
+            SqlValue::String("b".into()),
+        ],
+    ];
+    assert_eq!(session.execute(query).unwrap().rows, expected);
+    assert_eq!(session.execute("SELECT column_name FROM information_schema.columns WHERE table_schema='cols_b' AND table_name='same_name'").unwrap().rows,vec![vec![SqlValue::String("b".into())]]);
+    assert_eq!(session.execute("SELECT table_schema,table_name,column_name FROM information_schema.columns WHERE table_schema='cols_a' AND table_name='col_view'").unwrap().rows,vec![vec![SqlValue::String("cols_a".into()),SqlValue::String("col_view".into()),SqlValue::String("a".into())]]);
+    drop(session);
+    drop(db);
+    let mut db = BicDb::open(root.path()).unwrap();
+    assert_eq!(
+        SqlSession::new(&mut db).execute(query).unwrap().rows,
+        expected
+    );
+}

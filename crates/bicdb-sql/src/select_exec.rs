@@ -6620,8 +6620,9 @@ pub(crate) fn information_schema_columns_filtered(
     let schemas = list_schemas(db)?;
     let mut rows = Vec::new();
     for collection in user_collection_names(db) {
+        let namespace = relation_catalog_namespace(db, &collection)?;
         if !catalog_name_matches(table_names, &collection)
-            || !catalog_name_matches(schema_names, "public")
+            || !catalog_name_matches(schema_names, &namespace)
         {
             continue;
         }
@@ -6667,8 +6668,11 @@ pub(crate) fn information_schema_columns_filtered(
             let explicit_collation = column.collation.clone();
             rows.push(virtual_row([
                 ("table_catalog", SqlValue::String("bicdb".to_string())),
-                ("table_schema", SqlValue::String("public".to_string())),
-                ("table_name", SqlValue::String(collection.clone())),
+                ("table_schema", SqlValue::String(namespace.clone())),
+                (
+                    "table_name",
+                    SqlValue::String(catalog_display_name(&collection)),
+                ),
                 ("column_name", SqlValue::String(column.name)),
                 ("ordinal_position", SqlValue::Int((idx + 1) as i64)),
                 ("data_type", SqlValue::String(data_type)),
@@ -6826,8 +6830,9 @@ pub(crate) fn information_schema_columns_filtered(
         }
     }
     for view in list_views(db)? {
+        let namespace = relation_catalog_namespace(db, &view.name)?;
         if !catalog_name_matches(table_names, &view.name)
-            || !catalog_name_matches(schema_names, "public")
+            || !catalog_name_matches(schema_names, &namespace)
         {
             continue;
         }
@@ -6849,8 +6854,11 @@ pub(crate) fn information_schema_columns_filtered(
                 .unwrap_or(SqlValue::Null);
             rows.push(virtual_row([
                 ("table_catalog", SqlValue::String("bicdb".to_string())),
-                ("table_schema", SqlValue::String("public".to_string())),
-                ("table_name", SqlValue::String(view.name.clone())),
+                ("table_schema", SqlValue::String(namespace.clone())),
+                (
+                    "table_name",
+                    SqlValue::String(catalog_display_name(&view.name)),
+                ),
                 ("column_name", SqlValue::String(column.name)),
                 ("ordinal_position", SqlValue::Int((idx + 1) as i64)),
                 ("data_type", SqlValue::String(data_type)),

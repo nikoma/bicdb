@@ -914,3 +914,32 @@ The unchanged original intersection function now matches 11/11 source calls,
 and the CSV collection function retains 5/5. These bounded checks use an explicit
 fresh-creation adaptation for the source collection type's edition annotation.
 They do not qualify editioning, complete application execution or deployment.
+
+
+## Bounded session inspection and compiler version 22
+
+The [session-context contract](evidence/oracle-session-context-2026-11-03/README.md)
+adds SYS_CONTEXT for USERENV identity, current schema, database name/domain and
+available client metadata. The length argument truncates to an integral byte
+limit; values outside 1..4000 use the default 256-byte limit. NULL arguments,
+case-insensitive namespace/attribute matching, error codes and unknown namespaces
+have source comparisons. SQL text results use the normal VARCHAR transport.
+
+CURRENT_USER follows the effective SQL role; SESSION_USER follows session
+authorization. Existing role names retain their catalog spelling. CURRENT_SCHEMA
+uses preview schema selection. DB_NAME is the connected BicDB database name.
+DB_DOMAIN is NULL because this preview has no Oracle domain configuration.
+IP_ADDRESS comes from the accepted network peer; embedded sessions without a
+provided address return NULL. HOST requires host-installed client hostname
+information and is NULL for the PostgreSQL transport, which supplies no hostname.
+It never substitutes the server's hostname. Physical names and role catalogs are
+platform-specific, so reference assertions compare identity relationships and
+length/null/error rules rather than assuming equal physical environments.
+
+The server ignores startup attempts to inject its connection metadata. SQL SET,
+set_config and individual RESET cannot change it; RESET ALL and DISCARD ALL
+retain it. Version-21 routines preserve their previous context behavior. Compiler
+version 22 has language OID 999421; the version-21 OID remains 999420. Older
+readers refuse the new compiler and lowered view helpers. This does not implement
+application-defined contexts, SYS_SESSION_ROLES, all USERENV attributes, Oracle
+authentication protocols, linguistic conversion or complete application startup.

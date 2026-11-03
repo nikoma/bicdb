@@ -971,3 +971,20 @@ desktop over the PostgreSQL driver. Login and window navigation remain unreliabl
 under the full background workload. TM9 formatting, driver session controls,
 transaction failures and complete business workflows remain open. Accepted routine
 definitions and a displayed desktop are separate from complete application operation.
+
+
+## Text-minimum number formatting, compiler version 24
+
+The [number-format contract](evidence/oracle-number-text-formats-2026-11-03/README.md)
+adds bounded `TO_CHAR` models TM, TM9 and TME, with accepted FM prefixes, exact
+decimal rendering, scientific notation, explicit numeric NLS characters and
+source-compared NULL/error priority. Fifty-five Oracle cases pass, including
+prepared parameters. The previous binary matched five. Result metadata remains
+TEXT across prepared binds. Compiler version 24 has language OID 999423; version
+23 retains 999422 and its earlier semantics. Thirteen reader checks cover these
+boundaries without changing durable metadata format 5.
+
+The default PostgreSQL formatter is unchanged. Eight native controls preserve
+the previous BicDB results, while five match PostgreSQL and three explicitly
+record existing literal-letter format gaps. This is not complete native format
+parity or complete Oracle/NLS coercion. Full application workflows remain open.

@@ -37,6 +37,11 @@ adds bounded version-22 USERENV inspection and immutable connection facts. The
 adds shallow SQL concatenation and version-23 DML date provenance. One development
 candidate reached the admin desktop; reliable login, navigation and business
 workflows remain unqualified.
+The [number-format checkpoint](evidence/oracle-number-text-formats-2026-11-03/README.md)
+adds version-24 text-minimum numeric TO_CHAR behavior with 55/55 bounded Oracle
+comparisons. Native formatting retains its baseline, including three explicitly
+tracked pre-existing PostgreSQL parity gaps. This does not qualify full application
+execution or close the other programme workstreams.
 The milestones below retain their results at the time each was measured.
 
 The original 913 tables and 185,292 rows loaded and passed complete value

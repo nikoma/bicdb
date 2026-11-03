@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "feac9812bc4f4c900fa95d6c6f3086e35bf99aa290bb5225182b227b636fa7a6",
+  "prior_binary_sha256": "f4ca37545395a81f4305a7de3d865a864d53e86e2388da160f5110a100e2158d",
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "prior_scalar_executes",
+      "success": true
+    },
+    {
+      "id": "prior_context_refused",
+      "success": true
+    },
+    {
+      "id": "new_reader_retains_scalar",
+      "success": true
+    },
+    {
+      "id": "new_reader_keeps_legacy_minimum_fence",
+      "success": true
+    },
+    {
+      "id": "new_routine_executes",
+      "success": true
+    },
+    {
+      "id": "new_view_executes",
+      "success": true
+    },
+    {
+      "id": "language_23_oid_preserved",
+      "success": true
+    },
+    {
+      "id": "language_24_oid_registered",
+      "success": true
+    },
+    {
+      "id": "prior_scalar_still_executes",
+      "success": true
+    },
+    {
+      "id": "prior_reader_refuses_new_routine",
+      "success": true
+    },
+    {
+      "id": "prior_reader_refuses_new_view",
+      "success": true
+    },
+    {
+      "id": "new_routine_reopens_after_prior_refusal",
+      "success": true
+    },
+    {
+      "id": "new_view_reopens_after_prior_refusal",
+      "success": true
+    }
+  ],
+  "success": true
+}

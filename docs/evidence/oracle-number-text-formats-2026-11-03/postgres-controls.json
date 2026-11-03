@@ -1,0 +1,182 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "application_qualified": false,
+  "target_protocol": "prepared",
+  "cases": [
+    {
+      "id": "native_tm9",
+      "sql": "SELECT to_char(12.5,'TM9')",
+      "known_gap": true,
+      "postgres": {
+        "rows": [
+          [
+            "TM #"
+          ]
+        ]
+      },
+      "bicdb": {
+        "sqlstate": "0A000"
+      },
+      "source_qualified": true,
+      "matched": false,
+      "baseline_preserved": true
+    },
+    {
+      "id": "native_tme",
+      "sql": "SELECT to_char(12.5,'TME')",
+      "known_gap": true,
+      "postgres": {
+        "rows": [
+          [
+            "TME"
+          ]
+        ]
+      },
+      "bicdb": {
+        "sqlstate": "0A000"
+      },
+      "source_qualified": true,
+      "matched": false,
+      "baseline_preserved": true
+    },
+    {
+      "id": "native_fmtm9",
+      "sql": "SELECT to_char(12.5,'FMTM9')",
+      "known_gap": true,
+      "postgres": {
+        "rows": [
+          [
+            "TM#"
+          ]
+        ]
+      },
+      "bicdb": {
+        "sqlstate": "0A000"
+      },
+      "source_qualified": true,
+      "matched": false,
+      "baseline_preserved": true
+    },
+    {
+      "id": "native_fm",
+      "sql": "SELECT to_char(12.5,'FM99.9')",
+      "known_gap": false,
+      "postgres": {
+        "rows": [
+          [
+            "12.5"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "12.5"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true,
+      "baseline_preserved": true
+    },
+    {
+      "id": "native_precision",
+      "sql": "SELECT to_char(12345678901234567890123456789012345678,'FM99999999999999999999999999999999999999')",
+      "known_gap": false,
+      "postgres": {
+        "rows": [
+          [
+            "12345678901234567890123456789012345678"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "12345678901234567890123456789012345678"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true,
+      "baseline_preserved": true
+    },
+    {
+      "id": "native_timestamp",
+      "sql": "SELECT to_char(TIMESTAMP '2020-01-02 03:04:05','YYYY-MM-DD')",
+      "known_gap": false,
+      "postgres": {
+        "rows": [
+          [
+            "2020-01-02"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2020-01-02"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true,
+      "baseline_preserved": true
+    },
+    {
+      "id": "native_null",
+      "sql": "SELECT to_char(NULL::numeric,'TM9')",
+      "known_gap": false,
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true,
+      "baseline_preserved": true
+    },
+    {
+      "id": "native_zero",
+      "sql": "SELECT to_char(0,'FM9')",
+      "known_gap": false,
+      "postgres": {
+        "rows": [
+          [
+            "0"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "0"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true,
+      "baseline_preserved": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "scope": "Native formatter behavior preservation, with existing PostgreSQL literal-model gaps explicitly retained",
+  "source_qualified": true,
+  "matched": 5,
+  "baseline_preserved": 8,
+  "total": 8,
+  "known_gaps": 3,
+  "full_postgres_format_parity": false,
+  "runtime_binary_sha256": "feac9812bc4f4c900fa95d6c6f3086e35bf99aa290bb5225182b227b636fa7a6"
+}

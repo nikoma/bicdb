@@ -1,0 +1,349 @@
+{
+  "format": 1,
+  "postgres_version_num": 180004,
+  "cases": [
+    {
+      "id": "one_0",
+      "postgres": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "one_1",
+      "postgres": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "one_2",
+      "postgres": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "one_3",
+      "postgres": {
+        "error_code": "22001"
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "one_4",
+      "postgres": {
+        "error_code": "22001"
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "one_5",
+      "postgres": {
+        "rows": [
+          [
+            ""
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            ""
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "one_6",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "two_0",
+      "postgres": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "two_1",
+      "postgres": {
+        "rows": [
+          [
+            "A\u0301"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A\u0301"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "two_2",
+      "postgres": {
+        "rows": [
+          [
+            "ab"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "ab"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "two_3",
+      "postgres": {
+        "error_code": "22001"
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "two_4",
+      "postgres": {
+        "rows": [
+          [
+            ""
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            ""
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "two_5",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "length_0",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "length_1",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "length_2",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "length_3",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "length_4",
+      "postgres": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "length_5",
+      "postgres": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "matched": 19,
+  "total": 19,
+  "runtime_binary_sha256": "420299e92374c8d2ff935e4f0387a42083c9a0ac4eb8470ea4f187307f2f0fd6"
+}

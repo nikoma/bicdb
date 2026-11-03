@@ -150,6 +150,17 @@ workflow acceptance. Definitions remain 60/62, the NULL-call diagnostics remain
 1/13, and a valid NEXTIDFUNC call still fails on national-character variable
 typing. Five separately tracked semantic mismatches persist. Dynamic OUT binds,
 bulk/RETURNING, DDL/PLSQL blocks and broader query/type binding remain incomplete.
+The [national routine qualification](evidence/oracle-national-routines-2026-11-03/README.md)
+adds version-17 AL16UTF16 routine declarations and logical host-value provenance.
+It records 95 new accepted/error-contract cases, a separately tracked unsupported
+alias boundary and 19 new native PostgreSQL controls. The generated passing
+corpus becomes 1,296 cases, with 246 independent PostgreSQL controls. Unchanged
+GET_SYSCONFIG/NEXTID/NEXTIDFUNC bodies now pass 14/14 isolated minimal-dependency
+comparisons, including counter commit, parent rollback and observer visibility.
+Definitions remain 60/62 and NULL-input diagnostics remain 1/13; the running
+application is not upgraded or qualified. Broader national SQL/NLS semantics,
+hierarchical queries, collections, dictionary anchors and the other workstreams
+remain incomplete.
 These are development data baselines, not full schema/application acceptance. The
 [foreign-key inventory](evidence/idempiere-foreign-key-inventory-2026-11-02/README.md)
 records all 3,826 relationships as initially deferred; 2,914 have source
@@ -171,7 +182,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: application-schema selection, versioned static function/procedure relation binding, CALL namespaces and documented heap adaptation; general resolution and synonyms outstanding |
 | 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Partial: [nested-block contracts](evidence/oracle-nested-block-contracts-2026-11-02/README.md) distinguish new Oracle routine statement rollback from native PostgreSQL block rollback; general transactions, DDL commits and locking qualification outstanding |
 | 9. DDL lifecycle | Oracle implicit commits, replacement, dependency invalidation, invalid-object catalogs and recompilation | Partial: tested procedure replacement after cached calls; Oracle implicit commits, dependencies and invalid-object lifecycle remain outstanding |
-| 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: scoped blocks/declarations and nested handlers, standalone functions and version-12 procedures with OUT/IN OUT copyback, version-8 parameterized bound cursors with query-local formals/defaults and independent native scope checks, version-16 bounded EXECUTE IMMEDIATE with typed IN binds and scalar query INTO, declared-type procedural TRUNC and versioned logical DATE arithmetic; national-character variables, full language and application routines outstanding |
+| 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: scoped blocks/declarations and nested handlers, standalone functions and version-12 procedures with OUT/IN OUT copyback, version-8 parameterized bound cursors with query-local formals/defaults and independent native scope checks, version-16 bounded EXECUTE IMMEDIATE with typed IN binds and scalar query INTO, declared-type procedural TRUNC and versioned logical DATE arithmetic; version-17 bounded AL16UTF16 NVARCHAR2/NCHAR routine variables and typed host values; broader national SQL/NLS semantics, full language and application routines outstanding |
 | 11. Packages | Specs/bodies, visibility, overloads, initialization, session variables and invalidation with pool/session isolation | Outstanding |
 | 12. Autonomous transactions | Independent commit/rollback and lock behavior, nested calls, exceptions and restart tests | Partial: [version-15 standalone routine transactions](evidence/oracle-autonomous-transactions-2026-11-03/README.md), separate parent/observer visibility, active-return errors, parent-lock deadlocks, snapshot boundaries, Describe safeguards and restart; child DDL, package/session-state integration, distributed commits and broader failure qualification outstanding |
 | 13. Supplied package APIs | Qualify used DBMS/UTL APIs, including LOB, SQL, OUTPUT, UTILITY, APPLICATION_INFO, RANDOM, LOCK and SCHEDULER; file/network ACL enforcement | Outstanding |

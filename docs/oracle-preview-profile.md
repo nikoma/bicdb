@@ -676,3 +676,27 @@ cargo test --locked -p bicdb-sql --lib oracle::tests
 cargo test --locked -p bicdb-pgwire --test oracle_hr
 python3 -m unittest discover -s examples/oracle/idempiere -p 'test_*.py'
 ```
+
+
+## National character routine declarations
+
+Compiler version 17 adds a bounded AL16UTF16 NVARCHAR2/NCHAR routine contract,
+including local capacity and padding, empty-string normalization, mapped
+assignment overflow, national LENGTH units, formal/return provenance and typed
+static/dynamic host expressions. The PostgreSQL driver keeps an ordinary
+VARCHAR wire codec. Native PostgreSQL VARCHAR behavior is independently tested.
+
+The [national routine evidence](evidence/oracle-national-routines-2026-11-03/README.md)
+records 95 accepted/error-contract Oracle checks and one explicit unsupported
+alias boundary, 19 new native PostgreSQL controls, and 14/14 minimal-dependency
+comparisons of unchanged GET_SYSCONFIG/NEXTID/NEXTIDFUNC bodies. NVARCHAR is not
+accepted as an Oracle routine alias. General national SQL table types, national
+literals, full NLS/collation/operator behavior and NCHAR lengths above 16,383
+units require further work. National SUBSTR/SUBSTRING, OVERLAY, REVERSE, LPAD and RPAD operations reject
+execution until their UTF16 position contract is implemented.
+
+The imported application definition baseline remains 60/62; existing NULL-call
+diagnostics remain 1/13. The original counter improvement is isolated execution
+evidence, not application startup or business-workflow acceptance. The running
+application remains unchanged. Earlier compiler-version sections above retain
+their historical qualification boundaries.

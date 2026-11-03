@@ -1,0 +1,475 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "source_execution_compared": true,
+  "scope": "Unchanged GET_SYSCONFIG, NEXTID and NEXTIDFUNC bodies in generated schemas with minimal dependency tables; system and ordinary table-counter paths, repeated calls with a pending parent write, separate observers and rollback. Native sequence and missing-row handler paths are not qualified.",
+  "source_sha256": {
+    "GET_SYSCONFIG": "371a77923a465ddf5eb64ab6297bb3e3fb4d93bc860af41f3f0ea340f66504fc",
+    "NEXTID": "2909da207a432c9edd296db5b53d0aa2e4bf08ca22c0494d5934ddc35c917171",
+    "NEXTIDFUNC": "c9294765e35fced72635c796d17099c7f3bfbbdd5031d88cbee271e4e2a8e6b4"
+  },
+  "runtime_binary_sha256": "420299e92374c8d2ff935e4f0387a42083c9a0ac4eb8470ea4f187307f2f0fd6",
+  "cases": [
+    {
+      "id": "pending_parent_call_0",
+      "oracle": [
+        [
+          {
+            "number": "10"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "10"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "pending_parent_child_state_0",
+      "oracle": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1000"
+          },
+          {
+            "number": "11"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2000"
+          },
+          {
+            "number": "20"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1000"
+          },
+          {
+            "number": "11"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2000"
+          },
+          {
+            "number": "20"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "parent_log_hidden_0",
+      "oracle": [
+        [
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "pending_parent_call_1",
+      "oracle": [
+        [
+          {
+            "number": "11"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "11"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "pending_parent_child_state_1",
+      "oracle": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1000"
+          },
+          {
+            "number": "12"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2000"
+          },
+          {
+            "number": "20"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1000"
+          },
+          {
+            "number": "12"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2000"
+          },
+          {
+            "number": "20"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "parent_log_hidden_1",
+      "oracle": [
+        [
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "child_counters_survive_parent_rollback",
+      "oracle": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1000"
+          },
+          {
+            "number": "12"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2000"
+          },
+          {
+            "number": "20"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1000"
+          },
+          {
+            "number": "12"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2000"
+          },
+          {
+            "number": "20"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "parent_log_rolled_back",
+      "oracle": [
+        [
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "0"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "branch_call_0",
+      "oracle": [
+        [
+          {
+            "number": "1000"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "1000"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "branch_committed_state_0",
+      "oracle": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1001"
+          },
+          {
+            "number": "12"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2000"
+          },
+          {
+            "number": "20"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1001"
+          },
+          {
+            "number": "12"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2000"
+          },
+          {
+            "number": "20"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "branch_call_1",
+      "oracle": [
+        [
+          {
+            "number": "20"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "20"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "branch_committed_state_1",
+      "oracle": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1001"
+          },
+          {
+            "number": "12"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2000"
+          },
+          {
+            "number": "22"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1001"
+          },
+          {
+            "number": "12"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2000"
+          },
+          {
+            "number": "22"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "branch_call_2",
+      "oracle": [
+        [
+          {
+            "number": "2000"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "2000"
+          }
+        ]
+      ],
+      "matched": true
+    },
+    {
+      "id": "branch_committed_state_2",
+      "oracle": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1001"
+          },
+          {
+            "number": "12"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2002"
+          },
+          {
+            "number": "22"
+          }
+        ]
+      ],
+      "bicdb": [
+        [
+          {
+            "number": "1"
+          },
+          {
+            "number": "1001"
+          },
+          {
+            "number": "12"
+          }
+        ],
+        [
+          {
+            "number": "2"
+          },
+          {
+            "number": "2002"
+          },
+          {
+            "number": "22"
+          }
+        ]
+      ],
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "oracle_version": "23.26.3.0.0",
+  "matched": 14,
+  "total": 14
+}

@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "prior_application_process_still_running": true,
+  "runtime_binary_sha256": "8469fe1b9721fb5cccf666f9c44205dff23913ef97f847cc54adb3de6c55cfbc",
+  "application_database_updated": false,
+  "application_queries_requalified": false,
+  "release_published": false
+}

@@ -1,0 +1,1706 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "v1_ascii",
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "v1_bmp",
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "v1_supplementary",
+      "oracle": {
+        "error_code": 6502
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "v1_combining",
+      "oracle": {
+        "error_code": 6502
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "v1_trailing_space",
+      "oracle": {
+        "error_code": 6502
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "v1_empty",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "v1_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "v2_ascii",
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "v2_bmp",
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "v2_supplementary",
+      "oracle": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "v2_combining",
+      "oracle": {
+        "rows": [
+          [
+            "A\u0301"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A\u0301"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "v2_trailing_space",
+      "oracle": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "v2_empty",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "v2_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "c1_ascii",
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "c1_bmp",
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "c1_supplementary",
+      "oracle": {
+        "error_code": 6502
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "c1_combining",
+      "oracle": {
+        "error_code": 6502
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "c1_trailing_space",
+      "oracle": {
+        "error_code": 6502
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "c1_empty",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "c1_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "c2_ascii",
+      "oracle": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "c2_bmp",
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9 "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9 "
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "c2_supplementary",
+      "oracle": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "c2_combining",
+      "oracle": {
+        "rows": [
+          [
+            "A\u0301"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A\u0301"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "c2_trailing_space",
+      "oracle": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "c2_empty",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "c2_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qv_ascii",
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qv_bmp",
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qv_supplementary",
+      "oracle": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qv_combining",
+      "oracle": {
+        "rows": [
+          [
+            "A\u0301"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A\u0301"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qv_trailing_space",
+      "oracle": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qv_empty",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qv_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qc_ascii",
+      "oracle": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qc_bmp",
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9 "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9 "
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qc_supplementary",
+      "oracle": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qc_combining",
+      "oracle": {
+        "rows": [
+          [
+            "A\u0301"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A\u0301"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qc_trailing_space",
+      "oracle": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A "
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qc_empty",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "qc_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "cd_ascii",
+      "oracle": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "A"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "cd_bmp",
+      "oracle": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "cd_supplementary",
+      "oracle": {
+        "error_code": 6502
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "cd_combining",
+      "oracle": {
+        "error_code": 6502
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "cd_trailing_space",
+      "oracle": {
+        "error_code": 6502
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "cd_empty",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "cd_null",
+      "oracle": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unsupported_nvarchar_alias",
+      "oracle": {
+        "error_code": 6575
+      },
+      "bicdb": {
+        "error_code": "0A000"
+      },
+      "matched": true
+    },
+    {
+      "id": "maxv",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "16383"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "16383"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "overv",
+      "oracle": {
+        "error_code": 6502
+      },
+      "bicdb": {
+        "error_code": "22001"
+      },
+      "matched": true
+    },
+    {
+      "id": "maxc",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "16383"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "16383"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "vl_supplementary",
+      "oracle": {
+        "rows": [
+          [
+            "[\ud83d\ude00]/ 2/1/4/2/1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\ud83d\ude00]/ 2/1/4/2/1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "vl_bmp",
+      "oracle": {
+        "rows": [
+          [
+            "[\u00e9]/ 1/1/2/1/1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\u00e9]/ 1/1/2/1/1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "vl_combining",
+      "oracle": {
+        "rows": [
+          [
+            "[A\u0301]/ 2/1/4/2/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[A\u0301]/ 2/1/4/2/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "vl_null",
+      "oracle": {
+        "rows": [
+          [
+            "[]/ ////"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[]/ ////"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "cl_supplementary",
+      "oracle": {
+        "rows": [
+          [
+            "[\ud83d\ude00 ]/ 3/2/6/3/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\ud83d\ude00 ]/ 3/2/6/3/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "cl_bmp",
+      "oracle": {
+        "rows": [
+          [
+            "[\u00e9  ]/ 3/3/6/3/3"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[\u00e9  ]/ 3/3/6/3/3"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "cl_combining",
+      "oracle": {
+        "rows": [
+          [
+            "[A\u0301 ]/ 3/2/6/3/3"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[A\u0301 ]/ 3/2/6/3/3"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "cl_null",
+      "oracle": {
+        "rows": [
+          [
+            "[]/ ////"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "[]/ ////"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_0",
+      "oracle": {
+        "rows": [
+          [
+            "1/0/1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "1/0/1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_1",
+      "oracle": {
+        "rows": [
+          [
+            "2/0/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2/0/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_2",
+      "oracle": {
+        "rows": [
+          [
+            "3/1/3"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "3/1/3"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_3",
+      "oracle": {
+        "rows": [
+          [
+            "11/7/7"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "11/7/7"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_4",
+      "oracle": {
+        "rows": [
+          [
+            "4/2/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "4/2/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_5",
+      "oracle": {
+        "rows": [
+          [
+            "4/2/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "4/2/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_6",
+      "oracle": {
+        "rows": [
+          [
+            "2/1/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2/1/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_7",
+      "oracle": {
+        "rows": [
+          [
+            "1/1/1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "1/1/1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_8",
+      "oracle": {
+        "rows": [
+          [
+            "2/1/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2/1/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_9",
+      "oracle": {
+        "rows": [
+          [
+            "2/1/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2/1/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_10",
+      "oracle": {
+        "rows": [
+          [
+            "3/2/3"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "3/2/3"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_11",
+      "oracle": {
+        "rows": [
+          [
+            "2/2/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2/2/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_12",
+      "oracle": {
+        "rows": [
+          [
+            "1/1/1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "1/1/1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_13",
+      "oracle": {
+        "rows": [
+          [
+            "1/1/1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "1/1/1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_14",
+      "oracle": {
+        "rows": [
+          [
+            "2/2/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2/2/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_15",
+      "oracle": {
+        "rows": [
+          [
+            "2/2/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2/2/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_16",
+      "oracle": {
+        "rows": [
+          [
+            "1/0/1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "1/0/1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_17",
+      "oracle": {
+        "rows": [
+          [
+            "1/1/1"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "1/1/1"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_18",
+      "oracle": {
+        "rows": [
+          [
+            "2/2/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2/2/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_19",
+      "oracle": {
+        "rows": [
+          [
+            "2/2/2"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "2/2/2"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "unicode_complete_20",
+      "oracle": {
+        "rows": [
+          [
+            "3/1/3"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "3/1/3"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "nested_native_character_shadow",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "12"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "12"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "national_host_in_static_sql",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "national_host_dynamic_text_bind",
+      "oracle": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "O'Reilly"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "national_host_dynamic_length",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "fixeq",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "vareq",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "mixeq",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "fixne",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "nvl_len",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "decode_len",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "national_expression_dynamic_length",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "national_argument_and_return",
+      "oracle": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "national_return_length",
+      "oracle": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "2"
+            }
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "prepared_national_argument_and_return",
+      "oracle": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "\ud83d\ude00"
+          ]
+        ]
+      },
+      "target_type_oid": 1043,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "national_character_set": "AL16UTF16",
+  "matched": 96,
+  "total": 96,
+  "runtime_binary_sha256": "420299e92374c8d2ff935e4f0387a42083c9a0ac4eb8470ea4f187307f2f0fd6"
+}

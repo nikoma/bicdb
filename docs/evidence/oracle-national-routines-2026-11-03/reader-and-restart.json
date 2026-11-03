@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "420299e92374c8d2ff935e4f0387a42083c9a0ac4eb8470ea4f187307f2f0fd6",
+  "older_binary_sha256": "258b4b061d4afe649883dbb33608aa92ac46f3b9a9b582bb3d19dec5782e6d52",
+  "application_database_updated": false,
+  "attempts": [
+    {
+      "id": "older_reader_refuses",
+      "sqlstate": "0A000",
+      "success": true
+    },
+    {
+      "id": "new_reader_executes_once",
+      "success": true
+    },
+    {
+      "id": "committed_child_survives_restart",
+      "success": true
+    }
+  ],
+  "success": true
+}

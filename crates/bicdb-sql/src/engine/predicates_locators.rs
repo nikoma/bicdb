@@ -4233,7 +4233,16 @@ impl<'db> SqlEngine<'db> {
         } else {
             None
         };
-        if matches!(kind, RowJoinKind::Inner | RowJoinKind::Left) {
+        // `a JOIN b ON <keys> WHERE b.pk = $1`: the indexed join probes b by
+        // the join keys alone, fetching and decoding every b row per left row
+        // before WHERE filters them. When WHERE pins b to one primary key,
+        // the selection-driven lookup below reads just that row.
+        let selection_pins_right = matches!(kind, RowJoinKind::Inner)
+            && match right_seed_selection {
+                Some(selection) => self.selection_pins_primary_key(&join.relation, selection)?,
+                None => false,
+            };
+        if matches!(kind, RowJoinKind::Inner | RowJoinKind::Left) && !selection_pins_right {
             if let Some(row_set) = self.apply_indexed_right_table_join(
                 &mut left,
                 &join.relation,
@@ -4382,6 +4391,32 @@ impl<'db> SqlEngine<'db> {
         }
         sql_profile_join_rows(&rows, candidate_pairs);
         Ok(RowSet { rows, columns })
+    }
+
+    /// Whether `selection` fixes every primary-key column of the plain table
+    /// `relation` to a value (an exact single-row lookup).
+    fn selection_pins_primary_key(&self, relation: &TableFactor, selection: &Expr) -> Result<bool> {
+        let TableFactor::Table {
+            name,
+            alias,
+            args: None,
+            ..
+        } = relation
+        else {
+            return Ok(false);
+        };
+        let table = relation_name(name)?;
+        let alias_name = alias
+            .as_ref()
+            .map(|alias| alias.name.value.clone())
+            .unwrap_or_else(|| table.rsplit('.').next().unwrap_or(&table).to_string());
+        let Some(schema) = load_schema(self.db_ref(), &table)? else {
+            return Ok(false);
+        };
+        Ok(matches!(
+            self.primary_key_access_for_selection(&table, &alias_name, &schema, selection)?,
+            Some(PrimaryKeyAccess::Exact { .. })
+        ))
     }
 
     pub(crate) fn apply_lateral_unnest_join(

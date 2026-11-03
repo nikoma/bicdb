@@ -1184,3 +1184,45 @@ fn limit_stops_select_list_evaluation_early() {
         vec![vec![SqlValue::Int(9)]]
     );
 }
+
+#[test]
+fn inner_join_with_where_pinned_primary_key_returns_the_joined_row() {
+    // Carrier's `target` CTE: documents JOIN hub_memberships ON hub keys,
+    // WHERE document.id = $2. The lookup must stay correct when WHERE, not
+    // the join keys, selects the right-hand row.
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    for sql in [
+        "CREATE TABLE memberships (id INT PRIMARY KEY, hub_id INT NOT NULL, user_id INT NOT NULL)",
+        "CREATE TABLE docs (id INT PRIMARY KEY, hub_id INT NOT NULL, title TEXT)",
+        "CREATE INDEX docs_hub ON docs (hub_id)",
+        "INSERT INTO memberships VALUES (1, 10, 100), (2, 10, 200), (3, 20, 100)",
+        "INSERT INTO docs SELECT n, CASE WHEN n % 2 = 0 THEN 10 ELSE 20 END, 'doc ' || n FROM generate_series(1, 40) AS n",
+    ] {
+        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+    let joined = "SELECT d.title, m.id FROM memberships AS m JOIN docs AS d ON d.hub_id = m.hub_id \
+                  WHERE m.user_id = 100 AND d.id = ";
+    assert_eq!(
+        session_rows(&mut session, &format!("{joined}8")),
+        vec![vec![SqlValue::String("doc 8".to_string()), SqlValue::Int(1)]]
+    );
+    assert_eq!(
+        session_rows(&mut session, &format!("{joined}7")),
+        vec![vec![SqlValue::String("doc 7".to_string()), SqlValue::Int(3)]]
+    );
+    assert!(session_rows(&mut session, &format!("{joined}99")).is_empty());
+    // A LEFT JOIN keeps unmatched left rows as before.
+    assert_eq!(
+        session_rows(
+            &mut session,
+            "SELECT m.id, d.id FROM memberships AS m LEFT JOIN docs AS d ON d.hub_id = m.hub_id AND d.id = 8 ORDER BY m.id"
+        ),
+        vec![
+            vec![SqlValue::Int(1), SqlValue::Int(8)],
+            vec![SqlValue::Int(2), SqlValue::Int(8)],
+            vec![SqlValue::Int(3), SqlValue::Null],
+        ]
+    );
+}

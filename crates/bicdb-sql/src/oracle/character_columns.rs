@@ -281,6 +281,67 @@ mod tests {
     }
 
     #[test]
+    fn metadata_attachment_undo_keeps_schemas_without_row_snapshots() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let columns = (0..8)
+            .map(|n| format!("c{n} VARCHAR2(3 CHAR)"))
+            .collect::<Vec<_>>()
+            .join(",");
+        run(
+            &mut db,
+            &format!("CREATE TABLE bounded_undo(id NUMBER PRIMARY KEY,{columns})"),
+        )
+        .unwrap();
+        run(
+            &mut db,
+            "INSERT INTO bounded_undo VALUES(1,'ABC','ABC','ABC','ABC','ABC','ABC','ABC','ABC')",
+        )
+        .unwrap();
+        let mut legacy = load_schema(&db, "BOUNDED_UNDO").unwrap().unwrap();
+        for c in &mut legacy.columns[1..] {
+            c.type_modifier = Some(PgTypeModifier::Character { length: 3 });
+        }
+        save_schema(&mut db, &legacy).unwrap();
+        let records = db.scan_collection("BOUNDED_UNDO").unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            session.execute("BEGIN").unwrap();
+            for n in 0..8 {
+                session
+                    .execute(&format!(
+                        "ALTER TABLE \"BOUNDED_UNDO\" ALTER COLUMN \"C{n}\" TYPE VARCHAR(3 OCTETS)"
+                    ))
+                    .unwrap();
+            }
+            let retained_rows: usize = session
+                .ddl_undo
+                .iter()
+                .map(|undo| match undo {
+                    crate::session::DdlUndo::RestoreTableState { records, .. } => records.len(),
+                    _ => 0,
+                })
+                .sum();
+            assert_eq!(
+                retained_rows, 0,
+                "metadata attachment retained table rows per column"
+            );
+            session.execute("ROLLBACK").unwrap();
+        }
+        assert_eq!(
+            serde_json::to_value(load_schema(&db, "BOUNDED_UNDO").unwrap().unwrap().columns)
+                .unwrap(),
+            serde_json::to_value(&legacy.columns).unwrap()
+        );
+        assert_eq!(db.scan_collection("BOUNDED_UNDO").unwrap(), records);
+    }
+
+    #[test]
     fn standard_byte_ceiling_bounds_fixed_padding() {
         let value = coerce(SqlValue::String("é".into()), true, 2000, Unit::Characters)
             .unwrap()

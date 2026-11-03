@@ -1401,16 +1401,27 @@ impl<'db> SqlSession<'db> {
         self.validate_planned_alter_foreign_keys(&planned)?;
 
         for (previous, _, _) in &planned {
-            self.capture_table_state_undo(&previous.name, previous)?;
+            if unchanged_source_tables.contains(&previous.name) {
+                // Provenance attachment does not change records. Keeping a full
+                // table copy per column makes a wide-table transaction unbounded.
+                if self.tx.is_some() {
+                    self.ddl_undo.push(DdlUndo::RestoreSchema {
+                        schema: previous.clone(),
+                    });
+                }
+            } else {
+                self.capture_table_state_undo(&previous.name, previous)?;
+            }
         }
         let snapshots = planned
             .iter()
             .map(|(previous, _, _)| {
-                Ok((
-                    previous.name.clone(),
-                    previous.clone(),
-                    self.db_ref().scan_collection(&previous.name)?,
-                ))
+                let records = if unchanged_source_tables.contains(&previous.name) {
+                    None
+                } else {
+                    Some(self.db_ref().scan_collection(&previous.name)?)
+                };
+                Ok((previous.name.clone(), previous.clone(), records))
             })
             .collect::<Result<Vec<_>>>()?;
         let apply_result = (|| -> Result<()> {
@@ -1437,7 +1448,11 @@ impl<'db> SqlSession<'db> {
         })();
         if let Err(error) = apply_result {
             for (name, previous, records) in snapshots.into_iter().rev() {
-                restore_table_state(self.db_mut()?, &name, &previous, records)?;
+                if let Some(records) = records {
+                    restore_table_state(self.db_mut()?, &name, &previous, records)?;
+                } else {
+                    save_schema(self.db_mut()?, &previous)?;
+                }
             }
             return Err(error);
         }

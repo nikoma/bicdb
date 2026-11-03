@@ -3014,7 +3014,7 @@ impl<'db> SqlEngine<'db> {
             .and_then(|result| result.rows.into_iter().next())
             .and_then(|row| row.into_iter().next())
             .unwrap_or(SqlValue::Null);
-        cast_routine_return_value(value, &routine.schema).map(Some)
+        cast_routine_return_value(self.db_ref(), value, &routine.schema).map(Some)
     }
 
     pub(crate) fn eval_runtime_function_value(

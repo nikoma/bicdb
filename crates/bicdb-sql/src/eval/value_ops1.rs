@@ -88,6 +88,14 @@ pub(crate) fn eval_db_catalog_function_value(
     session_gucs: Option<&HashMap<String, String>>,
 ) -> Result<Option<SqlValue>> {
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    // These evaluators receive values only and cannot access database state.
+    // Resolve registered Oracle scalar helpers before the administrative gate;
+    // unknown names still pass through the normal privilege checks below.
+    if !bare_name.contains('.') && bare_name.starts_with("bicdb_oracle_") {
+        if let Some(value) = eval_pg_scalar_extra(bare_name, args)? {
+            return Ok(Some(value));
+        }
+    }
     // A qualified user-schema name is not a builtin name, even when that
     // schema starts with bicdb_. Catalog builtins are unqualified or pg_catalog.
     if !bare_name.contains('.') && (bare_name.starts_with("bicdb_") || bare_name == "travel_time") {

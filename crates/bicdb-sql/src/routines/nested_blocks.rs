@@ -61,6 +61,7 @@ impl SqlSession<'_> {
             return self.execute_routine_block(frame, body, handlers);
         }
         let types = Arc::clone(&frame.assignment_types);
+        let registered_types = frame.registered_assignment_types.clone();
         let dates = frame.oracle_dates.clone();
         let mut saved = Vec::new();
         let local =
@@ -112,6 +113,7 @@ impl SqlSession<'_> {
             .initialize_routine_declarations(frame, declarations)
             .and_then(|()| self.execute_routine_block(frame, body, handlers));
         frame.assignment_types = types;
+        frame.registered_assignment_types = registered_types;
         frame.oracle_dates = dates;
         for (name, value, cursor) in saved {
             frame.set(&name, value);

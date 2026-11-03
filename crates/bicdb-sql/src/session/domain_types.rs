@@ -2221,6 +2221,10 @@ impl<'db> SqlSession<'db> {
                 "DO language {language} is not supported"
             )));
         }
+        let _collections = oracle::collections::RoutineScope::new(
+            oracle::preview_routine_language_version(&language)
+                .is_some_and(|version| version >= 19),
+        );
         let _grammar = oracle::syntax::Scope::new(
             oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 13),
         );
@@ -2272,6 +2276,7 @@ impl<'db> SqlSession<'db> {
             );
             oracle::routine_arithmetic::lower(
                 self.db_ref(),
+                oracle::collections::routine_constructors_enabled().then_some(schema.as_str()),
                 true,
                 oracle::preview_routine_language_version(&language)
                     .is_some_and(|version| version >= 7),

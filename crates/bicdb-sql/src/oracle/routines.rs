@@ -31,7 +31,23 @@ pub(crate) fn function_namespace(routine: &RoutineSchema) -> Result<String> {
                 && matches!(
                     preview_routine_language_version(&routine.language),
                     Some(
-                        2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18
+                        2 | 3
+                            | 4
+                            | 5
+                            | 6
+                            | 7
+                            | 8
+                            | 9
+                            | 10
+                            | 11
+                            | 12
+                            | 13
+                            | 14
+                            | 15
+                            | 16
+                            | 17
+                            | 18
+                            | 19
                     )
                 )
         })
@@ -81,6 +97,7 @@ fn bind_namespace_statements(
                 handlers,
             } => {
                 for declaration in declarations {
+                    super::collections::bind_declaration_type(declaration, schema);
                     match declaration {
                         RoutineDecl::Variable {
                             default_expr: Some(expr),
@@ -226,6 +243,9 @@ pub(crate) fn bind_function_namespace(
         ));
     }
     for param in params {
+        if let Some(kind) = &mut param.type_schema {
+            super::collections::bind_routine_type_name(&mut kind.pg_type, &schema);
+        }
         if let Some(expr) = &mut param.default_expr {
             bind_relations(db, expr, &schema, calls)?;
         }
@@ -242,6 +262,7 @@ pub(crate) fn bind_block_namespace(
     calls: bool,
 ) -> Result<()> {
     for declaration in declarations {
+        super::collections::bind_declaration_type(declaration, schema);
         match declaration {
             RoutineDecl::Variable {
                 default_expr: Some(expr),

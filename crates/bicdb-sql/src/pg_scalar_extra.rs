@@ -551,6 +551,23 @@ fn trigram_set(text: &str) -> Result<std::collections::BTreeSet<String>> {
 }
 
 pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Option<SqlValue>> {
+    match name.strip_prefix("pg_catalog.").unwrap_or(name) {
+        "bicdb_oracle_collection_count" => {
+            arity(name, args, 1..=1)?;
+            return oracle::collections::count(&args[0])
+                .map(|count| Some(SqlValue::Int(count as i64)));
+        }
+        "bicdb_oracle_collection_get" => {
+            arity(name, args, 2..=2)?;
+            return oracle::collections::get(&args[0], &args[1]).map(Some);
+        }
+        "bicdb_oracle_collection_extend" => {
+            arity(name, args, 2..=3)?;
+            return oracle::collections::extend(&args[0], &args[1], args.get(2)).map(Some);
+        }
+        _ => {}
+    }
+
     if matches!(
         name,
         "bicdb_oracle_current_sqlcode" | "bicdb_oracle_current_sqlerrm"

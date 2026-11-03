@@ -14,6 +14,8 @@ mod attribute_tests;
 pub(crate) mod nested_blocks;
 pub(crate) mod parameterized_cursors;
 mod procedural_case;
+#[cfg(test)]
+mod type_identity_tests;
 
 pub(crate) fn routine_record_value(columns: &[String], row: &[SqlValue]) -> SqlValue {
     let values = columns
@@ -42,6 +44,10 @@ pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
 }
 
 fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) -> Result<RoutineIR> {
+    let _collections = oracle::collections::RoutineScope::new(
+        oracle::preview_routine_language_version(&routine.language)
+            .is_some_and(|version| version >= 19),
+    );
     let _characters = oracle::routine_characters::Scope::new(
         oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 18),
     );
@@ -131,7 +137,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     }
     if matches!(
         oracle::preview_routine_language_version(&routine.language),
-        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18)
+        Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19)
     ) {
         oracle::routines::bind_function_namespace(
             db,
@@ -149,9 +155,10 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
                     "typed Oracle routine compilation requires catalog context".into(),
                 )
             })?,
+            oracle::collections::routine_constructors_enabled().then_some(routine.schema.as_str()),
             matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18)
+                Some(4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19)
             ),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 7),
@@ -1727,7 +1734,20 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             targets,
         });
     }
-    Ok(RoutineStmt::Sql(parse_single_statement(statement)?))
+    match parse_single_statement(statement) {
+        Ok(statement) => Ok(RoutineStmt::Sql(statement)),
+        Err(original) if oracle::collections::routine_constructors_enabled() => {
+            if matches!(
+                parse_routine_expr(statement),
+                Ok(Expr::Identifier(_) | Expr::CompoundIdentifier(_))
+            ) {
+                return parse_single_statement(&format!("CALL {statement}()"))
+                    .map(RoutineStmt::Sql);
+            }
+            Err(original)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
@@ -2037,6 +2057,25 @@ pub(crate) fn parse_routine_fetch(rest: &str) -> Result<RoutineStmt> {
 
 pub(crate) fn parse_routine_assignment_target(target: &str) -> Result<RoutineAssignmentTarget> {
     if !target.contains('[') {
+        if oracle::collections::routine_constructors_enabled() {
+            if let Expr::Function(function) = parse_routine_expr(target)? {
+                if function.name.0.len() == 1 {
+                    if let FunctionArguments::List(list) = &function.args {
+                        if let [FunctionArg::Unnamed(FunctionArgExpr::Expr(index))] =
+                            list.args.as_slice()
+                        {
+                            return Ok(RoutineAssignmentTarget::ArrayElement {
+                                array_name: normalize_object_name(&object_name(&function.name)?),
+                                index: RoutineExpr::unbound(index.clone()),
+                            });
+                        }
+                    }
+                }
+                return Err(SqlError::UnsupportedPlpgsqlFeature(
+                    "collection assignments require one subscript on a variable".into(),
+                ));
+            }
+        }
         if let Expr::CompoundIdentifier(parts) = parse_routine_expr(target)? {
             return Ok(RoutineAssignmentTarget::Variable(
                 parts
@@ -2367,7 +2406,7 @@ pub(crate) fn list_routines(db: &BicDb) -> Result<Vec<RoutineSchema>> {
         .into_iter()
         .map(|record| {
             serde_json::from_value::<RoutineSchema>(record.metadata)
-                .map(RoutineSchema::with_declared_security_metadata)
+                .map(RoutineSchema::with_declared_metadata)
                 .map_err(SqlError::from)
         })
         .collect::<Result<Vec<_>>>()?;

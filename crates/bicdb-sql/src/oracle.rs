@@ -160,7 +160,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V14: &str = "bicdb_oracle_preview_v14"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V15: &str = "bicdb_oracle_preview_v15";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V16: &str = "bicdb_oracle_preview_v16";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V17: &str = "bicdb_oracle_preview_v17";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v18";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V18: &str = "bicdb_oracle_preview_v18";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v19";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -178,7 +179,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V14_OID: i64 = 999_413;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V15_OID: i64 = 999_414;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V16_OID: i64 = 999_415;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V17_OID: i64 = 999_416;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_417;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V18_OID: i64 = 999_417;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_418;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -204,7 +206,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V15 => Some(15),
         PREVIEW_ROUTINE_LANGUAGE_V16 => Some(16),
         PREVIEW_ROUTINE_LANGUAGE_V17 => Some(17),
-        PREVIEW_ROUTINE_LANGUAGE => Some(18),
+        PREVIEW_ROUTINE_LANGUAGE_V18 => Some(18),
+        PREVIEW_ROUTINE_LANGUAGE => Some(19),
         _ => None,
     }
 }
@@ -212,7 +215,7 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
 pub(crate) fn typed_preview_routine_language(language: &str) -> bool {
     matches!(
         preview_routine_language_version(language),
-        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18)
+        Some(3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19)
     )
 }
 
@@ -1531,6 +1534,21 @@ fn lower_block(
             end_name += 2;
         }
         if body.get(end_name) == Some(&Token::LParen) {
+            let mut depth = 0usize;
+            let close = (end_name..body.len()).find(|index| {
+                match body[*index] {
+                    Token::LParen => depth += 1,
+                    Token::RParen => depth = depth.saturating_sub(1),
+                    _ => {}
+                }
+                depth == 0
+            });
+            // A parenthesized collection subscript on an assignment's left
+            // side is not a procedure invocation. CALL applies only to the
+            // complete standalone expression before its statement delimiter.
+            if !close.is_some_and(|close| body.get(close + 1) == Some(&Token::SemiColon)) {
+                continue;
+            }
             body.insert(
                 i,
                 Token::Word(sqlparser::tokenizer::Word {

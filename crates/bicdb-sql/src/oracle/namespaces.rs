@@ -50,6 +50,7 @@ fn qualify_impl<T: sqlparser::ast::VisitMut>(node: &mut T, schema: &str, calls: 
                                     | 16
                                     | 17
                                     | 18
+                                    | 19
                             )
                         )
                     }) =>

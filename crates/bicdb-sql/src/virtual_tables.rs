@@ -415,9 +415,6 @@ pub(crate) fn raw_routine_return_type(sql: &str) -> Result<(String, bool)> {
         return Ok(("void".to_string(), false));
     };
     let after_returns = sql[returns_idx + "RETURNS".len()..].trim_start();
-    if after_returns.to_ascii_lowercase().starts_with("table") {
-        return Ok(("record".to_string(), true));
-    }
     let end = [
         "LANGUAGE",
         "IMMUTABLE",
@@ -443,13 +440,54 @@ pub(crate) fn raw_routine_return_type(sql: &str) -> Result<(String, bool)> {
             "CREATE FUNCTION requires a return type after RETURNS".to_string(),
         ))
     } else {
-        let mut normalized = collapse_sql_whitespace(return_type.trim());
-        normalized = normalized.trim_matches('"').to_ascii_lowercase();
-        if let Some(element_type) = normalized.strip_prefix("setof ") {
-            Ok((element_type.trim_matches('"').trim().to_string(), true))
-        } else {
-            Ok((normalized, false))
+        let mut parser = Parser::new(&PostgreSqlDialect {})
+            .try_with_sql(return_type)
+            .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+        // TABLE is grammar only as an unquoted keyword followed by a column
+        // list. Names such as table_of_labels are ordinary scalar types.
+        if matches!(parser.peek_token().token, Token::Word(ref word)
+            if word.quote_style.is_none() && word.value.eq_ignore_ascii_case("TABLE"))
+            && parser.peek_nth_token(1).token == Token::LParen
+        {
+            return Ok(("record".to_string(), true));
         }
+        let returns_set = parser.parse_keyword(sqlparser::keywords::Keyword::SETOF);
+        let data_type = parser
+            .parse_data_type()
+            .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+        if parser.peek_token().token != Token::EOF {
+            return Err(SqlError::InvalidSql(
+                "unexpected routine return type suffix".into(),
+            ));
+        }
+        let name = if let DataType::Custom(name, _) = &data_type {
+            // This is declaration text: its caller parses it again to derive
+            // modifiers. Preserve quoted boundaries and fold only unquoted
+            // identifiers, rather than returning a flattened logical name.
+            let parts = name
+                .0
+                .iter()
+                .map(|part| {
+                    part.as_ident()
+                        .map(|ident| {
+                            if ident.quote_style.is_some() {
+                                ident.clone()
+                            } else {
+                                Ident::new(ident.value.to_ascii_lowercase())
+                            }
+                        })
+                        .ok_or_else(|| {
+                            SqlError::InvalidSql("invalid routine return type name".into())
+                        })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            ObjectName::from(parts).to_string()
+        } else {
+            // Keep typmods in the raw declaration. The writer derives the
+            // physical type and modifier from this text in a separate step.
+            data_type.to_string().to_ascii_lowercase()
+        };
+        Ok((name, returns_set))
     }
 }
 
@@ -754,9 +792,15 @@ pub(crate) fn routine_type_schema(data_type: &DataType) -> Result<RoutineTypeSch
     let pg_type = match routine_data_type(data_type) {
         Ok(pg_type) => pg_type,
         Err(SqlError::Unsupported(_)) if matches!(data_type, DataType::Custom(_, _)) => {
-            collapse_sql_whitespace(&data_type.to_string())
-                .trim_matches('"')
-                .to_ascii_lowercase()
+            let DataType::Custom(name, modifiers) = data_type else {
+                unreachable!()
+            };
+            if !modifiers.is_empty() {
+                return Err(SqlError::Unsupported(
+                    "modifiers on user-defined routine types are not supported".into(),
+                ));
+            }
+            object_name(name)?
         }
         Err(error) => return Err(error),
     };

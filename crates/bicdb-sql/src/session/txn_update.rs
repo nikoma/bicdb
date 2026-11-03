@@ -3191,7 +3191,7 @@ impl<'db> SqlSession<'db> {
             user_calls: &[],
         })?;
         crate::inline_return_fns::record_hit();
-        cast_routine_return_value(value, &routine.schema).map(Some)
+        cast_routine_return_value(self.db_ref(), value, &routine.schema).map(Some)
     }
 
     pub(crate) fn execute_with_routine_security<T>(
@@ -3615,7 +3615,7 @@ impl<'db> SqlSession<'db> {
         } else {
             value
         };
-        cast_routine_return_value(value, routine)
+        cast_routine_return_value(self.db_ref(), value, routine)
     }
 
     pub(crate) fn execute_sql_function_value(
@@ -3645,7 +3645,7 @@ impl<'db> SqlSession<'db> {
             .and_then(|result| result.rows.into_iter().next())
             .and_then(|row| row.into_iter().next())
             .unwrap_or(SqlValue::Null);
-        cast_routine_return_value(value, routine)
+        cast_routine_return_value(self.db_ref(), value, routine)
     }
 
     pub(crate) fn initialize_routine_frame(
@@ -3664,6 +3664,7 @@ impl<'db> SqlSession<'db> {
         frame: &mut RoutineFrame,
         declarations: &[RoutineDecl],
     ) -> Result<()> {
+        frame.bind_registered_assignment_types(self.db_ref())?;
         for declaration in declarations {
             match declaration {
                 RoutineDecl::Alias { name, position } => {
@@ -4198,8 +4199,29 @@ impl<'db> SqlSession<'db> {
         match target {
             RoutineAssignmentTarget::Variable(name) => frame.assign(name, value)?,
             RoutineAssignmentTarget::ArrayElement { array_name, index } => {
-                let index = eval_subscript_bound(self.eval_routine_expr(frame, index)?)?;
+                let index = self.eval_routine_expr(frame, index)?;
+                let collection = frame.collection_schema(array_name).is_some();
+                let index = if collection {
+                    i64::from(
+                        oracle::collections::integer_argument(&index)?.ok_or_else(|| {
+                            oracle::errors::database_error(
+                                -6502,
+                                "22004",
+                                "collection subscript is NULL",
+                            )
+                        })?,
+                    )
+                } else {
+                    eval_subscript_bound(index)?
+                };
                 if index < 1 {
+                    if collection {
+                        return Err(oracle::errors::database_error(
+                            -6532,
+                            "2202E",
+                            "collection subscript is outside the valid range",
+                        ));
+                    }
                     return Err(SqlError::InvalidSql(format!(
                         "array assignment index for {array_name} must be positive"
                     )));

@@ -188,6 +188,8 @@ struct Environment {
     nvl: bool,
     sql_builtins_only: bool,
     defer_bind_types: bool,
+    collection_namespace: Option<String>,
+    collections: BTreeMap<String, super::collections::CollectionSchema>,
     variables: BTreeMap<String, Kind>,
     records: BTreeMap<String, BTreeMap<String, Kind>>,
 }
@@ -952,6 +954,20 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
         ControlFlow::Continue(())
     }
     fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<SqlError> {
+        if let Some(namespace) = self.env.collection_namespace.as_deref() {
+            if self.sql_depth == 0 && self.queries.is_empty() {
+                if let Err(error) =
+                    super::collections::method_expression(expr, &self.env.collections)
+                {
+                    return ControlFlow::Break(error);
+                }
+            }
+            if let Err(error) =
+                super::collections::constructor_expression(self.db, expr, Some(namespace))
+            {
+                return ControlFlow::Break(error);
+            }
+        }
         match self.rewrite(expr) {
             Ok(()) => ControlFlow::Continue(()),
             Err(error) => ControlFlow::Break(error),
@@ -1055,6 +1071,9 @@ fn statements(
     body: &mut [RoutineStmt],
 ) -> Result<()> {
     for statement in body {
+        if env.collection_namespace.is_some() {
+            super::collections::method_statement(statement, &env.collections)?;
+        }
         match statement {
             RoutineStmt::Block {
                 declarations,
@@ -1063,6 +1082,13 @@ fn statements(
             } => {
                 let mut local_env = env.clone();
                 let mut local_cursors = cursors.clone();
+                if env.collection_namespace.is_some() {
+                    super::collections::declaration_bindings(
+                        db,
+                        &mut local_env.collections,
+                        declarations,
+                    )?;
+                }
                 for declaration in declarations.iter() {
                     match declaration {
                         RoutineDecl::Variable {
@@ -1159,6 +1185,7 @@ fn statements(
                 visit(db, env, &mut lower.expr)?;
                 visit(db, env, &mut upper.expr)?;
                 let mut scope = env.clone();
+                scope.collections.remove(&normalize_object_name(iterator));
                 scope
                     .variables
                     .insert(normalize_object_name(iterator), Kind::Number);
@@ -1179,6 +1206,7 @@ fn statements(
             } => {
                 visit(db, env, query)?;
                 let mut scope = env.clone();
+                scope.collections.remove(&normalize_object_name(target));
                 scope
                     .records
                     .insert(normalize_object_name(target), record_types(db, env, query));
@@ -1194,6 +1222,7 @@ fn statements(
                     visit(db, env, &mut arg.expr.expr)?;
                 }
                 let mut scope = env.clone();
+                scope.collections.remove(&normalize_object_name(target));
                 if let Some(fields) = cursors.get(cursor) {
                     scope
                         .records
@@ -1282,6 +1311,7 @@ fn statements(
 
 pub(crate) fn lower(
     db: &BicDb,
+    collection_namespace: Option<&str>,
     v4_semantics: bool,
     concatenation: bool,
     number_arithmetic: bool,
@@ -1294,6 +1324,7 @@ pub(crate) fn lower(
     handlers: &mut [RoutineExceptionHandler],
 ) -> Result<()> {
     let mut env = Environment {
+        collection_namespace: collection_namespace.map(str::to_string),
         v4_semantics,
         concatenation,
         number_arithmetic,
@@ -1351,6 +1382,21 @@ pub(crate) fn lower(
             }
             _ => {}
         }
+    }
+    if collection_namespace.is_some() {
+        for param in params.iter() {
+            if let Some(kind) = &param.type_schema {
+                if let Some(collection) = super::collections::schema_for_type(db, &kind.pg_type)? {
+                    env.collections
+                        .insert(format!("${}", param.index + 1), collection.clone());
+                    if let Some(name) = &param.name {
+                        env.collections
+                            .insert(normalize_object_name(name), collection);
+                    }
+                }
+            }
+        }
+        super::collections::declaration_bindings(db, &mut env.collections, declarations)?;
     }
     for param in params {
         if let Some(expr) = &mut param.default_expr {

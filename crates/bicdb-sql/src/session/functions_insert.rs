@@ -33,6 +33,7 @@ impl<'db> SqlSession<'db> {
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V13
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V15
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V17
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V18
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V16
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V14
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V12
@@ -77,7 +78,7 @@ impl<'db> SqlSession<'db> {
                 kind: RoutineKind::Function,
                 args,
                 arg_types,
-                return_type,
+                return_type: return_type_schema.pg_type,
                 return_type_modifier: return_type_schema.type_modifier,
                 return_type_declaration: Some(return_type_declaration),
                 returns_set,
@@ -221,6 +222,7 @@ impl<'db> SqlSession<'db> {
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V13
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V15
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V17
+            | oracle::PREVIEW_ROUTINE_LANGUAGE_V18
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V16
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V14
             | oracle::PREVIEW_ROUTINE_LANGUAGE_V12
@@ -554,7 +556,9 @@ impl<'db> SqlSession<'db> {
         let routine = load_routine(self.db_ref(), kind, &name)?.filter(|routine| {
             let schema = if matches!(
                 oracle::preview_routine_language_version(&routine.language),
-                Some(2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18)
+                Some(
+                    2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19
+                )
             ) {
                 relation_schema_name(name_ast)
             } else {

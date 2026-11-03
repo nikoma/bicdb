@@ -4122,6 +4122,14 @@ impl RoutineTypeSchema {
     }
 
     fn formatted(&self) -> String {
+        if pg_type_oid_by_name(&self.pg_type).is_none() {
+            return self
+                .pg_type
+                .split('.')
+                .map(|part| Ident::with_quote('"', part).to_string())
+                .collect::<Vec<_>>()
+                .join(".");
+        }
         pg_format_type(self.catalog_oid() as i32, self.catalog_typmod() as i32)
             .unwrap_or_else(|| self.pg_type.clone())
     }
@@ -4168,10 +4176,57 @@ impl RoutineSchema {
         self.owner.as_deref()
     }
 
-    fn with_declared_security_metadata(mut self) -> Self {
+    fn with_declared_metadata(mut self) -> Self {
+        let _national = oracle::national::Scope::new(
+            oracle::preview_routine_language_version(&self.language)
+                .is_some_and(|version| version >= 17),
+        );
         // Stored flags from older writers may have classified body literals as
         // attributes. The declaration is authoritative in both directions.
         self.security_definer = routine_definition_is_security_definer(&self.definition);
+        // Custom return identities in older records may have been flattened
+        // and case-folded. Their saved declaration remains authoritative. Do
+        // not rederive builtin physical DATE/national metadata from this path.
+        if let Ok(statements) = Parser::parse_sql(&PostgreSqlDialect {}, &self.definition) {
+            if let [Statement::CreateFunction(function)] = statements.as_slice() {
+                if let Some(return_type) = &function.return_type {
+                    let data_type = match return_type {
+                        FunctionReturnType::DataType(data_type)
+                        | FunctionReturnType::SetOf(data_type) => data_type,
+                    };
+                    if matches!(data_type, DataType::Custom(_, _)) {
+                        if let Ok(schema) = routine_type_schema(data_type) {
+                            if pg_type_oid_by_name(&schema.pg_type).is_none() {
+                                let mut declared_type = data_type.clone();
+                                if oracle::preview_routine_language_version(&self.language)
+                                    .is_some()
+                                {
+                                    if let DataType::Custom(name, _) = &mut declared_type {
+                                        if name.0.len() == 1 {
+                                            name.0.insert(
+                                                0,
+                                                sqlparser::ast::ObjectNamePart::Identifier(
+                                                    Ident::with_quote(
+                                                        '"',
+                                                        relation_schema_name(&function.name),
+                                                    ),
+                                                ),
+                                            );
+                                        }
+                                    }
+                                }
+                                let schema = routine_type_schema(&declared_type).unwrap_or(schema);
+                                self.return_type = schema.pg_type;
+                                self.return_type_modifier = schema.type_modifier;
+                                self.return_type_declaration = Some(declared_type.to_string());
+                                self.returns_set =
+                                    matches!(return_type, FunctionReturnType::SetOf(_));
+                            }
+                        }
+                    }
+                }
+            }
+        }
         self
     }
 
@@ -4624,6 +4679,7 @@ struct RoutineFrame {
     active_exception: Option<Arc<SqlError>>,
     oracle_error_diagnostics: Option<oracle::errors::Diagnostics>,
     assignment_types: Arc<FxHashMap<String, RoutineTypeSchema>>,
+    registered_assignment_types: FxHashMap<String, UserTypeColumnSchema>,
     oracle_dates: Option<Arc<FxHashSet<String>>>,
     values: Arc<BTreeMap<String, SqlValue>>,
     // Shared with the engine while an embedded statement runs (see

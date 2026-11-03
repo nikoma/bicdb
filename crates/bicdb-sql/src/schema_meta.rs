@@ -429,6 +429,7 @@ pub(crate) fn has_executable_sql(sql: &str) -> bool {
 }
 
 pub(crate) fn cast_routine_return_value(
+    db: &BicDb,
     value: SqlValue,
     routine: &RoutineSchema,
 ) -> Result<SqlValue> {
@@ -436,8 +437,18 @@ pub(crate) fn cast_routine_return_value(
     if matches!(return_type, "" | "void" | "record" | "trigger") {
         return Ok(value);
     }
-    let pg_type = pg_type_regtype_name(return_type)
-        .unwrap_or_else(|| collapse_sql_whitespace(return_type).to_ascii_lowercase());
+    if let Some(pg_type) = pg_type_regtype_name(return_type) {
+        return cast_value_to_pg_type(value, &pg_type);
+    }
+    if let Some(oid) = pg_user_type_oid_by_name(db, return_type)? {
+        if let Some(user_type) = load_user_type_by_oid(db, i64::from(oid))? {
+            return cast_value_to_user_type(
+                value,
+                &user_type.column_type(user_type.array_oid == i64::from(oid)),
+            );
+        }
+    }
+    let pg_type = collapse_sql_whitespace(return_type).to_ascii_lowercase();
     cast_value_to_pg_type(value, &pg_type)
 }
 
@@ -4188,7 +4199,7 @@ pub(crate) fn load_routine(
     match db.get(ROUTINE_COLLECTION, &routine_key(kind, name)) {
         Ok(Some(record)) => Ok(Some(
             serde_json::from_value::<RoutineSchema>(record.metadata.clone())?
-                .with_declared_security_metadata(),
+                .with_declared_metadata(),
         )),
         Ok(None) => Ok(None),
         Err(BicDbError::CollectionNotFound(_)) => Ok(None),
@@ -4342,6 +4353,7 @@ impl RoutineFrame {
             active_exception: None,
             oracle_error_diagnostics: None,
             assignment_types: Arc::clone(&template.assignment_types),
+            registered_assignment_types: FxHashMap::default(),
             oracle_dates: template.oracle_dates.clone(),
             values: Arc::new(BTreeMap::new()),
             slot_values: std::rc::Rc::new(vec![SqlValue::Null; slot_count]),
@@ -4404,6 +4416,23 @@ impl RoutineFrame {
         Ok(frame)
     }
 
+    pub(crate) fn bind_registered_assignment_types(&mut self, db: &BicDb) -> Result<()> {
+        self.registered_assignment_types.clear();
+        for (name, schema) in self.assignment_types.iter() {
+            if pg_type_oid_by_name(&schema.pg_type).is_some() {
+                continue;
+            }
+            if let Some(oid) = pg_user_type_oid_by_name(db, &schema.pg_type)? {
+                if let Some(user_type) = load_user_type_by_oid(db, i64::from(oid))? {
+                    let array = user_type.array_oid == i64::from(oid);
+                    self.registered_assignment_types
+                        .insert(name.clone(), user_type.column_type(array));
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// User-visible assignment checks the declared type before changing a slot.
     /// Internal values such as FOUND continue to use the raw frame setters.
     pub(crate) fn assign(&mut self, name: &str, value: SqlValue) -> Result<()> {
@@ -4449,9 +4478,13 @@ impl RoutineFrame {
         } else {
             value
         };
-        let value = match self.assignment_types.get(key.as_ref()) {
-            Some(schema) => coerce_routine_assignment(value, schema)?,
-            None => value,
+        let value = if let Some(user_type) = self.registered_assignment_types.get(key.as_ref()) {
+            cast_value_to_user_type(value, user_type)?
+        } else {
+            match self.assignment_types.get(key.as_ref()) {
+                Some(schema) => coerce_routine_assignment(value, schema)?,
+                None => value,
+            }
         };
         self.set(name, value);
         Ok(())
@@ -4567,6 +4600,24 @@ impl RoutineFrame {
         self.values.clone()
     }
 
+    pub(crate) fn collection_schema(
+        &self,
+        name: &str,
+    ) -> Option<&oracle::collections::CollectionSchema> {
+        let user_type = self
+            .registered_assignment_types
+            .get(normalized_object_name_ref(name).as_ref())?;
+        if user_type.array {
+            return None;
+        }
+        match &user_type.kind {
+            UserTypeKind::Domain {
+                oracle_collection, ..
+            } => oracle_collection.as_ref(),
+            _ => None,
+        }
+    }
+
     pub(crate) fn set_array_element(
         &mut self,
         name: &str,
@@ -4574,22 +4625,33 @@ impl RoutineFrame {
         value: SqlValue,
     ) -> Result<()> {
         let key = normalized_object_name_ref(name);
-        let value = match self.assignment_types.get(key.as_ref()) {
-            Some(schema) => {
-                let element_type = schema.pg_type.strip_suffix("[]").ok_or_else(|| {
-                    SqlError::InvalidSql(format!(
-                        "cannot assign array element on non-array routine variable {name}"
-                    ))
-                })?;
-                let value = cast_value_to_pg_type_fast(value, element_type)?;
-                apply_pg_type_modifier_with_context(
-                    value,
-                    element_type,
-                    schema.type_modifier.as_ref(),
-                    false,
-                )?
+        let value = if let Some(collection) = self.collection_schema(name) {
+            if offset >= oracle::collections::count(&self.get(name))? {
+                return Err(oracle::errors::database_error(
+                    -6533,
+                    "2202E",
+                    "collection subscript is beyond count",
+                ));
             }
-            None => value,
+            oracle::collections::assignment_element(value, collection)?
+        } else {
+            match self.assignment_types.get(key.as_ref()) {
+                Some(schema) => {
+                    let element_type = schema.pg_type.strip_suffix("[]").ok_or_else(|| {
+                        SqlError::InvalidSql(format!(
+                            "cannot assign array element on non-array routine variable {name}"
+                        ))
+                    })?;
+                    let value = cast_value_to_pg_type_fast(value, element_type)?;
+                    apply_pg_type_modifier_with_context(
+                        value,
+                        element_type,
+                        schema.type_modifier.as_ref(),
+                        false,
+                    )?
+                }
+                None => value,
+            }
         };
         if let Some(id) = self.slot_ids.get(key.as_ref()).copied() {
             if let Some(slot) = std::rc::Rc::make_mut(&mut self.slot_values).get_mut(id.0) {

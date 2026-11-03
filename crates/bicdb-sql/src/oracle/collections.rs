@@ -1,5 +1,40 @@
 //! Named Oracle collection metadata, with native array transport carriers.
 use super::*;
+mod methods;
+pub(crate) use methods::*;
+
+thread_local! { static ROUTINE_CONSTRUCTORS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+pub(crate) struct RoutineScope(bool);
+impl RoutineScope {
+    pub(crate) fn new(enabled: bool) -> Self {
+        Self(ROUTINE_CONSTRUCTORS.with(|flag| flag.replace(enabled)))
+    }
+}
+impl Drop for RoutineScope {
+    fn drop(&mut self) {
+        ROUTINE_CONSTRUCTORS.with(|flag| flag.set(self.0));
+    }
+}
+pub(crate) fn routine_constructors_enabled() -> bool {
+    ROUTINE_CONSTRUCTORS.with(std::cell::Cell::get)
+}
+
+pub(crate) fn bind_routine_type_name(name: &mut String, schema: &str) {
+    if routine_constructors_enabled() && pg_type_oid_by_name(name).is_none() && !name.contains('.')
+    {
+        *name = format!("{schema}.{name}");
+    }
+}
+
+pub(crate) fn bind_declaration_type(declaration: &mut RoutineDecl, schema: &str) {
+    if let RoutineDecl::Variable {
+        pg_type: Some(name),
+        ..
+    } = declaration
+    {
+        bind_routine_type_name(name, schema);
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -131,76 +166,83 @@ pub(super) fn lower_declaration(
 
 /// Only registered Oracle collection types introduce constructor calls.
 /// Ordinary PostgreSQL domains keep their existing function resolution.
+pub(super) fn constructor_expression(
+    db: &BicDb,
+    expr: &mut Expr,
+    namespace: Option<&str>,
+) -> Result<()> {
+    let Expr::Function(function) = expr else {
+        return Ok(());
+    };
+    let resolved = (|| -> Result<Option<Expr>> {
+        let parts = object_name_parts(&function.name);
+        let (schema, name) = match parts.as_slice() {
+            [name] => (namespace.unwrap_or("public"), name.as_str()),
+            [schema, name] => (schema.as_str(), name.as_str()),
+            _ => return Ok(None),
+        };
+        let Some(user_type) = load_user_type(db, schema, name)? else {
+            return Ok(None);
+        };
+        let UserTypeKind::Domain {
+            oracle_collection: Some(collection),
+            ..
+        } = &user_type.kind
+        else {
+            return Ok(None);
+        };
+        let FunctionArguments::List(list) = &function.args else {
+            return Ok(None);
+        };
+        if list.duplicate_treatment.is_some()
+            || !list.clauses.is_empty()
+            || function.filter.is_some()
+            || function.over.is_some()
+        {
+            return Err(unsupported(
+                "collection constructors require positional scalar elements",
+            ));
+        }
+        let args = list
+            .args
+            .iter()
+            .map(|arg| {
+                let FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)) = arg else {
+                    return Err(unsupported(
+                        "collection constructors require positional scalar elements",
+                    ));
+                };
+                Ok(if collection.element.pg_type == "numeric" {
+                    format!(
+                        "CAST({} AS NUMERIC)",
+                        date_trunc::exact_numeric_operand_sql(arg)
+                    )
+                } else {
+                    render_sql(arg)
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let name = format!(
+            "\"{}\".\"{}\"",
+            schema.replace('"', "\"\""),
+            name.replace('"', "\"\"")
+        );
+        expression(&format!("CAST(ARRAY[{}] AS {name})", args.join(","))).map(Some)
+    })()?;
+    if let Some(lowered) = resolved {
+        *expr = lowered;
+    }
+    Ok(())
+}
+
 pub(super) fn lower_constructors<T: sqlparser::ast::VisitMut>(
     db: &BicDb,
     node: &mut T,
     namespace: Option<&str>,
 ) -> Result<()> {
     let result = visit_expressions_mut(node, |expr| {
-        let Expr::Function(function) = expr else {
-            return ControlFlow::Continue(());
-        };
-        let resolved = (|| -> Result<Option<Expr>> {
-            let parts = object_name_parts(&function.name);
-            let (schema, name) = match parts.as_slice() {
-                [name] => (namespace.unwrap_or("public"), name.as_str()),
-                [schema, name] => (schema.as_str(), name.as_str()),
-                _ => return Ok(None),
-            };
-            let Some(user_type) = load_user_type(db, schema, name)? else {
-                return Ok(None);
-            };
-            let UserTypeKind::Domain {
-                oracle_collection: Some(collection),
-                ..
-            } = &user_type.kind
-            else {
-                return Ok(None);
-            };
-            let FunctionArguments::List(list) = &function.args else {
-                return Ok(None);
-            };
-            if list.duplicate_treatment.is_some()
-                || !list.clauses.is_empty()
-                || function.filter.is_some()
-                || function.over.is_some()
-            {
-                return Err(unsupported(
-                    "collection constructors require positional scalar elements",
-                ));
-            }
-            let args = list
-                .args
-                .iter()
-                .map(|arg| {
-                    let FunctionArg::Unnamed(FunctionArgExpr::Expr(arg)) = arg else {
-                        return Err(unsupported(
-                            "collection constructors require positional scalar elements",
-                        ));
-                    };
-                    Ok(if collection.element.pg_type == "numeric" {
-                        format!(
-                            "CAST({} AS NUMERIC)",
-                            date_trunc::exact_numeric_operand_sql(arg)
-                        )
-                    } else {
-                        render_sql(arg)
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let name = format!(
-                "\"{}\".\"{}\"",
-                schema.replace('"', "\"\""),
-                name.replace('"', "\"\"")
-            );
-            expression(&format!("CAST(ARRAY[{}] AS {name})", args.join(","))).map(Some)
-        })();
-        match resolved {
-            Ok(Some(lowered)) => {
-                *expr = lowered;
-                ControlFlow::Continue(())
-            }
-            Ok(None) => ControlFlow::Continue(()),
+        match constructor_expression(db, expr, namespace) {
+            Ok(()) => ControlFlow::Continue(()),
             Err(error) => ControlFlow::Break(error),
         }
     });

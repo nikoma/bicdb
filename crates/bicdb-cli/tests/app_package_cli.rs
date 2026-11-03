@@ -42,6 +42,9 @@ fn unsigned_package(version: &str, marker: &str) -> Value {
             }
         },
         "modules": {},
+        "tables": [{"name": "greetings", "columns": [
+            {"name": "id", "type": "uuid"}, {"name": "text", "type": "text"}
+        ]}],
         "scripts": {"api": format!(
             "function hello(request: any) {{ return {{ status: 200, body: {{ marker: \"{marker}\", path: request.path }} }}; }}"
         )},

@@ -183,9 +183,11 @@ pub enum AppPackageCommand {
         #[arg(long)]
         out_public: PathBuf,
     },
-    /// Hash and sign an unsigned package. Fills the dependency lock, SBOM and
-    /// provenance hashes, signature key id/algorithm, package_sha256 and
-    /// signature; every other byte of the package is left as written.
+    /// Hash and sign an unsigned package. Expands an optional top-level
+    /// `tables` list into schema-only resources with tenant row-level
+    /// security and a migration plan, completes raw SQL hashes and authority,
+    /// and fills the dependency lock, SBOM and provenance hashes, signature
+    /// key id/algorithm, package_sha256 and signature.
     Sign {
         package: PathBuf,
         #[arg(long)]
@@ -233,8 +235,21 @@ pub fn run_package_command(command: AppPackageCommand) -> Result<()> {
             )?;
             let key = ed25519_dalek::SigningKey::from_bytes(&seed);
             let reader = PackageVerifier::new(TrustedSigningKeys::default(), 256 * 1024 * 1024)?;
+            let limit = bicdb_app_runtime::encoded_package_byte_limit(reader.max_package_bytes())?;
+            if fs::metadata(&input)
+                .with_context(|| format!("read package {}", input.display()))?
+                .len()
+                > limit
+            {
+                bail!("encoded package exceeds byte limit {limit}");
+            }
+            // Expand compact `tables` and derive raw SQL authority before
+            // the bytes are hashed, then decode with the install limits.
+            let mut document: serde_json::Value = serde_json::from_slice(&fs::read(&input)?)
+                .with_context(|| format!("parse package {}", input.display()))?;
+            bicdb_app_runtime::prepare_unsigned_package(&mut document)?;
             let mut package = reader
-                .read_package_file(&input)
+                .read_package(serde_json::to_vec(&document)?.as_slice())
                 .with_context(|| format!("read bounded package {}", input.display()))?;
             sign_package(&mut package, &key_id, &key)?;
             let mut trusted = TrustedSigningKeys::default();

@@ -678,6 +678,10 @@ fn script_schedules_fire_as_the_schedule_identity_and_write_declared_sql() {
     };
     assert!(!rows.is_empty(), "schedule never wrote a row");
     assert_eq!(rows[0].metadata["actor"], "scheduler");
-    assert!(rows[0].id.to_string().starts_with("notes:tick:"), "{:?}", rows[0]);
+    assert!(
+        rows[0].id.to_string().starts_with("notes:tick:"),
+        "{:?}",
+        rows[0]
+    );
     runtime.disable("notes").unwrap();
 }

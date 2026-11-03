@@ -292,7 +292,10 @@ impl PackageVerifier {
         let script_only = package.modules.is_empty()
             && !package.scripts.is_empty()
             && application.workers.is_empty()
-            && application.schedules.is_empty()
+            && application
+                .schedules
+                .iter()
+                .all(|schedule| schedule.script.is_some())
             && application.service_exports.is_empty();
         if !script_only
             && !package
@@ -437,20 +440,25 @@ fn validate_scripts(
             "package scripts exceed {MAX_SCRIPTS_TOTAL_BYTES} bytes in total"
         )));
     }
-    for route in &application.routes {
-        let Some(script) = &route.script else {
-            continue;
-        };
+    let handlers =
+        application
+            .routes
+            .iter()
+            .filter_map(|route| Some(("route", &route.name, route.script.as_ref()?)))
+            .chain(application.schedules.iter().filter_map(|schedule| {
+                Some(("schedule", &schedule.name, schedule.script.as_ref()?))
+            }));
+    for (kind, name, script) in handlers {
         if !package.scripts.contains_key(&script.module) {
             return Err(AppRuntimeError::InvalidPackage(format!(
-                "route `{}` references absent script `{}`",
-                route.name, script.module
+                "{kind} `{name}` references absent script `{}`",
+                script.module
             )));
         }
         if !bicdb_script::is_entry_name(&script.export) {
             return Err(AppRuntimeError::InvalidPackage(format!(
-                "route `{}` script export `{}` is not a usable JavaScript function name",
-                route.name, script.export
+                "{kind} `{name}` script export `{}` is not a usable JavaScript function name",
+                script.export
             )));
         }
     }

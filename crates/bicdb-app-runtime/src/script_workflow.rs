@@ -456,11 +456,12 @@ fn bind_deadline(capability: &mut CapabilityHost, limits: &bicdb_script::Limits)
     Ok(deadline)
 }
 
-/// Execute a signed package script route handler for one authenticated
-/// caller. The capability host is built from the caller's actor, so declared
+/// Execute a signed package script route or schedule handler for one actor
+/// (the authenticated caller, or the schedule's service identity). The
+/// capability host is built from that actor, so declared
 /// SQL runs under that caller's row-level security; an open transaction is
 /// always rolled back. Engine errors are reduced to their first line.
-pub(crate) fn execute_script_route(
+pub(crate) fn execute_script_handler(
     javascript: &str,
     export: &str,
     request: &Value,
@@ -470,11 +471,10 @@ pub(crate) fn execute_script_route(
     use crate::AppRuntimeError;
     let failed = |message: String| {
         AppRuntimeError::Extension(bicdb_extension::ExtensionError::Runtime(format!(
-            "script route `{export}` failed: {message}"
+            "script `{export}` failed: {message}"
         )))
     };
-    let timed_out =
-        || AppRuntimeError::Timeout(format!("script route `{export}` exceeded its deadline"));
+    let timed_out = || AppRuntimeError::Timeout(format!("script `{export}` exceeded its deadline"));
     clamp_limits(&capability, &mut options.limits).map_err(|_| timed_out())?;
     if javascript.len() > options.limits.source_bytes {
         return Err(failed(

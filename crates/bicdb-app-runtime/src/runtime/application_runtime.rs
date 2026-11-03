@@ -2423,7 +2423,7 @@ impl ApplicationRuntime {
             actor,
             self.services.clone(),
         )?;
-        crate::script_workflow::execute_script_route(
+        crate::script_workflow::execute_script_handler(
             &javascript,
             &script.export,
             &request,
@@ -3222,18 +3222,20 @@ impl ApplicationRuntime {
         if application.workers.is_empty() && application.schedules.is_empty() {
             return Ok(supervisors);
         }
-        let module = snapshot
+        let entry = snapshot
             .modules
             .get(&snapshot.package.manifest.identity.name)
-            .cloned()
-            .ok_or_else(|| {
+            .cloned();
+        let module = || {
+            entry.clone().ok_or_else(|| {
                 AppRuntimeError::InvalidPackage("application entry module is absent".to_string())
-            })?;
+            })
+        };
         let manifest = Arc::new(snapshot.package.manifest.clone());
         for worker in &application.workers {
             let control = start_worker(
                 self.db.clone(),
-                module.clone(),
+                module()?,
                 manifest.clone(),
                 self.services.clone(),
                 worker.clone(),
@@ -3243,9 +3245,24 @@ impl ApplicationRuntime {
         }
         for schedule in &application.schedules {
             let plan = parse_schedule_plan(&schedule.schedule, &schedule.timezone)?;
+            let handler = match &schedule.script {
+                Some(script) => ScheduleHandler::Script(
+                    snapshot
+                        .scripts
+                        .get(&script.module)
+                        .cloned()
+                        .ok_or_else(|| {
+                            AppRuntimeError::InvalidPackage(format!(
+                                "script `{}` is not installed",
+                                script.module
+                            ))
+                        })?,
+                ),
+                None => ScheduleHandler::Wasm(module()?),
+            };
             let control = start_schedule(
                 self.db.clone(),
-                module.clone(),
+                handler,
                 manifest.clone(),
                 self.services.clone(),
                 schedule.clone(),

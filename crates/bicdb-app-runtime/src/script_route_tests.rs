@@ -606,3 +606,78 @@ fn script_packages_are_signed_compiled_upgraded_rolled_back_and_restored() {
     assert_eq!(restored.inspect("notes").unwrap().version, "1.0.0");
     assert_eq!(note_ids(&restored, "tenant-2"), (1, vec!["b1".into()]));
 }
+
+#[test]
+fn script_schedules_fire_as_the_schedule_identity_and_write_declared_sql() {
+    let harness = Harness::new();
+    {
+        let mut db = harness.db.write();
+        SqlSession::new(&mut db)
+            .execute("CREATE TABLE ticks (id TEXT PRIMARY KEY, actor TEXT NOT NULL)")
+            .unwrap();
+    }
+    let source = format!(
+        "{API_V1}\nfunction tick(event: any) {{ db.execute(\"add_tick\", [event.run_id, event.payload.source]); return null; }}"
+    );
+    let mut package = package("1.0.0", &source, &harness.key);
+    package
+        .manifest
+        .capabilities
+        .extend([ExtensionCapability::Schedules, ExtensionCapability::Jobs]);
+    package
+        .manifest
+        .permissions
+        .write_relations
+        .insert("ticks".into());
+    let application = package.manifest.application.as_deref_mut().unwrap();
+    application.raw_sql.push(
+        serde_json::from_value(json!({
+            "id": "add_tick",
+            "sql": "INSERT INTO ticks (id, actor) VALUES ($1, $2)",
+            "sha256": digest(b"INSERT INTO ticks (id, actor) VALUES ($1, $2)"),
+            "relations": ["ticks"],
+            "actions": ["insert"],
+            "parameters": ["string", "string"],
+        }))
+        .unwrap(),
+    );
+    application.relation_permissions.push(RelationPermission {
+        relation: "ticks".into(),
+        actions: BTreeSet::from([DatabaseAction::Insert]),
+        readable_columns: BTreeSet::new(),
+        writable_columns: ["id", "actor"].map(String::from).into(),
+    });
+    application.schedules = vec![serde_json::from_value(json!({
+        "name": "tick",
+        "script": {"module": "api", "export": "tick"},
+        "schedule": "@every 200ms",
+        "timezone": "UTC",
+        "payload": {"source": "scheduler"}
+    }))
+    .unwrap()];
+    sign(&mut package, &harness.key);
+
+    let runtime = harness.runtime();
+    runtime.install(package).unwrap();
+    assert!(runtime.activate("notes").unwrap().ready);
+    assert_eq!(runtime.schedules(), vec!["tick".to_string()]);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let rows = loop {
+        let rows = harness
+            .db
+            .write()
+            .secure(&bicdb_core::SecurityContext::trusted_internal(
+                "test", "tenant-1",
+            ))
+            .scan_collection("ticks")
+            .unwrap();
+        if !rows.is_empty() || std::time::Instant::now() > deadline {
+            break rows;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+    assert!(!rows.is_empty(), "schedule never wrote a row");
+    assert_eq!(rows[0].metadata["actor"], "scheduler");
+    assert!(rows[0].id.to_string().starts_with("notes:tick:"), "{:?}", rows[0]);
+    runtime.disable("notes").unwrap();
+}

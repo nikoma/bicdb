@@ -299,7 +299,12 @@ pub struct WorkerDefinition {
 #[serde(deny_unknown_fields)]
 pub struct ScheduleDefinition {
     pub name: String,
+    /// WebAssembly or program export. Empty only for a script schedule.
+    #[serde(default)]
     pub export: String,
+    /// Signed package script handler, called with the occurrence event.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script: Option<RouteScript>,
     pub schedule: String,
     pub timezone: String,
     #[serde(default)]
@@ -3170,7 +3175,27 @@ impl ApplicationManifestV2 {
         unique_by("schedule", self.schedules.iter().map(|item| &item.name))?;
         for schedule in &self.schedules {
             validate_identifier("schedule", &schedule.name)?;
-            validate_identifier("schedule export", &schedule.export)?;
+            match &schedule.script {
+                Some(script) => {
+                    validate_identifier("schedule script module", &script.module)?;
+                    validate_identifier("schedule script export", &script.export)?;
+                    if !schedule.export.is_empty() || script.export.contains(['-', '.']) {
+                        return invalid(format!(
+                            "script schedule `{}` must name only a JavaScript identifier export",
+                            schedule.name
+                        ));
+                    }
+                    if let Some(egress) = &script.egress {
+                        if !self.egress.iter().any(|policy| &policy.name == egress) {
+                            return invalid(format!(
+                                "script schedule `{}` references undeclared egress policy `{egress}`",
+                                schedule.name
+                            ));
+                        }
+                    }
+                }
+                None => validate_identifier("schedule export", &schedule.export)?,
+            }
             validate_nonempty("schedule expression", &schedule.schedule, 256)?;
             validate_nonempty("schedule timezone", &schedule.timezone, 128)?;
             if schedule.max_concurrency == 0 || schedule.max_concurrency > 64 {

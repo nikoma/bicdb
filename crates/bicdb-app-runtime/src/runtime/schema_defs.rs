@@ -2223,6 +2223,7 @@ mod tests {
         ScheduleDefinition {
             name: "daily_reconcile".to_string(),
             export: "reconcile".to_string(),
+            script: None,
             schedule: "@every 1s".to_string(),
             timezone: "UTC".to_string(),
             payload: json!({"source": "scheduler-test"}),

@@ -883,3 +883,34 @@ disposable application copy with an explicitly adapted fresh collection type.
 The original intersection function remains unqualified (0/11 calls) pending
 MULTISET INTERSECT and IS NOT EMPTY. The retained listener, complete application
 schema and business workflows are separate requirements.
+
+
+## Named nested-table multisets and compiler version 21
+
+The [multiset contract](evidence/oracle-multisets-2026-11-03/README.md) adds
+MULTISET UNION, INTERSECT and EXCEPT with ALL/default and DISTINCT multiplicity,
+and IS [NOT] EMPTY. INTERSECT binds more tightly than UNION and EXCEPT. A whole
+NULL collection propagates NULL; NULL elements compare as equal members.
+Operands must resolve to the same registered named nested-table type. Matching
+element types alone do not establish nominal type compatibility.
+
+The qualified scalar elements are VARCHAR2, CHAR and NUMBER. Numeric scale and
+fixed-character padding follow their declared comparison rules. Constructors,
+explicit named casts, standalone stored function results and typed procedural
+locals/parameters provide type provenance. SQL column operands and procedural
+variables inside SQL queries currently require further type-resolution work.
+Object elements, TABLE(collection), sparse collections and unqualified collection
+kinds remain open. Result order is unspecified.
+
+Each operation limits combined inputs to 100,000 elements and an estimated 8 MiB,
+with a separate estimated 16 MiB canonical-key work budget. Limits are platform
+bounds, not Oracle limits. Version-20 routines retain their old behavior; the
+prior reader refuses version-21 routines and new lowered view helpers. Durable
+metadata remains format 5. Native PostgreSQL syntax does not enable Oracle
+collection operators. Independent PostgreSQL controls also cover the general
+INTERSECT ALL and EXCEPT ALL row-multiplicity implementation added here.
+
+The unchanged original intersection function now matches 11/11 source calls,
+and the CSV collection function retains 5/5. These bounded checks use an explicit
+fresh-creation adaptation for the source collection type's edition annotation.
+They do not qualify editioning, complete application execution or deployment.

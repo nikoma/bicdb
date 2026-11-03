@@ -3144,7 +3144,8 @@ impl<'db> SqlSession<'db> {
         let mut last_result = None;
         for statement in statements {
             if check_columns && self.column_references_checkable() {
-                self.sql_engine().check_statement_column_references(statement)?;
+                self.sql_engine()
+                    .check_statement_column_references(statement)?;
             }
             last_result = Some(self.execute_parsed_statement(statement)?);
         }
@@ -3202,9 +3203,9 @@ impl<'db> SqlSession<'db> {
         // state, not on every execution of the statement.
         let stamp = self.column_check_stamp();
         let check_columns = cached.columns_checked != Some(stamp);
-        let result = cached.bind(&literals).and_then(|()| {
-            self.execute_statement_list_checked(&cached.statements, check_columns)
-        });
+        let result = cached
+            .bind(&literals)
+            .and_then(|()| self.execute_statement_list_checked(&cached.statements, check_columns));
         if result.is_ok() && check_columns && self.column_references_checkable() {
             cached.columns_checked = Some(stamp);
         }

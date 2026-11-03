@@ -1256,7 +1256,9 @@ fn correlated_subqueries_see_an_outer_set_returning_function_alias() {
         "INSERT INTO role_assignments VALUES (1, 1, 'kitchen', NULL), (2, 2, 'teacher', '3b')",
         "INSERT INTO records VALUES (10, '{\"class\": \"3b\"}'), (11, '{\"class\": \"4a\"}')",
     ] {
-        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
     let visible = |user: i64| {
         format!(
@@ -1268,9 +1270,18 @@ fn correlated_subqueries_see_an_outer_set_returning_function_alias() {
                  AND (e->>'where_field' IS NULL OR (a.scope IS NOT NULL AND r.data->>(e->>'where_field') = a.scope))))"
         )
     };
-    assert_eq!(session_rows(&mut session, &visible(1)), vec![vec![SqlValue::Int(2)]]);
-    assert_eq!(session_rows(&mut session, &visible(2)), vec![vec![SqlValue::Int(1)]]);
-    assert_eq!(session_rows(&mut session, &visible(3)), vec![vec![SqlValue::Int(0)]]);
+    assert_eq!(
+        session_rows(&mut session, &visible(1)),
+        vec![vec![SqlValue::Int(2)]]
+    );
+    assert_eq!(
+        session_rows(&mut session, &visible(2)),
+        vec![vec![SqlValue::Int(1)]]
+    );
+    assert_eq!(
+        session_rows(&mut session, &visible(3)),
+        vec![vec![SqlValue::Int(0)]]
+    );
     assert_eq!(
         session_rows(
             &mut session,

@@ -32,7 +32,9 @@ struct Scope {
 
 impl Scope {
     fn is_open(&self) -> bool {
-        self.relations.iter().any(|relation| relation.columns.is_none())
+        self.relations
+            .iter()
+            .any(|relation| relation.columns.is_none())
     }
 }
 
@@ -237,7 +239,10 @@ impl SqlEngine<'_> {
                 output_names_of(body, inferred)
             });
             let columns = anchor.and_then(|names| {
-                rename_relation_columns(names.into_iter().map(|name| (name, None)).collect(), &cte.alias.columns)
+                rename_relation_columns(
+                    names.into_iter().map(|name| (name, None)).collect(),
+                    &cte.alias.columns,
+                )
             });
             match columns {
                 Some(columns) => {
@@ -254,7 +259,11 @@ impl SqlEngine<'_> {
                     // checked with the CTE visible as an open relation.
                     engine.ctes.insert(
                         cte_key(&name),
-                        CteResult::new(name.clone(), vec![UNKNOWN_CTE_COLUMN.to_string()], Vec::new()),
+                        CteResult::new(
+                            name.clone(),
+                            vec![UNKNOWN_CTE_COLUMN.to_string()],
+                            Vec::new(),
+                        ),
                     );
                     engine.check_query_columns(&cte.query, outer)?;
                 }
@@ -265,7 +274,9 @@ impl SqlEngine<'_> {
 
     fn check_query_body(&self, query: &Query, outer: &[Scope]) -> Result<()> {
         match query.body.as_ref() {
-            SetExpr::Select(select) => self.check_select_columns(select, query.order_by.as_ref(), outer),
+            SetExpr::Select(select) => {
+                self.check_select_columns(select, query.order_by.as_ref(), outer)
+            }
             body => {
                 self.check_set_expr_columns(body, outer)?;
                 // ORDER BY over a set operation sees only the output columns.
@@ -274,7 +285,8 @@ impl SqlEngine<'_> {
                     let scope = Scope {
                         relations: vec![ScopeRelation {
                             alias: String::new(),
-                            columns: output.map(|columns| columns.into_iter().map(|(name, _)| name).collect()),
+                            columns: output
+                                .map(|columns| columns.into_iter().map(|(name, _)| name).collect()),
                         }],
                         output_names: Vec::new(),
                     };
@@ -405,10 +417,14 @@ impl SqlEngine<'_> {
         deferred: &mut Vec<&'q Expr>,
     ) -> Result<()> {
         match factor {
-            TableFactor::NestedJoin { table_with_joins, .. } => {
+            TableFactor::NestedJoin {
+                table_with_joins, ..
+            } => {
                 return self.scope_table_with_joins(table_with_joins, outer, scope, deferred);
             }
-            TableFactor::Derived { lateral, subquery, .. } => {
+            TableFactor::Derived {
+                lateral, subquery, ..
+            } => {
                 // A LATERAL subquery also sees the FROM items before it.
                 if *lateral {
                     let mut lateral_outer = vec![scope.clone()];
@@ -430,7 +446,10 @@ impl SqlEngine<'_> {
         let known = !virtual_relation
             && self.collect_relation_columns(factor, &mut env).is_some()
             && !env.iter().any(|relation| {
-                relation.columns.iter().any(|(name, _)| name == UNKNOWN_CTE_COLUMN)
+                relation
+                    .columns
+                    .iter()
+                    .any(|(name, _)| name == UNKNOWN_CTE_COLUMN)
             });
         if !known {
             scope.relations.push(ScopeRelation {
@@ -439,12 +458,16 @@ impl SqlEngine<'_> {
             });
             return Ok(());
         }
-        if let TableFactor::Derived { subquery, alias, .. } = factor {
+        if let TableFactor::Derived {
+            subquery, alias, ..
+        } = factor
+        {
             if alias.as_ref().is_none_or(|alias| alias.columns.is_empty()) {
-                let inferred = env
-                    .first()
-                    .map(|relation| relation.columns.clone());
-                match (env.first_mut(), output_names_of(subquery.body.as_ref(), inferred)) {
+                let inferred = env.first().map(|relation| relation.columns.clone());
+                match (
+                    env.first_mut(),
+                    output_names_of(subquery.body.as_ref(), inferred),
+                ) {
                     (Some(relation), Some(names)) => {
                         relation.columns = names.into_iter().map(|name| (name, None)).collect();
                     }
@@ -460,14 +483,22 @@ impl SqlEngine<'_> {
         }
         let base_table = env.iter().any(|relation| relation.row_type.is_some());
         for relation in env {
-            let mut columns: Vec<String> = relation.columns.into_iter().map(|(name, _)| name).collect();
+            let mut columns: Vec<String> =
+                relation.columns.into_iter().map(|(name, _)| name).collect();
             if base_table {
                 columns.extend(SYSTEM_COLUMNS.iter().map(|name| (*name).to_string()));
                 // Record fields every BicDB collection row carries.
                 columns.extend(
-                    ["id", "metadata", "timestamp", "payload", "vector", "geometry"]
-                        .iter()
-                        .map(|name| (*name).to_string()),
+                    [
+                        "id",
+                        "metadata",
+                        "timestamp",
+                        "payload",
+                        "vector",
+                        "geometry",
+                    ]
+                    .iter()
+                    .map(|name| (*name).to_string()),
                 );
             }
             // An aliased base table stays reachable under its own name too
@@ -522,20 +553,29 @@ impl SqlEngine<'_> {
         match parts {
             [ident] => {
                 let name = ident.value.as_str();
-                if NON_COLUMN_NAMES.iter().any(|candidate| same_name(candidate, name))
+                if NON_COLUMN_NAMES
+                    .iter()
+                    .any(|candidate| same_name(candidate, name))
                     || self.session_identity_value(name).is_some()
                     || routine_var_from_name(&self.routine_vars, name).is_some()
                 {
                     return Ok(());
                 }
-                if output_names_visible && scope.output_names.iter().any(|alias| same_name(alias, name)) {
+                if output_names_visible
+                    && scope
+                        .output_names
+                        .iter()
+                        .any(|alias| same_name(alias, name))
+                {
                     return Ok(());
                 }
                 for scope in scopes {
                     for relation in &scope.relations {
                         match &relation.columns {
                             None => return Ok(()),
-                            Some(columns) if columns.iter().any(|column| same_name(column, name)) => {
+                            Some(columns)
+                                if columns.iter().any(|column| same_name(column, name)) =>
+                            {
                                 return Ok(());
                             }
                             // A bare relation name is a whole-row reference.
@@ -555,7 +595,9 @@ impl SqlEngine<'_> {
             }
             [.., qualifier, column] if parts.len() <= 3 => {
                 let (qualifier, column) = (qualifier.value.as_str(), column.value.as_str());
-                if PSEUDO_QUALIFIERS.iter().any(|candidate| same_name(candidate, qualifier))
+                if PSEUDO_QUALIFIERS
+                    .iter()
+                    .any(|candidate| same_name(candidate, qualifier))
                     || routine_var_from_name(&self.routine_vars, qualifier).is_some()
                 {
                     return Ok(());
@@ -563,10 +605,16 @@ impl SqlEngine<'_> {
                 let mut any_open = false;
                 for scope in scopes {
                     any_open |= scope.is_open();
-                    for relation in scope.relations.iter().filter(|relation| same_name(&relation.alias, qualifier)) {
+                    for relation in scope
+                        .relations
+                        .iter()
+                        .filter(|relation| same_name(&relation.alias, qualifier))
+                    {
                         return match &relation.columns {
                             None => Ok(()),
-                            Some(columns) if columns.iter().any(|name| same_name(name, column)) => Ok(()),
+                            Some(columns) if columns.iter().any(|name| same_name(name, column)) => {
+                                Ok(())
+                            }
                             Some(_) => Err(SqlError::UndefinedColumn {
                                 table: relation.alias.clone(),
                                 column: column.to_string(),
@@ -580,10 +628,9 @@ impl SqlEngine<'_> {
                 // `composite_column.field` written without parentheses.
                 let is_column = std::iter::once(scope).chain(outer.iter()).any(|scope| {
                     scope.relations.iter().any(|relation| {
-                        relation
-                            .columns
-                            .as_ref()
-                            .is_some_and(|columns| columns.iter().any(|name| same_name(name, qualifier)))
+                        relation.columns.as_ref().is_some_and(|columns| {
+                            columns.iter().any(|name| same_name(name, qualifier))
+                        })
                     })
                 });
                 if is_column || parts.len() == 3 {
@@ -633,11 +680,12 @@ fn output_names_of(
         SetExpr::Query(query) => return output_names_of(query.body.as_ref(), inferred),
         _ => return inferred.map(|columns| columns.into_iter().map(|(name, _)| name).collect()),
     };
-    if select
-        .projection
-        .iter()
-        .any(|item| matches!(item, SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(..)))
-    {
+    if select.projection.iter().any(|item| {
+        matches!(
+            item,
+            SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(..)
+        )
+    }) {
         return inferred.map(|columns| columns.into_iter().map(|(name, _)| name).collect());
     }
     let inferred = inferred.filter(|columns| columns.len() == select.projection.len());
@@ -647,7 +695,9 @@ fn output_names_of(
         .enumerate()
         .map(|(index, item)| match item {
             SelectItem::ExprWithAlias { alias, .. } => Some(alias.value.to_ascii_lowercase()),
-            SelectItem::UnnamedExpr(Expr::Identifier(ident)) => Some(ident.value.to_ascii_lowercase()),
+            SelectItem::UnnamedExpr(Expr::Identifier(ident)) => {
+                Some(ident.value.to_ascii_lowercase())
+            }
             SelectItem::UnnamedExpr(Expr::CompoundIdentifier(idents)) => {
                 idents.last().map(|ident| ident.value.to_ascii_lowercase())
             }

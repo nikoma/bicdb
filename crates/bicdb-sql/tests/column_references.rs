@@ -18,7 +18,9 @@ fn session_with_fixture(db: &mut BicDb) -> SqlSession<'_> {
         "CREATE TYPE contact AS (name TEXT, age INT)",
         "CREATE TABLE c (id INT PRIMARY KEY, person contact)",
     ] {
-        session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}"));
+        session
+            .execute(sql)
+            .unwrap_or_else(|error| panic!("{sql}: {error}"));
     }
     session
 }
@@ -31,15 +33,24 @@ fn unknown_column_references_are_errors() {
     for (sql, sqlstate) in [
         ("SELECT t.nosuch FROM t", "42703"),
         ("SELECT id FROM t WHERE nosuch = 1", "42703"),
-        ("SELECT t.id FROM t JOIN u ON u.t_id = t.id WHERE u.nosuch = 1", "42703"),
+        (
+            "SELECT t.id FROM t JOIN u ON u.t_id = t.id WHERE u.nosuch = 1",
+            "42703",
+        ),
         ("SELECT t.id FROM t JOIN u ON u.nosuch = t.id", "42703"),
         ("SELECT id FROM t ORDER BY nosuch", "42703"),
         ("SELECT count(*) FROM t GROUP BY nosuch", "42703"),
         ("SELECT nosuch FROM (SELECT 1 AS x) AS d", "42703"),
         ("SELECT d.nosuch FROM (SELECT 1 AS x) AS d", "42703"),
-        ("WITH c AS (SELECT id FROM t) SELECT id FROM c WHERE c.nosuch = 1", "42703"),
+        (
+            "WITH c AS (SELECT id FROM t) SELECT id FROM c WHERE c.nosuch = 1",
+            "42703",
+        ),
         ("SELECT nosuch FROM rr('v')", "42703"),
-        ("SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.t_id = t.nosuch)", "42703"),
+        (
+            "SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.t_id = t.nosuch)",
+            "42703",
+        ),
         ("SELECT id FROM tv WHERE nosuch = 1", "42703"),
         ("UPDATE t SET name = 'b' WHERE nosuch = 1", "42703"),
         ("UPDATE t SET name = nosuch WHERE id = 1", "42703"),

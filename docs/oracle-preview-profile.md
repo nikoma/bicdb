@@ -1051,3 +1051,10 @@ resolution instead of selecting a same-named routine value. Oracle PL/SQL and
 native SQL-function controls pass separately, and the four selected original
 inventory calls now match. PL/pgSQL conflict policies, correlated numeric result
 metadata, complete application flows and the wider programme remain unqualified.
+
+The [qualified scalar result-type checkpoint](evidence/sql-scalar-subquery-types-2026-11-03/README.md)
+subsequently resolves relation metadata using execution's canonical identity.
+Twelve Oracle and twelve native cases retain numeric values and NUMERIC transport
+types through prepared text/binary queries, including NULL and empty results.
+General query typing and the separately reproduced pending typed-index visibility
+gap remain open; the application is not fully qualified.

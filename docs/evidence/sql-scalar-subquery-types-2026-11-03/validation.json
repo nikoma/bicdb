@@ -1,0 +1,97 @@
+{
+  "format": 1,
+  "observed_at_utc": "2026-11-04T03:28:20.725689+00:00",
+  "source_commit": "b6dbdfc5fc09ae9f06900577bb937b45cc5866ea",
+  "runtime_binary_sha256": "0bc6575fd3ea7f7ddf14938adc82f474ba49b962c1ae880f45b2fb9f1d90e9e4",
+  "build": "development, unoptimized, debug=0",
+  "application_qualified": false,
+  "release_published": false,
+  "compiler_version": 25,
+  "language_oid": 999424,
+  "durable_metadata_format": 5,
+  "checks": {
+    "rust_passed": 1443,
+    "rust_ignored": 3,
+    "rust_batches": [
+      584,
+      7,
+      29,
+      17,
+      2,
+      60,
+      419,
+      121,
+      28,
+      169,
+      3,
+      4
+    ],
+    "python_passed": 58,
+    "format": "passed",
+    "diff": "passed",
+    "licenses": "passed",
+    "open_core_boundary": "passed",
+    "ci": "not run in this local qualification"
+  },
+  "oracle": {
+    "matched": 12,
+    "total": 12,
+    "source_qualified": true,
+    "baseline_matched": 0
+  },
+  "postgres": {
+    "matched": 12,
+    "total": 12,
+    "source_qualified": true,
+    "baseline_matched": 0
+  },
+  "retained_controls": {
+    "column-scope-after-types-oracle": {
+      "matched": 5,
+      "total": 5,
+      "success": true
+    },
+    "column-scope-after-types-postgres": {
+      "matched": 5,
+      "total": 5,
+      "success": true
+    },
+    "aggregates-after-types-oracle": {
+      "matched": 19,
+      "total": 19,
+      "success": true
+    },
+    "aggregates-after-types-postgres": {
+      "matched": 12,
+      "total": 12,
+      "success": true
+    }
+  },
+  "concurrent_logging": {
+    "format": 1,
+    "runtime_binary_sha256": "0bc6575fd3ea7f7ddf14938adc82f474ba49b962c1ae880f45b2fb9f1d90e9e4",
+    "strict_json_lines": 241,
+    "malformed_lines": 0,
+    "connections": 5,
+    "workers": 4,
+    "transactions_per_worker": 20,
+    "transaction_states": [
+      false,
+      true
+    ],
+    "success": true
+  },
+  "memory": {
+    "guard_floor_bytes": 8589934592,
+    "full_checks_peak_rss_bytes": 4917362688,
+    "full_checks_minimum_available_bytes": 19602845696,
+    "build_peak_rss_bytes": 2067066880,
+    "build_minimum_available_bytes": 21413576704
+  },
+  "remaining": [
+    "Pending typed secondary-index candidate visibility",
+    "Application header and tax totals and complete business flows",
+    "General query result typing beyond qualified scalar single-relation aggregates",
+    "Packages, GET_LINES and remaining compatibility programme streams"
+  ]
+}

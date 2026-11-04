@@ -1,0 +1,156 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "cases": [
+    {
+      "indexed": false,
+      "source": [
+        {
+          "id": "own_update",
+          "rows": [
+            [
+              {
+                "number": "185.25"
+              }
+            ]
+          ],
+          "matched": true
+        },
+        {
+          "id": "correlated_read",
+          "rows": [
+            [
+              {
+                "number": "185.25"
+              }
+            ]
+          ],
+          "matched": true
+        },
+        {
+          "id": "correlated_update",
+          "rows": [
+            [
+              {
+                "number": "185.25"
+              }
+            ]
+          ],
+          "matched": true
+        }
+      ],
+      "bicdb": [
+        {
+          "id": "own_update",
+          "rows": [
+            [
+              {
+                "number": "185.25"
+              }
+            ]
+          ],
+          "matched": true
+        },
+        {
+          "id": "correlated_read",
+          "rows": [
+            [
+              {
+                "number": "185.25"
+              }
+            ]
+          ],
+          "matched": true
+        },
+        {
+          "id": "correlated_update",
+          "rows": [
+            [
+              {
+                "number": "185.25"
+              }
+            ]
+          ],
+          "matched": true
+        }
+      ]
+    },
+    {
+      "indexed": true,
+      "source": [
+        {
+          "id": "own_update",
+          "rows": [
+            [
+              {
+                "number": "185.25"
+              }
+            ]
+          ],
+          "matched": true
+        },
+        {
+          "id": "correlated_read",
+          "rows": [
+            [
+              {
+                "number": "185.25"
+              }
+            ]
+          ],
+          "matched": true
+        },
+        {
+          "id": "correlated_update",
+          "rows": [
+            [
+              {
+                "number": "185.25"
+              }
+            ]
+          ],
+          "matched": true
+        }
+      ],
+      "bicdb": [
+        {
+          "id": "own_update",
+          "rows": [
+            [
+              {
+                "number": "0"
+              }
+            ]
+          ],
+          "matched": false
+        },
+        {
+          "id": "correlated_read",
+          "rows": [
+            [
+              {
+                "number": "0"
+              }
+            ]
+          ],
+          "matched": false
+        },
+        {
+          "id": "correlated_update",
+          "rows": [
+            [
+              {
+                "number": "0"
+              }
+            ]
+          ],
+          "matched": false
+        }
+      ]
+    }
+  ],
+  "cleanup_errors": [],
+  "success": false,
+  "runtime_binary_sha256": "0bc6575fd3ea7f7ddf14938adc82f474ba49b962c1ae880f45b2fb9f1d90e9e4",
+  "source_version": "23.26.3.0.0"
+}

@@ -79,6 +79,11 @@ fixes the physical-alias/local-value capture: all four selected unchanged
 inventory calls now match Oracle, with separate Oracle and native source controls.
 It retains a correlated numeric result-metadata failure and does not qualify all
 62 routines, header/tax propagation or the complete application.
+The [scalar result-type checkpoint](evidence/sql-scalar-subquery-types-2026-11-03/README.md)
+subsequently matches twelve Oracle and twelve native value/type cases through
+prepared text/binary results. It also repairs concurrent diagnostic log framing.
+A generic pending-write/index regression now reproduces the zero-total pattern;
+that transaction-visibility dependency and the complete application remain open.
 The milestones below retain their results at the time each was measured.
 
 The original 913 tables and 185,292 rows loaded and passed complete value

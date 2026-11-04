@@ -1,0 +1,476 @@
+{
+  "format": 1,
+  "reference": "oracle",
+  "application_qualified": false,
+  "target_protocol": "prepared, text and binary results",
+  "cases": [
+    {
+      "id": "correlated_sum_text",
+      "sql": "SELECT (SELECT COALESCE(SUM(l.amount),0) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE h.k=l.header_k) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          25
+        ],
+        "rows": [
+          [
+            "123.50"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "correlated_sum_binary",
+      "sql": "SELECT (SELECT COALESCE(SUM(l.amount),0) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE h.k=l.header_k) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          25
+        ],
+        "rows": [
+          [
+            "123.50"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "empty_sum_text",
+      "sql": "SELECT (SELECT COALESCE(SUM(l.amount),0) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE l.header_k=9) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          20
+        ],
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "empty_sum_binary",
+      "sql": "SELECT (SELECT COALESCE(SUM(l.amount),0) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE l.header_k=9) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          20
+        ],
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "null_sum_text",
+      "sql": "SELECT (SELECT SUM(l.amount) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE l.header_k=9) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          25
+        ],
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "null_sum_binary",
+      "sql": "SELECT (SELECT SUM(l.amount) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE l.header_k=9) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          25
+        ],
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "empty_outer_text",
+      "sql": "SELECT (SELECT SUM(l.amount) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE h.k=l.header_k) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 9,
+      "expected": {
+        "rows": []
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": []
+      },
+      "bicdb": {
+        "type_oids": [
+          25
+        ],
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "empty_outer_binary",
+      "sql": "SELECT (SELECT SUM(l.amount) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE h.k=l.header_k) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 9,
+      "expected": {
+        "rows": []
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": []
+      },
+      "bicdb": {
+        "type_oids": [
+          25
+        ],
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "max_amount_text",
+      "sql": "SELECT (SELECT MAX(l.amount) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE h.k=l.header_k) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          25
+        ],
+        "rows": [
+          [
+            "123.50"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "max_amount_binary",
+      "sql": "SELECT (SELECT MAX(l.amount) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE h.k=l.header_k) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          25
+        ],
+        "rows": [
+          [
+            "123.50"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "wrapped_sum_text",
+      "sql": "SELECT COALESCE((SELECT SUM(l.amount) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE h.k=l.header_k),0) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          23
+        ],
+        "exception": "ValueError",
+        "sqlstate": null,
+        "message": "invalid literal for int() with base 10: b'123.50'"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "wrapped_sum_binary",
+      "sql": "SELECT COALESCE((SELECT SUM(l.amount) FROM COMPAT_ST_L_5C2E56BD1B6E l WHERE h.k=l.header_k),0) FROM COMPAT_ST_H_5C2E56BD1B6E h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "oracle_types": [
+          "<DbType DB_TYPE_NUMBER>"
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "exception": "OperationalError",
+        "sqlstate": null,
+        "message": "consuming input failed: server closed the connection unexpectedly"
+      },
+      "source_qualified": true,
+      "matched": false
+    }
+  ],
+  "cleanup_errors": [
+    {
+      "backend": "bicdb",
+      "exception": "OperationalError"
+    },
+    {
+      "backend": "bicdb",
+      "exception": "OperationalError"
+    }
+  ],
+  "success": false,
+  "total": 12,
+  "matched": 0,
+  "source_qualified": true,
+  "source_version": "23.26.3.0.0",
+  "target_sql_profile": "oracle-preview-v1",
+  "runtime_binary_sha256": "877216f6c6ff006983d2e774cec34756352baca5cd64898dfaac76cc6c5415b9",
+  "fixture_sha256": "be4d0e6dbbc16b53447435ea0ffd09a510380886327f613ba7996beabbe6eab5",
+  "fixture_exit_status": 1
+}

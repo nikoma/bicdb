@@ -1,0 +1,486 @@
+{
+  "format": 1,
+  "reference": "postgres",
+  "application_qualified": false,
+  "target_protocol": "prepared, text and binary results",
+  "cases": [
+    {
+      "id": "correlated_sum_text",
+      "sql": "SELECT (SELECT COALESCE(SUM(l.amount),0) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE h.k=l.header_k) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "correlated_sum_binary",
+      "sql": "SELECT (SELECT COALESCE(SUM(l.amount),0) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE h.k=l.header_k) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_sum_text",
+      "sql": "SELECT (SELECT COALESCE(SUM(l.amount),0) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE l.header_k=9) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_sum_binary",
+      "sql": "SELECT (SELECT COALESCE(SUM(l.amount),0) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE l.header_k=9) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "null_sum_text",
+      "sql": "SELECT (SELECT SUM(l.amount) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE l.header_k=9) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "null_sum_binary",
+      "sql": "SELECT (SELECT SUM(l.amount) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE l.header_k=9) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            null
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_outer_text",
+      "sql": "SELECT (SELECT SUM(l.amount) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE h.k=l.header_k) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 9,
+      "expected": {
+        "rows": []
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": []
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_outer_binary",
+      "sql": "SELECT (SELECT SUM(l.amount) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE h.k=l.header_k) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 9,
+      "expected": {
+        "rows": []
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": []
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "max_amount_text",
+      "sql": "SELECT (SELECT MAX(l.amount) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE h.k=l.header_k) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "max_amount_binary",
+      "sql": "SELECT (SELECT MAX(l.amount) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE h.k=l.header_k) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "wrapped_sum_text",
+      "sql": "SELECT COALESCE((SELECT SUM(l.amount) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE h.k=l.header_k),0) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "wrapped_sum_binary",
+      "sql": "SELECT COALESCE((SELECT SUM(l.amount) FROM public.COMPAT_ST_L_7ABB779CC8B2 l WHERE h.k=l.header_k),0) FROM public.COMPAT_ST_H_7ABB779CC8B2 h WHERE h.k={P}",
+      "key": 1,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "expected_pg_oids": [
+        1700
+      ],
+      "source": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "type_oids": [
+          1700
+        ],
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "total": 12,
+  "matched": 12,
+  "source_qualified": true,
+  "source_version": 180004,
+  "target_sql_profile": "postgres",
+  "runtime_binary_sha256": "0bc6575fd3ea7f7ddf14938adc82f474ba49b962c1ae880f45b2fb9f1d90e9e4",
+  "fixture_sha256": "be4d0e6dbbc16b53447435ea0ffd09a510380886327f613ba7996beabbe6eab5",
+  "fixture_exit_status": 0
+}

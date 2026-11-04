@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "0bc6575fd3ea7f7ddf14938adc82f474ba49b962c1ae880f45b2fb9f1d90e9e4",
+  "strict_json_lines": 241,
+  "malformed_lines": 0,
+  "connections": 5,
+  "workers": 4,
+  "transactions_per_worker": 20,
+  "transaction_states": [
+    false,
+    true
+  ],
+  "success": true
+}

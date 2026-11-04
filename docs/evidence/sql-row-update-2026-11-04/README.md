@@ -87,3 +87,19 @@ statement snapshots, exact error identities and concurrent schedules remain
 unqualified. Mutable routine calls in broader correlated/source-table subqueries
 also remain unqualified. These checks do not establish full UPDATE, Oracle or application
 conformance. Application retry and deployment acceptance are separate evidence.
+
+## Subsequent application upgrade
+
+The [clean runtime upgrade](application-upgrade.json) opens a copy of the stopped
+current application database without recreating original objects. All 67
+selected workflow observations and 27 settled business queries retain their
+pre-upgrade values. The 62 routine and 160 view fingerprints are unchanged;
+all 11,983 projected view labels and type families match the source. All 141
+rows of three saved Trial Balance reports retain their fingerprints. Their PDFs
+were not regenerated. The saved project and its prior failed process state
+also remain unchanged.
+
+The actual iDempiere JVM serves HTTP 200 and the browser reaches the GardenAdmin
+desktop and standard Issue to Project process. This qualifies the recorded
+upgrade and navigation. Project issue completion, other workflows and production
+readiness require their own acceptance evidence.

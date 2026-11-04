@@ -1002,6 +1002,24 @@ record existing literal-letter format gaps. This is not complete native format
 parity or complete Oracle/NLS coercion. Full application workflows remain open.
 
 
+## Fixed numeric format pictures
+
+The [fixed-picture qualification](evidence/numeric-format-pictures-2026-11-04/README.md)
+adds `9`/`0` digit positions, `G`/`D` and literal comma/period separators, and
+`FM` padding through an exact-decimal renderer. Each reference independently
+passes 120 expectations. Oracle preserves the sign of negative values rounded
+to zero and uses whole-picture hashes for overflow; native PostgreSQL suppresses
+the rounded-zero sign and retains separators inside overflow markers. Native
+zero formatted without integer positions follows its independently measured
+overflow rule. Prepared format parameters retain TEXT result metadata.
+
+This extends the existing typed numeric helper without changing its signature,
+the compiler-language identities or durable metadata format. The comparison
+locale is Oracle `.,` and PostgreSQL `en_US.utf8`; other locales, fixed-picture
+NLS overrides, currency and additional sign/exponent models remain unqualified.
+Malformed-picture error codes and complete application execution remain open.
+
+
 ## Blocking locking reads
 
 The [SQL row-lock contract](evidence/sql-row-lock-waits-2026-11-03/README.md)

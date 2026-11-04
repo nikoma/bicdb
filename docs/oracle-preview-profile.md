@@ -1064,3 +1064,8 @@ subsequently reuses the core committed-key projection for pending candidates.
 It matches 24 Oracle and 24 native transaction-workload expectations while
 retaining indexed execution. This qualifies the bounded own-write rules, not
 general isolation, distributed transactions or complete application workflows.
+
+The [saved draft totals checkpoint](evidence/idempiere-sales-order-totals-2026-11-03/README.md)
+subsequently verifies a real UI line edit, committed header totals of 123.50 and
+a fresh-browser reload. It covers the selected zero-rate sample tax only; order
+completion and the full application remain unqualified.

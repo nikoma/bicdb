@@ -1,0 +1,43 @@
+{
+  "runtime_binary_sha256": "7ef8fd930d27d96649407fa089d8fcdb073f6de94878462a4e6ef8830566948c",
+  "application_qualified": false,
+  "checks": [
+    {
+      "sql": "SELECT C_Order_ID,DocumentNo,TotalLines,GrandTotal,DocStatus,Processed,IsTaxIncluded,SendEMail FROM C_Order WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "1000000",
+          "50000",
+          "123.50",
+          "123.50",
+          "DR",
+          "N",
+          "N",
+          "N"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT C_OrderLine_ID,M_Product_ID,QtyEntered,QtyOrdered,PriceEntered,PriceActual,LineNetAmt,C_Tax_ID FROM C_OrderLine WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "1000000",
+          "123",
+          "2",
+          "2",
+          "61.75",
+          "61.75",
+          "123.50",
+          "104"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT C_Tax_ID,TaxBaseAmt,TaxAmt FROM C_OrderTax WHERE C_Order_ID=1000000",
+      "rows": []
+    }
+  ],
+  "http_status": 200,
+  "source_commit": "15735661aefed754823f287451166a29c8d25fa1",
+  "scope": "Independent committed read after editing quantity through the actual application UI; not full application qualification."
+}

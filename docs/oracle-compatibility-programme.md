@@ -374,3 +374,8 @@ every required workstream, resolved migration blockers for the qualified target
 workloads, PostgreSQL regression coverage, and tested cutover/recovery procedures.
 External or conditional items must have explicit scope and evidence. A source
 commit, sample import or result-match count alone does not satisfy that gate.
+
+The [saved draft totals checkpoint](evidence/idempiere-sales-order-totals-2026-11-03/README.md)
+subsequently verifies a real UI line edit, committed header totals of 123.50 and
+a fresh-browser reload. It covers the selected zero-rate sample tax only; order
+completion and the full application remain unqualified.

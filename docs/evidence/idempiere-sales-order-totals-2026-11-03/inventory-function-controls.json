@@ -1,0 +1,102 @@
+{
+  "runtime_binary_sha256": "7ef8fd930d27d96649407fa089d8fcdb073f6de94878462a4e6ef8830566948c",
+  "application_qualified": false,
+  "cases": [
+    {
+      "function": "BOMQTYAVAILABLE",
+      "sql": "SELECT BOMQTYAVAILABLE(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.001
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "elapsed_seconds": 2.452
+      }
+    },
+    {
+      "function": "BOMQTYONHAND",
+      "sql": "SELECT BOMQTYONHAND(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.001
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.059
+      }
+    },
+    {
+      "function": "BOMQTYRESERVED",
+      "sql": "SELECT BOMQTYRESERVED(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.001
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.006
+      }
+    },
+    {
+      "function": "BOMQTYORDERED",
+      "sql": "SELECT BOMQTYORDERED(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.001
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.056
+      }
+    }
+  ]
+}

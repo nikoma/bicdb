@@ -1,0 +1,10 @@
+{
+  "runtime_binary_sha256": "7ef8fd930d27d96649407fa089d8fcdb073f6de94878462a4e6ef8830566948c",
+  "application_qualified": false,
+  "fresh_session": true,
+  "record_lookup_timeout": false,
+  "browser_errors": [],
+  "order_document_no": "50000",
+  "observed_summary": "1 Line - 123.50 - Total: 123.50 USD = 123.50",
+  "method": "Fresh browser login, Sales Order navigation and Document No lookup after prior browser session closed; no writes."
+}

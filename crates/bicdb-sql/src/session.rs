@@ -806,6 +806,113 @@ fn rewrite_routine_argument_type_identity(
     true
 }
 
+fn rewrite_routine_definition_type_identity(
+    routine: &mut RoutineSchema,
+    previous: &UserTypeSchema,
+    updated: &UserTypeSchema,
+) -> bool {
+    fn relocate(
+        data_type: &mut DataType,
+        previous: &UserTypeSchema,
+        updated: &UserTypeSchema,
+    ) -> bool {
+        use sqlparser::ast::ArrayElemTypeDef;
+        if let DataType::Array(
+            ArrayElemTypeDef::AngleBracket(element)
+            | ArrayElemTypeDef::SquareBracket(element, _)
+            | ArrayElemTypeDef::Parenthesis(element),
+        ) = data_type
+        {
+            return relocate(element, previous, updated);
+        }
+        let DataType::Custom(name, _) = data_type else {
+            return false;
+        };
+        let Some(parts) = name
+            .0
+            .iter()
+            .map(|part| part.as_ident())
+            .collect::<Option<Vec<_>>>()
+        else {
+            return false;
+        };
+        let normalized = |ident: &Ident| {
+            if ident.quote_style.is_some() {
+                ident.value.clone()
+            } else {
+                ident.value.to_ascii_lowercase()
+            }
+        };
+        if !matches!(parts.len(), 1 | 2)
+            || normalized(parts.last().unwrap()) != previous.name
+            || (parts.len() == 2 && normalized(parts[0]) != previous.schema_name)
+        {
+            return false;
+        }
+        let quoted = parts.iter().any(|part| part.quote_style.is_some());
+        let identifier = |value: &str| {
+            if quoted
+                || value != value.to_ascii_lowercase()
+                || !value
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'$'))
+                || sqlparser::keywords::ALL_KEYWORDS.contains(&value.to_ascii_uppercase().as_str())
+            {
+                Ident::with_quote('"', value)
+            } else {
+                Ident::new(value)
+            }
+        };
+        let mut target = Vec::new();
+        if updated.schema_name != "public" {
+            target.push(identifier(&updated.schema_name));
+        }
+        target.push(identifier(&updated.name));
+        *name = ObjectName::from(target);
+        true
+    }
+
+    let Ok(mut statements) = Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition) else {
+        return false;
+    };
+    let [Statement::CreateFunction(function)] = statements.as_mut_slice() else {
+        return false;
+    };
+    let mut changed = false;
+    for (index, argument) in function.args.iter_mut().flatten().enumerate() {
+        if relocate(&mut argument.data_type, previous, updated) {
+            if let Some(declaration) = routine.args.get_mut(index) {
+                *declaration = argument.to_string();
+            }
+            if let (Some(saved), Ok(rewritten)) = (
+                routine.arg_types.get_mut(index),
+                routine_type_schema(&argument.data_type),
+            ) {
+                *saved = rewritten;
+            }
+            changed = true;
+        }
+    }
+    if let Some(FunctionReturnType::DataType(data_type) | FunctionReturnType::SetOf(data_type)) =
+        &mut function.return_type
+    {
+        if relocate(data_type, previous, updated) {
+            routine.return_type_declaration = Some(data_type.to_string());
+            if let Ok(rewritten) = routine_type_schema(data_type) {
+                routine.return_type = rewritten.pg_type;
+                routine.return_type_modifier = rewritten.type_modifier;
+            }
+            changed = true;
+        }
+    }
+    if changed {
+        // Loading routine metadata reparses this declaration. Keep its typed
+        // header current while preserving the body as its original SQL value.
+        routine.definition = statements[0].to_string();
+    }
+    changed
+}
+
 fn base_type_uses_routine(user_type: &UserTypeSchema, routine_name: &str) -> bool {
     let UserTypeKind::Base {
         input,

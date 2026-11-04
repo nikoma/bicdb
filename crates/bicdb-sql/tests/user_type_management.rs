@@ -235,6 +235,21 @@ fn comments_owner_and_schema_moves_are_durable_and_transactional() {
             .rows,
         vec![vec![SqlValue::Null]],
     );
+    drop(session);
+    drop(db);
+    let mut reopened = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut reopened);
+    assert_eq!(
+        session.execute("SELECT pg_get_function_arguments(oid), pg_get_function_result(oid) FROM pg_proc WHERE proname='echo_priority'").unwrap().rows,
+        vec![vec![SqlValue::String("value type_target.moved_priority".into()),SqlValue::String("type_target.moved_priority".into())]]
+    );
+    assert_eq!(
+        session
+            .execute("SELECT echo_priority('low'::type_target.moved_priority)")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String("low".into())]]
+    );
 }
 
 #[test]
@@ -249,6 +264,7 @@ fn quoted_type_management_preserves_identifier_case() {
     session
         .execute(r#"CREATE TYPE "Type Source"."Managed.State" AS ENUM ('Ready')"#)
         .unwrap();
+    session.execute(r#"CREATE FUNCTION quoted_state(value "Type Source"."Managed.State") RETURNS "Type Source"."Managed.State" LANGUAGE sql AS 'SELECT value'"#).unwrap();
     session
         .execute(r#"REVOKE USAGE ON TYPE "Type Source"."Managed.State" FROM PUBLIC"#)
         .unwrap();
@@ -267,6 +283,15 @@ fn quoted_type_management_preserves_identifier_case() {
     session
         .execute(r#"ALTER TYPE "Type Source"."Managed.State" SET SCHEMA "Type.Target""#)
         .unwrap();
+    assert_eq!(
+        session
+            .execute("SELECT pg_get_function_result(oid) FROM pg_proc WHERE proname='quoted_state'")
+            .unwrap()
+            .rows,
+        vec![vec![SqlValue::String(
+            r#""Type.Target"."Managed.State""#.into()
+        )]]
+    );
     assert_eq!(
         session
             .execute(

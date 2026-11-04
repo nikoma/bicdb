@@ -1,0 +1,77 @@
+{
+  "format": 1,
+  "source_commit": "83797087c8f9b9fcf7a529417ef782a4cc02c608",
+  "runtime_binary_sha256": "282463584cfbf90f90a05e9b32f00cc5f2b8af6f6f96845203962b69e72fcdb6",
+  "rust_batches": 25,
+  "rust_passed": 1526,
+  "rust_failed": 0,
+  "rust_existing_ignored": 3,
+  "python_passed": 25,
+  "format_check_passed": true,
+  "retained_comparisons": [
+    {
+      "reference": "oracle",
+      "fixture": "joined_scalar_types",
+      "matched": 6,
+      "total": 6,
+      "success": true
+    },
+    {
+      "reference": "oracle",
+      "fixture": "wildcard_describe",
+      "matched": 9,
+      "total": 9,
+      "success": true
+    },
+    {
+      "reference": "oracle",
+      "fixture": "join_wildcards",
+      "matched": 23,
+      "total": 23,
+      "success": true
+    },
+    {
+      "reference": "postgres",
+      "fixture": "joined_scalar_types",
+      "matched": 6,
+      "total": 6,
+      "success": true
+    },
+    {
+      "reference": "postgres",
+      "fixture": "wildcard_describe",
+      "matched": 9,
+      "total": 9,
+      "success": true
+    },
+    {
+      "reference": "postgres",
+      "fixture": "join_wildcards",
+      "matched": 23,
+      "total": 23,
+      "success": true
+    }
+  ],
+  "build_jobs": 1,
+  "incremental": false,
+  "debug_info": 0,
+  "start_headroom_gib": 14,
+  "minimum_headroom_gib": 8,
+  "minimum_observed_validation_available_bytes": 18264850432,
+  "minimum_observed_source_available_bytes": 19631112192,
+  "peak_validation_group_rss_bytes": 5151633408,
+  "peak_source_group_rss_bytes": 1253482496,
+  "cleanup": {
+    "format": 1,
+    "removed_files": 20,
+    "reclaimed_bytes": 6311323136,
+    "by_category": {
+      "completed_test_executable": {
+        "files": 20,
+        "bytes": 6311323136
+      }
+    },
+    "current_example_binary_preserved": true
+  },
+  "application_qualified": false
+}

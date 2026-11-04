@@ -1,0 +1,92 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "original_routine_bodies": true,
+  "original_view_bodies": true,
+  "runtime_binary_sha256": "282463584cfbf90f90a05e9b32f00cc5f2b8af6f6f96845203962b69e72fcdb6",
+  "reference_version": "23.26.3.0.0",
+  "routines": 62,
+  "views": 160,
+  "columns": 11983,
+  "labels_verified": true,
+  "type_families_verified": true,
+  "oracle_date_columns_as_timestamp": 1104,
+  "repetitions": 20,
+  "comparisons": 120,
+  "matched": 120,
+  "success": true,
+  "queries": [
+    {
+      "index": 0,
+      "expected": [
+        [
+          "0"
+        ]
+      ],
+      "calls": 20,
+      "maximum_target_seconds": 2.6577154519036412,
+      "calculation": "invoiceOpen(101,NULL)"
+    },
+    {
+      "index": 1,
+      "expected": [
+        [
+          "0"
+        ]
+      ],
+      "calls": 20,
+      "maximum_target_seconds": 0.05435451911762357,
+      "calculation": "invoiceOpen(100,NULL)"
+    },
+    {
+      "index": 2,
+      "expected": [
+        [
+          "0"
+        ]
+      ],
+      "calls": 20,
+      "maximum_target_seconds": 0.054223526269197464,
+      "calculation": "invoiceOpen(101,NULL)"
+    },
+    {
+      "index": 3,
+      "expected": [
+        [
+          "161.12"
+        ]
+      ],
+      "calls": 20,
+      "maximum_target_seconds": 0.05226970184594393,
+      "calculation": "invoiceOpen(103,NULL)"
+    },
+    {
+      "index": 4,
+      "expected": [
+        [
+          "0"
+        ]
+      ],
+      "calls": 20,
+      "maximum_target_seconds": 0.05651072924956679,
+      "calculation": "invoiceOpen(101,NULL)"
+    },
+    {
+      "index": 5,
+      "expected": [
+        [
+          "430.35"
+        ]
+      ],
+      "calls": 20,
+      "maximum_target_seconds": 1.4868410569615662,
+      "calculation": "Invoice-view sum of currencyBase(invoiceOpen(...),...) for processed sales invoices"
+    }
+  ],
+  "limitations": [
+    "Metadata families do not establish precision, scale or width compatibility.",
+    "This checks original invoice calculations, not shipment, payment or accounting workflows.",
+    "Latency observations are not a performance benchmark."
+  ],
+  "reference_execution": "Oracle expectations collected from the six-query sequence; target sequence repeated 20 times."
+}

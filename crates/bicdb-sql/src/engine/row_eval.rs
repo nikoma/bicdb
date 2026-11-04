@@ -117,6 +117,38 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<Option<bool>> {
         match expr {
             Expr::Nested(inner) => self.eval_row_truth_typed(row, inner, env),
+            Expr::Between {
+                expr,
+                negated,
+                low,
+                high,
+            } => {
+                let mut eval = |operand: &Expr| self.eval_row_value(row, operand);
+                if let Some(truth) = eval_tuple_between_truth(expr, low, high, *negated, &mut eval)?
+                {
+                    return Ok(truth);
+                }
+                let types = [expr.as_ref(), low.as_ref(), high.as_ref()].map(|operand| {
+                    self.infer_env_expr_type(operand, env).or_else(|| {
+                        row_columns_expr_pg_type(
+                            self.db_ref(),
+                            operand,
+                            row.keys().map(String::as_str),
+                        )
+                    })
+                });
+                eval_between_expr_truth(
+                    [expr, low, high],
+                    [
+                        self.eval_row_value(row, expr)?,
+                        self.eval_row_value(row, low)?,
+                        self.eval_row_value(row, high)?,
+                    ],
+                    *negated,
+                    None,
+                    Some(types),
+                )
+            }
             Expr::BinaryOp { left, op, right } if *op == BinaryOperator::And => {
                 let left = self.eval_row_truth_typed(row, left, env)?;
                 if matches!(left, Some(false)) {
@@ -264,6 +296,33 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<Option<bool>> {
         match expr {
             Expr::Nested(inner) => self.eval_slot_row_truth_typed(row, context, inner, env),
+            Expr::Between {
+                expr,
+                negated,
+                low,
+                high,
+            } => {
+                let mut eval = |operand: &Expr| self.eval_slot_row_value(row, context, operand);
+                if let Some(truth) = eval_tuple_between_truth(expr, low, high, *negated, &mut eval)?
+                {
+                    return Ok(truth);
+                }
+                let types = [expr.as_ref(), low.as_ref(), high.as_ref()].map(|operand| {
+                    self.infer_env_expr_type(operand, env)
+                        .or_else(|| (*self.row_expr_pg_type(operand, context)).clone())
+                });
+                eval_between_expr_truth(
+                    [expr, low, high],
+                    [
+                        self.eval_slot_row_value(row, context, expr)?,
+                        self.eval_slot_row_value(row, context, low)?,
+                        self.eval_slot_row_value(row, context, high)?,
+                    ],
+                    *negated,
+                    None,
+                    Some(types),
+                )
+            }
             Expr::BinaryOp { left, op, right } if *op == BinaryOperator::And => {
                 let left = self.eval_slot_row_truth_typed(row, context, left, env)?;
                 if matches!(left, Some(false)) {
@@ -670,11 +729,19 @@ impl<'db> SqlEngine<'db> {
                 {
                     return Ok(truth);
                 }
-                eval_between_truth(
-                    self.eval_slot_row_value(row, context, expr)?,
-                    self.eval_slot_row_value(row, context, low)?,
-                    self.eval_slot_row_value(row, context, high)?,
+                eval_between_expr_truth(
+                    [expr, low, high],
+                    [
+                        self.eval_slot_row_value(row, context, expr)?,
+                        self.eval_slot_row_value(row, context, low)?,
+                        self.eval_slot_row_value(row, context, high)?,
+                    ],
                     *negated,
+                    None,
+                    Some(
+                        [expr.as_ref(), low.as_ref(), high.as_ref()]
+                            .map(|operand| (*self.row_expr_pg_type(operand, context)).clone()),
+                    ),
                 )
             }
             Expr::AnyOp {
@@ -2281,11 +2348,22 @@ impl<'db> SqlEngine<'db> {
                 {
                     return Ok(truth);
                 }
-                eval_between_truth(
-                    self.eval_row_value(row, expr)?,
-                    self.eval_row_value(row, low)?,
-                    self.eval_row_value(row, high)?,
+                eval_between_expr_truth(
+                    [expr, low, high],
+                    [
+                        self.eval_row_value(row, expr)?,
+                        self.eval_row_value(row, low)?,
+                        self.eval_row_value(row, high)?,
+                    ],
                     *negated,
+                    None,
+                    Some([expr.as_ref(), low.as_ref(), high.as_ref()].map(|operand| {
+                        row_columns_expr_pg_type(
+                            self.db_ref(),
+                            operand,
+                            row.keys().map(String::as_str),
+                        )
+                    })),
                 )
             }
             Expr::AnyOp {

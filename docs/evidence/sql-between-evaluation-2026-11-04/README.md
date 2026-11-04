@@ -62,3 +62,17 @@ Formatting and whitespace checks pass. Builds use one Cargo job, no incremental
 compilation and memory guards requiring 14 GiB available to start and preserving
 an 8 GiB floor. Local checks do not establish a published release, deployed
 application result or production qualification.
+
+## Subsequent application upgrade
+
+The [upgrade record](application-upgrade.json) verifies a clean stop and reopen
+of the current original Oracle-schema application database on the tested binary.
+All 62 routine and 160 view fingerprints are unchanged; all 160 views retain
+their original output labels and type families. The three existing Trial Balance
+requests retain all 141 rows with identical per-request hashes. All 46 selected
+financial/reporting observations pass. The actual application JVM reaches its
+web desktop and opens Physical Inventory without page errors.
+
+No original routines or views were recreated. This is local clean-upgrade and
+selected UI evidence, not complete application or recovery qualification.
+Physical inventory adjustments and posting remain to be exercised separately.

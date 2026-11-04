@@ -883,16 +883,34 @@ pub(crate) fn eval_tuple_between_truth<F>(
 where
     F: FnMut(&Expr) -> Result<SqlValue>,
 {
-    let Some(value) = eval_tuple_values(expr, eval)? else {
+    let Expr::Tuple(value_exprs) = unwrap_nested_expr(expr) else {
         return Ok(None);
     };
-    let Some(low) = eval_tuple_values(low, eval)? else {
+    let Expr::Tuple(low_exprs) = unwrap_nested_expr(low) else {
         return Err(row_value_side_error());
     };
+    let Expr::Tuple(high_exprs) = unwrap_nested_expr(high) else {
+        return Err(row_value_side_error());
+    };
+    if value_exprs.len() != low_exprs.len() || value_exprs.len() != high_exprs.len() {
+        return Err(row_value_length_error());
+    }
+    let value = value_exprs
+        .iter()
+        .map(&mut *eval)
+        .collect::<Result<Vec<_>>>()?;
+    let low = low_exprs
+        .iter()
+        .map(&mut *eval)
+        .collect::<Result<Vec<_>>>()?;
+    let lower = compare_tuple_values(&value, &BinaryOperator::GtEq, &low)?;
+    if lower == Some(false) {
+        return Ok(Some(Some(negated)));
+    }
+    let value = eval_tuple_values(expr, eval)?.expect("tuple expression shape is unchanged");
     let Some(high) = eval_tuple_values(high, eval)? else {
         return Err(row_value_side_error());
     };
-    let lower = compare_tuple_values(&value, &BinaryOperator::GtEq, &low)?;
     let upper = compare_tuple_values(&value, &BinaryOperator::LtEq, &high)?;
     Ok(Some(sql_and(lower, upper).map(|matched| {
         if negated {
@@ -1765,32 +1783,47 @@ pub(crate) fn eval_in_list_truth(
     }
 }
 
-/// BETWEEN uses the same typed operators as >= and <=, but evaluates each
-/// operand only once. Never infer a temporal type from a string's contents.
-pub(crate) fn eval_between_expr_truth(
+/// SQL expands BETWEEN into two comparisons. Oracle procedural expressions
+/// retain the tested value for the second comparison. In both cases a false
+/// lower comparison skips the upper comparison, including its operands.
+/// Operand types come from expressions/bindings, never string contents.
+pub(crate) fn eval_between_expr_truth<F>(
     exprs: [&Expr; 3],
-    values: [SqlValue; 3],
     negated: bool,
     schema: Option<&TableSchema>,
     types: Option<[Option<String>; 3]>,
-) -> Result<Option<bool>> {
+    oracle_procedural: bool,
+    mut eval: F,
+) -> Result<Option<bool>>
+where
+    F: FnMut(&Expr) -> Result<SqlValue>,
+{
     let types = types.unwrap_or_else(|| exprs.map(|expr| projected_expr_pg_type(expr, schema)));
     let [value_type, low_type, high_type] = types;
+    let mut value = eval(exprs[0])?;
+    let low = eval(exprs[1])?;
     let lower = compare_expr_values_resolved(
         exprs[0],
         &BinaryOperator::GtEq,
         exprs[1],
-        &values[0],
-        &values[1],
+        &value,
+        &low,
         schema,
         [value_type.clone(), low_type],
     )?;
+    if lower == Some(false) {
+        return Ok(Some(negated));
+    }
+    if !oracle_procedural {
+        value = eval(exprs[0])?;
+    }
+    let high = eval(exprs[2])?;
     let upper = compare_expr_values_resolved(
         exprs[0],
         &BinaryOperator::LtEq,
         exprs[2],
-        &values[0],
-        &values[2],
+        &value,
+        &high,
         schema,
         [value_type, high_type],
     )?;
@@ -3139,14 +3172,11 @@ pub(crate) fn eval_record_aggregate_truth(
             high,
         } => eval_between_expr_truth(
             [expr, low, high],
-            [
-                eval_record_aggregate_expr(records, expr, schema)?,
-                eval_record_aggregate_expr(records, low, schema)?,
-                eval_record_aggregate_expr(records, high, schema)?,
-            ],
             *negated,
             schema,
             None,
+            false,
+            |operand| eval_record_aggregate_expr(records, operand, schema),
         ),
         Expr::AnyOp {
             left,
@@ -3417,6 +3447,65 @@ mod between_type_tests {
     use super::*;
 
     #[test]
+    fn anonymous_block_inference_does_not_parse_or_execute_its_body() {
+        let root = tempfile::tempdir().unwrap();
+        let db = BicDb::open(root.path()).unwrap();
+        let sql = "/* anonymous */ DO $$DECLARE n INTEGER; BEGIN n:=$1; END$$";
+        assert!(infer_parameter_types(&db, sql).unwrap().is_empty());
+        assert!(infer_query_result_columns(&db, sql).unwrap().is_none());
+        assert!(infer_parameter_types(&db, "DO $$BEGIN NULL; END$$; SELECT $1").is_err());
+        assert!(infer_parameter_types(&db, "DO $$BEGIN NULL; END$$ garbage").is_err());
+    }
+
+    #[test]
+    fn sql_between_repeats_the_value_and_skips_an_unneeded_upper_bound() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for (name, expression, expected, calls) in [
+            ("be_equal", "nextval('be_equal') BETWEEN 1 AND 1", false, 2),
+            (
+                "be_short",
+                "nextval('be_short') BETWEEN 5 AND nextval('be_short')+100",
+                false,
+                1,
+            ),
+            (
+                "be_order",
+                "nextval('be_order') BETWEEN nextval('be_order')-2 AND nextval('be_order')",
+                true,
+                4,
+            ),
+            (
+                "be_tuple",
+                "(nextval('be_tuple'),0) BETWEEN (1,0) AND (1,0)",
+                false,
+                2,
+            ),
+        ] {
+            session
+                .execute(&format!("CREATE SEQUENCE {name} START WITH 1"))
+                .unwrap();
+            assert_eq!(
+                session
+                    .execute(&format!("SELECT {expression}"))
+                    .unwrap()
+                    .rows[0][0],
+                SqlValue::Bool(expected),
+                "{name}"
+            );
+            assert_eq!(
+                session
+                    .execute(&format!("SELECT currval('{name}')"))
+                    .unwrap()
+                    .rows[0][0],
+                SqlValue::Int(calls),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
     fn between_keeps_timestamp_boundaries_text_and_null_logic() {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();
@@ -3465,5 +3554,25 @@ mod between_type_tests {
         for sql in queries {
             assert_eq!(session.execute(&sql).unwrap().rows[0][0].to_cell(), "1");
         }
+        // A native routine keeps PostgreSQL evaluation even in a database
+        // provisioned with Oracle metadata. The stored language decides.
+        session
+            .execute("CREATE SEQUENCE native_frame_sequence START WITH 1")
+            .unwrap();
+        session.execute("CREATE FUNCTION native_frame_between() RETURNS INTEGER LANGUAGE plpgsql AS $$BEGIN IF nextval('native_frame_sequence') BETWEEN 1 AND 1 THEN RETURN 1; ELSE RETURN 0; END IF; END$$").unwrap();
+        assert_eq!(
+            session
+                .execute("SELECT native_frame_between()")
+                .unwrap()
+                .rows[0][0],
+            SqlValue::Int(0)
+        );
+        assert_eq!(
+            session
+                .execute("SELECT currval('native_frame_sequence')")
+                .unwrap()
+                .rows[0][0],
+            SqlValue::Int(2)
+        );
     }
 }

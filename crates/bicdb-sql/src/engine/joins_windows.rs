@@ -1939,11 +1939,6 @@ impl<'db> SqlEngine<'db> {
                 }
                 eval_between_expr_truth(
                     [expr, low, high],
-                    [
-                        self.eval_row_aggregate_expr(rows, columns, expr)?,
-                        self.eval_row_aggregate_expr(rows, columns, low)?,
-                        self.eval_row_aggregate_expr(rows, columns, high)?,
-                    ],
                     *negated,
                     None,
                     Some([expr.as_ref(), low.as_ref(), high.as_ref()].map(|operand| {
@@ -1953,6 +1948,8 @@ impl<'db> SqlEngine<'db> {
                             columns.iter().map(String::as_str),
                         )
                     })),
+                    false,
+                    |operand| self.eval_row_aggregate_expr(rows, columns, operand),
                 )
             }
             Expr::AnyOp {

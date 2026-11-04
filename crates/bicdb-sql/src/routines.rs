@@ -91,6 +91,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             statements,
             exception_handlers: Vec::new(),
             oracle_date_return: false,
+            oracle_procedural_evaluation: false,
             oracle_statement_rollback: false,
             oracle_error_diagnostics: None,
             oracle_autonomous: false,
@@ -211,6 +212,8 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
         statements,
         exception_handlers,
         oracle_date_return,
+        oracle_procedural_evaluation: oracle::preview_routine_language_version(&routine.language)
+            .is_some(),
         oracle_statement_rollback: oracle::preview_routine_language_version(&routine.language)
             .is_some_and(|version| version >= 6),
         oracle_error_diagnostics,
@@ -1703,12 +1706,12 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             parse_routine_expr(rest)?,
         )));
     }
-    if let Some(rest) = strip_prefix_ci(statement, "RETURN QUERY") {
-        return Ok(RoutineStmt::ReturnQuery(parse_single_query(rest.trim())?));
-    }
-    if let Some(rest) = strip_prefix_ci(statement, "RETURN") {
+    if let Some(rest) = strip_routine_keyword(statement, "RETURN") {
         let rest = rest.trim();
-        if rest.to_ascii_lowercase().starts_with("next") {
+        if let Some(rest) = strip_routine_keyword(rest, "QUERY") {
+            return Ok(RoutineStmt::ReturnQuery(parse_single_query(rest.trim())?));
+        }
+        if strip_routine_keyword(rest, "NEXT").is_some() {
             return Err(SqlError::UnsupportedPlpgsqlFeature(
                 "RETURN NEXT is not implemented".to_string(),
             ));
@@ -1765,6 +1768,16 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
         }
         Err(error) => Err(error),
     }
+}
+
+fn strip_routine_keyword<'a>(source: &'a str, keyword: &str) -> Option<&'a str> {
+    let rest = strip_prefix_ci(source, keyword)?;
+    rest.chars()
+        .next()
+        .is_none_or(|ch| {
+            !sqlparser::dialect::Dialect::is_identifier_part(&PostgreSqlDialect {}, ch)
+        })
+        .then_some(rest)
 }
 
 pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
@@ -3454,4 +3467,37 @@ fn plpgsql_case_statement(value: &str) -> Result<PlpgsqlCaseStatement> {
     Err(SqlError::InvalidSql(
         "CASE statement is missing END CASE".to_string(),
     ))
+}
+
+#[cfg(test)]
+mod return_keyword_tests {
+    use super::*;
+
+    #[test]
+    fn return_keywords_end_at_identifier_boundaries() {
+        for source in [
+            "RETURN nextval('return_seq')",
+            "RETURN next_value()",
+            "RETURN next$function()",
+            "RETURN nexté()",
+            "RETURN query_value()",
+            "RETURN query_to_xml('SELECT 1',true,false,'')",
+        ] {
+            assert!(
+                matches!(
+                    parse_routine_statement(source).unwrap(),
+                    RoutineStmt::Return(Some(_))
+                ),
+                "{source}"
+            );
+        }
+        assert!(matches!(
+            parse_routine_statement("RETURN\nQUERY SELECT 1").unwrap(),
+            RoutineStmt::ReturnQuery(_)
+        ));
+        assert!(matches!(
+            parse_routine_statement("RETURN NEXT 1"),
+            Err(SqlError::UnsupportedPlpgsqlFeature(_))
+        ));
+    }
 }

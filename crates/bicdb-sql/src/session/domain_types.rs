@@ -2348,6 +2348,7 @@ impl<'db> SqlSession<'db> {
         let result = (|| {
             let mut frame = RoutineFrame::new_with_symbols(&[], &[], &symbols)?;
             frame.oracle_statement_rollback = oracle_block;
+            frame.oracle_procedural_evaluation = oracle_block;
             frame.oracle_error_diagnostics = oracle_error_diagnostics;
             let template =
                 RoutineFrameTemplate::build_with_declarations(&[], &symbols, &declarations);

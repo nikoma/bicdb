@@ -2697,17 +2697,18 @@ impl<'db> SqlSession<'db> {
                 high,
             } => Ok(eval_between_expr_truth(
                 [expr, low, high],
-                [
-                    self.eval_session_expr(expr)?,
-                    self.eval_session_expr(low)?,
-                    self.eval_session_expr(high)?,
-                ],
                 *negated,
                 None,
                 Some(
                     [expr.as_ref(), low.as_ref(), high.as_ref()]
                         .map(|operand| self.routine_unary_operand_type(operand)),
                 ),
+                self.in_routine_expression
+                    && self
+                        .routine_slots
+                        .as_ref()
+                        .is_some_and(|slots| slots.oracle_procedural_evaluation),
+                |operand| self.eval_session_expr(operand),
             )?
             .map(SqlValue::Bool)
             .unwrap_or(SqlValue::Null)),
@@ -3518,6 +3519,7 @@ impl<'db> SqlSession<'db> {
         });
         let mut frame = RoutineFrame::from_template(&template, args)?;
         frame.oracle_statement_rollback = ir.oracle_statement_rollback;
+        frame.oracle_procedural_evaluation = ir.oracle_procedural_evaluation;
         frame.oracle_error_diagnostics = ir.oracle_error_diagnostics.clone();
         Ok(frame)
     }
@@ -4638,7 +4640,9 @@ impl<'db> SqlSession<'db> {
         let _diagnostics = oracle::errors::DiagnosticScope::new(None);
         let previous = self.bind_routine_frame(frame);
         let owned = std::mem::replace(&mut self.ir_owned_statement, true);
+        let procedural = std::mem::replace(&mut self.in_routine_expression, false);
         let result = self.execute_query(query);
+        self.in_routine_expression = procedural;
         self.ir_owned_statement = owned;
         self.unbind_routine_frame(previous);
         self.oracle_exception = oracle_context;
@@ -4762,7 +4766,9 @@ impl<'db> SqlSession<'db> {
         let _diagnostics = oracle::errors::DiagnosticScope::new(None);
         let previous = self.bind_routine_frame(frame);
         let owned = std::mem::replace(&mut self.ir_owned_statement, false);
+        let procedural = std::mem::replace(&mut self.in_routine_expression, false);
         let result = self.execute_query(query);
+        self.in_routine_expression = procedural;
         self.ir_owned_statement = owned;
         self.unbind_routine_frame(previous);
         self.oracle_exception = oracle_context;

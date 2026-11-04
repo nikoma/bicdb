@@ -139,14 +139,11 @@ impl<'db> SqlEngine<'db> {
                 });
                 eval_between_expr_truth(
                     [expr, low, high],
-                    [
-                        self.eval_row_value(row, expr)?,
-                        self.eval_row_value(row, low)?,
-                        self.eval_row_value(row, high)?,
-                    ],
                     *negated,
                     None,
                     Some(types),
+                    false,
+                    |operand| self.eval_row_value(row, operand),
                 )
             }
             Expr::BinaryOp { left, op, right } if *op == BinaryOperator::And => {
@@ -313,14 +310,11 @@ impl<'db> SqlEngine<'db> {
                 });
                 eval_between_expr_truth(
                     [expr, low, high],
-                    [
-                        self.eval_slot_row_value(row, context, expr)?,
-                        self.eval_slot_row_value(row, context, low)?,
-                        self.eval_slot_row_value(row, context, high)?,
-                    ],
                     *negated,
                     None,
                     Some(types),
+                    false,
+                    |operand| self.eval_slot_row_value(row, context, operand),
                 )
             }
             Expr::BinaryOp { left, op, right } if *op == BinaryOperator::And => {
@@ -731,17 +725,14 @@ impl<'db> SqlEngine<'db> {
                 }
                 eval_between_expr_truth(
                     [expr, low, high],
-                    [
-                        self.eval_slot_row_value(row, context, expr)?,
-                        self.eval_slot_row_value(row, context, low)?,
-                        self.eval_slot_row_value(row, context, high)?,
-                    ],
                     *negated,
                     None,
                     Some(
                         [expr.as_ref(), low.as_ref(), high.as_ref()]
                             .map(|operand| (*self.row_expr_pg_type(operand, context)).clone()),
                     ),
+                    false,
+                    |operand| self.eval_slot_row_value(row, context, operand),
                 )
             }
             Expr::AnyOp {
@@ -2350,11 +2341,6 @@ impl<'db> SqlEngine<'db> {
                 }
                 eval_between_expr_truth(
                     [expr, low, high],
-                    [
-                        self.eval_row_value(row, expr)?,
-                        self.eval_row_value(row, low)?,
-                        self.eval_row_value(row, high)?,
-                    ],
                     *negated,
                     None,
                     Some([expr.as_ref(), low.as_ref(), high.as_ref()].map(|operand| {
@@ -2364,6 +2350,8 @@ impl<'db> SqlEngine<'db> {
                             row.keys().map(String::as_str),
                         )
                     })),
+                    false,
+                    |operand| self.eval_row_value(row, operand),
                 )
             }
             Expr::AnyOp {

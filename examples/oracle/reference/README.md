@@ -1,5 +1,15 @@
 # Oracle reference queries
 
+`set_operand_builtins.py --reference oracle --oracle-config /private/oracle.json
+--output /private/set-operands.json` checks 14 explicit expectations for typed
+builtins in individual set-operation SELECT scopes: joined aggregates, UNION,
+INTERSECT, Oracle MINUS/PostgreSQL EXCEPT, stored views and counts, CTE inputs,
+local alias reuse, DATE defaults, nested scalar queries and ordered pagination.
+Oracle NVL and native PostgreSQL COALESCE have independent evaluation-order
+expectations. `--reference postgres` uses `ORACLE_CONTROL_PG_DSN`; both modes use
+`BICDB_PG_DSN` for the target. Nonce tables and views are removed, using Oracle
+PURGE for tables. These cases do not establish arbitrary set-query compatibility.
+
 `numeric_format_pictures.py --reference oracle --oracle-config /private/oracle.json
 --output /private/numeric-pictures.json` checks 120 fixed numeric pictures using
 9/0 digit positions, G/D separators and FM padding. Independent Oracle and

@@ -201,6 +201,7 @@ struct Resolve<'a> {
     db: &'a BicDb,
     env: &'a Environment,
     queries: Vec<Query>,
+    selects: Vec<(usize, sqlparser::ast::Select)>,
     sql_depth: usize,
     statement_from: Vec<Option<String>>,
 }
@@ -214,9 +215,26 @@ impl Resolve<'_> {
         }
     }
     fn query_kind(&self, expr: &Expr) -> Option<Kind> {
-        if let Some(source) = self
-            .queries
-            .last()
+        // A set operation's SELECT operands have independent FROM scopes.
+        // Keep the enclosing WITH clause while probing the operand being visited.
+        let context = self.queries.last().map(|query| {
+            if !matches!(query.body.as_ref(), SetExpr::Select(_)) {
+                if let Some((depth, select)) = self.selects.last() {
+                    if *depth == self.queries.len() {
+                        let mut operand = query.clone();
+                        operand.body = Box::new(SetExpr::Select(Box::new(select.clone())));
+                        operand.order_by = None;
+                        operand.limit_clause = None;
+                        operand.fetch = None;
+                        operand.locks.clear();
+                        return std::borrow::Cow::Owned(operand);
+                    }
+                }
+            }
+            std::borrow::Cow::Borrowed(query)
+        });
+        if let Some(source) = context
+            .as_deref()
             .and_then(|query| temporal_columns::logical_in_query(self.db, query, expr))
         {
             return Some(match source.source {
@@ -225,8 +243,8 @@ impl Resolve<'_> {
                 temporal_columns::Source::TimestampWithTimeZone => Kind::Other,
             });
         }
-        let sql = if let Some(query) = self.queries.last() {
-            let mut probe = query.clone();
+        let sql = if let Some(query) = context {
+            let mut probe = query.into_owned();
             let SetExpr::Select(select) = probe.body.as_mut() else {
                 return None;
             };
@@ -990,6 +1008,15 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
         self.queries.push(query.clone());
         ControlFlow::Continue(())
     }
+    fn pre_visit_select(&mut self, select: &mut sqlparser::ast::Select) -> ControlFlow<SqlError> {
+        self.selects.push((self.queries.len(), select.clone()));
+        ControlFlow::Continue(())
+    }
+    fn post_visit_select(&mut self, _: &mut sqlparser::ast::Select) -> ControlFlow<SqlError> {
+        let (depth, _) = self.selects.pop().expect("SELECT scope");
+        debug_assert_eq!(depth, self.queries.len());
+        ControlFlow::Continue(())
+    }
     fn post_visit_query(&mut self, query: &mut Query) -> ControlFlow<SqlError> {
         let previous = self.queries.pop().expect("query scope");
         if let Some(parent) = self.queries.last_mut() {
@@ -1013,6 +1040,18 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
                     resolved: query,
                 },
             );
+            let depth = self.queries.len();
+            for (owner, select) in &mut self.selects {
+                if *owner == depth {
+                    let _ = sqlparser::ast::VisitMut::visit(
+                        select,
+                        &mut Refresh {
+                            previous: &previous,
+                            resolved: query,
+                        },
+                    );
+                }
+            }
         }
         ControlFlow::Continue(())
     }
@@ -1100,6 +1139,7 @@ fn visit<T: sqlparser::ast::VisitMut>(db: &BicDb, env: &Environment, node: &mut 
         db,
         env,
         queries: Vec::new(),
+        selects: Vec::new(),
         sql_depth: 0,
         statement_from: Vec::new(),
     }) {
@@ -1126,6 +1166,7 @@ fn record_types(db: &BicDb, env: &Environment, query: &Query) -> BTreeMap<String
             db,
             env,
             queries: vec![query.clone()],
+            selects: Vec::new(),
             sql_depth: 1,
             statement_from: Vec::new(),
         };
@@ -1370,6 +1411,7 @@ fn statements(
                         db,
                         env,
                         queries: Vec::new(),
+                        selects: Vec::new(),
                         sql_depth: 0,
                         statement_from: Vec::new(),
                     };
@@ -1410,6 +1452,7 @@ fn statements(
                     db,
                     env,
                     queries: Vec::new(),
+                    selects: Vec::new(),
                     sql_depth: 0,
                     statement_from: Vec::new(),
                 };

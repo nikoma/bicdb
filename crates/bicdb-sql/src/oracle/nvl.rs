@@ -30,6 +30,102 @@ mod tests {
     }
 
     #[test]
+    fn set_operands_resolve_local_columns_ctes_and_temporal_defaults() {
+        for profile in [POSTGRES_PROFILE, ORACLE_PREVIEW_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open(root.path()).unwrap();
+            ensure_database_profile(&mut db, profile).unwrap();
+            let execute = |db: &mut BicDb, sql: &str| {
+                if profile == ORACLE_PREVIEW_PROFILE {
+                    run(db, sql)
+                } else {
+                    SqlSession::new(db).execute(sql)
+                }
+            };
+            for sql in [
+                "CREATE TABLE operand_groups(id NUMERIC PRIMARY KEY,happened DATE)",
+                "CREATE TABLE operand_numbers(row_id NUMERIC PRIMARY KEY,group_id NUMERIC,amount NUMERIC)",
+                "CREATE TABLE operand_text(row_id NUMERIC PRIMARY KEY,amount VARCHAR(12))",
+                "INSERT INTO operand_groups VALUES(1,DATE '2024-02-29'),(2,NULL)",
+                "INSERT INTO operand_numbers VALUES(1,1,NULL),(2,1,7)",
+                "INSERT INTO operand_text VALUES(1,'abc'),(2,NULL)",
+            ] { execute(&mut db, sql).unwrap(); }
+            let function = if profile == ORACLE_PREVIEW_PROFILE {
+                "NVL"
+            } else {
+                "COALESCE"
+            };
+            let empty = "SELECT id,CAST(0 AS NUMERIC) AS qty FROM operand_groups WHERE id<0";
+            let grouped = format!("SELECT g.id,SUM({function}(n.amount,0)) AS qty FROM operand_groups g LEFT JOIN operand_numbers n ON g.id=n.group_id GROUP BY g.id");
+            let union = format!("{empty} UNION ALL {grouped}");
+            let check = |db: &mut BicDb, sql: &str, wanted: &[[f64; 2]]| {
+                let result = execute(db, sql).unwrap();
+                let actual: Vec<[f64; 2]> = result
+                    .rows
+                    .iter()
+                    .map(|row| {
+                        [
+                            row[0].to_cell().parse().unwrap(),
+                            row[1].to_cell().parse().unwrap(),
+                        ]
+                    })
+                    .collect();
+                assert_eq!(actual, wanted, "{profile}: {sql}");
+            };
+            check(
+                &mut db,
+                &format!("{union} ORDER BY 1"),
+                &[[1.0, 7.0], [2.0, 0.0]],
+            );
+            check(
+                &mut db,
+                &format!("{union} ORDER BY 2 DESC FETCH FIRST 1 ROW ONLY"),
+                &[[1.0, 7.0]],
+            );
+            check(
+                &mut db,
+                &format!(
+                    "({union}) UNION ALL SELECT 3,5 FROM operand_groups WHERE id=1 ORDER BY 1"
+                ),
+                &[[1.0, 7.0], [2.0, 0.0], [3.0, 5.0]],
+            );
+            execute(&mut db, &format!("CREATE VIEW operand_union AS {union}")).unwrap();
+            for _ in 0..20 {
+                check(
+                    &mut db,
+                    "SELECT * FROM operand_union ORDER BY 1",
+                    &[[1.0, 7.0], [2.0, 0.0]],
+                );
+                assert_eq!(
+                    execute(&mut db, "SELECT COUNT(*) FROM operand_union")
+                        .unwrap()
+                        .rows[0][0]
+                        .to_cell(),
+                    "2"
+                );
+            }
+            let cte = format!("WITH chosen AS (SELECT * FROM operand_groups) {empty} UNION ALL SELECT g.id,SUM({function}(n.amount,0)) AS qty FROM chosen g LEFT JOIN operand_numbers n ON g.id=n.group_id GROUP BY g.id ORDER BY 1");
+            check(&mut db, &cte, &[[1.0, 7.0], [2.0, 0.0]]);
+            check(&mut db, &format!("{empty} UNION ALL SELECT g.id,{function}(g.happened,DATE '2024-03-01')-DATE '2024-02-28' FROM operand_groups g ORDER BY 1"), &[[1.0,1.0],[2.0,2.0]]);
+            check(&mut db, &format!("{empty} UNION ALL SELECT g.id,{function}((SELECT {function}(n.amount,3) FROM operand_numbers n WHERE n.group_id=g.id ORDER BY row_id FETCH FIRST 1 ROW ONLY),7) FROM operand_groups g ORDER BY 1"), &[[1.0,3.0],[2.0,7.0]]);
+            let result = execute(&mut db, &format!("SELECT CAST(n.amount AS VARCHAR(12)) AS label FROM operand_numbers n WHERE row_id<0 UNION ALL SELECT {function}(n.amount,'none') FROM operand_text n ORDER BY 1")).unwrap();
+            assert_eq!(
+                result.rows,
+                vec![
+                    vec![SqlValue::String("abc".into())],
+                    vec![SqlValue::String("none".into())]
+                ],
+                "{profile}"
+            );
+            let eager = format!("{empty} UNION ALL SELECT g.id,{function}(g.id,1/(g.id-1)) FROM operand_groups g WHERE g.id=1");
+            if profile == ORACLE_PREVIEW_PROFILE {
+                assert_eq!(execute(&mut db, &eager).unwrap_err().sqlstate(), "22012");
+            } else {
+                check(&mut db, &eager, &[[1.0, 1.0]]);
+            }
+        }
+    }
+    #[test]
     fn scalar_subquery_defaults_retain_declared_character_number_and_date_types() {
         for profile in [POSTGRES_PROFILE, ORACLE_PREVIEW_PROFILE] {
             let root = tempfile::tempdir().unwrap();

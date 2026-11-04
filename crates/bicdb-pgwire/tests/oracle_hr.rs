@@ -110,6 +110,59 @@ async fn fixed_number_pictures_keep_profile_rules_for_prepared_parameters() {
     }
 }
 
+#[tokio::test]
+async fn set_operand_builtins_keep_prepared_values_and_descriptions_after_reopen() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        for reopen in [false, true] {
+            let server = Running::with_profile(directory.path(), profile);
+            let mut config = tokio_postgres::Config::new();
+            config
+                .host("127.0.0.1")
+                .port(server.port)
+                .user("bicdb")
+                .dbname("bicdb");
+            if profile != "postgres" {
+                config.options("-c bicdb.sql_profile=oracle-preview-v1");
+            }
+            let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+            let connection = tokio::spawn(connection);
+            if !reopen {
+                client.batch_execute("CREATE TABLE operand_driver_groups(id NUMERIC PRIMARY KEY); CREATE TABLE operand_driver_numbers(row_id INTEGER PRIMARY KEY,group_id NUMERIC,amount NUMERIC); INSERT INTO operand_driver_groups VALUES(1),(2); INSERT INTO operand_driver_numbers VALUES(1,1,NULL),(2,1,7)").await.unwrap();
+                let function = if profile == "postgres" {
+                    "COALESCE"
+                } else {
+                    "NVL"
+                };
+                client.batch_execute(&format!("CREATE VIEW operand_driver_view AS SELECT id,CAST(0 AS NUMERIC) AS qty FROM operand_driver_groups WHERE id<0 UNION ALL SELECT g.id,SUM({function}(n.amount,0)) FROM operand_driver_groups g LEFT JOIN operand_driver_numbers n ON g.id=n.group_id GROUP BY g.id")).await.unwrap();
+            }
+            let rows_statement = client.prepare("SELECT CAST(qty AS TEXT) AS qty FROM operand_driver_view WHERE id=CAST(CAST($1 AS TEXT) AS NUMERIC)").await.unwrap();
+            assert_eq!(
+                rows_statement.columns()[0].type_(),
+                &tokio_postgres::types::Type::TEXT
+            );
+            let count_statement = client.prepare("SELECT COUNT(*) FROM (SELECT * FROM operand_driver_view WHERE id=CAST(CAST($1 AS TEXT) AS NUMERIC)) counted").await.unwrap();
+            for _ in 0..5 {
+                for (id, expected) in [("1", Some("7")), ("2", Some("0")), ("9", None)] {
+                    let rows = client.query(&rows_statement, &[&id]).await.unwrap();
+                    assert_eq!(
+                        rows.len(),
+                        usize::from(expected.is_some()),
+                        "{profile} reopen={reopen}"
+                    );
+                    if let Some(expected) = expected {
+                        assert_eq!(rows[0].get::<_, String>(0), expected);
+                    }
+                    let count = client.query_one(&count_statement, &[&id]).await.unwrap();
+                    assert_eq!(count.get::<_, i64>(0), i64::from(expected.is_some()));
+                }
+            }
+            drop(client);
+            connection.await.unwrap().unwrap();
+        }
+    }
+}
+
 impl Running {
     fn new(path: &std::path::Path, oracle: bool) -> Self {
         Self::with_profile(path, if oracle { "oracle-hr-v1" } else { "postgres" })

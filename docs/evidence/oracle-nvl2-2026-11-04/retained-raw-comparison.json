@@ -1,0 +1,946 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "c56656a4051dcee36ab64fa962c81ce51073480e07948b62b0a081a1618321f3",
+  "fixture_sha256": "699b768d6ea6f1537f98a335c6aa8a30c59864b7f2567d67581f68e0586153f0",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "raw_bytes",
+          "source": {
+            "id": "raw_bytes",
+            "expected": null,
+            "shape": "raw16",
+            "actual": [
+              {
+                "length": 16,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "raw_bytes",
+            "expected": null,
+            "shape": "raw16",
+            "actual": [
+              {
+                "length": 16,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "lower_raw",
+          "source": {
+            "id": "lower_raw",
+            "expected": null,
+            "shape": "[0-9a-f]{32}",
+            "actual": [
+              [
+                "5f7b03c87be045c2e0630b0011ac4ee9"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "lower_raw",
+            "expected": null,
+            "shape": "[0-9a-f]{32}",
+            "actual": [
+              [
+                "3732cb10178203e58a549eb8e8509fe7"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "upper_raw",
+          "source": {
+            "id": "upper_raw",
+            "expected": null,
+            "shape": "[0-9A-F]{32}",
+            "actual": [
+              [
+                "5F7B03C87BE145C2E0630B0011AC4EE9"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "upper_raw",
+            "expected": null,
+            "shape": "[0-9A-F]{32}",
+            "actual": [
+              [
+                "719564ED6DBBE0C8B9DD3429810296D4"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "cast_raw",
+          "source": {
+            "id": "cast_raw",
+            "expected": null,
+            "shape": "[0-9A-F]{32}",
+            "actual": [
+              [
+                "5F7B03C87BE245C2E0630B0011AC4EE9"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "cast_raw",
+            "expected": null,
+            "shape": "[0-9A-F]{32}",
+            "actual": [
+              [
+                "D680E749BA26541CD6D9599BED07A324"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "length_raw",
+          "source": {
+            "id": "length_raw",
+            "expected": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "length_raw",
+            "expected": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "lengthb_raw",
+          "source": {
+            "id": "lengthb_raw",
+            "expected": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "lengthb_raw",
+            "expected": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "substring_raw",
+          "source": {
+            "id": "substring_raw",
+            "expected": [
+              [
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "substring_raw",
+            "expected": [
+              [
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "trim_raw",
+          "source": {
+            "id": "trim_raw",
+            "expected": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "trim_raw",
+            "expected": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pattern_raw",
+          "source": {
+            "id": "pattern_raw",
+            "expected": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "pattern_raw",
+            "expected": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "32"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "concat_raw",
+          "source": {
+            "id": "concat_raw",
+            "expected": [
+              [
+                {
+                  "number": "33"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "33"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "concat_raw",
+            "expected": [
+              [
+                {
+                  "number": "33"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "33"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "volatile_raw",
+          "source": {
+            "id": "volatile_raw",
+            "expected": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "volatile_raw",
+            "expected": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "ordinary_prefixed_text",
+          "source": {
+            "id": "ordinary_prefixed_text",
+            "expected": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "ordinary_prefixed_text",
+            "expected": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedural_guid_buffer",
+          "source": {
+            "id": "procedural_guid_buffer",
+            "expected": null,
+            "shape": "[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}",
+            "actual": [
+              [
+                "5f7b03c8-7beb-45c2-e063-0b0011ac4ee9"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedural_guid_buffer",
+            "expected": null,
+            "shape": "[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}",
+            "actual": [
+              [
+                "9105bc61-faf4-6c02-ef5b-13cebe1bc8a9"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 13,
+      "matched": 13,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "random_binary_result",
+          "source": {
+            "id": "random_binary_result",
+            "expected": null,
+            "shape": "raw16",
+            "actual": [
+              {
+                "length": 16,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "random_binary_result",
+            "expected": null,
+            "shape": "raw16",
+            "actual": [
+              {
+                "length": 16,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "convert_to_binary_result",
+          "source": {
+            "id": "convert_to_binary_result",
+            "expected": null,
+            "shape": "raw2",
+            "actual": [
+              {
+                "length": 2,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "convert_to_binary_result",
+            "expected": null,
+            "shape": "raw2",
+            "actual": [
+              {
+                "length": 2,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "convert_binary_result",
+          "source": {
+            "id": "convert_binary_result",
+            "expected": null,
+            "shape": "raw2",
+            "actual": [
+              {
+                "length": 2,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "convert_binary_result",
+            "expected": null,
+            "shape": "raw2",
+            "actual": [
+              {
+                "length": 2,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "digest_binary_result",
+          "source": {
+            "id": "digest_binary_result",
+            "expected": null,
+            "shape": "raw32",
+            "actual": [
+              {
+                "length": 32,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "digest_binary_result",
+            "expected": null,
+            "shape": "raw32",
+            "actual": [
+              {
+                "length": 32,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "hmac_binary_result",
+          "source": {
+            "id": "hmac_binary_result",
+            "expected": null,
+            "shape": "raw32",
+            "actual": [
+              {
+                "length": 32,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "hmac_binary_result",
+            "expected": null,
+            "shape": "raw32",
+            "actual": [
+              {
+                "length": 32,
+                "binary": true
+              }
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "bytea_text",
+          "source": {
+            "id": "bytea_text",
+            "expected": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "bytea_text",
+            "expected": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "bytea_lower_text",
+          "source": {
+            "id": "bytea_lower_text",
+            "expected": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "bytea_lower_text",
+            "expected": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "bytea_upper_text",
+          "source": {
+            "id": "bytea_upper_text",
+            "expected": [
+              [
+                "\\XAB00FF"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "\\XAB00FF"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "bytea_upper_text",
+            "expected": [
+              [
+                "\\XAB00FF"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "\\XAB00FF"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "binary_length",
+          "source": {
+            "id": "binary_length",
+            "expected": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "binary_length",
+            "expected": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "hex_encoding",
+          "source": {
+            "id": "hex_encoding",
+            "expected": [
+              [
+                "ab00ff"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "ab00ff"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "hex_encoding",
+            "expected": [
+              [
+                "ab00ff"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "ab00ff"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "ordinary_prefixed_text",
+          "source": {
+            "id": "ordinary_prefixed_text",
+            "expected": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "ordinary_prefixed_text",
+            "expected": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                "\\xab00ff"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_binary",
+          "source": {
+            "id": "empty_binary",
+            "expected": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_binary",
+            "expected": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "binary_null",
+          "source": {
+            "id": "binary_null",
+            "expected": [
+              [
+                null
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                null
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "binary_null",
+            "expected": [
+              [
+                null
+              ]
+            ],
+            "shape": null,
+            "actual": [
+              [
+                null
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 13,
+      "matched": 13,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true
+    }
+  },
+  "cleanup_complete": true
+}

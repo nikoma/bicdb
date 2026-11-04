@@ -46,6 +46,8 @@
     "ordered_values_verified": true
   },
   "jvm_started": true,
-  "frontend_requalification_pending": true,
-  "release_published": false
+  "frontend_requalification_pending": false,
+  "release_published": false,
+  "frontend_requalification_scope": "Subsequent single-product production workflow; full application remains unqualified.",
+  "subsequent_workflow": "../idempiere-production-2026-11-04/README.md"
 }

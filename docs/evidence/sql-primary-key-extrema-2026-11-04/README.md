@@ -70,3 +70,9 @@ does not itself requalify the UI or the entire application.
 Bare MIN and MAX on the actual process-instance primary key now return 1000000
 and 1000043. They agree with the combined aggregate and independently ordered
 row queries. No application-specific SQL workaround is used.
+
+The subsequent [production workflow](../idempiere-production-2026-11-04/README.md)
+verifies desktop login and the standard single-product production UI on this
+same runtime: create, generate lines, complete, post and correct by reversal.
+All 67 selected observations pass, including the prior 57. This adds bounded
+frontend acceptance without qualifying every application window or workflow.

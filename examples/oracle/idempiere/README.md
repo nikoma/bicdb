@@ -5,6 +5,18 @@ It is an open-source ERP/CRM/SCM application with Oracle and PostgreSQL database
 providers. The [pinned target](target.json) identifies the release-13 source at
 `da0730aec42f3e9f5f671e81a70ff71e24d5e534`.
 
+The current local development checkpoint loads 62 original routines and verifies
+160 original view definitions/type families. The selected
+[sales workflow](../../../docs/evidence/idempiere-bank-reconciliation-2026-11-04/README.md)
+completes through paid invoice, receipt allocation and bank reconciliation.
+[Purchase order](../../../docs/evidence/idempiere-purchase-order-2026-11-04/README.md)
+and [material receipt](../../../docs/evidence/idempiere-material-receipt-2026-11-04/README.md)
+workflows also complete, including stock movement, purchase matching and receipt
+accounting. Supplier invoicing/outbound payment, the rest of the application,
+production operations and complete Oracle compatibility remain unqualified.
+The earlier inventory and initial observations below retain their historical
+results; they do not replace this current checkpoint.
+
 Source inspection found 59 SQL files under `db/oracle` and 1,085 Oracle migration
 SQL files under `migration`. These are file counts, not live database object
 counts. Database routines cover currency conversion, payment terms, stock and

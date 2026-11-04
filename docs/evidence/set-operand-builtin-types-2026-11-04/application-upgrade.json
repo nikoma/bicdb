@@ -1,0 +1,644 @@
+{
+  "application_qualified": false,
+  "application_upgrade_qualified": true,
+  "main_commit": "13fa542596597f1cc1d54556e069c9f184e986af",
+  "source_commit": "c4da7cbde37770dc327cd1525329b1b6d91728b4",
+  "runtime_binary_sha256": "64a3be06c438851f3a59a55c396aedcfea812699299dc38e5686a2c5b1c26366",
+  "original_routines_loaded": 62,
+  "original_views_verified": 160,
+  "business_state_preserved": true,
+  "preservation_checks": {
+    "read_only": true,
+    "application_qualified": false,
+    "checks": [
+      {
+        "sql": "SELECT DocumentNo,IsSOTrx,DocStatus,Processed,Processing,SendEMail,TotalLines,GrandTotal FROM C_Order WHERE C_Order_ID IN(1000000,1000001) ORDER BY C_Order_ID",
+        "rows": [
+          [
+            "50000",
+            "Y",
+            "CO",
+            "Y",
+            "N",
+            "N",
+            {
+              "number": "123.5"
+            },
+            {
+              "number": "123.5"
+            }
+          ],
+          [
+            "800003",
+            "N",
+            "CO",
+            "Y",
+            "N",
+            "N",
+            {
+              "number": "185.25"
+            },
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_Order_ID,C_OrderLine_ID,M_Product_ID,M_Warehouse_ID,QtyOrdered,QtyReserved,QtyDelivered,QtyInvoiced,PriceActual,LineNetAmt FROM C_OrderLine WHERE C_Order_ID IN(1000000,1000001) ORDER BY C_Order_ID,C_OrderLine_ID",
+        "rows": [
+          [
+            {
+              "number": "1E+6"
+            },
+            {
+              "number": "1E+6"
+            },
+            {
+              "number": "123"
+            },
+            {
+              "number": "103"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "0"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "61.75"
+            },
+            {
+              "number": "123.5"
+            }
+          ],
+          [
+            {
+              "number": "1000001"
+            },
+            {
+              "number": "1000001"
+            },
+            {
+              "number": "123"
+            },
+            {
+              "number": "103"
+            },
+            {
+              "number": "3"
+            },
+            {
+              "number": "3"
+            },
+            {
+              "number": "0"
+            },
+            {
+              "number": "0"
+            },
+            {
+              "number": "61.75"
+            },
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT M_InOut_ID,DocumentNo,C_Order_ID,IsSOTrx,MovementType,C_BPartner_ID,M_Warehouse_ID,DocStatus,Processed,Processing,Posted,SendEMail FROM M_InOut WHERE M_InOut_ID IN(1000000,1000001) ORDER BY M_InOut_ID",
+        "rows": [
+          [
+            {
+              "number": "1E+6"
+            },
+            "500000",
+            {
+              "number": "1E+6"
+            },
+            "Y",
+            "C-",
+            {
+              "number": "117"
+            },
+            {
+              "number": "103"
+            },
+            "CO",
+            "Y",
+            "N",
+            "Y",
+            "N"
+          ],
+          [
+            {
+              "number": "1000001"
+            },
+            "10000511",
+            {
+              "number": "1000001"
+            },
+            "N",
+            "V+",
+            {
+              "number": "114"
+            },
+            {
+              "number": "103"
+            },
+            "DR",
+            "N",
+            "N",
+            "N",
+            "N"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_Invoice_ID,DocumentNo,C_Order_ID,IsSOTrx,DocStatus,Processed,Processing,Posted,IsPaid,C_Payment_ID,GrandTotal,SendEMail FROM C_Invoice WHERE C_Invoice_ID=1000000",
+        "rows": [
+          [
+            {
+              "number": "1E+6"
+            },
+            "100001",
+            {
+              "number": "1E+6"
+            },
+            "Y",
+            "CO",
+            "Y",
+            "N",
+            "Y",
+            "Y",
+            {
+              "number": "1E+6"
+            },
+            {
+              "number": "123.5"
+            },
+            "N"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_Payment_ID,DocumentNo,C_Invoice_ID,DocStatus,Processed,Processing,Posted,IsAllocated,IsReconciled,IsOnline,PayAmt,DiscountAmt,WriteOffAmt,OverUnderAmt FROM C_Payment WHERE C_Payment_ID=1000000",
+        "rows": [
+          [
+            {
+              "number": "1E+6"
+            },
+            "#TEST-100001",
+            {
+              "number": "1E+6"
+            },
+            "CO",
+            "Y",
+            "N",
+            "Y",
+            "Y",
+            "Y",
+            "N",
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "2.47"
+            },
+            {
+              "number": "0"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_AllocationHdr_ID,DocumentNo,DocStatus,Processed,Processing,Posted FROM C_AllocationHdr WHERE C_AllocationHdr_ID=1000000",
+        "rows": [
+          [
+            {
+              "number": "1E+6"
+            },
+            "1000002",
+            "CO",
+            "Y",
+            "N",
+            "Y"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_AllocationHdr_ID,C_Payment_ID,C_Invoice_ID,Amount,DiscountAmt,WriteOffAmt,OverUnderAmt FROM C_AllocationLine WHERE C_Payment_ID=1000000 ORDER BY C_AllocationLine_ID",
+        "rows": [
+          [
+            {
+              "number": "1E+6"
+            },
+            {
+              "number": "1E+6"
+            },
+            {
+              "number": "1E+6"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "2.47"
+            },
+            {
+              "number": "0"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_BankStatement_ID,DocumentNo,C_BankAccount_ID,BeginningBalance,StatementDifference,EndingBalance,DocStatus,Processed,Processing,Posted FROM C_BankStatement WHERE C_BankStatement_ID=1000000",
+        "rows": [
+          [
+            {
+              "number": "1E+6"
+            },
+            "1000000",
+            {
+              "number": "1E+2"
+            },
+            {
+              "number": "148"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "269.03"
+            },
+            "CO",
+            "Y",
+            "N",
+            "Y"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_BankStatement_ID,C_Payment_ID,StmtAmt,TrxAmt,ChargeAmt,InterestAmt FROM C_BankStatementLine WHERE C_Payment_ID=1000000 ORDER BY C_BankStatementLine_ID",
+        "rows": [
+          [
+            {
+              "number": "1E+6"
+            },
+            {
+              "number": "1E+6"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "0"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT CurrentBalance FROM C_BankAccount WHERE C_BankAccount_ID=100",
+        "rows": [
+          [
+            {
+              "number": "269.03"
+            }
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT AD_Table_ID,C_AcctSchema_ID,COUNT(*),SUM(AmtAcctDr),SUM(AmtAcctCr),SUM(AmtSourceDr),SUM(AmtSourceCr) FROM Fact_Acct WHERE AD_Table_ID IN(318,319,335,392,735) AND Record_ID=1000000 GROUP BY AD_Table_ID,C_AcctSchema_ID ORDER BY AD_Table_ID,C_AcctSchema_ID",
+        "rows": [
+          [
+            {
+              "number": "318"
+            },
+            {
+              "number": "101"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "123.5"
+            },
+            {
+              "number": "123.5"
+            },
+            {
+              "number": "123.5"
+            },
+            {
+              "number": "123.5"
+            }
+          ],
+          [
+            {
+              "number": "318"
+            },
+            {
+              "number": "2E+5"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "104.98"
+            },
+            {
+              "number": "104.98"
+            },
+            {
+              "number": "123.5"
+            },
+            {
+              "number": "123.5"
+            }
+          ],
+          [
+            {
+              "number": "319"
+            },
+            {
+              "number": "101"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "104.19"
+            },
+            {
+              "number": "104.19"
+            },
+            {
+              "number": "104.19"
+            },
+            {
+              "number": "104.19"
+            }
+          ],
+          [
+            {
+              "number": "319"
+            },
+            {
+              "number": "2E+5"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "88.56"
+            },
+            {
+              "number": "88.56"
+            },
+            {
+              "number": "88.56"
+            },
+            {
+              "number": "88.56"
+            }
+          ],
+          [
+            {
+              "number": "335"
+            },
+            {
+              "number": "101"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "121.03"
+            }
+          ],
+          [
+            {
+              "number": "335"
+            },
+            {
+              "number": "2E+5"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "102.88"
+            },
+            {
+              "number": "102.88"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "121.03"
+            }
+          ],
+          [
+            {
+              "number": "392"
+            },
+            {
+              "number": "101"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "121.03"
+            }
+          ],
+          [
+            {
+              "number": "392"
+            },
+            {
+              "number": "2E+5"
+            },
+            {
+              "number": "2"
+            },
+            {
+              "number": "102.88"
+            },
+            {
+              "number": "102.88"
+            },
+            {
+              "number": "121.03"
+            },
+            {
+              "number": "121.03"
+            }
+          ],
+          [
+            {
+              "number": "735"
+            },
+            {
+              "number": "101"
+            },
+            {
+              "number": "3"
+            },
+            {
+              "number": "123.5"
+            },
+            {
+              "number": "123.5"
+            },
+            {
+              "number": "123.5"
+            },
+            {
+              "number": "123.5"
+            }
+          ],
+          [
+            {
+              "number": "735"
+            },
+            {
+              "number": "2E+5"
+            },
+            {
+              "number": "3"
+            },
+            {
+              "number": "104.98"
+            },
+            {
+              "number": "104.98"
+            },
+            {
+              "number": "123.5"
+            },
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*),SUM(MovementQty) FROM M_Transaction WHERE M_InOutLine_ID=1000000",
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "-2"
+            }
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*) FROM M_InOutLine WHERE M_InOut_ID=1000001",
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*) FROM C_Invoice WHERE C_Order_ID=1000001",
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT invoiceOpen(1000000,0),paymentAvailable(1000000) FROM DUAL",
+        "rows": [
+          [
+            {
+              "number": "0"
+            },
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT BOMQtyAvailable(123,103,0),BOMQtyOnHand(123,103,0),BOMQtyReserved(123,103,0),BOMQtyOrdered(123,103,0) FROM DUAL",
+        "rows": [
+          [
+            {
+              "number": "18"
+            },
+            {
+              "number": "18"
+            },
+            {
+              "number": "0"
+            },
+            {
+              "number": "3"
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  "receipt_selection_count": 1,
+  "receipt_selection_rows": [
+    [
+      "3",
+      "1.0000000000000000",
+      "123",
+      "1000001",
+      "260"
+    ]
+  ],
+  "original_count_query_sha256": "4bdec09010985bf7319e4ebd234adc5bbdcf1779ea61ec86a257f0f368e86e74",
+  "receipt_selection_ui_verified": true
+}

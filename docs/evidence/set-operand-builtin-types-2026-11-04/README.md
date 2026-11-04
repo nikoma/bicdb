@@ -52,3 +52,23 @@ Arbitrary correlated/type-sensitive set queries, MINUS ALL, other set-operator
 extensions, complete application coverage and the broader Oracle programme
 remain unqualified. The original material-receipt selection screen remains a
 separate application requalification gate.
+
+
+## Subsequent application requalification
+
+After the source reached verified main at `13fa542`, the old application and
+database stopped gracefully; the database exited successfully. The candidate
+opened a copy of that stopped database, reloaded 62 original routines and
+verified all 160 original view definitions/type families. All
+[16 read-only business-state gates](application-upgrade.json) matched the
+preceding runtime: the paid invoice, allocated/reconciled receipt, bank balance
+269.03, posted sales documents, completed purchase order and draft receipt were
+preserved without SQL repairs.
+
+The original prepared receipt-selection count now returns one eligible line,
+quantity three. A fresh browser opens the same draft receipt and its original
+[selection screen](receipt-selection.png) shows that row without the preceding
+NVL or secondary negative-count errors. The standard action subsequently creates
+one line, and the [material receipt checkpoint](../idempiere-material-receipt-2026-11-04/README.md)
+completes/posts the receipt. This qualifies the selected local path; complete
+application operation and the full Oracle programme remain open.

@@ -1,0 +1,122 @@
+{
+  "read_only": true,
+  "application_qualified": false,
+  "checks": [
+    {
+      "sql": "SELECT DocumentNo,IsSOTrx,DocStatus,Processed,Processing,SendEMail,TotalLines,GrandTotal FROM C_Order WHERE C_Order_ID=1000001",
+      "rows": [
+        [
+          "800003",
+          "N",
+          "CO",
+          "Y",
+          "N",
+          "N",
+          "185.25",
+          "185.25"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT QtyOrdered,QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000001",
+      "rows": [
+        [
+          "3",
+          "3",
+          "0",
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT BOMQtyAvailable(123,103,0),BOMQtyOnHand(123,103,0),BOMQtyReserved(123,103,0),BOMQtyOrdered(123,103,0) FROM DUAL",
+      "rows": [
+        [
+          "18",
+          "18",
+          "0",
+          "3"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT AD_PInstance_ID,AD_Process_ID,IsProcessing,Result,ErrorMsg FROM AD_PInstance ORDER BY AD_PInstance_ID DESC FETCH FIRST 2 ROWS ONLY",
+      "rows": [
+        [
+          "1000027",
+          "104",
+          "N",
+          "1",
+          "Completed"
+        ],
+        [
+          "1000026",
+          "147",
+          "N",
+          "1",
+          "Completed"
+        ]
+      ]
+    }
+  ],
+  "workflow_qualified": true,
+  "runtime_binary_sha256": "32d2c0441d23b9a856e2cb45d2d85b263b3272b322b6c88acd2a9b6962eaa009",
+  "source_commit": "c92dad68bc60184174902acdfedce2422a170420",
+  "header": {
+    "read_only": true,
+    "sql": "SELECT C_Order_ID,DocumentNo,IsSOTrx,C_BPartner_ID,M_Warehouse_ID,C_Currency_ID,M_PriceList_ID,C_PaymentTerm_ID,DocStatus,Processed,SendEMail,C_DocTypeTarget_ID FROM C_Order WHERE Description='Application workflow qualification purchase'",
+    "rows": [
+      [
+        "1000001",
+        "800003",
+        "N",
+        "114",
+        "103",
+        "100",
+        "101",
+        "106",
+        "DR",
+        "N",
+        "N",
+        "126"
+      ]
+    ]
+  },
+  "saved_line": {
+    "read_only": true,
+    "checks": [
+      {
+        "sql": "SELECT DocumentNo,IsSOTrx,DocStatus,Processed,Processing,SendEMail,TotalLines,GrandTotal FROM C_Order WHERE C_Order_ID=1000001",
+        "rows": [
+          [
+            "800003",
+            "N",
+            "DR",
+            "N",
+            "N",
+            "N",
+            "185.25",
+            "185.25"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_OrderLine_ID,M_Product_ID,M_Warehouse_ID,QtyEntered,QtyOrdered,QtyReserved,QtyDelivered,QtyInvoiced,PriceActual,LineNetAmt FROM C_OrderLine WHERE C_Order_ID=1000001",
+        "rows": [
+          [
+            "1000001",
+            "123",
+            "103",
+            "3",
+            "3",
+            "0",
+            "0",
+            "0",
+            "61.75",
+            "185.25"
+          ]
+        ]
+      }
+    ]
+  }
+}

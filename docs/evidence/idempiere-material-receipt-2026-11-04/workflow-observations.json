@@ -1,0 +1,303 @@
+{
+  "application_qualified": false,
+  "workflow_qualified": true,
+  "completion": {
+    "read_only": true,
+    "application_qualified": false,
+    "checks": [
+      {
+        "sql": "SELECT M_InOut_ID,DocumentNo,DocStatus,Processed,Processing,Posted,SendEMail FROM M_InOut WHERE M_InOut_ID=1000001",
+        "rows": [
+          [
+            "1000001",
+            "10000511",
+            "CO",
+            "Y",
+            "N",
+            "Y",
+            "N"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT QtyOrdered,QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000001",
+        "rows": [
+          [
+            "3",
+            "0",
+            "3",
+            "0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT BOMQtyAvailable(123,103,0),BOMQtyOnHand(123,103,0),BOMQtyReserved(123,103,0),BOMQtyOrdered(123,103,0) FROM DUAL",
+        "rows": [
+          [
+            "21",
+            "21",
+            "0",
+            "0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*),SUM(MovementQty) FROM M_Transaction WHERE M_InOutLine_ID=1000001",
+        "rows": [
+          [
+            "1",
+            "3.0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT AD_PInstance_ID,AD_Process_ID,IsProcessing,Result,ErrorMsg FROM AD_PInstance ORDER BY AD_PInstance_ID DESC FETCH FIRST 2 ROWS ONLY",
+        "rows": [
+          [
+            "1000029",
+            "109",
+            "N",
+            "1",
+            "Completed"
+          ],
+          [
+            "1000028",
+            "200141",
+            "N",
+            "1",
+            "Created = 1"
+          ]
+        ]
+      }
+    ]
+  },
+  "accounting": {
+    "read_only": true,
+    "application_qualified": false,
+    "runtime_binary_sha256": "64a3be06c438851f3a59a55c396aedcfea812699299dc38e5686a2c5b1c26366",
+    "checks": [
+      {
+        "sql": "SELECT C_AcctSchema_ID,C_Currency_ID,PostingType,COUNT(*),SUM(AmtAcctDr),SUM(AmtAcctCr),SUM(AmtSourceDr),SUM(AmtSourceCr) FROM Fact_Acct WHERE AD_Table_ID=319 AND Record_ID=1000001 GROUP BY C_AcctSchema_ID,C_Currency_ID,PostingType ORDER BY C_AcctSchema_ID,C_Currency_ID,PostingType",
+        "rows": [
+          [
+            "101",
+            "100",
+            "A",
+            "2",
+            "185.25",
+            "185.25",
+            "185.25",
+            "185.25"
+          ],
+          [
+            "200000",
+            "100",
+            "A",
+            "2",
+            "157.46",
+            "157.46",
+            "185.25",
+            "185.25"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_OrderLine_ID,M_InOutLine_ID,C_InvoiceLine_ID,Qty,Processed,Posted FROM M_MatchPO WHERE M_InOutLine_ID=1000001",
+        "rows": [
+          [
+            "1000001",
+            "1000001",
+            null,
+            "3",
+            "Y",
+            "Y"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*) FROM M_InOutLine WHERE M_InOut_ID=1000001",
+        "rows": [
+          [
+            "1"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT IsPaid,Posted,GrandTotal FROM C_Invoice WHERE C_Invoice_ID=1000000",
+        "rows": [
+          [
+            "Y",
+            "Y",
+            "123.50"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT DocStatus,IsAllocated,IsReconciled,Posted FROM C_Payment WHERE C_Payment_ID=1000000",
+        "rows": [
+          [
+            "CO",
+            "Y",
+            "Y",
+            "Y"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT CurrentBalance FROM C_BankAccount WHERE C_BankAccount_ID=100",
+        "rows": [
+          [
+            "269.03"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*),SUM(MovementQty) FROM M_Transaction WHERE M_InOutLine_ID=1000000",
+        "rows": [
+          [
+            "1",
+            "-2.0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT AD_Table_ID,C_AcctSchema_ID,COUNT(*),SUM(AmtAcctDr),SUM(AmtAcctCr),SUM(AmtSourceDr),SUM(AmtSourceCr) FROM Fact_Acct WHERE AD_Table_ID IN(318,319,335,392,735) AND Record_ID=1000000 GROUP BY AD_Table_ID,C_AcctSchema_ID ORDER BY AD_Table_ID,C_AcctSchema_ID",
+        "rows": [
+          [
+            "318",
+            "101",
+            "2",
+            "123.50",
+            "123.50",
+            "123.50",
+            "123.50"
+          ],
+          [
+            "318",
+            "200000",
+            "2",
+            "104.98",
+            "104.98",
+            "123.50",
+            "123.50"
+          ],
+          [
+            "319",
+            "101",
+            "2",
+            "104.19",
+            "104.19",
+            "104.19",
+            "104.19"
+          ],
+          [
+            "319",
+            "200000",
+            "2",
+            "88.56",
+            "88.56",
+            "88.56",
+            "88.56"
+          ],
+          [
+            "335",
+            "101",
+            "2",
+            "121.03",
+            "121.03",
+            "121.03",
+            "121.03"
+          ],
+          [
+            "335",
+            "200000",
+            "2",
+            "102.88",
+            "102.88",
+            "121.03",
+            "121.03"
+          ],
+          [
+            "392",
+            "101",
+            "2",
+            "121.03",
+            "121.03",
+            "121.03",
+            "121.03"
+          ],
+          [
+            "392",
+            "200000",
+            "2",
+            "102.88",
+            "102.88",
+            "121.03",
+            "121.03"
+          ],
+          [
+            "735",
+            "101",
+            "3",
+            "123.50",
+            "123.50",
+            "123.50",
+            "123.50"
+          ],
+          [
+            "735",
+            "200000",
+            "3",
+            "104.98",
+            "104.98",
+            "123.50",
+            "123.50"
+          ]
+        ]
+      }
+    ]
+  },
+  "single_receipt_line_and_stock_movement": true,
+  "purchase_order_matched": true,
+  "ledger_balanced": true,
+  "original_sales_and_bank_state_preserved": true,
+  "source_commit": "c4da7cbde37770dc327cd1525329b1b6d91728b4",
+  "source_main_commit": "13fa542596597f1cc1d54556e069c9f184e986af",
+  "creation": {
+    "read_only": true,
+    "checks": [
+      {
+        "sql": "SELECT AD_PInstance_ID,AD_Process_ID,IsProcessing,Result,ErrorMsg FROM AD_PInstance ORDER BY AD_PInstance_ID DESC FETCH FIRST 2 ROWS ONLY",
+        "rows": [
+          [
+            "1000028",
+            "200141",
+            "N",
+            "1",
+            "Created = 1"
+          ],
+          [
+            "1000027",
+            "104",
+            "N",
+            "1",
+            "Completed"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT M_InOutLine_ID,C_OrderLine_ID,M_Product_ID,M_Locator_ID,QtyEntered,MovementQty FROM M_InOutLine WHERE M_InOut_ID=1000001",
+        "rows": [
+          [
+            "1000001",
+            "1000001",
+            "123",
+            "101",
+            "3",
+            "3"
+          ]
+        ]
+      }
+    ]
+  }
+}

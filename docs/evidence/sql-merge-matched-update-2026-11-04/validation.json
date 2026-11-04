@@ -1,0 +1,103 @@
+{
+  "source_commit": "87c7ea7d8e7d8da367e5e4beb24ceb13267c81c9",
+  "binary_sha256": "2643c09472dca4730f5d58fdda040dd72a83fa37c7de97763e8133a2b9914d20",
+  "steps": [
+    {
+      "name": "sql",
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 612,
+          "failed": 0,
+          "ignored": 3
+        }
+      ]
+    },
+    {
+      "name": "pgwire",
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 123,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 36,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 169,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "build",
+      "returncode": 0,
+      "counts": []
+    }
+  ],
+  "formatting_passed": true,
+  "diff_check_passed": true,
+  "application_qualified": false,
+  "memory_guard": {
+    "start_available_gib": 14.0,
+    "minimum_available_gib": 8,
+    "peak_group_rss_bytes": 2914082816,
+    "minimum_observed_available_bytes": 16340811776
+  },
+  "ci_status": "Not claimed by this local validation record"
+}

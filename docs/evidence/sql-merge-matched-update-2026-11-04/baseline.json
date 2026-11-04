@@ -1,0 +1,4086 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "1b51e69b705a800bf1b3d18b18c108d5491984945f1936a1b5a96d75282c733b",
+  "fixture_sha256": "27d3c397c83d59f5783f5c895f3b10ae35b5495f70b6a597602620b9af028775",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "matched",
+          "source": {
+            "id": "matched",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "matched",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "action_filter",
+          "source": {
+            "id": "action_filter",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "action_filter",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "derived_join",
+          "source": {
+            "id": "derived_join",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "derived_join",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "empty_source",
+          "source": {
+            "id": "empty_source",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_source",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "false_on",
+          "source": {
+            "id": "false_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "false_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "null_on",
+          "source": {
+            "id": "null_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "check_rollback",
+          "source": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": null,
+              "detail": "ORA-02290: check constraint (IDEMPIERE_QUAL.SYS_C0047649) violated\nHelp: https://docs.oracle.com/error-help/db/ora-02290/"
+            },
+            "actual": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "on_column",
+          "source": {
+            "id": "on_column",
+            "expected": {
+              "affected": null,
+              "error": "on_column",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": null,
+              "detail": "ORA-38104: Columns referenced in the ON Clause cannot be updated: \"T\".\"N\"\nHelp: https://docs.oracle.com/error-help/db/ora-38104/"
+            },
+            "actual": {
+              "affected": null,
+              "error": "on_column",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "on_column",
+            "expected": {
+              "affected": null,
+              "error": "on_column",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "noop_then_change",
+          "source": {
+            "id": "noop_then_change",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "noop_then_change",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "change_then_noop",
+          "source": {
+            "id": "change_then_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": null,
+              "detail": "ORA-30926: The operation attempted to update the same row (rowid: 'AAAYSmAAAAAAJEUAAA') twice.\nHelp: https://docs.oracle.com/error-help/db/ora-30926/"
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "change_then_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "all_noop",
+          "source": {
+            "id": "all_noop",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "all_noop",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "repeat_change",
+          "source": {
+            "id": "repeat_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": null,
+              "detail": "ORA-30926: The operation attempted to update the same row (rowid: 'AAAYSuAAAAAAJEUAAA') twice.\nHelp: https://docs.oracle.com/error-help/db/ora-30926/"
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "repeat_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "two_noops_then_change",
+          "source": {
+            "id": "two_noops_then_change",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "two_noops_then_change",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "quoted_case",
+          "source": {
+            "id": "quoted_case",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_case",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  }
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "bound_parameters",
+          "source": {
+            "id": "bound_parameters",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "bound_parameters",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42601",
+              "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: \"MERGE\" at Line: 1, Column: 1"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        }
+      ],
+      "total": 15,
+      "matched": 0,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": false
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "matched",
+          "source": {
+            "id": "matched",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "matched",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_7E91C527D3T t USING BICDB_MG_7E91C527D3S s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "action_filter",
+          "source": {
+            "id": "action_filter",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "action_filter",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_9402FE14EDT t USING BICDB_MG_9402FE14EDS s ON (t.id = s.id) WHEN MATCHED AND t.active = 'Y' THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "derived_join",
+          "source": {
+            "id": "derived_join",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "derived_join",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_D7036F4260T t USING (SELECT a.id, COALESCE(b.n, a.n) AS n FROM BICDB_MG_D7036F4260S a LEFT JOIN BICDB_MG_D7036F4260S b ON a.seq = b.seq WHERE a.seq <= 2) s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "empty_source",
+          "source": {
+            "id": "empty_source",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_source",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_C836EA1100T t USING (SELECT * FROM BICDB_MG_C836EA1100S WHERE seq < 0) s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "false_on",
+          "source": {
+            "id": "false_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "false_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_C34CA13E3CT t USING BICDB_MG_C34CA13E3CS s ON (1 = 0) WHEN MATCHED THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "null_on",
+          "source": {
+            "id": "null_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_79A0D6C033T t USING BICDB_MG_79A0D6C033S s ON (t.n = s.n) WHEN MATCHED THEN UPDATE SET active = 'N'"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "check_rollback",
+          "source": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "23514",
+              "detail": "new row for relation \"bicdb_mg_71a3454099t\" violates check constraint \"bicdb_mg_71a3454099t_n_check\"\nDETAIL:  Failing row contains (2, -1, N)."
+            },
+            "actual": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_6851B5C24CT t USING BICDB_MG_6851B5C24CS s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "on_column",
+          "source": {
+            "id": "on_column",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "on_column",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_8181F68B64T t USING BICDB_MG_8181F68B64S s ON (t.n = s.id) WHEN MATCHED THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "noop_then_change",
+          "source": {
+            "id": "noop_then_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time\nHINT:  Ensure that not more than one source row matches any one target row."
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "noop_then_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_EB6EB26498T t USING (SELECT * FROM BICDB_MG_EB6EB26498S ORDER BY seq) s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "change_then_noop",
+          "source": {
+            "id": "change_then_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time\nHINT:  Ensure that not more than one source row matches any one target row."
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "change_then_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_77D476561DT t USING (SELECT * FROM BICDB_MG_77D476561DS ORDER BY seq) s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "all_noop",
+          "source": {
+            "id": "all_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time\nHINT:  Ensure that not more than one source row matches any one target row."
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "all_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_39545672A9T t USING (SELECT * FROM BICDB_MG_39545672A9S ORDER BY seq) s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "repeat_change",
+          "source": {
+            "id": "repeat_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time\nHINT:  Ensure that not more than one source row matches any one target row."
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "repeat_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_63A7269C0DT t USING (SELECT * FROM BICDB_MG_63A7269C0DS ORDER BY seq) s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "two_noops_then_change",
+          "source": {
+            "id": "two_noops_then_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time\nHINT:  Ensure that not more than one source row matches any one target row."
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "two_noops_then_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_D91F480973T t USING (SELECT * FROM BICDB_MG_D91F480973S ORDER BY seq) s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET n = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "quoted_case",
+          "source": {
+            "id": "quoted_case",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_case",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_F660E1508ET t USING BICDB_MG_F660E1508ES s ON (t.\"Key\" = s.id) WHEN MATCHED THEN UPDATE SET \"key\" = s.n"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  }
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "bound_parameters",
+          "source": {
+            "id": "bound_parameters",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "bound_parameters",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "0A000",
+              "detail": "unsupported SQL: unsupported SQL statement MERGE INTO BICDB_MG_A6ECEB83C8T t USING (SELECT * FROM BICDB_MG_A6ECEB83C8S WHERE seq >= 1) s ON (t.id = s.id) WHEN MATCHED AND t.active = 'Y' THEN UPDATE SET n = s.n + 5"
+            },
+            "actual": {
+              "affected": null,
+              "error": "unexpected",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        }
+      ],
+      "total": 15,
+      "matched": 0,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": false
+    }
+  },
+  "cleanup_complete": true
+}

@@ -2188,6 +2188,14 @@ pub(crate) fn parse_message(
     } else {
         sql
     };
+    // Parse describes one prepared statement. Apply this after profile lowering
+    // so Oracle routine/block bodies have their protected dollar-quoted form;
+    // semicolons inside those bodies are not protocol statement boundaries.
+    if split_sql_statements(&sql).len() > 1 {
+        return Err(PgWireError::Sql(SqlError::InvalidSql(
+            "cannot insert multiple commands into a prepared statement".into(),
+        )));
+    }
     let param_count = read_nonnegative_i16_count(payload, &mut idx, "parameter type")?;
     let mut param_type_oids = Vec::with_capacity(param_count);
     for _ in 0..param_count {

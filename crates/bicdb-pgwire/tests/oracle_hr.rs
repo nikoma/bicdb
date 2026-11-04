@@ -10,6 +10,73 @@ struct Running {
 }
 
 #[tokio::test]
+async fn prepared_requests_reject_batches_before_execution_and_preserve_routine_bodies() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(directory.path(), profile);
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb");
+        if profile != "postgres" {
+            config.options("-c bicdb.sql_profile=oracle-preview-v1");
+        }
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let connection = tokio::spawn(connection);
+        client
+            .batch_execute("CREATE TABLE prepared_batch_rows(id INTEGER)")
+            .await
+            .unwrap();
+        for sql in [
+            "SELECT 1; SELECT 2",
+            "INSERT INTO prepared_batch_rows VALUES(1); SELECT 2",
+        ] {
+            let error = client.prepare(sql).await.unwrap_err();
+            assert_eq!(error.code().unwrap().code(), "42601", "{profile}: {sql}");
+        }
+        let rows = client
+            .query(
+                "SELECT CAST(COUNT(*) AS VARCHAR(4)) FROM prepared_batch_rows",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(rows[0].get::<_, String>(0), "0");
+        for sql in [
+            "SELECT CAST(';' AS VARCHAR(4))",
+            "SELECT CAST(';' AS VARCHAR(4)); -- trailing ; comment",
+            "/* leading ; comment */ SELECT CAST(';' AS VARCHAR(4)); ;",
+        ] {
+            let statement = client.prepare(sql).await.unwrap();
+            let rows = client.query(&statement, &[]).await.unwrap();
+            assert_eq!(rows[0].get::<_, String>(0), ";", "{profile}: {sql}");
+        }
+        let routine = if profile == "postgres" {
+            "CREATE FUNCTION prepared_body_value() RETURNS INTEGER LANGUAGE plpgsql AS $$DECLARE n INTEGER:=1;BEGIN n:=n+2;RETURN n;END$$"
+        } else {
+            "CREATE FUNCTION prepared_body_value RETURN INTEGER IS n INTEGER:=1;BEGIN n:=n+2;RETURN n;END;"
+        };
+        client.execute(routine, &[]).await.unwrap();
+        let rows = client
+            .query("SELECT CAST(prepared_body_value() AS VARCHAR(4))", &[])
+            .await
+            .unwrap();
+        assert_eq!(rows[0].get::<_, String>(0), "3");
+        client.batch_execute("BEGIN").await.unwrap();
+        let error = client.prepare("SELECT 1; SELECT 2").await.unwrap_err();
+        assert_eq!(error.code().unwrap().code(), "42601");
+        let error = client.query("SELECT 3", &[]).await.unwrap_err();
+        assert_eq!(error.code().unwrap().code(), "25P02", "{profile}");
+        client.batch_execute("ROLLBACK").await.unwrap();
+        client.query("SELECT 3", &[]).await.unwrap();
+        drop(client);
+        connection.await.unwrap().unwrap();
+    }
+}
+
+#[tokio::test]
 async fn parenthesized_named_queries_describe_columns_before_rows_exist() {
     for profile in ["postgres", "oracle-preview-v1"] {
         let directory = tempfile::tempdir().unwrap();

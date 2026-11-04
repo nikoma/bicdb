@@ -74,3 +74,23 @@ concurrent schedules, full costing-method coverage and application-wide
 performance remain unqualified. UI metadata lookups are still slow. This
 checkpoint establishes the recorded issue/reversal workflow and preservation
 checks, not full Oracle compatibility or production readiness.
+
+## Upstream application test
+
+The existing compiled upstream `org.idempiere.test` bundle also runs
+`ProjectIssueTest.testProjBalanceUpdate` through Tycho Surefire and the
+PostgreSQL provider. It creates and completes a purchase order and material
+receipt, creates a project issue and asserts the resulting project cost balance.
+The [sanitized test record](upstream-test.json) identifies the bundle and runtime
+hashes: one JUnit test passes, with no failures, errors or skips.
+
+The test JVM and a disposable database copy share a private network namespace
+with only loopback and no routes. They do not use the primary application
+database. Both exit successfully. Reopening that copy verifies transaction
+rollback: no new order, receipt, project or issue remains; all prior 67 workflow
+checks and 27 business queries still match, with unchanged original definitions.
+The raw JUnit XML contains private runtime properties and is retained locally;
+the published record contains selected results and its hash.
+
+This is one upstream test in addition to the 77 primary-fixture observations.
+The full upstream suite and entire application remain unqualified.

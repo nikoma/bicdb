@@ -1588,10 +1588,12 @@ pub(crate) fn is_unusable_typed_primary_key_index(
 /// (`seq bigint PRIMARY KEY`). Ranges over that index found no rows, so
 /// `WHERE seq > $1` returned nothing; such keys are found by the record id.
 /// Composite keys keep their columns in the row and their index works.
+/// The special metadata slot is exactly lowercase `id`; a quoted `ID` or `Id`
+/// still lives only in the record identifier and cannot use that metadata index.
 pub(crate) fn primary_key_index_is_unreadable(schema: &TableSchema) -> bool {
     primary_key_requires_typed_identity(schema) || {
         let columns = primary_key_columns_for_schema(schema);
-        matches!(columns.as_slice(), [column] if !column.eq_ignore_ascii_case("id"))
+        matches!(columns.as_slice(), [column] if column != "id")
     }
 }
 

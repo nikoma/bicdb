@@ -11,8 +11,9 @@ impl SqlSession<'_> {
     ) -> Result<Option<SqlResult>> {
         let keys = primary_key_columns_for_schema(schema);
         let moves_key = update.assignments.iter().any(|assignment| {
-            matches!(&assignment.target, AssignmentTarget::ColumnName(name)
-                if relation_name(name).is_ok_and(|column| keys.iter().any(|k| k == &column)))
+            super::row_assignments::assignment_columns(&assignment.target)
+                .iter()
+                .any(|name| relation_name(name).is_ok_and(|column| keys.contains(&column)))
         });
         if !moves_key {
             return Ok(None);
@@ -130,6 +131,18 @@ impl SqlSession<'_> {
             // All expressions read the original row, including when several
             // assignments mention a key that this same statement changes.
             for assignment in &update.assignments {
+                if let AssignmentTarget::Tuple(names) = &assignment.target {
+                    let values = self.update_row_assignment_value(
+                        ctes,
+                        candidate.columns.as_ref(),
+                        &candidate.row,
+                        assignment,
+                    )?;
+                    for (name, value) in names.iter().zip(values) {
+                        fields.insert(relation_name(name)?, value);
+                    }
+                    continue;
+                }
                 let AssignmentTarget::ColumnName(name) = &assignment.target else {
                     return Err(SqlError::Unsupported(
                         "UPDATE supports only single-column assignments".into(),
@@ -264,7 +277,7 @@ impl SqlSession<'_> {
         Ok(pairs.len())
     }
 
-    fn require_key_update_read_privileges(
+    pub(super) fn require_key_update_read_privileges(
         &self,
         table: &str,
         schema: &TableSchema,

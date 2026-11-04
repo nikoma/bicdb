@@ -1,5 +1,22 @@
 # Oracle reference queries
 
+`integer_bounds.py --reference oracle --oracle-config /private/oracle.json
+--output /private/integer-bounds.json` checks 18 independent expectations for
+integer primary/secondary index bounds, numeric promotion, fractional/large
+values, reversed comparisons and prepared numeric parameters. Use the same
+PostgreSQL reference and BicDB target variables described below. Other index
+types, user-defined numeric types and concurrency remain unqualified.
+
+`row_update.py --reference oracle --oracle-config /private/oracle.json
+--output /private/row-update.json` checks 18 independent expectations for
+row-valued UPDATE: correlated aggregates, constructors, source cardinality,
+NULLs, simultaneous old values, primary keys, constraint/statement rollback,
+quoted columns, prepared values and volatile evaluation. PostgreSQL has its own
+native controls via `--reference postgres` and `ORACLE_CONTROL_PG_DSN`;
+`BICDB_PG_DSN` selects the target. Nonce objects are removed. DEFAULT, generated
+columns, broader statement snapshots, exact Oracle error numbers and full
+UPDATE conformance remain unqualified.
+
 `nvl2.py --reference oracle --oracle-config /private/oracle.json
 --output /private/nvl2.json` checks 59 explicit expectations for typed NVL2,
 empty-character identity, DATE/TIMESTAMP conversion and arithmetic, quoted

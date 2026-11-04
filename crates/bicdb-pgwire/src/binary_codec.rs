@@ -455,9 +455,24 @@ pub(crate) fn decode_binary_range_bound(
         .get(*index..end)
         .ok_or_else(|| PgWireError::Protocol("truncated range bound payload".to_string()))?;
     *index = end;
+    decode_binary_nested_value_text(payload, subtype_oid, db)
+}
+
+// Container fields need value text, whereas standalone bind parameters need
+// SQL expressions retaining their declared type. Do not embed a scalar cast
+// into an array element, range bound or composite field.
+fn decode_binary_nested_value_text(bytes: &[u8], oid: i32, db: Option<&BicDb>) -> Result<String> {
+    if oid == 1700 {
+        return decode_binary_numeric_parameter(bytes);
+    }
+    if let Some(db) = db {
+        if let Some(base_oid) = bicdb_sql::pg_user_type_binary_base_oid(db, oid)? {
+            return decode_binary_nested_value_text(bytes, base_oid, Some(db));
+        }
+    }
     let literal = match db {
-        Some(db) => decode_binary_parameter_with_db(db, payload, subtype_oid)?,
-        None => decode_binary_parameter(payload, subtype_oid)?,
+        Some(db) => decode_binary_parameter_with_db(db, bytes, oid)?,
+        None => decode_binary_parameter(bytes, oid)?,
     };
     Ok(unquote_binary_sql_literal(&literal))
 }
@@ -661,11 +676,7 @@ pub(crate) fn decode_binary_array_parameter_inner(
         }) {
             decode_binary_composite_array_element(db, payload, expected_element_oid)?
         } else {
-            let literal = match db {
-                Some(db) => decode_binary_parameter_with_db(db, payload, expected_element_oid)?,
-                None => decode_binary_parameter(payload, expected_element_oid)?,
-            };
-            unquote_binary_sql_literal(&literal)
+            decode_binary_nested_value_text(payload, expected_element_oid, db)?
         };
         values.push(Some(value));
         idx = end;
@@ -771,8 +782,11 @@ pub(crate) fn decode_binary_composite_array_element(
             .get(index..end)
             .ok_or_else(|| PgWireError::Protocol("truncated binary composite field".to_string()))?;
         index = end;
-        let literal = decode_binary_parameter_with_db(db, field, field_oid)?;
-        values.push(Some(unquote_binary_sql_literal(&literal)));
+        values.push(Some(decode_binary_nested_value_text(
+            field,
+            field_oid,
+            Some(db),
+        )?));
     }
     if index != bytes.len() {
         return Err(PgWireError::Protocol(
@@ -1099,7 +1113,8 @@ pub(crate) fn sql_literal_for_text_parameter(value: &str, oid: i32) -> Result<St
         16 => sql_bool_parameter_literal(value),
         20 | 21 | 23 => sql_integer_parameter_literal(value, oid),
         700 | 701 => Ok(sql_float_parameter_literal(value, oid)),
-        114 | 1700 | 3802 => Ok(quote_sql_string(value)),
+        1700 => Ok(format!("CAST({} AS numeric)", quote_sql_string(value))),
+        114 | 3802 => Ok(quote_sql_string(value)),
         // Unknown/undeclared types: a value that parses as a number is
         // re-emitted FROM THE PARSE so the literal is numeric by
         // construction; everything else is quoted.

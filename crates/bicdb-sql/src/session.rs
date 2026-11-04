@@ -16,6 +16,7 @@ mod primary_key_updates;
 mod privilege_projection;
 mod raw_ddl_analyze;
 mod raw_index_fts;
+mod row_assignments;
 mod row_triggers;
 mod set_functions;
 pub(crate) mod txn_update;

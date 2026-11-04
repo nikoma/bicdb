@@ -787,6 +787,7 @@ impl<'db> SqlSession<'db> {
             ));
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
+        self.validate_row_assignments(update, &table, schema.as_deref())?;
         if let Some(schema) = schema.as_deref() {
             if let Some(result) = self.try_move_primary_key(update, &table, schema, &ctes)? {
                 return Ok(result);
@@ -1010,6 +1011,19 @@ impl<'db> SqlSession<'db> {
                 let (scope, context) = row_engine.bound_row_context(candidate.columns.as_ref());
                 let mut values = Vec::with_capacity(update.assignments.len());
                 for assignment in &update.assignments {
+                    if matches!(assignment.target, AssignmentTarget::Tuple(_)) {
+                        if super::row_assignments::independent_row_query(assignment).is_some() {
+                            values.push(None);
+                            continue;
+                        }
+                        values.push(Some(super::row_assignments::evaluate_row_assignment(
+                            &row_engine,
+                            &candidate.row,
+                            &context,
+                            assignment,
+                        )));
+                        continue;
+                    }
                     let generated = match (&assignment.target, schema.as_deref()) {
                         (AssignmentTarget::ColumnName(column_name), Some(schema)) => {
                             relation_name(column_name)
@@ -1072,6 +1086,29 @@ impl<'db> SqlSession<'db> {
             };
             for assignment in &update.assignments {
                 let evaluated = assignment_values.next().flatten();
+                if let AssignmentTarget::Tuple(names) = &assignment.target {
+                    let values = match evaluated {
+                        Some(value) => {
+                            super::row_assignments::unpack_row_assignment(value?, names.len())?
+                        }
+                        None => self.update_row_assignment_value(
+                            &ctes,
+                            candidate.columns.as_ref(),
+                            &candidate.row,
+                            assignment,
+                        )?,
+                    };
+                    for (name, value) in names.iter().zip(values) {
+                        let column = relation_name(name)?;
+                        let value = if let Some(schema) = schema.as_deref() {
+                            resolve_oid_alias_column_value(self.db_ref(), schema, &column, value)?
+                        } else {
+                            value
+                        };
+                        set_record_column(&mut record, schema.as_deref(), &column, value)?;
+                    }
+                    continue;
+                }
                 let AssignmentTarget::ColumnName(column_name) = &assignment.target else {
                     return Err(SqlError::Unsupported(
                         "UPDATE supports only single-column assignments".to_string(),
@@ -4938,19 +4975,18 @@ impl<'db> SqlSession<'db> {
         let inherited = role_privilege_closure(self.db_ref(), &role)?;
         let grants = list_privileges(self.db_ref())?;
         for assignment in assignments {
-            let AssignmentTarget::ColumnName(name) = &assignment.target else {
-                return self.require_table_privilege(table, "UPDATE");
-            };
-            let column = relation_name(name)?;
-            if !grants.iter().any(|grant| {
-                grant.object_type == PrivilegeObjectType::Table
-                    && grant.object_name == table
-                    && grant.column.as_deref() == Some(column.as_str())
-                    && grant.privilege == "UPDATE"
-                    && (grant.grantee == "public"
-                        || inherited.contains(&normalize_role_name(&grant.grantee)))
-            }) {
-                return self.require_table_privilege(table, "UPDATE");
+            for name in super::row_assignments::assignment_columns(&assignment.target) {
+                let column = relation_name(name)?;
+                if !grants.iter().any(|grant| {
+                    grant.object_type == PrivilegeObjectType::Table
+                        && grant.object_name == table
+                        && grant.column.as_deref() == Some(column.as_str())
+                        && grant.privilege == "UPDATE"
+                        && (grant.grantee == "public"
+                            || inherited.contains(&normalize_role_name(&grant.grantee)))
+                }) {
+                    return self.require_table_privilege(table, "UPDATE");
+                }
             }
         }
         if assignments.is_empty() {

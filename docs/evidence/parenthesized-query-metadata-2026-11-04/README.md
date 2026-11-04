@@ -55,3 +55,22 @@ The built candidate uses source commit
 `b78991f08d526131bea683ec9cd1d814f499a941cd8d769953dfe98e301e1f7e`.
 These are local qualification results, not a published release or production
 deployment.
+
+## Subsequent application posting recovery
+
+[Recovery observations](posting-recovery.json) qualify the existing completed
+shipment on the candidate after the source reached main at `de9f8b0`. A consistent
+copy of the gracefully stopped application database retained shipment 500000 and
+its stock changes. Startup reloaded all 62 original routines and verified all 160
+view definitions and transport type families before Java started.
+
+The normal Shipment (Customer) UI posting action and its confirmation changed
+the shipment's posting status from Error to Posted. There are four ledger entries
+across two accounting schemas: debits and credits balance at 104.19 and 88.56,
+respectively. Stock remains 18, reservations remain zero, delivered quantity
+remains two, and exactly one -2 movement remains. No second shipment was generated
+and no statuses, quantities or amounts were repaired through SQL.
+
+The shipment-line order reference still has a separate NVL/scalar-expression and
+numeric-formatting lookup gap. Invoicing, payments, complete application coverage
+and the broader compatibility programme remain unqualified.

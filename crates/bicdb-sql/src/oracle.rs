@@ -21,6 +21,7 @@ pub(crate) mod dynamic_sql;
 pub(crate) mod errors;
 mod function_attributes;
 pub(crate) mod hierarchy;
+pub(crate) mod lock_waits;
 mod namespaces;
 pub(crate) mod national;
 pub(crate) mod number_formats;
@@ -1129,6 +1130,7 @@ fn syntax_word(value: &str, preview: bool) -> bool {
             | "FOR"
             | "OF"
             | "NOWAIT"
+            | "WAIT"
             | "SKIP"
             | "LOCKED"
             | "PROCEDURE"
@@ -1672,6 +1674,12 @@ fn expression(sql: &str) -> Result<Expr> {
 }
 
 fn lower_native(db: &BicDb, sql: &str, preview: bool, namespace: Option<&str>) -> Result<String> {
+    let bounded_locks = if preview {
+        lock_waits::lower(sql)?
+    } else {
+        None
+    };
+    let sql = bounded_locks.as_deref().unwrap_or(sql);
     let rewritten = preview.then(|| rewrite_is_json_predicates(sql)).flatten();
     let sql = rewritten.as_deref().unwrap_or(sql);
     let _grammar = syntax::Scope::new(preview);

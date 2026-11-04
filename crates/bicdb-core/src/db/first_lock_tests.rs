@@ -205,6 +205,85 @@ fn cancellable_row_wait_cleans_up_after_deadline_and_explicit_cancel() {
 }
 
 #[test]
+fn operation_deadline_keeps_prior_locks_and_does_not_expire_later_operations() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = BicDb::open_with_config(dir.path(), DbConfig::default().with_fsync(false)).unwrap();
+    let held = Mutex::new(LockedKeys::default());
+    let requested = Mutex::new(LockedKeys::default());
+    let owner = TransactionId(2);
+    let requester = TransactionId(1);
+    db.lock_tx_record_with_attempts(owner, "rows", "x", 0, false, false, &held)
+        .unwrap();
+    db.lock_tx_record_with_attempts(requester, "rows", "y", 0, false, false, &requested)
+        .unwrap();
+    let parent = CancellationToken::uncancelable();
+    let at = Instant::now();
+    let local = parent.child_with_deadline(at + Duration::from_millis(30));
+    assert!(matches!(
+        db.lock_tx_record_cancellable(requester, "rows", "x", &requested, &local),
+        Err(BicDbError::QueryTimedOut)
+    ));
+    assert!(at.elapsed() >= Duration::from_millis(25));
+    assert_eq!(requested.lock().len(), 1, "the prior y lock must survive");
+    assert_eq!(held.lock().len(), 1, "the owner must retain x");
+    // A stale requester -> owner wait edge would make this reverse edge a
+    // spurious cycle, even though the timed operation has already ended.
+    assert!(db.wait_graph.wait_for(owner, requester).is_some());
+    parent.check().unwrap();
+    parent.child().check().unwrap();
+    local.cancel();
+    parent.check().unwrap();
+    release_owned_write_locks(&db.write_locks, owner, &held.lock().take_all());
+    db.lock_tx_record_cancellable(requester, "rows", "x", &requested, &parent.child())
+        .unwrap();
+    assert_eq!(requested.lock().len(), 2);
+    release_owned_write_locks(&db.write_locks, requester, &requested.lock().take_all());
+}
+
+#[test]
+fn operation_deadline_observes_parent_cancel_and_never_extends_parent_deadline() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = BicDb::open_with_config(dir.path(), DbConfig::default().with_fsync(false)).unwrap();
+    let held = Mutex::new(LockedKeys::default());
+    let requested = Mutex::new(LockedKeys::default());
+    let owner = TransactionId(2);
+    let requester = TransactionId(1);
+    db.lock_tx_record_with_attempts(owner, "rows", "x", 0, false, false, &held)
+        .unwrap();
+    let parent = CancellationToken::new(
+        Arc::new(AtomicBool::new(false)),
+        Some(Instant::now() + Duration::from_millis(30)),
+    );
+    let local = parent.child_with_deadline(Instant::now() + Duration::from_secs(10));
+    let at = Instant::now();
+    assert!(matches!(
+        db.lock_tx_record_cancellable(requester, "rows", "x", &requested, &local),
+        Err(BicDbError::QueryTimedOut)
+    ));
+    assert!(at.elapsed() < Duration::from_secs(2));
+    let parent = CancellationToken::uncancelable();
+    let local = parent.child_with_deadline(Instant::now() + Duration::from_secs(10));
+    let (send, receive) = std::sync::mpsc::channel();
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            send.send(db.lock_tx_record_cancellable(requester, "rows", "x", &requested, &local))
+                .unwrap();
+        });
+        let early = receive.recv_timeout(Duration::from_millis(30));
+        parent.cancel();
+        assert!(early.is_err());
+        assert!(matches!(
+            receive.recv_timeout(Duration::from_secs(2)).unwrap(),
+            Err(BicDbError::QueryCanceled)
+        ));
+    });
+    assert!(db.wait_graph.wait_for(owner, requester).is_some());
+    assert_eq!(requested.lock().len(), 0);
+    assert_eq!(held.lock().len(), 1);
+    release_owned_write_locks(&db.write_locks, owner, &held.lock().take_all());
+}
+
+#[test]
 fn cancellable_row_wait_detects_cycles_without_an_environment_override() {
     let dir = tempfile::tempdir().unwrap();
     let db = BicDb::open_with_config(dir.path(), DbConfig::default().with_fsync(false)).unwrap();

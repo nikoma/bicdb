@@ -58,6 +58,91 @@ impl Running {
 }
 
 #[tokio::test]
+async fn preview_bounded_locks_preserve_prepared_describe_cancel_and_connection_reuse() {
+    use std::time::Duration;
+    use tokio_postgres::types::Type;
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let mut config = tokio_postgres::Config::new();
+    config
+        .host("127.0.0.1")
+        .port(server.port)
+        .user("bicdb")
+        .dbname("bicdb")
+        .options("-c bicdb.sql_profile=oracle-preview-v1");
+    let (owner, owner_connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+    let owner_connection = tokio::spawn(async move { owner_connection.await.unwrap() });
+    let (waiter, waiter_connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+    let waiter_connection = tokio::spawn(async move { waiter_connection.await.unwrap() });
+    owner.batch_execute("CREATE TABLE wire_deadlines(id NUMBER PRIMARY KEY); INSERT INTO wire_deadlines VALUES(1)").await.unwrap();
+    owner.batch_execute("BEGIN").await.unwrap();
+    owner
+        .query("SELECT id FROM wire_deadlines WHERE id=1 FOR UPDATE", &[])
+        .await
+        .unwrap();
+    let sql = "SELECT CAST(id AS VARCHAR2(30)) FROM wire_deadlines WHERE id=$1 FOR UPDATE WAIT 1";
+    let prepared = tokio::time::timeout(
+        Duration::from_secs(1),
+        waiter.prepare_typed(sql, &[Type::INT4]),
+    )
+    .await
+    .expect("Describe must not wait for the row lock")
+    .unwrap();
+    assert_eq!(*prepared.columns()[0].type_(), Type::VARCHAR);
+    waiter.batch_execute("BEGIN").await.unwrap();
+    let error = tokio::time::timeout(Duration::from_secs(3), waiter.query(&prepared, &[&1_i32]))
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error.code().unwrap().code(), "55P03");
+    waiter.batch_execute("ROLLBACK").await.unwrap();
+
+    let prepared_cancel = waiter
+        .prepare_typed(&sql.replace("WAIT 1", "WAIT 5"), &[Type::INT4])
+        .await
+        .unwrap();
+    waiter.batch_execute("BEGIN").await.unwrap();
+    let cancel = waiter.cancel_token();
+    let (result, ()) = tokio::join!(waiter.query(&prepared_cancel, &[&1_i32]), async {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        cancel.cancel_query(tokio_postgres::NoTls).await.unwrap();
+    });
+    assert_eq!(result.unwrap_err().code().unwrap().code(), "57014");
+    waiter.batch_execute("ROLLBACK").await.unwrap();
+    owner.batch_execute("COMMIT").await.unwrap();
+    let row = waiter.query_one(&prepared, &[&1_i32]).await.unwrap();
+    assert_eq!(row.get::<_, String>(0), "1");
+    drop(owner);
+    drop(waiter);
+    owner_connection.await.unwrap();
+    waiter_connection.await.unwrap();
+
+    let native_dir = tempfile::tempdir().unwrap();
+    let native = Running::new(native_dir.path(), false);
+    let (client, connection) = native.connect(false).await.unwrap();
+    assert_eq!(
+        client
+            .prepare("SELECT 1 FOR UPDATE WAIT 1")
+            .await
+            .unwrap_err()
+            .code()
+            .unwrap()
+            .code(),
+        "42601"
+    );
+    assert_eq!(
+        client
+            .query_one("SELECT 1", &[])
+            .await
+            .unwrap()
+            .get::<_, i32>(0),
+        1
+    );
+    drop(client);
+    connection.await.unwrap();
+}
+
+#[tokio::test]
 async fn qualified_scalar_aggregates_keep_prepared_types_with_empty_results() {
     use tokio_postgres::types::Type;
     for profile in ["postgres", "oracle-preview-v1"] {

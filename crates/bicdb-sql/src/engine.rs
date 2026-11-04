@@ -37,6 +37,21 @@ struct RelationColumnMetadata {
     columns: Vec<(String, SqlColumnMetadata)>,
 }
 
+fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
+    let parse_sql = rewrite_postgres_parse_compat(sql);
+    let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
+    reject_oversized_sql(sql_for_parse)?;
+    reject_deep_parse_nesting(sql_for_parse)?;
+    let statements = match Parser::parse_sql(&PostgreSqlDialect {}, sql_for_parse) {
+        Ok(statements) => statements,
+        Err(error) => oracle::lock_waits::parse_lowered(sql_for_parse)?
+            .ok_or_else(|| SqlError::InvalidSql(error.to_string()))?,
+    };
+    reject_deep_expressions(&statements)?;
+    oracle::lock_waits::validate(db, &statements)?;
+    Ok(statements)
+}
+
 /// Resolve PostgreSQL parameter types from statement, schema, and expression
 /// context. Entries remain `None` only when PostgreSQL's unknown-input rules
 /// have no stronger context; the wire layer then applies the protocol default.
@@ -44,12 +59,7 @@ pub fn infer_parameter_types(db: &BicDb, sql: &str) -> Result<Vec<Option<String>
     if oracle::collections::declaration(db, sql)?.is_some() {
         return Ok(Vec::new());
     }
-    let parse_sql = rewrite_postgres_parse_compat(sql);
-    let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
-    reject_oversized_sql(sql_for_parse)?;
-    reject_deep_parse_nesting(sql_for_parse)?;
-    let statements = Parser::parse_sql(&PostgreSqlDialect {}, sql_for_parse)
-        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    let statements = parse_inference_statements(db, sql)?;
     let engine = SqlEngine::new(db);
     let mut resolver = ParameterTypeResolver {
         engine: &engine,
@@ -91,13 +101,7 @@ pub fn infer_query_result_columns(
     if oracle::collections::declaration(db, sql)?.is_some() {
         return Ok(None);
     }
-    let parse_sql = rewrite_postgres_parse_compat(sql);
-    let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
-    reject_oversized_sql(sql_for_parse)?;
-    reject_deep_parse_nesting(sql_for_parse)?;
-    let mut statements = Parser::parse_sql(&PostgreSqlDialect {}, sql_for_parse)
-        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
-    reject_deep_expressions(&statements)?;
+    let mut statements = parse_inference_statements(db, sql)?;
     if statements.len() != 1 {
         return Ok(None);
     }
@@ -139,13 +143,7 @@ fn infer_describe_columns(
     if oracle::collections::declaration(db, sql)?.is_some() {
         return Ok(None);
     }
-    let parse_sql = rewrite_postgres_parse_compat(sql);
-    let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
-    reject_oversized_sql(sql_for_parse)?;
-    reject_deep_parse_nesting(sql_for_parse)?;
-    let mut statements = Parser::parse_sql(&PostgreSqlDialect {}, sql_for_parse)
-        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
-    reject_deep_expressions(&statements)?;
+    let mut statements = parse_inference_statements(db, sql)?;
     if statements.len() != 1 {
         return Ok(None);
     }
@@ -3809,6 +3807,7 @@ impl<'db> SqlEngine<'db> {
         }
 
         let statements = parse_statements(sql)?;
+        oracle::lock_waits::validate(self.db_ref(), &statements)?;
         let [statement] = statements.as_slice() else {
             return Err(SqlError::Unsupported(
                 "expected exactly one SQL statement".to_string(),
@@ -4216,6 +4215,7 @@ impl<'db> SqlEngine<'db> {
     }
 
     fn execute_query_unscoped(&self, query: &Query) -> Result<SqlResult> {
+        oracle::lock_waits::duration(self.db_ref(), query)?;
         if let Some(rewritten) = normalize_fetch_clause(query)? {
             return self.execute_query(&rewritten);
         }

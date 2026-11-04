@@ -3386,6 +3386,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_parsed_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
+        oracle::lock_waits::validate(self.db_ref(), statement)?;
         let previous = std::mem::replace(&mut self.in_routine_expression, false);
         let result = self.execute_parsed_statement_in_sql(statement);
         self.in_routine_expression = previous;

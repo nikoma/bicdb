@@ -45,6 +45,18 @@ impl CancellationToken {
         }
     }
 
+    /// Create a child with an operation-local deadline. An earlier parent
+    /// deadline and all parent cancellation sources still apply. Expiring or
+    /// canceling this child does not change its parent or sibling operations.
+    pub fn child_with_deadline(&self, deadline: Instant) -> Self {
+        let mut child = self.child();
+        child.deadline = Some(
+            self.deadline
+                .map_or(deadline, |parent| parent.min(deadline)),
+        );
+        child
+    }
+
     pub fn cancel(&self) {
         self.cancel_requested.store(true, Ordering::SeqCst);
     }

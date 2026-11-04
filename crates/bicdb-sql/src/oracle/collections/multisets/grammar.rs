@@ -74,11 +74,16 @@ fn operation(parser: &Parser<'_>) -> Option<Operation> {
 }
 
 #[derive(Debug)]
-pub(crate) struct CollectionDialect;
+pub(crate) struct CollectionDialect {
+    query_settings: bool,
+}
 macro_rules! delegate_pg_bool {
     ($($name:ident),* $(,)?) => { $(fn $name(&self)->bool { PostgreSqlDialect {}.$name() })* };
 }
 impl Dialect for CollectionDialect {
+    fn supports_settings(&self) -> bool {
+        self.query_settings
+    }
     // Keep PostgreSQL's dialect-specific branches and feature switches. Only
     // the collection infix grammar below differs, inside the preview scope.
     fn dialect(&self) -> std::any::TypeId {
@@ -191,7 +196,21 @@ impl Dialect for CollectionDialect {
 }
 
 pub(crate) fn parse(sql: &str) -> Result<Vec<Statement>, ParserError> {
-    Parser::parse_sql(&CollectionDialect, sql)
+    Parser::parse_sql(
+        &CollectionDialect {
+            query_settings: false,
+        },
+        sql,
+    )
+}
+
+pub(crate) fn parse_query_settings(sql: &str) -> Result<Vec<Statement>, ParserError> {
+    Parser::parse_sql(
+        &CollectionDialect {
+            query_settings: true,
+        },
+        sql,
+    )
 }
 
 #[cfg(test)]

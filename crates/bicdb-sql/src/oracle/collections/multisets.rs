@@ -3,6 +3,7 @@ use super::*;
 mod grammar;
 mod lowering;
 mod values;
+pub(crate) use grammar::parse_query_settings;
 pub(crate) use lowering::lower_expression;
 pub(crate) use values::{evaluate, is_empty};
 

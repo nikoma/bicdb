@@ -158,6 +158,7 @@ impl SqlEngine<'_> {
         let tx = self
             .tx
             .ok_or_else(|| SqlError::Unsupported("locking SELECT requires a transaction".into()))?;
+        let wait_duration = oracle::lock_waits::duration(self.db_ref(), query)?;
         let key_slots = targets
             .iter()
             .map(|(_, alias, _, keys, _)| {
@@ -217,12 +218,44 @@ impl SqlEngine<'_> {
             for ((table, _, _, _, nonblock), id) in targets.iter().zip(ids) {
                 if nonblock.is_none() {
                     self.check_cancellation()?;
-                    if !tx.lock_visible_record_cancellable(
+                    // Oracle's WAIT budget starts anew for each contended
+                    // row. A child timer cannot extend statement cancellation
+                    // or leave a deadline on subsequent session operations.
+                    let local = wait_duration
+                        .map(|duration| {
+                            std::time::Instant::now()
+                                .checked_add(duration)
+                                .map(|deadline| self.cancellation.child_with_deadline(deadline))
+                                .ok_or_else(|| {
+                                    SqlError::InvalidSql(
+                                        "lock-wait deadline exceeds the supported range".into(),
+                                    )
+                                })
+                        })
+                        .transpose()?;
+                    let result = tx.lock_visible_record_cancellable(
                         self.security_context.as_ref(),
                         table,
                         &id,
-                        &self.cancellation,
-                    )? {
+                        local.as_ref().unwrap_or(&self.cancellation),
+                    );
+                    let acquired = match result {
+                        Err(BicDbError::QueryTimedOut) if local.is_some() => {
+                            // An earlier statement deadline or explicit cancel
+                            // retains its own error instead of being relabeled
+                            // as a row-lock timeout.
+                            self.check_cancellation()?;
+                            return Err(SqlError::RaisedException {
+                                sqlstate: "55P03".into(),
+                                message: format!(
+                                    "row-lock wait deadline expired for relation {table}"
+                                ),
+                                detail: None,
+                            });
+                        }
+                        result => result?,
+                    };
+                    if !acquired {
                         return Err(SqlError::BicDb(BicDbError::TransactionConflict(format!(
                             "{READ_COMMITTED_LOCK_REFRESH}{table}:{id}"
                         ))));

@@ -1358,6 +1358,7 @@ fn canonical_tokens_with_routine_types(
                     continue;
                 }
                 match upper.as_str() {
+                    "MINUS" if preview => pieces.push("EXCEPT".into()),
                     "TYPE" if preview && i == 1 && word(&source[0], "DROP") => pieces.push("TYPE".into()),
                     "SYS_GUID" if preview
                         && (i == 0 || source[i - 1] != Token::Period)

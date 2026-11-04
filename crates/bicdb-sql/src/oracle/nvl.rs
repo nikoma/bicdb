@@ -58,6 +58,12 @@ mod tests {
             let empty = "SELECT id,CAST(0 AS NUMERIC) AS qty FROM operand_groups WHERE id<0";
             let grouped = format!("SELECT g.id,SUM({function}(n.amount,0)) AS qty FROM operand_groups g LEFT JOIN operand_numbers n ON g.id=n.group_id GROUP BY g.id");
             let union = format!("{empty} UNION ALL {grouped}");
+            let difference = if profile == ORACLE_PREVIEW_PROFILE {
+                "MINUS"
+            } else {
+                "EXCEPT"
+            };
+
             let check = |db: &mut BicDb, sql: &str, wanted: &[[f64; 2]]| {
                 let result = execute(db, sql).unwrap();
                 let actual: Vec<[f64; 2]> = result
@@ -89,6 +95,22 @@ mod tests {
                 ),
                 &[[1.0, 7.0], [2.0, 0.0], [3.0, 5.0]],
             );
+            check(&mut db, &format!("SELECT id,CASE WHEN id=1 THEN 8 ELSE 0 END AS qty FROM operand_groups {difference} {grouped} ORDER BY 1"), &[[1.0,8.0]]);
+            let keyword = execute(
+                &mut db,
+                "SELECT 'MINUS' AS \"MINUS\" FROM operand_groups WHERE id=1",
+            )
+            .unwrap();
+            assert_eq!(keyword.columns, vec!["MINUS"]);
+            assert_eq!(keyword.rows, vec![vec![SqlValue::String("MINUS".into())]]);
+            if profile == POSTGRES_PROFILE {
+                assert_eq!(
+                    execute(&mut db, "SELECT id AS minus FROM operand_groups WHERE id=1")
+                        .unwrap()
+                        .columns,
+                    vec!["minus"]
+                );
+            }
             execute(&mut db, &format!("CREATE VIEW operand_union AS {union}")).unwrap();
             for _ in 0..20 {
                 check(

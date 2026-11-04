@@ -1,0 +1,132 @@
+{
+  "read_only": true,
+  "application_qualified": false,
+  "runtime_binary_sha256": "32d2c0441d23b9a856e2cb45d2d85b263b3272b322b6c88acd2a9b6962eaa009",
+  "checks": [
+    {
+      "sql": "SELECT C_Invoice_ID,DocumentNo,C_Order_ID,DocStatus,Processed,Processing,SendEMail,Posted,TotalLines,GrandTotal,IsPaid,C_PaymentTerm_ID,C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID=1000000",
+      "rows": [
+        [
+          "1000000",
+          "100001",
+          "1000000",
+          "CO",
+          "Y",
+          "N",
+          "N",
+          "Y",
+          "123.50",
+          "123.50",
+          "N",
+          "106",
+          "100"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT C_InvoiceLine_ID,C_OrderLine_ID,M_InOutLine_ID,M_Product_ID,QtyInvoiced,LineNetAmt FROM C_InvoiceLine WHERE C_Invoice_ID=1000000",
+      "rows": [
+        [
+          "1000000",
+          "1000000",
+          null,
+          "123",
+          "2",
+          "123.50"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT C_AcctSchema_ID,C_Currency_ID,PostingType,COUNT(*),SUM(AmtAcctDr),SUM(AmtAcctCr),SUM(AmtSourceDr),SUM(AmtSourceCr) FROM Fact_Acct WHERE AD_Table_ID=318 AND Record_ID=1000000 GROUP BY C_AcctSchema_ID,C_Currency_ID,PostingType ORDER BY C_AcctSchema_ID,C_Currency_ID,PostingType",
+      "rows": [
+        [
+          "101",
+          "100",
+          "A",
+          "2",
+          "123.50",
+          "123.50",
+          "123.50",
+          "123.50"
+        ],
+        [
+          "200000",
+          "100",
+          "A",
+          "2",
+          "104.98",
+          "104.98",
+          "123.50",
+          "123.50"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT BOMQtyAvailable(123,103,0),BOMQtyOnHand(123,103,0),BOMQtyReserved(123,103,0),BOMQtyOrdered(123,103,0) FROM DUAL",
+      "rows": [
+        [
+          "18",
+          "18",
+          "0",
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT COUNT(*),SUM(MovementQty) FROM M_Transaction WHERE M_InOutLine_ID=1000000",
+      "rows": [
+        [
+          "1",
+          "-2.0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "0",
+          "2",
+          "2"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT COUNT(*),COUNT(DISTINCT C_Invoice_ID) FROM C_Invoice WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "1",
+          "1"
+        ]
+      ]
+    }
+  ],
+  "invoice_completed_and_posted": true,
+  "ledger_balanced": true,
+  "single_invoice": true,
+  "stock_unchanged": true,
+  "ui_success_verified": true,
+  "source_commit": "c92dad68bc60184174902acdfedce2422a170420",
+  "source_main_commit": "ab8dda710795482b92f598222aa063d685a646a6",
+  "process_result": {
+    "sql": "SELECT AD_PInstance_ID,AD_Process_ID,IsProcessing,Result,ErrorMsg FROM AD_PInstance WHERE AD_Process_ID=134 ORDER BY AD_PInstance_ID DESC FETCH FIRST 5 ROWS ONLY",
+    "rows": [
+      [
+        "1000024",
+        "134",
+        "N",
+        "1",
+        "Created = 1"
+      ]
+    ]
+  },
+  "selected_order": "50000",
+  "invoice_document": "100001",
+  "process_submitted_once": true,
+  "parameters": {
+    "document_action": "Complete",
+    "date_invoiced": "2026-11-04",
+    "consolidate": true,
+    "run_as_job": false
+  }
+}

@@ -25,7 +25,10 @@ completes and posts a real shipment through the UI, with balanced entries in two
 accounting schemas and one stock movement. Subsequent
 [scalar-subquery defaults](evidence/scalar-subquery-defaults-2026-11-04/README.md)
 and [numeric pictures](evidence/numeric-format-pictures-2026-11-04/README.md)
-have independent Oracle/PostgreSQL reference evidence. Invoicing, payments,
+have independent Oracle/PostgreSQL reference evidence. The subsequent
+[invoice checkpoint](evidence/idempiere-invoice-posting-2026-11-04/README.md)
+generates, completes and posts one invoice through the standard UI, with balanced
+entries in both accounting schemas and no repeated stock movement. Payments,
 remaining application workflows and the broader programme remain unqualified.
 The checkpoint history below records what was measured at each earlier stage.
 

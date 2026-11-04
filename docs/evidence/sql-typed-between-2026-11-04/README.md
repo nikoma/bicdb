@@ -60,3 +60,10 @@ changed between the full suites and that test-only refinement. The
 [retained RAW comparisons](retained-raw-comparison.json) pass 13/13 in each
 profile. Formatting checks passed. The two native reference failures above
 remain visible and are separate from the passing local Rust suites.
+
+## Subsequent evaluation qualification
+
+The [evaluation-context checkpoint](../sql-between-evaluation-2026-11-04/README.md)
+closes both native volatile-evaluation differences above and retains all typed
+boundary cases: 16/16 for Oracle and PostgreSQL independently. The earlier
+14/16 result remains preserved here as historical evidence.

@@ -28,8 +28,11 @@ workflows; the full application and broader programme remain incomplete.
 The [typed BETWEEN checkpoint](evidence/sql-typed-between-2026-11-04/README.md)
 retains datetime operand types at range boundaries. It preserves 16/16 explicit
 Oracle controls and improves PostgreSQL comparisons from 4/16 to 14/16. Two
-pre-existing PostgreSQL volatile-evaluation differences remain explicitly
-unqualified; the separate application checkpoint above now verifies the selected rendering workflow.
+pre-existing PostgreSQL volatile-evaluation differences were unqualified at
+that checkpoint. The subsequent [evaluation-context checkpoint](evidence/sql-between-evaluation-2026-11-04/README.md)
+closes both, retaining 16/16 typed-boundary cases in each profile, and passes
+19 Oracle / 20 PostgreSQL SQL/procedural evaluation cases. The separate
+application checkpoint above verifies the selected rendering workflow.
 
 The [RAW conversion checkpoint](evidence/oracle-raw-character-conversion-2026-11-04/README.md)
 corrects implicit hexadecimal character conversion for proven RAW intrinsic

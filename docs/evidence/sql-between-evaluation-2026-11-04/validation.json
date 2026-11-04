@@ -1,0 +1,109 @@
+{
+  "source_commit": "5778ea6836f5a85a31623917977dfedf78361768",
+  "binary_sha256": "1b51e69b705a800bf1b3d18b18c108d5491984945f1936a1b5a96d75282c733b",
+  "steps": [
+    {
+      "name": "sql",
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 604,
+          "failed": 0,
+          "ignored": 3
+        }
+      ]
+    },
+    {
+      "name": "pgwire",
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 122,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 36,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 169,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "build",
+      "returncode": 0,
+      "counts": []
+    }
+  ],
+  "formatting_passed": true,
+  "diff_check_passed": true,
+  "reference_comparisons": {
+    "oracle": 19,
+    "postgres": 20,
+    "typed_each_profile": 16,
+    "raw_each_profile": 13
+  },
+  "application_qualified": false,
+  "memory_guard": {
+    "start_available_gib": 14.0,
+    "minimum_available_gib": 8,
+    "peak_group_rss_bytes": 2742345728,
+    "minimum_observed_available_bytes": 16155471872
+  },
+  "ci_status": "Not claimed by this local validation record"
+}

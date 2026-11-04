@@ -1,0 +1,1580 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "5c28d769107422fc0869bebc44490194e9cae0e8ee7177ac9c4bfc4857dac44c",
+  "fixture_sha256": "269ca61e45ffa74b13a7d1d2ae3605fd43e9aff9756cdeabbdb6e0ea14b092a5",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "sql_equal",
+          "source": {
+            "id": "sql_equal",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_equal",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_inside",
+          "source": {
+            "id": "sql_inside",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_inside",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_lower_false",
+          "source": {
+            "id": "sql_lower_false",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_lower_false",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_false_skips_high",
+          "source": {
+            "id": "sql_false_skips_high",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_false_skips_high",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_order_both_bounds",
+          "source": {
+            "id": "sql_order_both_bounds",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "4"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "4"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_order_both_bounds",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "4"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_false_both_bounds",
+          "source": {
+            "id": "sql_false_both_bounds",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_false_both_bounds",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_not_between",
+          "source": {
+            "id": "sql_not_between",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_not_between",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_equal",
+          "source": {
+            "id": "procedure_equal",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_equal",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_inside",
+          "source": {
+            "id": "procedure_inside",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_inside",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_lower_false",
+          "source": {
+            "id": "procedure_lower_false",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_lower_false",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_false_skips_high",
+          "source": {
+            "id": "procedure_false_skips_high",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_false_skips_high",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_order_both_bounds",
+          "source": {
+            "id": "procedure_order_both_bounds",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "3"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "3"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_order_both_bounds",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "3"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_false_both_bounds",
+          "source": {
+            "id": "procedure_false_both_bounds",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_false_both_bounds",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_not_between",
+          "source": {
+            "id": "procedure_not_between",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_not_between",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_runtime_null_low",
+          "source": {
+            "id": "procedure_runtime_null_low",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_runtime_null_low",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_runtime_null_high",
+          "source": {
+            "id": "procedure_runtime_null_high",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_runtime_null_high",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_runtime_both_null",
+          "source": {
+            "id": "procedure_runtime_both_null",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_runtime_both_null",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "embedded_sql_equal",
+          "source": {
+            "id": "embedded_sql_equal",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_equal",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "anonymous_equal",
+          "source": {
+            "id": "anonymous_equal",
+            "expected": {
+              "value": null,
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": null,
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "anonymous_equal",
+            "expected": {
+              "value": null,
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "SyntaxError",
+            "sqlstate": "42601",
+            "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: DO at Line: 1, Column: 1",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        }
+      ],
+      "total": 19,
+      "matched": 0,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": false
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "sql_equal",
+          "source": {
+            "id": "sql_equal",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_equal",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_inside",
+          "source": {
+            "id": "sql_inside",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_inside",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_lower_false",
+          "source": {
+            "id": "sql_lower_false",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_lower_false",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_false_skips_high",
+          "source": {
+            "id": "sql_false_skips_high",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_false_skips_high",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_order_both_bounds",
+          "source": {
+            "id": "sql_order_both_bounds",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "4"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "4"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_order_both_bounds",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "4"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_false_both_bounds",
+          "source": {
+            "id": "sql_false_both_bounds",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_false_both_bounds",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_not_between",
+          "source": {
+            "id": "sql_not_between",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_not_between",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_equal",
+          "source": {
+            "id": "procedure_equal",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_equal",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_inside",
+          "source": {
+            "id": "procedure_inside",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_inside",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_lower_false",
+          "source": {
+            "id": "procedure_lower_false",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_lower_false",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_false_skips_high",
+          "source": {
+            "id": "procedure_false_skips_high",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_false_skips_high",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "1"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_order_both_bounds",
+          "source": {
+            "id": "procedure_order_both_bounds",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "4"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "4"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_order_both_bounds",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "4"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_false_both_bounds",
+          "source": {
+            "id": "procedure_false_both_bounds",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_false_both_bounds",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_not_between",
+          "source": {
+            "id": "procedure_not_between",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_not_between",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_runtime_null_low",
+          "source": {
+            "id": "procedure_runtime_null_low",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "3"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "3"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_runtime_null_low",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "3"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_runtime_null_high",
+          "source": {
+            "id": "procedure_runtime_null_high",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_runtime_null_high",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "procedure_runtime_both_null",
+          "source": {
+            "id": "procedure_runtime_both_null",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_runtime_both_null",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "embedded_sql_equal",
+          "source": {
+            "id": "embedded_sql_equal",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_equal",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "anonymous_equal",
+          "source": {
+            "id": "anonymous_equal",
+            "expected": {
+              "value": null,
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": null,
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "anonymous_equal",
+            "expected": {
+              "value": null,
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "SyntaxError",
+            "sqlstate": "42601",
+            "detail": "invalid SQL: sql parser error: Expected: an SQL statement, found: DO at Line: 1, Column: 1",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "sql_tuple",
+          "source": {
+            "id": "sql_tuple",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_tuple",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "sequence": {
+                "number": "2"
+              }
+            },
+            "exception": "FeatureNotSupported",
+            "sqlstate": "0A000",
+            "detail": "unsupported PL/pgSQL feature: RETURN NEXT is not implemented",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        }
+      ],
+      "total": 20,
+      "matched": 0,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": false
+    }
+  },
+  "cleanup_complete": true
+}

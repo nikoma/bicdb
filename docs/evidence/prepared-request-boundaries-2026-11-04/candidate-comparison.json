@@ -1,0 +1,678 @@
+{
+  "binary_sha256": "553af9735efdd884a90b74f4cbab1182ea71fef6418913e0ff9d5c2dd13b4502",
+  "application_qualified": false,
+  "profiles": {
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "select_batch_rejected",
+          "source": {
+            "id": "select_batch_rejected",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "select_batch_rejected",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "write_batch_rejected",
+          "source": {
+            "id": "write_batch_rejected",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "write_batch_rejected",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rejected_batch_did_not_write",
+          "source": {
+            "id": "rejected_batch_did_not_write",
+            "expected": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "rejected_batch_did_not_write",
+            "expected": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_semicolon",
+          "source": {
+            "id": "quoted_semicolon",
+            "expected": [
+              [
+                ";"
+              ]
+            ],
+            "actual": [
+              [
+                ";"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_semicolon",
+            "expected": [
+              [
+                ";"
+              ]
+            ],
+            "actual": [
+              [
+                ";"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "trailing_delimiters_comments",
+          "source": {
+            "id": "trailing_delimiters_comments",
+            "expected": [
+              [
+                ";"
+              ]
+            ],
+            "actual": [
+              [
+                ";"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "trailing_delimiters_comments",
+            "expected": [
+              [
+                ";"
+              ]
+            ],
+            "actual": [
+              [
+                ";"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "routine_body",
+          "source": {
+            "id": "routine_body",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "routine_body",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "routine_execution",
+          "source": {
+            "id": "routine_execution",
+            "expected": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "routine_execution",
+            "expected": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "transaction_parse_error",
+          "source": {
+            "id": "transaction_parse_error",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "transaction_parse_error",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "transaction_aborted",
+          "source": {
+            "id": "transaction_aborted",
+            "expected": "25P02",
+            "sqlstate": "25P02",
+            "exception": "InFailedSqlTransaction",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "transaction_aborted",
+            "expected": "25P02",
+            "sqlstate": "25P02",
+            "exception": "InFailedSqlTransaction",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "transaction_recovered",
+          "source": {
+            "id": "transaction_recovered",
+            "expected": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "transaction_recovered",
+            "expected": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "simple_query_batch_retained",
+          "source": {
+            "id": "simple_query_batch_retained",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "simple_query_batch_retained",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 11,
+      "matched": 11,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true
+    },
+    "oracle-preview-v1": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "select_batch_rejected",
+          "source": {
+            "id": "select_batch_rejected",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "select_batch_rejected",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "write_batch_rejected",
+          "source": {
+            "id": "write_batch_rejected",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "write_batch_rejected",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rejected_batch_did_not_write",
+          "source": {
+            "id": "rejected_batch_did_not_write",
+            "expected": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "rejected_batch_did_not_write",
+            "expected": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_semicolon",
+          "source": {
+            "id": "quoted_semicolon",
+            "expected": [
+              [
+                ";"
+              ]
+            ],
+            "actual": [
+              [
+                ";"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_semicolon",
+            "expected": [
+              [
+                ";"
+              ]
+            ],
+            "actual": [
+              [
+                ";"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "trailing_delimiters_comments",
+          "source": {
+            "id": "trailing_delimiters_comments",
+            "expected": [
+              [
+                ";"
+              ]
+            ],
+            "actual": [
+              [
+                ";"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "trailing_delimiters_comments",
+            "expected": [
+              [
+                ";"
+              ]
+            ],
+            "actual": [
+              [
+                ";"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "routine_body",
+          "source": {
+            "id": "routine_body",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "routine_body",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "routine_execution",
+          "source": {
+            "id": "routine_execution",
+            "expected": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "routine_execution",
+            "expected": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "transaction_parse_error",
+          "source": {
+            "id": "transaction_parse_error",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "transaction_parse_error",
+            "expected": "42601",
+            "sqlstate": "42601",
+            "exception": "SyntaxError",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "transaction_aborted",
+          "source": {
+            "id": "transaction_aborted",
+            "expected": "25P02",
+            "sqlstate": "25P02",
+            "exception": "InFailedSqlTransaction",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "transaction_aborted",
+            "expected": "25P02",
+            "sqlstate": "25P02",
+            "exception": "InFailedSqlTransaction",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "transaction_recovered",
+          "source": {
+            "id": "transaction_recovered",
+            "expected": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "transaction_recovered",
+            "expected": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "simple_query_batch_retained",
+          "source": {
+            "id": "simple_query_batch_retained",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "simple_query_batch_retained",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 11,
+      "matched": 11,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true
+    }
+  },
+  "cleanup_complete": true,
+  "fixture_source_sha256": "fc6b97895497cb07323398365374a8c9ac793f4ff1db64da5f41fb5763217186"
+}

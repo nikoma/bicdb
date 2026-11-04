@@ -1,0 +1,17 @@
+{
+  "source_commit": "7fccde8d2a9d21a78bf372092c5e213a14ebcfeb",
+  "all_pgwire_tests": {
+    "passed": 363,
+    "failed": 0,
+    "ignored": 2,
+    "suites": 14
+  },
+  "focused_original_routine_regression": true,
+  "oracle_hr_tests": 36,
+  "python_migration_tests": 30,
+  "prepared_reference_cases_per_profile": 11,
+  "retained_oracle_cases": 14,
+  "retained_postgres_cases": 14,
+  "application_qualified": false,
+  "application_upgrade_verified": false
+}

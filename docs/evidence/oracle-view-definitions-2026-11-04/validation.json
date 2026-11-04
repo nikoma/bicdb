@@ -1,0 +1,101 @@
+{
+  "format": 1,
+  "runtime_source_commit": "c3f2bc746ba6f16a24f94ee5549483d691a79a7b",
+  "fixture_source_commit": "c1383bc498fc96a993dbf39df6d66fb2f6ac7cc9",
+  "runtime_binary_sha256": "94ae64a04c4b4565102a835cb367d22103574006b7c919af6e7b327a6d69d4e8",
+  "build": "development, unoptimized, debug=0",
+  "routine_compiler": 26,
+  "durable_metadata_format": 5,
+  "application_qualified": false,
+  "release_published": false,
+  "production_deployment_verified": false,
+  "checks": {
+    "rust_passed_executions": 1506,
+    "rust_batches": [
+      595,
+      7,
+      29,
+      17,
+      2,
+      60,
+      419,
+      6,
+      5,
+      121,
+      32,
+      169,
+      3,
+      4,
+      1,
+      6,
+      4,
+      2,
+      8,
+      8,
+      8
+    ],
+    "rust_ignored": 3,
+    "python_reference_passed": 25,
+    "python_migration_passed": 30,
+    "python_hr_passed": 3,
+    "format": "passed",
+    "diff": "passed",
+    "licenses": "passed",
+    "open_core_boundary": "passed",
+    "oracle_new_fixture_cases": 18,
+    "postgres_new_fixture_cases": 18,
+    "oracle_describe_retained": 9,
+    "postgres_describe_retained": 9,
+    "oracle_join_retained": 23,
+    "postgres_join_retained": 23,
+    "reader_retention_checks": 24,
+    "application_definitions_accepted": 160,
+    "application_exact_view_descriptions": 160,
+    "application_type_families_matched": 160,
+    "application_view_columns": 11983,
+    "ci": "Local qualification; resulting merge GitHub CI tracked separately"
+  },
+  "resources": {
+    "build_and_regression": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 4698132480,
+      "minimum_observed_available_bytes": 17205207040
+    },
+    "application_definition_and_type_read": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 1158791168,
+      "minimum_observed_available_bytes": 17082458112
+    },
+    "initial_cleanup": {
+      "format": 1,
+      "removed_files": 15,
+      "reclaimed_bytes": 4709245208,
+      "by_category": {
+        "completed_test_executable": {
+          "files": 15,
+          "bytes": 4709245208
+        }
+      },
+      "current_example_binary_preserved": true
+    },
+    "final_cleanup": {
+      "format": 1,
+      "removed_files": 16,
+      "reclaimed_bytes": 5037215816,
+      "by_category": {
+        "completed_test_executable": {
+          "files": 16,
+          "bytes": 5037215816
+        }
+      },
+      "current_example_binary_preserved": true
+    },
+    "remaining_target_size": "7.5 GiB"
+  }
+}

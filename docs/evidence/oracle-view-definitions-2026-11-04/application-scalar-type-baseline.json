@@ -1,0 +1,30 @@
+{
+  "application_qualified": false,
+  "runtime_binary_sha256": "61e6e409c06bb6cf027bcdeed8feeb8fc54d9fc9aa00286ddd72340ba16012e3",
+  "definitions_accepted": 160,
+  "view_names_matched": 160,
+  "view_type_families_matched": 159,
+  "total": 160,
+  "success": false,
+  "mismatches": [
+    {
+      "view": "RV_M_FORECAST",
+      "column": "PRICELIST",
+      "source_type": "DB_TYPE_NUMBER",
+      "target_oid": 25
+    },
+    {
+      "view": "RV_M_FORECAST",
+      "column": "PRICESTD",
+      "source_type": "DB_TYPE_NUMBER",
+      "target_oid": 25
+    },
+    {
+      "view": "RV_M_FORECAST",
+      "column": "PRICELIMIT",
+      "source_type": "DB_TYPE_NUMBER",
+      "target_oid": 25
+    }
+  ],
+  "complete_private_report_sha256": "37622df59ad62fc13ff3e1f434e58acb915026d93c44e87446729a16eb2ad150"
+}

@@ -1,0 +1,593 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "reference_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "direct_description",
+      "source": {
+        "id": "direct_description",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "actual": {
+          "columns": [
+            "ID",
+            "AMOUNT",
+            "SEEN",
+            "MARKER"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "direct_description",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "actual": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "direct_rows",
+      "source": {
+        "id": "direct_rows",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "12.5"
+              },
+              "2024-02-29T12:34:56.123456",
+              "match"
+            ],
+            [
+              {
+                "number": "2"
+              },
+              null,
+              null,
+              null
+            ]
+          ]
+        },
+        "actual": {
+          "columns": [
+            "ID",
+            "AMOUNT",
+            "SEEN",
+            "MARKER"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "12.5"
+              },
+              "2024-02-29T12:34:56.123456",
+              "match"
+            ],
+            [
+              {
+                "number": "2"
+              },
+              null,
+              null,
+              null
+            ]
+          ]
+        },
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "direct_rows",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "12.5"
+              },
+              "2024-02-29T12:34:56.123456",
+              "match"
+            ],
+            [
+              {
+                "number": "2"
+              },
+              null,
+              null,
+              null
+            ]
+          ]
+        },
+        "actual": {
+          "columns": [
+            "ID",
+            "AMOUNT",
+            "SEEN",
+            "MARKER"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "12.5"
+              },
+              "2024-02-29T12:34:56.123456",
+              "match"
+            ],
+            [
+              {
+                "number": "2"
+              },
+              null,
+              null,
+              null
+            ]
+          ]
+        },
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_description",
+      "source": {
+        "id": "empty_description",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "actual": {
+          "columns": [
+            "ID",
+            "AMOUNT",
+            "SEEN",
+            "MARKER"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "empty_description",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "actual": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "stored_view_description",
+      "source": {
+        "id": "stored_view_description",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "actual": {
+          "columns": [
+            "ID",
+            "AMOUNT",
+            "SEEN",
+            "MARKER"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "stored_view_description",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "actual": {
+          "columns": [
+            "ID",
+            "AMOUNT",
+            "SEEN",
+            "MARKER"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "stored_view_rows",
+      "source": {
+        "id": "stored_view_rows",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "12.5"
+              },
+              "2024-02-29T12:34:56.123456",
+              "match"
+            ],
+            [
+              {
+                "number": "2"
+              },
+              null,
+              null,
+              null
+            ]
+          ]
+        },
+        "actual": {
+          "columns": [
+            "ID",
+            "AMOUNT",
+            "SEEN",
+            "MARKER"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "12.5"
+              },
+              "2024-02-29T12:34:56.123456",
+              "match"
+            ],
+            [
+              {
+                "number": "2"
+              },
+              null,
+              null,
+              null
+            ]
+          ]
+        },
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "stored_view_rows",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "12.5"
+              },
+              "2024-02-29T12:34:56.123456",
+              "match"
+            ],
+            [
+              {
+                "number": "2"
+              },
+              null,
+              null,
+              null
+            ]
+          ]
+        },
+        "actual": {
+          "columns": [
+            "ID",
+            "AMOUNT",
+            "SEEN",
+            "MARKER"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "12.5"
+              },
+              "2024-02-29T12:34:56.123456",
+              "match"
+            ],
+            [
+              {
+                "number": "2"
+              },
+              null,
+              null,
+              null
+            ]
+          ]
+        },
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "fresh_view_empty_description",
+      "source": {
+        "id": "fresh_view_empty_description",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "actual": {
+          "columns": [
+            "ID",
+            "AMOUNT",
+            "SEEN",
+            "MARKER"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "fresh_view_empty_description",
+        "expected": {
+          "columns": [
+            "id",
+            "amount",
+            "seen",
+            "marker"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "actual": {
+          "columns": [
+            "ID",
+            "AMOUNT",
+            "SEEN",
+            "MARKER"
+          ],
+          "types": [
+            "number",
+            "number",
+            "timestamp",
+            "text"
+          ]
+        },
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "total": 6,
+  "matched": 6,
+  "cleanup_errors": [],
+  "source_qualified": true,
+  "success": true,
+  "target_sql_profile": "oracle-preview-v1",
+  "reference": "oracle",
+  "oracle_disable_oob": false,
+  "runtime_binary_sha256": "94ae64a04c4b4565102a835cb367d22103574006b7c919af6e7b327a6d69d4e8",
+  "fixture_source_sha256": "54c571702d690cb1a9fdab33fa7dd6bf0b94431a38300c01bb12dfc57e3e86cf",
+  "comparison_exit_status": 0,
+  "target_qualified_cases": 6
+}

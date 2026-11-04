@@ -1,0 +1,6 @@
+{
+  "scope": "Dropped nonce tables from the four current reference fixtures only",
+  "before_owned": 31,
+  "after_owned": 0,
+  "success": true
+}

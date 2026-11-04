@@ -298,6 +298,87 @@ mod tests {
         SqlSession::new(db).execute(&sql)
     }
 
+    #[test]
+    fn ordinary_union_views_derive_typed_metadata_without_executing_their_definitions() {
+        for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            {
+                let mut db = BicDb::open(root.path()).unwrap();
+                oracle::ensure_database_profile(&mut db, profile).unwrap();
+                for sql in [
+                    "CREATE TABLE metadata_source(id INTEGER,v NUMERIC(10,2))",
+                    "INSERT INTO metadata_source VALUES(1,1.25)",
+                    "CREATE VIEW union_metadata(\"RowKey\",\"Amount\") AS SELECT id,v FROM metadata_source UNION ALL SELECT id+1,v+1 FROM metadata_source",
+                    "CREATE VIEW deferred_error AS SELECT id,CAST(1 AS NUMERIC)/0 AS value FROM metadata_source UNION ALL SELECT id,v FROM metadata_source",
+                ] { execute(&mut db,sql,profile).unwrap(); }
+            }
+            let mut db = BicDb::open(root.path()).unwrap();
+            let rows =
+                execute(&mut db, "SELECT * FROM union_metadata ORDER BY 1", profile).unwrap();
+            assert_eq!(rows.columns, vec!["RowKey", "Amount"]);
+            assert_eq!(
+                rows.rows
+                    .iter()
+                    .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                    .collect::<Vec<_>>(),
+                vec![
+                    vec!["1".to_string(), "1.25".to_string()],
+                    vec!["2".to_string(), "2.25".to_string()]
+                ]
+            );
+            assert_eq!(rows.column_types[1], Some("numeric".into()));
+            let error = execute(&mut db, "SELECT * FROM deferred_error", profile).unwrap_err();
+            assert!(
+                error.to_string().contains("division by zero"),
+                "{profile}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn joined_scalar_subqueries_keep_declared_types_with_empty_correlations_and_reopen() {
+        for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            {
+                let mut db = BicDb::open(root.path()).unwrap();
+                oracle::ensure_database_profile(&mut db, profile).unwrap();
+                for sql in [
+                    "CREATE TABLE scalar_outer(id INTEGER)",
+                    "CREATE TABLE scalar_versions(id INTEGER)",
+                    "CREATE TABLE scalar_values(version_id INTEGER,owner_id INTEGER,amount NUMERIC(10,2),seen TIMESTAMP,marker VARCHAR(8))",
+                    "INSERT INTO scalar_outer VALUES(1),(2)",
+                    "INSERT INTO scalar_versions VALUES(11)",
+                    "INSERT INTO scalar_values VALUES(11,1,12.50,TIMESTAMP '2024-02-29 12:34:56','match')",
+                ] {execute(&mut db,sql,profile).unwrap();}
+                let inner="FROM scalar_versions v JOIN scalar_values x ON v.id=x.version_id WHERE x.owner_id=o.id";
+                let sql=format!("CREATE VIEW scalar_metadata AS SELECT o.id,(SELECT x.amount {inner}) AS amount,(SELECT x.seen {inner}) AS seen,(SELECT x.marker {inner}) AS marker FROM scalar_outer o");
+                execute(&mut db, &sql, profile).unwrap();
+            }
+            let mut db = BicDb::open(root.path()).unwrap();
+            let result =
+                execute(&mut db, "SELECT * FROM scalar_metadata ORDER BY 1", profile).unwrap();
+            assert_eq!(
+                &result.column_types[1..],
+                &[
+                    Some("numeric".into()),
+                    Some("timestamp".into()),
+                    Some("varchar".into())
+                ]
+            );
+            assert_eq!(result.rows[0][1].to_cell(), "12.50");
+            assert_eq!(result.rows[0][2].to_cell(), "2024-02-29 12:34:56");
+            assert_eq!(result.rows[0][3].to_cell(), "match");
+            assert_eq!(
+                &result.rows[1][1..],
+                &[SqlValue::Null, SqlValue::Null, SqlValue::Null]
+            );
+            let empty =
+                execute(&mut db, "SELECT * FROM scalar_metadata WHERE 1=0", profile).unwrap();
+            assert!(empty.rows.is_empty());
+            assert_eq!(empty.column_types, result.column_types);
+        }
+    }
+
     fn fixture(profile: &str) -> (tempfile::TempDir, BicDb) {
         let directory = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(directory.path()).unwrap();

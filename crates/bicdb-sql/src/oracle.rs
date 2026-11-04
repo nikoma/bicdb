@@ -1291,6 +1291,37 @@ fn canonical_tokens_with_routine_types(
         if let Token::Word(w) = t {
             let upper = w.value.to_ascii_uppercase();
             if w.quote_style.is_none() {
+                // Treat the ANSI varying-character phrase as a type, while
+                // retaining ordinary column/alias pairs such as
+                // SELECT character varying FROM identifiers.
+                if matches!(upper.as_str(), "CHAR" | "CHARACTER")
+                    && source.get(i + 1).is_some_and(|t| word(t, "VARYING"))
+                    && (source.get(i + 2) == Some(&Token::LParen)
+                        || i == 0
+                        || source.get(i.wrapping_sub(1)).is_some_and(|t| {
+                            word(t, "AS") || word(t, "RETURN") || word(t, "RETURNS")
+                        }))
+                {
+                    if source.get(i + 2) == Some(&Token::LParen)
+                        && matches!(source.get(i + 3), Some(Token::Number(..)))
+                        && source
+                            .get(i + 4)
+                            .is_some_and(|t| word(t, "CHAR") || word(t, "BYTE"))
+                        && source.get(i + 5) == Some(&Token::RParen)
+                    {
+                        let unit = if word(&source[i + 4], "CHAR") {
+                            "CHARACTERS"
+                        } else {
+                            "OCTETS"
+                        };
+                        pieces.push(format!("VARCHAR({} {unit})", source[i + 3]));
+                        i += 6;
+                    } else {
+                        pieces.push("VARCHAR".into());
+                        i += 2;
+                    }
+                    continue;
+                }
                 if preview
                     && i >= 2
                     && source[i - 1] == Token::LParen
@@ -1755,6 +1786,57 @@ fn lower_native(db: &BicDb, sql: &str, preview: bool, namespace: Option<&str>) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ansi_varying_character_types_preserve_lengths_and_identifier_positions() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        for kind in ["CHARACTER VARYING(6)", "CHAR VARYING(6)", "VARCHAR(6)"] {
+            let source = format!("SELECT CAST('en_US' AS {kind}) AS locale_value FROM DUAL");
+            let sql = lower_profile_sql(&db, &source, ORACLE_PREVIEW_PROFILE).unwrap();
+            let value = SqlSession::new(&mut db).execute(&sql).unwrap();
+            assert_eq!(value.rows[0][0].to_cell(), "en_US");
+            assert_eq!(value.column_types, vec![Some("varchar".into())]);
+        }
+        for source in [
+            "CREATE TABLE varying_units(b CHARACTER VARYING(3 BYTE),c CHAR VARYING(3 CHAR))",
+            "INSERT INTO varying_units VALUES('é','😀')",
+            "CREATE VIEW varying_view AS SELECT CAST(b AS CHARACTER VARYING(6)) AS label FROM varying_units",
+            "CREATE TABLE identifier_words(character NUMBER, varying NUMBER)",
+            "INSERT INTO identifier_words VALUES(7,9)",
+        ] {
+            let sql=lower_profile_sql(&db,source,ORACLE_PREVIEW_PROFILE).unwrap();
+            SqlSession::new(&mut db).execute(&sql).unwrap();
+        }
+        let sql = lower_profile_sql(
+            &db,
+            "INSERT INTO varying_units VALUES('😀','a')",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        assert!(SqlSession::new(&mut db).execute(&sql).is_err());
+        let sql = lower_profile_sql(
+            &db,
+            "SELECT character varying FROM identifier_words",
+            ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        let result = SqlSession::new(&mut db).execute(&sql).unwrap();
+        assert_eq!(result.rows[0][0].to_cell(), "7");
+        assert_eq!(result.columns, vec!["VARYING"]);
+        let sql =
+            lower_profile_sql(&db, "SELECT * FROM varying_view", ORACLE_PREVIEW_PROFILE).unwrap();
+        assert_eq!(
+            SqlSession::new(&mut db).execute(&sql).unwrap().rows[0][0].to_cell(),
+            "é"
+        );
+        let native_root = tempfile::tempdir().unwrap();
+        let mut native = BicDb::open(native_root.path()).unwrap();
+        let value = SqlSession::new(&mut native)
+            .execute("SELECT CAST('abcdefg' AS CHARACTER VARYING(6))")
+            .unwrap();
+        assert_eq!(value.rows[0][0].to_cell(), "abcdef");
+    }
     #[test]
     fn preview_table_qualifiers_survive_schema_binding_in_filters_and_correlations() {
         let root = tempfile::tempdir().unwrap();

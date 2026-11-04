@@ -1,0 +1,154 @@
+{
+  "application_qualified": false,
+  "runtime_binary_sha256": "94ae64a04c4b4565102a835cb367d22103574006b7c919af6e7b327a6d69d4e8",
+  "prior_binary_sha256": "73bd840fc20119c2b0dd23f0618c11a7b9b0ddbf05bd73f037f78efb358d0134",
+  "application_database_opened_with_old_reader": false,
+  "cases": [
+    {
+      "profile": "postgres",
+      "stage": "new",
+      "id": "stored_union_values",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "stage": "new",
+      "id": "stored_joined_scalar_type_and_value",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "stage": "new",
+      "id": "describe_does_not_evaluate_error",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "stage": "new",
+      "id": "error_deferred_until_execution",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "stage": "prior",
+      "id": "stored_union_values",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "stage": "prior",
+      "id": "stored_joined_scalar_type_and_value",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "stage": "prior",
+      "id": "describe_does_not_evaluate_error",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "stage": "prior",
+      "id": "error_deferred_until_execution",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "stage": "new_after_prior",
+      "id": "stored_union_values",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "stage": "new_after_prior",
+      "id": "stored_joined_scalar_type_and_value",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "stage": "new_after_prior",
+      "id": "describe_does_not_evaluate_error",
+      "success": true
+    },
+    {
+      "profile": "postgres",
+      "stage": "new_after_prior",
+      "id": "error_deferred_until_execution",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "new",
+      "id": "stored_union_values",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "new",
+      "id": "stored_joined_scalar_type_and_value",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "new",
+      "id": "describe_does_not_evaluate_error",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "new",
+      "id": "error_deferred_until_execution",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "prior",
+      "id": "stored_union_values",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "prior",
+      "id": "stored_joined_scalar_type_and_value",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "prior",
+      "id": "describe_does_not_evaluate_error",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "prior",
+      "id": "error_deferred_until_execution",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "new_after_prior",
+      "id": "stored_union_values",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "new_after_prior",
+      "id": "stored_joined_scalar_type_and_value",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "new_after_prior",
+      "id": "describe_does_not_evaluate_error",
+      "success": true
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "stage": "new_after_prior",
+      "id": "error_deferred_until_execution",
+      "success": true
+    }
+  ],
+  "total": 24,
+  "success": true
+}

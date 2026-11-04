@@ -1884,28 +1884,26 @@ pub(crate) fn scalar_subquery_pg_type(
     };
     match select.from.as_slice() {
         [] => projected_expr_pg_type_with_db(db, expr),
-        [from] if from.joins.is_empty() => {
-            let TableFactor::Table {
-                name, args: None, ..
-            } = &from.relation
-            else {
-                return None;
-            };
-            if shadowed(&object_name(name).ok()?) {
-                return None;
+        from if !from.is_empty() => {
+            for table in from {
+                for factor in std::iter::once(&table.relation)
+                    .chain(table.joins.iter().map(|join| &join.relation))
+                {
+                    let TableFactor::Table {
+                        name, args: None, ..
+                    } = factor
+                    else {
+                        return None;
+                    };
+                    if shadowed(&object_name(name).ok()?) {
+                        return None;
+                    }
+                }
             }
-            // Catalog lookup must use the same relation identity as execution:
-            // public qualifiers are elided and other schemas are encoded.
-            // Keep the SQL spelling above for the enclosing CTE shadow check.
-            let collection = relation_name(name).ok()?;
-            load_schema_shared(db, &collection).ok().flatten()?;
-            // Aggregate return types need the subquery's relation/alias
-            // environment. The schema-only helper cannot type MAX(alias.n)
-            // and used to advertise int8 from the observed value instead of
-            // the declared int4, including for an empty scalar subquery.
-            let engine = SqlEngine::new(db);
-            let env = engine.from_relation_columns(&select.from)?;
-            engine.infer_env_expr_type(expr, &env)
+            // Use every local source, independently of row counts and WHERE
+            // correlation. A caller without a CTE environment must still
+            // decline shadowed names instead of resolving a base table.
+            SqlEngine::new(db).scalar_query_output_type(query)
         }
         _ => None,
     }

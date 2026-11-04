@@ -3071,11 +3071,17 @@ impl<'db> SqlEngine<'db> {
                 }
                 self.common_branch_type(&branches, env)
             }
-            Expr::Subquery(query) => scalar_subquery_pg_type(self.db_ref(), query, &|name| {
-                self.ctes.contains_key(&cte_key(name))
-            }),
+            Expr::Subquery(query) => self.scalar_query_output_type(query),
             _ => None,
         }
+    }
+
+    pub(crate) fn scalar_query_output_type(&self, query: &Query) -> Option<String> {
+        let columns = self.query_output_columns(query)?;
+        let [(_, kind)] = columns.as_slice() else {
+            return None;
+        };
+        kind.clone()
     }
 
     /// Result type of a function call. Aggregates follow PostgreSQL rules
@@ -3091,13 +3097,7 @@ impl<'db> SqlEngine<'db> {
         let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
         // ARRAY(SELECT x ...) is an array of the subquery column's type.
         if let (true, FunctionArguments::Subquery(query)) = (bare_name == "array", &function.args) {
-            let element = scalar_subquery_pg_type(self.db_ref(), query, &|name| {
-                self.ctes.contains_key(&cte_key(name))
-            })
-            .or_else(|| match self.query_output_columns(query)?.as_slice() {
-                [(_, pg_type)] => pg_type.clone(),
-                _ => None,
-            })?;
+            let element = self.scalar_query_output_type(query)?;
             return Some(if element.ends_with("[]") {
                 element
             } else {

@@ -34,8 +34,12 @@ completes and posts the receipt and allocation, marks that invoice paid and
 verifies zero remaining balances, with balanced accounting in both schemas.
 The [bank checkpoint](evidence/idempiere-bank-reconciliation-2026-11-04/README.md)
 then reconciles the receipt, completes/posts one statement and verifies its
-bank balance and balanced accounting. Purchasing/payables, remaining application
-workflows and the broader programme remain unqualified.
+bank balance and balanced accounting. The selected
+[purchase order](evidence/idempiere-purchase-order-2026-11-04/README.md) and
+[material receipt](evidence/idempiere-material-receipt-2026-11-04/README.md)
+then complete through the original UI, with one +3 movement, purchase matching
+and balanced receipt accounting. Supplier invoicing, outbound payment, remaining
+application workflows and the broader programme remain unqualified.
 The checkpoint history below records what was measured at each earlier stage.
 
 The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used

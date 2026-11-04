@@ -38,6 +38,13 @@ struct RelationColumnMetadata {
 }
 
 fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
+    // A dollar-quoted anonymous body is one command with no wire parameters
+    // or result columns. Its procedural syntax is parsed at execution, just
+    // like a stored routine body; $1 inside it is not an outer bind marker.
+    if split_sql_statements(sql).len() == 1 && raw_do_block_body(sql)?.is_some() {
+        raw_do_block_language(sql)?;
+        return Ok(Vec::new());
+    }
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     reject_oversized_sql(sql_for_parse)?;
@@ -3336,6 +3343,7 @@ impl RecordLocators {
 /// the string-keyed map per statement.
 #[derive(Clone, Debug)]
 pub(crate) struct RoutineSlotBinding {
+    pub(crate) oracle_procedural_evaluation: bool,
     pub(crate) ids: Arc<FxHashMap<String, VarId>>,
     pub(crate) values: Rc<Vec<SqlValue>>,
     pub(crate) types: Arc<FxHashMap<String, RoutineTypeSchema>>,

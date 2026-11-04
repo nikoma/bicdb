@@ -4533,6 +4533,7 @@ struct RoutineIR {
     statements: Vec<RoutineStmt>,
     exception_handlers: Vec<RoutineExceptionHandler>,
     oracle_date_return: bool,
+    oracle_procedural_evaluation: bool,
     oracle_statement_rollback: bool,
     oracle_error_diagnostics: Option<oracle::errors::Diagnostics>,
     oracle_autonomous: bool,
@@ -4677,6 +4678,7 @@ fn set_expr_may_write(expr: &SetExpr) -> bool {
 struct RoutineFrame {
     // Derived from the stored routine language, never from its caller's profile.
     oracle_statement_rollback: bool,
+    oracle_procedural_evaluation: bool,
     active_exception: Option<Arc<SqlError>>,
     oracle_error_diagnostics: Option<oracle::errors::Diagnostics>,
     assignment_types: Arc<FxHashMap<String, RoutineTypeSchema>>,

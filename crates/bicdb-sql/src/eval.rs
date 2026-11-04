@@ -1014,14 +1014,11 @@ pub(crate) fn eval_constant_truth(expr: &Expr) -> Result<Option<bool>> {
             }
             eval_between_expr_truth(
                 [expr, low, high],
-                [
-                    eval_constant_expr(expr)?,
-                    eval_constant_expr(low)?,
-                    eval_constant_expr(high)?,
-                ],
                 *negated,
                 None,
                 None,
+                false,
+                eval_constant_expr,
             )
         }
         Expr::AnyOp {

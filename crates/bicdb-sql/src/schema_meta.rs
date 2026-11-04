@@ -4358,6 +4358,7 @@ impl RoutineFrame {
         let slot_count = template.slot_names.len();
         let mut frame = Self {
             oracle_statement_rollback: false,
+            oracle_procedural_evaluation: false,
             active_exception: None,
             oracle_error_diagnostics: None,
             assignment_types: Arc::clone(&template.assignment_types),
@@ -4556,6 +4557,7 @@ impl RoutineFrame {
     /// of the per-statement snapshot of the string-keyed map.
     pub(crate) fn slot_binding(&self) -> crate::engine::RoutineSlotBinding {
         crate::engine::RoutineSlotBinding {
+            oracle_procedural_evaluation: self.oracle_procedural_evaluation,
             ids: Arc::clone(&self.slot_ids),
             values: std::rc::Rc::clone(&self.slot_values),
             types: Arc::clone(&self.assignment_types),

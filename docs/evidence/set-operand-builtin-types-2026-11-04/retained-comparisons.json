@@ -1,0 +1,6010 @@
+{
+  "scalar": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "character",
+          "source": {
+            "id": "character",
+            "expected": [
+              [
+                "alpha"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "character",
+            "expected": [
+              [
+                "alpha"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "concatenation",
+          "source": {
+            "id": "concatenation",
+            "expected": [
+              [
+                "alpha_x"
+              ],
+              [
+                "_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha_x"
+              ],
+              [
+                "_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "concatenation",
+            "expected": [
+              [
+                "alpha_x"
+              ],
+              [
+                "_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha_x"
+              ],
+              [
+                "_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "nested_default",
+          "source": {
+            "id": "nested_default",
+            "expected": [
+              [
+                "alpha_x"
+              ],
+              [
+                "-1_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha_x"
+              ],
+              [
+                "-1_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nested_default",
+            "expected": [
+              [
+                "alpha_x"
+              ],
+              [
+                "-1_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha_x"
+              ],
+              [
+                "-1_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "number",
+          "source": {
+            "id": "number",
+            "expected": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "number",
+            "expected": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "date_arithmetic",
+          "source": {
+            "id": "date_arithmetic",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "date_arithmetic",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "timestamp_fraction",
+          "source": {
+            "id": "timestamp_fraction",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "timestamp_fraction",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "evaluation_order",
+          "source": {
+            "id": "evaluation_order",
+            "expected": "division_by_zero",
+            "exception": "DatabaseError",
+            "sqlstate": null,
+            "oracle_code": 1476,
+            "detail": "ORA-01476: divisor is equal to zero\nHelp: https://docs.oracle.com/error-help/db/ora-01476/",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "evaluation_order",
+            "expected": "division_by_zero",
+            "exception": "DivisionByZero",
+            "sqlstate": "22012",
+            "oracle_code": null,
+            "detail": "division by zero",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 7,
+      "matched": 7,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true,
+      "target_sql_profile": "oracle-preview-v1",
+      "reference": "oracle",
+      "oracle_disable_oob": false,
+      "runtime_binary_sha256": "64a3be06c438851f3a59a55c396aedcfea812699299dc38e5686a2c5b1c26366",
+      "fixture_source_sha256": "7add253b3b98f68b2781971a4af7c726fc8db641c4659524f9116e914025f0f9",
+      "comparison_exit_status": 0,
+      "target_qualified_cases": 7
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "character",
+          "source": {
+            "id": "character",
+            "expected": [
+              [
+                "alpha"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "character",
+            "expected": [
+              [
+                "alpha"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "concatenation",
+          "source": {
+            "id": "concatenation",
+            "expected": [
+              [
+                "alpha_x"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha_x"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "concatenation",
+            "expected": [
+              [
+                "alpha_x"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha_x"
+              ],
+              [
+                "none"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "nested_default",
+          "source": {
+            "id": "nested_default",
+            "expected": [
+              [
+                "alpha_x"
+              ],
+              [
+                "-1_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha_x"
+              ],
+              [
+                "-1_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nested_default",
+            "expected": [
+              [
+                "alpha_x"
+              ],
+              [
+                "-1_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "alpha_x"
+              ],
+              [
+                "-1_x"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "number",
+          "source": {
+            "id": "number",
+            "expected": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "number",
+            "expected": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "date_arithmetic",
+          "source": {
+            "id": "date_arithmetic",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "date_arithmetic",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "timestamp_fraction",
+          "source": {
+            "id": "timestamp_fraction",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "timestamp_fraction",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "evaluation_order",
+          "source": {
+            "id": "evaluation_order",
+            "expected": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "evaluation_order",
+            "expected": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "12.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 7,
+      "matched": 7,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true,
+      "target_sql_profile": "postgres",
+      "reference": "postgres",
+      "runtime_binary_sha256": "64a3be06c438851f3a59a55c396aedcfea812699299dc38e5686a2c5b1c26366",
+      "postgres_version_num": 180004,
+      "fixture_source_sha256": "7add253b3b98f68b2781971a4af7c726fc8db641c4659524f9116e914025f0f9"
+    }
+  },
+  "numeric": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "0",
+          "source": {
+            "id": "0",
+            "model": "999.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "0",
+            "model": "999.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "1",
+          "source": {
+            "id": "1",
+            "model": "999.99",
+            "literal": "0",
+            "expected": "    .00",
+            "actual": "    .00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "1",
+            "model": "999.99",
+            "literal": "0",
+            "expected": "    .00",
+            "actual": "    .00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "2",
+          "source": {
+            "id": "2",
+            "model": "999.99",
+            "literal": "12.5",
+            "expected": "  12.50",
+            "actual": "  12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "2",
+            "model": "999.99",
+            "literal": "12.5",
+            "expected": "  12.50",
+            "actual": "  12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "3",
+          "source": {
+            "id": "3",
+            "model": "999.99",
+            "literal": "-12.5",
+            "expected": " -12.50",
+            "actual": " -12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "3",
+            "model": "999.99",
+            "literal": "-12.5",
+            "expected": " -12.50",
+            "actual": " -12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "4",
+          "source": {
+            "id": "4",
+            "model": "999.99",
+            "literal": "1234.56",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "4",
+            "model": "999.99",
+            "literal": "1234.56",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "5",
+          "source": {
+            "id": "5",
+            "model": "999.99",
+            "literal": "-0.004",
+            "expected": "   -.00",
+            "actual": "   -.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "5",
+            "model": "999.99",
+            "literal": "-0.004",
+            "expected": "   -.00",
+            "actual": "   -.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "6",
+          "source": {
+            "id": "6",
+            "model": "999.99",
+            "literal": "9999.995",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "6",
+            "model": "999.99",
+            "literal": "9999.995",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "7",
+          "source": {
+            "id": "7",
+            "model": "999.99",
+            "literal": "1234567890123",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "7",
+            "model": "999.99",
+            "literal": "1234567890123",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "8",
+          "source": {
+            "id": "8",
+            "model": "FM999.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "8",
+            "model": "FM999.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "9",
+          "source": {
+            "id": "9",
+            "model": "FM999.99",
+            "literal": "0",
+            "expected": "0.",
+            "actual": "0.",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "9",
+            "model": "FM999.99",
+            "literal": "0",
+            "expected": "0.",
+            "actual": "0.",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "10",
+          "source": {
+            "id": "10",
+            "model": "FM999.99",
+            "literal": "12.5",
+            "expected": "12.5",
+            "actual": "12.5",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "10",
+            "model": "FM999.99",
+            "literal": "12.5",
+            "expected": "12.5",
+            "actual": "12.5",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "11",
+          "source": {
+            "id": "11",
+            "model": "FM999.99",
+            "literal": "-12.5",
+            "expected": "-12.5",
+            "actual": "-12.5",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "11",
+            "model": "FM999.99",
+            "literal": "-12.5",
+            "expected": "-12.5",
+            "actual": "-12.5",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "12",
+          "source": {
+            "id": "12",
+            "model": "FM999.99",
+            "literal": "1234.56",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "12",
+            "model": "FM999.99",
+            "literal": "1234.56",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "13",
+          "source": {
+            "id": "13",
+            "model": "FM999.99",
+            "literal": "-0.004",
+            "expected": "-0.",
+            "actual": "-0.",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "13",
+            "model": "FM999.99",
+            "literal": "-0.004",
+            "expected": "-0.",
+            "actual": "-0.",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "14",
+          "source": {
+            "id": "14",
+            "model": "FM999.99",
+            "literal": "9999.995",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "14",
+            "model": "FM999.99",
+            "literal": "9999.995",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "15",
+          "source": {
+            "id": "15",
+            "model": "FM999.99",
+            "literal": "1234567890123",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "15",
+            "model": "FM999.99",
+            "literal": "1234567890123",
+            "expected": "#######",
+            "actual": "#######",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "16",
+          "source": {
+            "id": "16",
+            "model": "9G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "16",
+            "model": "9G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "17",
+          "source": {
+            "id": "17",
+            "model": "9G990D00",
+            "literal": "0",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "17",
+            "model": "9G990D00",
+            "literal": "0",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "18",
+          "source": {
+            "id": "18",
+            "model": "9G990D00",
+            "literal": "12.5",
+            "expected": "    12.50",
+            "actual": "    12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "18",
+            "model": "9G990D00",
+            "literal": "12.5",
+            "expected": "    12.50",
+            "actual": "    12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "19",
+          "source": {
+            "id": "19",
+            "model": "9G990D00",
+            "literal": "-12.5",
+            "expected": "   -12.50",
+            "actual": "   -12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "19",
+            "model": "9G990D00",
+            "literal": "-12.5",
+            "expected": "   -12.50",
+            "actual": "   -12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "20",
+          "source": {
+            "id": "20",
+            "model": "9G990D00",
+            "literal": "1234.56",
+            "expected": " 1,234.56",
+            "actual": " 1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "20",
+            "model": "9G990D00",
+            "literal": "1234.56",
+            "expected": " 1,234.56",
+            "actual": " 1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "21",
+          "source": {
+            "id": "21",
+            "model": "9G990D00",
+            "literal": "-0.004",
+            "expected": "    -0.00",
+            "actual": "    -0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "21",
+            "model": "9G990D00",
+            "literal": "-0.004",
+            "expected": "    -0.00",
+            "actual": "    -0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "22",
+          "source": {
+            "id": "22",
+            "model": "9G990D00",
+            "literal": "9999.995",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "22",
+            "model": "9G990D00",
+            "literal": "9999.995",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "23",
+          "source": {
+            "id": "23",
+            "model": "9G990D00",
+            "literal": "1234567890123",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "23",
+            "model": "9G990D00",
+            "literal": "1234567890123",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "24",
+          "source": {
+            "id": "24",
+            "model": "FM9G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "24",
+            "model": "FM9G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "25",
+          "source": {
+            "id": "25",
+            "model": "FM9G990D00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "25",
+            "model": "FM9G990D00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "26",
+          "source": {
+            "id": "26",
+            "model": "FM9G990D00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "26",
+            "model": "FM9G990D00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "27",
+          "source": {
+            "id": "27",
+            "model": "FM9G990D00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "27",
+            "model": "FM9G990D00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "28",
+          "source": {
+            "id": "28",
+            "model": "FM9G990D00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "28",
+            "model": "FM9G990D00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "29",
+          "source": {
+            "id": "29",
+            "model": "FM9G990D00",
+            "literal": "-0.004",
+            "expected": "-0.00",
+            "actual": "-0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "29",
+            "model": "FM9G990D00",
+            "literal": "-0.004",
+            "expected": "-0.00",
+            "actual": "-0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "30",
+          "source": {
+            "id": "30",
+            "model": "FM9G990D00",
+            "literal": "9999.995",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "30",
+            "model": "FM9G990D00",
+            "literal": "9999.995",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "31",
+          "source": {
+            "id": "31",
+            "model": "FM9G990D00",
+            "literal": "1234567890123",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "31",
+            "model": "FM9G990D00",
+            "literal": "1234567890123",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "32",
+          "source": {
+            "id": "32",
+            "model": "999G999G999G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "32",
+            "model": "999G999G999G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "33",
+          "source": {
+            "id": "33",
+            "model": "999G999G999G990D00",
+            "literal": "0",
+            "expected": "               0.00",
+            "actual": "               0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "33",
+            "model": "999G999G999G990D00",
+            "literal": "0",
+            "expected": "               0.00",
+            "actual": "               0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "34",
+          "source": {
+            "id": "34",
+            "model": "999G999G999G990D00",
+            "literal": "12.5",
+            "expected": "              12.50",
+            "actual": "              12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "34",
+            "model": "999G999G999G990D00",
+            "literal": "12.5",
+            "expected": "              12.50",
+            "actual": "              12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "35",
+          "source": {
+            "id": "35",
+            "model": "999G999G999G990D00",
+            "literal": "-12.5",
+            "expected": "             -12.50",
+            "actual": "             -12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "35",
+            "model": "999G999G999G990D00",
+            "literal": "-12.5",
+            "expected": "             -12.50",
+            "actual": "             -12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "36",
+          "source": {
+            "id": "36",
+            "model": "999G999G999G990D00",
+            "literal": "1234.56",
+            "expected": "           1,234.56",
+            "actual": "           1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "36",
+            "model": "999G999G999G990D00",
+            "literal": "1234.56",
+            "expected": "           1,234.56",
+            "actual": "           1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "37",
+          "source": {
+            "id": "37",
+            "model": "999G999G999G990D00",
+            "literal": "-0.004",
+            "expected": "              -0.00",
+            "actual": "              -0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "37",
+            "model": "999G999G999G990D00",
+            "literal": "-0.004",
+            "expected": "              -0.00",
+            "actual": "              -0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "38",
+          "source": {
+            "id": "38",
+            "model": "999G999G999G990D00",
+            "literal": "9999.995",
+            "expected": "          10,000.00",
+            "actual": "          10,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "38",
+            "model": "999G999G999G990D00",
+            "literal": "9999.995",
+            "expected": "          10,000.00",
+            "actual": "          10,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "39",
+          "source": {
+            "id": "39",
+            "model": "999G999G999G990D00",
+            "literal": "1234567890123",
+            "expected": "###################",
+            "actual": "###################",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "39",
+            "model": "999G999G999G990D00",
+            "literal": "1234567890123",
+            "expected": "###################",
+            "actual": "###################",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "40",
+          "source": {
+            "id": "40",
+            "model": "FM999G999G999G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "40",
+            "model": "FM999G999G999G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "41",
+          "source": {
+            "id": "41",
+            "model": "FM999G999G999G990D00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "41",
+            "model": "FM999G999G999G990D00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "42",
+          "source": {
+            "id": "42",
+            "model": "FM999G999G999G990D00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "42",
+            "model": "FM999G999G999G990D00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "43",
+          "source": {
+            "id": "43",
+            "model": "FM999G999G999G990D00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "43",
+            "model": "FM999G999G999G990D00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "44",
+          "source": {
+            "id": "44",
+            "model": "FM999G999G999G990D00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "44",
+            "model": "FM999G999G999G990D00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "45",
+          "source": {
+            "id": "45",
+            "model": "FM999G999G999G990D00",
+            "literal": "-0.004",
+            "expected": "-0.00",
+            "actual": "-0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "45",
+            "model": "FM999G999G999G990D00",
+            "literal": "-0.004",
+            "expected": "-0.00",
+            "actual": "-0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "46",
+          "source": {
+            "id": "46",
+            "model": "FM999G999G999G990D00",
+            "literal": "9999.995",
+            "expected": "10,000.00",
+            "actual": "10,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "46",
+            "model": "FM999G999G999G990D00",
+            "literal": "9999.995",
+            "expected": "10,000.00",
+            "actual": "10,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "47",
+          "source": {
+            "id": "47",
+            "model": "FM999G999G999G990D00",
+            "literal": "1234567890123",
+            "expected": "###################",
+            "actual": "###################",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "47",
+            "model": "FM999G999G999G990D00",
+            "literal": "1234567890123",
+            "expected": "###################",
+            "actual": "###################",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "48",
+          "source": {
+            "id": "48",
+            "model": "000G000D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "48",
+            "model": "000G000D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "49",
+          "source": {
+            "id": "49",
+            "model": "000G000D00",
+            "literal": "0",
+            "expected": " 000,000.00",
+            "actual": " 000,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "49",
+            "model": "000G000D00",
+            "literal": "0",
+            "expected": " 000,000.00",
+            "actual": " 000,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "50",
+          "source": {
+            "id": "50",
+            "model": "000G000D00",
+            "literal": "12.5",
+            "expected": " 000,012.50",
+            "actual": " 000,012.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "50",
+            "model": "000G000D00",
+            "literal": "12.5",
+            "expected": " 000,012.50",
+            "actual": " 000,012.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "51",
+          "source": {
+            "id": "51",
+            "model": "000G000D00",
+            "literal": "-12.5",
+            "expected": "-000,012.50",
+            "actual": "-000,012.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "51",
+            "model": "000G000D00",
+            "literal": "-12.5",
+            "expected": "-000,012.50",
+            "actual": "-000,012.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "52",
+          "source": {
+            "id": "52",
+            "model": "000G000D00",
+            "literal": "1234.56",
+            "expected": " 001,234.56",
+            "actual": " 001,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "52",
+            "model": "000G000D00",
+            "literal": "1234.56",
+            "expected": " 001,234.56",
+            "actual": " 001,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "53",
+          "source": {
+            "id": "53",
+            "model": "000G000D00",
+            "literal": "-0.004",
+            "expected": "-000,000.00",
+            "actual": "-000,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "53",
+            "model": "000G000D00",
+            "literal": "-0.004",
+            "expected": "-000,000.00",
+            "actual": "-000,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "54",
+          "source": {
+            "id": "54",
+            "model": "000G000D00",
+            "literal": "9999.995",
+            "expected": " 010,000.00",
+            "actual": " 010,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "54",
+            "model": "000G000D00",
+            "literal": "9999.995",
+            "expected": " 010,000.00",
+            "actual": " 010,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "55",
+          "source": {
+            "id": "55",
+            "model": "000G000D00",
+            "literal": "1234567890123",
+            "expected": "###########",
+            "actual": "###########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "55",
+            "model": "000G000D00",
+            "literal": "1234567890123",
+            "expected": "###########",
+            "actual": "###########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "56",
+          "source": {
+            "id": "56",
+            "model": "FM000G000D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "56",
+            "model": "FM000G000D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "57",
+          "source": {
+            "id": "57",
+            "model": "FM000G000D00",
+            "literal": "0",
+            "expected": "000,000.00",
+            "actual": "000,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "57",
+            "model": "FM000G000D00",
+            "literal": "0",
+            "expected": "000,000.00",
+            "actual": "000,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "58",
+          "source": {
+            "id": "58",
+            "model": "FM000G000D00",
+            "literal": "12.5",
+            "expected": "000,012.50",
+            "actual": "000,012.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "58",
+            "model": "FM000G000D00",
+            "literal": "12.5",
+            "expected": "000,012.50",
+            "actual": "000,012.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "59",
+          "source": {
+            "id": "59",
+            "model": "FM000G000D00",
+            "literal": "-12.5",
+            "expected": "-000,012.50",
+            "actual": "-000,012.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "59",
+            "model": "FM000G000D00",
+            "literal": "-12.5",
+            "expected": "-000,012.50",
+            "actual": "-000,012.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "60",
+          "source": {
+            "id": "60",
+            "model": "FM000G000D00",
+            "literal": "1234.56",
+            "expected": "001,234.56",
+            "actual": "001,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "60",
+            "model": "FM000G000D00",
+            "literal": "1234.56",
+            "expected": "001,234.56",
+            "actual": "001,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "61",
+          "source": {
+            "id": "61",
+            "model": "FM000G000D00",
+            "literal": "-0.004",
+            "expected": "-000,000.00",
+            "actual": "-000,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "61",
+            "model": "FM000G000D00",
+            "literal": "-0.004",
+            "expected": "-000,000.00",
+            "actual": "-000,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "62",
+          "source": {
+            "id": "62",
+            "model": "FM000G000D00",
+            "literal": "9999.995",
+            "expected": "010,000.00",
+            "actual": "010,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "62",
+            "model": "FM000G000D00",
+            "literal": "9999.995",
+            "expected": "010,000.00",
+            "actual": "010,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "63",
+          "source": {
+            "id": "63",
+            "model": "FM000G000D00",
+            "literal": "1234567890123",
+            "expected": "###########",
+            "actual": "###########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "63",
+            "model": "FM000G000D00",
+            "literal": "1234567890123",
+            "expected": "###########",
+            "actual": "###########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "64",
+          "source": {
+            "id": "64",
+            "model": "909D090",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "64",
+            "model": "909D090",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "65",
+          "source": {
+            "id": "65",
+            "model": "909D090",
+            "literal": "0",
+            "expected": "  00.000",
+            "actual": "  00.000",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "65",
+            "model": "909D090",
+            "literal": "0",
+            "expected": "  00.000",
+            "actual": "  00.000",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "66",
+          "source": {
+            "id": "66",
+            "model": "909D090",
+            "literal": "12.5",
+            "expected": "  12.500",
+            "actual": "  12.500",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "66",
+            "model": "909D090",
+            "literal": "12.5",
+            "expected": "  12.500",
+            "actual": "  12.500",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "67",
+          "source": {
+            "id": "67",
+            "model": "909D090",
+            "literal": "-12.5",
+            "expected": " -12.500",
+            "actual": " -12.500",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "67",
+            "model": "909D090",
+            "literal": "-12.5",
+            "expected": " -12.500",
+            "actual": " -12.500",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "68",
+          "source": {
+            "id": "68",
+            "model": "909D090",
+            "literal": "1234.56",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "68",
+            "model": "909D090",
+            "literal": "1234.56",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "69",
+          "source": {
+            "id": "69",
+            "model": "909D090",
+            "literal": "-0.004",
+            "expected": " -00.004",
+            "actual": " -00.004",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "69",
+            "model": "909D090",
+            "literal": "-0.004",
+            "expected": " -00.004",
+            "actual": " -00.004",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "70",
+          "source": {
+            "id": "70",
+            "model": "909D090",
+            "literal": "9999.995",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "70",
+            "model": "909D090",
+            "literal": "9999.995",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "71",
+          "source": {
+            "id": "71",
+            "model": "909D090",
+            "literal": "1234567890123",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "71",
+            "model": "909D090",
+            "literal": "1234567890123",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "72",
+          "source": {
+            "id": "72",
+            "model": "FM909D090",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "72",
+            "model": "FM909D090",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "73",
+          "source": {
+            "id": "73",
+            "model": "FM909D090",
+            "literal": "0",
+            "expected": "00.000",
+            "actual": "00.000",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "73",
+            "model": "FM909D090",
+            "literal": "0",
+            "expected": "00.000",
+            "actual": "00.000",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "74",
+          "source": {
+            "id": "74",
+            "model": "FM909D090",
+            "literal": "12.5",
+            "expected": "12.500",
+            "actual": "12.500",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "74",
+            "model": "FM909D090",
+            "literal": "12.5",
+            "expected": "12.500",
+            "actual": "12.500",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "75",
+          "source": {
+            "id": "75",
+            "model": "FM909D090",
+            "literal": "-12.5",
+            "expected": "-12.500",
+            "actual": "-12.500",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "75",
+            "model": "FM909D090",
+            "literal": "-12.5",
+            "expected": "-12.500",
+            "actual": "-12.500",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "76",
+          "source": {
+            "id": "76",
+            "model": "FM909D090",
+            "literal": "1234.56",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "76",
+            "model": "FM909D090",
+            "literal": "1234.56",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "77",
+          "source": {
+            "id": "77",
+            "model": "FM909D090",
+            "literal": "-0.004",
+            "expected": "-00.004",
+            "actual": "-00.004",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "77",
+            "model": "FM909D090",
+            "literal": "-0.004",
+            "expected": "-00.004",
+            "actual": "-00.004",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "78",
+          "source": {
+            "id": "78",
+            "model": "FM909D090",
+            "literal": "9999.995",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "78",
+            "model": "FM909D090",
+            "literal": "9999.995",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "79",
+          "source": {
+            "id": "79",
+            "model": "FM909D090",
+            "literal": "1234567890123",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "79",
+            "model": "FM909D090",
+            "literal": "1234567890123",
+            "expected": "########",
+            "actual": "########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "80",
+          "source": {
+            "id": "80",
+            "model": "9,990.00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "80",
+            "model": "9,990.00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "81",
+          "source": {
+            "id": "81",
+            "model": "9,990.00",
+            "literal": "0",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "81",
+            "model": "9,990.00",
+            "literal": "0",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "82",
+          "source": {
+            "id": "82",
+            "model": "9,990.00",
+            "literal": "12.5",
+            "expected": "    12.50",
+            "actual": "    12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "82",
+            "model": "9,990.00",
+            "literal": "12.5",
+            "expected": "    12.50",
+            "actual": "    12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "83",
+          "source": {
+            "id": "83",
+            "model": "9,990.00",
+            "literal": "-12.5",
+            "expected": "   -12.50",
+            "actual": "   -12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "83",
+            "model": "9,990.00",
+            "literal": "-12.5",
+            "expected": "   -12.50",
+            "actual": "   -12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "84",
+          "source": {
+            "id": "84",
+            "model": "9,990.00",
+            "literal": "1234.56",
+            "expected": " 1,234.56",
+            "actual": " 1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "84",
+            "model": "9,990.00",
+            "literal": "1234.56",
+            "expected": " 1,234.56",
+            "actual": " 1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "85",
+          "source": {
+            "id": "85",
+            "model": "9,990.00",
+            "literal": "-0.004",
+            "expected": "    -0.00",
+            "actual": "    -0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "85",
+            "model": "9,990.00",
+            "literal": "-0.004",
+            "expected": "    -0.00",
+            "actual": "    -0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "86",
+          "source": {
+            "id": "86",
+            "model": "9,990.00",
+            "literal": "9999.995",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "86",
+            "model": "9,990.00",
+            "literal": "9999.995",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "87",
+          "source": {
+            "id": "87",
+            "model": "9,990.00",
+            "literal": "1234567890123",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "87",
+            "model": "9,990.00",
+            "literal": "1234567890123",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "88",
+          "source": {
+            "id": "88",
+            "model": "FM9,990.00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "88",
+            "model": "FM9,990.00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "89",
+          "source": {
+            "id": "89",
+            "model": "FM9,990.00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "89",
+            "model": "FM9,990.00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "90",
+          "source": {
+            "id": "90",
+            "model": "FM9,990.00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "90",
+            "model": "FM9,990.00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "91",
+          "source": {
+            "id": "91",
+            "model": "FM9,990.00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "91",
+            "model": "FM9,990.00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "92",
+          "source": {
+            "id": "92",
+            "model": "FM9,990.00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "92",
+            "model": "FM9,990.00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "93",
+          "source": {
+            "id": "93",
+            "model": "FM9,990.00",
+            "literal": "-0.004",
+            "expected": "-0.00",
+            "actual": "-0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "93",
+            "model": "FM9,990.00",
+            "literal": "-0.004",
+            "expected": "-0.00",
+            "actual": "-0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "94",
+          "source": {
+            "id": "94",
+            "model": "FM9,990.00",
+            "literal": "9999.995",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "94",
+            "model": "FM9,990.00",
+            "literal": "9999.995",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "95",
+          "source": {
+            "id": "95",
+            "model": "FM9,990.00",
+            "literal": "1234567890123",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "95",
+            "model": "FM9,990.00",
+            "literal": "1234567890123",
+            "expected": "#########",
+            "actual": "#########",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "96",
+          "source": {
+            "id": "96",
+            "model": ".99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "96",
+            "model": ".99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "97",
+          "source": {
+            "id": "97",
+            "model": ".99",
+            "literal": "0",
+            "expected": " .00",
+            "actual": " .00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "97",
+            "model": ".99",
+            "literal": "0",
+            "expected": " .00",
+            "actual": " .00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "98",
+          "source": {
+            "id": "98",
+            "model": ".99",
+            "literal": "12.5",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "98",
+            "model": ".99",
+            "literal": "12.5",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "99",
+          "source": {
+            "id": "99",
+            "model": ".99",
+            "literal": "-12.5",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "99",
+            "model": ".99",
+            "literal": "-12.5",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "100",
+          "source": {
+            "id": "100",
+            "model": ".99",
+            "literal": "1234.56",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "100",
+            "model": ".99",
+            "literal": "1234.56",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "101",
+          "source": {
+            "id": "101",
+            "model": ".99",
+            "literal": "-0.004",
+            "expected": "-.00",
+            "actual": "-.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "101",
+            "model": ".99",
+            "literal": "-0.004",
+            "expected": "-.00",
+            "actual": "-.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "102",
+          "source": {
+            "id": "102",
+            "model": ".99",
+            "literal": "9999.995",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "102",
+            "model": ".99",
+            "literal": "9999.995",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "103",
+          "source": {
+            "id": "103",
+            "model": ".99",
+            "literal": "1234567890123",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "103",
+            "model": ".99",
+            "literal": "1234567890123",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "104",
+          "source": {
+            "id": "104",
+            "model": "FM.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "104",
+            "model": "FM.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "105",
+          "source": {
+            "id": "105",
+            "model": "FM.99",
+            "literal": "0",
+            "expected": ".",
+            "actual": ".",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "105",
+            "model": "FM.99",
+            "literal": "0",
+            "expected": ".",
+            "actual": ".",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "106",
+          "source": {
+            "id": "106",
+            "model": "FM.99",
+            "literal": "12.5",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "106",
+            "model": "FM.99",
+            "literal": "12.5",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "107",
+          "source": {
+            "id": "107",
+            "model": "FM.99",
+            "literal": "-12.5",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "107",
+            "model": "FM.99",
+            "literal": "-12.5",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "108",
+          "source": {
+            "id": "108",
+            "model": "FM.99",
+            "literal": "1234.56",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "108",
+            "model": "FM.99",
+            "literal": "1234.56",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "109",
+          "source": {
+            "id": "109",
+            "model": "FM.99",
+            "literal": "-0.004",
+            "expected": "-.",
+            "actual": "-.",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "109",
+            "model": "FM.99",
+            "literal": "-0.004",
+            "expected": "-.",
+            "actual": "-.",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "110",
+          "source": {
+            "id": "110",
+            "model": "FM.99",
+            "literal": "9999.995",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "110",
+            "model": "FM.99",
+            "literal": "9999.995",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "111",
+          "source": {
+            "id": "111",
+            "model": "FM.99",
+            "literal": "1234567890123",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "111",
+            "model": "FM.99",
+            "literal": "1234567890123",
+            "expected": "####",
+            "actual": "####",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "112",
+          "source": {
+            "id": "112",
+            "model": "90D99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "112",
+            "model": "90D99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "113",
+          "source": {
+            "id": "113",
+            "model": "90D99",
+            "literal": "0",
+            "expected": "  0.00",
+            "actual": "  0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "113",
+            "model": "90D99",
+            "literal": "0",
+            "expected": "  0.00",
+            "actual": "  0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "114",
+          "source": {
+            "id": "114",
+            "model": "90D99",
+            "literal": "12.5",
+            "expected": " 12.50",
+            "actual": " 12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "114",
+            "model": "90D99",
+            "literal": "12.5",
+            "expected": " 12.50",
+            "actual": " 12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "115",
+          "source": {
+            "id": "115",
+            "model": "90D99",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "115",
+            "model": "90D99",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "116",
+          "source": {
+            "id": "116",
+            "model": "90D99",
+            "literal": "1234.56",
+            "expected": "######",
+            "actual": "######",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "116",
+            "model": "90D99",
+            "literal": "1234.56",
+            "expected": "######",
+            "actual": "######",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "117",
+          "source": {
+            "id": "117",
+            "model": "90D99",
+            "literal": "-0.004",
+            "expected": " -0.00",
+            "actual": " -0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "117",
+            "model": "90D99",
+            "literal": "-0.004",
+            "expected": " -0.00",
+            "actual": " -0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "118",
+          "source": {
+            "id": "118",
+            "model": "90D99",
+            "literal": "9999.995",
+            "expected": "######",
+            "actual": "######",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "118",
+            "model": "90D99",
+            "literal": "9999.995",
+            "expected": "######",
+            "actual": "######",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "119",
+          "source": {
+            "id": "119",
+            "model": "90D99",
+            "literal": "1234567890123",
+            "expected": "######",
+            "actual": "######",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "119",
+            "model": "90D99",
+            "literal": "1234567890123",
+            "expected": "######",
+            "actual": "######",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 120,
+      "matched": 120,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true,
+      "target_sql_profile": "oracle-preview-v1",
+      "reference": "oracle",
+      "oracle_disable_oob": false,
+      "runtime_binary_sha256": "64a3be06c438851f3a59a55c396aedcfea812699299dc38e5686a2c5b1c26366",
+      "fixture_source_sha256": "97e7eb8420fd9323302c90e76de465298c6c29eefc20eb13388c2de496b68632",
+      "comparison_exit_status": 0,
+      "target_qualified_cases": 120
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "0",
+          "source": {
+            "id": "0",
+            "model": "999.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "0",
+            "model": "999.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "1",
+          "source": {
+            "id": "1",
+            "model": "999.99",
+            "literal": "0",
+            "expected": "    .00",
+            "actual": "    .00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "1",
+            "model": "999.99",
+            "literal": "0",
+            "expected": "    .00",
+            "actual": "    .00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "2",
+          "source": {
+            "id": "2",
+            "model": "999.99",
+            "literal": "12.5",
+            "expected": "  12.50",
+            "actual": "  12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "2",
+            "model": "999.99",
+            "literal": "12.5",
+            "expected": "  12.50",
+            "actual": "  12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "3",
+          "source": {
+            "id": "3",
+            "model": "999.99",
+            "literal": "-12.5",
+            "expected": " -12.50",
+            "actual": " -12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "3",
+            "model": "999.99",
+            "literal": "-12.5",
+            "expected": " -12.50",
+            "actual": " -12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "4",
+          "source": {
+            "id": "4",
+            "model": "999.99",
+            "literal": "1234.56",
+            "expected": " ###.##",
+            "actual": " ###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "4",
+            "model": "999.99",
+            "literal": "1234.56",
+            "expected": " ###.##",
+            "actual": " ###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "5",
+          "source": {
+            "id": "5",
+            "model": "999.99",
+            "literal": "-0.004",
+            "expected": "    .00",
+            "actual": "    .00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "5",
+            "model": "999.99",
+            "literal": "-0.004",
+            "expected": "    .00",
+            "actual": "    .00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "6",
+          "source": {
+            "id": "6",
+            "model": "999.99",
+            "literal": "9999.995",
+            "expected": " ###.##",
+            "actual": " ###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "6",
+            "model": "999.99",
+            "literal": "9999.995",
+            "expected": " ###.##",
+            "actual": " ###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "7",
+          "source": {
+            "id": "7",
+            "model": "999.99",
+            "literal": "1234567890123",
+            "expected": " ###.##",
+            "actual": " ###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "7",
+            "model": "999.99",
+            "literal": "1234567890123",
+            "expected": " ###.##",
+            "actual": " ###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "8",
+          "source": {
+            "id": "8",
+            "model": "FM999.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "8",
+            "model": "FM999.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "9",
+          "source": {
+            "id": "9",
+            "model": "FM999.99",
+            "literal": "0",
+            "expected": "0.",
+            "actual": "0.",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "9",
+            "model": "FM999.99",
+            "literal": "0",
+            "expected": "0.",
+            "actual": "0.",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "10",
+          "source": {
+            "id": "10",
+            "model": "FM999.99",
+            "literal": "12.5",
+            "expected": "12.5",
+            "actual": "12.5",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "10",
+            "model": "FM999.99",
+            "literal": "12.5",
+            "expected": "12.5",
+            "actual": "12.5",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "11",
+          "source": {
+            "id": "11",
+            "model": "FM999.99",
+            "literal": "-12.5",
+            "expected": "-12.5",
+            "actual": "-12.5",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "11",
+            "model": "FM999.99",
+            "literal": "-12.5",
+            "expected": "-12.5",
+            "actual": "-12.5",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "12",
+          "source": {
+            "id": "12",
+            "model": "FM999.99",
+            "literal": "1234.56",
+            "expected": "###.##",
+            "actual": "###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "12",
+            "model": "FM999.99",
+            "literal": "1234.56",
+            "expected": "###.##",
+            "actual": "###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "13",
+          "source": {
+            "id": "13",
+            "model": "FM999.99",
+            "literal": "-0.004",
+            "expected": "0.",
+            "actual": "0.",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "13",
+            "model": "FM999.99",
+            "literal": "-0.004",
+            "expected": "0.",
+            "actual": "0.",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "14",
+          "source": {
+            "id": "14",
+            "model": "FM999.99",
+            "literal": "9999.995",
+            "expected": "###.##",
+            "actual": "###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "14",
+            "model": "FM999.99",
+            "literal": "9999.995",
+            "expected": "###.##",
+            "actual": "###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "15",
+          "source": {
+            "id": "15",
+            "model": "FM999.99",
+            "literal": "1234567890123",
+            "expected": "###.##",
+            "actual": "###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "15",
+            "model": "FM999.99",
+            "literal": "1234567890123",
+            "expected": "###.##",
+            "actual": "###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "16",
+          "source": {
+            "id": "16",
+            "model": "9G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "16",
+            "model": "9G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "17",
+          "source": {
+            "id": "17",
+            "model": "9G990D00",
+            "literal": "0",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "17",
+            "model": "9G990D00",
+            "literal": "0",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "18",
+          "source": {
+            "id": "18",
+            "model": "9G990D00",
+            "literal": "12.5",
+            "expected": "    12.50",
+            "actual": "    12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "18",
+            "model": "9G990D00",
+            "literal": "12.5",
+            "expected": "    12.50",
+            "actual": "    12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "19",
+          "source": {
+            "id": "19",
+            "model": "9G990D00",
+            "literal": "-12.5",
+            "expected": "   -12.50",
+            "actual": "   -12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "19",
+            "model": "9G990D00",
+            "literal": "-12.5",
+            "expected": "   -12.50",
+            "actual": "   -12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "20",
+          "source": {
+            "id": "20",
+            "model": "9G990D00",
+            "literal": "1234.56",
+            "expected": " 1,234.56",
+            "actual": " 1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "20",
+            "model": "9G990D00",
+            "literal": "1234.56",
+            "expected": " 1,234.56",
+            "actual": " 1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "21",
+          "source": {
+            "id": "21",
+            "model": "9G990D00",
+            "literal": "-0.004",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "21",
+            "model": "9G990D00",
+            "literal": "-0.004",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "22",
+          "source": {
+            "id": "22",
+            "model": "9G990D00",
+            "literal": "9999.995",
+            "expected": " #,###.##",
+            "actual": " #,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "22",
+            "model": "9G990D00",
+            "literal": "9999.995",
+            "expected": " #,###.##",
+            "actual": " #,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "23",
+          "source": {
+            "id": "23",
+            "model": "9G990D00",
+            "literal": "1234567890123",
+            "expected": " #,###.##",
+            "actual": " #,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "23",
+            "model": "9G990D00",
+            "literal": "1234567890123",
+            "expected": " #,###.##",
+            "actual": " #,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "24",
+          "source": {
+            "id": "24",
+            "model": "FM9G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "24",
+            "model": "FM9G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "25",
+          "source": {
+            "id": "25",
+            "model": "FM9G990D00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "25",
+            "model": "FM9G990D00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "26",
+          "source": {
+            "id": "26",
+            "model": "FM9G990D00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "26",
+            "model": "FM9G990D00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "27",
+          "source": {
+            "id": "27",
+            "model": "FM9G990D00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "27",
+            "model": "FM9G990D00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "28",
+          "source": {
+            "id": "28",
+            "model": "FM9G990D00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "28",
+            "model": "FM9G990D00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "29",
+          "source": {
+            "id": "29",
+            "model": "FM9G990D00",
+            "literal": "-0.004",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "29",
+            "model": "FM9G990D00",
+            "literal": "-0.004",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "30",
+          "source": {
+            "id": "30",
+            "model": "FM9G990D00",
+            "literal": "9999.995",
+            "expected": "#,###.##",
+            "actual": "#,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "30",
+            "model": "FM9G990D00",
+            "literal": "9999.995",
+            "expected": "#,###.##",
+            "actual": "#,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "31",
+          "source": {
+            "id": "31",
+            "model": "FM9G990D00",
+            "literal": "1234567890123",
+            "expected": "#,###.##",
+            "actual": "#,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "31",
+            "model": "FM9G990D00",
+            "literal": "1234567890123",
+            "expected": "#,###.##",
+            "actual": "#,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "32",
+          "source": {
+            "id": "32",
+            "model": "999G999G999G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "32",
+            "model": "999G999G999G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "33",
+          "source": {
+            "id": "33",
+            "model": "999G999G999G990D00",
+            "literal": "0",
+            "expected": "               0.00",
+            "actual": "               0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "33",
+            "model": "999G999G999G990D00",
+            "literal": "0",
+            "expected": "               0.00",
+            "actual": "               0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "34",
+          "source": {
+            "id": "34",
+            "model": "999G999G999G990D00",
+            "literal": "12.5",
+            "expected": "              12.50",
+            "actual": "              12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "34",
+            "model": "999G999G999G990D00",
+            "literal": "12.5",
+            "expected": "              12.50",
+            "actual": "              12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "35",
+          "source": {
+            "id": "35",
+            "model": "999G999G999G990D00",
+            "literal": "-12.5",
+            "expected": "             -12.50",
+            "actual": "             -12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "35",
+            "model": "999G999G999G990D00",
+            "literal": "-12.5",
+            "expected": "             -12.50",
+            "actual": "             -12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "36",
+          "source": {
+            "id": "36",
+            "model": "999G999G999G990D00",
+            "literal": "1234.56",
+            "expected": "           1,234.56",
+            "actual": "           1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "36",
+            "model": "999G999G999G990D00",
+            "literal": "1234.56",
+            "expected": "           1,234.56",
+            "actual": "           1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "37",
+          "source": {
+            "id": "37",
+            "model": "999G999G999G990D00",
+            "literal": "-0.004",
+            "expected": "               0.00",
+            "actual": "               0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "37",
+            "model": "999G999G999G990D00",
+            "literal": "-0.004",
+            "expected": "               0.00",
+            "actual": "               0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "38",
+          "source": {
+            "id": "38",
+            "model": "999G999G999G990D00",
+            "literal": "9999.995",
+            "expected": "          10,000.00",
+            "actual": "          10,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "38",
+            "model": "999G999G999G990D00",
+            "literal": "9999.995",
+            "expected": "          10,000.00",
+            "actual": "          10,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "39",
+          "source": {
+            "id": "39",
+            "model": "999G999G999G990D00",
+            "literal": "1234567890123",
+            "expected": " ###,###,###,###.##",
+            "actual": " ###,###,###,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "39",
+            "model": "999G999G999G990D00",
+            "literal": "1234567890123",
+            "expected": " ###,###,###,###.##",
+            "actual": " ###,###,###,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "40",
+          "source": {
+            "id": "40",
+            "model": "FM999G999G999G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "40",
+            "model": "FM999G999G999G990D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "41",
+          "source": {
+            "id": "41",
+            "model": "FM999G999G999G990D00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "41",
+            "model": "FM999G999G999G990D00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "42",
+          "source": {
+            "id": "42",
+            "model": "FM999G999G999G990D00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "42",
+            "model": "FM999G999G999G990D00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "43",
+          "source": {
+            "id": "43",
+            "model": "FM999G999G999G990D00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "43",
+            "model": "FM999G999G999G990D00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "44",
+          "source": {
+            "id": "44",
+            "model": "FM999G999G999G990D00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "44",
+            "model": "FM999G999G999G990D00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "45",
+          "source": {
+            "id": "45",
+            "model": "FM999G999G999G990D00",
+            "literal": "-0.004",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "45",
+            "model": "FM999G999G999G990D00",
+            "literal": "-0.004",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "46",
+          "source": {
+            "id": "46",
+            "model": "FM999G999G999G990D00",
+            "literal": "9999.995",
+            "expected": "10,000.00",
+            "actual": "10,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "46",
+            "model": "FM999G999G999G990D00",
+            "literal": "9999.995",
+            "expected": "10,000.00",
+            "actual": "10,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "47",
+          "source": {
+            "id": "47",
+            "model": "FM999G999G999G990D00",
+            "literal": "1234567890123",
+            "expected": "###,###,###,###.##",
+            "actual": "###,###,###,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "47",
+            "model": "FM999G999G999G990D00",
+            "literal": "1234567890123",
+            "expected": "###,###,###,###.##",
+            "actual": "###,###,###,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "48",
+          "source": {
+            "id": "48",
+            "model": "000G000D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "48",
+            "model": "000G000D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "49",
+          "source": {
+            "id": "49",
+            "model": "000G000D00",
+            "literal": "0",
+            "expected": " 000,000.00",
+            "actual": " 000,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "49",
+            "model": "000G000D00",
+            "literal": "0",
+            "expected": " 000,000.00",
+            "actual": " 000,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "50",
+          "source": {
+            "id": "50",
+            "model": "000G000D00",
+            "literal": "12.5",
+            "expected": " 000,012.50",
+            "actual": " 000,012.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "50",
+            "model": "000G000D00",
+            "literal": "12.5",
+            "expected": " 000,012.50",
+            "actual": " 000,012.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "51",
+          "source": {
+            "id": "51",
+            "model": "000G000D00",
+            "literal": "-12.5",
+            "expected": "-000,012.50",
+            "actual": "-000,012.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "51",
+            "model": "000G000D00",
+            "literal": "-12.5",
+            "expected": "-000,012.50",
+            "actual": "-000,012.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "52",
+          "source": {
+            "id": "52",
+            "model": "000G000D00",
+            "literal": "1234.56",
+            "expected": " 001,234.56",
+            "actual": " 001,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "52",
+            "model": "000G000D00",
+            "literal": "1234.56",
+            "expected": " 001,234.56",
+            "actual": " 001,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "53",
+          "source": {
+            "id": "53",
+            "model": "000G000D00",
+            "literal": "-0.004",
+            "expected": " 000,000.00",
+            "actual": " 000,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "53",
+            "model": "000G000D00",
+            "literal": "-0.004",
+            "expected": " 000,000.00",
+            "actual": " 000,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "54",
+          "source": {
+            "id": "54",
+            "model": "000G000D00",
+            "literal": "9999.995",
+            "expected": " 010,000.00",
+            "actual": " 010,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "54",
+            "model": "000G000D00",
+            "literal": "9999.995",
+            "expected": " 010,000.00",
+            "actual": " 010,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "55",
+          "source": {
+            "id": "55",
+            "model": "000G000D00",
+            "literal": "1234567890123",
+            "expected": " ###,###.##",
+            "actual": " ###,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "55",
+            "model": "000G000D00",
+            "literal": "1234567890123",
+            "expected": " ###,###.##",
+            "actual": " ###,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "56",
+          "source": {
+            "id": "56",
+            "model": "FM000G000D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "56",
+            "model": "FM000G000D00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "57",
+          "source": {
+            "id": "57",
+            "model": "FM000G000D00",
+            "literal": "0",
+            "expected": "000,000.00",
+            "actual": "000,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "57",
+            "model": "FM000G000D00",
+            "literal": "0",
+            "expected": "000,000.00",
+            "actual": "000,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "58",
+          "source": {
+            "id": "58",
+            "model": "FM000G000D00",
+            "literal": "12.5",
+            "expected": "000,012.50",
+            "actual": "000,012.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "58",
+            "model": "FM000G000D00",
+            "literal": "12.5",
+            "expected": "000,012.50",
+            "actual": "000,012.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "59",
+          "source": {
+            "id": "59",
+            "model": "FM000G000D00",
+            "literal": "-12.5",
+            "expected": "-000,012.50",
+            "actual": "-000,012.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "59",
+            "model": "FM000G000D00",
+            "literal": "-12.5",
+            "expected": "-000,012.50",
+            "actual": "-000,012.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "60",
+          "source": {
+            "id": "60",
+            "model": "FM000G000D00",
+            "literal": "1234.56",
+            "expected": "001,234.56",
+            "actual": "001,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "60",
+            "model": "FM000G000D00",
+            "literal": "1234.56",
+            "expected": "001,234.56",
+            "actual": "001,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "61",
+          "source": {
+            "id": "61",
+            "model": "FM000G000D00",
+            "literal": "-0.004",
+            "expected": "000,000.00",
+            "actual": "000,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "61",
+            "model": "FM000G000D00",
+            "literal": "-0.004",
+            "expected": "000,000.00",
+            "actual": "000,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "62",
+          "source": {
+            "id": "62",
+            "model": "FM000G000D00",
+            "literal": "9999.995",
+            "expected": "010,000.00",
+            "actual": "010,000.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "62",
+            "model": "FM000G000D00",
+            "literal": "9999.995",
+            "expected": "010,000.00",
+            "actual": "010,000.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "63",
+          "source": {
+            "id": "63",
+            "model": "FM000G000D00",
+            "literal": "1234567890123",
+            "expected": "###,###.##",
+            "actual": "###,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "63",
+            "model": "FM000G000D00",
+            "literal": "1234567890123",
+            "expected": "###,###.##",
+            "actual": "###,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "64",
+          "source": {
+            "id": "64",
+            "model": "909D090",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "64",
+            "model": "909D090",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "65",
+          "source": {
+            "id": "65",
+            "model": "909D090",
+            "literal": "0",
+            "expected": "  00.000",
+            "actual": "  00.000",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "65",
+            "model": "909D090",
+            "literal": "0",
+            "expected": "  00.000",
+            "actual": "  00.000",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "66",
+          "source": {
+            "id": "66",
+            "model": "909D090",
+            "literal": "12.5",
+            "expected": "  12.500",
+            "actual": "  12.500",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "66",
+            "model": "909D090",
+            "literal": "12.5",
+            "expected": "  12.500",
+            "actual": "  12.500",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "67",
+          "source": {
+            "id": "67",
+            "model": "909D090",
+            "literal": "-12.5",
+            "expected": " -12.500",
+            "actual": " -12.500",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "67",
+            "model": "909D090",
+            "literal": "-12.5",
+            "expected": " -12.500",
+            "actual": " -12.500",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "68",
+          "source": {
+            "id": "68",
+            "model": "909D090",
+            "literal": "1234.56",
+            "expected": " ###.###",
+            "actual": " ###.###",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "68",
+            "model": "909D090",
+            "literal": "1234.56",
+            "expected": " ###.###",
+            "actual": " ###.###",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "69",
+          "source": {
+            "id": "69",
+            "model": "909D090",
+            "literal": "-0.004",
+            "expected": " -00.004",
+            "actual": " -00.004",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "69",
+            "model": "909D090",
+            "literal": "-0.004",
+            "expected": " -00.004",
+            "actual": " -00.004",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "70",
+          "source": {
+            "id": "70",
+            "model": "909D090",
+            "literal": "9999.995",
+            "expected": " ###.###",
+            "actual": " ###.###",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "70",
+            "model": "909D090",
+            "literal": "9999.995",
+            "expected": " ###.###",
+            "actual": " ###.###",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "71",
+          "source": {
+            "id": "71",
+            "model": "909D090",
+            "literal": "1234567890123",
+            "expected": " ###.###",
+            "actual": " ###.###",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "71",
+            "model": "909D090",
+            "literal": "1234567890123",
+            "expected": " ###.###",
+            "actual": " ###.###",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "72",
+          "source": {
+            "id": "72",
+            "model": "FM909D090",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "72",
+            "model": "FM909D090",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "73",
+          "source": {
+            "id": "73",
+            "model": "FM909D090",
+            "literal": "0",
+            "expected": "00.000",
+            "actual": "00.000",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "73",
+            "model": "FM909D090",
+            "literal": "0",
+            "expected": "00.000",
+            "actual": "00.000",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "74",
+          "source": {
+            "id": "74",
+            "model": "FM909D090",
+            "literal": "12.5",
+            "expected": "12.500",
+            "actual": "12.500",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "74",
+            "model": "FM909D090",
+            "literal": "12.5",
+            "expected": "12.500",
+            "actual": "12.500",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "75",
+          "source": {
+            "id": "75",
+            "model": "FM909D090",
+            "literal": "-12.5",
+            "expected": "-12.500",
+            "actual": "-12.500",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "75",
+            "model": "FM909D090",
+            "literal": "-12.5",
+            "expected": "-12.500",
+            "actual": "-12.500",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "76",
+          "source": {
+            "id": "76",
+            "model": "FM909D090",
+            "literal": "1234.56",
+            "expected": "###.###",
+            "actual": "###.###",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "76",
+            "model": "FM909D090",
+            "literal": "1234.56",
+            "expected": "###.###",
+            "actual": "###.###",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "77",
+          "source": {
+            "id": "77",
+            "model": "FM909D090",
+            "literal": "-0.004",
+            "expected": "-00.004",
+            "actual": "-00.004",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "77",
+            "model": "FM909D090",
+            "literal": "-0.004",
+            "expected": "-00.004",
+            "actual": "-00.004",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "78",
+          "source": {
+            "id": "78",
+            "model": "FM909D090",
+            "literal": "9999.995",
+            "expected": "###.###",
+            "actual": "###.###",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "78",
+            "model": "FM909D090",
+            "literal": "9999.995",
+            "expected": "###.###",
+            "actual": "###.###",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "79",
+          "source": {
+            "id": "79",
+            "model": "FM909D090",
+            "literal": "1234567890123",
+            "expected": "###.###",
+            "actual": "###.###",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "79",
+            "model": "FM909D090",
+            "literal": "1234567890123",
+            "expected": "###.###",
+            "actual": "###.###",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "80",
+          "source": {
+            "id": "80",
+            "model": "9,990.00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "80",
+            "model": "9,990.00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "81",
+          "source": {
+            "id": "81",
+            "model": "9,990.00",
+            "literal": "0",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "81",
+            "model": "9,990.00",
+            "literal": "0",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "82",
+          "source": {
+            "id": "82",
+            "model": "9,990.00",
+            "literal": "12.5",
+            "expected": "    12.50",
+            "actual": "    12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "82",
+            "model": "9,990.00",
+            "literal": "12.5",
+            "expected": "    12.50",
+            "actual": "    12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "83",
+          "source": {
+            "id": "83",
+            "model": "9,990.00",
+            "literal": "-12.5",
+            "expected": "   -12.50",
+            "actual": "   -12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "83",
+            "model": "9,990.00",
+            "literal": "-12.5",
+            "expected": "   -12.50",
+            "actual": "   -12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "84",
+          "source": {
+            "id": "84",
+            "model": "9,990.00",
+            "literal": "1234.56",
+            "expected": " 1,234.56",
+            "actual": " 1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "84",
+            "model": "9,990.00",
+            "literal": "1234.56",
+            "expected": " 1,234.56",
+            "actual": " 1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "85",
+          "source": {
+            "id": "85",
+            "model": "9,990.00",
+            "literal": "-0.004",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "85",
+            "model": "9,990.00",
+            "literal": "-0.004",
+            "expected": "     0.00",
+            "actual": "     0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "86",
+          "source": {
+            "id": "86",
+            "model": "9,990.00",
+            "literal": "9999.995",
+            "expected": " #,###.##",
+            "actual": " #,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "86",
+            "model": "9,990.00",
+            "literal": "9999.995",
+            "expected": " #,###.##",
+            "actual": " #,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "87",
+          "source": {
+            "id": "87",
+            "model": "9,990.00",
+            "literal": "1234567890123",
+            "expected": " #,###.##",
+            "actual": " #,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "87",
+            "model": "9,990.00",
+            "literal": "1234567890123",
+            "expected": " #,###.##",
+            "actual": " #,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "88",
+          "source": {
+            "id": "88",
+            "model": "FM9,990.00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "88",
+            "model": "FM9,990.00",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "89",
+          "source": {
+            "id": "89",
+            "model": "FM9,990.00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "89",
+            "model": "FM9,990.00",
+            "literal": "0",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "90",
+          "source": {
+            "id": "90",
+            "model": "FM9,990.00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "90",
+            "model": "FM9,990.00",
+            "literal": "12.5",
+            "expected": "12.50",
+            "actual": "12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "91",
+          "source": {
+            "id": "91",
+            "model": "FM9,990.00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "91",
+            "model": "FM9,990.00",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "92",
+          "source": {
+            "id": "92",
+            "model": "FM9,990.00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "92",
+            "model": "FM9,990.00",
+            "literal": "1234.56",
+            "expected": "1,234.56",
+            "actual": "1,234.56",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "93",
+          "source": {
+            "id": "93",
+            "model": "FM9,990.00",
+            "literal": "-0.004",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "93",
+            "model": "FM9,990.00",
+            "literal": "-0.004",
+            "expected": "0.00",
+            "actual": "0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "94",
+          "source": {
+            "id": "94",
+            "model": "FM9,990.00",
+            "literal": "9999.995",
+            "expected": "#,###.##",
+            "actual": "#,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "94",
+            "model": "FM9,990.00",
+            "literal": "9999.995",
+            "expected": "#,###.##",
+            "actual": "#,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "95",
+          "source": {
+            "id": "95",
+            "model": "FM9,990.00",
+            "literal": "1234567890123",
+            "expected": "#,###.##",
+            "actual": "#,###.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "95",
+            "model": "FM9,990.00",
+            "literal": "1234567890123",
+            "expected": "#,###.##",
+            "actual": "#,###.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "96",
+          "source": {
+            "id": "96",
+            "model": ".99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "96",
+            "model": ".99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "97",
+          "source": {
+            "id": "97",
+            "model": ".99",
+            "literal": "0",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "97",
+            "model": ".99",
+            "literal": "0",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "98",
+          "source": {
+            "id": "98",
+            "model": ".99",
+            "literal": "12.5",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "98",
+            "model": ".99",
+            "literal": "12.5",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "99",
+          "source": {
+            "id": "99",
+            "model": ".99",
+            "literal": "-12.5",
+            "expected": "-.##",
+            "actual": "-.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "99",
+            "model": ".99",
+            "literal": "-12.5",
+            "expected": "-.##",
+            "actual": "-.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "100",
+          "source": {
+            "id": "100",
+            "model": ".99",
+            "literal": "1234.56",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "100",
+            "model": ".99",
+            "literal": "1234.56",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "101",
+          "source": {
+            "id": "101",
+            "model": ".99",
+            "literal": "-0.004",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "101",
+            "model": ".99",
+            "literal": "-0.004",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "102",
+          "source": {
+            "id": "102",
+            "model": ".99",
+            "literal": "9999.995",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "102",
+            "model": ".99",
+            "literal": "9999.995",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "103",
+          "source": {
+            "id": "103",
+            "model": ".99",
+            "literal": "1234567890123",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "103",
+            "model": ".99",
+            "literal": "1234567890123",
+            "expected": " .##",
+            "actual": " .##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "104",
+          "source": {
+            "id": "104",
+            "model": "FM.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "104",
+            "model": "FM.99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "105",
+          "source": {
+            "id": "105",
+            "model": "FM.99",
+            "literal": "0",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "105",
+            "model": "FM.99",
+            "literal": "0",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "106",
+          "source": {
+            "id": "106",
+            "model": "FM.99",
+            "literal": "12.5",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "106",
+            "model": "FM.99",
+            "literal": "12.5",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "107",
+          "source": {
+            "id": "107",
+            "model": "FM.99",
+            "literal": "-12.5",
+            "expected": "-.##",
+            "actual": "-.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "107",
+            "model": "FM.99",
+            "literal": "-12.5",
+            "expected": "-.##",
+            "actual": "-.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "108",
+          "source": {
+            "id": "108",
+            "model": "FM.99",
+            "literal": "1234.56",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "108",
+            "model": "FM.99",
+            "literal": "1234.56",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "109",
+          "source": {
+            "id": "109",
+            "model": "FM.99",
+            "literal": "-0.004",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "109",
+            "model": "FM.99",
+            "literal": "-0.004",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "110",
+          "source": {
+            "id": "110",
+            "model": "FM.99",
+            "literal": "9999.995",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "110",
+            "model": "FM.99",
+            "literal": "9999.995",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "111",
+          "source": {
+            "id": "111",
+            "model": "FM.99",
+            "literal": "1234567890123",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "111",
+            "model": "FM.99",
+            "literal": "1234567890123",
+            "expected": ".##",
+            "actual": ".##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "112",
+          "source": {
+            "id": "112",
+            "model": "90D99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "112",
+            "model": "90D99",
+            "literal": "CAST(NULL AS NUMERIC)",
+            "expected": null,
+            "actual": null,
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "113",
+          "source": {
+            "id": "113",
+            "model": "90D99",
+            "literal": "0",
+            "expected": "  0.00",
+            "actual": "  0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "113",
+            "model": "90D99",
+            "literal": "0",
+            "expected": "  0.00",
+            "actual": "  0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "114",
+          "source": {
+            "id": "114",
+            "model": "90D99",
+            "literal": "12.5",
+            "expected": " 12.50",
+            "actual": " 12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "114",
+            "model": "90D99",
+            "literal": "12.5",
+            "expected": " 12.50",
+            "actual": " 12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "115",
+          "source": {
+            "id": "115",
+            "model": "90D99",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "115",
+            "model": "90D99",
+            "literal": "-12.5",
+            "expected": "-12.50",
+            "actual": "-12.50",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "116",
+          "source": {
+            "id": "116",
+            "model": "90D99",
+            "literal": "1234.56",
+            "expected": " ##.##",
+            "actual": " ##.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "116",
+            "model": "90D99",
+            "literal": "1234.56",
+            "expected": " ##.##",
+            "actual": " ##.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "117",
+          "source": {
+            "id": "117",
+            "model": "90D99",
+            "literal": "-0.004",
+            "expected": "  0.00",
+            "actual": "  0.00",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "117",
+            "model": "90D99",
+            "literal": "-0.004",
+            "expected": "  0.00",
+            "actual": "  0.00",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "118",
+          "source": {
+            "id": "118",
+            "model": "90D99",
+            "literal": "9999.995",
+            "expected": " ##.##",
+            "actual": " ##.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "118",
+            "model": "90D99",
+            "literal": "9999.995",
+            "expected": " ##.##",
+            "actual": " ##.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "119",
+          "source": {
+            "id": "119",
+            "model": "90D99",
+            "literal": "1234567890123",
+            "expected": " ##.##",
+            "actual": " ##.##",
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "119",
+            "model": "90D99",
+            "literal": "1234567890123",
+            "expected": " ##.##",
+            "actual": " ##.##",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 120,
+      "matched": 120,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true,
+      "target_sql_profile": "postgres",
+      "reference": "postgres",
+      "runtime_binary_sha256": "64a3be06c438851f3a59a55c396aedcfea812699299dc38e5686a2c5b1c26366",
+      "postgres_version_num": 180004,
+      "fixture_source_sha256": "97e7eb8420fd9323302c90e76de465298c6c29eefc20eb13388c2de496b68632"
+    }
+  }
+}

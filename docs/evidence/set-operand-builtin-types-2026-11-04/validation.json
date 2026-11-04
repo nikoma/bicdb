@@ -1,0 +1,46 @@
+{
+  "application_qualified": false,
+  "application_deployed": false,
+  "source_commit": "c4da7cbde37770dc327cd1525329b1b6d91728b4",
+  "binary_sha256": "64a3be06c438851f3a59a55c396aedcfea812699299dc38e5686a2c5b1c26366",
+  "sql_units": {
+    "passed": 599,
+    "failed": 0,
+    "ignored": 3
+  },
+  "driver_tests": {
+    "passed": 35,
+    "failed": 0
+  },
+  "python_tests": {
+    "passed": 25,
+    "failed": 0
+  },
+  "formatting": "passed",
+  "build": {
+    "jobs": 1,
+    "incremental": false,
+    "debug": 0
+  },
+  "memory": {
+    "final_validation": {
+      "status": "completed",
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 4957032448,
+      "minimum_observed_available_bytes": 17454473216
+    },
+    "final_references": {
+      "status": "completed",
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 198098944,
+      "minimum_observed_available_bytes": 21226299392
+    }
+  },
+  "cleanup": {
+    "reclaimed_bytes": 1392140960,
+    "remaining_cache": "approximately 7.5 GiB",
+    "runnable_and_reference_binaries_preserved": true
+  }
+}

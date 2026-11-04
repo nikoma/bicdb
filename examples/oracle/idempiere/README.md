@@ -21,8 +21,11 @@ also complete, including allocation, zero open balances and balanced accounting.
 The selected
 [inventory transfer](../../../docs/evidence/idempiere-inventory-transfer-2026-11-04/README.md)
 also completes/posts with paired stock movements, conserved quantity and balanced
-accounting. The rest of the application, production operations and complete
-Oracle compatibility remain unqualified.
+accounting. Its
+[Reverse Correct](../../../docs/evidence/idempiere-inventory-reversal-2026-11-04/README.md)
+also completes/posts, restores stock and offsets accounting in each locator.
+The rest of the application, production operations and complete Oracle
+compatibility remain unqualified.
 The earlier inventory and initial observations below retain their historical
 results; they do not replace this current checkpoint.
 

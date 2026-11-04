@@ -46,6 +46,11 @@ The [blocking row-lock checkpoint](evidence/sql-row-lock-waits-2026-11-03/README
 addresses premature conflicts in SELECT FOR UPDATE with cancellation and live
 row-cycle detection in both profiles. Broader locking and application qualification
 remain open.
+The [view-predicate checkpoint](evidence/sql-view-predicates-2026-11-03/README.md)
+adds bounded predicate propagation through ordinary view projections, with separate
+Oracle/PostgreSQL comparisons and exact reconciliation of the selected original
+application field view. This improves a measured materialization bottleneck;
+full optimizer and application qualification remain open.
 The milestones below retain their results at the time each was measured.
 
 The original 913 tables and 185,292 rows loaded and passed complete value

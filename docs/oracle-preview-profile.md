@@ -999,3 +999,15 @@ wait graph detects cycles. READ COMMITTED refresh, NOWAIT, SKIP LOCKED, row
 policies and rollback remain independently exercised. This is a common execution
 fix, not a new routine compiler or durable metadata version. Broader DML waits,
 metadata-lock interactions and complete concurrency qualification remain open.
+
+
+## Selective predicates through eligible view projections
+
+The [view-predicate contract](evidence/sql-view-predicates-2026-11-03/README.md)
+propagates bounded null-rejecting filters through directly projected columns,
+including positional aliases. It preserves security barriers and cardinality or
+effect boundaries. Oracle and PostgreSQL source comparisons include prepared
+parameters; all 88 rows and 73 columns of the selected original application
+field view also match Oracle. Stored definitions, compiler version 24 and durable
+metadata format 5 are unchanged. Broader optimizer behavior and complete
+application workflows remain unqualified.

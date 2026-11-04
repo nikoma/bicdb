@@ -1,0 +1,2054 @@
+{
+  "format": 1,
+  "reference": "postgres",
+  "application_qualified": false,
+  "target_protocol": "prepared",
+  "cases": [
+    {
+      "id": "selected_join_view",
+      "sql": "SELECT field_id,label FROM \"BICDB_VF_V_B113364D279A\" WHERE owner_key=7 ORDER BY field_id",
+      "expected": [
+        [
+          "61",
+          "label 7"
+        ],
+        [
+          "62",
+          "label 7"
+        ],
+        [
+          "63",
+          "label 7"
+        ],
+        [
+          "64",
+          "label 7"
+        ],
+        [
+          "65",
+          "label 7"
+        ],
+        [
+          "66",
+          "label 7"
+        ],
+        [
+          "67",
+          "label 7"
+        ],
+        [
+          "68",
+          "label 7"
+        ],
+        [
+          "69",
+          "label 7"
+        ],
+        [
+          "70",
+          "label 7"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61",
+            "label 7"
+          ],
+          [
+            "62",
+            "label 7"
+          ],
+          [
+            "63",
+            "label 7"
+          ],
+          [
+            "64",
+            "label 7"
+          ],
+          [
+            "65",
+            "label 7"
+          ],
+          [
+            "66",
+            "label 7"
+          ],
+          [
+            "67",
+            "label 7"
+          ],
+          [
+            "68",
+            "label 7"
+          ],
+          [
+            "69",
+            "label 7"
+          ],
+          [
+            "70",
+            "label 7"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61",
+            "label 7"
+          ],
+          [
+            "62",
+            "label 7"
+          ],
+          [
+            "63",
+            "label 7"
+          ],
+          [
+            "64",
+            "label 7"
+          ],
+          [
+            "65",
+            "label 7"
+          ],
+          [
+            "66",
+            "label 7"
+          ],
+          [
+            "67",
+            "label 7"
+          ],
+          [
+            "68",
+            "label 7"
+          ],
+          [
+            "69",
+            "label 7"
+          ],
+          [
+            "70",
+            "label 7"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "qualified_alias",
+      "sql": "SELECT z.field_id FROM \"BICDB_VF_V_B113364D279A\" z WHERE z.owner_key=7 ORDER BY z.field_id",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "mixed_alias",
+      "sql": "SELECT vTag.field_id FROM \"BICDB_VF_V_B113364D279A\" vTag WHERE vTag.owner_key=7 ORDER BY vTag.field_id",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "quoted_alias",
+      "sql": "SELECT \"Owner.Alias\".field_id FROM \"BICDB_VF_V_B113364D279A\" \"Owner.Alias\" WHERE \"Owner.Alias\".owner_key=7 ORDER BY \"Owner.Alias\".field_id",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "reverse_comparison",
+      "sql": "SELECT field_id FROM \"BICDB_VF_V_B113364D279A\" WHERE 7=owner_key ORDER BY field_id",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "between",
+      "sql": "SELECT field_id FROM \"BICDB_VF_V_B113364D279A\" WHERE owner_key BETWEEN 6 AND 7 ORDER BY field_id",
+      "expected": [
+        [
+          "51"
+        ],
+        [
+          "52"
+        ],
+        [
+          "53"
+        ],
+        [
+          "54"
+        ],
+        [
+          "55"
+        ],
+        [
+          "56"
+        ],
+        [
+          "57"
+        ],
+        [
+          "58"
+        ],
+        [
+          "59"
+        ],
+        [
+          "60"
+        ],
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "51"
+          ],
+          [
+            "52"
+          ],
+          [
+            "53"
+          ],
+          [
+            "54"
+          ],
+          [
+            "55"
+          ],
+          [
+            "56"
+          ],
+          [
+            "57"
+          ],
+          [
+            "58"
+          ],
+          [
+            "59"
+          ],
+          [
+            "60"
+          ],
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "51"
+          ],
+          [
+            "52"
+          ],
+          [
+            "53"
+          ],
+          [
+            "54"
+          ],
+          [
+            "55"
+          ],
+          [
+            "56"
+          ],
+          [
+            "57"
+          ],
+          [
+            "58"
+          ],
+          [
+            "59"
+          ],
+          [
+            "60"
+          ],
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "in_list",
+      "sql": "SELECT field_id FROM \"BICDB_VF_V_B113364D279A\" WHERE owner_key IN (6,7) ORDER BY field_id",
+      "expected": [
+        [
+          "51"
+        ],
+        [
+          "52"
+        ],
+        [
+          "53"
+        ],
+        [
+          "54"
+        ],
+        [
+          "55"
+        ],
+        [
+          "56"
+        ],
+        [
+          "57"
+        ],
+        [
+          "58"
+        ],
+        [
+          "59"
+        ],
+        [
+          "60"
+        ],
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "51"
+          ],
+          [
+            "52"
+          ],
+          [
+            "53"
+          ],
+          [
+            "54"
+          ],
+          [
+            "55"
+          ],
+          [
+            "56"
+          ],
+          [
+            "57"
+          ],
+          [
+            "58"
+          ],
+          [
+            "59"
+          ],
+          [
+            "60"
+          ],
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "51"
+          ],
+          [
+            "52"
+          ],
+          [
+            "53"
+          ],
+          [
+            "54"
+          ],
+          [
+            "55"
+          ],
+          [
+            "56"
+          ],
+          [
+            "57"
+          ],
+          [
+            "58"
+          ],
+          [
+            "59"
+          ],
+          [
+            "60"
+          ],
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "in_with_null",
+      "sql": "SELECT field_id FROM \"BICDB_VF_V_B113364D279A\" WHERE owner_key IN (7,NULL) ORDER BY field_id",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "not_in_with_null",
+      "sql": "SELECT field_id FROM \"BICDB_VF_V_B113364D279A\" WHERE owner_key NOT IN (7,NULL) ORDER BY field_id",
+      "expected": [],
+      "source": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "null_equality",
+      "sql": "SELECT field_id FROM \"BICDB_VF_V_B113364D279A\" WHERE owner_key=NULL ORDER BY field_id",
+      "expected": [],
+      "source": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "residual_computed_column",
+      "sql": "SELECT field_id FROM \"BICDB_VF_V_B113364D279A\" WHERE owner_key=7 AND label IS NULL ORDER BY field_id",
+      "expected": [],
+      "source": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "disjunction",
+      "sql": "SELECT field_id FROM \"BICDB_VF_V_B113364D279A\" WHERE owner_key=7 OR owner_key=8 ORDER BY field_id",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ],
+        [
+          "71"
+        ],
+        [
+          "72"
+        ],
+        [
+          "73"
+        ],
+        [
+          "74"
+        ],
+        [
+          "75"
+        ],
+        [
+          "76"
+        ],
+        [
+          "77"
+        ],
+        [
+          "78"
+        ],
+        [
+          "79"
+        ],
+        [
+          "80"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ],
+          [
+            "71"
+          ],
+          [
+            "72"
+          ],
+          [
+            "73"
+          ],
+          [
+            "74"
+          ],
+          [
+            "75"
+          ],
+          [
+            "76"
+          ],
+          [
+            "77"
+          ],
+          [
+            "78"
+          ],
+          [
+            "79"
+          ],
+          [
+            "80"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ],
+          [
+            "71"
+          ],
+          [
+            "72"
+          ],
+          [
+            "73"
+          ],
+          [
+            "74"
+          ],
+          [
+            "75"
+          ],
+          [
+            "76"
+          ],
+          [
+            "77"
+          ],
+          [
+            "78"
+          ],
+          [
+            "79"
+          ],
+          [
+            "80"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "renamed_view_columns",
+      "sql": "SELECT field_alias FROM \"BICDB_VF_R_B113364D279A\" WHERE owner_alias=7 ORDER BY field_alias",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "quoted_view_columns",
+      "sql": "SELECT \"Field Id\" FROM \"BICDB_VF_Q_B113364D279A\" WHERE \"Owner Key\"=7 ORDER BY \"Field Id\"",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "inner_join",
+      "sql": "SELECT z.field_id FROM \"BICDB_VF_D_B113364D279A\" d JOIN \"BICDB_VF_V_B113364D279A\" z ON d.id=z.owner_key WHERE z.owner_key=7 ORDER BY z.field_id",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "nullable_join_input",
+      "sql": "SELECT d.id FROM \"BICDB_VF_D_B113364D279A\" d LEFT JOIN \"BICDB_VF_V_B113364D279A\" z ON d.id=z.field_id WHERE z.owner_key IS NULL ORDER BY d.id",
+      "expected": [
+        [
+          "999"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "999"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "999"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "aggregate_boundary",
+      "sql": "SELECT amount FROM \"BICDB_VF_G_B113364D279A\" WHERE owner_key=7",
+      "expected": [
+        [
+          "10"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "10"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "10"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_key",
+      "sql": "SELECT field_id FROM \"BICDB_VF_V_B113364D279A\" WHERE owner_key={P} ORDER BY field_id",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "params": [
+        7
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_null_key",
+      "sql": "SELECT field_id FROM \"BICDB_VF_V_B113364D279A\" WHERE owner_key={P} ORDER BY field_id",
+      "expected": [],
+      "params": [
+        null
+      ],
+      "source": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "column_alias_positions",
+      "sql": "SELECT x FROM \"BICDB_VF_V_B113364D279A\" z(k,x,t) WHERE z.k=7 ORDER BY x",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "mixed_column_aliases",
+      "sql": "SELECT z.fieldAlias FROM \"BICDB_VF_V_B113364D279A\" z(keyAlias,fieldAlias,labelAlias) WHERE z.keyAlias=7 ORDER BY z.fieldAlias",
+      "expected": [
+        [
+          "61"
+        ],
+        [
+          "62"
+        ],
+        [
+          "63"
+        ],
+        [
+          "64"
+        ],
+        [
+          "65"
+        ],
+        [
+          "66"
+        ],
+        [
+          "67"
+        ],
+        [
+          "68"
+        ],
+        [
+          "69"
+        ],
+        [
+          "70"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "61"
+          ],
+          [
+            "62"
+          ],
+          [
+            "63"
+          ],
+          [
+            "64"
+          ],
+          [
+            "65"
+          ],
+          [
+            "66"
+          ],
+          [
+            "67"
+          ],
+          [
+            "68"
+          ],
+          [
+            "69"
+          ],
+          [
+            "70"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "limit_boundary",
+      "sql": "SELECT id FROM \"BICDB_VF_L_B113364D279A\" WHERE id>5",
+      "expected": [],
+      "source": {
+        "rows": []
+      },
+      "bicdb": {
+        "rows": []
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "window_boundary",
+      "sql": "SELECT ordinal FROM \"BICDB_VF_W_B113364D279A\" WHERE id=10",
+      "expected": [
+        [
+          "10"
+        ]
+      ],
+      "source": {
+        "rows": [
+          [
+            "10"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "10"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "matched": 23,
+  "total": 23,
+  "source_qualified": true,
+  "source_version": 180004,
+  "target_sql_profile": "postgres",
+  "runtime_binary_sha256": "1e683572cf27d76db38eb802af54f3b4abd27e1a424e7b40f66ac1c56c3df3fd",
+  "postgres_version_num": 180004,
+  "fixture_source_sha256": "dcea07c410b4045707d48bd02984344c661e37c33476daa6c49af6347ca8c94d"
+}

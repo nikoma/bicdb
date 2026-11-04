@@ -1,0 +1,223 @@
+{
+  "format": 1,
+  "runtime_source_commit": "ea5faf1b6df302a331b430e976439d698299ed69",
+  "runtime_binary_sha256": "1e683572cf27d76db38eb802af54f3b4abd27e1a424e7b40f66ac1c56c3df3fd",
+  "routine_compiler": "bicdb_oracle_preview_v24",
+  "metadata_format": 5,
+  "application_qualified": false,
+  "published_release": false,
+  "verified_application_deployment": false,
+  "reference_reports": {
+    "oracle": {
+      "report": "oracle-comparison.json",
+      "matched": 19,
+      "total": 19
+    },
+    "postgres": {
+      "report": "postgres-comparison.json",
+      "matched": 23,
+      "total": 23
+    },
+    "retained_number_formats": {
+      "report": "retained-number-formats.json",
+      "matched": 55,
+      "total": 55
+    }
+  },
+  "memory_guards": [
+    {
+      "report": "view-filter-alias-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 4953305088,
+      "minimum_observed_available_bytes": 23302766592,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "view-filter-server-build-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 4525551616,
+      "minimum_observed_available_bytes": 23685083136,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "view-filter-full-validation-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 4439547904,
+      "minimum_observed_available_bytes": 19310596096,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "view-filter-references-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 398864384,
+      "minimum_observed_available_bytes": 24885891072,
+      "minimum_required_available_bytes": 8589934592
+    },
+    {
+      "report": "view-filter-field-probe-memory.json",
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 1124786176,
+      "minimum_observed_available_bytes": 26434928640,
+      "minimum_required_available_bytes": 8589934592
+    }
+  ],
+  "rust": {
+    "passed": 1423,
+    "failed": 0,
+    "existing_ignored": 3,
+    "batches": [
+      {
+        "passed": 570,
+        "failed": 0,
+        "ignored": 3
+      },
+      {
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 29,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 17,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 60,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 419,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 121,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 26,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 169,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      }
+    ]
+  },
+  "python": {
+    "passed": 58,
+    "failed": 0
+  },
+  "static_checks": {
+    "rustfmt": true,
+    "diff_check": true,
+    "licenses": true,
+    "open_core_boundary": true
+  },
+  "native_protocol_materialization": {
+    "before": {
+      "format": 1,
+      "runtime_binary_sha256": "703bbf047b5d6d8d1931e7ca64c22e9ecb29e61c7ab245ad94d12aa4cbfbe572",
+      "sql_profile": "postgres",
+      "matched_rows": 10,
+      "synthetic_input_rows": 200,
+      "metrics": {
+        "elapsed_ms": 17.911,
+        "rows_materialized": 600,
+        "join_intermediate_rows": 200,
+        "join_steps": 1,
+        "peak_memory_bytes": 34896,
+        "index_lookups": 200
+      },
+      "application_qualified": false,
+      "production_benchmark": false
+    },
+    "after": {
+      "format": 1,
+      "runtime_binary_sha256": "1e683572cf27d76db38eb802af54f3b4abd27e1a424e7b40f66ac1c56c3df3fd",
+      "sql_profile": "postgres",
+      "matched_rows": 10,
+      "synthetic_input_rows": 200,
+      "metrics": {
+        "elapsed_ms": 5.484,
+        "rows_materialized": 30,
+        "join_intermediate_rows": 10,
+        "join_steps": 1,
+        "peak_memory_bytes": 1740,
+        "index_lookups": 11
+      },
+      "application_qualified": false,
+      "production_benchmark": false
+    },
+    "production_benchmark": false
+  },
+  "focused": {
+    "passed": 7,
+    "oracle_rows_materialized": 21,
+    "postgres_rows_materialized": 30
+  },
+  "earlier_attempts": "The initial native unit harness incorrectly called the Oracle normalizer and is excluded from native baseline evidence. The corrected native baseline is a separate protocol probe against the prior binary. The Oracle engine baseline materialized 420 rows. Initial compiler errors from newly extended internal call signatures were fixed before qualification.",
+  "application_field_view": {
+    "report": "application-field-view-comparison.json",
+    "rows": 88,
+    "columns": 73,
+    "all_values_match": true,
+    "all_column_names_match": true,
+    "canonical_snapshot_unchanged": true,
+    "disposable_copy": true,
+    "full_application_qualified": false
+  },
+  "application_observation": {
+    "runtime_binary_sha256": "1e683572cf27d76db38eb802af54f3b4abd27e1a424e7b40f66ac1c56c3df3fd",
+    "original_oracle_schema": true,
+    "transport": "PostgreSQL driver",
+    "sales_order_form_rendered": true,
+    "record_selected": false,
+    "records_displayed": "0/0",
+    "saved_order_qualified": false,
+    "processed_order_qualified": false,
+    "full_application_qualified": false,
+    "screenshot": "sales-order-development-candidate.png"
+  },
+  "open_application_gaps": [
+    "DBMS_OUTPUT.PUT_LINE has an observed missing-procedure error.",
+    "Record lookup, saving and processing complete business documents remain unqualified.",
+    "Other programme workstreams remain open."
+  ],
+  "scope": {
+    "direct_projection_columns": true,
+    "bounded_null_rejecting_predicates": true,
+    "outer_predicate_retained": true,
+    "stored_definitions_unchanged": true,
+    "security_barriers_preserved": true,
+    "cardinality_boundaries_preserved": true,
+    "full_view_optimization_qualified": false,
+    "full_function_volatility_qualified": false,
+    "full_application_qualified": false
+  },
+  "ci": "Local validation; GitHub CI and a published release are not claimed"
+}

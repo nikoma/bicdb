@@ -1,0 +1,758 @@
+{
+  "format": 1,
+  "oracle_version": "23.26.3.0.0",
+  "application_qualified": false,
+  "target_protocol": "prepared",
+  "cases": [
+    {
+      "id": "literal_0",
+      "sql": "SELECT TO_CHAR(0,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "0"
+      },
+      "bicdb": {
+        "value": "0"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_1",
+      "sql": "SELECT TO_CHAR(1,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "1"
+      },
+      "bicdb": {
+        "value": "1"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_2",
+      "sql": "SELECT TO_CHAR(-1,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "-1"
+      },
+      "bicdb": {
+        "value": "-1"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_3",
+      "sql": "SELECT TO_CHAR(12.500,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "12.5"
+      },
+      "bicdb": {
+        "value": "12.5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_4",
+      "sql": "SELECT TO_CHAR(.5,'TM9') FROM DUAL",
+      "oracle": {
+        "value": ".5"
+      },
+      "bicdb": {
+        "value": ".5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_5",
+      "sql": "SELECT TO_CHAR(-.5,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "-.5"
+      },
+      "bicdb": {
+        "value": "-.5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_6",
+      "sql": "SELECT TO_CHAR(1e63,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "1000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "bicdb": {
+        "value": "1000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_7",
+      "sql": "SELECT TO_CHAR(1e64,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "1E+64"
+      },
+      "bicdb": {
+        "value": "1E+64"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_8",
+      "sql": "SELECT TO_CHAR(-1e63,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "-1E+63"
+      },
+      "bicdb": {
+        "value": "-1E+63"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_9",
+      "sql": "SELECT TO_CHAR(1e-63,'TM9') FROM DUAL",
+      "oracle": {
+        "value": ".000000000000000000000000000000000000000000000000000000000000001"
+      },
+      "bicdb": {
+        "value": ".000000000000000000000000000000000000000000000000000000000000001"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_10",
+      "sql": "SELECT TO_CHAR(1e-64,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "1E-64"
+      },
+      "bicdb": {
+        "value": "1E-64"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_11",
+      "sql": "SELECT TO_CHAR(-1e-62,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "-.00000000000000000000000000000000000000000000000000000000000001"
+      },
+      "bicdb": {
+        "value": "-.00000000000000000000000000000000000000000000000000000000000001"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_12",
+      "sql": "SELECT TO_CHAR(12345678901234567890123456789012345678,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "12345678901234567890123456789012345678"
+      },
+      "bicdb": {
+        "value": "12345678901234567890123456789012345678"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_13",
+      "sql": "SELECT TO_CHAR(1.234567890123456789e80,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "1.234567890123456789E+80"
+      },
+      "bicdb": {
+        "value": "1.234567890123456789E+80"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_14",
+      "sql": "SELECT TO_CHAR(1e125,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "1E+125"
+      },
+      "bicdb": {
+        "value": "1E+125"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_15",
+      "sql": "SELECT TO_CHAR(12.500,'TM') FROM DUAL",
+      "oracle": {
+        "value": "12.5"
+      },
+      "bicdb": {
+        "value": "12.5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_16",
+      "sql": "SELECT TO_CHAR(12.500,'tm9') FROM DUAL",
+      "oracle": {
+        "value": "12.5"
+      },
+      "bicdb": {
+        "value": "12.5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_17",
+      "sql": "SELECT TO_CHAR(12.500,'TME') FROM DUAL",
+      "oracle": {
+        "value": "1.25E+01"
+      },
+      "bicdb": {
+        "value": "1.25E+01"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_18",
+      "sql": "SELECT TO_CHAR(12.500,'tme') FROM DUAL",
+      "oracle": {
+        "value": "1.25E+01"
+      },
+      "bicdb": {
+        "value": "1.25E+01"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_19",
+      "sql": "SELECT TO_CHAR(12.500,'TM9E') FROM DUAL",
+      "oracle": {
+        "code": "ORA-01481"
+      },
+      "bicdb": {
+        "code": "ORA-01481"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_20",
+      "sql": "SELECT TO_CHAR(12.500,'FMTM9') FROM DUAL",
+      "oracle": {
+        "value": "12.5"
+      },
+      "bicdb": {
+        "value": "12.5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_21",
+      "sql": "SELECT TO_CHAR(12.500,' TM9') FROM DUAL",
+      "oracle": {
+        "code": "ORA-01481"
+      },
+      "bicdb": {
+        "code": "ORA-01481"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_22",
+      "sql": "SELECT TO_CHAR(12.500,'TM9 ') FROM DUAL",
+      "oracle": {
+        "code": "ORA-01481"
+      },
+      "bicdb": {
+        "code": "ORA-01481"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_23",
+      "sql": "SELECT TO_CHAR(12.500,'TM99') FROM DUAL",
+      "oracle": {
+        "code": "ORA-01481"
+      },
+      "bicdb": {
+        "code": "ORA-01481"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_24",
+      "sql": "SELECT TO_CHAR(NULL,'TM9') FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_25",
+      "sql": "SELECT TO_CHAR('bad','TM9') FROM DUAL",
+      "oracle": {
+        "code": "ORA-01722"
+      },
+      "bicdb": {
+        "code": "ORA-01722"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_26",
+      "sql": "SELECT TO_CHAR(12.5,NULL) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_27",
+      "sql": "SELECT TO_CHAR(12.5,'TM9','NLS_NUMERIC_CHARACTERS='',.''') FROM DUAL",
+      "oracle": {
+        "value": "12,5"
+      },
+      "bicdb": {
+        "value": "12,5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_28",
+      "sql": "SELECT TO_CHAR(.5,'TM9','NLS_NUMERIC_CHARACTERS='',.''') FROM DUAL",
+      "oracle": {
+        "value": ",5"
+      },
+      "bicdb": {
+        "value": ",5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_29",
+      "sql": "SELECT TO_CHAR(DATE '2020-01-01','TM9') FROM DUAL",
+      "oracle": {
+        "code": "ORA-01821"
+      },
+      "bicdb": {
+        "code": "ORA-01821"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_30",
+      "sql": "SELECT TO_CHAR(0,'TME') FROM DUAL",
+      "oracle": {
+        "value": "0E+00"
+      },
+      "bicdb": {
+        "value": "0E+00"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_31",
+      "sql": "SELECT TO_CHAR(.5,'TME') FROM DUAL",
+      "oracle": {
+        "value": "5E-01"
+      },
+      "bicdb": {
+        "value": "5E-01"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_32",
+      "sql": "SELECT TO_CHAR(-1,'TME') FROM DUAL",
+      "oracle": {
+        "value": "-1E+00"
+      },
+      "bicdb": {
+        "value": "-1E+00"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_33",
+      "sql": "SELECT TO_CHAR(12.5,'TM9',NULL) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_34",
+      "sql": "SELECT TO_CHAR(NULL,'TM9E') FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_35",
+      "sql": "SELECT TO_CHAR('bad',NULL) FROM DUAL",
+      "oracle": {
+        "code": "ORA-01722"
+      },
+      "bicdb": {
+        "code": "ORA-01722"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_36",
+      "sql": "SELECT TO_CHAR('bad','TM9E') FROM DUAL",
+      "oracle": {
+        "code": "ORA-01722"
+      },
+      "bicdb": {
+        "code": "ORA-01722"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_37",
+      "sql": "SELECT TO_CHAR(NULL,'TM9','invalid') FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_38",
+      "sql": "SELECT TO_CHAR(12.5,'TM9','invalid') FROM DUAL",
+      "oracle": {
+        "code": "ORA-12702"
+      },
+      "bicdb": {
+        "code": "ORA-12702"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_39",
+      "sql": "SELECT TO_CHAR(1e-131,'TM9') FROM DUAL",
+      "oracle": {
+        "value": "0"
+      },
+      "bicdb": {
+        "value": "0"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_40",
+      "sql": "SELECT TO_CHAR(1e126,'TM9') FROM DUAL",
+      "oracle": {
+        "code": "ORA-01426"
+      },
+      "bicdb": {
+        "code": "ORA-01426"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_41",
+      "sql": "SELECT TO_CHAR(1,'FMFMTM9') FROM DUAL",
+      "oracle": {
+        "code": "ORA-01481"
+      },
+      "bicdb": {
+        "code": "ORA-01481"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "literal_42",
+      "sql": "SELECT TO_CHAR(1,'TM9FM') FROM DUAL",
+      "oracle": {
+        "code": "ORA-01481"
+      },
+      "bicdb": {
+        "code": "ORA-01481"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_nls_0",
+      "sql": "SELECT TO_CHAR(%s,%s) FROM DUAL",
+      "parameters": [
+        {
+          "numeric": "12.500"
+        },
+        "FMTME"
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2) FROM DUAL",
+      "oracle": {
+        "value": "1.25E+01"
+      },
+      "bicdb": {
+        "value": "1.25E+01"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_nls_1",
+      "sql": "SELECT TO_CHAR(%s,%s,%s) FROM DUAL",
+      "parameters": [
+        {
+          "numeric": "12.500"
+        },
+        "TM9E",
+        "invalid"
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2,:3) FROM DUAL",
+      "oracle": {
+        "code": "ORA-12702"
+      },
+      "bicdb": {
+        "code": "ORA-12702"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_nls_2",
+      "sql": "SELECT TO_CHAR(%s,%s,%s) FROM DUAL",
+      "parameters": [
+        {
+          "numeric": "12.500"
+        },
+        "TM9",
+        "NLS_NUMERIC_CHARACTERS='!?'"
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2,:3) FROM DUAL",
+      "oracle": {
+        "value": "12!5"
+      },
+      "bicdb": {
+        "value": "12!5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_nls_3",
+      "sql": "SELECT TO_CHAR(%s,%s,%s) FROM DUAL",
+      "parameters": [
+        {
+          "numeric": "12.500"
+        },
+        "TM9",
+        "NLS_NUMERIC_CHARACTERS='.'''"
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2,:3) FROM DUAL",
+      "oracle": {
+        "value": "12.5"
+      },
+      "bicdb": {
+        "value": "12.5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_nls_4",
+      "sql": "SELECT TO_CHAR(%s,%s,%s) FROM DUAL",
+      "parameters": [
+        {
+          "numeric": "12.500"
+        },
+        "TM9",
+        "NLS_NUMERIC_CHARACTERS=' .'"
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2,:3) FROM DUAL",
+      "oracle": {
+        "value": "12 5"
+      },
+      "bicdb": {
+        "value": "12 5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_nls_5",
+      "sql": "SELECT TO_CHAR(%s,%s,%s) FROM DUAL",
+      "parameters": [
+        {
+          "numeric": "12.500"
+        },
+        "TM9",
+        "NLS_NUMERIC_CHARACTERS='..'"
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2,:3) FROM DUAL",
+      "oracle": {
+        "code": "ORA-12702"
+      },
+      "bicdb": {
+        "code": "ORA-12702"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_decimal",
+      "sql": "SELECT TO_CHAR(%s,%s) FROM DUAL",
+      "parameters": [
+        {
+          "numeric": "12.500"
+        },
+        "TM9"
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2) FROM DUAL",
+      "oracle": {
+        "value": "12.5"
+      },
+      "bicdb": {
+        "value": "12.5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_text",
+      "sql": "SELECT TO_CHAR(%s,%s) FROM DUAL",
+      "parameters": [
+        "12.500",
+        "TM9"
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2) FROM DUAL",
+      "oracle": {
+        "value": "12.5"
+      },
+      "bicdb": {
+        "value": "12.5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_scientific",
+      "sql": "SELECT TO_CHAR(%s,%s) FROM DUAL",
+      "parameters": [
+        {
+          "numeric": "12.500"
+        },
+        "TME"
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2) FROM DUAL",
+      "oracle": {
+        "value": "1.25E+01"
+      },
+      "bicdb": {
+        "value": "1.25E+01"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_native_fallback",
+      "sql": "SELECT TO_CHAR(%s,%s) FROM DUAL",
+      "parameters": [
+        {
+          "numeric": "12.500"
+        },
+        "FM99.9"
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2) FROM DUAL",
+      "oracle": {
+        "value": "12.5"
+      },
+      "bicdb": {
+        "value": "12.5"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_null",
+      "sql": "SELECT TO_CHAR(%s,%s) FROM DUAL",
+      "parameters": [
+        null,
+        "TM9"
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2) FROM DUAL",
+      "oracle": {
+        "value": null
+      },
+      "bicdb": {
+        "value": null
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_text_error",
+      "sql": "SELECT TO_CHAR(%s,%s) FROM DUAL",
+      "parameters": [
+        "bad",
+        null
+      ],
+      "oracle_sql": "SELECT TO_CHAR(:1,:2) FROM DUAL",
+      "oracle": {
+        "code": "ORA-01722"
+      },
+      "bicdb": {
+        "code": "ORA-01722"
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "matched": 55,
+  "total": 55,
+  "source_qualified": true,
+  "runtime_binary_sha256": "1e683572cf27d76db38eb802af54f3b4abd27e1a424e7b40f66ac1c56c3df3fd",
+  "baseline_observation": false
+}

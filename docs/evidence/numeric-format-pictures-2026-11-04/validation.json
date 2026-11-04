@@ -1,0 +1,46 @@
+{
+  "source_commit": "c92dad68bc60184174902acdfedce2422a170420",
+  "binary_sha256": "32d2c0441d23b9a856e2cb45d2d85b263b3272b322b6c88acd2a9b6962eaa009",
+  "application_qualified": false,
+  "application_deployed": false,
+  "sql_unit_tests": {
+    "passed": 598,
+    "failed": 0,
+    "ignored": 3
+  },
+  "postgres_driver_tests": {
+    "passed": 34,
+    "failed": 0
+  },
+  "python_tests": {
+    "passed": 25,
+    "failed": 0
+  },
+  "formatting": "passed",
+  "build": {
+    "jobs": 1,
+    "incremental": false,
+    "debug": 0
+  },
+  "memory": {
+    "final_validation": {
+      "status": "completed",
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 5064318976,
+      "minimum_observed_available_bytes": 9349963776
+    },
+    "final_references": {
+      "status": "completed",
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 140394496,
+      "minimum_observed_available_bytes": 22216204288
+    }
+  },
+  "cleanup": {
+    "reclaimed_bytes": 1392023136,
+    "remaining_cache": "approximately 7.5 GiB",
+    "current_and_reference_binaries_preserved": true
+  }
+}

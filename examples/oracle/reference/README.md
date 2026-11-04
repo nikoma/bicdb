@@ -1,5 +1,16 @@
 # Oracle reference queries
 
+`scalar_subquery_defaults.py --reference oracle --oracle-config /private/oracle.json
+--output /private/scalar-defaults.json` checks seven scalar-subquery cases:
+character and number defaults, nested defaults and concatenation, DATE
+arithmetic, timestamp fractions and eager Oracle NVL evaluation. The PostgreSQL
+reference uses COALESCE with independent null-concatenation and lazy-evaluation
+expectations. Set `ORACLE_CONTROL_PG_DSN` with `--reference postgres` and
+`BICDB_PG_DSN` for the target. Both references must meet explicit expectations;
+nonce tables are removed, purging Oracle fixture tables. These cases do not
+qualify arbitrary scalar queries, national character types or numeric format
+pictures.
+
 `parenthesized_queries.py --reference oracle --oracle-config /private/oracle.json
 --output /private/parenthesized-queries.json` checks named statement descriptions
 and rows for parenthesized SELECTs and UNION ALL operands with independent row

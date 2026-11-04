@@ -1,0 +1,56 @@
+{
+  "source_commit": "4cabab0627cc4f93f1a989941c3db92dae528ec1",
+  "runtime_binary_sha256": "c9a5d283973fbeefbe71364d8d03014ec7f0f9f1bdfd72af4377aa58831e138b",
+  "sql_unit_passed": 597,
+  "sql_unit_existing_ignored": 3,
+  "oracle_driver_passed": 33,
+  "python_passed": 25,
+  "format_check_passed": true,
+  "resources": {
+    "unit": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 853839872,
+      "minimum_observed_available_bytes": 15327649792
+    },
+    "driver": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 4771618816,
+      "minimum_observed_available_bytes": 12618334208
+    },
+    "build": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 2307821568,
+      "minimum_observed_available_bytes": 15598485504
+    },
+    "references": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 408588288,
+      "minimum_observed_available_bytes": 16613634048
+    }
+  },
+  "cleanup": {
+    "format": 1,
+    "removed_files": 2,
+    "reclaimed_bytes": 695926176,
+    "by_category": {
+      "completed_test_executable": {
+        "files": 2,
+        "bytes": 695926176
+      }
+    },
+    "current_example_binary_preserved": true
+  },
+  "application_qualified": false
+}

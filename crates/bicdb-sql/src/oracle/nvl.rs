@@ -28,6 +28,63 @@ mod tests {
         let lowered = lower_session_sql(db, sql, ORACLE_PREVIEW_PROFILE, None, "bicdb")?;
         SqlSession::new(db).execute(&lowered)
     }
+
+    #[test]
+    fn scalar_subquery_defaults_retain_declared_character_number_and_date_types() {
+        for profile in [POSTGRES_PROFILE, ORACLE_PREVIEW_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open(root.path()).unwrap();
+            ensure_database_profile(&mut db, profile).unwrap();
+            let execute = |db: &mut BicDb, sql: &str| {
+                if profile == ORACLE_PREVIEW_PROFILE {
+                    run(db, sql)
+                } else {
+                    SqlSession::new(db).execute(sql)
+                }
+            };
+            for sql in [
+                "CREATE TABLE scalar_defaults(id NUMERIC(10,0),label VARCHAR(12),amount NUMERIC(10,2),day_value DATE,seen TIMESTAMP(6))",
+                "CREATE TABLE scalar_references(id INTEGER,target_id INTEGER)",
+                "INSERT INTO scalar_defaults VALUES(1,'alpha',12.50,DATE '2024-02-29',TIMESTAMP '2024-02-29 12:34:56.125')",
+                "INSERT INTO scalar_defaults VALUES(2,NULL,NULL,NULL,NULL)",
+                "INSERT INTO scalar_references VALUES(1,1)",
+                "INSERT INTO scalar_references VALUES(2,2)",
+                "INSERT INTO scalar_references VALUES(3,9)",
+            ] {
+                execute(&mut db, sql).unwrap();
+            }
+            let function = if profile == ORACLE_PREVIEW_PROFILE {
+                "NVL"
+            } else {
+                "COALESCE"
+            };
+            for (expression, expected) in [
+                (format!("{function}((SELECT d.label FROM scalar_defaults d WHERE d.id=r.target_id),'none')"), ["alpha", "none", "none"]),
+                (format!("{function}((SELECT d.label||'_x' FROM scalar_defaults d WHERE d.id=r.target_id),'none')"), if profile==ORACLE_PREVIEW_PROFILE { ["alpha_x", "_x", "none"] } else { ["alpha_x", "none", "none"] }),
+                (format!("{function}((SELECT {function}(d.label,'-1')||'_x' FROM scalar_defaults d WHERE d.id=r.target_id),'none')"), ["alpha_x", "-1_x", "none"]),
+                (format!("{function}((SELECT d.amount FROM scalar_defaults d WHERE d.id=r.target_id),7)"), ["12.5", "7", "7"]),
+                (format!("{function}((SELECT d.day_value FROM scalar_defaults d WHERE d.id=r.target_id),DATE '2024-03-01')-DATE '2024-02-28'"), ["1", "2", "2"]),
+                (format!("CASE WHEN {function}((SELECT d.seen FROM scalar_defaults d WHERE d.id=r.target_id),TIMESTAMP '2000-01-01 00:00:07.25')=TIMESTAMP '2024-02-29 12:34:56.125' THEN 1 ELSE 0 END"), ["1", "0", "0"]),
+            ] {
+                let sql = format!("SELECT {expression} FROM scalar_references r ORDER BY r.id");
+                let result = execute(&mut db, &sql).unwrap_or_else(|error| panic!("{profile}: {sql}: {error}"));
+                let actual: Vec<_> = result.rows.iter().map(|row| {
+                    let value = row[0].to_cell();
+                    if value.contains('.') { value.trim_end_matches('0').trim_end_matches('.').to_string() } else { value }
+                }).collect();
+                assert_eq!(actual, expected, "{profile}: {sql}");
+            }
+            let sql=format!("SELECT {function}((SELECT d.amount FROM scalar_defaults d WHERE d.id=r.target_id),1/(r.id-1)) FROM scalar_references r WHERE r.id=1");
+            let result = execute(&mut db, &sql);
+            if profile == ORACLE_PREVIEW_PROFILE {
+                assert_eq!(result.unwrap_err().sqlstate(), "22012");
+            } else {
+                let value = result.unwrap().rows[0][0].to_cell();
+                assert_eq!(value.trim_end_matches('0').trim_end_matches('.'), "12.5");
+            }
+        }
+    }
+
     #[test]
     fn aggregate_nvl_uses_query_scope_and_retains_eager_conversion() {
         let root = tempfile::tempdir().unwrap();

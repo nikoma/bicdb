@@ -1,0 +1,1779 @@
+{
+  "application_qualified": false,
+  "comparisons": [
+    {
+      "reference": "oracle",
+      "before": {
+        "reference_version": "23.26.3.0.0",
+        "runtime_binary_sha256": "b78991f08d526131bea683ec9cd1d814f499a941cd8d769953dfe98e301e1f7e",
+        "fixture_source_sha256": "7add253b3b98f68b2781971a4af7c726fc8db641c4659524f9116e914025f0f9",
+        "source_qualified": true,
+        "matched": 1,
+        "total": 7,
+        "cleanup_errors": [],
+        "cases": [
+          {
+            "id": "character",
+            "source": {
+              "id": "character",
+              "expected": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "character",
+              "expected": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "exception": "FeatureNotSupported",
+              "sqlstate": "0A000",
+              "oracle_code": null,
+              "detail": "unsupported SQL: function nvl is not supported without FROM",
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "concatenation",
+            "source": {
+              "id": "concatenation",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "concatenation",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "exception": "FeatureNotSupported",
+              "sqlstate": "0A000",
+              "oracle_code": null,
+              "detail": "unsupported SQL: function nvl is not supported without FROM",
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "nested_default",
+            "source": {
+              "id": "nested_default",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "nested_default",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "exception": "FeatureNotSupported",
+              "sqlstate": "0A000",
+              "oracle_code": null,
+              "detail": "unsupported SQL: function nvl is not supported without FROM",
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "number",
+            "source": {
+              "id": "number",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "number",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "exception": "FeatureNotSupported",
+              "sqlstate": "0A000",
+              "oracle_code": null,
+              "detail": "unsupported SQL: function nvl is not supported without FROM",
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "date_arithmetic",
+            "source": {
+              "id": "date_arithmetic",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "date_arithmetic",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "exception": "FeatureNotSupported",
+              "sqlstate": "0A000",
+              "oracle_code": null,
+              "detail": "unsupported SQL: function nvl is not supported without FROM",
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "timestamp_fraction",
+            "source": {
+              "id": "timestamp_fraction",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "timestamp_fraction",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "exception": "FeatureNotSupported",
+              "sqlstate": "0A000",
+              "oracle_code": null,
+              "detail": "unsupported SQL: function nvl is not supported without FROM",
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "evaluation_order",
+            "source": {
+              "id": "evaluation_order",
+              "expected": "division_by_zero",
+              "exception": "DatabaseError",
+              "sqlstate": null,
+              "oracle_code": 1476,
+              "detail": "ORA-01476: divisor is equal to zero\nHelp: https://docs.oracle.com/error-help/db/ora-01476/",
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "evaluation_order",
+              "expected": "division_by_zero",
+              "exception": "DivisionByZero",
+              "sqlstate": "22012",
+              "oracle_code": null,
+              "detail": "division by zero",
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          }
+        ]
+      },
+      "after": {
+        "reference_version": "23.26.3.0.0",
+        "runtime_binary_sha256": "c9a5d283973fbeefbe71364d8d03014ec7f0f9f1bdfd72af4377aa58831e138b",
+        "fixture_source_sha256": "7add253b3b98f68b2781971a4af7c726fc8db641c4659524f9116e914025f0f9",
+        "source_qualified": true,
+        "matched": 7,
+        "total": 7,
+        "cleanup_errors": [],
+        "cases": [
+          {
+            "id": "character",
+            "source": {
+              "id": "character",
+              "expected": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "character",
+              "expected": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "concatenation",
+            "source": {
+              "id": "concatenation",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "concatenation",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "nested_default",
+            "source": {
+              "id": "nested_default",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "nested_default",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "number",
+            "source": {
+              "id": "number",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "number",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "date_arithmetic",
+            "source": {
+              "id": "date_arithmetic",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "date_arithmetic",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "timestamp_fraction",
+            "source": {
+              "id": "timestamp_fraction",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "timestamp_fraction",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "evaluation_order",
+            "source": {
+              "id": "evaluation_order",
+              "expected": "division_by_zero",
+              "exception": "DatabaseError",
+              "sqlstate": null,
+              "oracle_code": 1476,
+              "detail": "ORA-01476: divisor is equal to zero\nHelp: https://docs.oracle.com/error-help/db/ora-01476/",
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "evaluation_order",
+              "expected": "division_by_zero",
+              "exception": "DivisionByZero",
+              "sqlstate": "22012",
+              "oracle_code": null,
+              "detail": "division by zero",
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          }
+        ]
+      }
+    },
+    {
+      "reference": "postgres",
+      "before": {
+        "reference_version": 180004,
+        "runtime_binary_sha256": "b78991f08d526131bea683ec9cd1d814f499a941cd8d769953dfe98e301e1f7e",
+        "fixture_source_sha256": "7add253b3b98f68b2781971a4af7c726fc8db641c4659524f9116e914025f0f9",
+        "source_qualified": true,
+        "matched": 7,
+        "total": 7,
+        "cleanup_errors": [],
+        "cases": [
+          {
+            "id": "character",
+            "source": {
+              "id": "character",
+              "expected": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "character",
+              "expected": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "concatenation",
+            "source": {
+              "id": "concatenation",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "concatenation",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "nested_default",
+            "source": {
+              "id": "nested_default",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "nested_default",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "number",
+            "source": {
+              "id": "number",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "number",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "date_arithmetic",
+            "source": {
+              "id": "date_arithmetic",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "date_arithmetic",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "timestamp_fraction",
+            "source": {
+              "id": "timestamp_fraction",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "timestamp_fraction",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "evaluation_order",
+            "source": {
+              "id": "evaluation_order",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "evaluation_order",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          }
+        ]
+      },
+      "after": {
+        "reference_version": 180004,
+        "runtime_binary_sha256": "c9a5d283973fbeefbe71364d8d03014ec7f0f9f1bdfd72af4377aa58831e138b",
+        "fixture_source_sha256": "7add253b3b98f68b2781971a4af7c726fc8db641c4659524f9116e914025f0f9",
+        "source_qualified": true,
+        "matched": 7,
+        "total": 7,
+        "cleanup_errors": [],
+        "cases": [
+          {
+            "id": "character",
+            "source": {
+              "id": "character",
+              "expected": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "character",
+              "expected": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "concatenation",
+            "source": {
+              "id": "concatenation",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "concatenation",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "none"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "nested_default",
+            "source": {
+              "id": "nested_default",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "nested_default",
+              "expected": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "actual": [
+                [
+                  "alpha_x"
+                ],
+                [
+                  "-1_x"
+                ],
+                [
+                  "none"
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "number",
+            "source": {
+              "id": "number",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "number",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ],
+                [
+                  {
+                    "number": "7"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "date_arithmetic",
+            "source": {
+              "id": "date_arithmetic",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "date_arithmetic",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "timestamp_fraction",
+            "source": {
+              "id": "timestamp_fraction",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "timestamp_fraction",
+              "expected": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "evaluation_order",
+            "source": {
+              "id": "evaluation_order",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "evaluation_order",
+              "expected": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ]
+              ],
+              "actual": [
+                [
+                  {
+                    "number": "12.5"
+                  }
+                ]
+              ],
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          }
+        ]
+      }
+    }
+  ]
+}

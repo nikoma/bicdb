@@ -265,6 +265,7 @@ impl Resolve<'_> {
     fn kind(&self, expr: &Expr) -> Kind {
         match expr {
             Expr::Nested(expr) => self.kind(expr),
+            Expr::Subquery(_) => self.query_kind(expr).unwrap_or(Kind::Unknown),
             Expr::Substring { expr, .. } | Expr::Overlay { expr, .. } | Expr::Trim { expr, .. } => {
                 // These are dedicated AST nodes, not Function calls. Their
                 // character result type must retain procedural input types

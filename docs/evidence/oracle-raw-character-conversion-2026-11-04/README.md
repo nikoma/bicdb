@@ -60,3 +60,23 @@ binary hash: 600 SQL tests passed (three existing benchmark ignores), 363
 PostgreSQL-driver tests passed (two existing external interoperability ignores),
 and 30 migration-tool Python tests passed. Formatting checks passed. Ignored
 checks were not executed; no failing checks were suppressed.
+
+## Application upgrade and reporting follow-up
+
+The [upgrade record](application-upgrade.json) verifies a clean stop, copy and
+reopen of the current application database. No original routines or views were
+recreated: all 62 routine and 160 view definition fingerprints match, all 160
+view labels/type families pass named Parse/Describe, fresh login succeeds, and
+the prior 38 financial/inventory checks still pass. The unchanged original UUID
+routine now returns the expected 36-character format. This is a clean local
+upgrade check, not crash-recovery or disaster-recovery qualification.
+
+A fresh Trial Balance submission persisted all 47 independently expected rows:
+19 opening balances and 28 current-period entries. Exact rows match the source
+ledger, with valid unique UUIDs and balanced current-period debits/credits of
+1,910.35. However, the completed eight-page PDF and process summary contain
+only 28 rows. The report's rendered date-range filter omitted the 19 opening
+balances. Replacing equivalent timestamp bounds with a zero fractional-second
+suffix reproduces that omission. Typed BETWEEN handling remains under
+investigation; the full report workflow is **not qualified**. The previous
+failed request was not overwritten or blindly resubmitted.

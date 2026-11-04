@@ -198,6 +198,7 @@ impl ParameterTypeResolver<'_, '_> {
             Statement::Query(query) => self.query(query, None),
             Statement::Insert(insert) => self.insert(insert),
             Statement::Update(update) => self.update(update),
+            Statement::Merge(merge) => self.merge(merge),
             Statement::Delete(delete) => self.delete(delete),
             Statement::Call(function) => {
                 self.function(function, &[], None);
@@ -292,6 +293,47 @@ impl ParameterTypeResolver<'_, '_> {
         for assignment in assignments {
             let expected = assignment_target_type(&assignment.target, columns);
             self.expr(&assignment.value, env, expected.as_deref());
+        }
+    }
+
+    fn merge(&mut self, merge: &sqlparser::ast::Merge) {
+        let target = TableWithJoins {
+            relation: merge.table.clone(),
+            joins: Vec::new(),
+        };
+        let source = TableWithJoins {
+            relation: merge.source.clone(),
+            joins: Vec::new(),
+        };
+        let target_env = self
+            .engine
+            .from_relation_columns(std::slice::from_ref(&target))
+            .unwrap_or_default();
+        let columns = flatten_relation_env(&target_env);
+        let mut env = target_env;
+        env.extend(
+            self.engine
+                .from_relation_columns(std::slice::from_ref(&source))
+                .unwrap_or_default(),
+        );
+        self.table_factor(&merge.source);
+        self.expr(&merge.on, &env, Some("bool"));
+        for clause in &merge.clauses {
+            if let Some(predicate) = &clause.predicate {
+                self.expr(predicate, &env, Some("bool"));
+            }
+            if let sqlparser::ast::MergeAction::Update(update) = &clause.action {
+                self.assignments(&update.assignments, &columns, &env);
+                for predicate in [
+                    update.update_predicate.as_ref(),
+                    update.delete_predicate.as_ref(),
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    self.expr(predicate, &env, Some("bool"));
+                }
+            }
         }
     }
 

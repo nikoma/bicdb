@@ -1312,7 +1312,8 @@ pub(crate) fn write_table_for_buffered_sql(normalized: &str) -> Option<String> {
 }
 
 pub(crate) fn is_write_sql(normalized: &str) -> bool {
-    normalized.starts_with("insert ")
+    normalized.starts_with("merge ")
+        || normalized.starts_with("insert ")
         || normalized.starts_with("update ")
         || normalized.starts_with("delete ")
         || is_mutating_with_sql(normalized)
@@ -3729,5 +3730,22 @@ mod placeholder_describe_name_tests {
         )
         .expect("describable");
         assert_eq!(result.columns, vec!["n".to_string(), "m".to_string()]);
+    }
+}
+
+#[cfg(test)]
+mod merge_admission_tests {
+    use super::*;
+
+    #[test]
+    fn matched_merge_uses_write_admission_even_with_leading_comments() {
+        let sql = "/* mutation */ MERGE INTO target t USING source s ON(t.id=s.id) WHEN MATCHED THEN UPDATE SET n=s.n";
+        assert!(matches!(query_kind_for_sql(sql), QueryKind::Write));
+        assert!(!is_read_only_sql_for_shared_execution(sql));
+        assert!(!is_describable_query(sql));
+        assert!(matches!(
+            query_kind_for_sql("SELECT 'MERGE INTO target'"),
+            QueryKind::Read
+        ));
     }
 }

@@ -764,6 +764,15 @@ impl<'db> SqlSession<'db> {
         update: &sqlparser::ast::Update,
         ctes: BTreeMap<String, CteResult>,
     ) -> Result<SqlResult> {
+        self.execute_update_with_match_policy(update, ctes, UpdateMatchPolicy::First)
+    }
+
+    pub(super) fn execute_update_with_match_policy(
+        &mut self,
+        update: &sqlparser::ast::Update,
+        ctes: BTreeMap<String, CteResult>,
+        match_policy: UpdateMatchPolicy,
+    ) -> Result<SqlResult> {
         let (table, target_alias) = table_with_joins_name_and_alias(&update.table)?;
         let table = resolve_session_relation_name_if_exists(self.db_ref(), &table);
         self.require_update_privileges(&table, &update.assignments)?;
@@ -793,7 +802,10 @@ impl<'db> SqlSession<'db> {
         // Simple updates of resident rows never parse the row: the assigned
         // columns are spliced into the old row's JSON text and the result is
         // written in its stored form (typed resident rows phase 3).
-        if let Some(schema) = schema.as_ref() {
+        if let Some(schema) = schema
+            .as_ref()
+            .filter(|_| match_policy == UpdateMatchPolicy::First)
+        {
             if let Some(result) = self.try_execute_update_stored(
                 update,
                 &ctes,
@@ -815,6 +827,7 @@ impl<'db> SqlSession<'db> {
                 from_rows,
                 target_columns.clone(),
                 &ctes,
+                match_policy,
             )?
         } else {
             self.update_assignment_candidates_without_from(
@@ -855,10 +868,11 @@ impl<'db> SqlSession<'db> {
         // row triggers, or extension event bindings. When none applies (the
         // common OLTP case) the per-row `before` deep clone and the
         // (before, after) pair clone are both skipped.
-        let needs_before_image = match schema.as_deref() {
-            None => true,
-            Some(schema) => self.update_needs_before_image(update, &table, schema)?,
-        };
+        let needs_before_image = match_policy != UpdateMatchPolicy::First
+            || match schema.as_deref() {
+                None => true,
+                Some(schema) => self.update_needs_before_image(update, &table, schema)?,
+            };
         let repair_assignments =
             self.repairable_update_assignments(update, &table, &target_alias, schema.as_deref())?;
         let assignment_operand_memo = self.ir_owned_statement
@@ -897,7 +911,22 @@ impl<'db> SqlSession<'db> {
         } else {
             None
         };
+        let mut merged_targets = BTreeSet::new();
+        let merge_columns = (match_policy == UpdateMatchPolicy::OracleMerge)
+            .then(|| {
+                schema.as_ref().map(|schema| {
+                    schema
+                        .columns
+                        .iter()
+                        .map(|column| column.name.clone())
+                        .collect::<Vec<_>>()
+                })
+            })
+            .flatten();
         for (idx, mut candidate) in assignment_candidates.into_iter().enumerate() {
+            if merged_targets.contains(&candidate.record.id) {
+                return Err(match_policy.duplicate_error());
+            }
             if idx % 1024 == 0 {
                 self.cancellation.check()?;
             }
@@ -1119,6 +1148,22 @@ impl<'db> SqlSession<'db> {
                     schema,
                     std::slice::from_mut(&mut record),
                 )?;
+            }
+            if match_policy != UpdateMatchPolicy::First {
+                let changed = match (schema.as_deref(), merge_columns.as_deref(), before.as_ref()) {
+                    (Some(schema), Some(columns), Some(before)) => {
+                        !typed_column_values_not_distinct(
+                            schema,
+                            columns,
+                            &record_column_values(before, schema, columns),
+                            &record_column_values(&record, schema, columns),
+                        )?
+                    }
+                    _ => true,
+                };
+                if match_policy == UpdateMatchPolicy::PostgresMerge || changed {
+                    merged_targets.insert(record.id.clone());
+                }
             }
             let repair_plan = match repair_assignments.as_ref() {
                 Some(assignments) => {
@@ -1395,6 +1440,7 @@ impl<'db> SqlSession<'db> {
         from_rows: &RowSet,
         target_columns: Arc<Vec<String>>,
         ctes: &BTreeMap<String, CteResult>,
+        match_policy: UpdateMatchPolicy,
     ) -> Result<Vec<UpdateAssignmentCandidate>> {
         let mut candidates = Vec::new();
         let mut seen_record_ids = BTreeSet::new();
@@ -1523,7 +1569,8 @@ impl<'db> SqlSession<'db> {
                 if idx % 1024 == 0 {
                     self.cancellation.check()?;
                 }
-                if seen_record_ids.contains(&record.id) {
+                if match_policy == UpdateMatchPolicy::First && seen_record_ids.contains(&record.id)
+                {
                     continue;
                 }
                 let candidate_row =
@@ -1544,7 +1591,10 @@ impl<'db> SqlSession<'db> {
                         matches?
                     }
                 };
-                if matches && seen_record_ids.insert(record.id.clone()) {
+                if matches
+                    && (match_policy != UpdateMatchPolicy::First
+                        || seen_record_ids.insert(record.id.clone()))
+                {
                     candidates.push(UpdateAssignmentCandidate {
                         record,
                         columns: candidate_columns.clone(),

@@ -83,7 +83,7 @@ def observe(factory):
         finally:
             for kind, name in reversed(created):
                 try:
-                    execute(f"DROP {kind} {name}")
+                    execute(f"DROP {kind} {name}" + (" PURGE" if oracle and kind == "TABLE" else ""))
                 except Exception as exc:
                     report["cleanup_errors"].append(dict(kind=kind, exception=type(exc).__name__))
     return report

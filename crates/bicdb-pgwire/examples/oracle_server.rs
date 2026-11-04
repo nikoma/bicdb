@@ -31,6 +31,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sql_profile: profile,
         ..Default::default()
     };
+    // Optional local qualification trace through the existing query logger.
+    // Keep bind-parameter redaction and normal execution behavior unchanged.
+    if let Some(path) = std::env::var_os("BICDB_COMPAT_QUERY_LOG") {
+        config.slow_query_log = Some(PathBuf::from(path));
+        config.slow_query_threshold = std::time::Duration::ZERO;
+    }
     // A local application can use several JDBC pools from one loopback IP.
     // Keep limits explicit for that workload without changing server defaults.
     if let Some(limit) = max_connections {

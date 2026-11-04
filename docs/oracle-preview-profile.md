@@ -674,6 +674,12 @@ crates, `cargo run -p bicdb-pgwire --example oracle_server -- PATH PORT` selects
 this preview and binds loopback. Use the CLI's deployment controls for public
 servers.
 
+For local qualification, setting `BICDB_COMPAT_QUERY_LOG` to a file path enables
+the example server's existing query logger with a zero-duration threshold. It
+records query text using the normal bind-parameter redaction settings. This is
+an optional diagnostic for tracing application SQL; it does not alter execution
+or enable logging unless that variable is set.
+
 ```sh
 cargo test --locked -p bicdb-sql --lib oracle::tests
 cargo test --locked -p bicdb-pgwire --test oracle_hr

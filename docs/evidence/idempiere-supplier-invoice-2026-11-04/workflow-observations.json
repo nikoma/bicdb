@@ -1,0 +1,379 @@
+{
+  "invoice": {
+    "columns": [
+      "C_INVOICE_ID",
+      "DOCUMENTNO",
+      "AD_ORG_ID",
+      "C_BPARTNER_ID",
+      "ISSOTRX",
+      "DOCSTATUS",
+      "PROCESSED",
+      "PROCESSING",
+      "POSTED",
+      "SENDEMAIL",
+      "GRANDTOTAL",
+      "TOTALLINES",
+      "C_ORDER_ID",
+      "C_PAYMENTTERM_ID",
+      "ISPAID"
+    ],
+    "rows": [
+      [
+        "1000001",
+        "TF-800003",
+        "11",
+        "114",
+        "N",
+        "CO",
+        "Y",
+        "N",
+        "Y",
+        "N",
+        "185.25",
+        "185.25",
+        "1000001",
+        "106",
+        "N"
+      ]
+    ]
+  },
+  "lines": {
+    "columns": [
+      "C_INVOICELINE_ID",
+      "C_ORDERLINE_ID",
+      "M_INOUTLINE_ID",
+      "M_PRODUCT_ID",
+      "QTYENTERED",
+      "QTYINVOICED",
+      "PRICEENTERED",
+      "PRICEACTUAL",
+      "LINENETAMT"
+    ],
+    "rows": [
+      [
+        "1000001",
+        "1000001",
+        "1000001",
+        "123",
+        "3",
+        "3",
+        "61.75",
+        "61.75",
+        "185.25"
+      ]
+    ]
+  },
+  "order_line": {
+    "columns": [
+      "QTYORDERED",
+      "QTYRESERVED",
+      "QTYDELIVERED",
+      "QTYINVOICED"
+    ],
+    "rows": [
+      [
+        "3",
+        "0",
+        "3",
+        "3"
+      ]
+    ]
+  },
+  "match_invoice": {
+    "columns": [
+      "M_MATCHINV_ID",
+      "M_INOUTLINE_ID",
+      "C_INVOICELINE_ID",
+      "QTY",
+      "PROCESSED",
+      "POSTED"
+    ],
+    "rows": [
+      [
+        "1000000",
+        "1000001",
+        "1000001",
+        "3",
+        "Y",
+        "Y"
+      ]
+    ]
+  },
+  "match_po": {
+    "columns": [
+      "M_MATCHPO_ID",
+      "C_ORDERLINE_ID",
+      "M_INOUTLINE_ID",
+      "C_INVOICELINE_ID",
+      "QTY",
+      "PROCESSED",
+      "POSTED"
+    ],
+    "rows": [
+      [
+        "1000000",
+        "1000001",
+        "1000001",
+        "1000001",
+        "3",
+        "Y",
+        "Y"
+      ]
+    ]
+  },
+  "invoice_accounting": {
+    "columns": [
+      "C_ACCTSCHEMA_ID",
+      "count",
+      "sum",
+      "sum",
+      "sum",
+      "sum"
+    ],
+    "rows": [
+      [
+        "101",
+        2,
+        "185.25",
+        "185.25",
+        "185.25",
+        "185.25"
+      ],
+      [
+        "200000",
+        2,
+        "157.46",
+        "157.46",
+        "185.25",
+        "185.25"
+      ]
+    ]
+  },
+  "processes": {
+    "columns": [
+      "AD_PINSTANCE_ID",
+      "AD_PROCESS_ID",
+      "ISPROCESSING",
+      "RESULT",
+      "ERRORMSG"
+    ],
+    "rows": [
+      [
+        "1000030",
+        "200143",
+        "N",
+        "1",
+        "Created = 1"
+      ],
+      [
+        "1000031",
+        "111",
+        "N",
+        "1",
+        "Completed"
+      ]
+    ]
+  },
+  "application_qualified": false,
+  "workflow_qualified": true,
+  "read_only_verification": true,
+  "runtime_binary_sha256": "64a3be06c438851f3a59a55c396aedcfea812699299dc38e5686a2c5b1c26366",
+  "source_commit": "c4da7cbde37770dc327cd1525329b1b6d91728b4",
+  "preservation_checks": [
+    {
+      "sql": "SELECT C_AcctSchema_ID,C_Currency_ID,PostingType,COUNT(*),SUM(AmtAcctDr),SUM(AmtAcctCr),SUM(AmtSourceDr),SUM(AmtSourceCr) FROM Fact_Acct WHERE AD_Table_ID=319 AND Record_ID=1000001 GROUP BY C_AcctSchema_ID,C_Currency_ID,PostingType ORDER BY C_AcctSchema_ID,C_Currency_ID,PostingType",
+      "rows": [
+        [
+          "101",
+          "100",
+          "A",
+          2,
+          "185.25",
+          "185.25",
+          "185.25",
+          "185.25"
+        ],
+        [
+          "200000",
+          "100",
+          "A",
+          2,
+          "157.46",
+          "157.46",
+          "185.25",
+          "185.25"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "sql": "SELECT COUNT(*) FROM M_InOutLine WHERE M_InOut_ID=1000001",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "sql": "SELECT IsPaid,Posted,GrandTotal FROM C_Invoice WHERE C_Invoice_ID=1000000",
+      "rows": [
+        [
+          "Y",
+          "Y",
+          "123.50"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "sql": "SELECT DocStatus,IsAllocated,IsReconciled,Posted FROM C_Payment WHERE C_Payment_ID=1000000",
+      "rows": [
+        [
+          "CO",
+          "Y",
+          "Y",
+          "Y"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "sql": "SELECT CurrentBalance FROM C_BankAccount WHERE C_BankAccount_ID=100",
+      "rows": [
+        [
+          "269.03"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "sql": "SELECT COUNT(*),SUM(MovementQty) FROM M_Transaction WHERE M_InOutLine_ID=1000000",
+      "rows": [
+        [
+          1,
+          "-2.0"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "sql": "SELECT AD_Table_ID,C_AcctSchema_ID,COUNT(*),SUM(AmtAcctDr),SUM(AmtAcctCr),SUM(AmtSourceDr),SUM(AmtSourceCr) FROM Fact_Acct WHERE AD_Table_ID IN(318,319,335,392,735) AND Record_ID=1000000 GROUP BY AD_Table_ID,C_AcctSchema_ID ORDER BY AD_Table_ID,C_AcctSchema_ID",
+      "rows": [
+        [
+          "318",
+          "101",
+          2,
+          "123.50",
+          "123.50",
+          "123.50",
+          "123.50"
+        ],
+        [
+          "318",
+          "200000",
+          2,
+          "104.98",
+          "104.98",
+          "123.50",
+          "123.50"
+        ],
+        [
+          "319",
+          "101",
+          2,
+          "104.19",
+          "104.19",
+          "104.19",
+          "104.19"
+        ],
+        [
+          "319",
+          "200000",
+          2,
+          "88.56",
+          "88.56",
+          "88.56",
+          "88.56"
+        ],
+        [
+          "335",
+          "101",
+          2,
+          "121.03",
+          "121.03",
+          "121.03",
+          "121.03"
+        ],
+        [
+          "335",
+          "200000",
+          2,
+          "102.88",
+          "102.88",
+          "121.03",
+          "121.03"
+        ],
+        [
+          "392",
+          "101",
+          2,
+          "121.03",
+          "121.03",
+          "121.03",
+          "121.03"
+        ],
+        [
+          "392",
+          "200000",
+          2,
+          "102.88",
+          "102.88",
+          "121.03",
+          "121.03"
+        ],
+        [
+          "735",
+          "101",
+          3,
+          "123.50",
+          "123.50",
+          "123.50",
+          "123.50"
+        ],
+        [
+          "735",
+          "200000",
+          3,
+          "104.98",
+          "104.98",
+          "123.50",
+          "123.50"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "sql": "SELECT BOMQtyAvailable(123,103,0),BOMQtyOnHand(123,103,0),BOMQtyReserved(123,103,0),BOMQtyOrdered(123,103,0) FROM DUAL",
+      "rows": [
+        [
+          "21",
+          "21",
+          "0",
+          "0"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "sql": "SELECT COUNT(*),SUM(MovementQty) FROM M_Transaction WHERE M_InOutLine_ID=1000001",
+      "rows": [
+        [
+          1,
+          "3.0"
+        ]
+      ],
+      "passed": true
+    }
+  ]
+}

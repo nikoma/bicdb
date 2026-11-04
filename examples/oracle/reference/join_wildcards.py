@@ -64,6 +64,8 @@ def observe(factory, nonce):
         ("derived_second_duplicate_ordinal", f"SELECT d.* FROM (SELECT * FROM {a} l CROSS JOIN {b} r) d ORDER BY 6 ASC,1 DESC FETCH FIRST 1 ROWS ONLY", columns, types, [[number(32), stamp, "left_32"] + right]),
         ("stored_view_star", f"SELECT * FROM {view}", ["l_key","l_time","l_common","r_key","r_amount","r_common"], types, [left + right]),
         ("qualified_view_star", f"SELECT v.* FROM {view} v", ["l_key","l_time","l_common","r_key","r_amount","r_common"], types, [left + right]),
+        ("left_unmatched", f"SELECT * FROM {a} l LEFT JOIN {b} r ON l.left_key=r.right_key WHERE l.left_key=8", columns, types, [[number(8),stamp,"left_08",None,None,None]]),
+        ("right_unmatched", f"SELECT * FROM {a} l RIGHT JOIN {b} r ON l.left_key=99", columns, types, [[None,None,None] + right]),
     ]
     report = dict(cases=[], cleanup_errors=[])
     with factory() as conn:
@@ -151,7 +153,7 @@ def run(source_factory, target_factory):
     return dict(format=1, application_qualified=False, reference_version=source["server_version"],
                 cases=cases, total=len(cases), matched=sum(case["matched"] for case in cases),
                 cleanup_errors=cleanup, source_qualified=all(case["source_qualified"] for case in cases),
-                success=len(cases) == 21 and all(case["matched"] for case in cases) and not cleanup)
+                success=len(cases) == 23 and all(case["matched"] for case in cases) and not cleanup)
 
 
 def qualified(row):

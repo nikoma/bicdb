@@ -17,6 +17,14 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [production checkpoint](evidence/idempiere-production-2026-11-04/README.md)
+completes and reverses one single-product BOM build through the original UI.
+Stock totals return to their initial values; both accounting schemas balance
+and all eight product/account groups net to zero. All 67 selected observations
+pass, including the prior 57, with definitions and saved reports preserved.
+Production plans, disassembly, broader manufacturing and the full application
+remain unqualified.
+
 The [physical inventory checkpoint](evidence/idempiere-physical-inventory-2026-11-04/README.md)
 completes one count-list generation, inventory adjustment, posting and correction
 reversal through the original Oracle-schema application's UI. All 57 selected

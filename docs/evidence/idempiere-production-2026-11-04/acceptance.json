@@ -1,0 +1,118 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "workflow_qualified": true,
+  "source_commit": "e0dec4b12b8eff009a18df68af6d3118f217a90b",
+  "source_main_commit": "c76509b480b17ff81cf92e57972e75c12218e999",
+  "runtime_binary_sha256": "a212d957d2091906d4b2d69b5941cee1baf76e3a577f0cced4c45421af9c71fd",
+  "runtime_changed_for_this_workflow": false,
+  "workflow_checks": 67,
+  "prior_checks_preserved": 57,
+  "initial_production_documents": 0,
+  "organization": 11,
+  "locator": 101,
+  "product": 145,
+  "bom": 145,
+  "quantity": 1,
+  "original": {
+    "id": 1000000,
+    "document": "1000000",
+    "status": "RE",
+    "posted": true,
+    "reversal_id": 1000001
+  },
+  "reversal": {
+    "id": 1000001,
+    "document": "1000001",
+    "quantity": -1,
+    "status": "RE",
+    "posted": true,
+    "reversal_id": 1000000
+  },
+  "processes": {
+    "generation": 1000044,
+    "completion": 1000045,
+    "reversal": 1000046,
+    "all_successful": true
+  },
+  "lines_each_document": 4,
+  "stock_movements_each_document": 4,
+  "committed_stock_movements": 8,
+  "stock": [
+    {
+      "product": 133,
+      "before": 30,
+      "forward": 26,
+      "after_reversal": 30
+    },
+    {
+      "product": 134,
+      "before": 12,
+      "forward": 11,
+      "after_reversal": 12
+    },
+    {
+      "product": 135,
+      "before": 15,
+      "forward": 14,
+      "after_reversal": 15
+    },
+    {
+      "product": 145,
+      "before": 0,
+      "forward": 1,
+      "after_reversal": 0
+    }
+  ],
+  "accounting": {
+    "rows_each_document_each_schema": 4,
+    "ledger_rows": 16,
+    "schema_101_debit_credit_each": "225.00",
+    "schema_200000_debit_credit_each": "191.26",
+    "rounding": "Each component is rounded to currency precision before summing the finished product.",
+    "net_zero_product_account_groups": 8
+  },
+  "stock_layers": {
+    "original_material_policy_date": "2003-01-22",
+    "returned_material_policy_date": "2026-11-04",
+    "distinct_keys_verified": true,
+    "aggregate_stock_restored": true,
+    "full_fifo_qualification": false
+  },
+  "preservation": {
+    "business_checks": 27,
+    "object_fingerprints": {
+      "routines": {
+        "count": 62,
+        "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+      },
+      "views": {
+        "count": 160,
+        "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+      }
+    },
+    "reports": [
+      {
+        "instance": 1000037,
+        "rows": 47,
+        "sha256": "81a42de285b0d5fe80ae0b40933506f0be1e530f9c94f764a7e539be0ab5980a"
+      },
+      {
+        "instance": 1000038,
+        "rows": 47,
+        "sha256": "35e82c243822cfcdeebebd85e458eeae1fed085b7fea74c6db860d21946159a1"
+      },
+      {
+        "instance": 1000039,
+        "rows": 47,
+        "sha256": "2862e075a0105c67da863e18f804409fd70769c7b0144642bf867d9998078387"
+      }
+    ]
+  },
+  "pdfs_regenerated": false,
+  "frontend_scope": [
+    "desktop login",
+    "Production (Single Product) create/generate/complete/post/reverse"
+  ],
+  "release_published": false
+}

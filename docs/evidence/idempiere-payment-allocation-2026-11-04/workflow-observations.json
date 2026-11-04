@@ -1,0 +1,230 @@
+{
+  "application_qualified": false,
+  "workflow_qualified": true,
+  "payment_completion": {
+    "read_only": true,
+    "application_qualified": false,
+    "checks": [
+      {
+        "sql": "SELECT C_Payment_ID,DocumentNo,DocStatus,Processed,Processing,IsReceipt,IsOnline,C_Invoice_ID,PayAmt,DiscountAmt,WriteOffAmt,OverUnderAmt,IsAllocated,Posted FROM C_Payment WHERE C_Invoice_ID=1000000",
+        "rows": [
+          [
+            "1000000",
+            "#TEST-100001",
+            "CO",
+            "Y",
+            "N",
+            "Y",
+            "N",
+            "1000000",
+            "121.03",
+            "2.47",
+            "0",
+            "0",
+            "Y",
+            "Y"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_Invoice_ID,DocumentNo,DocStatus,IsPaid,C_Payment_ID,GrandTotal FROM C_Invoice WHERE C_Invoice_ID=1000000",
+        "rows": [
+          [
+            "1000000",
+            "100001",
+            "CO",
+            "Y",
+            "1000000",
+            "123.50"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_AllocationHdr_ID,C_Payment_ID,C_Invoice_ID,Amount,DiscountAmt,WriteOffAmt,OverUnderAmt FROM C_AllocationLine WHERE C_Payment_ID=1000000",
+        "rows": [
+          [
+            "1000000",
+            "1000000",
+            "1000000",
+            "121.03",
+            "2.47",
+            "0",
+            "0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT AD_PInstance_ID,AD_Process_ID,IsProcessing,Result,ErrorMsg FROM AD_PInstance ORDER BY AD_PInstance_ID DESC FETCH FIRST 3 ROWS ONLY",
+        "rows": [
+          [
+            "1000025",
+            "149",
+            "N",
+            "1",
+            "Completed"
+          ],
+          [
+            "1000024",
+            "134",
+            "N",
+            "1",
+            "Created = 1"
+          ],
+          [
+            "1000023",
+            "199",
+            "N",
+            "1",
+            "Created = 1"
+          ]
+        ]
+      }
+    ]
+  },
+  "accounting": {
+    "read_only": true,
+    "application_qualified": false,
+    "runtime_binary_sha256": "32d2c0441d23b9a856e2cb45d2d85b263b3272b322b6c88acd2a9b6962eaa009",
+    "checks": [
+      {
+        "sql": "SELECT C_AllocationHdr_ID,DocumentNo,DocStatus,Processed,Processing,Posted FROM C_AllocationHdr WHERE C_AllocationHdr_ID=1000000",
+        "rows": [
+          [
+            "1000000",
+            "1000002",
+            "CO",
+            "Y",
+            "N",
+            "Y"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT AD_Table_ID,C_AcctSchema_ID,C_Currency_ID,PostingType,COUNT(*),SUM(AmtAcctDr),SUM(AmtAcctCr),SUM(AmtSourceDr),SUM(AmtSourceCr) FROM Fact_Acct WHERE AD_Table_ID IN (335,735) AND Record_ID=1000000 GROUP BY AD_Table_ID,C_AcctSchema_ID,C_Currency_ID,PostingType ORDER BY AD_Table_ID,C_AcctSchema_ID,C_Currency_ID,PostingType",
+        "rows": [
+          [
+            "335",
+            "101",
+            "100",
+            "A",
+            "2",
+            "121.03",
+            "121.03",
+            "121.03",
+            "121.03"
+          ],
+          [
+            "335",
+            "200000",
+            "100",
+            "A",
+            "2",
+            "102.88",
+            "102.88",
+            "121.03",
+            "121.03"
+          ],
+          [
+            "735",
+            "101",
+            "100",
+            "A",
+            "3",
+            "123.50",
+            "123.50",
+            "123.50",
+            "123.50"
+          ],
+          [
+            "735",
+            "200000",
+            "100",
+            "A",
+            "3",
+            "104.98",
+            "104.98",
+            "123.50",
+            "123.50"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT invoiceOpen(1000000,0),paymentAvailable(1000000) FROM DUAL",
+        "rows": [
+          [
+            "0",
+            "0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*) FROM C_Payment WHERE C_Invoice_ID=1000000",
+        "rows": [
+          [
+            "1"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*) FROM C_AllocationLine WHERE C_Payment_ID=1000000 AND C_Invoice_ID=1000000",
+        "rows": [
+          [
+            "1"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT BOMQtyAvailable(123,103,0),BOMQtyOnHand(123,103,0),BOMQtyReserved(123,103,0),BOMQtyOrdered(123,103,0) FROM DUAL",
+        "rows": [
+          [
+            "18",
+            "18",
+            "0",
+            "0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*),SUM(MovementQty) FROM M_Transaction WHERE M_InOutLine_ID=1000000",
+        "rows": [
+          [
+            "1",
+            "-2.0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000000",
+        "rows": [
+          [
+            "0",
+            "2",
+            "2"
+          ]
+        ]
+      }
+    ],
+    "table_ids": {
+      "C_Payment": 335,
+      "C_AllocationHdr": 735
+    }
+  },
+  "receipt_and_allocation_completed_posted": true,
+  "invoice_paid": true,
+  "zero_invoice_open_and_payment_available": true,
+  "single_payment_and_allocation": true,
+  "inventory_preserved": true,
+  "source_commit": "c92dad68bc60184174902acdfedce2422a170420",
+  "source_main_commit": "ab8dda710795482b92f598222aa063d685a646a6",
+  "workflow_actions": "Original payment UI: selected invoice, saved draft, selected Complete and confirmed once; no direct SQL business writes.",
+  "fresh_invoice_browser": {
+    "window": "Sales Invoice and Credit/Debit Note",
+    "document": "100001",
+    "paid_checked": true,
+    "paid_read_only": true,
+    "allocation_rows": 1,
+    "receipt": "#TEST-100001",
+    "amount": "121.03",
+    "discount": "2.47"
+  }
+}

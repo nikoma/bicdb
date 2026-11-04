@@ -43,6 +43,29 @@ The [local validation](validation.json) passes all 363 PostgreSQL-wire tests
 with 2 existing environment-gated tests ignored, including all 36 Oracle-driver
 tests. Formatting and the 30 Python migration tests also pass.
 
-The live application still uses the preceding binary at this checkpoint. These
-transport and reference results do not imply an application upgrade, full
-application acceptance or completion of the Oracle compatibility programme.
+## Subsequent application upgrade and clean restart
+
+The [upgrade observations](application-upgrade.json) now record a completed
+local application upgrade to the candidate above. The existing JVM was stopped
+with SIGTERM (exit 143), and the database then exited cleanly with code zero.
+Only after both stopped was the current database copied to a separate directory.
+The copied state includes both settled sales and purchasing flows; no older
+shipment-only or unpaid-invoice database was substituted.
+
+The upgraded database preserves 27 captured document, ledger and stock checks,
+including both paid invoices, both reconciled payments, allocations, matching,
+bank statements and their accounting. The repeatable workflow verifier passes
+25/25 before and after the restart. Stock remains 21 at HQ and the bank balance
+87.49. Fingerprints match for all 62 stored routine bodies/kinds and all 160 view
+definitions. No routine or view was recreated to repair the copied database.
+All 160 persisted views retain their source column names and Oracle type families
+through named Parse/Describe; this does not qualify all view values or typmods.
+
+A fresh browser login reached the admin desktop and
+[Inventory Move](upgraded-navigation.png) on the upgraded runtime, without
+browser page errors. That screen contains an unsaved new record; navigation is
+not a completed inventory movement. Background processors were retained.
+
+This is a clean local stop/copy/reopen and application-login check, not a crash,
+backup/restore or disaster-recovery drill. Full application acceptance, other
+business rules/modules and the full Oracle programme remain open.

@@ -931,7 +931,7 @@ impl<'db> SqlEngine<'db> {
                 }
                 if let Some(value) = context
                     .row_lookup
-                    .value_from_parts(row, std::slice::from_ref(&ident.value))
+                    .value_from_parts(row, &[ident_value(ident)])
                 {
                     return Ok(value);
                 }
@@ -951,9 +951,7 @@ impl<'db> SqlEngine<'db> {
                     return Ok(value);
                 }
                 if let Some(outer_row) = &self.outer_row {
-                    if let Some(value) =
-                        outer_row.value_from_parts(std::slice::from_ref(&ident.value))
-                    {
+                    if let Some(value) = outer_row.value_from_parts(&[ident_value(ident)]) {
                         return Ok(value);
                     }
                     if let Some(value) = outer_row.scalar_value_for_relation_alias(&ident.value) {
@@ -967,10 +965,7 @@ impl<'db> SqlEngine<'db> {
                 .unwrap_or_else(|| literal_to_value(value)),
             Expr::TypedString(value) => typed_string_to_value_with_db(self.db_ref(), value),
             Expr::CompoundIdentifier(idents) => {
-                let parts = idents
-                    .iter()
-                    .map(|ident| ident.value.clone())
-                    .collect::<Vec<_>>();
+                let parts = idents.iter().map(ident_value).collect::<Vec<_>>();
                 if let Some(value) = context.row_lookup.qualified_value_from_parts(row, &parts) {
                     return Ok(value);
                 }
@@ -1863,7 +1858,7 @@ impl<'db> SqlEngine<'db> {
     ) -> Result<Option<SqlValue>> {
         match expr {
             Expr::Identifier(ident) => {
-                let parts = [ident.value.clone()];
+                let parts = [ident_value(ident)];
                 if let Some(value) =
                     self.record_outer_target_value(table, alias, schema, record, &parts)
                 {
@@ -1878,10 +1873,7 @@ impl<'db> SqlEngine<'db> {
                 Ok(routine_var_from_ident(&self.routine_vars, ident).or(Some(SqlValue::Null)))
             }
             Expr::CompoundIdentifier(idents) => {
-                let parts = idents
-                    .iter()
-                    .map(|ident| ident.value.clone())
-                    .collect::<Vec<_>>();
+                let parts = idents.iter().map(ident_value).collect::<Vec<_>>();
                 if let Some(value) =
                     self.record_outer_target_value(table, alias, schema, record, &parts)
                 {
@@ -2522,9 +2514,7 @@ impl<'db> SqlEngine<'db> {
                     return Ok(hydrate_relation_composite(self.db_ref(), value));
                 }
                 if let Some(outer_row) = &self.outer_row {
-                    if let Some(value) =
-                        outer_row.value_from_parts(std::slice::from_ref(&ident.value))
-                    {
+                    if let Some(value) = outer_row.value_from_parts(&[ident_value(ident)]) {
                         return Ok(value);
                     }
                     if let Some(value) = outer_row.scalar_value_for_relation_alias(&ident.value) {
@@ -2538,10 +2528,7 @@ impl<'db> SqlEngine<'db> {
                 .unwrap_or_else(|| literal_to_value(value)),
             Expr::TypedString(value) => typed_string_to_value_with_db(self.db_ref(), value),
             Expr::CompoundIdentifier(idents) => {
-                let parts = idents
-                    .iter()
-                    .map(|ident| ident.value.clone())
-                    .collect::<Vec<_>>();
+                let parts = idents.iter().map(ident_value).collect::<Vec<_>>();
                 if let Some(value) = row_value_from_parts_opt(row, &parts) {
                     return Ok(value);
                 }

@@ -1937,11 +1937,22 @@ impl<'db> SqlEngine<'db> {
                 {
                     return Ok(truth);
                 }
-                eval_between_truth(
-                    self.eval_row_aggregate_expr(rows, columns, expr)?,
-                    self.eval_row_aggregate_expr(rows, columns, low)?,
-                    self.eval_row_aggregate_expr(rows, columns, high)?,
+                eval_between_expr_truth(
+                    [expr, low, high],
+                    [
+                        self.eval_row_aggregate_expr(rows, columns, expr)?,
+                        self.eval_row_aggregate_expr(rows, columns, low)?,
+                        self.eval_row_aggregate_expr(rows, columns, high)?,
+                    ],
                     *negated,
+                    None,
+                    Some([expr.as_ref(), low.as_ref(), high.as_ref()].map(|operand| {
+                        row_columns_expr_pg_type(
+                            self.db_ref(),
+                            operand,
+                            columns.iter().map(String::as_str),
+                        )
+                    })),
                 )
             }
             Expr::AnyOp {

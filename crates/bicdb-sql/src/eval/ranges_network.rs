@@ -3764,6 +3764,27 @@ pub(crate) fn compare_expr_values(
 ) -> Result<Option<bool>> {
     let left_expr_type = projected_expr_pg_type(left_expr, schema);
     let right_expr_type = projected_expr_pg_type(right_expr, schema);
+    compare_expr_values_resolved(
+        left_expr,
+        op,
+        right_expr,
+        left,
+        right,
+        schema,
+        [left_expr_type, right_expr_type],
+    )
+}
+
+pub(crate) fn compare_expr_values_resolved(
+    left_expr: &Expr,
+    op: &BinaryOperator,
+    right_expr: &Expr,
+    left: &SqlValue,
+    right: &SqlValue,
+    schema: Option<&TableSchema>,
+    types: [Option<String>; 2],
+) -> Result<Option<bool>> {
+    let [left_expr_type, right_expr_type] = types;
     reject_undefined_comparison(left_expr_type.as_deref(), op, right_expr_type.as_deref())?;
     if matches!(
         op,
@@ -3802,8 +3823,12 @@ pub(crate) fn compare_expr_values(
             }
         }
     }
-    let left_type = projected_arithmetic_operand_pg_type(left_expr, schema);
-    let right_type = projected_arithmetic_operand_pg_type(right_expr, schema);
+    let left_type = left_expr_type
+        .clone()
+        .or_else(|| projected_arithmetic_operand_pg_type(left_expr, schema));
+    let right_type = right_expr_type
+        .clone()
+        .or_else(|| projected_arithmetic_operand_pg_type(right_expr, schema));
     if left_type.as_deref() == Some("oid") || right_type.as_deref() == Some("oid") {
         let left = oid_comparison_value(left, left_type.as_deref(), right_type.as_deref())?;
         let right = oid_comparison_value(right, right_type.as_deref(), left_type.as_deref())?;

@@ -17,6 +17,12 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [typed BETWEEN checkpoint](evidence/sql-typed-between-2026-11-04/README.md)
+retains datetime operand types at range boundaries. It preserves 16/16 explicit
+Oracle controls and improves PostgreSQL comparisons from 4/16 to 14/16. Two
+pre-existing PostgreSQL volatile-evaluation differences remain explicitly
+unqualified; application rendering acceptance is still separate.
+
 The [RAW conversion checkpoint](evidence/oracle-raw-character-conversion-2026-11-04/README.md)
 corrects implicit hexadecimal character conversion for proven RAW intrinsic
 operands and binary result metadata over prepared PostgreSQL queries. Its

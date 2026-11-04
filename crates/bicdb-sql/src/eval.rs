@@ -1012,11 +1012,16 @@ pub(crate) fn eval_constant_truth(expr: &Expr) -> Result<Option<bool>> {
             if let Some(truth) = eval_tuple_between_truth(expr, low, high, *negated, &mut eval)? {
                 return Ok(truth);
             }
-            eval_between_truth(
-                eval_constant_expr(expr)?,
-                eval_constant_expr(low)?,
-                eval_constant_expr(high)?,
+            eval_between_expr_truth(
+                [expr, low, high],
+                [
+                    eval_constant_expr(expr)?,
+                    eval_constant_expr(low)?,
+                    eval_constant_expr(high)?,
+                ],
                 *negated,
+                None,
+                None,
             )
         }
         Expr::AnyOp {

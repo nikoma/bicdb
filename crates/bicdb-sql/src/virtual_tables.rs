@@ -1133,11 +1133,16 @@ pub(crate) fn eval_virtual_truth(
             if let Some(truth) = eval_tuple_between_truth(expr, low, high, *negated, &mut eval)? {
                 return Ok(truth);
             }
-            eval_between_truth(
-                eval_virtual_value(row, expr)?,
-                eval_virtual_value(row, low)?,
-                eval_virtual_value(row, high)?,
+            eval_between_expr_truth(
+                [expr, low, high],
+                [
+                    eval_virtual_value(row, expr)?,
+                    eval_virtual_value(row, low)?,
+                    eval_virtual_value(row, high)?,
+                ],
                 *negated,
+                None,
+                None,
             )
         }
         Expr::AnyOp {
@@ -6139,11 +6144,16 @@ pub(crate) fn eval_predicate_truth(record: &Record, expr: &Expr) -> Result<Optio
             if let Some(truth) = eval_tuple_between_truth(expr, low, high, *negated, &mut eval)? {
                 return Ok(truth);
             }
-            eval_between_truth(
-                eval_value(record, expr)?,
-                eval_value(record, low)?,
-                eval_value(record, high)?,
+            eval_between_expr_truth(
+                [expr, low, high],
+                [
+                    eval_value(record, expr)?,
+                    eval_value(record, low)?,
+                    eval_value(record, high)?,
+                ],
                 *negated,
+                None,
+                None,
             )
         }
         Expr::AnyOp {

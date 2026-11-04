@@ -668,3 +668,11 @@ encoding, length, null and empty-value behavior. The PostgreSQL reference needs
 `pgcrypto` installed for its random-byte control. Nonce routines are removed.
 These cases do not qualify RAW columns, all RAW-producing expressions, explicit
 `TO_CHAR(RAW)`, or general LOB support.
+
+`typed_between.py` uses the common connection arguments with `--reference oracle`
+or `--reference postgres`. Sixteen cases exercise typed range boundaries,
+character controls, NULL logic, relation scopes and stored routines. Oracle
+uses explicit datetime bounds; PostgreSQL also checks unknown ISO literals.
+The [bounded checkpoint](../../../docs/evidence/sql-typed-between-2026-11-04/README.md)
+retains two pre-existing PostgreSQL volatile-evaluation differences: its CLI
+returns nonzero while those cases remain unqualified. Nonce objects are removed.

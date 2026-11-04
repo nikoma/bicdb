@@ -1765,14 +1765,35 @@ pub(crate) fn eval_in_list_truth(
     }
 }
 
-pub(crate) fn eval_between_truth(
-    value: SqlValue,
-    low: SqlValue,
-    high: SqlValue,
+/// BETWEEN uses the same typed operators as >= and <=, but evaluates each
+/// operand only once. Never infer a temporal type from a string's contents.
+pub(crate) fn eval_between_expr_truth(
+    exprs: [&Expr; 3],
+    values: [SqlValue; 3],
     negated: bool,
+    schema: Option<&TableSchema>,
+    types: Option<[Option<String>; 3]>,
 ) -> Result<Option<bool>> {
-    let lower = compare_values(&value, &BinaryOperator::GtEq, &low)?;
-    let upper = compare_values(&value, &BinaryOperator::LtEq, &high)?;
+    let types = types.unwrap_or_else(|| exprs.map(|expr| projected_expr_pg_type(expr, schema)));
+    let [value_type, low_type, high_type] = types;
+    let lower = compare_expr_values_resolved(
+        exprs[0],
+        &BinaryOperator::GtEq,
+        exprs[1],
+        &values[0],
+        &values[1],
+        schema,
+        [value_type.clone(), low_type],
+    )?;
+    let upper = compare_expr_values_resolved(
+        exprs[0],
+        &BinaryOperator::LtEq,
+        exprs[2],
+        &values[0],
+        &values[2],
+        schema,
+        [value_type, high_type],
+    )?;
     Ok(sql_and(lower, upper).map(|matched| if negated { !matched } else { matched }))
 }
 
@@ -3116,11 +3137,16 @@ pub(crate) fn eval_record_aggregate_truth(
             negated,
             low,
             high,
-        } => eval_between_truth(
-            eval_record_aggregate_expr(records, expr, schema)?,
-            eval_record_aggregate_expr(records, low, schema)?,
-            eval_record_aggregate_expr(records, high, schema)?,
+        } => eval_between_expr_truth(
+            [expr, low, high],
+            [
+                eval_record_aggregate_expr(records, expr, schema)?,
+                eval_record_aggregate_expr(records, low, schema)?,
+                eval_record_aggregate_expr(records, high, schema)?,
+            ],
             *negated,
+            schema,
+            None,
         ),
         Expr::AnyOp {
             left,
@@ -3383,5 +3409,61 @@ fn eval_untyped_date_day_arithmetic(
             eval_typed_date_arithmetic(left, op, right, Some("int4"), Some("date"))
         }
         _ => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod between_type_tests {
+    use super::*;
+
+    #[test]
+    fn between_keeps_timestamp_boundaries_text_and_null_logic() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for (sql, expected) in [
+            ("SELECT TIMESTAMP '2026-11-01 00:00:00' BETWEEN '2026-11-01 00:00:00.0' AND '2026-11-30 00:00:00.0'", SqlValue::Bool(true)),
+            ("SELECT date_trunc('day',TIMESTAMP '2026-11-01 13:14:15.123456') BETWEEN '2026-11-01 00:00:00.000000' AND '2026-11-30 00:00:00.0'", SqlValue::Bool(true)),
+            ("SELECT CAST('2026-11-01 00:00:00' AS TEXT) BETWEEN '2026-11-01 00:00:00.0' AND '2026-11-30 00:00:00.0'", SqlValue::Bool(false)),
+            ("SELECT TIMESTAMP '2026-11-01' NOT BETWEEN '2026-11-01 00:00:00.0' AND '2026-11-30 00:00:00.0'", SqlValue::Bool(false)),
+            ("SELECT 5 BETWEEN NULL AND 3", SqlValue::Bool(false)),
+            ("SELECT 5 BETWEEN NULL AND 8", SqlValue::Null),
+            ("SELECT 5 NOT BETWEEN NULL AND 3", SqlValue::Bool(true)),
+        ] {
+            assert_eq!(session.execute(sql).unwrap().rows[0][0], expected, "{sql}");
+        }
+        session.execute("CREATE TABLE boundary_values(id INTEGER PRIMARY KEY, happened TIMESTAMP(6), label TEXT)").unwrap();
+        session.execute("INSERT INTO boundary_values VALUES (1,TIMESTAMP '2026-11-01','2026-11-01 00:00:00'),(2,TIMESTAMP '2026-11-04','2026-11-04 00:00:00')").unwrap();
+        let result = session.execute("SELECT id FROM boundary_values WHERE happened BETWEEN '2026-11-01 00:00:00.0' AND '2026-11-30 00:00:00.0' ORDER BY id").unwrap();
+        assert_eq!(
+            result.rows,
+            vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
+        );
+        let result = session.execute("SELECT id FROM boundary_values WHERE label BETWEEN '2026-11-01 00:00:00.0' AND '2026-11-30 00:00:00.0' ORDER BY id").unwrap();
+        assert_eq!(result.rows, vec![vec![SqlValue::Int(2)]]);
+        drop(session);
+        drop(db);
+        let oracle_root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(oracle_root.path()).unwrap();
+        oracle::ensure_database_profile(&mut db, oracle::ORACLE_PREVIEW_PROFILE).unwrap();
+        for source in [
+            "CREATE SEQUENCE boundary_sequence START WITH 1",
+            "CREATE FUNCTION boundary_counter RETURN INTEGER IS BEGIN IF boundary_sequence.NEXTVAL BETWEEN 1 AND 1 THEN RETURN 1; ELSE RETURN 0; END IF; END;",
+        ] {
+            let sql = oracle::lower_session_sql(&db, source, oracle::ORACLE_PREVIEW_PROFILE, None, "bicdb").unwrap();
+            SqlSession::new(&mut db).execute(&sql).unwrap();
+        }
+        let queries = [
+            "SELECT boundary_counter() FROM DUAL",
+            "SELECT boundary_sequence.CURRVAL FROM DUAL",
+        ]
+        .map(|source| {
+            oracle::lower_session_sql(&db, source, oracle::ORACLE_PREVIEW_PROFILE, None, "bicdb")
+                .unwrap()
+        });
+        let mut session = SqlSession::new(&mut db);
+        for sql in queries {
+            assert_eq!(session.execute(&sql).unwrap().rows[0][0].to_cell(), "1");
+        }
     }
 }

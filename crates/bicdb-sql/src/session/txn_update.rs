@@ -2695,11 +2695,19 @@ impl<'db> SqlSession<'db> {
                 negated,
                 low,
                 high,
-            } => Ok(eval_between_truth(
-                self.eval_session_expr(expr)?,
-                self.eval_session_expr(low)?,
-                self.eval_session_expr(high)?,
+            } => Ok(eval_between_expr_truth(
+                [expr, low, high],
+                [
+                    self.eval_session_expr(expr)?,
+                    self.eval_session_expr(low)?,
+                    self.eval_session_expr(high)?,
+                ],
                 *negated,
+                None,
+                Some(
+                    [expr.as_ref(), low.as_ref(), high.as_ref()]
+                        .map(|operand| self.routine_unary_operand_type(operand)),
+                ),
             )?
             .map(SqlValue::Bool)
             .unwrap_or(SqlValue::Null)),

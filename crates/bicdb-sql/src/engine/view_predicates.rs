@@ -298,6 +298,43 @@ mod tests {
         SqlSession::new(db).execute(&sql)
     }
 
+    #[test]
+    fn ordinary_union_views_derive_typed_metadata_without_executing_their_definitions() {
+        for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            {
+                let mut db = BicDb::open(root.path()).unwrap();
+                oracle::ensure_database_profile(&mut db, profile).unwrap();
+                for sql in [
+                    "CREATE TABLE metadata_source(id INTEGER,v NUMERIC(10,2))",
+                    "INSERT INTO metadata_source VALUES(1,1.25)",
+                    "CREATE VIEW union_metadata(\"RowKey\",\"Amount\") AS SELECT id,v FROM metadata_source UNION ALL SELECT id+1,v+1 FROM metadata_source",
+                    "CREATE VIEW deferred_error AS SELECT id,CAST(1 AS NUMERIC)/0 AS value FROM metadata_source UNION ALL SELECT id,v FROM metadata_source",
+                ] { execute(&mut db,sql,profile).unwrap(); }
+            }
+            let mut db = BicDb::open(root.path()).unwrap();
+            let rows =
+                execute(&mut db, "SELECT * FROM union_metadata ORDER BY 1", profile).unwrap();
+            assert_eq!(rows.columns, vec!["RowKey", "Amount"]);
+            assert_eq!(
+                rows.rows
+                    .iter()
+                    .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                    .collect::<Vec<_>>(),
+                vec![
+                    vec!["1".to_string(), "1.25".to_string()],
+                    vec!["2".to_string(), "2.25".to_string()]
+                ]
+            );
+            assert_eq!(rows.column_types[1], Some("numeric".into()));
+            let error = execute(&mut db, "SELECT * FROM deferred_error", profile).unwrap_err();
+            assert!(
+                error.to_string().contains("division by zero"),
+                "{profile}: {error}"
+            );
+        }
+    }
+
     fn fixture(profile: &str) -> (tempfile::TempDir, BicDb) {
         let directory = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(directory.path()).unwrap();

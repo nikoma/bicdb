@@ -243,7 +243,19 @@ impl<'db> SqlSession<'db> {
         let mut columns = match view_columns_from_query(&create_view.query) {
             Ok(columns) => columns,
             Err(metadata_error) => {
-                let query_result = self.sql_engine().execute_query(&create_view.query);
+                let typed_columns = (!create_view.materialized)
+                    .then(|| {
+                        self.sql_engine()
+                            .query_describe_output_columns(&create_view.query)
+                    })
+                    .flatten()
+                    .filter(|columns| columns.iter().all(|(_, kind)| kind.is_some()));
+                let query_result = if let Some(columns) = typed_columns {
+                    let (names, types) = columns.into_iter().unzip();
+                    Ok(SqlResult::empty(names).with_column_types(types))
+                } else {
+                    self.sql_engine().execute_query(&create_view.query)
+                };
                 match query_result {
                     // Keep the result's column types (integer, uuid, ...): a view over a UNION
                     // typed everything as text, so its integers compared and sorted as text.

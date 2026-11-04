@@ -11,6 +11,8 @@ use crate::*;
 
 #[cfg(test)]
 mod attribute_tests;
+#[cfg(test)]
+mod keyword_tests;
 pub(crate) mod nested_blocks;
 pub(crate) mod parameterized_cursors;
 mod procedural_case;
@@ -115,6 +117,9 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     let body = plpgsql_body_from_definition(&routine.definition)?;
     let (body, oracle_autonomous) = oracle::autonomous::prepare_body(&body, &routine.language)?;
     let (mut declarations, mut statements, mut exception_handlers) = parse_plpgsql_body(&body)?;
+    if oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 25) {
+        oracle::output::lower(&mut statements, &mut exception_handlers)?;
+    }
     let oracle_error_diagnostics =
         if oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 14) {
             oracle::errors::lower(&mut statements, &mut exception_handlers)?;
@@ -1675,13 +1680,12 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             query: parse_single_query(&format!("SELECT {}", rest.trim()))?,
         });
     }
-    let lower = statement.to_ascii_lowercase();
-    for (keyword, feature) in [("exception", "EXCEPTION blocks")] {
-        if lower.starts_with(keyword) || lower.contains(&format!(" {keyword}")) {
-            return Err(SqlError::UnsupportedPlpgsqlFeature(format!(
-                "{feature} are not implemented"
-            )));
-        }
+    // A stray clause keyword is syntax, while strings, comments, aliases and
+    // longer routine identifiers containing the word are ordinary SQL text.
+    if starts_with_plpgsql_word(statement, "EXCEPTION") {
+        return Err(SqlError::UnsupportedPlpgsqlFeature(
+            "EXCEPTION blocks are not implemented".into(),
+        ));
     }
     if oracle::dynamic_sql::enabled() {
         if let Some(dynamic) = oracle::dynamic_sql::parse(statement)? {

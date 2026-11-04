@@ -26,6 +26,7 @@ pub(crate) mod national;
 pub(crate) mod number_formats;
 mod nvl;
 mod outer_joins;
+pub(crate) mod output;
 pub(crate) mod procedures;
 pub(crate) mod routine_arithmetic;
 pub(crate) mod routine_characters;
@@ -172,7 +173,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V20: &str = "bicdb_oracle_preview_v20"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V21: &str = "bicdb_oracle_preview_v21";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V22: &str = "bicdb_oracle_preview_v22";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V23: &str = "bicdb_oracle_preview_v23";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v24";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V24: &str = "bicdb_oracle_preview_v24";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v25";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -196,7 +198,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V20_OID: i64 = 999_419;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V21_OID: i64 = 999_420;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V22_OID: i64 = 999_421;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V23_OID: i64 = 999_422;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_423;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V24_OID: i64 = 999_423;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_424;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -228,7 +231,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V21 => Some(21),
         PREVIEW_ROUTINE_LANGUAGE_V22 => Some(22),
         PREVIEW_ROUTINE_LANGUAGE_V23 => Some(23),
-        PREVIEW_ROUTINE_LANGUAGE => Some(24),
+        PREVIEW_ROUTINE_LANGUAGE_V24 => Some(24),
+        PREVIEW_ROUTINE_LANGUAGE => Some(25),
         _ => None,
     }
 }
@@ -416,6 +420,7 @@ pub fn lower_session_sql(
         return procedures::render(function);
     }
     let mut statements = parse_statements(&lowered)?;
+    output::lower_calls(&mut statements)?;
     namespaces::qualify_with_calls(&mut statements, &schema);
     collections::lower_constructors(db, &mut statements, Some(&schema))?;
     date_trunc::rewrite(db, &mut statements)?;

@@ -311,6 +311,7 @@ impl SqlSession<'_> {
         child.settings = self.settings;
         child.session_gucs = self.session_gucs.clone();
         child.currvals = self.currvals.clone();
+        child.oracle_output = self.oracle_output.clone();
         child.oracle_exception = self.oracle_exception.clone();
         child.oracle_error_tokens = self.oracle_error_tokens.clone();
         child.runtime = self.runtime.clone();

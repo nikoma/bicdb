@@ -239,6 +239,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_call(&mut self, function: &Function) -> Result<SqlResult> {
+        if let Some(result) = self.execute_output_call(function)? {
+            return Ok(result);
+        }
         let name = object_name(&function.name)?.to_ascii_lowercase();
         let routine = resolve_routine_cached(self.db_ref(), RoutineKind::Procedure, &name)?
             .ok_or_else(|| SqlError::InvalidSql(format!("procedure \"{name}\" does not exist")))?;

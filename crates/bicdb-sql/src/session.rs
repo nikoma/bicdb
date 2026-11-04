@@ -960,6 +960,7 @@ pub struct SqlSession<'db> {
     /// enable this mode.
     pub(crate) signed_application_security_guc_compatibility: bool,
     pub(crate) currvals: FxHashMap<String, i64>,
+    pub(crate) oracle_output: oracle::output::State,
     pub(crate) schema_cache_generation: u64,
     pub(crate) schema_cache: SqlSchemaCacheMap,
     pub(crate) schema_list_cache: SqlSchemaListCacheMap,
@@ -985,6 +986,7 @@ pub struct SqlSessionGucState {
     local_restore: HashMap<String, Option<String>>,
     local_settings_restore: SqlSettingsRestore,
     currvals: FxHashMap<String, i64>,
+    oracle_output: oracle::output::State,
 }
 
 impl SqlSessionGucState {
@@ -1103,6 +1105,7 @@ impl SqlSessionGucState {
             )
             .saturating_add(optional_string_map_memory_estimate(&self.local_restore))
             .saturating_add(sequence_value_map_memory_estimate(&self.currvals))
+            .saturating_add(self.oracle_output.memory_estimate())
     }
 }
 
@@ -2227,6 +2230,7 @@ impl<'db> SqlSession<'db> {
             signed_mutation_grants: BTreeMap::new(),
             signed_application_security_guc_compatibility: false,
             currvals: FxHashMap::default(),
+            oracle_output: oracle::output::State::default(),
             schema_cache_generation,
             schema_cache: SqlSchemaCacheMap::default(),
             schema_list_cache: BTreeMap::new(),
@@ -2332,6 +2336,7 @@ impl<'db> SqlSession<'db> {
         self.guc_local_restore = state.local_restore;
         self.guc_local_settings_restore = state.local_settings_restore;
         self.currvals = state.currvals;
+        self.oracle_output = state.oracle_output;
         self.rebind_trusted_security_settings();
         self.apply_database_setting_defaults();
     }
@@ -2347,6 +2352,7 @@ impl<'db> SqlSession<'db> {
             local_restore: std::mem::take(&mut self.guc_local_restore),
             local_settings_restore: std::mem::take(&mut self.guc_local_settings_restore),
             currvals: std::mem::take(&mut self.currvals),
+            oracle_output: std::mem::take(&mut self.oracle_output),
         };
         if !preserve_postgres_compatibility_gucs {
             state.strip_protected_security_settings();
@@ -2515,6 +2521,7 @@ impl<'db> SqlSession<'db> {
             local_restore: self.guc_local_restore.clone(),
             local_settings_restore: self.guc_local_settings_restore.clone(),
             currvals: self.currvals.clone(),
+            oracle_output: self.oracle_output.clone(),
         }
     }
 
@@ -4926,6 +4933,7 @@ impl<'db> SqlSession<'db> {
         self.guc_local_restore.clear();
         self.guc_local_settings_restore = SqlSettingsRestore::default();
         self.currvals.clear();
+        self.oracle_output.reset()?;
         self.rebind_trusted_security_settings();
         Ok(())
     }

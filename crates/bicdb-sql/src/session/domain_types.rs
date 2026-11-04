@@ -2263,6 +2263,9 @@ impl<'db> SqlSession<'db> {
                 &session_user_from_gucs(&self.session_gucs),
             )?
             .unwrap_or_else(default_schema_name);
+            if oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 25) {
+                oracle::output::lower(&mut statements, &mut exception_handlers)?;
+            }
             if oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 14) {
                 oracle::errors::lower(&mut statements, &mut exception_handlers)?;
                 oracle_error_diagnostics = oracle::errors::prepare_diagnostics(

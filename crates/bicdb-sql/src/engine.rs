@@ -3373,6 +3373,7 @@ pub struct SqlEngine<'db> {
     pub(crate) security_context: Option<SecurityContext>,
     pub(crate) runtime: Option<Arc<dyn SqlSessionRuntime>>,
     pub(crate) session_gucs: Arc<HashMap<String, String>>,
+    pub(crate) oracle_output: oracle::output::State,
     pub(crate) routine_vars: Arc<BTreeMap<String, SqlValue>>,
     /// The running routine frame's slots (see `RoutineSlotBinding`), when an
     /// embedded statement of a compiled routine is executing.
@@ -3527,6 +3528,7 @@ impl<'db> SqlEngine<'db> {
             security_context: None,
             runtime: None,
             session_gucs: Arc::new(HashMap::new()),
+            oracle_output: oracle::output::State::default(),
             routine_vars: Arc::new(BTreeMap::new()),
             routine_slots: None,
             routine_ir: None,
@@ -3561,6 +3563,7 @@ impl<'db> SqlEngine<'db> {
             security_context,
             runtime: None,
             session_gucs: Arc::new(session_gucs),
+            oracle_output: oracle::output::State::default(),
             routine_vars: Arc::new(BTreeMap::new()),
             routine_slots: None,
             routine_ir: None,
@@ -3615,6 +3618,7 @@ impl<'db> SqlEngine<'db> {
             security_context,
             runtime,
             session_gucs,
+            oracle_output: oracle::output::State::default(),
             routine_vars,
             routine_slots,
             routine_ir,
@@ -3651,6 +3655,7 @@ impl<'db> SqlEngine<'db> {
             security_context,
             runtime: None,
             session_gucs,
+            oracle_output: oracle::output::State::default(),
             routine_vars: Arc::new(BTreeMap::new()),
             routine_slots: None,
             routine_ir: None,
@@ -3668,6 +3673,11 @@ impl<'db> SqlEngine<'db> {
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             routine_host: None,
         }
+    }
+
+    pub(crate) fn with_oracle_output(mut self, state: oracle::output::State) -> Self {
+        self.oracle_output = state;
+        self
     }
 
     pub(crate) fn with_bound_context_cache(mut self, cache: SharedBoundContextCache) -> Self {
@@ -3769,7 +3779,8 @@ impl<'db> SqlEngine<'db> {
             .with_rowid_index_lookup_cache(self.rowid_index_lookup_cache.clone())
             .with_record_lookup_cache(self.record_lookup_cache.clone())
             .with_optional_runtime(self.runtime.clone())
-            .with_routine_host(self.routine_host);
+            .with_routine_host(self.routine_host)
+            .with_oracle_output(self.oracle_output.clone());
         if engine.outer_row.is_none() {
             engine.outer_row.clone_from(&self.outer_row);
         }
@@ -4781,6 +4792,7 @@ impl<'db> SqlEngine<'db> {
             security_context: self.security_context.clone(),
             runtime: self.runtime.clone(),
             session_gucs,
+            oracle_output: self.oracle_output.clone(),
             routine_vars: self.routine_vars.clone(),
             routine_slots: self.routine_slots.clone(),
             outer_row: self.outer_row.clone(),

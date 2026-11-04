@@ -60,6 +60,37 @@ def plans():
          [["first", 0], done]),
         ("unlimited_buffer", [("ENABLE", [None]),
          ("PUT_LINE", ["x" * 21000]), ("LENGTH_GET", [[21000, 21000, 0]])], [done]),
+        ("enable_replaces_unlimited", [("ENABLE", [None]), ("ENABLE", [2000]),
+         ("EXPECT_ERROR", ["PUT_LINE", ["x" * 2500], 20000, "ORU-10027"])], [done]),
+        ("enable_uses_last_limit", [("ENABLE", [2000]), ("ENABLE", [5000]),
+         ("ENABLE", [2000]),
+         ("EXPECT_ERROR", ["PUT_LINE", ["x" * 2500], 20000, "ORU-10027"])], [done]),
+        ("enable_resets_byte_counter", [("ENABLE", [2000]), ("PUT_LINE", ["x" * 1000]),
+         ("ENABLE", [2000]), ("PUT_LINE", ["y" * 1500]),
+         ("LENGTH_GET", [[1000, 1000, 0]]), ("LENGTH_GET", [[1500, 1500, 0]])], [done]),
+        ("enable_retains_partial_line", [("ENABLE", [2000]), ("PUT", ["x" * 1000]),
+         ("ENABLE", [2000]), ("PUT_LINE", ["y" * 1500]),
+         ("LENGTH_GET", [[2500, 2500, 0]])], [done]),
+        ("enable_preserves_read_discard", [("ENABLE", []), ("PUT_LINE", ["one"]),
+         ("PUT_LINE", ["two"]), ("GET", [["one", 0]]), ("ENABLE", []),
+         ("PUT_LINE", ["new"])], [["new", 0], done]),
+        ("buffer_overflow_retains_partial", [("ENABLE", [2000]), ("PUT_LINE", ["x" * 1000]),
+         ("PUT", ["y" * 600]), ("EXPECT_ERROR", ["PUT", ["z" * 500], 20000, "ORU-10027"]),
+         ("PUT_LINE", ["w" * 100]), ("LENGTH_GET", [[1000, 1000, 0]]),
+         ("LENGTH_GET", [[700, 700, 0]])], [done]),
+        ("line_overflow_does_not_refund_bytes", [("ENABLE", [35000]),
+         ("PUT", ["x" * 32000]), ("EXPECT_ERROR", ["PUT", ["y" * 1000], 20000, "ORU-10028"]),
+         ("PUT_LINE", ["z" * 3000]), ("EXPECT_ERROR", ["PUT_LINE", ["w"], 20000, "ORU-10027"]),
+         ("LENGTH_GET", [[3000, 3000, 0]])], [done]),
+        ("autonomous_output_same_session", [("ENABLE", []), ("PUT_LINE", ["parent"]),
+         ("HELPER", ["_AU"])], [["parent", 0], ["child", 0], done]),
+        ("exception_output_survives_rollback", [("ENABLE", []),
+         ("EXPECT_HELPER_ERROR", ["_ER", [], 20100, "output exception"])],
+         [["before error", 0], done]),
+        ("sql_called_function_output", [("ENABLE", []),
+         ("FUNCTION_QUERY", [[['1']]])], [["sql row", 0], done]),
+        ("connection_isolation", [("ENABLE", []), ("PUT_LINE", ["private"]),
+         ("ISOLATED_GET", [done])], [["private", 0], done]),
         ("get_lines_disabled", [("LINES_GET", [3, [0, None, None, None]])], [done]),
         ("get_lines_empty", [("ENABLE", []),
          ("LINES_GET", [3, [0, None, None, None]])], [done]),
@@ -93,13 +124,22 @@ class Backend:
             cursor.execute(sql)
 
     def call(self, name, args):
+        return self.named_call("DBMS_OUTPUT." + name, args)
+
+    def named_call(self, name, args):
         with self.connection.cursor() as cursor:
             if self.oracle:
-                cursor.callproc("DBMS_OUTPUT." + name, args)
+                cursor.callproc(name, args)
             else:
                 markers = ",".join("%s" for _ in args)
-                cursor.execute(f"CALL DBMS_OUTPUT.{name}({markers})", args or None,
+                cursor.execute(f"CALL {name}({markers})", args or None,
                                prepare=True)
+
+    def function_query(self):
+        with self.connection.cursor() as cursor:
+            cursor.execute(f"SELECT {self.helper}_FN(1) FROM DUAL")
+            return [[str(value) if value is not None else None for value in row]
+                    for row in cursor.fetchall()]
 
     def get(self):
         with self.connection.cursor() as cursor:
@@ -137,6 +177,7 @@ def observe(factory):
         backend = Backend(connection, helper)
         created = False
         lines_created = False
+        extra_created = []
         try:
             backend.sql(f"CREATE PROCEDURE {helper}(line OUT VARCHAR2,status OUT NUMBER) "
                         "AS BEGIN DBMS_OUTPUT.GET_LINE(line,status); END;")
@@ -150,6 +191,13 @@ def observe(factory):
                 lines_created = True
             except Exception as exc:
                 report["get_lines_helper_error"] = failure(exc)
+            for kind, suffix, ddl in [
+                ("PROCEDURE", "_AU", "AS PRAGMA AUTONOMOUS_TRANSACTION; BEGIN DBMS_OUTPUT.PUT_LINE('child');ROLLBACK;END;"),
+                ("PROCEDURE", "_ER", "AS BEGIN DBMS_OUTPUT.PUT_LINE('before error');RAISE_APPLICATION_ERROR(-20100,'output exception');END;"),
+                ("FUNCTION", "_FN", "(p NUMBER) RETURN NUMBER AS BEGIN DBMS_OUTPUT.PUT_LINE('sql row');RETURN p;END;"),
+            ]:
+                backend.sql(f"CREATE {kind} {helper}{suffix} {ddl}")
+                extra_created.append((kind, helper + suffix))
             connection.autocommit = False
             for ident, operations, expected in plans():
                 row = dict(id=ident, expected=expected, observations=[], success=False, phase="reset")
@@ -157,7 +205,21 @@ def observe(factory):
                     backend.call("DISABLE", [])
                     row["phase"] = "operations"
                     for op, args in operations:
-                        if op == "LINES_GET":
+                        if op == "HELPER":
+                            backend.named_call(helper + args[0], [])
+                        elif op == "ISOLATED_GET":
+                            with factory() as other:
+                                other.autocommit = True
+                                value = Backend(other, helper).get()
+                            row["observations"].append(dict(op=op, value=value, expected=args[0]))
+                            if value != args[0]:
+                                raise AssertionError("output leaked between connections")
+                        elif op == "FUNCTION_QUERY":
+                            value = backend.function_query()
+                            row["observations"].append(dict(op=op, value=value, expected=args[0]))
+                            if value != args[0]:
+                                raise AssertionError("function result differs from expectation")
+                        elif op == "LINES_GET":
                             value = backend.lines(args[0])
                             row["observations"].append(dict(op=op, value=value, expected=args[1]))
                             if value != args[1]:
@@ -169,10 +231,13 @@ def observe(factory):
                             row["observations"].append(dict(op=op, value=value, expected=args[0]))
                             if value != args[0]:
                                 raise AssertionError("intermediate output differs from expectation")
-                        elif op == "EXPECT_ERROR":
+                        elif op in ("EXPECT_ERROR", "EXPECT_HELPER_ERROR"):
                             name, actuals, code, prefix = args
                             try:
-                                backend.call(name, actuals)
+                                if op == "EXPECT_HELPER_ERROR":
+                                    backend.named_call(helper + name, actuals)
+                                else:
+                                    backend.call(name, actuals)
                             except Exception as exc:
                                 observed = failure(exc)
                                 # PG transport carries Oracle errors as server
@@ -214,6 +279,11 @@ def observe(factory):
             except Exception as exc:
                 # No buffer exists when the package itself is unavailable.
                 report["buffer_reset_error"] = failure(exc)
+            for kind, name in reversed(extra_created):
+                try:
+                    backend.sql(f"DROP {kind} {name}")
+                except Exception as exc:
+                    report["cleanup_errors"].append(failure(exc))
             for exists, name in [(lines_created, helper + "_LS"), (created, helper)]:
                 if not exists:
                     continue

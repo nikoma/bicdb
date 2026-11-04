@@ -371,6 +371,7 @@ impl<'db> SqlSession<'db> {
             self.fts_limits,
         )
         .with_routine_host(Some(&SESSION_ROUTINE_HOST))
+        .with_oracle_output(self.oracle_output.clone())
     }
 
     fn extension_event_relation(table: &str) -> String {
@@ -3070,6 +3071,7 @@ impl<'db> SqlSession<'db> {
         session.row_routine_call = true;
         session.parent_tx = engine.tx;
         session.session_gucs = engine.session_gucs.clone();
+        session.oracle_output = engine.oracle_output.clone();
         session.settings = engine.settings;
         session.runtime = engine.runtime.clone();
         session.cancellation = engine.cancellation.clone();
@@ -4089,12 +4091,17 @@ impl<'db> SqlSession<'db> {
                 self.close_routine_cursor(frame, name)?;
                 Ok(RoutineControl::Continue)
             }
+            RoutineStmt::OracleBuiltin {
+                builtin: oracle::errors::Builtin::Output(op),
+                arguments,
+            } => oracle::output::invoke(self, frame, *op, arguments),
             RoutineStmt::OracleBuiltin { builtin, arguments } => {
                 let values = arguments
                     .iter()
                     .map(|arg| self.eval_routine_expr(frame, arg))
                     .collect::<Result<Vec<_>>>()?;
                 match builtin {
+                    oracle::errors::Builtin::Output(_) => unreachable!("output handled above"),
                     oracle::errors::Builtin::RaiseApplicationError => {
                         Err(oracle::errors::invoke(self, &values))
                     }

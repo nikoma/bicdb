@@ -254,7 +254,7 @@ fn collection_constructor_compilation_preserves_version_18_routines() {
     assert!(!oracle::collections::routine_constructors_enabled());
     assert_eq!(
         oracle::preview_routine_language_version(oracle::PREVIEW_ROUTINE_LANGUAGE),
-        Some(24)
+        Some(25)
     );
 }
 

@@ -1370,10 +1370,28 @@ fn statements(
             RoutineStmt::Return(Some(expr)) | RoutineStmt::DynamicExecute(expr) => {
                 visit(db, env, &mut expr.expr)?
             }
-            RoutineStmt::OracleBuiltin { arguments, .. } => {
-                for arg in arguments.iter_mut() {
-                    visit(db, env, &mut arg.expr)?;
+            RoutineStmt::OracleBuiltin { builtin, arguments } => {
+                // Output destinations are lvalues, never converted input
+                // expressions. Other supplied operations have independent
+                // signatures rather than application-error's three arguments.
+                if !matches!(
+                    builtin,
+                    super::errors::Builtin::Output(super::output::Operation::GetLine)
+                ) {
+                    for arg in arguments.iter_mut() {
+                        visit(db, env, &mut arg.expr)?;
+                    }
                 }
+                let message_index = match builtin {
+                    super::errors::Builtin::RaiseApplicationError => Some(1),
+                    super::errors::Builtin::Output(
+                        super::output::Operation::Put | super::output::Operation::PutLine,
+                    ) => Some(0),
+                    _ => None,
+                };
+                let Some(message_index) = message_index else {
+                    continue;
+                };
                 let resolve = Resolve {
                     db,
                     env,
@@ -1381,11 +1399,14 @@ fn statements(
                     sql_depth: 0,
                     statement_from: Vec::new(),
                 };
-                let message = &mut arguments[1].expr;
+                let message = &mut arguments[message_index].expr;
                 let kind=match resolve.kind(message) {
                     Kind::Date=>Some("date"),Kind::Number=>Some("number"),
                     Kind::Text|Kind::NationalText|Kind::FixedNationalText|Kind::Null=>None,
-                    _=>return Err(SqlError::Unsupported("RAISE_APPLICATION_ERROR msg requires a resolved character, NUMBER or logical DATE operand".into())),
+                    _=>return Err(SqlError::Unsupported(match builtin {
+                        super::errors::Builtin::RaiseApplicationError => "RAISE_APPLICATION_ERROR msg requires a resolved character, NUMBER or logical DATE operand",
+                        _ => "Oracle character procedure input requires a resolved character, NUMBER or logical DATE operand",
+                    }.into())),
                 };
                 if let Some(kind) = kind {
                     *message = expression(&format!(

@@ -1,0 +1,7624 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "81f4a2669addfdd4a4bdd57a570fa0143a0de147376e87721cb7ca2de809b451",
+  "fixture_sha256": "6d68e3ed2b04a5596b85477ba290d2ca4a299966dcb2dfd5996ceb652cc37392",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "constant",
+          "source": {
+            "id": "constant",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "constant",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "constructor_swap",
+          "source": {
+            "id": "constructor_swap",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "constructor_swap",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "correlated_aggregate",
+          "source": {
+            "id": "correlated_aggregate",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "12"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "12"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "correlated_aggregate",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "12"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "12"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_query",
+          "source": {
+            "id": "empty_query",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_query",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "multiple_rows",
+          "source": {
+            "id": "multiple_rows",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "ORA-30926: The operation attempted to update the same row (rowid: 'AAAYgVAAAAAAJEVAAB') twice.\nHelp: https://docs.oracle.com/error-help/db/ora-30926/",
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "multiple_rows",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "UPDATE row subquery returned more than one row",
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "too_few_columns",
+          "source": {
+            "id": "too_few_columns",
+            "expected": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "ORA-00947: not enough values\nHelp: https://docs.oracle.com/error-help/db/ora-00947/",
+            "actual": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "too_few_columns",
+            "expected": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "invalid SQL: UPDATE assignment has 2 columns but subquery returns 1",
+            "actual": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "too_many_columns",
+          "source": {
+            "id": "too_many_columns",
+            "expected": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "ORA-00913: too many values\nHelp: https://docs.oracle.com/error-help/db/ora-00913/",
+            "actual": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "too_many_columns",
+            "expected": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "invalid SQL: UPDATE assignment has 2 columns but subquery returns 3",
+            "actual": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "mixed_old_values",
+          "source": {
+            "id": "mixed_old_values",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "mixed_old_values",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "key_move",
+          "source": {
+            "id": "key_move",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "key_move",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "key_collision",
+          "source": {
+            "id": "key_collision",
+            "expected": {
+              "affected": null,
+              "error": "unique",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "ORA-00001: unique constraint (IDEMPIERE_QUAL.SYS_C0048032) violated on table IDEMPIERE_QUAL.BICDB_RU_370DA1A7DCT columns (ID)\nORA-03301: (ORA-00001 details) row with column values (ID:2) already exists\nHelp: https://docs.oracle.com/error-help/db/ora-00001/",
+            "actual": {
+              "affected": null,
+              "error": "unique",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "key_collision",
+            "expected": {
+              "affected": null,
+              "error": "unique",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "duplicate key value violates unique constraint \"BICDB_RU_10F3C9118DT_pkey\"",
+            "actual": {
+              "affected": null,
+              "error": "unique",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "check_rollback",
+          "source": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "ORA-02290: check constraint (IDEMPIERE_QUAL.SYS_C0048033) violated\nHelp: https://docs.oracle.com/error-help/db/ora-02290/",
+            "actual": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "new row for relation \"BICDB_RU_585BCB6059T\" violates check constraint \"BICDB_RU_585BCB6059T_A_check\"",
+            "actual": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_columns",
+          "source": {
+            "id": "quoted_columns",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_columns",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prepared",
+          "source": {
+            "id": "prepared",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "17"
+                  },
+                  {
+                    "number": "18"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "17"
+                  },
+                  {
+                    "number": "18"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prepared",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "17"
+                  },
+                  {
+                    "number": "18"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "17"
+                  },
+                  {
+                    "number": "18"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "selected_null",
+          "source": {
+            "id": "selected_null",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "selected_null",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sequence_once",
+          "source": {
+            "id": "sequence_once",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sequence_once",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "unmatched_sequence",
+          "source": {
+            "id": "unmatched_sequence",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "unmatched_sequence",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "caller_rollback",
+          "source": {
+            "id": "caller_rollback",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "caller_rollback",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_aggregate",
+          "source": {
+            "id": "empty_aggregate",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_aggregate",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "source_qualified": true,
+      "matched": 18,
+      "total": 18,
+      "cleanup_errors": [],
+      "success": true
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "constant",
+          "source": {
+            "id": "constant",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "constant",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "constructor_swap",
+          "source": {
+            "id": "constructor_swap",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "constructor_swap",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "correlated_aggregate",
+          "source": {
+            "id": "correlated_aggregate",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "12"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "12"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "correlated_aggregate",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "12"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "12"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_query",
+          "source": {
+            "id": "empty_query",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_query",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "multiple_rows",
+          "source": {
+            "id": "multiple_rows",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "more than one row returned by a subquery used as an expression",
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "multiple_rows",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "UPDATE row subquery returned more than one row",
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "too_few_columns",
+          "source": {
+            "id": "too_few_columns",
+            "expected": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "number of columns does not match number of values\nLINE 1: UPDATE BICDB_RU_9451544D39T t SET (a,b)=(SELECT 7) WHERE id=...\n                                                ^",
+            "actual": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "too_few_columns",
+            "expected": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "invalid SQL: UPDATE assignment has 2 columns but subquery returns 1",
+            "actual": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "too_many_columns",
+          "source": {
+            "id": "too_many_columns",
+            "expected": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "number of columns does not match number of values\nLINE 1: UPDATE BICDB_RU_C802CA56EET t SET (a,b)=(SELECT 7,8,9) WHERE...\n                                                ^",
+            "actual": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "too_many_columns",
+            "expected": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "invalid SQL: UPDATE assignment has 2 columns but subquery returns 3",
+            "actual": {
+              "affected": null,
+              "error": "shape",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "mixed_old_values",
+          "source": {
+            "id": "mixed_old_values",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "mixed_old_values",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "key_move",
+          "source": {
+            "id": "key_move",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "key_move",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "key_collision",
+          "source": {
+            "id": "key_collision",
+            "expected": {
+              "affected": null,
+              "error": "unique",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "duplicate key value violates unique constraint \"bicdb_ru_507bb7049dt_pkey\"\nDETAIL:  Key (id)=(2) already exists.",
+            "actual": {
+              "affected": null,
+              "error": "unique",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "key_collision",
+            "expected": {
+              "affected": null,
+              "error": "unique",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "duplicate key value violates unique constraint \"bicdb_ru_b933491a2at_pkey\"",
+            "actual": {
+              "affected": null,
+              "error": "unique",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "check_rollback",
+          "source": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "new row for relation \"bicdb_ru_33f82140a4t\" violates check constraint \"bicdb_ru_33f82140a4t_a_check\"\nDETAIL:  Failing row contains (2, -1, 8, 0, 10, 20).",
+            "actual": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "error_detail": "new row for relation \"bicdb_ru_1081d2c28et\" violates check constraint \"bicdb_ru_1081d2c28et_a_check\"",
+            "actual": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_columns",
+          "source": {
+            "id": "quoted_columns",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_columns",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prepared",
+          "source": {
+            "id": "prepared",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "17"
+                  },
+                  {
+                    "number": "18"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "17"
+                  },
+                  {
+                    "number": "18"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prepared",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "17"
+                  },
+                  {
+                    "number": "18"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "17"
+                  },
+                  {
+                    "number": "18"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "selected_null",
+          "source": {
+            "id": "selected_null",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "selected_null",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  null,
+                  {
+                    "number": "7"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sequence_once",
+          "source": {
+            "id": "sequence_once",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sequence_once",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "8"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "unmatched_sequence",
+          "source": {
+            "id": "unmatched_sequence",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "unmatched_sequence",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ],
+              "after": [
+                [
+                  [
+                    {
+                      "number": "1"
+                    }
+                  ]
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "caller_rollback",
+          "source": {
+            "id": "caller_rollback",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "caller_rollback",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_aggregate",
+          "source": {
+            "id": "empty_aggregate",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_aggregate",
+            "expected": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 1,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  null,
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  },
+                  {
+                    "number": "4E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "3"
+                  },
+                  {
+                    "number": "5E+1"
+                  },
+                  {
+                    "number": "6E+1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "source_qualified": true,
+      "matched": 18,
+      "total": 18,
+      "cleanup_errors": [],
+      "success": true
+    }
+  },
+  "cleanup_complete": true
+}

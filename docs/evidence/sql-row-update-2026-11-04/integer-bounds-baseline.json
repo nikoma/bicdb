@@ -1,0 +1,2177 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "c56656a4051dcee36ab64fa962c81ce51073480e07948b62b0a081a1618321f3",
+  "fixture_sha256": "049908215fe9d6d59db862c10aeac6b52ca4e3deb081bdc02b0fb5bf2ba05b90",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "id_positive",
+          "source": {
+            "id": "id_positive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_positive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "id_inclusive",
+          "source": {
+            "id": "id_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "id_fractional_lower",
+          "source": {
+            "id": "id_fractional_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_fractional_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "id_fractional_upper",
+          "source": {
+            "id": "id_fractional_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_fractional_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "id_outside_lower",
+          "source": {
+            "id": "id_outside_lower",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_outside_lower",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "id_outside_upper",
+          "source": {
+            "id": "id_outside_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_outside_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": false,
+            "error": "integer out of range"
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "id_reversed_lower",
+          "source": {
+            "id": "id_reversed_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_reversed_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "id_reversed_upper",
+          "source": {
+            "id": "id_reversed_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_reversed_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "id_prepared_fraction",
+          "source": {
+            "id": "id_prepared_fraction",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_prepared_fraction",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "n_positive",
+          "source": {
+            "id": "n_positive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_positive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "n_inclusive",
+          "source": {
+            "id": "n_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "n_fractional_lower",
+          "source": {
+            "id": "n_fractional_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_fractional_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "n_fractional_upper",
+          "source": {
+            "id": "n_fractional_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_fractional_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "n_outside_lower",
+          "source": {
+            "id": "n_outside_lower",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_outside_lower",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "n_outside_upper",
+          "source": {
+            "id": "n_outside_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_outside_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": false,
+            "error": "integer out of range"
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "n_reversed_lower",
+          "source": {
+            "id": "n_reversed_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_reversed_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "n_reversed_upper",
+          "source": {
+            "id": "n_reversed_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_reversed_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "n_prepared_fraction",
+          "source": {
+            "id": "n_prepared_fraction",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_prepared_fraction",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        }
+      ],
+      "total": 18,
+      "matched": 6,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": false
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "id_positive",
+          "source": {
+            "id": "id_positive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_positive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "id_inclusive",
+          "source": {
+            "id": "id_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "id_fractional_lower",
+          "source": {
+            "id": "id_fractional_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_fractional_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "id_fractional_upper",
+          "source": {
+            "id": "id_fractional_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_fractional_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "id_outside_lower",
+          "source": {
+            "id": "id_outside_lower",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_outside_lower",
+            "expected": [],
+            "qualified": false,
+            "error": "integer out of range"
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "id_outside_upper",
+          "source": {
+            "id": "id_outside_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_outside_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": false,
+            "error": "integer out of range"
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "id_reversed_lower",
+          "source": {
+            "id": "id_reversed_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_reversed_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "id_reversed_upper",
+          "source": {
+            "id": "id_reversed_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_reversed_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "id_prepared_fraction",
+          "source": {
+            "id": "id_prepared_fraction",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "id_prepared_fraction",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "n_positive",
+          "source": {
+            "id": "n_positive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_positive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "n_inclusive",
+          "source": {
+            "id": "n_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "n_fractional_lower",
+          "source": {
+            "id": "n_fractional_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_fractional_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "n_fractional_upper",
+          "source": {
+            "id": "n_fractional_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_fractional_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "n_outside_lower",
+          "source": {
+            "id": "n_outside_lower",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_outside_lower",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "n_outside_upper",
+          "source": {
+            "id": "n_outside_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_outside_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": false,
+            "error": "integer out of range"
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "n_reversed_lower",
+          "source": {
+            "id": "n_reversed_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_reversed_lower",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "n_reversed_upper",
+          "source": {
+            "id": "n_reversed_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_reversed_upper",
+            "expected": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2"
+                }
+              ],
+              [
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "n_prepared_fraction",
+          "source": {
+            "id": "n_prepared_fraction",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "n_prepared_fraction",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                }
+              ]
+            ],
+            "actual": [],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        }
+      ],
+      "total": 18,
+      "matched": 8,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": false
+    }
+  },
+  "cleanup_complete": true
+}

@@ -20,6 +20,7 @@ mod records_plan;
 mod row_eval;
 pub(crate) use row_eval::SubqueryMemo;
 mod row_locks;
+mod view_predicates;
 pub(crate) use row_locks::is_read_committed_lock_refresh;
 mod scan_fts;
 
@@ -4447,6 +4448,8 @@ impl<'db> SqlEngine<'db> {
                     &view,
                     &alias_name,
                     select.selection.as_ref(),
+                    alias.as_ref(),
+                    select.from.len() == 1 && from.joins.is_empty(),
                 )?,
             );
             return self
@@ -4668,6 +4671,8 @@ impl<'db> SqlEngine<'db> {
         view: &ViewSchema,
         alias: &str,
         selection: Option<&Expr>,
+        table_alias: Option<&sqlparser::ast::TableAlias>,
+        single_relation: bool,
     ) -> Result<CteResult> {
         if self.cte(&view.name).is_some() {
             return Err(SqlError::Unsupported(format!(
@@ -4701,7 +4706,16 @@ impl<'db> SqlEngine<'db> {
         if is_postgres_triggers_catalog_view(view) {
             return materialize_postgres_triggers_view(self.db_ref(), view, alias, selection);
         }
-        let query = parse_query(&view.query_sql)?;
+        let mut query = parse_query(&view.query_sql)?;
+        view_predicates::propagate(
+            self.db_ref(),
+            &mut query,
+            view,
+            alias,
+            table_alias,
+            single_relation,
+            selection,
+        )?;
         // A view with NO recorded owner falls back to INVOKER semantics rather
         // than to a definer identity.
         //

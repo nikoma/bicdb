@@ -3290,7 +3290,7 @@ fn function_is_volatile(name: &str) -> bool {
 /// Whether a subquery's result may be kept once it is shown not to read the
 /// outer row: it takes no row locks and calls no volatile builtin and no
 /// user-defined function (which may be volatile or write).
-fn subquery_is_memoizable(db: &BicDb, query: &Query) -> bool {
+pub(super) fn subquery_is_memoizable(db: &BicDb, query: &Query) -> bool {
     use sqlparser::ast::{TableFactor, Visit, Visitor};
     use std::ops::ControlFlow;
 

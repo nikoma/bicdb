@@ -187,7 +187,7 @@ impl<'db> SqlSession<'db> {
             set_function_row_set(&name, alias.as_ref(), result)?
         } else {
             self.sql_engine_with_ctes(ctes.clone())
-                .row_set_from_table_factor_with_selection(&from.relation, None, None)?
+                .row_set_from_table_factor_with_selection(&from.relation, None, None, false)?
         };
         for (join, call) in from.joins.iter().zip(calls) {
             let Some((name, args, alias)) = call else {

@@ -3581,6 +3581,7 @@ impl<'db> SqlEngine<'db> {
             &relation,
             materialize_selection,
             base_needed_columns,
+            joins.is_empty(),
         )?;
         self.apply_pushable_base_predicates(&mut row_set, materialize_selection)?;
         let mut cumulative_inner_selection = can_push_join_selection

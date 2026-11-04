@@ -599,6 +599,7 @@ impl<'db> SqlEngine<'db> {
         relation: &TableFactor,
         selection: Option<&Expr>,
         needed_columns: Option<&ReferencedColumns>,
+        single_relation: bool,
     ) -> Result<RowSet> {
         if let Some(call) = json_set_returning_call(relation)? {
             return self.json_set_function_row_set(&call);
@@ -781,7 +782,13 @@ impl<'db> SqlEngine<'db> {
 
         if let Some(view) = load_view(self.db_ref(), &table)? {
             self.require_relation_privilege(&table, "SELECT")?;
-            let cte = self.materialize_view_with_selection(&view, &alias_name, selection)?;
+            let cte = self.materialize_view_with_selection(
+                &view,
+                &alias_name,
+                selection,
+                table_alias,
+                single_relation,
+            )?;
             let columns = table_alias_columns(
                 &table,
                 &alias_name,
@@ -4262,6 +4269,7 @@ impl<'db> SqlEngine<'db> {
             &join.relation,
             combined_inner_selection.as_ref().or(right_seed_selection),
             needed_columns,
+            false,
         )?;
         if matches!(kind, RowJoinKind::Inner) {
             self.apply_pushable_base_predicates(&mut right, selection)?;

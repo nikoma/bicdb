@@ -4059,8 +4059,8 @@ struct ViewSchema {
     // checked as the querying user instead of the view owner.
     #[serde(default)]
     security_invoker: bool,
-    // Parsed and persisted for catalog fidelity; BicDB's row filters already
-    // run before user predicates, so it has no separate planner effect.
+    // Preserve the barrier when considering predicate propagation into the
+    // view body, in addition to exposing it in the catalogs.
     #[serde(default)]
     security_barrier: bool,
 }

@@ -69,3 +69,20 @@ paths. LOBs, floating-point precedence, time zones, arbitrary NLS, exact Oracle
 descriptor widths, all syntax/error variants and full NVL2 conformance remain
 unqualified. No release or full application qualification follows from these
 expression and routine checks; deployment acceptance is recorded separately.
+
+## Subsequent application upgrade
+
+The [clean runtime upgrade](application-upgrade.json) opens a copy of the stopped
+current application database without recreating the original schema objects.
+All 67 selected workflow observations and 27 settled business queries match
+their pre-upgrade values. The 62 routine and 160 view fingerprints are unchanged;
+all 11,983 projected view labels and type families still match the source.
+All 141 rows of the three saved Trial Balance reports retain their fingerprints.
+Their PDFs were not regenerated.
+
+Prepared queries verify the new NVL2 result and unused-branch error behavior,
+national literal length and empty-literal selection, numeric primary-key
+extrema, and resolution of all stored routine language OIDs. The actual
+iDempiere JVM serves HTTP 200 and the browser reaches the GardenAdmin desktop
+without a browser script error. This qualifies the recorded upgrade and login;
+it does not establish every application workflow or production readiness.

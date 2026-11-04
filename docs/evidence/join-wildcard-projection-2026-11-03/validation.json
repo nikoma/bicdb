@@ -1,0 +1,87 @@
+{
+  "format": 1,
+  "source_commit": "ac96ecfb073d84cc253c67e5243caf59bcf47f4a",
+  "runtime_change_commit": "ada42e17053ece745d409c725900e083893eda54",
+  "fixture_source_commit": "5e19803307abfa8be6eae810b1f341e863c44c0a",
+  "runtime_binary_sha256": "e80a31e35ba311db3952d822441360b6aedfbdc0a472fe218d8f840502626cd4",
+  "build": "development, unoptimized, debug=0",
+  "compiler_version": 26,
+  "durable_metadata_format": 5,
+  "application_qualified": false,
+  "release_published": false,
+  "production_deployment_verified": false,
+  "checks": {
+    "rust_passed_executions": 1501,
+    "rust_batches": [
+      592,
+      7,
+      29,
+      17,
+      2,
+      60,
+      419,
+      6,
+      4,
+      121,
+      31,
+      169,
+      3,
+      4,
+      1,
+      6,
+      4,
+      2,
+      8,
+      8,
+      8
+    ],
+    "rust_ignored": 3,
+    "python_reference_passed": 25,
+    "python_migration_passed": 30,
+    "python_hr_passed": 3,
+    "format": "passed",
+    "diff": "passed",
+    "licenses": "passed",
+    "open_core_boundary": "passed",
+    "oracle_matched": 23,
+    "postgres_matched": 23,
+    "oracle_prior_matched": 6,
+    "postgres_prior_matched": 3,
+    "clock_oracle_retained": 75,
+    "clock_postgres_retained": 12,
+    "application_copy_projection_columns": 81,
+    "application_copy_ordinary_driver_decoding": true,
+    "ci": "Local qualification; GitHub CI for resulting merge is tracked separately"
+  },
+  "resources": {
+    "build_and_regression": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 5138841600,
+      "minimum_observed_available_bytes": 21910134784
+    },
+    "application_copy_read": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 1079201792,
+      "minimum_observed_available_bytes": 25083670528
+    },
+    "cleanup": {
+      "format": 1,
+      "removed_files": 16,
+      "reclaimed_bytes": 5035945304,
+      "by_category": {
+        "completed_test_executable": {
+          "files": 16,
+          "bytes": 5035945304
+        }
+      },
+      "current_example_binary_preserved": true
+    },
+    "remaining_target_size": "7.5 GiB"
+  }
+}

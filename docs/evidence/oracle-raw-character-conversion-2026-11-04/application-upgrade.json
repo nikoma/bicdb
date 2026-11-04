@@ -1,0 +1,49 @@
+{
+  "application_qualified": false,
+  "full_programme_qualified": false,
+  "source_commit": "4eddbf08c838773f58d07f4a87d1eaa4d62ba203",
+  "runtime_source_main_commit": "22c428fe7a7ea832af5ee82e302e9861a3f211c4",
+  "binary_sha256": "4f6fbc46c0257f9f4ccfd266027026cc8a8fb53fe029903fb8875fb5fa1ff3e9",
+  "parent_database_clean_shutdown_verified": true,
+  "original_objects_recreated": false,
+  "original_object_fingerprints": {
+    "routines": {
+      "count": 62,
+      "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+    },
+    "views": {
+      "count": 160,
+      "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+    }
+  },
+  "persisted_view_labels_and_type_families_verified": 160,
+  "business_checks_before": 38,
+  "business_checks_after": 38,
+  "fresh_login_verified": true,
+  "original_generate_uuid_routine_verified": true,
+  "trial_balance": {
+    "process_instance": 1000037,
+    "terminal": true,
+    "result": 1,
+    "process_summary": "Rows=28",
+    "data_checks": {
+      "row_count": true,
+      "detail_rows_match_source_ledger": true,
+      "opening_rows_match_source_ledger": true,
+      "row_scope": true,
+      "uuid_formats": true,
+      "unique_uuids": true
+    },
+    "persisted_rows": 47,
+    "opening_rows": 19,
+    "detail_rows": 28,
+    "current_period_debit": "1910.35",
+    "current_period_credit": "1910.35",
+    "rendered_rows": 28,
+    "pdf_pages": 8,
+    "pdf_bytes": 57822,
+    "pdf_sha256": "cab6218cf66356e347cf8caa1bd73bbc9eabd714304aa0f78bb88ac70e33a7d2",
+    "report_workflow_qualified": false,
+    "remaining_gap": "Rendered date-range filtering omits19 opening-balance rows. Equivalent timestamps with a zero fractional-second suffix reproduce the omission; untyped lexical BETWEEN comparisons are under investigation. A complete report is not yet qualified."
+  }
+}

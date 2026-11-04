@@ -90,14 +90,28 @@ pub(crate) fn lower(source: &[Token]) -> Result<Option<(String, usize)>> {
 /// both explicit and implicit projection aliases with these names. Preserve
 /// identifier positions before replacing a keyword with an expression.
 pub(super) fn identifier_position(source: &[Token], index: usize) -> bool {
+    if !source.get(index).is_some_and(|token| {
+        ["CURRENT_TIMESTAMP", "LOCALTIMESTAMP", "CURRENT_DATE"]
+            .iter()
+            .any(|name| word(token, name))
+    }) {
+        return false;
+    }
     if source.get(index + 1) == Some(&Token::Period) {
         return true;
     }
     let Some(previous) = index.checked_sub(1).and_then(|i| source.get(i)) else {
         return false;
     };
+    if matches!(previous, Token::LParen | Token::Comma) && in_named_identifier_list(source, index) {
+        return true;
+    }
     match previous {
-        Token::Period | Token::Number(_, _) | Token::SingleQuotedString(_) | Token::RParen => true,
+        Token::Period
+        | Token::Number(_, _)
+        | Token::SingleQuotedString(_)
+        | Token::Placeholder(_)
+        | Token::RParen => true,
         Token::Word(word) => {
             word.quote_style.is_some()
                 || word.keyword == Keyword::NoKeyword
@@ -113,6 +127,9 @@ pub(super) fn identifier_position(source: &[Token], index: usize) -> bool {
                     "SEQUENCE",
                     "FUNCTION",
                     "PROCEDURE",
+                    "COLUMN",
+                    "ADD",
+                    "CONSTRAINT",
                     "NULL",
                     "TRUE",
                     "FALSE",
@@ -126,6 +143,61 @@ pub(super) fn identifier_position(source: &[Token], index: usize) -> bool {
         }
         _ => false,
     }
+}
+
+fn in_named_identifier_list(source: &[Token], index: usize) -> bool {
+    // Column declarations, insert targets, routine parameters and constraint
+    // column lists contain identifiers even when spelled like clock keywords.
+    // Nested DEFAULT/CHECK expressions are outside this list level.
+    for start in 0..index {
+        let direct = word(&source[start], "KEY") || word(&source[start], "UNIQUE");
+        let named = [
+            "TABLE",
+            "INTO",
+            "REFERENCES",
+            "VIEW",
+            "FUNCTION",
+            "PROCEDURE",
+        ]
+        .iter()
+        .any(|name| word(&source[start], name));
+        if !direct && !named {
+            continue;
+        }
+        if direct && !source[..start].iter().any(|token| word(token, "TABLE")) {
+            continue;
+        }
+        let mut open = start + 1;
+        if named {
+            if !matches!(source.get(open), Some(Token::Word(_))) {
+                continue;
+            }
+            open += 1;
+            while source.get(open) == Some(&Token::Period)
+                && matches!(source.get(open + 1), Some(Token::Word(_)))
+            {
+                open += 2;
+            }
+        }
+        if source.get(open) != Some(&Token::LParen) || open >= index {
+            continue;
+        }
+        let mut depth = 0;
+        for token in &source[open..index] {
+            match token {
+                Token::LParen => depth += 1,
+                Token::RParen => depth -= 1,
+                _ => {}
+            }
+            if depth == 0 {
+                break;
+            }
+        }
+        if depth == 1 {
+            return true;
+        }
+    }
+    false
 }
 
 pub(crate) fn pg_type(name: &str) -> Option<&'static str> {
@@ -281,6 +353,19 @@ mod tests {
                 }
             }
         }
+        run(&mut session,"CREATE TABLE keyword_columns(current_timestamp NUMBER,localtimestamp NUMBER,current_date NUMBER,PRIMARY KEY(current_timestamp))");
+        run(&mut session,"INSERT INTO keyword_columns(current_timestamp,localtimestamp,current_date) VALUES(1,2,3)");
+        let result = run(
+            &mut session,
+            "SELECT t.current_timestamp,t.localtimestamp,t.current_date FROM keyword_columns t",
+        );
+        assert_eq!(
+            result.rows[0]
+                .iter()
+                .map(SqlValue::to_cell)
+                .collect::<Vec<_>>(),
+            vec!["1", "2", "3"]
+        );
         run(&mut session,"CREATE FUNCTION current_time_fn RETURN TIMESTAMP WITH TIME ZONE IS BEGIN RETURN CURRENT_TIMESTAMP; END;");
         assert!(!matches!(
             run(&mut session, "SELECT current_time_fn() FROM DUAL").rows[0][0],

@@ -8397,3 +8397,57 @@ fn information_schema_columns_preserves_logical_names_and_schema_filters() {
         expected
     );
 }
+
+#[test]
+fn typed_primary_key_extrema_and_ranges_use_logical_values() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let mut db = BicDb::open(dir.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for sql in [
+            "CREATE TABLE typed_extrema (id NUMERIC(30,0) PRIMARY KEY)",
+            "INSERT INTO typed_extrema VALUES (-100000000000000000000000000001),(2),(100000000000000000000000000003)",
+            "CREATE TABLE typed_prefix (tenant NUMERIC(10,2), sequence_key NUMERIC(10,2), suffix TEXT, PRIMARY KEY(tenant,sequence_key,suffix))",
+            "INSERT INTO typed_prefix VALUES (1,2,'01'),(1,3,'1'),(1,10,'01'),(2,20,'01')",
+        ] { session.execute(sql).unwrap(); }
+        let check = |session: &mut SqlSession<'_>| {
+            for (query, expected) in [
+                ("SELECT MIN(id) FROM typed_extrema", "-100000000000000000000000000001"),
+                ("SELECT MAX(id) FROM typed_extrema", "100000000000000000000000000003"),
+                ("SELECT MAX(sequence_key) FROM typed_prefix WHERE tenant=1 AND suffix='01'", "10"),
+                ("SELECT MIN(sequence_key) FROM typed_prefix WHERE tenant=1 AND suffix='1'", "3"),
+                ("SELECT COUNT(*) FROM typed_prefix WHERE tenant=1 AND sequence_key>=3 AND sequence_key<=10", "2"),
+            ] {
+                let result = session.execute(query).unwrap();
+                assert_eq!(result.rows.len(), 1, "{query}");
+                assert_eq!(pg_typed_compare("numeric", &result.rows[0][0], &SqlValue::String(expected.into())).unwrap(), Ordering::Equal, "{query}: {:?}", result.rows);
+            }
+        };
+        check(&mut session);
+        session.execute("BEGIN").unwrap();
+        session
+            .execute("INSERT INTO typed_prefix VALUES (1,30,'01')")
+            .unwrap();
+        assert!(values_equal(
+            &session
+                .execute("SELECT MAX(sequence_key) FROM typed_prefix WHERE tenant=1")
+                .unwrap()
+                .rows[0][0],
+            &SqlValue::Int(30)
+        ));
+        session
+            .execute("DELETE FROM typed_prefix WHERE tenant=1 AND sequence_key=30")
+            .unwrap();
+        check(&mut session);
+        session.execute("ROLLBACK").unwrap();
+        check(&mut session);
+    }
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let result = SqlSession::new(&mut db)
+        .execute("SELECT MAX(id) FROM typed_extrema")
+        .unwrap();
+    assert!(values_equal(
+        &result.rows[0][0],
+        &SqlValue::String("100000000000000000000000000003".into())
+    ));
+}

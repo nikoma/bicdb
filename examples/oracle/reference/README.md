@@ -1,5 +1,15 @@
 # Oracle reference queries
 
+`primary_key_extrema.py --reference oracle --oracle-config /private/oracle.json
+--output /private/key-extrema.json` checks 20 explicit expectations for numeric
+primary-key MIN/MAX and ranges: exact 30-digit integers, fractional composite
+keys, numeric-looking text suffixes, empty results, prepared prefixes, pending
+inserts/key updates/deletes and rollback. Both references must independently
+satisfy the expected rows. Use `--reference postgres` with
+`ORACLE_CONTROL_PG_DSN` for PostgreSQL; both use `BICDB_PG_DSN` for the target.
+Nonce tables are removed, with Oracle PURGE. These controls do not qualify all
+primary-key types, collations or concurrent schedules.
+
 `set_operand_builtins.py --reference oracle --oracle-config /private/oracle.json
 --output /private/set-operands.json` checks 14 explicit expectations for typed
 builtins in individual set-operation SELECT scopes: joined aggregates, UNION,

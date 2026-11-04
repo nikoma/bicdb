@@ -942,25 +942,37 @@ impl<'db> SqlEngine<'db> {
             self.primary_key_prefix_record_ids(collection, schema, &prefix_values, &id_prefix)?;
         let mut best = SqlValue::Null;
         for id in ids.iter() {
-            let Some(values) = primary_key_values_from_record_id(schema, &primary_key_columns, id)?
+            let Some(values) = self.primary_key_values_for_record_id(
+                collection,
+                schema,
+                &primary_key_columns,
+                id,
+            )?
             else {
                 return Ok(None);
             };
-            if !primary_key_values_match_bindings(&values, &bindings) {
+            if !primary_key_values_match_bindings(schema, &primary_key_columns, &values, &bindings)?
+            {
                 continue;
             }
             let value = values.get(extreme_idx).cloned().unwrap_or(SqlValue::Null);
             if matches!(value, SqlValue::Null) {
                 continue;
             }
-            if matches!(best, SqlValue::Null)
-                || value_ordering(&value, &best).is_some_and(|ordering| {
-                    if greatest {
-                        ordering == Ordering::Greater
-                    } else {
-                        ordering == Ordering::Less
-                    }
-                })
+            if matches!(best, SqlValue::Null) {
+                best = value;
+                continue;
+            }
+            let column = schema
+                .column(&primary_key_columns[extreme_idx])
+                .ok_or_else(|| SqlError::Unsupported("missing primary key column".into()))?;
+            let ordering = column_typed_compare(column, &value, &best)?;
+            if ordering
+                == if greatest {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
             {
                 best = value;
             }
@@ -970,6 +982,23 @@ impl<'db> SqlEngine<'db> {
         Ok(Some(
             SqlResult::new(vec![column_name], vec![vec![best]]).with_column_types(column_types),
         ))
+    }
+
+    /// Typed record identities are storage locators, not SQL literals. Read
+    /// their logical values through the same decoder used by row projection.
+    pub(crate) fn primary_key_values_for_record_id(
+        &self,
+        table: &str,
+        schema: &TableSchema,
+        columns: &[String],
+        id: &str,
+    ) -> Result<Option<Vec<SqlValue>>> {
+        if primary_key_requires_typed_identity(schema) {
+            return Ok(self
+                .get_raw_record_cached(table, id)?
+                .map(|record| record_column_values(&record, schema, columns)));
+        }
+        primary_key_values_from_record_id(schema, columns, id)
     }
 
     pub(crate) fn primary_key_equality_bindings(

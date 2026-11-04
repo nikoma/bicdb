@@ -7039,6 +7039,9 @@ pub(crate) fn primary_key_values_from_record_id(
     primary_key_columns: &[String],
     record_id: &str,
 ) -> Result<Option<Vec<SqlValue>>> {
+    if primary_key_requires_typed_identity(schema) {
+        return Ok(None);
+    }
     let cells = if primary_key_columns.len() == 1 {
         vec![record_id.to_string()]
     } else {
@@ -7067,50 +7070,70 @@ pub(crate) fn primary_key_values_from_record_id(
 }
 
 pub(crate) fn primary_key_values_match_bindings(
+    schema: &TableSchema,
+    columns: &[String],
     values: &[SqlValue],
     bindings: &[Option<SqlValue>],
-) -> bool {
-    values.len() == bindings.len()
-        && values.iter().zip(bindings).all(|(value, binding)| {
-            binding
-                .as_ref()
-                .is_none_or(|bound| values_equal(value, bound))
-        })
+) -> Result<bool> {
+    if values.len() != bindings.len() || columns.len() != values.len() {
+        return Ok(false);
+    }
+    for ((column, value), binding) in columns.iter().zip(values).zip(bindings) {
+        if let Some(bound) = binding {
+            if !typed_column_values_not_distinct(
+                schema,
+                std::slice::from_ref(column),
+                std::slice::from_ref(value),
+                std::slice::from_ref(bound),
+            )? {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
 }
 
-pub(crate) fn primary_key_values_match_prefix(values: &[SqlValue], prefix: &[SqlValue]) -> bool {
-    values.len() >= prefix.len()
-        && values
-            .iter()
-            .zip(prefix)
-            .all(|(value, bound)| values_equal(value, bound))
+pub(crate) fn primary_key_values_match_prefix(
+    schema: &TableSchema,
+    columns: &[String],
+    values: &[SqlValue],
+    prefix: &[SqlValue],
+) -> Result<bool> {
+    if values.len() < prefix.len() || columns.len() < prefix.len() {
+        return Ok(false);
+    }
+    typed_column_values_not_distinct(
+        schema,
+        &columns[..prefix.len()],
+        &values[..prefix.len()],
+        prefix,
+    )
 }
 
 pub(crate) fn primary_key_value_outside_range(
+    column: &ColumnSchema,
     value: &SqlValue,
     lower: Option<&SqlValue>,
     upper: Option<&SqlValue>,
-) -> bool {
+) -> Result<bool> {
     if matches!(value, SqlValue::Null) {
-        return true;
+        return Ok(true);
     }
     if let Some(lower) = lower {
-        if !matches!(
-            value_ordering(value, lower),
-            Some(Ordering::Equal | Ordering::Greater)
-        ) {
-            return true;
+        if matches!(lower, SqlValue::Null)
+            || column_typed_compare(column, value, lower)? == Ordering::Less
+        {
+            return Ok(true);
         }
     }
     if let Some(upper) = upper {
-        if !matches!(
-            value_ordering(value, upper),
-            Some(Ordering::Equal | Ordering::Less)
-        ) {
-            return true;
+        if matches!(upper, SqlValue::Null)
+            || column_typed_compare(column, value, upper)? == Ordering::Greater
+        {
+            return Ok(true);
         }
     }
-    false
+    Ok(false)
 }
 
 pub(crate) fn unique_constraint_is_primary_key(

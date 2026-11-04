@@ -58,6 +58,53 @@ impl Running {
 }
 
 #[tokio::test]
+async fn preparing_typed_wildcards_does_not_advance_sequences_in_either_profile() {
+    for oracle in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::new(directory.path(), oracle);
+        let (client, connection) = server.connect(oracle).await.unwrap();
+        client.batch_execute("CREATE TABLE describe_rows(id INTEGER,marker VARCHAR(8)); INSERT INTO describe_rows VALUES(1,'visible'); CREATE SEQUENCE describe_counter;").await.unwrap();
+        let expression = if oracle {
+            "describe_counter.NEXTVAL"
+        } else {
+            "nextval('describe_counter')"
+        };
+        for wildcard in ["*", "r.*"] {
+            let statement = client
+                .prepare(&format!(
+                    "SELECT {wildcard},{expression} AS counter FROM describe_rows r"
+                ))
+                .await
+                .unwrap();
+            assert_eq!(statement.columns().len(), 3);
+            assert_eq!(statement.columns()[0].name().to_ascii_lowercase(), "id");
+            assert_eq!(statement.columns()[1].name().to_ascii_lowercase(), "marker");
+            assert_eq!(
+                statement.columns()[2].name().to_ascii_lowercase(),
+                "counter"
+            );
+        }
+        let sql = if oracle {
+            "SELECT describe_counter.NEXTVAL FROM DUAL"
+        } else {
+            "SELECT nextval('describe_counter')"
+        };
+        let result = client.simple_query(sql).await.unwrap();
+        let row = result
+            .iter()
+            .find_map(|message| match message {
+                tokio_postgres::SimpleQueryMessage::Row(row) => Some(row),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(row.get(0), Some("1"));
+        drop(client);
+        connection.await.unwrap();
+        drop(server);
+    }
+}
+
+#[tokio::test]
 async fn wildcard_join_describe_and_binary_values_follow_logical_columns_in_both_profiles() {
     use std::time::{Duration, SystemTime};
     use tokio_postgres::types::Type;

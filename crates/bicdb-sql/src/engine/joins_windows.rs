@@ -1485,6 +1485,23 @@ impl<'db> SqlEngine<'db> {
         columns: &[String],
         expr: &Expr,
     ) -> Result<SqlValue> {
+        let key = crate::aggregate_evaluation::GroupKey(
+            self as *const Self as usize,
+            rows.as_ptr() as usize,
+            rows.len(),
+            columns.as_ptr() as usize,
+        );
+        crate::aggregate_evaluation::evaluate(key, expr, |expr| {
+            self.eval_row_aggregate_expr_inner(rows, columns, expr)
+        })
+    }
+
+    fn eval_row_aggregate_expr_inner(
+        &self,
+        rows: &[SlotRow],
+        columns: &[String],
+        expr: &Expr,
+    ) -> Result<SqlValue> {
         match expr {
             Expr::Function(function) if is_aggregate_function(function) => {
                 // A nested aggregate keeps its FILTER clause
@@ -1718,11 +1735,20 @@ impl<'db> SqlEngine<'db> {
         function: &Function,
     ) -> Result<SqlValue> {
         let name = object_name(&function.name)?.to_ascii_lowercase();
-        let args = function_args(function)
+        if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
+            for arg in borrowed_function_args(function) {
+                let value = self.eval_row_aggregate_expr(rows, columns, &arg)?;
+                if !matches!(value, SqlValue::Null) {
+                    return Ok(value);
+                }
+            }
+            return Ok(SqlValue::Null);
+        }
+        let args = borrowed_function_args(function)
             .iter()
             .map(|arg| self.eval_row_aggregate_expr(rows, columns, arg))
             .collect::<Result<Vec<_>>>()?;
-        let arg_types = function_args(function)
+        let arg_types = borrowed_function_args(function)
             .iter()
             .map(|arg| {
                 row_columns_expr_pg_type(self.db_ref(), arg, columns.iter().map(String::as_str))

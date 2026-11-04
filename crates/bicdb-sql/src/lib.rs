@@ -64,6 +64,7 @@ use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, SqlError>;
 
+mod aggregate_evaluation;
 mod identity;
 pub mod oracle;
 pub use identity::{

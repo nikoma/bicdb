@@ -390,6 +390,18 @@ operands. Binary floating point, other NLS settings, full Oracle diagnostics and
 submicrosecond values are not qualified by this fixture. Existing compiled
 routines retain their earlier contract until recreated from Oracle source.
 
+`aggregate_conditionals.py --reference oracle --oracle-config /private/oracle.json
+--output /private/oracle-aggregates.json` separately checks query-scoped aggregate
+typing, parameterized stored routines, eager NVL conversion, and conditional
+scalar evaluation. `--reference postgres` uses `ORACLE_CONTROL_PG_DSN` for an
+independent PostgreSQL control. Both modes use `BICDB_PG_DSN` for a dedicated
+target with the corresponding profile. Aggregate inputs in an unused CASE or
+COALESCE branch still execute; an unused scalar fallback or scalar subquery
+does not. Explicit values and selected error codes must agree with the actual
+reference before a case counts as matched. The fixture creates and drops only
+its nonce-named table and routine. It does not qualify every aggregate, optimizer
+evaluation order, or Oracle aggregate/subquery legality rule.
+
 
 The `routine_namespaces.py --suite procedures` fixture checks actual Oracle CALL
 effects, replacement, defaults, qualified nested calls, OUT/IN OUT copyback and

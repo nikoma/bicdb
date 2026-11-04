@@ -29,6 +29,107 @@ mod tests {
         SqlSession::new(db).execute(&lowered)
     }
     #[test]
+    fn aggregate_nvl_uses_query_scope_and_retains_eager_conversion() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = preview(root.path());
+        for sql in [
+            "CREATE TABLE aggregate_values(k NUMBER,n NUMBER,label VARCHAR2(8),day_value DATE)",
+            "INSERT INTO aggregate_values VALUES(1,10,'A',DATE '2024-02-29')",
+            "INSERT INTO aggregate_values VALUES(1,5,'Z',DATE '2024-03-01')",
+            "CREATE FUNCTION aggregate_total(p_key NUMBER) RETURN NUMBER IS result NUMBER; BEGIN SELECT NVL(SUM(a.n),0) INTO result FROM aggregate_values a WHERE a.k=p_key;RETURN result;END;",
+        ] {run(&mut db,sql).unwrap_or_else(|e|panic!("{sql}: {e}"));}
+        for (sql, expected) in [
+            ("SELECT aggregate_total(1) FROM DUAL", "15"),
+            ("SELECT aggregate_total(9) FROM DUAL", "0"),
+            ("SELECT NVL(SUM(n),0) FROM aggregate_values WHERE k=1", "15"),
+            ("SELECT NVL(SUM(n),0) FROM aggregate_values WHERE k=9", "0"),
+            (
+                "SELECT NVL(MAX(label),'none') FROM aggregate_values WHERE k=1",
+                "Z",
+            ),
+            (
+                "SELECT NVL(MAX(label),'none') FROM aggregate_values WHERE k=9",
+                "none",
+            ),
+            (
+                "SELECT NVL(MAX(day_value),DATE '2000-01-01') FROM aggregate_values WHERE k=1",
+                "2024-03-01 00:00:00",
+            ),
+            (
+                "SELECT NVL(MAX(day_value),DATE '2000-01-01') FROM aggregate_values WHERE k=9",
+                "2000-01-01 00:00:00",
+            ),
+        ] {
+            assert_eq!(
+                run(&mut db, sql)
+                    .unwrap_or_else(|e| panic!("{sql}: {e}"))
+                    .rows[0][0]
+                    .to_cell(),
+                expected,
+                "{sql}"
+            );
+        }
+        for (sql, state) in [
+            (
+                "SELECT NVL(SUM(n),1/0) FROM aggregate_values WHERE k=1",
+                "22012",
+            ),
+            (
+                "SELECT NVL(SUM(n),'bad') FROM aggregate_values WHERE k=1",
+                "22P02",
+            ),
+        ] {
+            assert_eq!(run(&mut db, sql).unwrap_err().sqlstate(), state, "{sql}");
+        }
+    }
+
+    #[test]
+    fn native_aggregate_coalesce_keeps_its_own_lazy_behavior() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for sql in ["CREATE TABLE native_aggregate_values(k integer,n numeric)",
+            "INSERT INTO native_aggregate_values VALUES(1,10),(1,5)",
+            "CREATE FUNCTION native_total(p_key integer) RETURNS numeric LANGUAGE plpgsql AS $$DECLARE result numeric; BEGIN SELECT COALESCE(SUM(a.n),0) INTO result FROM native_aggregate_values a WHERE a.k=p_key;RETURN result;END$$",
+        ] {session.execute(sql).unwrap_or_else(|e|panic!("{sql}: {e}"));}
+        for (sql, expected) in [
+            ("SELECT native_total(1)", "15"),
+            ("SELECT native_total(9)", "0"),
+            (
+                // The denominator must depend on the aggregate. PostgreSQL can
+                // fold a constant 1/0 during planning even in a lazy branch.
+                "SELECT COALESCE(SUM(n),1/(COUNT(*)-2)) FROM native_aggregate_values WHERE k=1",
+                "15",
+            ),
+            ("SELECT CASE WHEN SUM(n)>0 THEN SUM(n) ELSE 1/(COUNT(*)-2) END FROM native_aggregate_values WHERE k=1", "15"),
+            ("SELECT COALESCE(SUM(n),(SELECT SUM(1/(n-n)) FROM native_aggregate_values)) FROM native_aggregate_values WHERE k=1", "15"),
+        ] {
+            assert_eq!(
+                session.execute(sql).unwrap().rows[0][0].to_cell(),
+                expected,
+                "{sql}"
+            );
+        }
+        for sql in [
+            "SELECT COALESCE(SUM(n),SUM(1/(n-n))) FROM native_aggregate_values WHERE k=1",
+            "SELECT CASE WHEN SUM(n)>0 THEN SUM(n) ELSE SUM(1/(n-n)) END FROM native_aggregate_values WHERE k=1",
+        ] {assert_eq!(session.execute(sql).unwrap_err().sqlstate(),"22012","{sql}");}
+        // A failed projection must not leave cached values in the next group or
+        // statement, even when it reuses the same parsed SQL template.
+        assert_eq!(
+            session
+                .execute("SELECT COALESCE(SUM(n),0) FROM native_aggregate_values WHERE k=9")
+                .unwrap()
+                .rows[0][0]
+                .to_cell(),
+            "0"
+        );
+    }
+    #[test]
     fn nvl_is_eager_and_converts_the_unused_replacement() {
         let root = tempfile::tempdir().unwrap();
         let mut db = preview(root.path());

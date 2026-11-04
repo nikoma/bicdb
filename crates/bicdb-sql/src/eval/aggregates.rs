@@ -2944,6 +2944,45 @@ pub(crate) fn function_args(function: &Function) -> Vec<Expr> {
         .collect()
 }
 
+/// Preserve aggregate AST identity while scalar wrappers evaluate arguments.
+/// JSON object labels still require synthesized string expressions.
+pub(crate) fn borrowed_function_args(function: &Function) -> Vec<Cow<'_, Expr>> {
+    let FunctionArguments::List(args) = &function.args else {
+        return Vec::new();
+    };
+    if !standard_json_object_call(function, args) {
+        return args
+            .args
+            .iter()
+            .filter_map(|arg| match arg {
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => Some(Cow::Borrowed(expr)),
+                _ => None,
+            })
+            .collect();
+    }
+    let mut values = Vec::with_capacity(args.args.len() * 2);
+    for arg in &args.args {
+        match arg {
+            FunctionArg::ExprNamed { name, arg, .. } => {
+                values.push(Cow::Borrowed(name));
+                if let FunctionArgExpr::Expr(expr) = arg {
+                    values.push(Cow::Borrowed(expr));
+                }
+            }
+            FunctionArg::Named { name, arg, .. } => {
+                values.push(Cow::Owned(Expr::Value(
+                    Value::SingleQuotedString(name.value.clone()).into(),
+                )));
+                if let FunctionArgExpr::Expr(expr) = arg {
+                    values.push(Cow::Borrowed(expr));
+                }
+            }
+            FunctionArg::Unnamed(_) => {}
+        }
+    }
+    values
+}
+
 pub(crate) fn function_args_are_distinct(function: &Function) -> bool {
     let FunctionArguments::List(args) = &function.args else {
         return false;

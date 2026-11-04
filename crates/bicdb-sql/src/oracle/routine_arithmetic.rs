@@ -454,6 +454,14 @@ impl Resolve<'_> {
                             return kind;
                         }
                     }
+                    Some("min" | "max") => {
+                        // These aggregates preserve the operand's logical type,
+                        // including Oracle DATE provenance which native output
+                        // metadata represents with a timestamp transport type.
+                        return function_args(function)
+                            .first()
+                            .map_or(Kind::Unknown, |arg| self.kind(arg));
+                    }
                     _ => {}
                 }
                 if let Ok(name) = object_name(&function.name) {
@@ -478,9 +486,14 @@ impl Resolve<'_> {
                         return pg_kind(&routine.return_type);
                     }
                 }
+                // Aggregate and scalar function arguments can reference input
+                // columns. Projection-only inference has no FROM scope; use
+                // the query's metadata without executing predicates or rows.
                 projected_expr_pg_type(expr, None)
                     .as_deref()
-                    .map_or(Kind::Unknown, pg_kind)
+                    .map(pg_kind)
+                    .or_else(|| self.query_kind(expr))
+                    .unwrap_or(Kind::Unknown)
             }
             Expr::BinaryOp { left, op, right } => {
                 let left = self.kind(left);

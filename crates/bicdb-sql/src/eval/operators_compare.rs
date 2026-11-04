@@ -2816,6 +2816,22 @@ pub(crate) fn eval_record_aggregate_expr(
     expr: &Expr,
     schema: Option<&TableSchema>,
 ) -> Result<SqlValue> {
+    let key = crate::aggregate_evaluation::GroupKey(
+        0,
+        records.as_ptr() as usize,
+        records.len(),
+        schema.map_or(0, |schema| schema as *const TableSchema as usize),
+    );
+    crate::aggregate_evaluation::evaluate(key, expr, |expr| {
+        eval_record_aggregate_expr_inner(records, expr, schema)
+    })
+}
+
+fn eval_record_aggregate_expr_inner(
+    records: &[Record],
+    expr: &Expr,
+    schema: Option<&TableSchema>,
+) -> Result<SqlValue> {
     match expr {
         Expr::Function(function) if is_aggregate_function(function) => {
             Aggregate::from_function(function, schema)?.evaluate(records)
@@ -2961,7 +2977,16 @@ pub(crate) fn eval_record_aggregate_function_value(
     schema: Option<&TableSchema>,
 ) -> Result<SqlValue> {
     let name = object_name(&function.name)?.to_ascii_lowercase();
-    let arg_exprs = function_args(function);
+    let arg_exprs = borrowed_function_args(function);
+    if matches!(name.as_str(), "coalesce" | "pg_catalog.coalesce") {
+        for arg in &arg_exprs {
+            let value = eval_record_aggregate_expr(records, arg, schema)?;
+            if !matches!(value, SqlValue::Null) {
+                return Ok(value);
+            }
+        }
+        return Ok(SqlValue::Null);
+    }
     let args = arg_exprs
         .iter()
         .map(|arg| eval_record_aggregate_expr(records, arg, schema))

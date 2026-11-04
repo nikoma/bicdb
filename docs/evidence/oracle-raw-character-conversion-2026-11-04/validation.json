@@ -1,0 +1,20 @@
+{
+  "application_qualified": false,
+  "source_commit": "4eddbf08c838773f58d07f4a87d1eaa4d62ba203",
+  "binary_sha256": "4f6fbc46c0257f9f4ccfd266027026cc8a8fb53fe029903fb8875fb5fa1ff3e9",
+  "sql_tests": {
+    "passed": 600,
+    "failed": 0,
+    "ignored": 3
+  },
+  "pgwire_tests": {
+    "passed": 363,
+    "failed": 0,
+    "ignored": 2
+  },
+  "migration_python_tests_passed": 30,
+  "oracle_reference_cases_passed": 13,
+  "postgres_reference_cases_passed": 13,
+  "format_check_passed": true,
+  "minimum_available_ram_gib": 15.47
+}

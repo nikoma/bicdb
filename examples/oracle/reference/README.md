@@ -658,3 +658,13 @@ databases first. They remain fixture infrastructure; each run removes its nonce
 functions and types. Schema removal is outside this fixture's qualification.
 The [bounded comparison](../../../docs/evidence/sql-type-relocation-2026-11-03/README.md)
 records the original schema-cleanup failures separately.
+
+`raw_character_conversion.py` uses the common connection arguments with
+`--reference oracle` or `--reference postgres`. Its 13 Oracle cases check the
+binary result of `SYS_GUID`, implicit hexadecimal conversion in character
+operations, ordinary text prefixes, volatility and a stored routine's original
+32-character buffer. Thirteen independent PostgreSQL controls retain native BYTEA
+encoding, length, null and empty-value behavior. The PostgreSQL reference needs
+`pgcrypto` installed for its random-byte control. Nonce routines are removed.
+These cases do not qualify RAW columns, all RAW-producing expressions, explicit
+`TO_CHAR(RAW)`, or general LOB support.

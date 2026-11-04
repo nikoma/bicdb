@@ -80,6 +80,12 @@ fn operand(value: &SqlValue, kind: &str, width: usize) -> Result<String> {
         return Ok(String::new());
     }
     match kind {
+        "raw" => {
+            // RAW-to-character conversion is hexadecimal, independent of the
+            // native bytea display prefix and character-set decoding of BLOBs.
+            let bytes = crate::eval::bytea_argument(value)?.unwrap_or_default();
+            Ok(bytes.iter().map(|byte| format!("{byte:02X}")).collect())
+        }
         "text" => match value {
             SqlValue::String(value) => Ok(value.clone()),
             _ => Err(SqlError::Unsupported(
@@ -166,6 +172,79 @@ pub(super) fn default_to_char(args: &[SqlValue]) -> Result<SqlValue> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raw_character_conversion_preserves_bytes_text_and_native_bytea() {
+        assert_eq!(
+            default_to_char(&[
+                SqlValue::String("\\xab00ff".into()),
+                SqlValue::String("raw".into()),
+                SqlValue::String("sql".into()),
+            ])
+            .unwrap(),
+            SqlValue::String("AB00FF".into())
+        );
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        oracle::ensure_database_profile(&mut db, oracle::ORACLE_PREVIEW_PROFILE).unwrap();
+        assert_eq!(
+            infer_query_result_types(&db, "SELECT gen_random_bytes(16)")
+                .unwrap()
+                .unwrap(),
+            vec![Some("bytea".into())]
+        );
+        for (source, expected) in [
+            ("SELECT LENGTH(LOWER(SYS_GUID())) FROM DUAL", "32"),
+            ("SELECT LENGTHB(SYS_GUID()) FROM DUAL", "32"),
+            ("SELECT LENGTH(UPPER(SYS_GUID())) FROM DUAL", "32"),
+            (
+                "SELECT LENGTH(CAST(SYS_GUID() AS VARCHAR2(32))) FROM DUAL",
+                "32",
+            ),
+            ("SELECT LENGTH(SYS_GUID()||'z') FROM DUAL", "33"),
+            ("SELECT LENGTH(SUBSTR(SYS_GUID(),1,8)) FROM DUAL", "8"),
+            (r"SELECT LOWER('\xAB00FF') FROM DUAL", r"\xab00ff"),
+        ] {
+            let sql = oracle::lower_session_sql(
+                &db,
+                source,
+                oracle::ORACLE_PREVIEW_PROFILE,
+                None,
+                "bicdb",
+            )
+            .unwrap();
+            let rows = SqlSession::new(&mut db).execute(&sql).unwrap().rows;
+            assert_eq!(rows[0][0].to_cell(), expected, "{source}: {sql}");
+        }
+        let declaration = "CREATE FUNCTION raw_guid_text RETURN VARCHAR2 IS guid VARCHAR2(32); BEGIN guid:=LOWER(SYS_GUID()); RETURN SUBSTR(guid,1,8)||'-'||SUBSTR(guid,9,4)||'-'||SUBSTR(guid,13,4)||'-'||SUBSTR(guid,17,4)||'-'||SUBSTR(guid,21,12); END;";
+        let sql = oracle::lower_session_sql(
+            &db,
+            declaration,
+            oracle::ORACLE_PREVIEW_PROFILE,
+            None,
+            "bicdb",
+        )
+        .unwrap();
+        SqlSession::new(&mut db).execute(&sql).unwrap();
+        let sql = oracle::lower_profile_sql(
+            &db,
+            "SELECT raw_guid_text() FROM DUAL",
+            oracle::ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        let result = SqlSession::new(&mut db).execute(&sql).unwrap().rows[0][0].to_cell();
+        assert!(
+            regex::Regex::new("^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+                .unwrap()
+                .is_match(&result),
+            "{result}"
+        );
+        // Native SQL keeps PostgreSQL's bytea display, even in this database.
+        let result = SqlSession::new(&mut db)
+            .execute(r"SELECT CAST(CAST('\xab00ff' AS BYTEA) AS TEXT)")
+            .unwrap();
+        assert_eq!(result.rows[0][0].to_cell(), r"\xab00ff");
+    }
 
     #[test]
     fn sequence_result_types_are_known_and_concatenation_evaluates_operands_once() {

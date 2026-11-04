@@ -17,6 +17,13 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [RAW conversion checkpoint](evidence/oracle-raw-character-conversion-2026-11-04/README.md)
+corrects implicit hexadecimal character conversion for proven RAW intrinsic
+operands and binary result metadata over prepared PostgreSQL queries. Its
+independent references pass 13/13 Oracle and 13/13 PostgreSQL cases. Broader RAW
+column/LOB semantics and the subsequent application reporting workflow remain
+unqualified by those expression tests.
+
 The latest completed application checkpoint runs the original Oracle-schema
 application through PostgreSQL drivers, with 62 routine definitions and 160 view
 definitions/type families loaded. The

@@ -70,6 +70,10 @@ only two return the correct values. A generic SQL column/local-variable shadowin
 reproduction isolates the next name-resolution dependency. Line entry and the
 full application remain unqualified; 62 accepted definitions are not 62 correct
 routine executions.
+The [first saved line](evidence/idempiere-sales-order-line-2026-11-03/README.md)
+checkpoint subsequently verifies product selection and a committed order line
+through independent SQL and a fresh browser. Its parent totals remain zero;
+header/tax propagation, processing and the complete order workflow are unqualified.
 The milestones below retain their results at the time each was measured.
 
 The original 913 tables and 185,292 rows loaded and passed complete value

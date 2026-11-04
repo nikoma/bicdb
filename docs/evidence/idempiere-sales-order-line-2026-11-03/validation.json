@@ -1,0 +1,43 @@
+{
+  "format": 1,
+  "observed_at_utc": "2026-11-04T02:45:03.987451+00:00",
+  "source_commit": "f537c2c9aabe71fb6d7b695f63d0858ec5aef5d0",
+  "runtime_binary_sha256": "83252bf9a21039ba1287bd661d1ca57697751f65ddc2f89662c48b1b1e6cc2d2",
+  "application_qualified": false,
+  "order_workflow_qualified": false,
+  "release_published": false,
+  "build": "development, unoptimized, debug=0",
+  "sql_profile": "oracle-preview-v1",
+  "accepted_original_definitions": 62,
+  "target_protocol": "PostgreSQL JDBC 42.7.8 transport bridge with original Oracle provider",
+  "saved_line": {
+    "verified_by": "independent SQL connection and fresh browser session",
+    "order_id": 1000000,
+    "document_no": "50000",
+    "line_id": 1000000,
+    "product_id": 123,
+    "quantity": "2",
+    "price": "61.75",
+    "line_net_amount": "123.50"
+  },
+  "header": {
+    "total_lines": "0",
+    "grand_total": "0",
+    "status": "DR",
+    "processed": "N",
+    "totals_qualified": false
+  },
+  "checks": {
+    "exact_binary_rust_passed": 1434,
+    "exact_binary_rust_ignored": 3,
+    "python_passed": 58,
+    "source_comparisons": "19/19 aggregate Oracle cases, 12/12 aggregate PostgreSQL controls; not a complete order comparison"
+  },
+  "oracle_application_replay_qualified": false,
+  "canonical_migration_database_modified": false,
+  "remaining": [
+    "SQL column/local-variable binding mismatch in selected inventory calls",
+    "Header totals and tax propagation",
+    "Order processing, inventory effects, invoicing, accounting, rollback and remaining application flows"
+  ]
+}

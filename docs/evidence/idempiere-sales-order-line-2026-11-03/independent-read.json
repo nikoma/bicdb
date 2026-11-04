@@ -1,0 +1,50 @@
+{
+  "runtime_binary_sha256": "83252bf9a21039ba1287bd661d1ca57697751f65ddc2f89662c48b1b1e6cc2d2",
+  "application_qualified": false,
+  "header": {
+    "columns": [
+      "c_order_id",
+      "documentno",
+      "totallines",
+      "grandtotal",
+      "docstatus",
+      "processed"
+    ],
+    "rows": [
+      [
+        "1000000",
+        "50000",
+        "0",
+        "0",
+        "DR",
+        "N"
+      ]
+    ]
+  },
+  "lines": {
+    "columns": [
+      "c_orderline_id",
+      "m_product_id",
+      "qtyentered",
+      "qtyordered",
+      "priceentered",
+      "priceactual",
+      "linenetamt",
+      "c_tax_id",
+      "description"
+    ],
+    "rows": [
+      [
+        "1000000",
+        "123",
+        "2",
+        "2",
+        "61.75",
+        "61.75",
+        "123.50",
+        "104",
+        "BicDB application qualification line"
+      ]
+    ]
+  }
+}

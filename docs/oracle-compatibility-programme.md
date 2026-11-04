@@ -17,11 +17,19 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [Trial Balance checkpoint](evidence/idempiere-trial-balance-2026-11-04/README.md)
+completes the original HQ reporting workflow through the UI: 47 stored and
+rendered rows, including 19 opening balances and 28 current-period entries,
+with a verified 12-page PDF. All 46 financial/reporting observations pass after
+the clean runtime upgrade. An additional all-organization report also renders
+its expected 47 rows. This remains one bounded report and selected business
+workflows; the full application and broader programme remain incomplete.
+
 The [typed BETWEEN checkpoint](evidence/sql-typed-between-2026-11-04/README.md)
 retains datetime operand types at range boundaries. It preserves 16/16 explicit
 Oracle controls and improves PostgreSQL comparisons from 4/16 to 14/16. Two
 pre-existing PostgreSQL volatile-evaluation differences remain explicitly
-unqualified; application rendering acceptance is still separate.
+unqualified; the separate application checkpoint above now verifies the selected rendering workflow.
 
 The [RAW conversion checkpoint](evidence/oracle-raw-character-conversion-2026-11-04/README.md)
 corrects implicit hexadecimal character conversion for proven RAW intrinsic

@@ -15,8 +15,11 @@ workflows also complete, including stock movement, purchase matching and receipt
 accounting. The
 [supplier invoice](../../../docs/evidence/idempiere-supplier-invoice-2026-11-04/README.md)
 also completes/posts with receipt and purchase matching and balanced accounting.
-Outbound payment, the rest of the application, production operations and complete
-Oracle compatibility remain unqualified.
+[Supplier payment](../../../docs/evidence/idempiere-supplier-payment-2026-11-04/README.md)
+and [bank reconciliation](../../../docs/evidence/idempiere-supplier-reconciliation-2026-11-04/README.md)
+also complete, including allocation, zero open balances and balanced accounting.
+The rest of the application, production operations and complete Oracle
+compatibility remain unqualified.
 The earlier inventory and initial observations below retain their historical
 results; they do not replace this current checkpoint.
 

@@ -1,0 +1,101 @@
+{
+  "format": 1,
+  "source_commit": "aa077a87fa28af49409cbddffdafeb16a2d474e1",
+  "runtime_binary_sha256": "abd22affa8b965cbf6741c6670eb37b91dcfe1c875e6ec2584c10a05e967be89",
+  "build": "development, unoptimized, debug=0",
+  "application_qualified": false,
+  "full_package_qualified": false,
+  "release_published": false,
+  "sql_profile": "oracle-preview-v1",
+  "compiler_version": 25,
+  "language_oid": 999424,
+  "durable_metadata_format": 5,
+  "checks": {
+    "rust_passed": 1430,
+    "rust_ignored": 3,
+    "rust_batches": [
+      577,
+      7,
+      29,
+      17,
+      2,
+      60,
+      419,
+      121,
+      26,
+      169,
+      3
+    ],
+    "python_passed": 58,
+    "format": "passed",
+    "diff": "passed",
+    "licenses": "passed",
+    "open_core_boundary": "passed",
+    "ci": "not run in this local qualification"
+  },
+  "oracle": {
+    "version": "23.26.3.0.0",
+    "source_qualified": 38,
+    "matched": 32,
+    "total": 38,
+    "fixture_exit_status": 1,
+    "full_fixture_success": false,
+    "pending": [
+      "get_lines_disabled",
+      "get_lines_empty",
+      "get_lines_batch",
+      "get_lines_zero",
+      "get_lines_empty_line",
+      "get_lines_discards_unretrieved_on_write"
+    ],
+    "schema_cleanup_errors": [],
+    "buffers_reset": true
+  },
+  "postgres_controls": {
+    "matched": 23,
+    "total": 23,
+    "version_num": 180004
+  },
+  "readers": {
+    "passed": 13,
+    "total": 13,
+    "prior_runtime_sha256": "1e683572cf27d76db38eb802af54f3b4abd27e1a424e7b40f66ac1c56c3df3fd"
+  },
+  "memory": {
+    "guard_status": "completed",
+    "minimum_available_gib": 16.352,
+    "peak_owned_group_rss_gib": 4.538,
+    "minimum_required_gib": 8
+  },
+  "qualification_history": [
+    {
+      "kind": "interrupted validation",
+      "reason": "finish constant-time allocation accounting; only the owned process group stopped"
+    },
+    {
+      "kind": "failed full SQL run",
+      "failures": 2,
+      "reason": "version assertions still expected current 24; updated to current 25 with explicit legacy 24 and future 26 guards"
+    },
+    {
+      "kind": "failed protocol run",
+      "failures": 1,
+      "reason": "eager empty-buffer allocation crossed the original native connection memory limit; fixed with a shared lazy slot; test limit unchanged"
+    },
+    {
+      "kind": "initial candidate comparison",
+      "matched": 31,
+      "total": 38,
+      "reason": "six missing GET_LINES cases plus EXCEPTION word incorrectly treated as syntax in error message; general lexical guard fixed with native regression"
+    }
+  ],
+  "remaining": [
+    "GET_LINES and package collection types",
+    "broader package declarations/ACLs and scalar conversions",
+    "record/collection OUT destinations",
+    "prepared CREATE PROCEDURE interface",
+    "all callable/catalog client paths",
+    "NVL aggregate typing and application product selection",
+    "full application workflows and remaining Oracle programme"
+  ]
+}

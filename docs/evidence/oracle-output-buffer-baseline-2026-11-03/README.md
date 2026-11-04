@@ -1,7 +1,7 @@
 # Session output buffer acceptance baseline
 
 The executable [output buffer fixture](../../../examples/oracle/reference/output_buffers.py)
-checks **27 explicit expectations against Oracle 23.26.3.0.0**. All 27 pass on
+checked **27 explicit expectations against Oracle 23.26.3.0.0** at this baseline. All 27 passed on
 that reference. On the current BicDB development runtime, **0/27 match**: each
 case stops at the initial DBMS_OUTPUT.DISABLE call because that procedure is
 unavailable. These are 27 blocked cases, not 27 independently exercised target
@@ -63,3 +63,7 @@ assuming that every Oracle release was tested.
 
 This baseline does not implement the package, qualify other DBMS/UTL APIs, or
 complete the Oracle compatibility programme.
+
+The subsequent [version-25 checkpoint](../oracle-output-buffers-2026-11-03/README.md)
+expands the fixture to 38 expectations and implements six operations. Its 32/38
+matches and six pending GET_LINES cases do not replace this historical report.

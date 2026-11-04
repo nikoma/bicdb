@@ -1,0 +1,164 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "abd22affa8b965cbf6741c6670eb37b91dcfe1c875e6ec2584c10a05e967be89",
+  "prior_binary_sha256": "1e683572cf27d76db38eb802af54f3b4abd27e1a424e7b40f66ac1c56c3df3fd",
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "prior_scalar_executes",
+      "actual": [
+        [
+          "7"
+        ]
+      ],
+      "expected": [
+        [
+          "7"
+        ]
+      ],
+      "success": true
+    },
+    {
+      "id": "prior_package_unavailable",
+      "actual": "42601",
+      "expected": "42601",
+      "success": true
+    },
+    {
+      "id": "new_reader_retains_scalar",
+      "actual": [
+        [
+          "7"
+        ]
+      ],
+      "expected": [
+        [
+          "7"
+        ]
+      ],
+      "success": true
+    },
+    {
+      "id": "new_reader_keeps_v24_package_fence",
+      "actual": "42601",
+      "expected": "42601",
+      "success": true
+    },
+    {
+      "id": "current_routine_executes",
+      "actual": [
+        [
+          "7"
+        ]
+      ],
+      "expected": [
+        [
+          "7"
+        ]
+      ],
+      "success": true
+    },
+    {
+      "id": "current_getter_executes",
+      "actual": [
+        [
+          "current",
+          "0"
+        ]
+      ],
+      "expected": [
+        [
+          "current",
+          "0"
+        ]
+      ],
+      "success": true
+    },
+    {
+      "id": "language_24_oid_preserved",
+      "actual": [
+        [
+          "999423"
+        ]
+      ],
+      "expected": [
+        [
+          "999423"
+        ]
+      ],
+      "success": true
+    },
+    {
+      "id": "language_25_oid_registered",
+      "actual": [
+        [
+          "999424"
+        ]
+      ],
+      "expected": [
+        [
+          "999424"
+        ]
+      ],
+      "success": true
+    },
+    {
+      "id": "prior_scalar_still_executes",
+      "actual": [
+        [
+          "7"
+        ]
+      ],
+      "expected": [
+        [
+          "7"
+        ]
+      ],
+      "success": true
+    },
+    {
+      "id": "prior_refuses_v25_function",
+      "actual": "0A000",
+      "expected": "0A000",
+      "success": true
+    },
+    {
+      "id": "prior_refuses_v25_procedure",
+      "actual": "0A000",
+      "expected": "0A000",
+      "success": true
+    },
+    {
+      "id": "current_function_reopens_after_refusal",
+      "actual": [
+        [
+          "7"
+        ]
+      ],
+      "expected": [
+        [
+          "7"
+        ]
+      ],
+      "success": true
+    },
+    {
+      "id": "output_not_persisted_across_sessions",
+      "actual": [
+        [
+          null,
+          "1"
+        ]
+      ],
+      "expected": [
+        [
+          null,
+          "1"
+        ]
+      ],
+      "success": true
+    }
+  ],
+  "success": true,
+  "total": 13
+}

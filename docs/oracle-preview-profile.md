@@ -1011,3 +1011,14 @@ parameters; all 88 rows and 73 columns of the selected original application
 field view also match Oracle. Stored definitions, compiler version 24 and durable
 metadata format 5 are unchanged. Broader optimizer behavior and complete
 application workflows remain unqualified.
+
+The [output-operation contract](evidence/oracle-output-buffers-2026-11-03/README.md)
+advances the current routine compiler to **25** (language OID **999424**) while
+retaining version 24 and metadata format 5. It adds ENABLE, DISABLE, PUT,
+PUT_LINE, NEW_LINE and scalar GET_LINE with connection-local state that survives
+database rollback. Lazy allocation preserves native memory admission behavior;
+output allocations have an explicit host budget. Original declarations must be
+explicitly recompiled to adopt the new lowering. The live comparison matches
+32/38 source expectations, leaving six GET_LINES cases open. Package types,
+further conversions, callable/catalog interfaces and full application execution
+remain unqualified.

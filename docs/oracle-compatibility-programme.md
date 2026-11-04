@@ -28,8 +28,12 @@ and [numeric pictures](evidence/numeric-format-pictures-2026-11-04/README.md)
 have independent Oracle/PostgreSQL reference evidence. The subsequent
 [invoice checkpoint](evidence/idempiere-invoice-posting-2026-11-04/README.md)
 generates, completes and posts one invoice through the standard UI, with balanced
-entries in both accounting schemas and no repeated stock movement. Payments,
-remaining application workflows and the broader programme remain unqualified.
+entries in both accounting schemas and no repeated stock movement. The
+[payment/allocation checkpoint](evidence/idempiere-payment-allocation-2026-11-04/README.md)
+completes and posts the receipt and allocation, marks that invoice paid and
+verifies zero remaining balances, with balanced accounting in both schemas.
+Bank reconciliation, remaining application workflows and the broader programme
+remain unqualified.
 The checkpoint history below records what was measured at each earlier stage.
 
 The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used

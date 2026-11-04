@@ -12,6 +12,7 @@ from row_lock_waits import main as comparison_main
 def observe(factory):
     nonce = uuid.uuid4().hex[:12].upper()
     table, sequence, view = ("BICDB_WD_" + nonce + suffix for suffix in ("T", "S", "V"))
+    quoted_table, quoted_view = "BICDB_WD_" + nonce + "Q", "BICDB_WD_" + nonce + "W"
     report = dict(cases=[], cleanup_errors=[])
     created = []
     with factory() as conn:
@@ -34,6 +35,10 @@ def observe(factory):
             created.append(("SEQUENCE", sequence))
             execute(f"CREATE VIEW {view} AS SELECT * FROM {table}")
             created.append(("VIEW", view))
+            execute(f'CREATE TABLE {quoted_table}("Key" INTEGER,"Value" VARCHAR(8))')
+            created.append(("TABLE", quoted_table))
+            execute(f'CREATE VIEW {quoted_view}("ResultKey","ResultValue") AS SELECT * FROM {quoted_table}')
+            created.append(("VIEW", quoted_view))
             counter = f"{sequence}.NEXTVAL" if oracle_semantics else f"nextval('{sequence}')"
             star = "l.*,r.*" if oracle_semantics else "*"
             cases = [
@@ -41,6 +46,10 @@ def observe(factory):
                 ("qualified_table", f"SELECT t.* FROM {table} t", ["id", "marker"], ["number", "text"]),
                 ("join_with_sequence", f"SELECT {star},{counter} AS counter FROM {table} l CROSS JOIN {table} r", ["id", "marker", "id", "marker", "counter"], ["number", "text", "number", "text", "number"]),
                 ("bare_view", f"SELECT * FROM {view}", ["id", "marker"], ["number", "text"]),
+                ("quoted_table", f"SELECT * FROM {quoted_table}", ["Key", "Value"], ["number", "text"]),
+                ("quoted_derived", f"SELECT d.* FROM (SELECT * FROM {quoted_table}) d", ["Key", "Value"], ["number", "text"]),
+                ("quoted_cte", f"WITH d AS (SELECT * FROM {quoted_table}) SELECT * FROM d", ["Key", "Value"], ["number", "text"]),
+                ("quoted_declared_view", f"SELECT * FROM {quoted_view}", ["ResultKey", "ResultValue"], ["number", "text"]),
             ]
             for ordinal, (name, sql, names, types) in enumerate(cases):
                 row = dict(id=name, expected_columns=names, expected_types=types)
@@ -61,7 +70,7 @@ def observe(factory):
                         columns = [result.fname(i).decode() for i in range(result.nfields)]
                         actual_types = [family(result.ftype(i)) for i in range(result.nfields)]
                     row.update(columns=columns, types=actual_types,
-                               qualified=[name.lower() for name in columns] == names and actual_types == types)
+                               qualified=(columns if name.startswith("quoted_") else [label.lower() for label in columns]) == names and actual_types == types)
                 except Exception as exc:
                     row.update(qualified=False, exception=type(exc).__name__, sqlstate=getattr(exc, "sqlstate", None), detail=str(exc)[:500])
                 report["cases"].append(row)
@@ -89,7 +98,7 @@ def run(source_factory, target_factory):
     return dict(format=1, application_qualified=False, reference_version=source["server_version"],
                 cases=cases, total=len(cases), matched=sum(case["matched"] for case in cases),
                 cleanup_errors=cleanup, source_qualified=all(case["source_qualified"] for case in cases),
-                success=len(cases) == 5 and all(case["matched"] for case in cases) and not cleanup)
+                success=len(cases) == 9 and all(case["matched"] for case in cases) and not cleanup)
 
 
 def qualified(row):

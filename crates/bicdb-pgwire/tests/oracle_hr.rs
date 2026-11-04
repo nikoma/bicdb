@@ -64,6 +64,33 @@ async fn preparing_typed_wildcards_does_not_advance_sequences_in_either_profile(
         let server = Running::new(directory.path(), oracle);
         let (client, connection) = server.connect(oracle).await.unwrap();
         client.batch_execute("CREATE TABLE describe_rows(id INTEGER,marker VARCHAR(8)); INSERT INTO describe_rows VALUES(1,'visible'); CREATE SEQUENCE describe_counter;").await.unwrap();
+        client.batch_execute(r#"CREATE TABLE "QuotedRows"("Key" INTEGER,"Value" VARCHAR(8)); CREATE VIEW quoted_labels("ResultKey","ResultValue") AS SELECT * FROM "QuotedRows""#).await.unwrap();
+        for (sql, names) in [
+            (r#"SELECT * FROM "QuotedRows""#, vec!["Key", "Value"]),
+            (
+                r#"SELECT d.* FROM (SELECT * FROM "QuotedRows") d"#,
+                vec!["Key", "Value"],
+            ),
+            (
+                r#"WITH d AS (SELECT * FROM "QuotedRows") SELECT * FROM d"#,
+                vec!["Key", "Value"],
+            ),
+            (
+                "SELECT * FROM quoted_labels",
+                vec!["ResultKey", "ResultValue"],
+            ),
+        ] {
+            let statement = client.prepare(sql).await.unwrap();
+            assert_eq!(
+                statement
+                    .columns()
+                    .iter()
+                    .map(|column| column.name())
+                    .collect::<Vec<_>>(),
+                names,
+                "{sql}"
+            );
+        }
         let expression = if oracle {
             "describe_counter.NEXTVAL"
         } else {

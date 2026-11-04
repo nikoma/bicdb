@@ -158,7 +158,17 @@ fn infer_describe_columns(
         return Ok(None);
     }
     let engine = SqlEngine::new(db);
-    let columns = engine.query_output_columns(&query);
+    let columns = if explicit_from
+        && select.projection.iter().any(|item| {
+            matches!(
+                item,
+                SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(..)
+            )
+        }) {
+        engine.query_describe_output_columns(&query)
+    } else {
+        engine.query_output_columns(&query)
+    };
     if new_projection
         && columns
             .as_ref()

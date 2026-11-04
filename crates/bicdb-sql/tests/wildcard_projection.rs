@@ -21,6 +21,12 @@ fn describe_expands_typed_wildcards_without_executing_volatile_view_projections(
             .unwrap();
         session.execute("CREATE SEQUENCE describe_counter").unwrap();
         session.execute("CREATE VIEW describe_volatile AS SELECT id,nextval('describe_counter') AS counter FROM describe_left").unwrap();
+        session
+            .execute(r#"CREATE TABLE "CaSe"("Key" INTEGER,"Value" TEXT)"#)
+            .unwrap();
+        session
+            .execute(r#"CREATE VIEW "CaseView"("OutputId","OutputLabel") AS SELECT * FROM "CaSe""#)
+            .unwrap();
     }
     for sql in [
         "SELECT * FROM describe_left l JOIN describe_right r ON l.id=r.id",
@@ -41,6 +47,34 @@ fn describe_expands_typed_wildcards_without_executing_volatile_view_projections(
         .execute("SELECT nextval('describe_counter')")
         .unwrap();
     assert_eq!(result.rows[0][0].to_cell(), "1");
+    for (sql, names) in [
+        (r#"SELECT * FROM "CaSe""#, vec!["Key", "Value"]),
+        (r#"SELECT t.* FROM "CaSe" t"#, vec!["Key", "Value"]),
+        (
+            r#"SELECT d.* FROM (SELECT * FROM "CaSe") d"#,
+            vec!["Key", "Value"],
+        ),
+        (
+            r#"WITH d AS (SELECT * FROM "CaSe") SELECT * FROM d"#,
+            vec!["Key", "Value"],
+        ),
+        (
+            r#"SELECT * FROM "CaseView""#,
+            vec!["OutputId", "OutputLabel"],
+        ),
+    ] {
+        let columns = bicdb_sql::infer_query_result_columns_for_describe(&db, sql)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            columns
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            names,
+            "{sql}"
+        );
+    }
 }
 
 #[test]

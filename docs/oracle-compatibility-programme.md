@@ -402,3 +402,16 @@ checks cover the boundary. This addresses a NULL timestamp observed during
 application order processing, but a standalone comparison does not qualify that
 workflow. Complete clock/temporal semantics, application operation, migration,
 cutover and all outstanding workstreams above remain required.
+
+The [first committed sales-order completion](evidence/idempiere-sales-order-complete-2026-11-03/README.md)
+subsequently verifies the original UI Complete action, committed status CO,
+two-unit reservation, totals of 123.50, a fresh browser session and a graceful
+database reopen. It does not qualify the entire application. Background matching
+record decoding and growing database memory remain active investigations; the
+isolated application was intentionally stopped to preserve host headroom.
+
+The [native type-relocation correction](evidence/sql-type-relocation-2026-11-03/README.md)
+addresses a separately reproduced main CI failure while retaining Oracle
+custom-type regressions and source-backed clock controls. It qualifies native
+function declaration/type identity updates, not Oracle schema-move syntax or
+schema removal. All outstanding workstreams in the programme remain required.

@@ -1,0 +1,277 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "reference_version": 180004,
+  "cases": [
+    {
+      "id": "initial_signature",
+      "source": {
+        "id": "initial_signature",
+        "expected": [
+          [
+            "value move_from_daaf213222.state",
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "actual": [
+          [
+            "value move_from_daaf213222.state",
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "initial_signature",
+        "expected": [
+          [
+            "value move_from_daaf213222.state",
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "actual": [
+          [
+            "value move_from_daaf213222.state",
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "signature_in_transaction",
+      "source": {
+        "id": "signature_in_transaction",
+        "expected": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "actual": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "signature_in_transaction",
+        "expected": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "actual": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "signature_after_rollback",
+      "source": {
+        "id": "signature_after_rollback",
+        "expected": [
+          [
+            "value move_from_daaf213222.state",
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "actual": [
+          [
+            "value move_from_daaf213222.state",
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "signature_after_rollback",
+        "expected": [
+          [
+            "value move_from_daaf213222.state",
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "actual": [
+          [
+            "value move_from_daaf213222.state",
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "committed_signature",
+      "source": {
+        "id": "committed_signature",
+        "expected": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "actual": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "committed_signature",
+        "expected": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "actual": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "relocated_argument_and_return",
+      "source": {
+        "id": "relocated_argument_and_return",
+        "expected": [
+          [
+            "ready"
+          ]
+        ],
+        "actual": [
+          [
+            "ready"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "relocated_argument_and_return",
+        "expected": [
+          [
+            "ready"
+          ]
+        ],
+        "actual": [
+          [
+            "ready"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "body_literal_preserved",
+      "source": {
+        "id": "body_literal_preserved",
+        "expected": [
+          [
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "actual": [
+          [
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "body_literal_preserved",
+        "expected": [
+          [
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "actual": [
+          [
+            "move_from_daaf213222.state"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "signature_after_reconnect",
+      "source": {
+        "id": "signature_after_reconnect",
+        "actual": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "expected": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "signature_after_reconnect",
+        "actual": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "expected": [
+          [
+            "value move_to_daaf213222.renamed_state",
+            "move_to_daaf213222.renamed_state"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "total": 7,
+  "matched": 7,
+  "cleanup_errors": [
+    {
+      "exception": "FeatureNotSupported",
+      "sqlstate": "0A000"
+    },
+    {
+      "exception": "FeatureNotSupported",
+      "sqlstate": "0A000"
+    }
+  ],
+  "source_qualified": true,
+  "success": false,
+  "target_sql_profile": "postgres",
+  "reference": "postgres",
+  "runtime_binary_sha256": "86b09dee244d09f2665d4bfa6a84ee0bdf119b1f5be7560380d2a15f3571eef4",
+  "postgres_version_num": 180004,
+  "fixture_source_sha256": "61b86f4f4c2c45fd56916570233f75f4f889ceec6e6b47702eb0a86385193961"
+}

@@ -2001,6 +2001,7 @@ impl<'db> SqlSession<'db> {
                     changed = true;
                 }
             }
+            changed |= rewrite_routine_definition_type_identity(&mut routine, previous, updated);
             if changed {
                 self.save_session_routine(&routine)?;
             }

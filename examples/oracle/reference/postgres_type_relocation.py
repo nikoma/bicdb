@@ -1,7 +1,8 @@
 """Native PostgreSQL function signatures across user-type moves and rollback.
 
-Nonce schemas/functions are removed. A function returning an old type-name
-literal independently checks that moving typed declarations preserves body data.
+Provision bicdb_type_moves_a and bicdb_type_moves_b before running. They remain
+fixture infrastructure; nonce types/functions are removed. A function returning
+an old type-name literal checks that moving declarations preserves body data.
 """
 import uuid
 
@@ -9,9 +10,10 @@ from row_lock_waits import main as comparison_main
 
 
 def observe(factory, nonce):
-    source, target = "move_from_" + nonce, "move_to_" + nonce
+    source, target = "bicdb_type_moves_a", "bicdb_type_moves_b"
+    type_name, moved_name = "state_" + nonce, "state_" + nonce + "_moved"
     identity, literal = "move_identity_" + nonce, "move_literal_" + nonce
-    old, new = source + ".state", target + ".renamed_state"
+    old, new = source + "." + type_name, target + "." + moved_name
     report = dict(cases=[], cleanup_errors=[])
     with factory() as conn:
         conn.autocommit = True
@@ -34,20 +36,19 @@ def observe(factory, nonce):
         metadata = ("SELECT pg_get_function_arguments(oid),pg_get_function_result(oid) "
                     "FROM pg_proc WHERE proname='" + identity + "'")
         try:
-            execute("CREATE SCHEMA " + source)
-            execute("CREATE SCHEMA " + target)
+            assert str(execute(f"SELECT count(*) FROM pg_namespace WHERE nspname IN ('{source}','{target}')")[0][0]) == "2", "Provision both qualification schemas first"
             execute("CREATE TYPE " + old + " AS ENUM ('ready')")
             execute(f"CREATE FUNCTION public.{identity}(value {old}) RETURNS {old} LANGUAGE sql AS 'SELECT value'")
             execute(f"CREATE FUNCTION public.{literal}(value {old}) RETURNS text LANGUAGE sql AS $$SELECT '{old}'$$")
             check("initial_signature", metadata, [["value " + old, old]])
             execute("BEGIN")
             execute(f"ALTER TYPE {old} SET SCHEMA {target}")
-            execute(f"ALTER TYPE {target}.state RENAME TO renamed_state")
+            execute(f"ALTER TYPE {target}.{type_name} RENAME TO {moved_name}")
             check("signature_in_transaction", metadata, [["value " + new, new]])
             execute("ROLLBACK")
             check("signature_after_rollback", metadata, [["value " + old, old]])
             execute(f"ALTER TYPE {old} SET SCHEMA {target}")
-            execute(f"ALTER TYPE {target}.state RENAME TO renamed_state")
+            execute(f"ALTER TYPE {target}.{type_name} RENAME TO {moved_name}")
             check("committed_signature", metadata, [["value " + new, new]])
             check("relocated_argument_and_return", f"SELECT public.{identity}('ready'::{new})", [["ready"]])
             check("body_literal_preserved", f"SELECT public.{literal}('ready'::{new})", [[old]])
@@ -59,7 +60,7 @@ def observe(factory, nonce):
         finally:
             for sql in ["ROLLBACK", f"DROP FUNCTION IF EXISTS public.{identity}",
                         f"DROP FUNCTION IF EXISTS public.{literal}",
-                        f"DROP SCHEMA IF EXISTS {source} CASCADE", f"DROP SCHEMA IF EXISTS {target} CASCADE"]:
+                        f"DROP TYPE IF EXISTS {new}", f"DROP TYPE IF EXISTS {old}"]:
                 try:
                     execute(sql)
                 except Exception as exc:

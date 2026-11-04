@@ -2601,6 +2601,7 @@ fn handle_frontend_message(
                 parse_complete(stream)?;
             }
             Err(error) => {
+                state.record_query_error();
                 state.discard_until_sync = true;
                 error_response_for_error(stream, &error)?;
                 if error.closes_connection() {

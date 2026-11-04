@@ -1,0 +1,69 @@
+{
+  "read_only": true,
+  "application_qualified": false,
+  "checks": [
+    {
+      "sql": "SELECT M_InOut_ID,DocumentNo,DocStatus,Processed,Processing,SendEMail,Posted FROM M_InOut WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "1000000",
+          "500000",
+          "CO",
+          "Y",
+          "N",
+          "N",
+          "E"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT M_InOutLine_ID,M_Product_ID,MovementQty,C_OrderLine_ID FROM M_InOutLine WHERE M_InOut_ID=1000000",
+      "rows": [
+        [
+          "1000000",
+          "123",
+          "2",
+          "1000000"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT MovementQty,MovementType FROM M_Transaction WHERE M_InOutLine_ID IN (SELECT M_InOutLine_ID FROM M_InOutLine WHERE M_InOut_ID=1000000)",
+      "rows": [
+        [
+          "-2.0",
+          "C-"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT BOMQtyAvailable(123,103,0),BOMQtyOnHand(123,103,0),BOMQtyReserved(123,103,0),BOMQtyOrdered(123,103,0) FROM DUAL",
+      "rows": [
+        [
+          "18",
+          "18",
+          "0",
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "0",
+          "2",
+          "0"
+        ]
+      ]
+    }
+  ],
+  "shipment_and_stock_checks_passed": true,
+  "accounting_posted": false,
+  "posting_blocker": "JDBC received result tuples without field metadata for a parenthesized set query",
+  "ui_observer_timeout_recorded": true,
+  "ui_result_observed": "Process completed successfully; Created = 1; Shipment Processed: 500000",
+  "repost_after_candidate_verified": false,
+  "runtime_binary_sha256": "282463584cfbf90f90a05e9b32f00cc5f2b8af6f6f96845203962b69e72fcdb6",
+  "main_commit": "e04386b5b8f38de7b02a84c9bb754f91524bfa9d"
+}

@@ -1,0 +1,69 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "source_commit": "40a94db5a12062e4cfa8b96a486e8679058074d0",
+  "runtime_binary_sha256": "b78991f08d526131bea683ec9cd1d814f499a941cd8d769953dfe98e301e1f7e",
+  "rust_passed": 324,
+  "rust_failed": 0,
+  "rust_ignored": 0,
+  "rust_batches": [
+    122,
+    33,
+    169
+  ],
+  "python_passed": 25,
+  "retained_describe": [
+    {
+      "reference": "oracle",
+      "matched": 9,
+      "total": 9,
+      "runtime_binary_sha256": "b78991f08d526131bea683ec9cd1d814f499a941cd8d769953dfe98e301e1f7e"
+    },
+    {
+      "reference": "postgres",
+      "matched": 9,
+      "total": 9,
+      "runtime_binary_sha256": "b78991f08d526131bea683ec9cd1d814f499a941cd8d769953dfe98e301e1f7e"
+    }
+  ],
+  "resources": {
+    "rust": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 2736513024,
+      "minimum_observed_available_bytes": 16491208704
+    },
+    "build": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 2199248896,
+      "minimum_observed_available_bytes": 13891354624
+    },
+    "source": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 451481600,
+      "minimum_observed_available_bytes": 14324633600
+    }
+  },
+  "cleanup": {
+    "format": 1,
+    "removed_files": 3,
+    "reclaimed_bytes": 1117533024,
+    "by_category": {
+      "completed_test_executable": {
+        "files": 3,
+        "bytes": 1117533024
+      }
+    },
+    "current_example_binary_preserved": true
+  },
+  "compiler_format_changed": false,
+  "storage_format_changed": false
+}

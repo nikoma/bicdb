@@ -1,0 +1,3872 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "comparisons": [
+    {
+      "reference": "oracle",
+      "before": {
+        "reference_version": "23.26.3.0.0",
+        "runtime_binary_sha256": "282463584cfbf90f90a05e9b32f00cc5f2b8af6f6f96845203962b69e72fcdb6",
+        "fixture_source_sha256": "1b9ca3155698149a46fceed58947e531324d7adb93bfd0a42d9e8373ba9b71d7",
+        "matched": 6,
+        "total": 12,
+        "source_qualified": true,
+        "cleanup_errors": [],
+        "cases": [
+          {
+            "id": "0:empty_statement_description",
+            "source": {
+              "id": "0:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "0:empty_rows",
+            "source": {
+              "id": "0:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "0:populated_statement_description",
+            "source": {
+              "id": "0:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "0:populated_rows",
+            "source": {
+              "id": "0:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:empty_statement_description",
+            "source": {
+              "id": "1:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "1:empty_rows",
+            "source": {
+              "id": "1:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:populated_statement_description",
+            "source": {
+              "id": "1:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "1:populated_rows",
+            "source": {
+              "id": "1:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:empty_statement_description",
+            "source": {
+              "id": "2:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "2:empty_rows",
+            "source": {
+              "id": "2:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:populated_statement_description",
+            "source": {
+              "id": "2:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "2:populated_rows",
+            "source": {
+              "id": "2:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          }
+        ]
+      },
+      "after": {
+        "reference_version": "23.26.3.0.0",
+        "runtime_binary_sha256": "b78991f08d526131bea683ec9cd1d814f499a941cd8d769953dfe98e301e1f7e",
+        "fixture_source_sha256": "1b9ca3155698149a46fceed58947e531324d7adb93bfd0a42d9e8373ba9b71d7",
+        "matched": 12,
+        "total": 12,
+        "source_qualified": true,
+        "cleanup_errors": [],
+        "cases": [
+          {
+            "id": "0:empty_statement_description",
+            "source": {
+              "id": "0:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "0:empty_rows",
+            "source": {
+              "id": "0:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "0:populated_statement_description",
+            "source": {
+              "id": "0:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "0:populated_rows",
+            "source": {
+              "id": "0:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:empty_statement_description",
+            "source": {
+              "id": "1:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:empty_rows",
+            "source": {
+              "id": "1:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:populated_statement_description",
+            "source": {
+              "id": "1:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:populated_rows",
+            "source": {
+              "id": "1:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:empty_statement_description",
+            "source": {
+              "id": "2:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:empty_rows",
+            "source": {
+              "id": "2:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:populated_statement_description",
+            "source": {
+              "id": "2:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:populated_rows",
+            "source": {
+              "id": "2:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          }
+        ]
+      }
+    },
+    {
+      "reference": "postgres",
+      "before": {
+        "reference_version": 180004,
+        "runtime_binary_sha256": "282463584cfbf90f90a05e9b32f00cc5f2b8af6f6f96845203962b69e72fcdb6",
+        "fixture_source_sha256": "1b9ca3155698149a46fceed58947e531324d7adb93bfd0a42d9e8373ba9b71d7",
+        "matched": 6,
+        "total": 12,
+        "source_qualified": true,
+        "cleanup_errors": [],
+        "cases": [
+          {
+            "id": "0:empty_statement_description",
+            "source": {
+              "id": "0:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "0:empty_rows",
+            "source": {
+              "id": "0:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "0:populated_statement_description",
+            "source": {
+              "id": "0:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "0:populated_rows",
+            "source": {
+              "id": "0:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:empty_statement_description",
+            "source": {
+              "id": "1:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "1:empty_rows",
+            "source": {
+              "id": "1:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:populated_statement_description",
+            "source": {
+              "id": "1:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "1:populated_rows",
+            "source": {
+              "id": "1:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:empty_statement_description",
+            "source": {
+              "id": "2:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "2:empty_rows",
+            "source": {
+              "id": "2:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:populated_statement_description",
+            "source": {
+              "id": "2:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [],
+                "types": []
+              },
+              "qualified": false
+            },
+            "source_qualified": true,
+            "matched": false
+          },
+          {
+            "id": "2:populated_rows",
+            "source": {
+              "id": "2:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          }
+        ]
+      },
+      "after": {
+        "reference_version": 180004,
+        "runtime_binary_sha256": "b78991f08d526131bea683ec9cd1d814f499a941cd8d769953dfe98e301e1f7e",
+        "fixture_source_sha256": "1b9ca3155698149a46fceed58947e531324d7adb93bfd0a42d9e8373ba9b71d7",
+        "matched": 12,
+        "total": 12,
+        "source_qualified": true,
+        "cleanup_errors": [],
+        "cases": [
+          {
+            "id": "0:empty_statement_description",
+            "source": {
+              "id": "0:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "0:empty_rows",
+            "source": {
+              "id": "0:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "0:populated_statement_description",
+            "source": {
+              "id": "0:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "0:populated_rows",
+            "source": {
+              "id": "0:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "0:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:empty_statement_description",
+            "source": {
+              "id": "1:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:empty_rows",
+            "source": {
+              "id": "1:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:populated_statement_description",
+            "source": {
+              "id": "1:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "1:populated_rows",
+            "source": {
+              "id": "1:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "1:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:empty_statement_description",
+            "source": {
+              "id": "2:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:empty_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:empty_rows",
+            "source": {
+              "id": "2:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:empty_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": []
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:populated_statement_description",
+            "source": {
+              "id": "2:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:populated_statement_description",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          },
+          {
+            "id": "2:populated_rows",
+            "source": {
+              "id": "2:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "bicdb": {
+              "id": "2:populated_rows",
+              "expected": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "actual": {
+                "columns": [
+                  "id",
+                  "amount",
+                  "seen",
+                  "label"
+                ],
+                "types": [
+                  "number",
+                  "number",
+                  "timestamp",
+                  "text"
+                ],
+                "rows": [
+                  [
+                    {
+                      "number": "1"
+                    },
+                    {
+                      "number": "12.5"
+                    },
+                    "2024-02-29T12:34:56.000000",
+                    "match"
+                  ]
+                ]
+              },
+              "qualified": true
+            },
+            "source_qualified": true,
+            "matched": true
+          }
+        ]
+      }
+    }
+  ]
+}

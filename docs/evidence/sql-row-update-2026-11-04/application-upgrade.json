@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "database_upgrade_qualified": true,
+  "source_commit": "bd1804544a1c11918337e5ea49d9c272c3e56cbf",
+  "source_main_commit": "251f331cacb70a0bd817940d54c64372b9525a1d",
+  "runtime_binary_sha256": "81f4a2669addfdd4a4bdd57a570fa0143a0de147376e87721cb7ca2de809b451",
+  "previous_database_exit": 0,
+  "original_objects_recreated": false,
+  "workflow_checks_passed": 67,
+  "workflow_observations": "../idempiere-production-2026-11-04/workflow-observations.json",
+  "settled_business_queries_preserved": 27,
+  "object_fingerprints": {
+    "routines": {
+      "count": 62,
+      "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+    },
+    "views": {
+      "count": 160,
+      "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+    }
+  },
+  "views_verified": 160,
+  "view_columns_verified": 11983,
+  "reports_preserved": [
+    {
+      "instance": 1000037,
+      "rows": 47,
+      "sha256": "81a42de285b0d5fe80ae0b40933506f0be1e530f9c94f764a7e539be0ab5980a"
+    },
+    {
+      "instance": 1000038,
+      "rows": 47,
+      "sha256": "35e82c243822cfcdeebebd85e458eeae1fed085b7fea74c6db860d21946159a1"
+    },
+    {
+      "instance": 1000039,
+      "rows": 47,
+      "sha256": "2862e075a0105c67da863e18f804409fd70769c7b0144642bf867d9998078387"
+    }
+  ],
+  "pdfs_regenerated": false,
+  "numeric_extrema": {
+    "minimum": "1000000",
+    "maximum": "1000049",
+    "combined_equals_bare": true,
+    "ordered_values_verified": true
+  },
+  "nvl2_smoke": {
+    "nonnull": "present",
+    "null_fallback": "8",
+    "unused_branch_error": "22012",
+    "national_length": 2,
+    "empty_national_nvl": "7",
+    "stored_language_oids_resolve": true,
+    "stored_languages": [
+      [
+        "bicdb_oracle_preview_v26",
+        "62"
+      ]
+    ]
+  },
+  "pending_project_and_failed_process_state_preserved": true,
+  "jvm_started": true,
+  "http_status": 200,
+  "desktop_login_verified": true,
+  "browser_script_errors": [],
+  "frontend_scope": "Login, desktop initialization and Issue to Project navigation",
+  "release_published": false
+}

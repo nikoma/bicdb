@@ -1,0 +1,296 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "reference_version": 180004,
+  "cases": [
+    {
+      "id": "typed_union_created",
+      "source": {
+        "id": "typed_union_created",
+        "expected": true,
+        "actual": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "typed_union_created",
+        "expected": true,
+        "actual": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "typed_union_rows",
+      "source": {
+        "id": "typed_union_rows",
+        "expected": {
+          "columns": [
+            "RowKey",
+            "Amount"
+          ],
+          "types": [
+            "number",
+            "number"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "1.25"
+              }
+            ],
+            [
+              {
+                "number": "2"
+              },
+              {
+                "number": "2.25"
+              }
+            ]
+          ]
+        },
+        "actual": {
+          "columns": [
+            "RowKey",
+            "Amount"
+          ],
+          "types": [
+            "number",
+            "number"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "1.25"
+              }
+            ],
+            [
+              {
+                "number": "2"
+              },
+              {
+                "number": "2.25"
+              }
+            ]
+          ]
+        },
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "typed_union_rows",
+        "expected": {
+          "columns": [
+            "RowKey",
+            "Amount"
+          ],
+          "types": [
+            "number",
+            "number"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "1.25"
+              }
+            ],
+            [
+              {
+                "number": "2"
+              },
+              {
+                "number": "2.25"
+              }
+            ]
+          ]
+        },
+        "actual": {
+          "columns": [
+            "RowKey",
+            "Amount"
+          ],
+          "types": [
+            "number",
+            "number"
+          ],
+          "rows": [
+            [
+              {
+                "number": "1"
+              },
+              {
+                "number": "1.25"
+              }
+            ],
+            [
+              {
+                "number": "2"
+              },
+              {
+                "number": "2.25"
+              }
+            ]
+          ]
+        },
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "deferred_error_created",
+      "source": {
+        "id": "deferred_error_created",
+        "expected": true,
+        "actual": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "deferred_error_created",
+        "expected": true,
+        "qualified": false,
+        "exception": "DivisionByZero",
+        "sqlstate": "22012",
+        "detail": "division by zero"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "deferred_error_described",
+      "source": {
+        "id": "deferred_error_described",
+        "expected": {
+          "columns": [
+            "RowKey",
+            "Amount"
+          ],
+          "types": [
+            "number",
+            "number"
+          ]
+        },
+        "actual": {
+          "columns": [
+            "RowKey",
+            "Amount"
+          ],
+          "types": [
+            "number",
+            "number"
+          ]
+        },
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "deferred_error_described",
+        "expected": {
+          "columns": [
+            "RowKey",
+            "Amount"
+          ],
+          "types": [
+            "number",
+            "number"
+          ]
+        },
+        "qualified": false,
+        "exception": "RuntimeError",
+        "sqlstate": null,
+        "detail": "ERROR:  collection not found: bicdb_vd_3f8e6008f4b7e\n"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "deferred_error_on_execution",
+      "source": {
+        "id": "deferred_error_on_execution",
+        "expected": "division_by_zero",
+        "actual": "division_by_zero",
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "deferred_error_on_execution",
+        "expected": "division_by_zero",
+        "qualified": false,
+        "exception": "UndefinedTable",
+        "sqlstate": "42P01",
+        "detail": "collection not found: bicdb_vd_3f8e6008f4b7e"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "fresh_connection_metadata",
+      "source": {
+        "id": "fresh_connection_metadata",
+        "expected": {
+          "columns": [
+            "RowKey",
+            "Amount"
+          ],
+          "types": [
+            "number",
+            "number"
+          ]
+        },
+        "actual": {
+          "columns": [
+            "RowKey",
+            "Amount"
+          ],
+          "types": [
+            "number",
+            "number"
+          ]
+        },
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "fresh_connection_metadata",
+        "expected": {
+          "columns": [
+            "RowKey",
+            "Amount"
+          ],
+          "types": [
+            "number",
+            "number"
+          ]
+        },
+        "actual": {
+          "columns": [
+            "RowKey",
+            "Amount"
+          ],
+          "types": [
+            "number",
+            "number"
+          ]
+        },
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "total": 6,
+  "matched": 3,
+  "cleanup_errors": [],
+  "source_qualified": true,
+  "success": false,
+  "target_sql_profile": "postgres",
+  "reference": "postgres",
+  "runtime_binary_sha256": "c26bff8dff71b7b544a853b6fa5ab781d89aad2c5d36125b06a5bb927e24b15c",
+  "postgres_version_num": 180004,
+  "fixture_source_sha256": "14e90d7a98cbbb8450013f36b90809a44028673c9d058d5bcd1bdc7db39d4005"
+}

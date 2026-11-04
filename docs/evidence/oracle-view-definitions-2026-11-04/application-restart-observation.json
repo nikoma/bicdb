@@ -1,0 +1,76 @@
+{
+  "application_qualified": false,
+  "runtime_binary_sha256": "73bd840fc20119c2b0dd23f0618c11a7b9b0ddbf05bd73f037f78efb358d0134",
+  "source_main_commit": "ba3fbdd335b7cdfdf56e003f1950feb7357d6a1f",
+  "scope": "Fresh browser completed-order read and independent SQL after restart; controlled background observation, not full workflow or memory qualification",
+  "original_routines_loaded": 62,
+  "fresh_browser_completed_label": true,
+  "document_fields": [
+    {
+      "name": "C_Order0TotalLines",
+      "value": "123.50",
+      "text": ""
+    },
+    {
+      "name": "C_Order0GrandTotal",
+      "value": "123.50",
+      "text": ""
+    },
+    {
+      "name": "C_Order0DocStatus",
+      "value": "Completed",
+      "text": ""
+    },
+    {
+      "name": "C_Order0DocAction",
+      "value": "",
+      "text": "Document Action"
+    }
+  ],
+  "independent_sql_read": {
+    "application_qualified": false,
+    "runtime_binary_sha256": "73bd840fc20119c2b0dd23f0618c11a7b9b0ddbf05bd73f037f78efb358d0134",
+    "checks": [
+      {
+        "sql": "SELECT DocumentNo,DocStatus,Processed,Processing,GrandTotal FROM C_Order WHERE C_Order_ID=1000000",
+        "rows": [
+          [
+            "50000",
+            "CO",
+            "Y",
+            "N",
+            "123.50"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT QtyOrdered,QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000000",
+        "rows": [
+          [
+            "2",
+            "2",
+            "0",
+            "0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT BOMQTYAVAILABLE(123,103,0),BOMQTYONHAND(123,103,0),BOMQTYRESERVED(123,103,0),BOMQTYORDERED(123,103,0) FROM DUAL",
+        "rows": [
+          [
+            "18",
+            "20",
+            "2",
+            "0"
+          ]
+        ]
+      }
+    ],
+    "success": true
+  },
+  "observed_minutes": 66.2,
+  "database_rss_bytes": 3259682816,
+  "peak_database_rss_bytes": 3261358080,
+  "application_log_sql_exceptions": 0,
+  "application_log_column_decoding_errors": 0
+}

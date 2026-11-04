@@ -1,0 +1,358 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "reference_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "cast_0",
+      "source": {
+        "id": "cast_0",
+        "sql": "SELECT CAST('en_US' AS CHARACTER VARYING(6)) AS label FROM DUAL",
+        "expected_columns": [
+          "label"
+        ],
+        "expected_types": [
+          "text"
+        ],
+        "expected_rows": [
+          [
+            "en_US"
+          ]
+        ],
+        "columns": [
+          "LABEL"
+        ],
+        "types": [
+          "text"
+        ],
+        "rows": [
+          [
+            "en_US"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "cast_0",
+        "sql": "SELECT CAST('en_US' AS CHARACTER VARYING(6)) AS label FROM DUAL",
+        "expected_columns": [
+          "label"
+        ],
+        "expected_types": [
+          "text"
+        ],
+        "expected_rows": [
+          [
+            "en_US"
+          ]
+        ],
+        "qualified": false,
+        "exception": "SyntaxError",
+        "sqlstate": "42601",
+        "detail": "invalid SQL: sql parser error: Expected: ), found: \"VARYING\" at Line: 1, Column: 38"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "cast_1",
+      "source": {
+        "id": "cast_1",
+        "sql": "SELECT CAST('en_US' AS CHAR VARYING(6)) AS label FROM DUAL",
+        "expected_columns": [
+          "label"
+        ],
+        "expected_types": [
+          "text"
+        ],
+        "expected_rows": [
+          [
+            "en_US"
+          ]
+        ],
+        "columns": [
+          "LABEL"
+        ],
+        "types": [
+          "text"
+        ],
+        "rows": [
+          [
+            "en_US"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "cast_1",
+        "sql": "SELECT CAST('en_US' AS CHAR VARYING(6)) AS label FROM DUAL",
+        "expected_columns": [
+          "label"
+        ],
+        "expected_types": [
+          "text"
+        ],
+        "expected_rows": [
+          [
+            "en_US"
+          ]
+        ],
+        "qualified": false,
+        "exception": "SyntaxError",
+        "sqlstate": "42601",
+        "detail": "invalid SQL: sql parser error: Expected: ), found: \"VARYING\" at Line: 1, Column: 31"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "cast_2",
+      "source": {
+        "id": "cast_2",
+        "sql": "SELECT CAST('en_US' AS VARCHAR(6)) AS label FROM DUAL",
+        "expected_columns": [
+          "label"
+        ],
+        "expected_types": [
+          "text"
+        ],
+        "expected_rows": [
+          [
+            "en_US"
+          ]
+        ],
+        "columns": [
+          "LABEL"
+        ],
+        "types": [
+          "text"
+        ],
+        "rows": [
+          [
+            "en_US"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "cast_2",
+        "sql": "SELECT CAST('en_US' AS VARCHAR(6)) AS label FROM DUAL",
+        "expected_columns": [
+          "label"
+        ],
+        "expected_types": [
+          "text"
+        ],
+        "expected_rows": [
+          [
+            "en_US"
+          ]
+        ],
+        "columns": [
+          "LABEL"
+        ],
+        "types": [
+          "text"
+        ],
+        "rows": [
+          [
+            "en_US"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "declared_values",
+      "source": {
+        "id": "declared_values",
+        "sql": "SELECT * FROM BICDB_AC_0A730F7823D3T",
+        "expected_columns": [
+          "first_value",
+          "second_value"
+        ],
+        "expected_types": [
+          "text",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            "en_US",
+            "\u00e9"
+          ]
+        ],
+        "columns": [
+          "FIRST_VALUE",
+          "SECOND_VALUE"
+        ],
+        "types": [
+          "text",
+          "text"
+        ],
+        "rows": [
+          [
+            "en_US",
+            "\u00e9"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "declared_values",
+        "sql": "SELECT * FROM BICDB_AC_25875806462CT",
+        "expected_columns": [
+          "first_value",
+          "second_value"
+        ],
+        "expected_types": [
+          "text",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            "en_US",
+            "\u00e9"
+          ]
+        ],
+        "qualified": false,
+        "exception": "UndefinedTable",
+        "sqlstate": "42P01",
+        "detail": "collection not found: BICDB_AC_25875806462CT"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "stored_view",
+      "source": {
+        "id": "stored_view",
+        "sql": "SELECT * FROM BICDB_AC_0A730F7823D3V",
+        "expected_columns": [
+          "label"
+        ],
+        "expected_types": [
+          "text"
+        ],
+        "expected_rows": [
+          [
+            "\u00e9"
+          ]
+        ],
+        "columns": [
+          "LABEL"
+        ],
+        "types": [
+          "text"
+        ],
+        "rows": [
+          [
+            "\u00e9"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "stored_view",
+        "sql": "SELECT * FROM BICDB_AC_25875806462CV",
+        "expected_columns": [
+          "label"
+        ],
+        "expected_types": [
+          "text"
+        ],
+        "expected_rows": [
+          [
+            "\u00e9"
+          ]
+        ],
+        "qualified": false,
+        "exception": "UndefinedTable",
+        "sqlstate": "42P01",
+        "detail": "collection not found: BICDB_AC_25875806462CV"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "identifier_alias_pair",
+      "source": {
+        "id": "identifier_alias_pair",
+        "sql": "SELECT character varying FROM BICDB_AC_0A730F7823D3I",
+        "expected_columns": [
+          "varying"
+        ],
+        "expected_types": [
+          "number"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ],
+        "columns": [
+          "VARYING"
+        ],
+        "types": [
+          "number"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "identifier_alias_pair",
+        "sql": "SELECT character varying FROM BICDB_AC_25875806462CI",
+        "expected_columns": [
+          "varying"
+        ],
+        "expected_types": [
+          "number"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ],
+        "columns": [
+          "VARYING"
+        ],
+        "types": [
+          "number"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            }
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "total": 6,
+  "matched": 2,
+  "cleanup_errors": [],
+  "source_qualified": true,
+  "success": false,
+  "target_sql_profile": "oracle-preview-v1",
+  "reference": "oracle",
+  "oracle_disable_oob": false,
+  "runtime_binary_sha256": "73bd840fc20119c2b0dd23f0618c11a7b9b0ddbf05bd73f037f78efb358d0134",
+  "fixture_source_sha256": "40d444a58a8c7313cecf5f8ecf1217f0c780aafcea24c00471de48da656afbc0",
+  "comparison_exit_status": 1,
+  "target_qualified_cases": 2
+}

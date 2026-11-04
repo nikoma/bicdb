@@ -1113,3 +1113,15 @@ metadata check matches 127/160 source view descriptions: 32 views are absent and
 one has different labels. A general ANSI character-type parser gap is reproduced
 separately. Missing view definitions, their values, full application operation,
 memory behavior and the wider compatibility programme remain open.
+
+The [ordinary view definition checkpoint](evidence/oracle-view-definitions-2026-11-04/README.md)
+adds ANSI varying-character type phrases, metadata-only UNION view creation and
+joined scalar-subquery result typing. Three independent fixtures match 18 Oracle
+and 18 native PostgreSQL cases; native ANSI syntax retains its previous 6/6
+controls. A dependency-ordered application-copy rebuild accepts all 160 ordinary
+views and matches exact output labels/order and transport families for 11,983
+columns. The retained 159/160 type baseline exposed three numeric fields described
+as text; the general scalar type fix resolves them. Compiler 26 and metadata format
+5 remain unchanged, with 24 new/prior/new reader checks across both profiles.
+Full view values/type modifiers, remaining application workflows and the wider
+compatibility programme remain open.

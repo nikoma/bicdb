@@ -1,0 +1,5896 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "comparisons": [
+    {
+      "reference": "oracle",
+      "before": {
+        "reference_version": "23.26.3.0.0",
+        "runtime_binary_sha256": "94ae64a04c4b4565102a835cb367d22103574006b7c919af6e7b327a6d69d4e8",
+        "fixture_source_sha256": "19b6e0b99bd3a15e413eff4acf4b467970b2d91e270858868e459f85fca3fc8e",
+        "source_qualified": true,
+        "matched": 155,
+        "total": 180,
+        "cleanup_errors": [],
+        "success": false,
+        "cases": [
+          {
+            "id": "0:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "0:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "0:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "1:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "1:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "1:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "2:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "2:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "2:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "3:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "3:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "3:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "4:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "4:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "4:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "5:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "5:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "5:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "6:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "6:2",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "6:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "7:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "7:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "7:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "8:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "8:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "8:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "9:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "9:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "9:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "10:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "10:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "10:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "11:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "11:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "11:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "12:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "12:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "12:3",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "13:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "13:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "13:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "14:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "14:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "14:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "15:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "15:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "15:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "16:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "16:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "16:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "17:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "17:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "17:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "18:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "18:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "18:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "19:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "19:2",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "19:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "20:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "20:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "20:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "21:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "21:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "21:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "22:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "22:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "22:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "23:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "23:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "23:3",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "24:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "24:2",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "24:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "25:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "25:2",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "25:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "26:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "26:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "26:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "27:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "27:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "27:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "28:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "28:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "28:3",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "29:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "29:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "29:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "30:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "30:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "30:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "31:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "31:2",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "31:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "32:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "32:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "32:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "33:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "33:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "33:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "34:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "34:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "34:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "35:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "35:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "35:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "36:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "36:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "36:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "37:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "37:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "37:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "38:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "38:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "38:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "39:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "39:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "39:3",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "40:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "40:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "40:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "41:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "41:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "41:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "42:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "42:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "42:3",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "43:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "43:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "43:3",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "44:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "44:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "44:3",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "45:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "45:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "45:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "46:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "46:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "46:3",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "47:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "47:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "47:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "48:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "48:2",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "48:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "49:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "49:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "49:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "50:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "50:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "50:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "51:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "51:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "51:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "52:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "52:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "52:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "53:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "53:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "53:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "54:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "54:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "54:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "55:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "55:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "55:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "56:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "56:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "56:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "57:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "57:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "57:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "58:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "58:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "58:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "59:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "59:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "59:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          }
+        ]
+      },
+      "after": {
+        "reference_version": "23.26.3.0.0",
+        "runtime_binary_sha256": "282463584cfbf90f90a05e9b32f00cc5f2b8af6f6f96845203962b69e72fcdb6",
+        "fixture_source_sha256": "19b6e0b99bd3a15e413eff4acf4b467970b2d91e270858868e459f85fca3fc8e",
+        "source_qualified": true,
+        "matched": 180,
+        "total": 180,
+        "cleanup_errors": [],
+        "success": true,
+        "cases": [
+          {
+            "id": "0:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "0:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "0:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "1:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "1:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "1:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "2:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "2:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "2:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "3:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "3:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "3:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "4:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "4:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "4:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "5:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "5:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "5:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "6:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "6:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "6:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "7:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "7:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "7:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "8:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "8:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "8:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "9:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "9:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "9:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "10:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "10:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "10:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "11:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "11:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "11:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "12:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "12:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "12:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "13:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "13:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "13:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "14:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "14:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "14:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "15:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "15:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "15:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "16:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "16:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "16:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "17:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "17:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "17:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "18:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "18:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "18:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "19:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "19:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "19:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "20:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "20:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "20:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "21:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "21:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "21:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "22:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "22:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "22:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "23:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "23:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "23:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "24:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "24:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "24:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "25:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "25:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "25:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "26:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "26:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "26:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "27:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "27:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "27:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "28:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "28:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "28:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "29:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "29:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "29:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "30:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "30:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "30:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "31:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "31:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "31:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "32:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "32:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "32:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "33:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "33:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "33:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "34:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "34:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "34:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "35:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "35:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "35:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "36:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "36:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "36:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "37:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "37:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "37:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "38:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "38:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "38:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "39:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "39:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "39:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "40:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "40:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "40:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "41:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "41:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "41:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "42:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "42:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "42:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "43:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "43:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "43:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "44:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "44:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "44:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "45:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "45:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "45:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "46:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "46:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "46:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "47:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "47:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "47:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "48:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "48:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "48:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "49:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "49:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "49:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "50:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "50:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "50:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "51:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "51:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "51:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "52:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "52:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "52:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "53:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "53:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "53:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "54:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "54:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "54:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "55:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "55:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "55:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "56:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "56:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "56:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "57:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "57:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "57:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "58:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "58:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "58:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "59:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "59:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.7",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "59:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          }
+        ]
+      }
+    },
+    {
+      "reference": "postgres",
+      "before": {
+        "reference_version": 180004,
+        "runtime_binary_sha256": "94ae64a04c4b4565102a835cb367d22103574006b7c919af6e7b327a6d69d4e8",
+        "fixture_source_sha256": "19b6e0b99bd3a15e413eff4acf4b467970b2d91e270858868e459f85fca3fc8e",
+        "source_qualified": true,
+        "matched": 167,
+        "total": 180,
+        "cleanup_errors": [],
+        "success": false,
+        "cases": [
+          {
+            "id": "0:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "0:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "0:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "1:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "1:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "1:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "2:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "2:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "2:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "3:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "3:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "3:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "4:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "4:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "4:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "5:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "5:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "5:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "6:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "6:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "6:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "7:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "7:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "7:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "8:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "8:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "8:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "9:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "9:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "9:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "10:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "10:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "10:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "11:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "11:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "11:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "12:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "12:2",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "12:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "13:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "13:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "13:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "14:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "14:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "14:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "15:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "15:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "15:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "16:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "16:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "16:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "17:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "17:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "17:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "18:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "18:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "18:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "19:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "19:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "19:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "20:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "20:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "20:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "21:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "21:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "21:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "22:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "22:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "22:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "23:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "23:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "23:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "24:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "24:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "24:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "25:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "25:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "25:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "26:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "26:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "26:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "27:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "27:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "27:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "28:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "28:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "28:3",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "29:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "29:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "29:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "30:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "30:2",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "30:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "31:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "31:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "31:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "32:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "32:2",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "32:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "33:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "33:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "33:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "34:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "34:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "34:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "35:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "35:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "35:3",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "36:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "36:2",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "36:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "37:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "37:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "37:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "38:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "38:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "38:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "39:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "39:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "39:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "40:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "40:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "40:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "41:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "41:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "41:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "42:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "42:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "42:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "43:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "43:2",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "43:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "44:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "44:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "44:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "45:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "45:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "45:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "46:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "46:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "46:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "47:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "47:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "47:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "48:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "48:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "48:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "49:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "49:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "49:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "50:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "50:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "50:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "51:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "51:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "51:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "52:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "52:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "52:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "53:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "53:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "53:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "54:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "54:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "54:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "55:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "55:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "55:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "56:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "56:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "56:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "57:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "57:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "57:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "58:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "58:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "58:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "59:1",
+            "source_qualified": true,
+            "matched": false,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": null,
+            "sqlstate": "42804",
+            "detail": "CASE types varchar and int4 cannot be matched"
+          },
+          {
+            "id": "59:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "59:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          }
+        ]
+      },
+      "after": {
+        "reference_version": 180004,
+        "runtime_binary_sha256": "282463584cfbf90f90a05e9b32f00cc5f2b8af6f6f96845203962b69e72fcdb6",
+        "fixture_source_sha256": "19b6e0b99bd3a15e413eff4acf4b467970b2d91e270858868e459f85fca3fc8e",
+        "source_qualified": true,
+        "matched": 180,
+        "total": 180,
+        "cleanup_errors": [],
+        "success": true,
+        "cases": [
+          {
+            "id": "0:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "0:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "0:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "1:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "1:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "1:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "2:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "2:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "2:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "3:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "3:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "3:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "4:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "4:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "4:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "5:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "5:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "5:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "6:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "6:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "6:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "7:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "7:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "7:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "8:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "8:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "8:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "9:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "9:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "9:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "10:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "10:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "10:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "11:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "11:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "11:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "12:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "12:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "12:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "13:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "13:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "13:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "14:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "14:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "14:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "15:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "15:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "15:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "16:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "16:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "16:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "17:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "17:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "17:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "18:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "18:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "18:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "19:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "19:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "19:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "20:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "20:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "20:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "21:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "21:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "21:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "22:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "22:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "22:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "23:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "23:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "23:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "24:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "24:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "24:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "25:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "25:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "25:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "26:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "26:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "26:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "27:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "27:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "27:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "28:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "28:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "28:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "29:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "29:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "29:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "30:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "30:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "30:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "31:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "31:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "31:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "32:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "32:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "32:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "33:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "33:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "33:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "34:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "34:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "34:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "35:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "35:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "35:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "36:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "36:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "36:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "37:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "37:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "37:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "38:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "38:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "38:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "39:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "39:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "39:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "40:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "40:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "40:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "41:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "41:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "41:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "42:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "42:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "42:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "43:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "43:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "43:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "44:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "44:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "44:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "45:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "45:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "45:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "46:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "46:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "46:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "47:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "47:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "47:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "48:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "48:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "48:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "49:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "49:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "49:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "50:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "50:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "50:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "51:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "51:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "51:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "52:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "52:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "52:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "53:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "53:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "53:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "54:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "54:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "54:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "55:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "55:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "55:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "56:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "56:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "56:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "57:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "57:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "57:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "58:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "58:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "58:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          },
+          {
+            "id": "59:1",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "50.35",
+            "source_actual": "50.35",
+            "target_actual": "50.35"
+          },
+          {
+            "id": "59:2",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "100.70",
+            "source_actual": "100.70",
+            "target_actual": "100.70"
+          },
+          {
+            "id": "59:3",
+            "source_qualified": true,
+            "matched": true,
+            "expected": "-161.12",
+            "source_actual": "-161.12",
+            "target_actual": "-161.12"
+          }
+        ]
+      }
+    }
+  ]
+}

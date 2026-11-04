@@ -1,5 +1,16 @@
 # Oracle reference queries
 
+`reparsed_view_routines.py --reference oracle --oracle-config /private/oracle.json
+--output /private/reparsed-views.json` compares 180 repeated calls to a stored
+function reading a view containing numeric and character CASE expressions,
+NULL casts and UNION ALL. Every call must return its exact expected decimal.
+`--reference postgres` independently runs the PostgreSQL function syntax against
+`ORACLE_CONTROL_PG_DSN` and BicDB's native profile. Set `BICDB_PG_DSN` to the
+dedicated target. Nonce functions, views and tables are removed afterward;
+Oracle tables are purged to avoid accumulating fixture recycle-bin entries.
+This qualifies the repeated-call workload, not the full application or general
+view performance.
+
 This directory compares a fixed set of public queries against an actual Oracle
 database and BicDB's `oracle-hr-v1` profile. The comparison checks query values,
 including nulls, character padding, exact numbers and time components. It does

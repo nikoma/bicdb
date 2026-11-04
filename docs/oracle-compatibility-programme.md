@@ -17,6 +17,18 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The latest completed application checkpoint runs the original Oracle-schema
+application through PostgreSQL drivers, with 62 routine definitions and 160 view
+definitions/type families loaded. The
+[shipment posting recovery](evidence/parenthesized-query-metadata-2026-11-04/README.md#subsequent-application-posting-recovery)
+completes and posts a real shipment through the UI, with balanced entries in two
+accounting schemas and one stock movement. Subsequent
+[scalar-subquery defaults](evidence/scalar-subquery-defaults-2026-11-04/README.md)
+and [numeric pictures](evidence/numeric-format-pictures-2026-11-04/README.md)
+have independent Oracle/PostgreSQL reference evidence. Invoicing, payments,
+remaining application workflows and the broader programme remain unqualified.
+The checkpoint history below records what was measured at each earlier stage.
+
 The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used
 for [iDempiere seed development](evidence/idempiere-seed-2026-11-01/README.md).
 The latest [function-attribute checkpoint](evidence/oracle-function-attributes-2026-11-03/README.md)

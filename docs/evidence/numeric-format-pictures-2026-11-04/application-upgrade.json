@@ -1,0 +1,99 @@
+{
+  "application_qualified": false,
+  "read_only": true,
+  "runtime_binary_sha256": "32d2c0441d23b9a856e2cb45d2d85b263b3272b322b6c88acd2a9b6962eaa009",
+  "source_commit": "c92dad68bc60184174902acdfedce2422a170420",
+  "main_commit": "ab8dda710795482b92f598222aa063d685a646a6",
+  "original_routines_loaded": 62,
+  "original_views_verified": 160,
+  "lookup": {
+    "expected": "50000_11/03/2026_10_123.50",
+    "rows": [
+      [
+        "1000000",
+        null,
+        "50000_11/03/2026_10_123.50",
+        "Y"
+      ]
+    ]
+  },
+  "checks": [
+    {
+      "sql": "SELECT DocumentNo,DocStatus,Processed,Processing,SendEMail,GrandTotal FROM C_Order WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "50000",
+          "CO",
+          "Y",
+          "N",
+          "N",
+          "123.50"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT DocumentNo,DocStatus,Processed,Processing,SendEMail,Posted FROM M_InOut WHERE M_InOut_ID=1000000",
+      "rows": [
+        [
+          "500000",
+          "CO",
+          "Y",
+          "N",
+          "N",
+          "Y"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT C_AcctSchema_ID,COUNT(*),SUM(AmtAcctDr),SUM(AmtAcctCr) FROM Fact_Acct WHERE AD_Table_ID=319 AND Record_ID=1000000 GROUP BY C_AcctSchema_ID ORDER BY C_AcctSchema_ID",
+      "rows": [
+        [
+          "101",
+          "2",
+          "104.19",
+          "104.19"
+        ],
+        [
+          "200000",
+          "2",
+          "88.56",
+          "88.56"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT COUNT(*),SUM(MovementQty) FROM M_Transaction WHERE M_InOutLine_ID IN (SELECT M_InOutLine_ID FROM M_InOutLine WHERE M_InOut_ID=1000000)",
+      "rows": [
+        [
+          "1",
+          "-2.0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT BOMQtyAvailable(123,103,0),BOMQtyOnHand(123,103,0),BOMQtyReserved(123,103,0),BOMQtyOrdered(123,103,0) FROM DUAL",
+      "rows": [
+        [
+          "18",
+          "18",
+          "0",
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "0",
+          "2",
+          "0"
+        ]
+      ]
+    }
+  ],
+  "lookup_sql_verified": true,
+  "lookup_browser_verified": true,
+  "posted_shipment_and_balanced_ledger_preserved": true,
+  "stock_movement_preserved": true
+}

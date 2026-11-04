@@ -44,3 +44,24 @@ pictures and malformed-model error codes remain unqualified. At this checkpoint
 the candidate has not been deployed to the application. These checks do not
 establish complete application coverage, general Oracle compatibility, a
 published release or production qualification.
+
+
+## Subsequent application upgrade
+
+After the source was merged and verified on main at `ab8dda7`, the preceding
+application and database stopped gracefully; the database exited successfully.
+The candidate opened a copy of that stopped database, reloaded all 62 original
+routines and verified all 160 original view definitions and transport type
+families. No business document was regenerated or repaired through SQL.
+
+[Upgrade observations](application-upgrade.json) verify the exact original
+shipment-line lookup SQL and a fresh browser login. The
+[shipment window](shipment-lookup.png) now displays the expected order reference
+`50000_11/03/2026_10_123.50` in its Sales Order Line column. The completed order
+and posted shipment remain intact. Four ledger entries still balance across two
+accounting schemas at 104.19 and 88.56, exactly one -2 stock movement remains,
+and on-hand stock is 18 with zero reserved and two delivered units.
+
+This is a verified local application upgrade and lookup checkpoint. Invoicing,
+payments, complete application coverage and the broader Oracle programme remain
+unqualified.

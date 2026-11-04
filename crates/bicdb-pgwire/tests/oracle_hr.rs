@@ -8,6 +8,50 @@ struct Running {
     thread: Option<thread::JoinHandle<bicdb_pgwire::Result<()>>>,
     port: u16,
 }
+
+#[tokio::test]
+async fn parenthesized_named_queries_describe_columns_before_rows_exist() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(directory.path(), profile);
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb");
+        if profile != "postgres" {
+            config.options("-c bicdb.sql_profile=oracle-preview-v1");
+        }
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let connection = tokio::spawn(connection);
+        client.batch_execute("CREATE TABLE typed_query_rows(id NUMERIC(10,0),amount NUMERIC(10,2),seen TIMESTAMP,label VARCHAR(8))").await.unwrap();
+        for query in [
+            "((SELECT r.* FROM typed_query_rows r WHERE label=$1 ORDER BY id FETCH FIRST 1 ROW ONLY))",
+            "(SELECT r.* FROM typed_query_rows r WHERE label=$1 ORDER BY id FETCH FIRST 1 ROW ONLY) UNION ALL (SELECT r.* FROM typed_query_rows r WHERE label=$1 AND id<0 ORDER BY id FETCH FIRST 1 ROW ONLY)",
+        ] {
+            client.batch_execute("DELETE FROM typed_query_rows").await.unwrap();
+            let statement = client.prepare(query).await.unwrap();
+            assert_eq!(statement.columns().len(), 4, "{profile}: {query}");
+            let labels: Vec<_> = statement.columns().iter().map(|c| c.name().to_ascii_lowercase()).collect();
+            assert_eq!(labels, ["id", "amount", "seen", "label"]);
+            let types: Vec<_> = statement.columns().iter().map(|c| c.type_().oid()).collect();
+            assert_eq!(types, [1700, 1700, 1114, 1043], "{profile}: {query}");
+            assert!(client.query(&statement, &[&"match"]).await.unwrap().is_empty());
+            client.batch_execute("INSERT INTO typed_query_rows VALUES(1,12.50,TIMESTAMP '2024-02-29 12:34:56','match')").await.unwrap();
+            for _ in 0..10 {
+                let rows = client.query(&statement, &[&"match"]).await.unwrap();
+                assert_eq!(rows.len(), 1);
+                assert_eq!(rows[0].len(), 4);
+                assert_eq!(rows[0].get::<_, String>(3), "match");
+                assert!(client.query(&statement, &[&"missing"]).await.unwrap().is_empty());
+            }
+        }
+        drop(client);
+        connection.await.unwrap().unwrap();
+    }
+}
+
 impl Running {
     fn new(path: &std::path::Path, oracle: bool) -> Self {
         Self::with_profile(path, if oracle { "oracle-hr-v1" } else { "postgres" })

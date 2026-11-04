@@ -2168,6 +2168,35 @@ mod tests {
     }
 
     #[test]
+    fn preview_sql_columns_shadow_same_named_local_values() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute(r#"CREATE SCHEMA "Tenant""#).unwrap();
+        for source in [
+            "CREATE TABLE column_scope(k NUMBER,label VARCHAR2(20))",
+            "INSERT INTO column_scope VALUES(1,'column')",
+            "CREATE FUNCTION local_column(p_key NUMBER) RETURN VARCHAR2 IS label VARCHAR2(20):='local'; BEGIN SELECT label INTO label FROM column_scope WHERE k=p_key; RETURN label; END;",
+        ] {
+            let sql = lower_session_sql(session.db_ref(), source, ORACLE_PREVIEW_PROFILE, Some("\"Tenant\""), "Tenant").unwrap();
+            session.execute(&sql).unwrap();
+        }
+        let sql = lower_session_sql(
+            session.db_ref(),
+            "SELECT local_column(1) FROM DUAL",
+            ORACLE_PREVIEW_PROFILE,
+            Some("\"Tenant\""),
+            "Tenant",
+        )
+        .unwrap();
+        assert_eq!(
+            session.execute(&sql).unwrap().rows[0][0].to_cell(),
+            "column"
+        );
+    }
+
+    #[test]
     fn preview_routine_variable_types_do_not_retype_embedded_query_columns() {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();

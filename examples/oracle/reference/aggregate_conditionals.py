@@ -98,12 +98,12 @@ def run(reference, target, native=False):
     return report
 
 
-def main():
+def main(runner=run, description=None):
     import argparse
     import os
     from pathlib import Path
     import psycopg
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=description or __doc__)
     parser.add_argument('--reference', choices=['oracle', 'postgres'], required=True)
     parser.add_argument('--oracle-config', type=Path)
     parser.add_argument('--output', type=Path, required=True)
@@ -128,7 +128,7 @@ def main():
         expected = 'postgres' if args.reference == 'postgres' else 'oracle-preview-v1'
         if target.info.parameter_status('bicdb_sql_profile') != expected:
             raise RuntimeError('target profile does not match selected reference')
-        report = run(source, target, args.reference == 'postgres')
+        report = runner(source, target, args.reference == 'postgres')
         report['source_version'] = source.info.server_version if args.reference == 'postgres' else source.version
         report['target_sql_profile'] = expected
     args.output.write_text(json.dumps(report, indent=2) + '\n')

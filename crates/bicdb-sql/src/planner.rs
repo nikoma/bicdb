@@ -1957,9 +1957,23 @@ impl BoundExprScope {
     }
 
     pub(crate) fn bind_identifier(&self, parts: &[String]) -> Option<BoundExpr> {
-        self.column_id(parts)
-            .map(BoundExpr::Column)
-            .or_else(|| self.var_id_for_parts(parts).map(BoundExpr::Var))
+        self.column_id(parts).map(BoundExpr::Column).or_else(|| {
+            // An unresolved/ambiguous input column is not a reference to
+            // a same-named routine variable. A physical relation can expose
+            // both its storage qualifier and visible alias here; let the
+            // ordinary SQL resolver distinguish that from a real join
+            // ambiguity instead of capturing the procedural value.
+            if let [name] = parts {
+                if self
+                    .cols
+                    .scope_unqualified
+                    .contains_key(&name.to_ascii_lowercase())
+                {
+                    return None;
+                }
+            }
+            self.var_id_for_parts(parts).map(BoundExpr::Var)
+        })
     }
 
     pub(crate) fn column_id(&self, parts: &[String]) -> Option<ColumnId> {

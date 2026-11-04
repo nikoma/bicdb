@@ -402,6 +402,16 @@ reference before a case counts as matched. The fixture creates and drops only
 its nonce-named table and routine. It does not qualify every aggregate, optimizer
 evaluation order, or Oracle aggregate/subquery legality rule.
 
+`column_scope.py --reference oracle --oracle-config /private/oracle.json --output
+/private/column-scope.json` checks columns that share names with local values,
+including projection, filters, qualification and a variable without a matching
+column. The Oracle target must use an existing dedicated non-public application
+schema. `--reference postgres` independently checks SQL-language function
+arguments through `ORACLE_CONTROL_PG_DSN`; it does not qualify PL/pgSQL's separate
+variable-conflict policies. Both modes use `BICDB_PG_DSN`, prepared query parameters,
+explicit source expectations, and owned nonce-named tables/functions that are
+removed afterward. No reserved internal-function prefix is used.
+
 
 The `routine_namespaces.py --suite procedures` fixture checks actual Oracle CALL
 effects, replacement, defaults, qualified nested calls, OUT/IN OUT copyback and

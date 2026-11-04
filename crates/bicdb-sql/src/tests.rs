@@ -1637,6 +1637,57 @@ fn bound_expr_rejects_ambiguous_unqualified_columns() {
         scope.bind(&parse_routine_expr("right_alias.shared_value").unwrap()),
         Some(BoundExpr::Column(ColumnId(1)))
     ));
+    // A procedural variable must not capture a name which already denotes an
+    // input column, even when this fast binder cannot choose its input slot.
+    let vars = vec!["shared_value".to_string()];
+    let scope = BoundExprScope::new(&columns, &vars);
+    assert!(scope
+        .bind(&parse_routine_expr("shared_value").unwrap())
+        .is_none());
+    assert!(scope
+        .bind(&parse_routine_expr("shared_value + 1").unwrap())
+        .is_none());
+    assert!(matches!(
+        scope.bind(&parse_routine_expr("right_alias.shared_value").unwrap()),
+        Some(BoundExpr::Column(ColumnId(1)))
+    ));
+    let variables_only = BoundExprScope::new(&[], &vars);
+    assert!(matches!(
+        variables_only.bind(&parse_routine_expr("shared_value").unwrap()),
+        Some(BoundExpr::Var(VarId(0)))
+    ));
+}
+
+#[test]
+fn sql_function_columns_win_over_shadowed_arguments_across_schemas() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE SCHEMA scope_tests; CREATE TABLE scope_tests.values_table(k integer,label text); INSERT INTO scope_tests.values_table VALUES(1,'column')").unwrap();
+    for (name, param, projection) in [
+        ("column_value", "label", "label"),
+        ("qualified_value", "label", "r.label"),
+        ("local_value", "p_label", "p_label"),
+    ] {
+        session.execute(&format!("CREATE FUNCTION scope_tests.{name}({param} text) RETURNS text LANGUAGE sql AS $$SELECT {projection} FROM scope_tests.values_table r WHERE k=1$$")).unwrap();
+    }
+    for _ in 0..3 {
+        for (name, expected) in [
+            ("column_value", "column"),
+            ("qualified_value", "column"),
+            ("local_value", "local"),
+        ] {
+            assert_eq!(
+                session
+                    .execute(&format!("SELECT scope_tests.{name}('local')"))
+                    .unwrap()
+                    .rows[0][0]
+                    .to_cell(),
+                expected,
+                "{name}"
+            );
+        }
+    }
 }
 
 #[test]

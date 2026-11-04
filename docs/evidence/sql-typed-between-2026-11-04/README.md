@@ -40,13 +40,15 @@ read in both profiles in this change. The PostgreSQL fixture deliberately
 returns nonzero (`success: false`) while those differences remain. This is a
 bounded boundary-comparison fix, not complete PostgreSQL or Oracle conformance.
 
-## Application acceptance remains pending
+## Subsequent application acceptance
 
 The original application's previous Trial Balance request persisted 47 correct
 rows, but its rendered range omitted 19 opening balances. Equivalent bounds
-ending in `.0` or `.000000` reproduce that omission. The fix must be verified
-through a clean runtime upgrade and a fresh report/PDF; expression comparisons
-alone do not qualify that workflow or the full application.
+ending in `.0` or `.000000` reproduce that omission. The subsequent
+[application checkpoint](../idempiere-trial-balance-2026-11-04/README.md) verifies
+a clean runtime upgrade and a fresh HQ report/PDF containing all 47 rows and
+19 opening balances, with 46 passing financial/reporting observations. This
+qualifies the selected report, not the full application.
 
 ## Local validation
 

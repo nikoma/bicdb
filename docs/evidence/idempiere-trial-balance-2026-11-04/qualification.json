@@ -1,0 +1,75 @@
+{
+  "application_qualified": false,
+  "full_programme_qualified": false,
+  "report_workflow_qualified": true,
+  "source_commit": "5cf85d77b3f53abe8710f2447aa1f68b24b213c6",
+  "runtime_source_main_commit": "60b906c995083453085e7789bb42a152474f02b6",
+  "runtime_binary_sha256": "5c28d769107422fc0869bebc44490194e9cae0e8ee7177ac9c4bfc4857dac44c",
+  "workflow_checks_passed": 46,
+  "workflow_checks_total": 46,
+  "original_objects_recreated": false,
+  "original_object_fingerprints": {
+    "routines": {
+      "count": 62,
+      "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+    },
+    "views": {
+      "count": 160,
+      "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+    }
+  },
+  "view_labels_and_type_families_verified": 160,
+  "prior_report_preservation": {
+    "instance": 1000037,
+    "rows": 47,
+    "sha256": "81a42de285b0d5fe80ae0b40933506f0be1e530f9c94f764a7e539be0ab5980a"
+  },
+  "fresh_login_verified": true,
+  "hq": {
+    "application_qualified": false,
+    "report_workflow_qualified": true,
+    "scope": "HQ11",
+    "process_instance": 1000039,
+    "parameters_verified_before_submission": true,
+    "pdf_sha256": "39dff88543f669c2f2f1c00135fe4b93ccd551bedfb0506920e7b55e534e08d9",
+    "pdf_bytes": 73313,
+    "pdf_pages": 12,
+    "rendered_rows": 47,
+    "opening_balance_labels": 19,
+    "expected_opening_rows": 19,
+    "expected_detail_rows": 28,
+    "opening_debit": "24548.47",
+    "opening_credit": "24548.47",
+    "current_period_debit": "1910.35",
+    "current_period_credit": "1910.35",
+    "source_data_checks": {
+      "row_count": true,
+      "detail_rows_match_source_ledger": true,
+      "opening_rows_match_source_ledger": true,
+      "row_scope": true,
+      "uuid_formats": true,
+      "unique_uuids": true
+    }
+  },
+  "additional_all_organizations": {
+    "application_qualified": false,
+    "process_instance": 1000038,
+    "scope": "all_organizations",
+    "pdf_sha256": "173dc72859bacb50d6fe24e419cbb0d71ae39415c5f47485cb39632c50d02c2b",
+    "pdf_bytes": 70891,
+    "pages": 12,
+    "rendered_rows": 47,
+    "opening_balance_labels": 19,
+    "source_data_checks": {
+      "expected_count": true,
+      "opening_matches": true,
+      "detail_matches": true,
+      "unique_uuids": true,
+      "uuid_format": true
+    }
+  },
+  "native_reference_gaps_still_open": [
+    "volatile_value_evaluation",
+    "sequence_evaluation_count"
+  ]
+}

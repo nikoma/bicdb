@@ -4542,6 +4542,12 @@ impl TryFrom<PersistedIndexDefinition> for IndexDefinition {
 }
 
 impl IndexDefinition {
+    /// Project a record with the same field transforms and typed storage keys
+    /// used by committed indexes. This does not evaluate the index predicate.
+    pub fn key_for_record(&self, record: &Record) -> Vec<IndexValue> {
+        record_index_key(record, &self.fields)
+    }
+
     fn enforces_unique_key(&self, key: &[IndexValue]) -> bool {
         self.unique && (self.nulls_not_distinct || !index_key_contains_null(key))
     }

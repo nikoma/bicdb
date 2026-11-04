@@ -636,7 +636,7 @@ impl<'db> SqlEngine<'db> {
         ids: Rc<[String]>,
     ) -> Result<Rc<[String]>> {
         self.record_ids_with_filtered_pending_candidates(collection, ids, |record| {
-            let key = record_index_key_from_sql_record(record, &index.fields)?;
+            let key = index.key_for_record(record);
             Ok(key.starts_with(prefix))
         })
     }
@@ -702,7 +702,7 @@ impl<'db> SqlEngine<'db> {
         ids: Rc<[String]>,
     ) -> Result<Rc<[String]>> {
         self.record_ids_with_filtered_pending_candidates(collection, ids, |record| {
-            let key = record_index_key_from_sql_record(record, &index.fields)?;
+            let key = index.key_for_record(record);
             Ok(index_key_matches_prefix_range_and_filters(
                 &key, prefix, lower, upper, filters,
             ))

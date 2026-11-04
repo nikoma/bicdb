@@ -2353,6 +2353,96 @@ fn pending_transaction_index_range_materializes_only_matching_delta_rows() {
 }
 
 #[test]
+fn pending_typed_index_reads_keep_updates_inserts_and_savepoint_visibility() {
+    for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        if profile != oracle::POSTGRES_PROFILE {
+            oracle::ensure_database_profile(&mut db, profile).unwrap();
+        }
+        let mut session = SqlSession::new(&mut db);
+        let mut execute = |sql: &str| {
+            let sql = if profile == oracle::POSTGRES_PROFILE {
+                sql.to_string()
+            } else {
+                oracle::lower_profile_sql(session.db_ref(), sql, profile).unwrap()
+            };
+            session
+                .execute(&sql)
+                .unwrap_or_else(|error| panic!("{profile}: {sql}: {error}"))
+        };
+        for sql in [
+            "CREATE TABLE pending_typed_rows(row_id NUMERIC(20,0) PRIMARY KEY,bucket_key NUMERIC(20,0),amount NUMERIC(20,2))",
+            "CREATE INDEX pending_typed_bucket ON pending_typed_rows(bucket_key)",
+            "INSERT INTO pending_typed_rows VALUES(1,7,10.50),(2,8,20.25)",
+            "BEGIN",
+            "UPDATE pending_typed_rows SET amount=30.50 WHERE row_id=1",
+        ] {execute(sql);}
+        SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().push(SqlProfileStats::default()));
+        let sum =
+            execute("SELECT COALESCE(SUM(amount),0) FROM pending_typed_rows WHERE bucket_key=7");
+        let stats = SQL_PROFILE_STACK.with(|stack| stack.borrow_mut().pop().unwrap());
+        assert_eq!(sum.rows[0][0].to_cell(), "30.50");
+        assert!(stats.index_lookup_count > 0);
+        assert_eq!(
+            stats.full_scan_count, 0,
+            "the correction must preserve indexed execution"
+        );
+        assert!(
+            stats.rows_materialized <= 2,
+            "only matching pending candidates should be materialized"
+        );
+        assert_eq!(
+            execute(
+                "SELECT SUM(amount) FROM pending_typed_rows WHERE bucket_key>=7 AND bucket_key<=7"
+            )
+            .rows[0][0]
+                .to_cell(),
+            "30.50"
+        );
+        execute("SAVEPOINT typed_before_changes");
+        execute("INSERT INTO pending_typed_rows VALUES(3,7,5.25)");
+        assert_eq!(
+            execute("SELECT SUM(amount) FROM pending_typed_rows WHERE bucket_key=7").rows[0][0]
+                .to_cell(),
+            "35.75"
+        );
+        execute("UPDATE pending_typed_rows SET bucket_key=8 WHERE row_id=1");
+        assert_eq!(
+            execute("SELECT SUM(amount) FROM pending_typed_rows WHERE bucket_key=8").rows[0][0]
+                .to_cell(),
+            "50.75"
+        );
+        execute("DELETE FROM pending_typed_rows WHERE row_id=3");
+        assert_eq!(
+            execute("SELECT COUNT(*) FROM pending_typed_rows WHERE bucket_key=7").rows[0][0]
+                .to_cell(),
+            "0"
+        );
+        execute("ROLLBACK TO SAVEPOINT typed_before_changes");
+        assert_eq!(
+            execute("SELECT SUM(amount) FROM pending_typed_rows WHERE bucket_key=7").rows[0][0]
+                .to_cell(),
+            "30.50"
+        );
+        execute("ROLLBACK");
+        assert_eq!(
+            execute("SELECT SUM(amount) FROM pending_typed_rows WHERE bucket_key=7").rows[0][0]
+                .to_cell(),
+            "10.50"
+        );
+        execute("BEGIN");
+        execute("UPDATE pending_typed_rows SET amount=40.50 WHERE row_id=1");
+        execute("COMMIT");
+        assert_eq!(
+            execute("SELECT SUM(amount) FROM pending_typed_rows WHERE bucket_key=7").rows[0][0]
+                .to_cell(),
+            "40.50"
+        );
+    }
+}
+
+#[test]
 fn pending_transaction_index_update_removes_stale_committed_candidates() {
     let dir = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(dir.path()).unwrap();

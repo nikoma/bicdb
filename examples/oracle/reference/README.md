@@ -421,6 +421,16 @@ report NUMBER; the selected PostgreSQL transport must report NUMERIC OID 1700
 independently of row values. The native source checks that OID directly. This
 qualifies the bounded one-relation aggregate shapes, not general subquery typing.
 
+`pending_index_visibility.py --reference oracle --oracle-config /private/oracle.json
+--output /private/pending-index.json` compares NUMERIC-key transaction workloads
+with and without a secondary index. `--reference postgres` supplies the independent
+native control through `ORACLE_CONTROL_PG_DSN`; both use `BICDB_PG_DSN`. Prepared
+mutations and reads cover equality/range aggregates, a correlated parent update,
+inserted rows, key changes, deletion, savepoint rollback, full rollback and commit.
+The 24 explicit expectations must pass on the actual reference before target
+matches count. Only nonce-named tables/indexes are created and removed. This
+qualifies these own-write visibility rules, not complete transaction isolation.
+
 
 The `routine_namespaces.py --suite procedures` fixture checks actual Oracle CALL
 effects, replacement, defaults, qualified nested calls, OUT/IN OUT copyback and

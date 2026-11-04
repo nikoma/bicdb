@@ -2037,16 +2037,6 @@ pub(crate) fn record_index_field_sql_value(
     }
 }
 
-pub(crate) fn record_index_key_from_sql_record(
-    record: &Record,
-    fields: &[IndexField],
-) -> Result<Vec<IndexValue>> {
-    fields
-        .iter()
-        .map(|field| index_value_from_sql(record_index_field_sql_value(record, field, None)))
-        .collect()
-}
-
 pub(crate) fn index_key_matches_prefix_range_and_filters(
     key: &[IndexValue],
     prefix: &[IndexValue],

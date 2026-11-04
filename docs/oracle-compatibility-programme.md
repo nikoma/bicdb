@@ -38,8 +38,12 @@ bank balance and balanced accounting. The selected
 [purchase order](evidence/idempiere-purchase-order-2026-11-04/README.md) and
 [material receipt](evidence/idempiere-material-receipt-2026-11-04/README.md)
 then complete through the original UI, with one +3 movement, purchase matching
-and balanced receipt accounting. Supplier invoicing, outbound payment, remaining
-application workflows and the broader programme remain unqualified.
+and balanced receipt accounting. The
+[supplier invoice](evidence/idempiere-supplier-invoice-2026-11-04/README.md)
+then completes/posts from that receipt, with posted invoice/receipt and purchase
+matching, balanced accounting, and preserved stock and prior sales/bank state.
+Outbound payment, remaining application workflows and the broader programme
+remain unqualified.
 The checkpoint history below records what was measured at each earlier stage.
 
 The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used

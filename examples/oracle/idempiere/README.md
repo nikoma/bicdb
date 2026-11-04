@@ -12,8 +12,11 @@ completes through paid invoice, receipt allocation and bank reconciliation.
 [Purchase order](../../../docs/evidence/idempiere-purchase-order-2026-11-04/README.md)
 and [material receipt](../../../docs/evidence/idempiere-material-receipt-2026-11-04/README.md)
 workflows also complete, including stock movement, purchase matching and receipt
-accounting. Supplier invoicing/outbound payment, the rest of the application,
-production operations and complete Oracle compatibility remain unqualified.
+accounting. The
+[supplier invoice](../../../docs/evidence/idempiere-supplier-invoice-2026-11-04/README.md)
+also completes/posts with receipt and purchase matching and balanced accounting.
+Outbound payment, the rest of the application, production operations and complete
+Oracle compatibility remain unqualified.
 The earlier inventory and initial observations below retain their historical
 results; they do not replace this current checkpoint.
 

@@ -1,0 +1,1858 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "UTC:CURRENT_TIMESTAMP",
+      "source": {
+        "id": "UTC:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.700684+00:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.814362+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:LOCALTIMESTAMP",
+      "source": {
+        "id": "UTC:LOCALTIMESTAMP",
+        "expression": "LOCALTIMESTAMP",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.700918",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:LOCALTIMESTAMP",
+        "expression": "LOCALTIMESTAMP",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.816660",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:CURRENT_DATE",
+      "source": {
+        "id": "UTC:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09",
+        "type": "DB_TYPE_DATE",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_DATE",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:CURRENT_TIMESTAMP(0)",
+      "source": {
+        "id": "UTC:CURRENT_TIMESTAMP(0)",
+        "expression": "CURRENT_TIMESTAMP(0)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:10+00:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:CURRENT_TIMESTAMP(0)",
+        "expression": "CURRENT_TIMESTAMP(0)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:10+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:CURRENT_TIMESTAMP(1)",
+      "source": {
+        "id": "UTC:CURRENT_TIMESTAMP(1)",
+        "expression": "CURRENT_TIMESTAMP(1)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.700000+00:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:CURRENT_TIMESTAMP(1)",
+        "expression": "CURRENT_TIMESTAMP(1)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.800000+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:CURRENT_TIMESTAMP(2)",
+      "source": {
+        "id": "UTC:CURRENT_TIMESTAMP(2)",
+        "expression": "CURRENT_TIMESTAMP(2)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.700000+00:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:CURRENT_TIMESTAMP(2)",
+        "expression": "CURRENT_TIMESTAMP(2)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.830000+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:CURRENT_TIMESTAMP(3)",
+      "source": {
+        "id": "UTC:CURRENT_TIMESTAMP(3)",
+        "expression": "CURRENT_TIMESTAMP(3)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.702000+00:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:CURRENT_TIMESTAMP(3)",
+        "expression": "CURRENT_TIMESTAMP(3)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.828000+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:CURRENT_TIMESTAMP(4)",
+      "source": {
+        "id": "UTC:CURRENT_TIMESTAMP(4)",
+        "expression": "CURRENT_TIMESTAMP(4)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.702700+00:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:CURRENT_TIMESTAMP(4)",
+        "expression": "CURRENT_TIMESTAMP(4)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.829900+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:CURRENT_TIMESTAMP(5)",
+      "source": {
+        "id": "UTC:CURRENT_TIMESTAMP(5)",
+        "expression": "CURRENT_TIMESTAMP(5)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.702970+00:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:CURRENT_TIMESTAMP(5)",
+        "expression": "CURRENT_TIMESTAMP(5)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.831960+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:CURRENT_TIMESTAMP(6)",
+      "source": {
+        "id": "UTC:CURRENT_TIMESTAMP(6)",
+        "expression": "CURRENT_TIMESTAMP(6)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.703203+00:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:CURRENT_TIMESTAMP(6)",
+        "expression": "CURRENT_TIMESTAMP(6)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.834020+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:LOCALTIMESTAMP(0)",
+      "source": {
+        "id": "UTC:LOCALTIMESTAMP(0)",
+        "expression": "LOCALTIMESTAMP(0)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:10",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:LOCALTIMESTAMP(0)",
+        "expression": "LOCALTIMESTAMP(0)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:10",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:LOCALTIMESTAMP(1)",
+      "source": {
+        "id": "UTC:LOCALTIMESTAMP(1)",
+        "expression": "LOCALTIMESTAMP(1)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.700000",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:LOCALTIMESTAMP(1)",
+        "expression": "LOCALTIMESTAMP(1)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.800000",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:LOCALTIMESTAMP(2)",
+      "source": {
+        "id": "UTC:LOCALTIMESTAMP(2)",
+        "expression": "LOCALTIMESTAMP(2)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.700000",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:LOCALTIMESTAMP(2)",
+        "expression": "LOCALTIMESTAMP(2)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.840000",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:LOCALTIMESTAMP(3)",
+      "source": {
+        "id": "UTC:LOCALTIMESTAMP(3)",
+        "expression": "LOCALTIMESTAMP(3)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.704000",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:LOCALTIMESTAMP(3)",
+        "expression": "LOCALTIMESTAMP(3)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.841000",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:LOCALTIMESTAMP(4)",
+      "source": {
+        "id": "UTC:LOCALTIMESTAMP(4)",
+        "expression": "LOCALTIMESTAMP(4)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.704000",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:LOCALTIMESTAMP(4)",
+        "expression": "LOCALTIMESTAMP(4)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.842800",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:LOCALTIMESTAMP(5)",
+      "source": {
+        "id": "UTC:LOCALTIMESTAMP(5)",
+        "expression": "LOCALTIMESTAMP(5)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.704130",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:LOCALTIMESTAMP(5)",
+        "expression": "LOCALTIMESTAMP(5)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.844520",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:LOCALTIMESTAMP(6)",
+      "source": {
+        "id": "UTC:LOCALTIMESTAMP(6)",
+        "expression": "LOCALTIMESTAMP(6)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.704301",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:LOCALTIMESTAMP(6)",
+        "expression": "LOCALTIMESTAMP(6)",
+        "zone": "UTC",
+        "value": "2026-11-04T05:44:09.846253",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:alias:current_timestamp:AS",
+      "source": {
+        "id": "UTC:alias:current_timestamp:AS",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "UTC:alias:current_timestamp:AS",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:alias:current_timestamp:",
+      "source": {
+        "id": "UTC:alias:current_timestamp:",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "UTC:alias:current_timestamp:",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:alias:localtimestamp:AS",
+      "source": {
+        "id": "UTC:alias:localtimestamp:AS",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "UTC:alias:localtimestamp:AS",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:alias:localtimestamp:",
+      "source": {
+        "id": "UTC:alias:localtimestamp:",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "UTC:alias:localtimestamp:",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:alias:current_date:AS",
+      "source": {
+        "id": "UTC:alias:current_date:AS",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "UTC:alias:current_date:AS",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:alias:current_date:",
+      "source": {
+        "id": "UTC:alias:current_date:",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "UTC:alias:current_date:",
+        "zone": "UTC",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:same_statement_rounding",
+      "source": {
+        "id": "UTC:same_statement_rounding",
+        "zone": "UTC",
+        "qualified": true,
+        "values": [
+          "2026-11-04T05:44:09.705450+00:00",
+          "2026-11-04T05:44:09.705450+00:00",
+          "2026-11-04T05:44:10+00:00",
+          "2026-11-04T05:44:09.705450",
+          "2026-11-04T05:44:10",
+          "2026-11-04T05:44:09"
+        ]
+      },
+      "bicdb": {
+        "id": "UTC:same_statement_rounding",
+        "zone": "UTC",
+        "qualified": true,
+        "values": [
+          "2026-11-04T05:44:09.859347+00:00",
+          "2026-11-04T05:44:09.859347+00:00",
+          "2026-11-04T05:44:10+00:00",
+          "2026-11-04T05:44:09.859347",
+          "2026-11-04T05:44:10",
+          "2026-11-04T05:44:09"
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:transaction_clock",
+      "source": {
+        "id": "UTC:transaction_clock",
+        "zone": "UTC",
+        "expected": "advances",
+        "qualified": true,
+        "first": "2026-11-04 05:44:09.705788+00:00",
+        "second": "2026-11-04 05:44:09.736211+00:00"
+      },
+      "bicdb": {
+        "id": "UTC:transaction_clock",
+        "zone": "UTC",
+        "expected": "advances",
+        "qualified": true,
+        "first": "2026-11-04 05:44:09.861896+00:00",
+        "second": "2026-11-04 05:44:09.893952+00:00"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:CURRENT_TIMESTAMP",
+      "source": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.736768+05:30",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T05:44:09.897819+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:LOCALTIMESTAMP",
+      "source": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP",
+        "expression": "LOCALTIMESTAMP",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.736914",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP",
+        "expression": "LOCALTIMESTAMP",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.899802",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:CURRENT_DATE",
+      "source": {
+        "id": "Asia/Kolkata:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09",
+        "type": "DB_TYPE_DATE",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_DATE",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:CURRENT_TIMESTAMP(0)",
+      "source": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(0)",
+        "expression": "CURRENT_TIMESTAMP(0)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:10+05:30",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(0)",
+        "expression": "CURRENT_TIMESTAMP(0)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T05:44:10+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:CURRENT_TIMESTAMP(1)",
+      "source": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(1)",
+        "expression": "CURRENT_TIMESTAMP(1)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.700000+05:30",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(1)",
+        "expression": "CURRENT_TIMESTAMP(1)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T05:44:09.900000+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:CURRENT_TIMESTAMP(2)",
+      "source": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(2)",
+        "expression": "CURRENT_TIMESTAMP(2)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.740000+05:30",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(2)",
+        "expression": "CURRENT_TIMESTAMP(2)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T05:44:09.910000+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:CURRENT_TIMESTAMP(3)",
+      "source": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(3)",
+        "expression": "CURRENT_TIMESTAMP(3)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.738000+05:30",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(3)",
+        "expression": "CURRENT_TIMESTAMP(3)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T05:44:09.911000+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:CURRENT_TIMESTAMP(4)",
+      "source": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(4)",
+        "expression": "CURRENT_TIMESTAMP(4)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.738000+05:30",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(4)",
+        "expression": "CURRENT_TIMESTAMP(4)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T05:44:09.912800+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:CURRENT_TIMESTAMP(5)",
+      "source": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(5)",
+        "expression": "CURRENT_TIMESTAMP(5)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.738200+05:30",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(5)",
+        "expression": "CURRENT_TIMESTAMP(5)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T05:44:09.914650+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:CURRENT_TIMESTAMP(6)",
+      "source": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(6)",
+        "expression": "CURRENT_TIMESTAMP(6)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.738385+05:30",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP(6)",
+        "expression": "CURRENT_TIMESTAMP(6)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T05:44:09.916464+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:LOCALTIMESTAMP(0)",
+      "source": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(0)",
+        "expression": "LOCALTIMESTAMP(0)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:10",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(0)",
+        "expression": "LOCALTIMESTAMP(0)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:10",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:LOCALTIMESTAMP(1)",
+      "source": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(1)",
+        "expression": "LOCALTIMESTAMP(1)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.700000",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(1)",
+        "expression": "LOCALTIMESTAMP(1)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.900000",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:LOCALTIMESTAMP(2)",
+      "source": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(2)",
+        "expression": "LOCALTIMESTAMP(2)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.740000",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(2)",
+        "expression": "LOCALTIMESTAMP(2)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.920000",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:LOCALTIMESTAMP(3)",
+      "source": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(3)",
+        "expression": "LOCALTIMESTAMP(3)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.739000",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(3)",
+        "expression": "LOCALTIMESTAMP(3)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.923000",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:LOCALTIMESTAMP(4)",
+      "source": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(4)",
+        "expression": "LOCALTIMESTAMP(4)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.739200",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(4)",
+        "expression": "LOCALTIMESTAMP(4)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.925200",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:LOCALTIMESTAMP(5)",
+      "source": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(5)",
+        "expression": "LOCALTIMESTAMP(5)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.739400",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(5)",
+        "expression": "LOCALTIMESTAMP(5)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.926940",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:LOCALTIMESTAMP(6)",
+      "source": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(6)",
+        "expression": "LOCALTIMESTAMP(6)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.739566",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:LOCALTIMESTAMP(6)",
+        "expression": "LOCALTIMESTAMP(6)",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T11:14:09.928620",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:alias:current_timestamp:AS",
+      "source": {
+        "id": "Asia/Kolkata:alias:current_timestamp:AS",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:alias:current_timestamp:AS",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:alias:current_timestamp:",
+      "source": {
+        "id": "Asia/Kolkata:alias:current_timestamp:",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:alias:current_timestamp:",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:alias:localtimestamp:AS",
+      "source": {
+        "id": "Asia/Kolkata:alias:localtimestamp:AS",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:alias:localtimestamp:AS",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:alias:localtimestamp:",
+      "source": {
+        "id": "Asia/Kolkata:alias:localtimestamp:",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:alias:localtimestamp:",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:alias:current_date:AS",
+      "source": {
+        "id": "Asia/Kolkata:alias:current_date:AS",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:alias:current_date:AS",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:alias:current_date:",
+      "source": {
+        "id": "Asia/Kolkata:alias:current_date:",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:alias:current_date:",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:same_statement_rounding",
+      "source": {
+        "id": "Asia/Kolkata:same_statement_rounding",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "values": [
+          "2026-11-04T11:14:09.740792+05:30",
+          "2026-11-04T11:14:09.740792+05:30",
+          "2026-11-04T11:14:10+05:30",
+          "2026-11-04T11:14:09.740792",
+          "2026-11-04T11:14:10",
+          "2026-11-04T11:14:09"
+        ]
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:same_statement_rounding",
+        "zone": "Asia/Kolkata",
+        "qualified": true,
+        "values": [
+          "2026-11-04T05:44:09.941469+00:00",
+          "2026-11-04T05:44:09.941469+00:00",
+          "2026-11-04T05:44:10+00:00",
+          "2026-11-04T11:14:09.941469",
+          "2026-11-04T11:14:10",
+          "2026-11-04T11:14:09"
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:transaction_clock",
+      "source": {
+        "id": "Asia/Kolkata:transaction_clock",
+        "zone": "Asia/Kolkata",
+        "expected": "advances",
+        "qualified": true,
+        "first": "2026-11-04 11:14:09.741194+05:30",
+        "second": "2026-11-04 11:14:09.771595+05:30"
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:transaction_clock",
+        "zone": "Asia/Kolkata",
+        "expected": "advances",
+        "qualified": true,
+        "first": "2026-11-04 05:44:09.944005+00:00",
+        "second": "2026-11-04 05:44:09.976033+00:00"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:CURRENT_TIMESTAMP",
+      "source": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.771993-08:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-04T05:44:09.979862+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:LOCALTIMESTAMP",
+      "source": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP",
+        "expression": "LOCALTIMESTAMP",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.772113",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP",
+        "expression": "LOCALTIMESTAMP",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.981873",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:CURRENT_DATE",
+      "source": {
+        "id": "America/Los_Angeles:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09",
+        "type": "DB_TYPE_DATE",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_DATE",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:CURRENT_TIMESTAMP(0)",
+      "source": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(0)",
+        "expression": "CURRENT_TIMESTAMP(0)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:10-08:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(0)",
+        "expression": "CURRENT_TIMESTAMP(0)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-04T05:44:10+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:CURRENT_TIMESTAMP(1)",
+      "source": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(1)",
+        "expression": "CURRENT_TIMESTAMP(1)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.800000-08:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(1)",
+        "expression": "CURRENT_TIMESTAMP(1)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-04T05:44:10+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:CURRENT_TIMESTAMP(2)",
+      "source": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(2)",
+        "expression": "CURRENT_TIMESTAMP(2)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.770000-08:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(2)",
+        "expression": "CURRENT_TIMESTAMP(2)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-04T05:44:09.990000+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:CURRENT_TIMESTAMP(3)",
+      "source": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(3)",
+        "expression": "CURRENT_TIMESTAMP(3)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.773000-08:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(3)",
+        "expression": "CURRENT_TIMESTAMP(3)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-04T05:44:09.993000+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:CURRENT_TIMESTAMP(4)",
+      "source": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(4)",
+        "expression": "CURRENT_TIMESTAMP(4)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.773200-08:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(4)",
+        "expression": "CURRENT_TIMESTAMP(4)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-04T05:44:09.994700+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:CURRENT_TIMESTAMP(5)",
+      "source": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(5)",
+        "expression": "CURRENT_TIMESTAMP(5)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.773420-08:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(5)",
+        "expression": "CURRENT_TIMESTAMP(5)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-04T05:44:09.996500+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:CURRENT_TIMESTAMP(6)",
+      "source": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(6)",
+        "expression": "CURRENT_TIMESTAMP(6)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.773601-08:00",
+        "type": "DB_TYPE_TIMESTAMP_TZ",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP_TZ",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP(6)",
+        "expression": "CURRENT_TIMESTAMP(6)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-04T05:44:09.998289+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:LOCALTIMESTAMP(0)",
+      "source": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(0)",
+        "expression": "LOCALTIMESTAMP(0)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:10",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(0)",
+        "expression": "LOCALTIMESTAMP(0)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:10",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:LOCALTIMESTAMP(1)",
+      "source": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(1)",
+        "expression": "LOCALTIMESTAMP(1)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.800000",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(1)",
+        "expression": "LOCALTIMESTAMP(1)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:10",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:LOCALTIMESTAMP(2)",
+      "source": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(2)",
+        "expression": "LOCALTIMESTAMP(2)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.770000",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(2)",
+        "expression": "LOCALTIMESTAMP(2)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:10",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:LOCALTIMESTAMP(3)",
+      "source": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(3)",
+        "expression": "LOCALTIMESTAMP(3)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.774000",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(3)",
+        "expression": "LOCALTIMESTAMP(3)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:10.005000",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:LOCALTIMESTAMP(4)",
+      "source": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(4)",
+        "expression": "LOCALTIMESTAMP(4)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.774200",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(4)",
+        "expression": "LOCALTIMESTAMP(4)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:10.006600",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:LOCALTIMESTAMP(5)",
+      "source": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(5)",
+        "expression": "LOCALTIMESTAMP(5)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.774590",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(5)",
+        "expression": "LOCALTIMESTAMP(5)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:10.008310",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:LOCALTIMESTAMP(6)",
+      "source": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(6)",
+        "expression": "LOCALTIMESTAMP(6)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:09.774888",
+        "type": "DB_TYPE_TIMESTAMP",
+        "nonnull": true,
+        "expected_type": "DB_TYPE_TIMESTAMP",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:LOCALTIMESTAMP(6)",
+        "expression": "LOCALTIMESTAMP(6)",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T21:44:10.009997",
+        "type": "1114",
+        "nonnull": true,
+        "expected_type": "1114",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:alias:current_timestamp:AS",
+      "source": {
+        "id": "America/Los_Angeles:alias:current_timestamp:AS",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:alias:current_timestamp:AS",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:alias:current_timestamp:",
+      "source": {
+        "id": "America/Los_Angeles:alias:current_timestamp:",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:alias:current_timestamp:",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:alias:localtimestamp:AS",
+      "source": {
+        "id": "America/Los_Angeles:alias:localtimestamp:AS",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:alias:localtimestamp:AS",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:alias:localtimestamp:",
+      "source": {
+        "id": "America/Los_Angeles:alias:localtimestamp:",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:alias:localtimestamp:",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:alias:current_date:AS",
+      "source": {
+        "id": "America/Los_Angeles:alias:current_date:AS",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:alias:current_date:AS",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:alias:current_date:",
+      "source": {
+        "id": "America/Los_Angeles:alias:current_date:",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:alias:current_date:",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "value": 1
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:same_statement_rounding",
+      "source": {
+        "id": "America/Los_Angeles:same_statement_rounding",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "values": [
+          "2026-11-03T21:44:09.775954-08:00",
+          "2026-11-03T21:44:09.775954-08:00",
+          "2026-11-03T21:44:10-08:00",
+          "2026-11-03T21:44:09.775954",
+          "2026-11-03T21:44:10",
+          "2026-11-03T21:44:09"
+        ]
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:same_statement_rounding",
+        "zone": "America/Los_Angeles",
+        "qualified": true,
+        "values": [
+          "2026-11-04T05:44:10.023458+00:00",
+          "2026-11-04T05:44:10.023458+00:00",
+          "2026-11-04T05:44:10+00:00",
+          "2026-11-03T21:44:10.023458",
+          "2026-11-03T21:44:10",
+          "2026-11-03T21:44:10"
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:transaction_clock",
+      "source": {
+        "id": "America/Los_Angeles:transaction_clock",
+        "zone": "America/Los_Angeles",
+        "expected": "advances",
+        "qualified": true,
+        "first": "2026-11-03 21:44:09.776301-08:00",
+        "second": "2026-11-03 21:44:09.806763-08:00"
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:transaction_clock",
+        "zone": "America/Los_Angeles",
+        "expected": "advances",
+        "qualified": true,
+        "first": "2026-11-04 05:44:10.025807+00:00",
+        "second": "2026-11-04 05:44:10.056962+00:00"
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "reference_version": "23.26.3.0.0",
+  "total": 75,
+  "matched": 75,
+  "source_qualified": true,
+  "cleanup_errors": [],
+  "success": true,
+  "target_sql_profile": "oracle-preview-v1",
+  "reference": "oracle",
+  "oracle_disable_oob": false,
+  "runtime_binary_sha256": "0ce04cb2b5caa01712f8c0732ee62bd2e03210626d81a25be0be55ae8afa572d",
+  "fixture_source_sha256": "c67a3f36f7b1cf8cef4acccac9f80c3ca7a844ee3cf8b36bdf116ffdb5e3d060",
+  "comparison_exit_status": 0,
+  "target_qualified_cases": 75
+}

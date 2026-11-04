@@ -1,0 +1,17 @@
+[
+  {
+    "name": "current_timestamp",
+    "accepted": true,
+    "removed": true
+  },
+  {
+    "name": "localtimestamp",
+    "accepted": true,
+    "removed": true
+  },
+  {
+    "name": "current_date",
+    "accepted": true,
+    "removed": true
+  }
+]

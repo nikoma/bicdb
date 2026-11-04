@@ -589,3 +589,12 @@ retains both the missing target syntax and a timed source-cancellation gap.
 successive waits from expiry on the second row. The current
 [qualification](../../../docs/evidence/oracle-row-lock-deadlines-2026-11-03/README.md)
 retains the timed source-cancellation gap from the five-case deadline fixture.
+
+`current_time.py` uses the common connection arguments with `--reference oracle`
+or `--reference postgres`. It compares typed current-time values and clock
+properties in three session zones: 75 Oracle cases or 12 PostgreSQL controls.
+It makes no schema/data changes. Oracle timezone-bearing values use original
+typed Describe metadata plus a TO_CHAR ISO-offset value projection because Thin
+mode cannot decode named region IDs directly. The
+[bounded qualification](../../../docs/evidence/oracle-current-time-2026-11-03/README.md)
+documents the precision, transport and application limits.

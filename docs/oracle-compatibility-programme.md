@@ -392,3 +392,13 @@ paths, with independent source comparisons and native lock controls. Four of fiv
 deadline comparisons and both multirow cases match; timed source cancellation
 remains unqualified. A pre-existing DDL/BEGIN batch-boundary gap is retained.
 The actual application Complete action and the full programme remain open.
+
+The [statement-clock checkpoint](evidence/oracle-current-time-2026-11-03/README.md)
+subsequently matches 75 Oracle current-time/alias cases and 12 independent native
+PostgreSQL controls. It provides bounded precision, typed prepared results and
+Oracle statement-time advancement while preserving native transaction time.
+Compiler version 26 retains version 25 and durable metadata format 5; 11 reader
+checks cover the boundary. This addresses a NULL timestamp observed during
+application order processing, but a standalone comparison does not qualify that
+workflow. Complete clock/temporal semantics, application operation, migration,
+cutover and all outstanding workstreams above remain required.

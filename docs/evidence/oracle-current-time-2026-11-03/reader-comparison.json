@@ -1,0 +1,54 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "0ce04cb2b5caa01712f8c0732ee62bd2e03210626d81a25be0be55ae8afa572d",
+  "prior_binary_sha256": "52b9c5a760386ddce41bd9559a977608be49be168fd1b1ebce6195a15f1713d7",
+  "application_database_opened_with_old_reader": false,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "prior_scalar_executes",
+      "success": true
+    },
+    {
+      "id": "new_reader_retains_scalar",
+      "success": true
+    },
+    {
+      "id": "new_routine_executes",
+      "success": true
+    },
+    {
+      "id": "new_view_executes",
+      "success": true
+    },
+    {
+      "id": "language_25_oid_preserved",
+      "success": true
+    },
+    {
+      "id": "language_26_oid_registered",
+      "success": true
+    },
+    {
+      "id": "prior_scalar_still_executes",
+      "success": true
+    },
+    {
+      "id": "prior_reader_refuses_new_routine",
+      "success": true
+    },
+    {
+      "id": "prior_reader_refuses_new_view",
+      "success": true
+    },
+    {
+      "id": "new_routine_reopens_after_prior_refusal",
+      "success": true
+    },
+    {
+      "id": "new_view_reopens_after_prior_refusal",
+      "success": true
+    }
+  ],
+  "success": true
+}

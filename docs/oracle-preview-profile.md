@@ -1082,3 +1082,14 @@ paths, with independent source comparisons and native lock controls. Four of fiv
 deadline comparisons and both multirow cases match; timed source cancellation
 remains unqualified. A pre-existing DDL/BEGIN batch-boundary gap is retained.
 The actual application Complete action and the full programme remain open.
+
+The [statement-clock checkpoint](evidence/oracle-current-time-2026-11-03/README.md)
+adds typed CURRENT_TIMESTAMP, LOCALTIMESTAMP and CURRENT_DATE with session-zone
+representations, precision zero through six and a clock shared within each
+statement. Later Oracle statements advance within one transaction. Shared
+datetime Describe inference preserves native date/timestamptz types and native
+CURRENT_TIMESTAMP transaction stability. The source comparisons match 75 Oracle
+cases and 12 native PostgreSQL controls; 11 reader checks cover compiler version
+26, language OID 999425 and retained version 25. Metadata format remains 5.
+Higher precision, the complete clock family, full identifier/declaration and
+cursor semantics, application completion and the wider programme remain open.

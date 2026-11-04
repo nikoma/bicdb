@@ -1,0 +1,92 @@
+{
+  "format": 1,
+  "reported_at_utc": "2026-11-04T05:58:01.864988+00:00",
+  "source_commit": "cf8e65a58b0afaba739ca866cb48d40c1d24dc2e",
+  "runtime_binary_sha256": "0ce04cb2b5caa01712f8c0732ee62bd2e03210626d81a25be0be55ae8afa572d",
+  "build": "development, unoptimized, debug=0",
+  "application_qualified": false,
+  "release_published": false,
+  "production_deployment_verified": false,
+  "compiler_version": 26,
+  "durable_metadata_format": 5,
+  "checks": {
+    "rust_passed_executions": 1490,
+    "rust_ignored": 3,
+    "rust_batches": [
+      592,
+      7,
+      29,
+      17,
+      2,
+      60,
+      419,
+      121,
+      30,
+      169,
+      3,
+      4,
+      1,
+      6,
+      4,
+      2,
+      8,
+      8,
+      8
+    ],
+    "python_passed": 58,
+    "format": "passed",
+    "diff": "passed",
+    "licenses": "passed",
+    "open_core_boundary": "passed",
+    "ci": "Not run in this local qualification; prior-main SQL CI failure independently reproduced in native type relocation"
+  },
+  "reference_scope": {
+    "oracle_matched": 75,
+    "oracle_total": 75,
+    "oracle_prior_baseline_matched": 18,
+    "postgres_matched": 12,
+    "postgres_total": 12,
+    "postgres_prior_baseline_matched": 0,
+    "reader_checks": 11
+  },
+  "prior_validation_attempts": [
+    {
+      "scope": "SQL library before compiler expectation updates",
+      "passed": 590,
+      "failed": 2,
+      "ignored": 3,
+      "reason": "Two existing assertions still expected current compiler 25; future-version rejection advanced to 27 while retained version 25 is checked"
+    },
+    {
+      "scope": "Focused identifier regression before correcting numeric representation expectation",
+      "passed": 2,
+      "failed": 1,
+      "reason": "Expected Int rather than the exact-number storage representation; asserted returned numeric cells instead"
+    }
+  ],
+  "resources": {
+    "start_available_gib": 14,
+    "minimum_available_gib": 8,
+    "minimum_observed_available_bytes": 17838616576,
+    "peak_process_group_rss_bytes": 5135761408,
+    "build_cache_cleanup": {
+      "format": 1,
+      "removed_files": 14,
+      "reclaimed_bytes": 4396439672,
+      "by_category": {
+        "completed_test_executable": {
+          "files": 14,
+          "bytes": 4396439672
+        }
+      },
+      "current_example_binary_preserved": true
+    },
+    "remaining_build_cache_bytes": 7897648381
+  },
+  "remaining_native_ci_failure": {
+    "job_id": 126393381076,
+    "test": "comments_owner_and_schema_moves_are_durable_and_transactional",
+    "observed": "Saved function declaration restores the previous custom return name after type relocation",
+    "qualified": false
+  }
+}

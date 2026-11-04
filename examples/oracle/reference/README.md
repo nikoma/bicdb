@@ -573,3 +573,13 @@ matches 32/38 against Oracle, with six GET_LINES cases still unimplemented.
 Overall success remains false and the fixture exits nonzero. The earlier 27-case
 [baseline](../../../docs/evidence/oracle-output-buffer-baseline-2026-11-03/README.md)
 remains available. Neither checkpoint qualifies the full package or application.
+
+
+`row_lock_deadlines.py` compares Oracle `SELECT ... FOR UPDATE WAIT n` against
+an explicitly selected `oracle-preview-v1` target. It uses the same connection
+arguments as `row_lock_waits.py`, with `--reference oracle` only. It checks
+uncontended acquisition, immediate contention, expiry, release and cancellation.
+A nonzero result means the complete contract is unqualified, including when a
+source expectation fails. The current
+[baseline](../../../docs/evidence/oracle-row-lock-deadlines-baseline-2026-11-03/README.md)
+retains both the missing target syntax and a timed source-cancellation gap.

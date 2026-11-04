@@ -379,3 +379,9 @@ The [saved draft totals checkpoint](evidence/idempiere-sales-order-totals-2026-1
 subsequently verifies a real UI line edit, committed header totals of 123.50 and
 a fresh-browser reload. It covers the selected zero-rate sample tax only; order
 completion and the full application remain unqualified.
+
+The subsequent [order-processing and bounded lock-wait baseline](evidence/oracle-row-lock-deadlines-baseline-2026-11-03/README.md)
+records the actual Complete attempt failing at unsupported `FOR UPDATE WAIT n`.
+The order remains draft. Four of five source expectations qualify; the target
+matches zero, and timed reference cancellation remains separately unqualified.
+Deadline syntax/execution and the full application workflow remain open.

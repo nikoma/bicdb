@@ -155,14 +155,14 @@ def run(source_factory, target_factory, hold_seconds=10):
     return dict(format=1, application_qualified=False, cases=cases, total=len(cases), matched=sum(c["matched"] for c in cases), source_qualified=all(c["source_qualified"] for c in cases), cleanup_errors=cleanup, success=len(cases) == 3 and all(c["matched"] for c in cases) and not cleanup)
 
 
-def main():
+def main(runner=run, description=__doc__, references=("oracle", "postgres")):
     import argparse
     import os
     from pathlib import Path
     import psycopg
     from psycopg.conninfo import conninfo_to_dict
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--reference", choices=["oracle", "postgres"], required=True)
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument("--reference", choices=references, required=True)
     parser.add_argument("--oracle-config", type=Path)
     parser.add_argument("--oracle-disable-oob", action="store_true", help="use in-band breaks on the Oracle reference connection")
     parser.add_argument("--output", type=Path, required=True)
@@ -194,7 +194,7 @@ def main():
         expected = "oracle-preview-v1" if args.reference == "oracle" else "postgres"
         if profile != expected:
             raise RuntimeError("target SQL profile does not match the selected reference")
-    report = run(source_factory, target_factory)
+    report = runner(source_factory, target_factory)
     report["target_sql_profile"] = profile
     report["reference"] = args.reference
     if args.reference == "oracle":

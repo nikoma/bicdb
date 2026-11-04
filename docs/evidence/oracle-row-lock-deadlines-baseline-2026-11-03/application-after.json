@@ -1,0 +1,63 @@
+{
+  "runtime_binary_sha256": "7ef8fd930d27d96649407fa089d8fcdb073f6de94878462a4e6ef8830566948c",
+  "application_qualified": false,
+  "stage": "after_failed_complete",
+  "checks": [
+    {
+      "sql": "SELECT DocumentNo,DocStatus,DocAction,Processed,Processing,SendEMail,TotalLines,GrandTotal FROM C_Order WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "50000",
+          "DR",
+          "CO",
+          "N",
+          "N",
+          "N",
+          "123.50",
+          "123.50"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT QtyOrdered,QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "2",
+          "0",
+          "0",
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT M_Product_ID,M_Warehouse_ID,Qty,IsSOTrx FROM M_StorageReservation WHERE M_Product_ID=123 AND M_Warehouse_ID=103",
+      "rows": [
+        [
+          "123",
+          "103",
+          "0",
+          "N"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT C_Invoice_ID,DocStatus,GrandTotal FROM C_Invoice WHERE C_Order_ID=1000000",
+      "rows": []
+    },
+    {
+      "sql": "SELECT M_InOut_ID,DocStatus FROM M_InOut WHERE C_Order_ID=1000000",
+      "rows": []
+    },
+    {
+      "sql": "SELECT AD_WF_Process_ID,WFState,Processed,TextMsg FROM AD_WF_Process WHERE Record_ID=1000000 AND AD_Table_ID=259",
+      "rows": [
+        [
+          "1000000",
+          "CT",
+          "Y",
+          "50000: Grand Total=123.50 - BicDB application qualification draft\n - Could not lock record for MOrder[1000000-50000,IsSOTrx=true,C_DocType_ID=0, GrandTotal=123.50] caused by ERROR: invalid SQL: sql parser error: Expected: end of statement, found: \"WAIT\" at Line: 1, Column: 71\n - Could not lock record for MOrder[1000000-50000,IsSOTrx=true,C_DocType_ID=0, GrandTotal=123.50] caused by ERROR: invalid SQL: sql parser error: Expected: end of statement, found: \"WAIT\" at Line: 1, Column: 71"
+        ]
+      ]
+    }
+  ]
+}

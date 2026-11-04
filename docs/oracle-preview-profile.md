@@ -1037,3 +1037,11 @@ remains eager. Independent Oracle and native PostgreSQL source comparisons cover
 these bounded rules; this correctness fix does not change compiler version 25
 or metadata format 5. SQL column/local-variable shadowing and broader Oracle
 grouping legality remain explicit gaps, and the full application is unqualified.
+
+The [input-column binding checkpoint](evidence/sql-column-binding-2026-11-03/README.md)
+subsequently fixes local-value capture when a physical input exposes multiple
+qualifiers. The fast binder defers unresolved column bindings to ordinary SQL
+resolution instead of selecting a same-named routine value. Oracle PL/SQL and
+native SQL-function controls pass separately, and the four selected original
+inventory calls now match. PL/pgSQL conflict policies, correlated numeric result
+metadata, complete application flows and the wider programme remain unqualified.

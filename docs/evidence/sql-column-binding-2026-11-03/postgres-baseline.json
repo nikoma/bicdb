@@ -1,0 +1,149 @@
+{
+  "format": 1,
+  "reference": "postgres",
+  "application_qualified": false,
+  "target_protocol": "prepared",
+  "native_language": "sql",
+  "cases": [
+    {
+      "id": "column",
+      "expected": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "qualified",
+      "expected": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "expression",
+      "expected": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "filter",
+      "expected": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "variable_only",
+      "expected": {
+        "rows": [
+          [
+            "local"
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            "local"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "local"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "total": 5,
+  "matched": 5,
+  "source_qualified": true,
+  "source_version": 180004,
+  "target_sql_profile": "postgres",
+  "runtime_binary_sha256": "83252bf9a21039ba1287bd661d1ca57697751f65ddc2f89662c48b1b1e6cc2d2",
+  "fixture_sha256": "f596f83f043b2613f391ee3be2dee0385eb6a00c78a570ab4264642a76db68f5",
+  "fixture_exit_status": 0
+}

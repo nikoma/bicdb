@@ -1,0 +1,73 @@
+{
+  "format": 1,
+  "observed_at_utc": "2026-11-04T02:55:30.866273+00:00",
+  "source_commit": "11fdbe602e19e4a43c8c16080cd1f7c12bfb5b1e",
+  "engine_change_commit": "e9d82065cf397b3151dca6fe8b87e8344ea920f6",
+  "runtime_binary_sha256": "877216f6c6ff006983d2e774cec34756352baca5cd64898dfaac76cc6c5415b9",
+  "build": "development, unoptimized, debug=0",
+  "application_qualified": false,
+  "release_published": false,
+  "compiler_version": 25,
+  "language_oid": 999424,
+  "durable_metadata_format": 5,
+  "checks": {
+    "rust_passed": 1436,
+    "rust_ignored": 3,
+    "rust_batches": [
+      583,
+      7,
+      29,
+      17,
+      2,
+      60,
+      419,
+      121,
+      26,
+      169,
+      3
+    ],
+    "python_passed": 58,
+    "format": "passed",
+    "diff": "passed",
+    "licenses": "passed",
+    "open_core_boundary": "passed",
+    "ci": "not run in this local qualification"
+  },
+  "oracle": {
+    "matched": 5,
+    "total": 5,
+    "source_qualified": true,
+    "baseline_matched": 3
+  },
+  "postgres": {
+    "matched": 5,
+    "total": 5,
+    "source_qualified": true,
+    "baseline_matched": 5
+  },
+  "retained_aggregates": {
+    "oracle_matched": 19,
+    "oracle_total": 19,
+    "postgres_matched": 12,
+    "postgres_total": 12
+  },
+  "application_functions": {
+    "matched": 4,
+    "total": 4,
+    "complete_application_qualified": false
+  },
+  "query_trace_observed": true,
+  "memory": {
+    "guard_floor_bytes": 8589934592,
+    "full_checks_peak_rss_bytes": 5149327360,
+    "full_checks_minimum_available_bytes": 18834137088,
+    "build_peak_rss_bytes": 2238877696,
+    "build_minimum_available_bytes": 26505973760
+  },
+  "remaining": [
+    "Header/tax total propagation and complete order workflow",
+    "Uncast correlated numeric scalar result metadata (driver decoding error)",
+    "PL/pgSQL variable-conflict policy qualification",
+    "General Oracle grouping legality, GET_LINES and remaining programme streams"
+  ]
+}

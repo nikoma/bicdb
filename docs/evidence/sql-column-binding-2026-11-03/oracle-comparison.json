@@ -1,0 +1,150 @@
+{
+  "format": 1,
+  "reference": "oracle",
+  "application_qualified": false,
+  "target_protocol": "prepared",
+  "native_language": null,
+  "cases": [
+    {
+      "id": "column",
+      "expected": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "qualified",
+      "expected": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "expression",
+      "expected": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "filter",
+      "expected": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "column"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "variable_only",
+      "expected": {
+        "rows": [
+          [
+            "local"
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            "local"
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            "local"
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "target_schema": "SCOPE_OWNER",
+  "total": 5,
+  "matched": 5,
+  "source_qualified": true,
+  "source_version": "23.26.3.0.0",
+  "target_sql_profile": "oracle-preview-v1",
+  "runtime_binary_sha256": "877216f6c6ff006983d2e774cec34756352baca5cd64898dfaac76cc6c5415b9",
+  "fixture_sha256": "f596f83f043b2613f391ee3be2dee0385eb6a00c78a570ab4264642a76db68f5",
+  "fixture_exit_status": 0
+}

@@ -1,0 +1,106 @@
+{
+  "runtime_binary_sha256": "877216f6c6ff006983d2e774cec34756352baca5cd64898dfaac76cc6c5415b9",
+  "application_qualified": false,
+  "cases": [
+    {
+      "function": "BOMQTYAVAILABLE",
+      "sql": "SELECT BOMQTYAVAILABLE(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.001
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "elapsed_seconds": 2.411
+      }
+    },
+    {
+      "function": "BOMQTYONHAND",
+      "sql": "SELECT BOMQTYONHAND(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.001
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.054
+      }
+    },
+    {
+      "function": "BOMQTYRESERVED",
+      "sql": "SELECT BOMQTYRESERVED(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.001
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.005
+      }
+    },
+    {
+      "function": "BOMQTYORDERED",
+      "sql": "SELECT BOMQTYORDERED(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.0
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.052
+      }
+    }
+  ],
+  "matched": 4,
+  "total": 4,
+  "success": true,
+  "scope": "Four selected original inventory function values, not the complete application"
+}

@@ -1,0 +1,402 @@
+{
+  "format": 1,
+  "reference": "postgres",
+  "application_qualified": false,
+  "target_protocol": "prepared",
+  "cases": [
+    {
+      "id": "sum",
+      "sql": "SELECT COALESCE(SUM(n),0) FROM BICDB_AG_ROWS_EE4E99BA272C",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_sum",
+      "sql": "SELECT COALESCE(SUM(n),0) FROM BICDB_AG_ROWS_EE4E99BA272C WHERE bucket=9",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "bound_predicate",
+      "sql": "SELECT COALESCE(SUM(n),0) FROM BICDB_AG_ROWS_EE4E99BA272C WHERE bucket={P}",
+      "params": [
+        1
+      ],
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "routine_parameter",
+      "sql": "SELECT BICDB_AG_TOTAL_EE4E99BA272C({P})",
+      "params": [
+        1
+      ],
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "routine_empty",
+      "sql": "SELECT BICDB_AG_TOTAL_EE4E99BA272C({P})",
+      "params": [
+        9
+      ],
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "coalesce_skips_scalar",
+      "sql": "SELECT COALESCE(SUM(n),1/(COUNT(*)-2)) FROM BICDB_AG_ROWS_EE4E99BA272C",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "case_skips_scalar",
+      "sql": "SELECT CASE WHEN SUM(n) IS NOT NULL THEN SUM(n) ELSE 1/(COUNT(*)-2) END FROM BICDB_AG_ROWS_EE4E99BA272C",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "coalesce_skips_subquery",
+      "sql": "SELECT COALESCE(SUM(n),(SELECT SUM(1/(n-n)) FROM BICDB_AG_ROWS_EE4E99BA272C)) FROM BICDB_AG_ROWS_EE4E99BA272C GROUP BY bucket",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "coalesce_prepares_aggregate",
+      "sql": "SELECT COALESCE(SUM(n),SUM(1/(n-n))) FROM BICDB_AG_ROWS_EE4E99BA272C",
+      "oracle_code": 1476,
+      "sqlstate": "22012",
+      "source": {
+        "oracle_code": null,
+        "sqlstate": "22012",
+        "exception": "DivisionByZero"
+      },
+      "bicdb": {
+        "oracle_code": null,
+        "sqlstate": "22012",
+        "exception": "DivisionByZero"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "case_prepares_aggregate",
+      "sql": "SELECT CASE WHEN SUM(n) IS NOT NULL THEN SUM(n) ELSE SUM(1/(n-n)) END FROM BICDB_AG_ROWS_EE4E99BA272C",
+      "oracle_code": 1476,
+      "sqlstate": "22012",
+      "source": {
+        "oracle_code": null,
+        "sqlstate": "22012",
+        "exception": "DivisionByZero"
+      },
+      "bicdb": {
+        "oracle_code": null,
+        "sqlstate": "22012",
+        "exception": "DivisionByZero"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "grouped_conditional",
+      "sql": "SELECT bucket,COALESCE(SUM(n),0) FROM BICDB_AG_ROWS_EE4E99BA272C GROUP BY bucket ORDER BY bucket",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            {
+              "number": "15"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_group_after_error",
+      "sql": "SELECT COALESCE(SUM(n),0) FROM BICDB_AG_ROWS_EE4E99BA272C WHERE bucket=9",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "success": true,
+  "total": 12,
+  "matched": 12,
+  "source_qualified": true,
+  "source_version": 180004,
+  "target_sql_profile": "postgres",
+  "runtime_binary_sha256": "877216f6c6ff006983d2e774cec34756352baca5cd64898dfaac76cc6c5415b9",
+  "fixture_sha256": "dbc0db3b60753b2d73f5c2d359ed4046efd7140007d879fa7bdb1c616e29dd66",
+  "fixture_exit_status": 0
+}

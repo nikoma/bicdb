@@ -74,6 +74,11 @@ The [first saved line](evidence/idempiere-sales-order-line-2026-11-03/README.md)
 checkpoint subsequently verifies product selection and a committed order line
 through independent SQL and a fresh browser. Its parent totals remain zero;
 header/tax propagation, processing and the complete order workflow are unqualified.
+The [column-binding checkpoint](evidence/sql-column-binding-2026-11-03/README.md)
+fixes the physical-alias/local-value capture: all four selected unchanged
+inventory calls now match Oracle, with separate Oracle and native source controls.
+It retains a correlated numeric result-metadata failure and does not qualify all
+62 routines, header/tax propagation or the complete application.
 The milestones below retain their results at the time each was measured.
 
 The original 913 tables and 185,292 rows loaded and passed complete value

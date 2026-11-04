@@ -1,0 +1,89 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "877216f6c6ff006983d2e774cec34756352baca5cd64898dfaac76cc6c5415b9",
+  "application_qualified": false,
+  "backends": {
+    "source": [
+      {
+        "id": "own_insert",
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ],
+        "expected": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ],
+        "matched": true
+      },
+      {
+        "id": "correlated_read",
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ],
+        "expected": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ],
+        "matched": true
+      },
+      {
+        "id": "correlated_update",
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ],
+        "expected": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ],
+        "matched": true
+      }
+    ],
+    "bicdb": [
+      {
+        "id": "own_insert",
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ],
+        "expected": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ],
+        "matched": true
+      },
+      {
+        "error": "invalid literal for int() with base 10: b'123.50'",
+        "sqlstate": null
+      }
+    ]
+  },
+  "cleanup_errors": [],
+  "success": false
+}

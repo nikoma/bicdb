@@ -1059,9 +1059,10 @@ pub(crate) fn enter_expr_type_scope(generation: u64, routine_ir: usize) -> ExprT
     EXPR_TYPE_SCOPE.with(|scope| ExprTypeScopeGuard(scope.replace(Some((generation, routine_ir)))))
 }
 
-/// Synthetic argument rewrites have no stable node ownership. Keep their
-/// inference out of the address memo while retaining the surrounding scope.
-fn suspend_expr_type_scope() -> ExprTypeScopeGuard {
+/// Temporary query nodes and synthetic argument rewrites have no stable node
+/// ownership. Keep their inference out of the address memo while retaining the
+/// surrounding scope.
+pub(crate) fn suspend_expr_type_scope() -> ExprTypeScopeGuard {
     EXPR_TYPE_SCOPE.with(|scope| ExprTypeScopeGuard(scope.replace(None)))
 }
 

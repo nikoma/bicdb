@@ -379,6 +379,50 @@ mod tests {
         }
     }
 
+    #[test]
+    fn repeated_routine_reads_of_reparsed_views_keep_expression_types_stable() {
+        for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open(root.path()).unwrap();
+            oracle::ensure_database_profile(&mut db, profile).unwrap();
+            for sql in [
+                "CREATE TABLE stable_rows(id INTEGER,amount NUMERIC(10,2),kind VARCHAR(1),label VARCHAR(8))",
+                "INSERT INTO stable_rows VALUES(1,50.35,'I','one'),(2,100.70,'I','two'),(3,161.12,'C','three')",
+                "CREATE VIEW stable_values AS SELECT id,CASE WHEN kind='C' THEN amount * -1 ELSE amount END AS amount,CASE WHEN kind='C' THEN -1 ELSE 1 END AS sign,label,CAST(NULL AS VARCHAR(8)) AS note FROM stable_rows UNION ALL SELECT id+10,amount,1,label,'other' FROM stable_rows WHERE id<0",
+            ] {execute(&mut db,sql,profile).unwrap();}
+            let ddl = if oracle::is_oracle_profile(profile) {
+                "CREATE FUNCTION stable_total(p_id INTEGER) RETURN NUMBER IS result NUMBER; BEGIN SELECT SUM(amount) INTO result FROM stable_values WHERE id=p_id; RETURN result; END;"
+            } else {
+                "CREATE FUNCTION stable_total(p_id INTEGER) RETURNS NUMERIC LANGUAGE plpgsql AS $$DECLARE result NUMERIC; BEGIN SELECT SUM(amount) INTO result FROM stable_values WHERE id=p_id; RETURN result; END$$"
+            };
+            execute(&mut db, ddl, profile).unwrap();
+            for iteration in 0..60 {
+                for (id, expected) in [(1, "50.35"), (2, "100.7"), (3, "-161.12")] {
+                    let suffix = if oracle::is_oracle_profile(profile) {
+                        " FROM DUAL"
+                    } else {
+                        ""
+                    };
+                    let result = execute(
+                        &mut db,
+                        &format!("SELECT stable_total({id}){suffix}"),
+                        profile,
+                    )
+                    .unwrap_or_else(|error| {
+                        panic!("{profile}, iteration {iteration}, id {id}: {error}")
+                    });
+                    let actual = result.rows[0][0].to_cell();
+                    let normalized = if actual.contains('.') {
+                        actual.trim_end_matches('0').trim_end_matches('.')
+                    } else {
+                        actual.as_str()
+                    };
+                    assert_eq!(normalized, expected);
+                }
+            }
+        }
+    }
+
     fn fixture(profile: &str) -> (tempfile::TempDir, BicDb) {
         let directory = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(directory.path()).unwrap();

@@ -4694,6 +4694,10 @@ impl<'db> SqlEngine<'db> {
                 view.name
             )));
         }
+        // View definitions are reparsed and predicates are cloned for this
+        // evaluation. Their node addresses do not belong to the caller's
+        // persistent routine IR and must not enter its address-keyed memos.
+        let _typing_scope = crate::eval::suspend_expr_type_scope();
         if is_postgres_foreign_keys_catalog_view(view) {
             return materialize_postgres_foreign_keys_view(self.db_ref(), view, alias, selection);
         }
@@ -4752,15 +4756,11 @@ impl<'db> SqlEngine<'db> {
             Some(owner) if !view.security_invoker => Some(owner.clone()),
             _ => None,
         };
-        let result = match definer_owner {
-            // PostgreSQL default (definer) semantics: RLS on the underlying
-            // tables is decided as the view owner. Policy expressions still
-            // evaluate with the session's identity and GUCs.
-            Some(owner) => self
-                .engine_with_rls_check_as(&owner)
-                .execute_query(&query)?,
-            None => self.execute_query(&query)?,
-        };
+        // Preserve definer/invoker policy selection while giving this parsed
+        // query an execution context without the caller's IR ownership.
+        let result = self
+            .engine_for_view_context(definer_owner.as_deref())
+            .execute_query(&query)?;
         Ok(CteResult::new(
             view.name.clone(),
             view.columns
@@ -4777,21 +4777,25 @@ impl<'db> SqlEngine<'db> {
         ))
     }
 
-    // A sub-engine identical to `self` except that RLS bypass/policy-selection
-    // decisions are made as `check_as` (definer-view semantics). Lookup caches
-    // hold pre-RLS raw records, so sharing them across identities is safe.
-    pub(crate) fn engine_with_rls_check_as(&self, check_as: &str) -> SqlEngine<'db> {
-        let mut session_gucs = (*self.session_gucs).clone();
-        session_gucs.insert(RLS_CHECK_AS_GUC.to_string(), check_as.to_string());
-        let session_gucs = Arc::new(session_gucs);
+    // Share record lookups and transaction/session state, but not routine-IR
+    // node ownership. Lookup caches hold pre-RLS raw records, so sharing them
+    // across definer/invoker policy identities remains safe.
+    fn engine_for_view_context(&self, check_as: Option<&str>) -> SqlEngine<'db> {
+        let session_gucs = if let Some(check_as) = check_as {
+            let mut gucs = (*self.session_gucs).clone();
+            gucs.insert(RLS_CHECK_AS_GUC.to_string(), check_as.to_string());
+            Arc::new(gucs)
+        } else {
+            self.session_gucs.clone()
+        };
         SqlEngine {
             db: self.db,
             tx: self.tx,
             settings: self.settings,
             ctes: self.ctes.clone(),
-            routine_ir: self.routine_ir,
-            memo_operand_types: self.memo_operand_types,
-            ir_owned_statement: self.ir_owned_statement,
+            routine_ir: None,
+            memo_operand_types: false,
+            ir_owned_statement: false,
             security_context: self.security_context.clone(),
             runtime: self.runtime.clone(),
             session_gucs,

@@ -58,6 +58,131 @@ impl Running {
 }
 
 #[tokio::test]
+async fn wildcard_join_describe_and_binary_values_follow_logical_columns_in_both_profiles() {
+    use std::time::{Duration, SystemTime};
+    use tokio_postgres::types::Type;
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(directory.path(), profile);
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb");
+        if profile != "postgres" {
+            config.options("-c bicdb.sql_profile=oracle-preview-v1");
+        }
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let connection = tokio::spawn(async move { connection.await.unwrap() });
+        let varchar = if profile == "postgres" {
+            "VARCHAR(8)"
+        } else {
+            "VARCHAR2(8)"
+        };
+        client.batch_execute(&format!("CREATE TABLE wire_left(key_id {varchar},time_value TIMESTAMP,marker {varchar});CREATE TABLE wire_right(key_id {varchar},marker {varchar})")).await.unwrap();
+        for key in 1..=32 {
+            client.batch_execute(&format!("INSERT INTO wire_left VALUES('{key:02}',TIMESTAMP '2024-02-29 12:34:56.123456','left_{key:02}')")).await.unwrap();
+        }
+        client
+            .batch_execute("INSERT INTO wire_right VALUES('07','right')")
+            .await
+            .unwrap();
+        let sql = "SELECT * FROM wire_left l JOIN wire_right r ON l.key_id=r.key_id";
+        let statement = client.prepare(sql).await.unwrap();
+        let expected_names = vec!["key_id", "time_value", "marker", "key_id", "marker"];
+        let expected_types = vec![
+            Type::VARCHAR,
+            Type::TIMESTAMP,
+            Type::VARCHAR,
+            Type::VARCHAR,
+            Type::VARCHAR,
+        ];
+        assert_eq!(
+            statement
+                .columns()
+                .iter()
+                .map(|c| c.name().to_ascii_lowercase())
+                .collect::<Vec<_>>(),
+            expected_names,
+            "{profile}"
+        );
+        assert_eq!(
+            statement
+                .columns()
+                .iter()
+                .map(|c| c.type_().clone())
+                .collect::<Vec<_>>(),
+            expected_types,
+            "{profile}"
+        );
+        let row = client.query_one(&statement, &[]).await.unwrap();
+        assert_eq!(row.get::<_, String>(0), "07");
+        assert_eq!(
+            row.get::<_, SystemTime>(1),
+            SystemTime::UNIX_EPOCH + Duration::from_micros(1_709_210_096_123_456)
+        );
+        assert_eq!(row.get::<_, String>(2), "left_07");
+        assert_eq!(row.get::<_, String>(3), "07");
+        assert_eq!(row.get::<_, String>(4), "right");
+        let empty = client.prepare(&format!("{sql} WHERE 1=0")).await.unwrap();
+        assert_eq!(
+            empty
+                .columns()
+                .iter()
+                .map(|c| c.type_().clone())
+                .collect::<Vec<_>>(),
+            expected_types
+        );
+        assert!(client.query(&empty, &[]).await.unwrap().is_empty());
+        for ordering in ["3 DESC,1 ASC", "5 ASC,1 DESC"] {
+            let statement=client.prepare(&format!("SELECT d.* FROM (SELECT * FROM wire_left l CROSS JOIN wire_right r) d ORDER BY {ordering} FETCH FIRST 1 ROWS ONLY")).await.unwrap();
+            assert_eq!(
+                statement
+                    .columns()
+                    .iter()
+                    .map(|c| c.type_().clone())
+                    .collect::<Vec<_>>(),
+                expected_types
+            );
+            let row = client.query_one(&statement, &[]).await.unwrap();
+            assert_eq!(row.get::<_, String>(0), "32", "{profile}: {ordering}");
+            assert_eq!(row.get::<_, String>(2), "left_32", "{profile}: {ordering}");
+            assert_eq!(row.get::<_, String>(3), "07");
+            assert_eq!(row.get::<_, String>(4), "right");
+        }
+        let integer = if profile == "postgres" {
+            "INTEGER"
+        } else {
+            "NUMBER(9)"
+        };
+        client.batch_execute(&format!("CREATE TABLE ordinal_left(left_key {integer});CREATE TABLE ordinal_right(right_key {integer})")).await.unwrap();
+        for key in 1..=32 {
+            client
+                .batch_execute(&format!("INSERT INTO ordinal_left VALUES({key})"))
+                .await
+                .unwrap();
+        }
+        client
+            .batch_execute("INSERT INTO ordinal_right VALUES(99)")
+            .await
+            .unwrap();
+        let result = client.simple_query("SELECT * FROM ordinal_left l CROSS JOIN ordinal_right r ORDER BY 1 DESC FETCH FIRST 1 ROWS ONLY").await.unwrap();
+        let row = result
+            .iter()
+            .find_map(|message| match message {
+                tokio_postgres::SimpleQueryMessage::Row(row) => Some(row),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(row.get(0), Some("32"), "{profile}");
+        assert_eq!(row.get(1), Some("99"), "{profile}");
+        drop(client);
+        connection.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn preview_current_time_has_typed_nonnull_prepared_binary_values() {
     use std::time::{Duration, SystemTime};
     use tokio_postgres::types::Type;

@@ -1007,8 +1007,16 @@ impl<'db> SqlEngine<'db> {
         }
 
         let hide_flashback_pseudo = flashback::select_has_flashback_versions(select);
-        let wildcard_columns = row_set
-            .columns
+        let visible_columns = if select
+            .projection
+            .iter()
+            .any(|item| matches!(item, SelectItem::Wildcard(_)))
+        {
+            self.logical_wildcard_columns(from, &row_set.columns)?
+        } else {
+            row_set.columns.clone()
+        };
+        let wildcard_columns = visible_columns
             .iter()
             .filter(|column| !is_postgres_system_column(column))
             .filter(|column| {
@@ -1020,14 +1028,28 @@ impl<'db> SqlEngine<'db> {
         self.check_cancellation()?;
         let mut resolved_order_by =
             resolve_order_by_projection_aliases(query.order_by.as_ref(), &select.projection);
-        if locks.is_some() {
-            super::row_locks::resolve_locking_order_positions(
+        let order_columns = if locks.is_some()
+            || select.projection.iter().any(|item| {
+                matches!(
+                    item,
+                    SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(..)
+                )
+            }) {
+            super::row_locks::resolve_materialized_order_positions(
                 &mut resolved_order_by,
                 &select.projection,
                 &row_set.columns,
                 &wildcard_columns,
-            )?;
-        }
+            )?
+        } else {
+            Vec::new()
+        };
+        let output_columns = order_columns
+            .iter()
+            .any(Option::is_some)
+            .then(|| self.select_output_columns(select))
+            .flatten()
+            .unwrap_or_default();
         let order_env = self.from_relation_columns(&select.from).unwrap_or_default();
         let order_types = resolved_order_by
             .as_ref()
@@ -1035,8 +1057,14 @@ impl<'db> SqlEngine<'db> {
                 OrderByKind::Expressions(expressions) => Some(
                     expressions
                         .iter()
-                        .map(|order| {
-                            self.infer_env_expr_type(&order.expr, &order_env)
+                        .enumerate()
+                        .map(|(index, order)| {
+                            order_columns
+                                .get(index)
+                                .and_then(Option::as_ref)
+                                .and_then(|column| output_columns.get(column.output_position))
+                                .and_then(|(_, pg_type)| pg_type.clone())
+                                .or_else(|| self.infer_env_expr_type(&order.expr, &order_env))
                                 .or_else(|| projected_expr_pg_type(&order.expr, schema_ref))
                                 .or_else(|| {
                                     row_columns_expr_pg_type(
@@ -1084,11 +1112,15 @@ impl<'db> SqlEngine<'db> {
         } else {
             None
         };
-        self.apply_row_order_by(
+        self.apply_row_order_by_with_slots(
             &mut row_set.rows,
             resolved_order_by.as_ref(),
             &row_set.columns,
             &order_types,
+            &order_columns
+                .iter()
+                .map(|column| column.map(|column| column.source_slot))
+                .collect::<Vec<_>>(),
             keep,
         )?;
         self.check_cancellation()?;
@@ -1576,7 +1608,8 @@ impl<'db> SqlEngine<'db> {
                         unqualified_relation(&object_name(qualifier).ok()?).to_ascii_lowercase();
                     let relation = relations.iter().find(|relation| relation.alias == alias)?;
                     metadata.extend(
-                        single_wildcard_copy(&relation.columns)
+                        relation
+                            .columns
                             .iter()
                             .filter(|(name, _)| wildcard_visible(name))
                             .map(|(_, metadata)| metadata.clone()),
@@ -1661,7 +1694,7 @@ impl<'db> SqlEngine<'db> {
                     .unwrap_or(&[]);
                 let (typed_columns, is_base_table) =
                     self.relation_table_columns(&table, alias_columns)?;
-                let mut columns = if is_base_table {
+                let columns = if is_base_table {
                     let resolved = resolve_session_relation_name(self.db_ref(), &table).ok()?;
                     let schema = load_schema_shared(self.db_ref(), &resolved)
                         .ok()
@@ -1694,9 +1727,6 @@ impl<'db> SqlEngine<'db> {
                         .map(|(name, _)| (name, SqlColumnMetadata::default()))
                         .collect()
                 };
-                if is_base_table && !alias_name.eq_ignore_ascii_case(&short) {
-                    columns.extend(columns.clone());
-                }
                 relations.push(RelationColumnMetadata {
                     alias: alias_name.to_ascii_lowercase(),
                     columns,
@@ -1851,6 +1881,34 @@ impl<'db> SqlEngine<'db> {
         Ok(Some(SqlResult::new(vec!["name".to_string()], rows)))
     }
 
+    /// SQL-visible columns follow the original FROM order, rather than physical
+    /// join order or the executor's additional binding qualifiers.
+    fn logical_wildcard_columns(
+        &self,
+        from: &TableWithJoins,
+        row_columns: &[String],
+    ) -> Result<Vec<String>> {
+        if row_columns.iter().all(|column| !column.contains('.')) {
+            return Ok(row_columns.to_vec());
+        }
+        let Some(relations) = self.from_relation_columns(std::slice::from_ref(from)) else {
+            return Ok(row_columns.to_vec());
+        };
+        let sources = relations
+            .iter()
+            .flat_map(|relation| {
+                relation
+                    .columns
+                    .iter()
+                    .map(|(name, _)| format!("{}.{name}", relation.alias))
+            })
+            .collect::<Vec<_>>();
+        Ok(wildcard_column_slots(row_columns, &sources)?
+            .into_iter()
+            .map(|index| row_columns[index].clone())
+            .collect())
+    }
+
     /// Output columns (name + logical type) of a SELECT, used both for the
     /// top-level attach and recursively for derived tables / subqueries. Names are
     /// lowercased; they are not load-bearing for the top-level attach (which uses
@@ -1896,7 +1954,7 @@ impl<'db> SqlEngine<'db> {
                 }
                 SelectItem::QualifiedWildcard(qualifier, _) => {
                     let relation = self.qualified_wildcard_relation(qualifier, &env)?;
-                    for (name, ty) in single_wildcard_copy(&relation.columns) {
+                    for (name, ty) in &relation.columns {
                         if wildcard_visible(name) {
                             out.push((name.clone(), ty.clone()));
                         }
@@ -2340,17 +2398,9 @@ impl<'db> SqlEngine<'db> {
                     .as_ref()
                     .map(|alias| alias.columns.as_slice())
                     .unwrap_or(&[]);
-                let (mut columns, is_base_table) =
-                    self.relation_table_columns(&table, alias_cols)?;
-                // A base table whose binding alias differs from its name is
-                // materialized by the executor with BOTH `alias.col` and
-                // `table.col` entries (see `row_output_columns`), so a wildcard
-                // over it yields each column twice. Mirror that here so the typed
-                // column count matches the produced columns exactly.
-                if is_base_table && !alias_name.eq_ignore_ascii_case(&short) {
-                    let duplicated = columns.clone();
-                    columns.extend(duplicated);
-                }
+                let (columns, is_base_table) = self.relation_table_columns(&table, alias_cols)?;
+                // Multiple executor binding qualifiers name the same source
+                // fields. They are not extra SQL-visible output columns.
                 env.push(RelationColumns {
                     alias: alias_name.to_ascii_lowercase(),
                     row_type: is_base_table.then(|| short.to_ascii_lowercase()),
@@ -2396,8 +2446,7 @@ impl<'db> SqlEngine<'db> {
     /// uses. `None` for virtual/catalog tables, sequences and schemaless
     /// collections — those fall back to the value-independent default.
     ///
-    /// The returned bool is `true` for a base table (whose wildcard materialization
-    /// duplicates columns when aliased — see [`Self::collect_relation_columns`]).
+    /// The returned bool identifies base tables for row-type and origin metadata.
     pub(crate) fn relation_table_columns(
         &self,
         table: &str,
@@ -3823,24 +3872,6 @@ pub(crate) fn query_mentions_function(select: &Select, query: &Query, name: &str
         ControlFlow::Continue(())
     });
     flow.is_break()
-}
-
-/// An aliased base table lists its columns twice (an unqualified `*` over it
-/// yields both the `alias.col` and the `table.col` copy); `alias.*` yields
-/// one copy.
-fn single_wildcard_copy<T>(columns: &[(String, T)]) -> &[(String, T)] {
-    let half = columns.len() / 2;
-    let doubled = columns.len() % 2 == 0
-        && half > 0
-        && columns[..half]
-            .iter()
-            .zip(&columns[half..])
-            .all(|(first, second)| first.0 == second.0);
-    if doubled {
-        &columns[..half]
-    } else {
-        columns
-    }
 }
 
 /// `DISTINCT ON (1)` names an output column by position, as ORDER BY does.

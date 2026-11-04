@@ -380,57 +380,76 @@ impl SqlEngine<'_> {
 }
 
 /// Positional ORDER BY refers to the original visible output, including wildcard
-/// expansion, rather than an internal candidate/lock-key column.
-pub(crate) fn resolve_locking_order_positions(
+/// expansion, rather than physical input, binding-alias or lock-key columns.
+#[derive(Clone, Copy)]
+pub(crate) struct MaterializedOrderColumn {
+    pub(crate) source_slot: usize,
+    pub(crate) output_position: usize,
+}
+
+pub(crate) fn resolve_materialized_order_positions(
     order_by: &mut Option<OrderBy>,
     projection: &[SelectItem],
     columns: &[String],
     wildcard_columns: &[String],
-) -> Result<()> {
+) -> Result<Vec<Option<MaterializedOrderColumn>>> {
     let Some(OrderBy {
         kind: OrderByKind::Expressions(orders),
         ..
     }) = order_by
     else {
-        return Ok(());
+        return Ok(Vec::new());
     };
     let mut outputs = Vec::new();
     for item in projection {
         match item {
             SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
-                outputs.push(expr.clone())
+                outputs.push((expr.clone(), None))
             }
             SelectItem::Wildcard(_) => outputs.extend(
                 wildcard_columns
                     .iter()
-                    .map(|column| Expr::Identifier(Ident::with_quote('"', column))),
+                    .zip(wildcard_column_slots(columns, wildcard_columns)?)
+                    .map(|(column, slot)| {
+                        (Expr::Identifier(Ident::with_quote('"', column)), Some(slot))
+                    }),
             ),
             SelectItem::QualifiedWildcard(qualifier, _) => {
                 outputs.extend(
-                    qualified_wildcard_columns(qualifier, columns)?
+                    qualified_wildcard_slots(qualifier, columns, columns)?
                         .into_iter()
-                        .map(|(source, _)| Expr::Identifier(Ident::with_quote('"', source))),
+                        .map(|(slot, source, _)| {
+                            (Expr::Identifier(Ident::with_quote('"', source)), Some(slot))
+                        }),
                 );
             }
             _ => {}
         }
     }
+    let mut bindings = Vec::with_capacity(orders.len());
     for order in orders {
+        let mut binding = None;
         if let Expr::Value(value) = &order.expr {
             if let Value::Number(number, _) = &value.value {
                 if let Ok(position) = number.parse::<usize>() {
-                    order.expr = position
+                    let output_position = position
                         .checked_sub(1)
-                        .and_then(|index| outputs.get(index))
-                        .cloned()
+                        .filter(|index| *index < outputs.len())
                         .ok_or_else(|| {
                             SqlError::InvalidSql(
                                 "ORDER BY position is not in the select list".into(),
                             )
                         })?;
+                    let (expression, source_slot) = &outputs[output_position];
+                    order.expr = expression.clone();
+                    binding = source_slot.map(|source_slot| MaterializedOrderColumn {
+                        source_slot,
+                        output_position,
+                    });
                 }
             }
         }
+        bindings.push(binding);
     }
-    Ok(())
+    Ok(bindings)
 }

@@ -56,3 +56,17 @@ All 613 SQL library tests and 364 driver/protocol tests pass. Three existing
 benchmark ignores and two external interoperability ignores remain recorded.
 Formatting and whitespace checks pass. No release is published by this
 checkpoint; application deployment is recorded separately.
+
+## Subsequent clean database upgrade
+
+The [upgrade record](application-upgrade.json) verifies a clean exit of the
+previous database and a copy opened with the new frozen binary, without
+recreating original objects. All 57 [workflow observations](../idempiere-physical-inventory-2026-11-04/workflow-observations.json)
+pass. The 62 routine and 160 view fingerprints, all 160 view descriptions
+(11,983 columns) and all 141 saved report rows remain unchanged. Report PDFs
+were not regenerated. The application JVM is started; this database checkpoint
+does not itself requalify the UI or the entire application.
+
+Bare MIN and MAX on the actual process-instance primary key now return 1000000
+and 1000043. They agree with the combined aggregate and independently ordered
+row queries. No application-specific SQL workaround is used.

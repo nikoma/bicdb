@@ -1,0 +1,51 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "database_upgrade_qualified": true,
+  "source_commit": "e0dec4b12b8eff009a18df68af6d3118f217a90b",
+  "source_main_commit": "c76509b480b17ff81cf92e57972e75c12218e999",
+  "runtime_binary_sha256": "a212d957d2091906d4b2d69b5941cee1baf76e3a577f0cced4c45421af9c71fd",
+  "previous_database_exit": 0,
+  "original_objects_recreated": false,
+  "workflow_checks_passed": 57,
+  "workflow_observations": "../idempiere-physical-inventory-2026-11-04/workflow-observations.json",
+  "object_fingerprints": {
+    "routines": {
+      "count": 62,
+      "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+    },
+    "views": {
+      "count": 160,
+      "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+    }
+  },
+  "views_verified": 160,
+  "view_columns_verified": 11983,
+  "reports_preserved": [
+    {
+      "instance": 1000037,
+      "rows": 47,
+      "sha256": "81a42de285b0d5fe80ae0b40933506f0be1e530f9c94f764a7e539be0ab5980a"
+    },
+    {
+      "instance": 1000038,
+      "rows": 47,
+      "sha256": "35e82c243822cfcdeebebd85e458eeae1fed085b7fea74c6db860d21946159a1"
+    },
+    {
+      "instance": 1000039,
+      "rows": 47,
+      "sha256": "2862e075a0105c67da863e18f804409fd70769c7b0144642bf867d9998078387"
+    }
+  ],
+  "pdfs_regenerated": false,
+  "numeric_extrema": {
+    "minimum": "1000000",
+    "maximum": "1000043",
+    "combined_equals_bare": true,
+    "ordered_values_verified": true
+  },
+  "jvm_started": true,
+  "frontend_requalification_pending": true,
+  "release_published": false
+}

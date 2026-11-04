@@ -63,3 +63,8 @@ An independent numeric MAX decoding gap was found by verification tooling and
 remains open. It did not prevent this completed workflow; broader aggregates,
 performance, naming, concurrency and the full compatibility programme require
 further work.
+
+The subsequent [logical primary-key checkpoint](../sql-primary-key-extrema-2026-11-04/README.md)
+closes that numeric MIN/MAX decoding gap, with independent Oracle/PostgreSQL
+controls and a clean database upgrade preserving all 57 observations. Broader
+aggregation, performance and application coverage remain separate work.

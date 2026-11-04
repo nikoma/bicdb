@@ -1,0 +1,409 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "reference_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "bare_table",
+      "source": {
+        "id": "bare_table",
+        "expected_columns": [
+          "id",
+          "marker"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "ID",
+          "MARKER"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "bare_table",
+        "expected_columns": [
+          "id",
+          "marker"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "ID",
+          "MARKER"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "qualified_table",
+      "source": {
+        "id": "qualified_table",
+        "expected_columns": [
+          "id",
+          "marker"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "ID",
+          "MARKER"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "qualified_table",
+        "expected_columns": [
+          "id",
+          "marker"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "ID",
+          "MARKER"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "join_with_sequence",
+      "source": {
+        "id": "join_with_sequence",
+        "expected_columns": [
+          "id",
+          "marker",
+          "id",
+          "marker",
+          "counter"
+        ],
+        "expected_types": [
+          "number",
+          "text",
+          "number",
+          "text",
+          "number"
+        ],
+        "columns": [
+          "ID",
+          "MARKER",
+          "ID",
+          "MARKER",
+          "COUNTER"
+        ],
+        "types": [
+          "number",
+          "text",
+          "number",
+          "text",
+          "number"
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "join_with_sequence",
+        "expected_columns": [
+          "id",
+          "marker",
+          "id",
+          "marker",
+          "counter"
+        ],
+        "expected_types": [
+          "number",
+          "text",
+          "number",
+          "text",
+          "number"
+        ],
+        "qualified": false,
+        "exception": "RuntimeError",
+        "sqlstate": null,
+        "detail": "ERROR:  unsupported SQL: function nextval is not supported without FROM\n"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "bare_view",
+      "source": {
+        "id": "bare_view",
+        "expected_columns": [
+          "id",
+          "marker"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "ID",
+          "MARKER"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "bare_view",
+        "expected_columns": [
+          "id",
+          "marker"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "ID",
+          "MARKER"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "quoted_table",
+      "source": {
+        "id": "quoted_table",
+        "expected_columns": [
+          "Key",
+          "Value"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "Key",
+          "Value"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "quoted_table",
+        "expected_columns": [
+          "Key",
+          "Value"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "Key",
+          "Value"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "quoted_derived",
+      "source": {
+        "id": "quoted_derived",
+        "expected_columns": [
+          "Key",
+          "Value"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "Key",
+          "Value"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "quoted_derived",
+        "expected_columns": [
+          "Key",
+          "Value"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "Key",
+          "Value"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "quoted_cte",
+      "source": {
+        "id": "quoted_cte",
+        "expected_columns": [
+          "Key",
+          "Value"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "Key",
+          "Value"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "quoted_cte",
+        "expected_columns": [
+          "Key",
+          "Value"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "Key",
+          "Value"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "quoted_declared_view",
+      "source": {
+        "id": "quoted_declared_view",
+        "expected_columns": [
+          "ResultKey",
+          "ResultValue"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "ResultKey",
+          "ResultValue"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "quoted_declared_view",
+        "expected_columns": [
+          "ResultKey",
+          "ResultValue"
+        ],
+        "expected_types": [
+          "number",
+          "text"
+        ],
+        "columns": [
+          "ResultKey",
+          "ResultValue"
+        ],
+        "types": [
+          "number",
+          "text"
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "sequence_unchanged_by_prepare",
+      "source": {
+        "id": "sequence_unchanged_by_prepare",
+        "value": 1,
+        "expected": 1,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "sequence_unchanged_by_prepare",
+        "value": 1,
+        "expected": 1,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "total": 9,
+  "matched": 8,
+  "cleanup_errors": [],
+  "source_qualified": true,
+  "success": false,
+  "target_sql_profile": "oracle-preview-v1",
+  "reference": "oracle",
+  "oracle_disable_oob": false,
+  "runtime_binary_sha256": "e80a31e35ba311db3952d822441360b6aedfbdc0a472fe218d8f840502626cd4",
+  "fixture_source_sha256": "2504d2c836f47340f0b992c02d3d8d5bfdfd6134568a42afb7256d48cc126c6b",
+  "comparison_exit_status": 1,
+  "target_qualified_cases": 8
+}

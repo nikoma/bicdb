@@ -2029,6 +2029,212 @@ impl<'db> SqlEngine<'db> {
         self.set_expr_output_columns(query.body.as_ref())
     }
 
+    /// Protocol labels retain catalog/quoted spelling. The ordinary output
+    /// environment folds names for expression binding and cannot supply labels.
+    pub(crate) fn query_describe_output_columns(
+        &self,
+        query: &Query,
+    ) -> Option<Vec<(String, Option<String>)>> {
+        if let Some(with) = &query.with {
+            if with.recursive {
+                return None;
+            }
+            let mut engine = self
+                .inherit_transaction(SqlEngine::with_ctes_and_context(
+                    self.db_ref(),
+                    self.settings,
+                    self.ctes.clone(),
+                    self.security_context.clone(),
+                    self.session_gucs.clone(),
+                ))
+                .with_shared_routine_vars(self.routine_vars.clone());
+            for cte in &with.cte_tables {
+                let columns = engine.query_describe_output_columns(&cte.query)?;
+                let columns = rename_relation_columns(columns, &cte.alias.columns)?;
+                let (names, types) = columns.into_iter().unzip();
+                let name = cte.alias.name.value.clone();
+                engine.ctes.insert(
+                    cte_key(&name),
+                    CteResult::new(name, names, Vec::new()).with_column_types(types),
+                );
+            }
+            return engine.describe_set_output_columns(&query.body);
+        }
+        self.describe_set_output_columns(&query.body)
+    }
+
+    fn describe_set_output_columns(&self, body: &SetExpr) -> Option<Vec<(String, Option<String>)>> {
+        let mut columns = self.set_expr_output_columns(body)?;
+        let names = match body {
+            SetExpr::Query(query) => self
+                .query_describe_output_columns(query)?
+                .into_iter()
+                .map(|(name, _)| name)
+                .collect(),
+            SetExpr::SetOperation { left, .. } => self
+                .describe_set_output_columns(left)?
+                .into_iter()
+                .map(|(name, _)| name)
+                .collect(),
+            SetExpr::Select(select) => {
+                let mut relations = Vec::new();
+                for table in &select.from {
+                    self.collect_describe_relation_labels(&table.relation, &mut relations)?;
+                    for join in &table.joins {
+                        self.collect_describe_relation_labels(&join.relation, &mut relations)?;
+                    }
+                }
+                let mut names = Vec::new();
+                for item in &select.projection {
+                    match item {
+                        SelectItem::Wildcard(_) => names.extend(
+                            relations
+                                .iter()
+                                .flat_map(|(_, names)| names.iter().cloned()),
+                        ),
+                        SelectItem::QualifiedWildcard(
+                            SelectItemQualifiedWildcardKind::ObjectName(qualifier),
+                            _,
+                        ) => {
+                            let alias = unqualified_relation(&object_name(qualifier).ok()?)
+                                .to_ascii_lowercase();
+                            names.extend(
+                                relations
+                                    .iter()
+                                    .find(|(name, _)| name == &alias)?
+                                    .1
+                                    .iter()
+                                    .cloned(),
+                            );
+                        }
+                        SelectItem::ExprWithAlias { alias, .. } => names.push(ident_value(alias)),
+                        SelectItem::UnnamedExpr(expr) => names.push(if select.from.is_empty() {
+                            select_expr_column_name(expr)
+                        } else {
+                            row_expr_column_name(expr)
+                        }),
+                        _ => return None,
+                    }
+                }
+                names
+            }
+            _ => return Some(columns),
+        };
+        if names.len() != columns.len() {
+            return None;
+        }
+        for ((name, _), label) in columns.iter_mut().zip(names) {
+            *name = label;
+        }
+        Some(columns)
+    }
+
+    fn collect_describe_relation_labels(
+        &self,
+        factor: &TableFactor,
+        out: &mut Vec<(String, Vec<String>)>,
+    ) -> Option<()> {
+        match factor {
+            TableFactor::Table {
+                name,
+                alias,
+                args: None,
+                ..
+            } => {
+                let table = relation_name(name).ok()?;
+                let alias_name = alias
+                    .as_ref()
+                    .map(|a| a.name.value.clone())
+                    .unwrap_or_else(|| unqualified_relation(&table).to_string());
+                let (names, base) = if let Some(cte) = self.cte(&table) {
+                    (cte.columns.clone(), false)
+                } else if let Some(view) = load_view(self.db_ref(), &table).ok().flatten() {
+                    (
+                        view.columns
+                            .iter()
+                            .filter(|c| !c.hidden)
+                            .map(|c| c.name.clone())
+                            .collect(),
+                        false,
+                    )
+                } else {
+                    let resolved = resolve_session_relation_name(self.db_ref(), &table).ok()?;
+                    if let Some(schema) =
+                        load_schema_shared(self.db_ref(), &resolved).ok().flatten()
+                    {
+                        (
+                            schema
+                                .columns
+                                .iter()
+                                .filter(|c| !c.hidden)
+                                .map(|c| c.name.clone())
+                                .collect(),
+                            true,
+                        )
+                    } else {
+                        (
+                            self.relation_table_columns(&table, &[])?
+                                .0
+                                .into_iter()
+                                .map(|(name, _)| name)
+                                .collect(),
+                            false,
+                        )
+                    }
+                };
+                let names = if !base {
+                    rename_relation_columns(
+                        names.into_iter().map(|name| (name, None)).collect(),
+                        alias.as_ref().map(|a| a.columns.as_slice()).unwrap_or(&[]),
+                    )?
+                    .into_iter()
+                    .map(|(name, _)| name)
+                    .collect()
+                } else {
+                    names
+                };
+                out.push((alias_name.to_ascii_lowercase(), names));
+            }
+            TableFactor::Derived {
+                subquery, alias, ..
+            } => {
+                let columns = self.query_describe_output_columns(subquery)?;
+                let columns = rename_relation_columns(
+                    columns,
+                    alias.as_ref().map(|a| a.columns.as_slice()).unwrap_or(&[]),
+                )?;
+                let name = alias
+                    .as_ref()
+                    .map(|a| a.name.value.clone())
+                    .unwrap_or_else(|| "subquery".into());
+                out.push((
+                    name.to_ascii_lowercase(),
+                    columns.into_iter().map(|(name, _)| name).collect(),
+                ));
+            }
+            TableFactor::NestedJoin {
+                table_with_joins,
+                alias: None,
+            } => {
+                self.collect_describe_relation_labels(&table_with_joins.relation, out)?;
+                for join in &table_with_joins.joins {
+                    self.collect_describe_relation_labels(&join.relation, out)?;
+                }
+            }
+            _ => {
+                let mut env = Vec::new();
+                self.collect_relation_columns(factor, &mut env)?;
+                out.extend(env.into_iter().map(|r| {
+                    (
+                        r.alias,
+                        r.columns.into_iter().map(|(name, _)| name).collect(),
+                    )
+                }));
+            }
+        }
+        Some(())
+    }
+
     pub(crate) fn set_expr_output_columns(
         &self,
         expr: &SetExpr,

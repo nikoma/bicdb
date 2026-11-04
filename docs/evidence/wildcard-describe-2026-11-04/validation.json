@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "source_commit": "ec2a5abf09e676ff612ef9495615d418e7016720",
+  "runtime_binary_sha256": "73bd840fc20119c2b0dd23f0618c11a7b9b0ddbf05bd73f037f78efb358d0134",
+  "build": "development, unoptimized, debug=0",
+  "compiler_version": 26,
+  "durable_metadata_format": 5,
+  "application_qualified": false,
+  "release_published": false,
+  "production_deployment_verified": false,
+  "checks": {
+    "rust_passed_executions": 919,
+    "rust_batches": [
+      592,
+      5,
+      121,
+      32,
+      169
+    ],
+    "rust_ignored": 3,
+    "python_reference_passed": 25,
+    "format": "passed",
+    "diff": "passed",
+    "licenses": "passed",
+    "open_core_boundary": "passed",
+    "oracle_prepare_matched": 9,
+    "postgres_prepare_matched": 9,
+    "oracle_prepare_prior_matched": 8,
+    "postgres_prepare_prior_matched": 8,
+    "oracle_join_retained": 23,
+    "postgres_join_retained": 23,
+    "application_view_descriptions_matched": 127,
+    "application_view_descriptions_total": 160,
+    "ci": "Local qualification; resulting merge GitHub CI tracked separately"
+  },
+  "resources": {
+    "build_and_regression": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 4974182400,
+      "minimum_observed_available_bytes": 21622591488
+    },
+    "application_copy_describe": {
+      "status": "completed",
+      "returncode": 0,
+      "start_available_gib": 14.0,
+      "minimum_available_gib": 8,
+      "peak_group_rss_bytes": 1098924032,
+      "minimum_observed_available_bytes": 21556531200
+    },
+    "cleanup": {
+      "format": 1,
+      "removed_files": 5,
+      "reclaimed_bytes": 1764006248,
+      "by_category": {
+        "completed_test_executable": {
+          "files": 5,
+          "bytes": 1764006248
+        }
+      },
+      "current_example_binary_preserved": true
+    },
+    "remaining_target_size": "7.5 GiB"
+  }
+}

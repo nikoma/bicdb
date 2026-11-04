@@ -125,7 +125,7 @@ pub fn infer_query_result_columns_without_from(
     infer_describe_columns(db, sql, false)
 }
 
-/// Describe explicit, fully typed projections without running their FROM or
+/// Describe fully typed projections without running their FROM or
 /// WHERE clauses. Preparing a query must not execute volatile projections or
 /// perform a potentially expensive join just to obtain column metadata.
 pub fn infer_query_result_columns_for_describe(
@@ -154,19 +154,21 @@ fn infer_describe_columns(
         return Ok(None);
     };
     let new_projection = !select.from.is_empty() && !query_has_row_locks(&query);
-    if new_projection
-        && (!explicit_from
-            || select.projection.iter().any(|item| {
-                matches!(
-                    item,
-                    SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(..)
-                )
-            }))
-    {
+    if new_projection && !explicit_from {
         return Ok(None);
     }
     let engine = SqlEngine::new(db);
-    let columns = engine.query_output_columns(&query);
+    let columns = if explicit_from
+        && select.projection.iter().any(|item| {
+            matches!(
+                item,
+                SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(..)
+            )
+        }) {
+        engine.query_describe_output_columns(&query)
+    } else {
+        engine.query_output_columns(&query)
+    };
     if new_projection
         && columns
             .as_ref()

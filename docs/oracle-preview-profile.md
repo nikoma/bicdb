@@ -1103,3 +1103,13 @@ reservation survive reopen. Oracle's declared-column joined-wildcard view form
 remains unqualified after a retained source-side ORA-25716 observation; its final
 view controls use explicit aliases. Full background execution, legacy view metadata,
 memory behavior, remaining application workflows and the wider programme remain open.
+
+The [wildcard Describe checkpoint](evidence/wildcard-describe-2026-11-04/README.md)
+adds metadata-only preparation of fully typed wildcard projections, preserving
+quoted result labels independently of folded type-binding names. Nine Oracle and
+nine native PostgreSQL preparation controls match, including sequence invariance;
+executed join controls retain 23/23 in each profile. A stopped application-copy
+metadata check matches 127/160 source view descriptions: 32 views are absent and
+one has different labels. A general ANSI character-type parser gap is reproduced
+separately. Missing view definitions, their values, full application operation,
+memory behavior and the wider compatibility programme remain open.

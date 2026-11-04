@@ -58,6 +58,80 @@ impl Running {
 }
 
 #[tokio::test]
+async fn preparing_typed_wildcards_does_not_advance_sequences_in_either_profile() {
+    for oracle in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::new(directory.path(), oracle);
+        let (client, connection) = server.connect(oracle).await.unwrap();
+        client.batch_execute("CREATE TABLE describe_rows(id INTEGER,marker VARCHAR(8)); INSERT INTO describe_rows VALUES(1,'visible'); CREATE SEQUENCE describe_counter;").await.unwrap();
+        client.batch_execute(r#"CREATE TABLE "QuotedRows"("Key" INTEGER,"Value" VARCHAR(8)); CREATE VIEW quoted_labels("ResultKey","ResultValue") AS SELECT * FROM "QuotedRows""#).await.unwrap();
+        for (sql, names) in [
+            (r#"SELECT * FROM "QuotedRows""#, vec!["Key", "Value"]),
+            (
+                r#"SELECT d.* FROM (SELECT * FROM "QuotedRows") d"#,
+                vec!["Key", "Value"],
+            ),
+            (
+                r#"WITH d AS (SELECT * FROM "QuotedRows") SELECT * FROM d"#,
+                vec!["Key", "Value"],
+            ),
+            (
+                "SELECT * FROM quoted_labels",
+                vec!["ResultKey", "ResultValue"],
+            ),
+        ] {
+            let statement = client.prepare(sql).await.unwrap();
+            assert_eq!(
+                statement
+                    .columns()
+                    .iter()
+                    .map(|column| column.name())
+                    .collect::<Vec<_>>(),
+                names,
+                "{sql}"
+            );
+        }
+        let expression = if oracle {
+            "describe_counter.NEXTVAL"
+        } else {
+            "nextval('describe_counter')"
+        };
+        for wildcard in ["*", "r.*"] {
+            let statement = client
+                .prepare(&format!(
+                    "SELECT {wildcard},{expression} AS counter FROM describe_rows r"
+                ))
+                .await
+                .unwrap();
+            assert_eq!(statement.columns().len(), 3);
+            assert_eq!(statement.columns()[0].name().to_ascii_lowercase(), "id");
+            assert_eq!(statement.columns()[1].name().to_ascii_lowercase(), "marker");
+            assert_eq!(
+                statement.columns()[2].name().to_ascii_lowercase(),
+                "counter"
+            );
+        }
+        let sql = if oracle {
+            "SELECT describe_counter.NEXTVAL FROM DUAL"
+        } else {
+            "SELECT nextval('describe_counter')"
+        };
+        let result = client.simple_query(sql).await.unwrap();
+        let row = result
+            .iter()
+            .find_map(|message| match message {
+                tokio_postgres::SimpleQueryMessage::Row(row) => Some(row),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(row.get(0), Some("1"));
+        drop(client);
+        connection.await.unwrap();
+        drop(server);
+    }
+}
+
+#[tokio::test]
 async fn wildcard_join_describe_and_binary_values_follow_logical_columns_in_both_profiles() {
     use std::time::{Duration, SystemTime};
     use tokio_postgres::types::Type;

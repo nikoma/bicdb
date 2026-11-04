@@ -1,0 +1,31 @@
+{
+  "read_only": true,
+  "oracle_source": [
+    [
+      "DocumentNo_M_Movement",
+      10000000,
+      1
+    ]
+  ],
+  "oracle_seed_movements": [
+    [
+      100,
+      "10000000",
+      11,
+      11
+    ]
+  ],
+  "bicdb_after_header": [
+    [
+      "DocumentNo_M_Movement",
+      "10000001",
+      "1"
+    ]
+  ],
+  "source_seed_next_number": "10000000",
+  "target_sequence_increment_correct": true,
+  "seed_already_has_same_display_number": true,
+  "sequence_query": "SELECT Name,CurrentNext,IncrementNo FROM AD_Sequence WHERE Name='DocumentNo_M_Movement' AND AD_Client_ID=11",
+  "seed_movement_query": "SELECT M_Movement_ID,DocumentNo,AD_Client_ID,AD_Org_ID FROM M_Movement ORDER BY M_Movement_ID",
+  "qualification_scope": "read-only original Oracle seed/counter comparison; not Oracle application process execution"
+}

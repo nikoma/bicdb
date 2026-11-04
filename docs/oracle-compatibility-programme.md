@@ -53,6 +53,11 @@ against PostgreSQL in both profiles, retaining independent Oracle/PostgreSQL
 set-operand comparisons. Its subsequent local runtime upgrade preserves both
 settled business flows and all 62 routine/160 view definitions across a clean
 restart, with 27 preservation gates, 25 workflow checks and fresh login/navigation.
+The subsequent [inventory transfer](evidence/idempiere-inventory-transfer-2026-11-04/README.md)
+completes/posts two units from HQ to HQ Transit through the standard UI, with
+paired stock transactions, conserved product quantity, balanced accounting and
+36 replayed transfer/preservation checks. Reversals and remaining application
+workflows remain unqualified.
 The checkpoint history below records what was measured at each earlier stage.
 
 The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used

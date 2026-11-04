@@ -1,5 +1,15 @@
 # Oracle reference queries
 
+`parenthesized_queries.py --reference oracle --oracle-config /private/oracle.json
+--output /private/parenthesized-queries.json` checks named statement descriptions
+and rows for parenthesized SELECTs and UNION ALL operands with independent row
+limits. All 12 expectations must hold on the actual reference, for both empty
+and populated nonce tables. `--reference postgres` uses
+`ORACLE_CONTROL_PG_DSN`; both modes use `BICDB_PG_DSN` for the dedicated target.
+Oracle native cursor parsing is compared with PostgreSQL protocol statement
+Describe. This checks the selected metadata and row shapes, not a whole JDBC
+driver or application. Fixtures remove their nonce tables, with Oracle PURGE.
+
 `reparsed_view_routines.py --reference oracle --oracle-config /private/oracle.json
 --output /private/reparsed-views.json` compares 180 repeated calls to a stored
 function reading a view containing numeric and character CASE expressions,

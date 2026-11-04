@@ -2703,11 +2703,18 @@ pub(crate) fn close_message_with_server(
 
 pub(crate) fn is_describable_query(sql: &str) -> bool {
     let normalized = normalize_executable_sql(sql);
+    // Parentheses around SELECTs and set-operation operands preserve their
+    // result columns. Inspect the query's leading keyword without changing
+    // the SQL passed to inference/execution, including its ordering and limits.
+    let mut normalized = normalized.as_str();
+    while let Some(inner) = normalized.strip_prefix('(') {
+        normalized = inner.trim_start();
+    }
     normalized.starts_with("select ")
         || normalized == "select"
         || normalized.starts_with("show ")
         || normalized == "show"
-        || (normalized.starts_with("with ") && !is_mutating_with_sql(&normalized))
+        || (normalized.starts_with("with ") && !is_mutating_with_sql(normalized))
 }
 
 pub(crate) fn returning_describe_result(
@@ -3637,7 +3644,21 @@ pub(crate) fn mutating_with_describe_sql(sql: &str) -> Option<String> {
 
 #[cfg(test)]
 mod mutating_with_describe_tests {
-    use super::mutating_with_describe_sql;
+    use super::{is_describable_query, mutating_with_describe_sql};
+
+    #[test]
+    fn parenthesized_read_queries_preserve_mutating_cte_classification() {
+        assert!(is_describable_query(
+            "/* outer */ ( ( /* inner */ WITH rows AS (SELECT 1 AS id) SELECT * FROM rows))"
+        ));
+        for sql in [
+            "(UPDATE rows SET id=2 RETURNING id)",
+            "((WITH removed AS (DELETE FROM rows RETURNING id) SELECT * FROM removed))",
+            "(WITH input AS (SELECT 1 AS id) INSERT INTO rows SELECT id FROM input RETURNING id)",
+        ] {
+            assert!(!is_describable_query(sql), "{sql}");
+        }
+    }
 
     #[test]
     fn data_modifying_ctes_describe_through_empty_selects() {

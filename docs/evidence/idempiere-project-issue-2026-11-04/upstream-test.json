@@ -1,0 +1,148 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "source_main_commit": "251f331cacb70a0bd817940d54c64372b9525a1d",
+  "runtime_binary_sha256": "81f4a2669addfdd4a4bdd57a570fa0143a0de147376e87721cb7ca2de809b451",
+  "application_target": {
+    "format": 1,
+    "project": "iDempiere",
+    "version_branch": "release-13",
+    "repository": "https://github.com/idempiere/idempiere",
+    "source_commit": "da0730aec42f3e9f5f671e81a70ff71e24d5e534",
+    "upstream_license_file": "LICENSE.md",
+    "source_distribution": "external checkout; application source and seed are not bundled",
+    "oracle_database_sql_directory": "db/oracle",
+    "oracle_provider_directory": "org.compiere.db.oracle.provider",
+    "oracle_import_script": "org.adempiere.server-feature/utils.unix/oracle/ImportIdempiere.sh",
+    "observed_oracle_database_sql_files": 59,
+    "observed_oracle_migration_sql_files": 1085,
+    "status": "Original Oracle-schema application runs through PostgreSQL drivers with 62 routine definitions and 160 views; selected sales, purchasing and inventory-transfer workflows qualified locally; full application qualification outstanding",
+    "qualification_route": "Oracle schema and SQL, using PostgreSQL client transport with an explicit BicDB Oracle profile",
+    "reference_seed_import_requires": "Oracle Data Pump-capable reference instance; seed import and release-13 clone upgrade validated in isolated development fixtures",
+    "qualification_evidence": [
+      "../../../docs/evidence/idempiere-seed-2026-11-01/README.md",
+      "../../../docs/evidence/idempiere-release13-desktop-2026-11-01/README.md",
+      "../../../docs/evidence/idempiere-object-coverage-2026-11-01/README.md",
+      "../../../docs/evidence/idempiere-supplier-invoice-2026-11-04/README.md",
+      "../../../docs/evidence/idempiere-supplier-payment-2026-11-04/README.md",
+      "../../../docs/evidence/idempiere-supplier-reconciliation-2026-11-04/README.md",
+      "../../../docs/evidence/idempiere-inventory-transfer-2026-11-04/README.md",
+      "../../../docs/evidence/idempiere-inventory-reversal-2026-11-04/README.md"
+    ]
+  },
+  "runner": "Tycho Surefire 4.0.8 JUnit 5.9 provider",
+  "junit_report_sha256": "06def42138a2432854fd7e9339c045b386da593ade8f58b44b3454d9390f221c",
+  "junit_report_contains_private_runtime_properties_and_is_not_published": true,
+  "tests": 1,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "testcases": [
+    {
+      "classname": "org.idempiere.test.process.ProjectIssueTest",
+      "name": "testProjBalanceUpdate",
+      "seconds": "92.721"
+    }
+  ],
+  "added_bundles": [
+    {
+      "name": "org.idempiere.test",
+      "version": "13.0.0.202611011311",
+      "sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7"
+    },
+    {
+      "name": "org.eclipse.tycho.surefire.osgibooter",
+      "version": "4.0.8",
+      "sha256": "d8d645a8cb944e880751f4f0180af33a0384ab53f240c4473784c6cad7d3915c"
+    },
+    {
+      "name": "org.eclipse.tycho.surefire.junit59",
+      "version": "4.0.8",
+      "sha256": "c96e2c66bb7c8b71631884b6439124ab8b464e2c7d47c9efb05febc3a671d771"
+    },
+    {
+      "name": "junit-jupiter-api",
+      "version": "5.9.1",
+      "sha256": "5d2fe4d719dffb25a95d77e9c7a34893cbbb1b4cc6c86f2726af7e0fb7035b2f"
+    },
+    {
+      "name": "junit-jupiter-params",
+      "version": "5.9.1",
+      "sha256": "30157f26d857ba4f84c0d84d156f55f056e80dc09b4281affa8b1ed4d3205c08"
+    },
+    {
+      "name": "junit-platform-commons",
+      "version": "1.9.1",
+      "sha256": "a8e82d510bbbce5fe1777b2ecf7bc68401e9ae8327009e029b2db5798403d25e"
+    },
+    {
+      "name": "org.opentest4j",
+      "version": "1.2.0",
+      "sha256": "58812de60898d976fb81ef3b62da05c6604c18fd4a249f5044282479fc286af2"
+    },
+    {
+      "name": "org.apiguardian.api",
+      "version": "1.1.2",
+      "sha256": "b509448ac506d607319f182537f0b35d71007582ec741832a1f111e5b5b70b38"
+    },
+    {
+      "name": "assertj-core",
+      "version": "3.22.0",
+      "sha256": "419b7594a869147ee9578f5af2297fdd2c03c07c835927dbf4a7b32ad22cb411"
+    }
+  ],
+  "network_isolation": {
+    "format": 1,
+    "database_and_test_jvm_share_private_network_namespace": true,
+    "primary_database_in_separate_namespace": true,
+    "interfaces": [
+      "lo"
+    ],
+    "routes": [],
+    "external_connectivity": false
+  },
+  "primary_database_used_for_test_mutations": false,
+  "shutdown_results": [
+    {
+      "role": "test_jvm",
+      "returncode": 0
+    },
+    {
+      "role": "database",
+      "returncode": 0
+    }
+  ],
+  "rollback_verification": {
+    "format": 1,
+    "application_qualified": false,
+    "read_only": true,
+    "prior_workflow_checks": 67,
+    "settled_business_queries": 27,
+    "object_fingerprints": {
+      "routines": {
+        "count": 62,
+        "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+      },
+      "views": {
+        "count": 160,
+        "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+      }
+    },
+    "new_business_records": {
+      "orders": 0,
+      "receipts": 0,
+      "projects": 0,
+      "issues": 0,
+      "project_lines": 0
+    },
+    "upstream_transaction_rollback_verified": true,
+    "primary_database_used": false
+  },
+  "memory_guard": {
+    "start_available_gib": 14,
+    "minimum_available_gib": 8,
+    "minimum_observed_available_bytes": 17879633920
+  },
+  "full_upstream_suite_run": false,
+  "release_published": false
+}

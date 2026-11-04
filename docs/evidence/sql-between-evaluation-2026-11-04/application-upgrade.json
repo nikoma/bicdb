@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "source_commit": "5778ea6836f5a85a31623917977dfedf78361768",
+  "source_main_commit": "3338e7dfa0769024e57839a07e0f19c0e40e54e6",
+  "runtime_binary_sha256": "1b51e69b705a800bf1b3d18b18c108d5491984945f1936a1b5a96d75282c733b",
+  "clean_previous_database_exit": true,
+  "original_objects_recreated": false,
+  "object_fingerprints": {
+    "routines": {
+      "count": 62,
+      "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+    },
+    "views": {
+      "count": 160,
+      "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+    }
+  },
+  "views": {
+    "count": 160,
+    "total_columns": 11983,
+    "all_original_labels_and_type_families_verified": true
+  },
+  "reports": [
+    {
+      "instance": 1000037,
+      "rows": 47,
+      "sha256": "81a42de285b0d5fe80ae0b40933506f0be1e530f9c94f764a7e539be0ab5980a"
+    },
+    {
+      "instance": 1000038,
+      "rows": 47,
+      "sha256": "35e82c243822cfcdeebebd85e458eeae1fed085b7fea74c6db860d21946159a1"
+    },
+    {
+      "instance": 1000039,
+      "rows": 47,
+      "sha256": "2862e075a0105c67da863e18f804409fd70769c7b0144642bf867d9998078387"
+    }
+  ],
+  "workflow_observations": {
+    "expected": 46,
+    "passed": 46,
+    "fixture": "../idempiere-trial-balance-2026-11-04/workflow-observations.json"
+  },
+  "ui": {
+    "desktop_rendered": true,
+    "physical_inventory_window_opened": true,
+    "page_errors": []
+  },
+  "limits": [
+    "Clean local upgrade only; not crash recovery, rolling upgrade, disaster recovery or a published release.",
+    "Opening Physical Inventory does not yet qualify count creation, adjustment, posting or reversal.",
+    "The complete application and compatibility programme remain unqualified."
+  ]
+}

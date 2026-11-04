@@ -32,7 +32,10 @@ pre-existing PostgreSQL volatile-evaluation differences were unqualified at
 that checkpoint. The subsequent [evaluation-context checkpoint](evidence/sql-between-evaluation-2026-11-04/README.md)
 closes both, retaining 16/16 typed-boundary cases in each profile, and passes
 19 Oracle / 20 PostgreSQL SQL/procedural evaluation cases. The separate
-application checkpoint above verifies the selected rendering workflow.
+application checkpoint above verifies the selected rendering workflow. The
+[subsequent clean upgrade](evidence/sql-between-evaluation-2026-11-04/README.md#subsequent-application-upgrade)
+preserves all 46 observations, 62 routine and 160 view fingerprints, view
+metadata and all 141 saved report rows; the upgraded UI opens Physical Inventory.
 
 The [RAW conversion checkpoint](evidence/oracle-raw-character-conversion-2026-11-04/README.md)
 corrects implicit hexadecimal character conversion for proven RAW intrinsic

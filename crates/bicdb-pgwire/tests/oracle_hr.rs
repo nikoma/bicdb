@@ -52,6 +52,64 @@ async fn parenthesized_named_queries_describe_columns_before_rows_exist() {
     }
 }
 
+#[tokio::test]
+async fn fixed_number_pictures_keep_profile_rules_for_prepared_parameters() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(directory.path(), profile);
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb");
+        if profile != "postgres" {
+            config.options("-c bicdb.sql_profile=oracle-preview-v1");
+        }
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let connection = tokio::spawn(connection);
+        let statement = client
+            .prepare("SELECT TO_CHAR(CAST(CAST($1 AS TEXT) AS NUMERIC),CAST($2 AS TEXT))")
+            .await
+            .unwrap();
+        assert_eq!(
+            statement.columns()[0].type_(),
+            &tokio_postgres::types::Type::TEXT
+        );
+        for _ in 0..3 {
+            for (value, model, oracle, postgres) in [
+                ("12.5", "9G990D00", "    12.50", "    12.50"),
+                ("1234.56", "FM9G990D00", "1,234.56", "1,234.56"),
+                ("-0.004", "FM9G990D00", "-0.00", "0.00"),
+                ("9999.995", "FM9G990D00", "#########", "#,###.##"),
+                ("12.5", "000G000D00", " 000,012.50", " 000,012.50"),
+            ] {
+                let row = client
+                    .query_one(&statement, &[&value, &model])
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    row.get::<_, String>(0),
+                    if profile == "postgres" {
+                        postgres
+                    } else {
+                        oracle
+                    },
+                    "{profile}: {value} {model}"
+                );
+            }
+            let empty: Option<&str> = None;
+            let row = client
+                .query_one(&statement, &[&empty, &"9G990D00"])
+                .await
+                .unwrap();
+            assert_eq!(row.get::<_, Option<String>>(0), None);
+        }
+        drop(client);
+        connection.await.unwrap().unwrap();
+    }
+}
+
 impl Running {
     fn new(path: &std::path::Path, oracle: bool) -> Self {
         Self::with_profile(path, if oracle { "oracle-hr-v1" } else { "postgres" })

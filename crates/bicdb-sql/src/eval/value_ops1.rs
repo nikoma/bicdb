@@ -4111,21 +4111,39 @@ pub(crate) fn format_numeric_to_char(value: f64, format: &str) -> Result<String>
 }
 
 fn format_decimal_to_char(value: Decimal, negative: bool, format: &str) -> Result<String> {
-    let fill = format
-        .get(..2)
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("FM"));
-    let model = if fill { &format[2..] } else { format };
-    let (left, right) = model.split_once('.').unwrap_or((model, ""));
+    format_number_picture(value, negative, format, false, '.', ',')
+}
+
+/// Fixed decimal pictures. Oracle and PostgreSQL differ at rounded zero and overflow.
+pub(crate) fn format_number_picture(
+    value: Decimal,
+    negative: bool,
+    format: &str,
+    oracle: bool,
+    decimal: char,
+    group: char,
+) -> Result<String> {
+    let upper = format.to_ascii_uppercase();
+    let fill = upper.starts_with("FM");
+    let model = if fill { &upper[2..] } else { &upper };
+    let point = model.find(['.', 'D']);
+    let (left, right) = point.map_or((model, ""), |i| (&model[..i], &model[i + 1..]));
     if model.is_empty()
-        || !left.chars().all(|c| c == '9')
-        || !right.chars().all(|c| c == '9')
-        || left.is_empty() && right.is_empty()
+        || !left.chars().all(|c| matches!(c, '9' | '0' | 'G' | ','))
+        || !right.chars().all(|c| matches!(c, '9' | '0'))
+        || !model.chars().any(|c| matches!(c, '9' | '0'))
+        || left.starts_with(['G', ','])
+        || left.ends_with(['G', ','])
+        || left
+            .as_bytes()
+            .windows(2)
+            .any(|w| w.iter().all(|c| matches!(c, b'G' | b',')))
     {
         return Err(SqlError::Unsupported(format!(
             "to_char numeric format {format} is not supported"
         )));
     }
-    let left_width = left.len();
+    let left_width = left.chars().filter(|c| matches!(c, '9' | '0')).count();
     let right_width = right.len();
     let mut magnitude = value.mantissa.abs();
     let mut scale = value.scale;
@@ -4138,30 +4156,47 @@ fn format_decimal_to_char(value: Decimal, negative: bool, format: &str) -> Resul
         }
         scale = right_width as u32;
     }
-    // PostgreSQL suppresses a negative sign when the display rounding is zero.
-    let negative = negative && !magnitude.is_zero();
+    let rounded_zero = magnitude.is_zero();
+    let negative = negative && (oracle || !rounded_zero);
     let rendered = Decimal {
         mantissa: magnitude,
         scale,
     }
     .format();
     let (integer, fraction) = rendered.split_once('.').unwrap_or((&rendered, ""));
-    let integer_digits = if integer == "0" { 0 } else { integer.len() };
-    let decimal_point = model.contains('.');
+    let integer_digits = if integer == "0" {
+        usize::from(!oracle && rounded_zero)
+    } else {
+        integer.len()
+    };
+    let separator = point.map(|i| {
+        if model.as_bytes()[i] == b'D' {
+            decimal
+        } else {
+            '.'
+        }
+    });
     if integer_digits > left_width {
-        return Ok(format!(
-            "{}{}{}{}",
-            if negative {
-                "-"
-            } else if fill {
-                ""
-            } else {
-                " "
-            },
-            "#".repeat(left_width),
-            if decimal_point { "." } else { "" },
-            "#".repeat(right_width)
-        ));
+        if oracle {
+            return Ok("#".repeat(model.len() + 1));
+        }
+        let mut output = if negative {
+            "-"
+        } else if fill {
+            ""
+        } else {
+            " "
+        }
+        .to_string();
+        for c in model.chars() {
+            output.push(match c {
+                '9' | '0' => '#',
+                'G' => group,
+                'D' => decimal,
+                other => other,
+            });
+        }
+        return Ok(output);
     }
     let mut fractional = fraction.to_string();
     fractional.extend(std::iter::repeat_n(
@@ -4169,22 +4204,49 @@ fn format_decimal_to_char(value: Decimal, negative: bool, format: &str) -> Resul
         right_width.saturating_sub(fractional.len()),
     ));
     if fill {
-        fractional = fractional.trim_end_matches('0').to_string();
+        let required = right.rfind('0').map_or(0, |i| i + 1);
+        while fractional.len() > required && fractional.ends_with('0') {
+            fractional.pop();
+        }
     }
-    let integer =
-        if integer == "0" && decimal_point && !(fill && fractional.is_empty() && left_width > 0) {
-            ""
-        } else {
-            integer
-        };
-    let signed = format!("{}{integer}", if negative { "-" } else { "" });
+    let omit_zero = integer == "0"
+        && separator.is_some()
+        && !left.contains('0')
+        && !(fill && fractional.is_empty() && left_width > 0);
+    let digits = if omit_zero { "" } else { integer };
+    let required = left.find('0').map_or(0, |i| {
+        left[i..].chars().filter(|c| matches!(c, '0' | '9')).count()
+    });
+    let width = digits.len().max(required);
+    let padded = format!("{digits:0>width$}");
+    let mut remaining = padded.chars().rev();
+    let mut reversed = Vec::new();
+    for c in left.chars().rev() {
+        reversed.push(match c {
+            '9' | '0' => remaining.next().unwrap_or(' '),
+            'G' | ',' if remaining.clone().next().is_some() => {
+                if c == 'G' {
+                    group
+                } else {
+                    ','
+                }
+            }
+            _ => ' ',
+        });
+    }
+    let integer: String = reversed.into_iter().rev().collect();
+    let signed = format!(
+        "{}{}",
+        if negative { "-" } else { "" },
+        integer.trim_start()
+    );
     let mut output = if fill {
         signed
     } else {
-        format!("{signed:>width$}", width = left_width + 1)
+        format!("{signed:>width$}", width = left.len() + 1)
     };
-    if decimal_point {
-        output.push('.');
+    if let Some(separator) = separator {
+        output.push(separator);
         output.push_str(&fractional);
     }
     Ok(output)

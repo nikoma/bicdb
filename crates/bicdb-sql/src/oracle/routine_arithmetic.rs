@@ -108,6 +108,7 @@ pub(super) enum Kind {
     TemporalUnknown,
     Number,
     Text,
+    Raw,
     NationalText,
     FixedNationalText,
     Interval,
@@ -373,6 +374,9 @@ impl Resolve<'_> {
             Expr::Function(function) => {
                 let name = object_name_lowercase(&function.name).ok();
                 match name.as_deref() {
+                    // SYS_GUID lowers to the existing random-byte intrinsic.
+                    // Do not infer RAW from a text value's bytea-looking prefix.
+                    Some("gen_random_bytes" | "public.gen_random_bytes") => return Kind::Raw,
                     Some(
                         "bicdb_oracle_current_sqlcode"
                         | "bicdb_oracle_national_length"
@@ -548,6 +552,99 @@ impl Resolve<'_> {
     }
 
     fn rewrite(&self, expr: &mut Expr) -> Result<()> {
+        if self.env.character_conversion {
+            let convert = |value: &mut Expr| -> Result<()> {
+                if self.kind(value) == Kind::Raw {
+                    *value = expression(&format!(
+                        "bicdb_oracle_default_to_char({},'raw','sql')",
+                        render_sql(value)
+                    ))?;
+                }
+                Ok(())
+            };
+            match expr {
+                Expr::Cast {
+                    expr: value,
+                    data_type,
+                    ..
+                } if routine_type_schema(data_type).ok().is_some_and(|s| {
+                    matches!(
+                        schema_kind(&s),
+                        Kind::Text | Kind::NationalText | Kind::FixedNationalText
+                    )
+                }) =>
+                {
+                    convert(value)?
+                }
+                Expr::Function(function)
+                    if object_name_lowercase(&function.name).is_ok_and(|name| {
+                        matches!(
+                            &*name,
+                            "lower"
+                                | "upper"
+                                | "length"
+                                | "lengthb"
+                                | "lengthc"
+                                | "length2"
+                                | "length4"
+                                | "substr"
+                                | "substring"
+                                | "instr"
+                                | "ascii"
+                                | "lpad"
+                                | "rpad"
+                                | "concat"
+                                | "pg_catalog.concat"
+                                | "concat_ws"
+                                | "pg_catalog.concat_ws"
+                        )
+                    }) =>
+                {
+                    if let FunctionArguments::List(args) = &mut function.args {
+                        let name = object_name_lowercase(&function.name)?;
+                        let raw_length = matches!(
+                            &*name,
+                            "lengthb" | "lengthc" | "length2" | "length4"
+                        ) && matches!(args.args.first(), Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(value))) if self.kind(value) == Kind::Raw);
+                        let length_name = if name == "lengthb" {
+                            "octet_length"
+                        } else {
+                            "length"
+                        };
+                        let all = matches!(
+                            &*name,
+                            "concat" | "pg_catalog.concat" | "concat_ws" | "pg_catalog.concat_ws"
+                        );
+                        for (index, arg) in args.args.iter_mut().enumerate() {
+                            let character = all
+                                || index == 0
+                                || (index == 1 && name == "instr")
+                                || (index == 2 && matches!(&*name, "lpad" | "rpad"));
+                            if character {
+                                if let FunctionArg::Unnamed(FunctionArgExpr::Expr(value)) = arg {
+                                    convert(value)?;
+                                }
+                            }
+                        }
+                        if raw_length {
+                            function.name = ObjectName::from(vec![Ident::new(length_name)]);
+                        }
+                    }
+                }
+                Expr::Substring { expr: value, .. } | Expr::Trim { expr: value, .. } => {
+                    convert(value)?
+                }
+                Expr::BinaryOp {
+                    left,
+                    op: BinaryOperator::StringConcat,
+                    right,
+                } => {
+                    convert(left)?;
+                    convert(right)?;
+                }
+                _ => {}
+            }
+        }
         if let Expr::BinaryOp { left, op, right } = expr {
             if matches!(op, BinaryOperator::Eq | BinaryOperator::NotEq) {
                 fn fixed_literal(expr: &Expr) -> bool {
@@ -1081,6 +1178,7 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
                     Kind::Text | Kind::Null => return Ok(value.clone()),
                     Kind::Number => "number",
                     Kind::Date => "date",
+                    Kind::Raw => "raw",
                     Kind::Unknown if self.env.sql_builtins_only && self.env.defer_bind_types => return Ok(value.clone()),
                     Kind::NationalText | Kind::FixedNationalText => return Err(unsupported("national-character text patterns require a UTF16 execution contract")),
                     _ => return Err(unsupported("text patterns require resolved character, NUMBER or logical DATE input; use an explicit conversion")),

@@ -1,0 +1,91 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "release_published": false,
+  "source_commit": "bd1804544a1c11918337e5ea49d9c272c3e56cbf",
+  "source_main_commit": "251f331cacb70a0bd817940d54c64372b9525a1d",
+  "runtime_binary_sha256": "81f4a2669addfdd4a4bdd57a570fa0143a0de147376e87721cb7ca2de809b451",
+  "forward": {
+    "format": 1,
+    "forward_qualified": true,
+    "application_qualified": false,
+    "issue_id": 1000001,
+    "line_id": 1000001,
+    "process_id": 1000050,
+    "hq_stock_before": "21",
+    "hq_stock_after": "20",
+    "project_balance": "53.25250000",
+    "ledger_rows": 4,
+    "posting_amounts": {
+      "101": "53.25",
+      "200000": "45.26"
+    },
+    "expected_from_pre_issue_costs_and_account_mapping": true
+  },
+  "reversal": {
+    "format": 1,
+    "reversal_qualified": true,
+    "application_qualified": false,
+    "original_issue_id": 1000001,
+    "reversal_issue_id": 1000002,
+    "reciprocal_reversal_links": true,
+    "project_balance": "0",
+    "hq_stock_restored": "21",
+    "stock_totals_restored": true,
+    "stock_duplicate_keys": false,
+    "project_line_retained": true,
+    "ledger_rows": 8,
+    "ledger_pairs_exactly_offset": true,
+    "reversal_uses_negative_same_column_amounts": true,
+    "average_quantity_restored": true,
+    "average_cost_rounding_matches_source_rules": true,
+    "expected_average_costs": {
+      "101": "53.25250000",
+      "200000": "45.26462400"
+    },
+    "costing_precision_independently_matches_oracle": true
+  },
+  "preservation": {
+    "format": 1,
+    "application_qualified": false,
+    "prior_workflow_checks_preserved": 67,
+    "settled_business_queries_preserved": 27,
+    "object_fingerprints": {
+      "routines": {
+        "count": 62,
+        "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+      },
+      "views": {
+        "count": 160,
+        "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+      }
+    },
+    "reports_preserved": [
+      {
+        "instance": 1000037,
+        "rows": 47,
+        "sha256": "81a42de285b0d5fe80ae0b40933506f0be1e530f9c94f764a7e539be0ab5980a"
+      },
+      {
+        "instance": 1000038,
+        "rows": 47,
+        "sha256": "35e82c243822cfcdeebebd85e458eeae1fed085b7fea74c6db860d21946159a1"
+      },
+      {
+        "instance": 1000039,
+        "rows": 47,
+        "sha256": "2862e075a0105c67da863e18f804409fd70769c7b0144642bf867d9998078387"
+      }
+    ]
+  },
+  "workflow_checks_passed": 77,
+  "prior_workflow_checks_preserved": 67,
+  "new_workflow_observations": 10,
+  "financial_sql_repairs": false,
+  "standard_application_ui_used": true,
+  "original_objects_recreated": false,
+  "full_oracle_application_reference_run": false,
+  "browser_issue_status": "Reversed",
+  "browser_posting_status": "Posted",
+  "browser_script_errors": []
+}

@@ -26,10 +26,14 @@ accounting. Its
 also completes/posts, restores stock and offsets accounting in each locator.
 The selected [physical inventory adjustment and reversal](../../../docs/evidence/idempiere-physical-inventory-2026-11-04/README.md)
 and [single-product production and reversal](../../../docs/evidence/idempiere-production-2026-11-04/README.md)
-also complete through the original UI. The latest
-[clean NVL2 runtime upgrade](../../../docs/evidence/oracle-nvl2-2026-11-04/README.md#subsequent-application-upgrade)
-preserves all 67 selected workflow observations, all original routine/view
-fingerprints and 141 saved report rows, and reaches the browser desktop.
+also complete through the original UI. The subsequent
+[clean row UPDATE runtime upgrade](../../../docs/evidence/sql-row-update-2026-11-04/README.md#subsequent-application-upgrade)
+preserves all 67 prior observations and reaches the browser desktop.
+The selected [project inventory issue and reversal](../../../docs/evidence/idempiere-project-issue-2026-11-04/README.md)
+now completes/posts through the standard UI. All 77 selected observations pass,
+including the prior 67, with original routine/view fingerprints and 141 saved
+report rows preserved. Stock totals and project balance are restored; accounting
+offsets and average-cost rounding match the recorded upstream rules.
 The rest of the application, broader production operations and complete Oracle
 compatibility remain unqualified. These observations count assertions, not
 application workflows or a percentage of compatibility.

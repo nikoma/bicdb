@@ -99,5 +99,21 @@
     "peak_group_rss_bytes": 2914082816,
     "minimum_observed_available_bytes": 16340811776
   },
-  "ci_status": "Not claimed by this local validation record"
+  "ci_status": "Not claimed by this local validation record",
+  "additional_existing_identity_integration": {
+    "command": "cargo test --locked -p bicdb-sql --test projection_pushdown --test prepared_typed_join -- --test-threads=1",
+    "counts": [
+      {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "passed": 9,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "source_commit": "87c7ea7d8e7d8da367e5e4beb24ceb13267c81c9"
+  }
 }

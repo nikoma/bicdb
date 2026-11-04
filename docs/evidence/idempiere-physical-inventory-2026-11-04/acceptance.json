@@ -1,0 +1,119 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "workflow_qualified": true,
+  "source_commit": "87c7ea7d8e7d8da367e5e4beb24ceb13267c81c9",
+  "source_main_commit": "cc1d288fbea80016864f9805411d566b2eccaa70",
+  "runtime_binary_sha256": "2643c09472dca4730f5d58fdda040dd72a83fa37c7de97763e8133a2b9914d20",
+  "clean_upgrade": {
+    "previous_database_exit": 0,
+    "original_objects_recreated": false,
+    "preserved_forward_observations": 52,
+    "views_verified": 160,
+    "view_columns_verified": 11983
+  },
+  "final_workflow_checks": 57,
+  "prior_workflow_checks_restored": 46,
+  "original": {
+    "header": 1000000,
+    "line": 1000000,
+    "document": "10000000",
+    "book_quantity": 21,
+    "count_quantity": 20,
+    "status": "RE",
+    "posted": true,
+    "reversal_id": 1000002
+  },
+  "reversal": {
+    "header": 1000002,
+    "line": 1000002,
+    "document": "10000000^",
+    "book_quantity": 20,
+    "count_quantity": 21,
+    "status": "RE",
+    "posted": true,
+    "reversal_id": 1000000
+  },
+  "committed_stock_movements": [
+    {
+      "id": 1000006,
+      "quantity": -1,
+      "type": "I-",
+      "locator": 101,
+      "product": 123
+    },
+    {
+      "id": 1000008,
+      "quantity": 1,
+      "type": "I+",
+      "locator": 101,
+      "product": 123
+    }
+  ],
+  "stock": {
+    "hq_before": 21,
+    "hq_after_forward": 20,
+    "hq_after_reversal": 21,
+    "store": 4,
+    "transit": 0,
+    "global_before": 25,
+    "global_after_forward": 24,
+    "global_after_reversal": 25
+  },
+  "accounting": {
+    "rows_each_document_each_schema": 2,
+    "schema_101_debit_credit_each": "53.25",
+    "schema_200000_debit_credit_each": "45.26",
+    "account_product_locator_net_zero": true
+  },
+  "processes": {
+    "generation_success": 1000040,
+    "completion_success": 1000041,
+    "pre_fix_reversal_failure_preserved": 1000042,
+    "post_fix_reversal_success": 1000043
+  },
+  "preservation": {
+    "object_fingerprints": {
+      "routines": {
+        "count": 62,
+        "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+      },
+      "views": {
+        "count": 160,
+        "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+      }
+    },
+    "reports": [
+      {
+        "instance": 1000037,
+        "rows": 47,
+        "sha256": "81a42de285b0d5fe80ae0b40933506f0be1e530f9c94f764a7e539be0ab5980a"
+      },
+      {
+        "instance": 1000038,
+        "rows": 47,
+        "sha256": "35e82c243822cfcdeebebd85e458eeae1fed085b7fea74c6db860d21946159a1"
+      },
+      {
+        "instance": 1000039,
+        "rows": 47,
+        "sha256": "2862e075a0105c67da863e18f804409fd70769c7b0144642bf867d9998078387"
+      }
+    ],
+    "read_only": true,
+    "application_qualified": false,
+    "workflow_qualified": true,
+    "selected_original_and_reversal_linked": true
+  },
+  "ui": {
+    "original_saved_record_selected": true,
+    "selected_action": "Reverse - Correct",
+    "final_document_status": "Reversed",
+    "page_errors": []
+  },
+  "limits": [
+    "One selected seeded application workflow; full application and compatibility programme remain incomplete.",
+    "A numeric MAX decoding issue observed by verification tooling remains open.",
+    "Local clean-upgrade evidence does not qualify crash recovery, distributed availability, release or production operations."
+  ]
+}

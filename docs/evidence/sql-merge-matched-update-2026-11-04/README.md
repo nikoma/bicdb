@@ -77,3 +77,13 @@ whitespace checks pass. Builds use one Cargo job and memory guards requiring
 
 These local checks do not establish a release, application deployment or full
 Oracle/PostgreSQL MERGE compatibility.
+
+## Subsequent application acceptance
+
+The [physical inventory checkpoint](../idempiere-physical-inventory-2026-11-04/README.md)
+verifies a clean upgrade preserving the posted forward adjustment and completes
+its previously failing correction reversal through the standard UI. All 57
+selected workflow observations pass, with stock restored and per-account
+balances offset in both accounting schemas. This remains bounded application
+evidence, not complete MERGE or application qualification. Ten additional
+existing projection/quoted-join integration tests also pass on the same source.

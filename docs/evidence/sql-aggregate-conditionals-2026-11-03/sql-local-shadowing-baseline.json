@@ -1,0 +1,38 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "83252bf9a21039ba1287bd661d1ca57697751f65ddc2f89662c48b1b1e6cc2d2",
+  "source_qualified": true,
+  "matched": false,
+  "application_qualified": false,
+  "backends": {
+    "source": {
+      "rows": [
+        [
+          "column"
+        ]
+      ],
+      "application_flags": [
+        [
+          "N",
+          "I",
+          "Y"
+        ]
+      ]
+    },
+    "bicdb": {
+      "rows": [
+        [
+          "local"
+        ]
+      ],
+      "application_flags": [
+        [
+          "N",
+          "I",
+          "Y"
+        ]
+      ]
+    }
+  },
+  "cleanup_errors": []
+}

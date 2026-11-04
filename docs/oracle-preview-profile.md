@@ -1022,3 +1022,12 @@ explicitly recompiled to adopt the new lowering. The live comparison matches
 32/38 source expectations, leaving six GET_LINES cases open. Package types,
 further conversions, callable/catalog interfaces and full application execution
 remain unqualified.
+
+The [aggregate evaluation checkpoint](evidence/sql-aggregate-conditionals-2026-11-03/README.md)
+resolves supported aggregate operand types from query metadata and preserves
+logical DATE through MIN/MAX. Conditional scalar evaluation skips unused scalar
+fallbacks while still evaluating aggregate inputs in those branches. Oracle NVL
+remains eager. Independent Oracle and native PostgreSQL source comparisons cover
+these bounded rules; this correctness fix does not change compiler version 25
+or metadata format 5. SQL column/local-variable shadowing and broader Oracle
+grouping legality remain explicit gaps, and the full application is unqualified.

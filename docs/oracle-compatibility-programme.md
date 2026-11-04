@@ -63,8 +63,13 @@ The [version-25 output checkpoint](evidence/oracle-output-buffers-2026-11-03/REA
 adds six supplied operations with connection-local nontransactional state and
 retains native connection-memory admission behavior. It matches 32/38 current
 source expectations; six GET_LINES cases and the other package work remain open.
-Product selection exposes a separately reproduced aggregate NVL typing gap, so
-line entry and the full application remain unqualified.
+The [aggregate checkpoint](evidence/sql-aggregate-conditionals-2026-11-03/README.md)
+fixes the reproduced aggregate NVL typing gap, with 19/19 Oracle and 12/12 native
+PostgreSQL source comparisons. Four unchanged inventory calls now execute, but
+only two return the correct values. A generic SQL column/local-variable shadowing
+reproduction isolates the next name-resolution dependency. Line entry and the
+full application remain unqualified; 62 accepted definitions are not 62 correct
+routine executions.
 The milestones below retain their results at the time each was measured.
 
 The original 913 tables and 185,292 rows loaded and passed complete value

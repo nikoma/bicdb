@@ -1,0 +1,106 @@
+{
+  "runtime_binary_sha256": "83252bf9a21039ba1287bd661d1ca57697751f65ddc2f89662c48b1b1e6cc2d2",
+  "application_qualified": false,
+  "cases": [
+    {
+      "function": "BOMQTYAVAILABLE",
+      "sql": "SELECT BOMQTYAVAILABLE(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.02
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "99999"
+            }
+          ]
+        ],
+        "elapsed_seconds": 2.992
+      }
+    },
+    {
+      "function": "BOMQTYONHAND",
+      "sql": "SELECT BOMQTYONHAND(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "20"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.013
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "99999"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.12
+      }
+    },
+    {
+      "function": "BOMQTYRESERVED",
+      "sql": "SELECT BOMQTYRESERVED(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.002
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.006
+      }
+    },
+    {
+      "function": "BOMQTYORDERED",
+      "sql": "SELECT BOMQTYORDERED(123,103,0) FROM DUAL",
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.003
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ],
+        "elapsed_seconds": 0.052
+      }
+    }
+  ],
+  "matched": 2,
+  "total": 4,
+  "success": false,
+  "scope": "Selected original inventory function values, not the complete application"
+}

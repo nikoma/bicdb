@@ -88,6 +88,9 @@ pub(crate) fn eval_db_catalog_function_value(
     session_gucs: Option<&HashMap<String, String>>,
 ) -> Result<Option<SqlValue>> {
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    if oracle::current_time::pg_type(bare_name).is_some() {
+        return oracle::current_time::evaluate(db, bare_name, args).map(Some);
+    }
     if bare_name == "bicdb_oracle_sys_context" {
         if let Some(gucs) = session_gucs {
             return oracle::session_context::evaluate(db, args, gucs).map(Some);
@@ -1694,6 +1697,24 @@ pub(crate) fn pg_get_serial_sequence(db: &BicDb, args: &[SqlValue]) -> Result<Sq
         })
         .map(|sequence| SqlValue::String(sequence.name))
         .unwrap_or(SqlValue::Null))
+}
+
+/// Logical types shared by scalar projection and metadata-only inference.
+/// Runtime values use text internally, which must not become their wire type.
+pub(crate) fn current_datetime_function_pg_type(name: &str, arity: usize) -> Option<&'static str> {
+    if arity != 0 {
+        return None;
+    }
+    let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    match name {
+        "current_date" => Some("date"),
+        "now"
+        | "current_timestamp"
+        | "transaction_timestamp"
+        | "statement_timestamp"
+        | "clock_timestamp" => Some("timestamptz"),
+        _ => oracle::current_time::pg_type(name),
+    }
 }
 
 pub(crate) fn eval_catalog_function_value(name: &str, args: &[SqlValue]) -> Option<SqlValue> {

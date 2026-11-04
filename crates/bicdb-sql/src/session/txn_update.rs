@@ -3818,6 +3818,7 @@ impl<'db> SqlSession<'db> {
         frame: &mut RoutineFrame,
         statement: &RoutineStmt,
     ) -> Result<RoutineControl> {
+        let _clock = oracle::current_time::StatementScope::new();
         self.ensure_autonomous_transaction()?;
         let was_active = self.oracle_autonomous_active;
         let epoch = self.oracle_autonomous_epoch;

@@ -3798,6 +3798,7 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn execute_inner(&self, sql: &str) -> Result<SqlResult> {
+        let _clock = oracle::current_time::StatementScope::if_absent();
         self.check_cancellation()?;
         if split_sql_statements(sql).is_empty() {
             return Ok(SqlResult::empty(Vec::new()));

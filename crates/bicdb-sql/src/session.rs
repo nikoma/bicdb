@@ -2888,6 +2888,7 @@ impl<'db> SqlSession<'db> {
     /// diagnostics that want to preserve normal statement semantics without
     /// measuring parser or SQL-string construction cost.
     pub fn execute_statement_ast(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let _clock = oracle::current_time::StatementScope::new();
         self.db_ref().check_recovery_state()?;
         let effects = crate::statement_context::StatementScope::enter();
         let result = self.with_implicit_guc_statement(|session| {
@@ -3386,6 +3387,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_parsed_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let _clock = oracle::current_time::StatementScope::new();
         oracle::lock_waits::validate(self.db_ref(), statement)?;
         let previous = std::mem::replace(&mut self.in_routine_expression, false);
         let result = self.execute_parsed_statement_in_sql(statement);

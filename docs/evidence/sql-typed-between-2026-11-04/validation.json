@@ -1,0 +1,31 @@
+{
+  "application_qualified": false,
+  "full_native_reference_qualified": false,
+  "source_commit": "5cf85d77b3f53abe8710f2447aa1f68b24b213c6",
+  "binary_sha256": "5c28d769107422fc0869bebc44490194e9cae0e8ee7177ac9c4bfc4857dac44c",
+  "sql_tests": {
+    "passed": 601,
+    "failed": 0,
+    "ignored": 3
+  },
+  "pgwire_tests": {
+    "passed": 363,
+    "failed": 0,
+    "ignored": 2
+  },
+  "final_focused_oracle_fixture_passed": true,
+  "oracle_reference_cases": {
+    "passed": 16,
+    "total": 16
+  },
+  "postgres_reference_cases": {
+    "passed": 14,
+    "total": 16,
+    "preexisting_unqualified": [
+      "volatile_value_evaluation",
+      "sequence_evaluation_count"
+    ]
+  },
+  "retained_raw_reference_cases_per_profile": 13,
+  "format_check_passed": true
+}

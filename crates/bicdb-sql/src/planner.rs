@@ -83,6 +83,12 @@ pub(crate) struct DeleteCandidate {
 #[derive(Debug)]
 pub(crate) struct ColumnLookups {
     pub(crate) columns: Vec<String>,
+    /// Preserve materialized column identity while retaining the existing
+    /// case-insensitive qualifier lookup. AST identifiers are folded before
+    /// lookup; quoted columns with different case must occupy different slots.
+    case_exact: FxHashMap<String, ColumnId>,
+    case_unqualified: FxHashMap<String, ColumnId>,
+    case_scope_unqualified: FxHashMap<String, Option<ColumnId>>,
     /// Lowercased full column name -> id (last definition wins, matching prior
     /// `HashMap::insert` semantics).
     pub(crate) exact: FxHashMap<String, ColumnId>,
@@ -98,8 +104,22 @@ pub(crate) struct ColumnLookups {
     pub(crate) qualifiers: FxHashMap<String, Option<ColumnId>>,
 }
 
+fn case_qualified_column_key(key: &str) -> std::borrow::Cow<'_, str> {
+    match key.rsplit_once('.') {
+        Some((qualifier, column)) if qualifier.bytes().any(|byte| byte.is_ascii_uppercase()) => {
+            std::borrow::Cow::Owned(format!("{}.{}", qualifier.to_ascii_lowercase(), column))
+        }
+        _ => std::borrow::Cow::Borrowed(key),
+    }
+}
+
 impl ColumnLookups {
     pub(crate) fn build(columns: &[String]) -> Self {
+        let mut case_exact = FxHashMap::with_capacity_and_hasher(columns.len(), Default::default());
+        let mut case_unqualified =
+            FxHashMap::with_capacity_and_hasher(columns.len(), Default::default());
+        let mut case_scope_unqualified =
+            FxHashMap::with_capacity_and_hasher(columns.len(), Default::default());
         let mut exact = FxHashMap::with_capacity_and_hasher(columns.len(), Default::default());
         let mut lookup_unqualified =
             FxHashMap::with_capacity_and_hasher(columns.len(), Default::default());
@@ -114,6 +134,17 @@ impl ColumnLookups {
                     .and_modify(|existing| *existing = None)
                     .or_insert(Some(id));
             }
+            case_exact.insert(case_qualified_column_key(column).into_owned(), id);
+            let case_short = column.rsplit('.').next().unwrap_or(column).to_string();
+            case_unqualified.entry(case_short.clone()).or_insert(id);
+            case_scope_unqualified
+                .entry(case_short)
+                .and_modify(|existing: &mut Option<ColumnId>| {
+                    if *existing != Some(id) {
+                        *existing = None;
+                    }
+                })
+                .or_insert(Some(id));
             exact.insert(column.to_ascii_lowercase(), id);
             let short = column
                 .rsplit('.')
@@ -132,6 +163,9 @@ impl ColumnLookups {
         }
         Self {
             columns: columns.to_vec(),
+            case_exact,
+            case_unqualified,
+            case_scope_unqualified,
             exact,
             lookup_unqualified,
             scope_unqualified,
@@ -190,6 +224,14 @@ impl SlotRowLookup {
 
     /// The slot `value_for_key` reads for `key`, if any.
     pub(crate) fn slot_for_key(&self, key: &str) -> Option<usize> {
+        if let Some(id) = self
+            .cols
+            .case_exact
+            .get(case_qualified_column_key(key).as_ref())
+            .or_else(|| self.cols.case_unqualified.get(key))
+        {
+            return Some(id.0);
+        }
         let find = |key: &str| {
             self.cols
                 .exact
@@ -201,6 +243,15 @@ impl SlotRowLookup {
     }
 
     pub(crate) fn value_for_key<'a>(&self, row: &'a [SqlValue], key: &str) -> Option<&'a SqlValue> {
+        if let Some(value) = self
+            .cols
+            .case_exact
+            .get(case_qualified_column_key(key).as_ref())
+            .or_else(|| self.cols.case_unqualified.get(key))
+            .and_then(|id| row.get(id.0))
+        {
+            return Some(value);
+        }
         if let Some(value) = self
             .cols
             .exact
@@ -501,10 +552,7 @@ impl sqlparser::ast::Visitor for OuterReadMarker<'_> {
                 .row
                 .mark_parts(std::slice::from_ref(&ident.value), true),
             Expr::CompoundIdentifier(idents) => {
-                let parts = idents
-                    .iter()
-                    .map(|ident| ident.value.clone())
-                    .collect::<Vec<_>>();
+                let parts = idents.iter().map(ident_value).collect::<Vec<_>>();
                 self.row.mark_parts(&parts, true);
             }
             // `p.*` and `f(p.*)` read whole rows.
@@ -1713,12 +1761,9 @@ impl BoundExprScope {
 
     fn bind_in(&self, expr: &Expr, ctx: &mut BindCtx) -> Option<BoundExpr> {
         match expr {
-            Expr::Identifier(ident) => self.bind_identifier(std::slice::from_ref(&ident.value)),
+            Expr::Identifier(ident) => self.bind_identifier(&[ident_value(ident)]),
             Expr::CompoundIdentifier(idents) => {
-                let parts = idents
-                    .iter()
-                    .map(|ident| ident.value.clone())
-                    .collect::<Vec<_>>();
+                let parts = idents.iter().map(ident_value).collect::<Vec<_>>();
                 self.bind_identifier(&parts)
             }
             Expr::Value(value) => match &value.value {
@@ -1979,6 +2024,13 @@ impl BoundExprScope {
     pub(crate) fn column_id(&self, parts: &[String]) -> Option<ColumnId> {
         let [single] = parts else {
             let full = parts.join(".");
+            if let Some(id) = self
+                .cols
+                .case_exact
+                .get(case_qualified_column_key(&full).as_ref())
+            {
+                return Some(*id);
+            }
             if let Some(id) = self.cols.exact.get(&full.to_ascii_lowercase()) {
                 return Some(*id);
             }
@@ -1986,12 +2038,27 @@ impl BoundExprScope {
                 let qualified = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
                 return self
                     .cols
-                    .exact
-                    .get(&qualified.to_ascii_lowercase())
-                    .copied();
+                    .case_exact
+                    .get(case_qualified_column_key(&qualified).as_ref())
+                    .copied()
+                    .or_else(|| {
+                        self.cols
+                            .exact
+                            .get(&qualified.to_ascii_lowercase())
+                            .copied()
+                    });
             }
             return None;
         };
+        if let Some(id) = self.cols.case_exact.get(single).copied().or_else(|| {
+            self.cols
+                .case_scope_unqualified
+                .get(single)
+                .copied()
+                .flatten()
+        }) {
+            return Some(id);
+        }
         let lower = single.to_ascii_lowercase();
         self.cols
             .exact
@@ -4905,5 +4972,59 @@ mod relation_alias_lookup_tests {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod case_preserving_slot_tests {
+    use super::*;
+
+    #[test]
+    fn slot_and_bound_lookup_keep_distinct_quoted_column_names() {
+        let columns = vec!["T.Key".to_string(), "T.key".to_string()];
+        let row = vec![SqlValue::Int(1), SqlValue::Int(9)];
+        let lookup = SlotRowLookup::new(&columns);
+        assert_eq!(
+            lookup.value_from_parts(&row, &["t".into(), "Key".into()]),
+            Some(SqlValue::Int(1))
+        );
+        assert_eq!(
+            lookup.value_from_parts(&row, &["t".into(), "key".into()]),
+            Some(SqlValue::Int(9))
+        );
+        let scope = BoundExprScope::new(&columns, &[]);
+        for (ident, expected) in [
+            (Ident::with_quote('"', "Key"), 0),
+            (Ident::with_quote('"', "key"), 1),
+            (Ident::new("Key"), 1),
+        ] {
+            let expr = Expr::CompoundIdentifier(vec![Ident::new("T"), ident]);
+            assert!(
+                matches!(scope.bind(&expr),Some(BoundExpr::Column(ColumnId(id))) if id==expected)
+            );
+        }
+    }
+
+    #[test]
+    fn native_update_from_preserves_quoted_column_case_and_unquoted_folding() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for sql in [
+            "CREATE TABLE case_target(id INTEGER PRIMARY KEY,\"Key\" INTEGER,\"key\" INTEGER)",
+            "CREATE TABLE case_source(id INTEGER,n INTEGER)",
+            "INSERT INTO case_target VALUES(1,1,0)",
+            "INSERT INTO case_source VALUES(1,9)",
+            "UPDATE case_target T SET \"key\"=s.n FROM case_source s WHERE T.\"Key\"=s.id",
+        ] {
+            session.execute(sql).unwrap();
+        }
+        assert_eq!(
+            session
+                .execute("SELECT t.\"Key\",t.\"key\",t.Key FROM case_target t")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(1), SqlValue::Int(9), SqlValue::Int(9)]]
+        );
     }
 }

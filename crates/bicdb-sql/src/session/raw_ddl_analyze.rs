@@ -1007,6 +1007,10 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
+        if matches!(statement, Statement::Merge(_)) {
+            return self
+                .with_statement_transaction(|session| session.execute_statement_inner(statement));
+        }
         if matches!(
             statement,
             Statement::DropFunction(_) | Statement::DropProcedure { .. }
@@ -1113,6 +1117,7 @@ impl<'db> SqlSession<'db> {
             Statement::Insert(insert) => self
                 .execute_insert(insert)
                 .map(|result| with_returning_command_tag(result, "INSERT 0")),
+            Statement::Merge(merge) => self.execute_merge(merge),
             Statement::Update(update) => self
                 .execute_update(update)
                 .map(|result| with_returning_command_tag(result, "UPDATE")),

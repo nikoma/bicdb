@@ -4612,6 +4612,7 @@ fn statement_may_write(statement: &Statement) -> bool {
     match statement {
         Statement::Query(query) => query_may_write(query),
         Statement::Insert(_)
+        | Statement::Merge(_)
         | Statement::Update(_)
         | Statement::Delete(_)
         | Statement::Truncate(_)
@@ -4665,7 +4666,7 @@ fn query_may_write(query: &Query) -> bool {
 
 fn set_expr_may_write(expr: &SetExpr) -> bool {
     match expr {
-        SetExpr::Insert(_) | SetExpr::Update(_) | SetExpr::Delete(_) => true,
+        SetExpr::Insert(_) | SetExpr::Update(_) | SetExpr::Delete(_) | SetExpr::Merge(_) => true,
         SetExpr::Query(query) => query_may_write(query),
         SetExpr::SetOperation { left, right, .. } => {
             set_expr_may_write(left) || set_expr_may_write(right)

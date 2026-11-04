@@ -1,0 +1,4006 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "2643c09472dca4730f5d58fdda040dd72a83fa37c7de97763e8133a2b9914d20",
+  "fixture_sha256": "27d3c397c83d59f5783f5c895f3b10ae35b5495f70b6a597602620b9af028775",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "matched",
+          "source": {
+            "id": "matched",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "matched",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "action_filter",
+          "source": {
+            "id": "action_filter",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "action_filter",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "derived_join",
+          "source": {
+            "id": "derived_join",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "derived_join",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_source",
+          "source": {
+            "id": "empty_source",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_source",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "false_on",
+          "source": {
+            "id": "false_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "false_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "null_on",
+          "source": {
+            "id": "null_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "check_rollback",
+          "source": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": null,
+              "detail": "ORA-02290: check constraint (IDEMPIERE_QUAL.SYS_C0047695) violated\nHelp: https://docs.oracle.com/error-help/db/ora-02290/"
+            },
+            "actual": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "23514",
+              "detail": "new row for relation \"BICDB_MG_9199D3E3D4T\" violates check constraint \"BICDB_MG_9199D3E3D4T_N_check\""
+            },
+            "actual": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "on_column",
+          "source": {
+            "id": "on_column",
+            "expected": {
+              "affected": null,
+              "error": "on_column",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": null,
+              "detail": "ORA-38104: Columns referenced in the ON Clause cannot be updated: \"T\".\"N\"\nHelp: https://docs.oracle.com/error-help/db/ora-38104/"
+            },
+            "actual": {
+              "affected": null,
+              "error": "on_column",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "on_column",
+            "expected": {
+              "affected": null,
+              "error": "on_column",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "42000",
+              "detail": "ORA-38104: Columns referenced in the ON clause cannot be updated"
+            },
+            "actual": {
+              "affected": null,
+              "error": "on_column",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "noop_then_change",
+          "source": {
+            "id": "noop_then_change",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "noop_then_change",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "change_then_noop",
+          "source": {
+            "id": "change_then_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": null,
+              "detail": "ORA-30926: The operation attempted to update the same row (rowid: 'AAAYUZAAAAAAJEUAAA') twice.\nHelp: https://docs.oracle.com/error-help/db/ora-30926/"
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "change_then_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "ORA-30926: MERGE cannot update the same target row twice"
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "all_noop",
+          "source": {
+            "id": "all_noop",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "all_noop",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "repeat_change",
+          "source": {
+            "id": "repeat_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": null,
+              "detail": "ORA-30926: The operation attempted to update the same row (rowid: 'AAAYUhAAAAAAJEUAAA') twice.\nHelp: https://docs.oracle.com/error-help/db/ora-30926/"
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "repeat_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "ORA-30926: MERGE cannot update the same target row twice"
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "two_noops_then_change",
+          "source": {
+            "id": "two_noops_then_change",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "two_noops_then_change",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_case",
+          "source": {
+            "id": "quoted_case",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_case",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "bound_parameters",
+          "source": {
+            "id": "bound_parameters",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "bound_parameters",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 15,
+      "matched": 15,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "matched",
+          "source": {
+            "id": "matched",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "matched",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "action_filter",
+          "source": {
+            "id": "action_filter",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "action_filter",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "derived_join",
+          "source": {
+            "id": "derived_join",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "derived_join",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "3E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_source",
+          "source": {
+            "id": "empty_source",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_source",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "false_on",
+          "source": {
+            "id": "false_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "false_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "null_on",
+          "source": {
+            "id": "null_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null_on",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "check_rollback",
+          "source": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "23514",
+              "detail": "new row for relation \"bicdb_mg_0a5260011ft\" violates check constraint \"bicdb_mg_0a5260011ft_n_check\"\nDETAIL:  Failing row contains (2, -1, N)."
+            },
+            "actual": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "check_rollback",
+            "expected": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "23514",
+              "detail": "new row for relation \"bicdb_mg_e00d8ec96et\" violates check constraint \"bicdb_mg_e00d8ec96et_n_check\""
+            },
+            "actual": {
+              "affected": null,
+              "error": "check",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "on_column",
+          "source": {
+            "id": "on_column",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "on_column",
+            "expected": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 0,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "noop_then_change",
+          "source": {
+            "id": "noop_then_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time\nHINT:  Ensure that not more than one source row matches any one target row."
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "noop_then_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time"
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "change_then_noop",
+          "source": {
+            "id": "change_then_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time\nHINT:  Ensure that not more than one source row matches any one target row."
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "change_then_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time"
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "all_noop",
+          "source": {
+            "id": "all_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time\nHINT:  Ensure that not more than one source row matches any one target row."
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "all_noop",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time"
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "repeat_change",
+          "source": {
+            "id": "repeat_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time\nHINT:  Ensure that not more than one source row matches any one target row."
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "repeat_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time"
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "two_noops_then_change",
+          "source": {
+            "id": "two_noops_then_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time\nHINT:  Ensure that not more than one source row matches any one target row."
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "two_noops_then_change",
+            "expected": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "error_detail": {
+              "sqlstate": "21000",
+              "detail": "MERGE command cannot affect row a second time"
+            },
+            "actual": {
+              "affected": null,
+              "error": "cardinality",
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_case",
+          "source": {
+            "id": "quoted_case",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_case",
+            "expected": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 3,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "0"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  },
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null,
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "1E+1"
+                  }
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "bound_parameters",
+          "source": {
+            "id": "bound_parameters",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "bound_parameters",
+            "expected": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "actual": {
+              "affected": 2,
+              "error": null,
+              "rows": [
+                [
+                  {
+                    "number": "1"
+                  },
+                  {
+                    "number": "15"
+                  }
+                ],
+                [
+                  {
+                    "number": "2"
+                  },
+                  {
+                    "number": "2E+1"
+                  }
+                ],
+                [
+                  {
+                    "number": "4"
+                  },
+                  null
+                ]
+              ]
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 15,
+      "matched": 15,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true
+    }
+  },
+  "cleanup_complete": true
+}

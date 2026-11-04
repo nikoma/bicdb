@@ -6,6 +6,8 @@
 
 mod domain_types;
 mod flashback;
+mod merge;
+pub(crate) use merge::UpdateMatchPolicy;
 pub(crate) mod recycle_bin;
 pub(crate) use recycle_bin::is_recycle_bin_name;
 pub use recycle_bin::RECYCLE_BIN_COLLECTION;
@@ -3560,6 +3562,7 @@ impl<'db> SqlSession<'db> {
             && matches!(
                 statement,
                 Statement::Insert(_)
+                    | Statement::Merge(_)
                     | Statement::Update(_)
                     | Statement::Delete(_)
                     | Statement::Savepoint { .. }

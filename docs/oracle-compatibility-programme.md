@@ -17,6 +17,13 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [matched-update MERGE checkpoint](evidence/sql-merge-matched-update-2026-11-04/README.md)
+adds one matched UPDATE action with independent Oracle/PostgreSQL cardinality
+rules, action filters, bound parameters and rollback controls: 15/15 reference
+cases in each profile. A general row-binding fix preserves distinct quoted
+column identities. Multi-action MERGE, target column-level read authorization,
+concurrency and complete MERGE/identifier conformance remain outstanding.
+
 The [Trial Balance checkpoint](evidence/idempiere-trial-balance-2026-11-04/README.md)
 completes the original HQ reporting workflow through the UI: 47 stored and
 rendered rows, including 19 opening balances and 28 current-period entries,
@@ -412,7 +419,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 3. SQL value semantics | Differential null/empty-string, concatenation, padding, comparison, coercion, uniqueness and composite-key tests | Partial: HR lowering and version-7 typed routine concatenation with NULL/padding/caller-length reference cases; general SQL coercion and padding qualification outstanding |
 | 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings, bounded NUMBER arithmetic/reference infinity transport, and durable DATE/TIMESTAMP column provenance with storage/anchor/reference checks; 2,263-column application temporal backfill and complete target-value preservation verified; durable BYTE/CHAR columns with STANDARD capacity and importer provenance checks; legacy character reconciliation, timezone regions and full conversion rules unqualified |
 | 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL, date formats and Gregorian ADD_MONTHS; version-9 bounded DECODE, version-10 AL32UTF8 CHR/default TO_CHAR, and version-11 eager typed NVL with timestamp precision; NVL2, PL/SQL constant propagation and broader scalar/NLS/type semantics outstanding |
-| 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL, pgwire parameters and literal-integer ROWNUM prefix predicates in plain blocks; other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |
+| 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL, pgwire parameters and literal-integer ROWNUM prefix predicates in plain blocks; [single matched-update MERGE](evidence/sql-merge-matched-update-2026-11-04/README.md) with separate Oracle/PostgreSQL duplicate-match rules, filters and statement rollback; multi-action MERGE and other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |
 | 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: application-schema selection, versioned static function/procedure relation binding, CALL namespaces and documented heap adaptation; general resolution and synonyms outstanding |
 | 8. Transactions and locking | Oracle statement rollback and error continuation, isolation, waits, locks, deadlocks, cancellation and read-only behavior | Partial: [nested-block contracts](evidence/oracle-nested-block-contracts-2026-11-02/README.md) distinguish new Oracle routine statement rollback from native PostgreSQL block rollback; [blocking locking reads and protocol progress](evidence/sql-row-lock-waits-2026-11-03/README.md) have separate Oracle/PostgreSQL comparisons; general transactions, DDL commits and broader locking qualification outstanding |
 | 9. DDL lifecycle | Oracle implicit commits, replacement, dependency invalidation, invalid-object catalogs and recompilation | Partial: tested procedure replacement after cached calls; Oracle implicit commits, dependencies and invalid-object lifecycle remain outstanding |

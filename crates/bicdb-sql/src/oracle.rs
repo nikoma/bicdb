@@ -995,6 +995,8 @@ fn syntax_word(value: &str, preview: bool) -> bool {
         && matches!(
             value,
             "SCHEMA"
+                | "MERGE"
+                | "MATCHED"
                 | "BYTEA"
                 | "COPY"
                 | "STDIN"

@@ -1,0 +1,56 @@
+{
+  "application_qualified": false,
+  "runtime_binary_sha256": "e80a31e35ba311db3952d822441360b6aedfbdc0a472fe218d8f840502626cd4",
+  "cases": [
+    {
+      "type": "CHARACTER VARYING(6)",
+      "source": {
+        "rows": [
+          [
+            "en_US"
+          ]
+        ]
+      },
+      "target": {
+        "exception": "SyntaxError",
+        "sqlstate": "42601",
+        "detail": "invalid SQL: sql parser error: Expected: ), found: \"VARYING\" at Line: 1, Column: 38"
+      },
+      "matched": false
+    },
+    {
+      "type": "CHAR VARYING(6)",
+      "source": {
+        "rows": [
+          [
+            "en_US"
+          ]
+        ]
+      },
+      "target": {
+        "exception": "SyntaxError",
+        "sqlstate": "42601",
+        "detail": "invalid SQL: sql parser error: Expected: ), found: \"VARYING\" at Line: 1, Column: 31"
+      },
+      "matched": false
+    },
+    {
+      "type": "VARCHAR(6)",
+      "source": {
+        "rows": [
+          [
+            "en_US"
+          ]
+        ]
+      },
+      "target": {
+        "rows": [
+          [
+            "en_US"
+          ]
+        ]
+      },
+      "matched": true
+    }
+  ]
+}

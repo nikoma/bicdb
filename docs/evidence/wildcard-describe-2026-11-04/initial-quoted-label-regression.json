@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "source_commit": "743f4337ff78f458ec7d401feae0f62a47bf4233",
+  "result": "failed",
+  "passed_before_failure": 749,
+  "failed_test": "nullable_unique_constraints_keep_profile_rules_across_copy_and_restart",
+  "failure": "Protocol wildcard metadata lowercased quoted Key and Value column labels, causing SQLSTATE 42703 on mixed-case table copy. The suite stopped before protocol integration tests.",
+  "rust_batches": [
+    592,
+    5,
+    121,
+    31
+  ],
+  "rust_failed": 1,
+  "rust_ignored": 3,
+  "memory": {
+    "status": "command_failed",
+    "returncode": 1,
+    "minimum_observed_available_bytes": 21273219072,
+    "peak_group_rss_bytes": 4946046976
+  }
+}

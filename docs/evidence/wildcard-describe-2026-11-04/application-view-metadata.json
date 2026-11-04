@@ -1,0 +1,1198 @@
+{
+  "application_qualified": false,
+  "runtime_binary_sha256": "73bd840fc20119c2b0dd23f0618c11a7b9b0ddbf05bd73f037f78efb358d0134",
+  "source": "Actual Oracle SELECT WHERE 1=0 result column labels",
+  "target": "PostgreSQL protocol Parse and Describe without Execute",
+  "scope": "Case-folded result column names and order only; result values and type equivalence are not qualified",
+  "total": 160,
+  "matched": 127,
+  "success": false,
+  "complete_private_report_sha256": "e904d51925e25ba830106255cc17673d93643f985ad7b8509346c2c4d7f4dac2",
+  "describe_seconds": 7.077,
+  "checks": [
+    {
+      "name": "AD_ALLCLIENTS_V",
+      "matched": true,
+      "elapsed_seconds": 0.601,
+      "source_column_count": 13,
+      "target_column_count": 13
+    },
+    {
+      "name": "AD_ALLROLES_V",
+      "matched": true,
+      "elapsed_seconds": 0.007,
+      "source_column_count": 26,
+      "target_column_count": 26
+    },
+    {
+      "name": "AD_ALLUSERROLES_V",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 27,
+      "target_column_count": 27
+    },
+    {
+      "name": "AD_ALLUSERS_V",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 27,
+      "target_column_count": 27
+    },
+    {
+      "name": "AD_CHANGELOG_V",
+      "matched": true,
+      "elapsed_seconds": 0.002,
+      "source_column_count": 9,
+      "target_column_count": 9
+    },
+    {
+      "name": "AD_FIELD_V",
+      "matched": true,
+      "elapsed_seconds": 0.009,
+      "source_column_count": 73,
+      "target_column_count": 73
+    },
+    {
+      "name": "AD_FIELD_VT",
+      "matched": true,
+      "elapsed_seconds": 0.009,
+      "source_column_count": 74,
+      "target_column_count": 74
+    },
+    {
+      "name": "AD_ORG_V",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 19,
+      "target_column_count": 19
+    },
+    {
+      "name": "AD_SESSIONINFO_V",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 23,
+      "target_column_count": 23
+    },
+    {
+      "name": "AD_TAB_V",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 44,
+      "target_column_count": 44
+    },
+    {
+      "name": "AD_TAB_VT",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 45,
+      "target_column_count": 45
+    },
+    {
+      "name": "AD_USER_ROLES_V",
+      "matched": true,
+      "elapsed_seconds": 0.002,
+      "source_column_count": 2,
+      "target_column_count": 2
+    },
+    {
+      "name": "AD_WINDOW_VT",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 14,
+      "target_column_count": 14
+    },
+    {
+      "name": "C_DUNNING_HEADER_V",
+      "matched": false,
+      "elapsed_seconds": 0.168,
+      "source_column_count": 289,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_DUNNING_HEADER_VT",
+      "matched": true,
+      "elapsed_seconds": 0.032,
+      "source_column_count": 289,
+      "target_column_count": 289
+    },
+    {
+      "name": "C_DUNNING_LINE_V",
+      "matched": false,
+      "elapsed_seconds": 0.17,
+      "source_column_count": 163,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_DUNNING_LINE_VT",
+      "matched": true,
+      "elapsed_seconds": 0.022,
+      "source_column_count": 163,
+      "target_column_count": 163
+    },
+    {
+      "name": "C_INVOICELINE_V",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 27,
+      "target_column_count": 27
+    },
+    {
+      "name": "C_INVOICE_CANDIDATE_V",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 15,
+      "target_column_count": 15
+    },
+    {
+      "name": "C_INVOICE_CREATEFROM_V",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 21,
+      "target_column_count": 21
+    },
+    {
+      "name": "C_INVOICE_HEADER_V",
+      "matched": false,
+      "elapsed_seconds": 0.172,
+      "source_column_count": 330,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_INVOICE_HEADER_VT",
+      "matched": true,
+      "elapsed_seconds": 0.038,
+      "source_column_count": 330,
+      "target_column_count": 330
+    },
+    {
+      "name": "C_INVOICE_LINETAX_V",
+      "matched": false,
+      "elapsed_seconds": 0.169,
+      "source_column_count": 244,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_INVOICE_LINETAX_VT",
+      "matched": false,
+      "elapsed_seconds": 0.168,
+      "source_column_count": 244,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_INVOICE_V",
+      "matched": true,
+      "elapsed_seconds": 0.008,
+      "source_column_count": 59,
+      "target_column_count": 59
+    },
+    {
+      "name": "C_INVOICE_V1",
+      "matched": true,
+      "elapsed_seconds": 0.007,
+      "source_column_count": 51,
+      "target_column_count": 51
+    },
+    {
+      "name": "C_ORDER_HEADER_V",
+      "matched": false,
+      "elapsed_seconds": 0.167,
+      "source_column_count": 473,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_ORDER_HEADER_VT",
+      "matched": true,
+      "elapsed_seconds": 0.052,
+      "source_column_count": 473,
+      "target_column_count": 473
+    },
+    {
+      "name": "C_ORDER_LINETAX_V",
+      "matched": false,
+      "elapsed_seconds": 0.167,
+      "source_column_count": 378,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_ORDER_LINETAX_VT",
+      "matched": false,
+      "elapsed_seconds": 0.166,
+      "source_column_count": 378,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_PAYMENT_V",
+      "matched": true,
+      "elapsed_seconds": 0.011,
+      "source_column_count": 82,
+      "target_column_count": 82
+    },
+    {
+      "name": "C_PAYSELECTION_CHECK_V",
+      "matched": false,
+      "elapsed_seconds": 0.17,
+      "source_column_count": 202,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_PAYSELECTION_CHECK_VT",
+      "matched": true,
+      "elapsed_seconds": 0.024,
+      "source_column_count": 202,
+      "target_column_count": 202
+    },
+    {
+      "name": "C_PAYSELECTION_REMITTANCE_V",
+      "matched": false,
+      "elapsed_seconds": 0.17,
+      "source_column_count": 79,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_PAYSELECTION_REMITTANCE_VT",
+      "matched": true,
+      "elapsed_seconds": 0.011,
+      "source_column_count": 79,
+      "target_column_count": 79
+    },
+    {
+      "name": "C_PROJECT_DETAILS_V",
+      "matched": false,
+      "elapsed_seconds": 0.169,
+      "source_column_count": 132,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_PROJECT_DETAILS_VT",
+      "matched": true,
+      "elapsed_seconds": 0.016,
+      "source_column_count": 132,
+      "target_column_count": 132
+    },
+    {
+      "name": "C_PROJECT_HEADER_V",
+      "matched": false,
+      "elapsed_seconds": 0.168,
+      "source_column_count": 311,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_PROJECT_HEADER_VT",
+      "matched": true,
+      "elapsed_seconds": 0.035,
+      "source_column_count": 311,
+      "target_column_count": 311
+    },
+    {
+      "name": "C_RFQRESPONSELINEQTY_V",
+      "matched": false,
+      "elapsed_seconds": 0.169,
+      "source_column_count": 16,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_RFQRESPONSELINEQTY_VT",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 16,
+      "target_column_count": 16
+    },
+    {
+      "name": "C_RFQRESPONSELINE_V",
+      "matched": false,
+      "elapsed_seconds": 0.167,
+      "source_column_count": 31,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_RFQRESPONSELINE_VT",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 30,
+      "target_column_count": 30
+    },
+    {
+      "name": "C_RFQRESPONSE_V",
+      "matched": false,
+      "elapsed_seconds": 0.167,
+      "source_column_count": 29,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "C_RFQRESPONSE_VT",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 29,
+      "target_column_count": 29
+    },
+    {
+      "name": "C_SALESDASHBOARD",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 10,
+      "target_column_count": 10
+    },
+    {
+      "name": "DD_ORDER_HEADER_V",
+      "matched": false,
+      "elapsed_seconds": 0.168,
+      "source_column_count": 53,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "DD_ORDER_HEADER_VT",
+      "matched": true,
+      "elapsed_seconds": 0.008,
+      "source_column_count": 53,
+      "target_column_count": 53
+    },
+    {
+      "name": "FACT_ACCT_BALANCE",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 31,
+      "target_column_count": 31
+    },
+    {
+      "name": "GL_JOURNALLINE_ACCT_V",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 37,
+      "target_column_count": 37
+    },
+    {
+      "name": "M_COSTMOVEMENT_V",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 38,
+      "target_column_count": 38
+    },
+    {
+      "name": "M_INOUTCONFIRM_V",
+      "matched": false,
+      "elapsed_seconds": 0.17,
+      "source_column_count": 34,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "M_INOUTCONFIRM_VT",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 34,
+      "target_column_count": 34
+    },
+    {
+      "name": "M_INOUTLINEMA_RETURNED",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 14,
+      "target_column_count": 14
+    },
+    {
+      "name": "M_INOUTLINEMA_V",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 14,
+      "target_column_count": 14
+    },
+    {
+      "name": "M_INOUTLINEMA_VT",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 14,
+      "target_column_count": 14
+    },
+    {
+      "name": "M_INOUT_CANDIDATE_V",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 19,
+      "target_column_count": 19
+    },
+    {
+      "name": "M_INOUT_CREATEFROM_V",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 23,
+      "target_column_count": 23
+    },
+    {
+      "name": "M_INOUT_HEADER_V",
+      "matched": false,
+      "elapsed_seconds": 0.169,
+      "source_column_count": 236,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "M_INOUT_HEADER_VT",
+      "matched": true,
+      "elapsed_seconds": 0.029,
+      "source_column_count": 236,
+      "target_column_count": 236
+    },
+    {
+      "name": "M_INOUT_LINECONFIRM_V",
+      "matched": false,
+      "elapsed_seconds": 0.168,
+      "source_column_count": 40,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "M_INOUT_LINECONFIRM_VT",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 40,
+      "target_column_count": 40
+    },
+    {
+      "name": "M_INOUT_LINE_V",
+      "matched": false,
+      "elapsed_seconds": 0.168,
+      "source_column_count": 191,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "M_INOUT_LINE_VT",
+      "matched": false,
+      "elapsed_seconds": 0.167,
+      "source_column_count": 191,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "M_MOVEMENTLINEMA_V",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 15,
+      "target_column_count": 15
+    },
+    {
+      "name": "M_MOVEMENTLINEMA_VT",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 15,
+      "target_column_count": 15
+    },
+    {
+      "name": "M_MOVEMENT_CANDIDATE_V",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 12,
+      "target_column_count": 12
+    },
+    {
+      "name": "M_PACKAGELINES_AVAIL_V",
+      "matched": true,
+      "elapsed_seconds": 0.002,
+      "source_column_count": 9,
+      "target_column_count": 9
+    },
+    {
+      "name": "M_PRODUCT_BOM",
+      "matched": false,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 15,
+      "target_column_count": 15
+    },
+    {
+      "name": "M_PRODUCT_STOCK_V",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 17,
+      "target_column_count": 17
+    },
+    {
+      "name": "M_PRODUCT_SUBSTITUTERELATED_V",
+      "matched": false,
+      "elapsed_seconds": 0.166,
+      "source_column_count": 18,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "M_RMA_CREATEFROM_V",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 15,
+      "target_column_count": 15
+    },
+    {
+      "name": "M_STORAGE",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 16,
+      "target_column_count": 16
+    },
+    {
+      "name": "M_TRANSACTION_V",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 24,
+      "target_column_count": 24
+    },
+    {
+      "name": "PP_ORDER_BOMLINE_V",
+      "matched": false,
+      "elapsed_seconds": 0.167,
+      "source_column_count": 45,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "PP_ORDER_BOMLINE_VT",
+      "matched": true,
+      "elapsed_seconds": 0.007,
+      "source_column_count": 46,
+      "target_column_count": 46
+    },
+    {
+      "name": "PP_ORDER_BOM_HEADER_V",
+      "matched": false,
+      "elapsed_seconds": 0.167,
+      "source_column_count": 63,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "PP_ORDER_BOM_HEADER_VT",
+      "matched": true,
+      "elapsed_seconds": 0.01,
+      "source_column_count": 63,
+      "target_column_count": 63
+    },
+    {
+      "name": "PP_ORDER_HEADER_V",
+      "matched": false,
+      "elapsed_seconds": 0.175,
+      "source_column_count": 66,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "PP_ORDER_HEADER_VT",
+      "matched": true,
+      "elapsed_seconds": 0.009,
+      "source_column_count": 66,
+      "target_column_count": 66
+    },
+    {
+      "name": "PP_ORDER_NODE_V",
+      "matched": false,
+      "elapsed_seconds": 0.167,
+      "source_column_count": 44,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "PP_ORDER_NODE_VT",
+      "matched": true,
+      "elapsed_seconds": 0.007,
+      "source_column_count": 44,
+      "target_column_count": 44
+    },
+    {
+      "name": "PP_ORDER_WORKFLOW_HEADER_V",
+      "matched": false,
+      "elapsed_seconds": 0.167,
+      "source_column_count": 71,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "PP_ORDER_WORKFLOW_HEADER_VT",
+      "matched": true,
+      "elapsed_seconds": 0.01,
+      "source_column_count": 72,
+      "target_column_count": 72
+    },
+    {
+      "name": "PP_PRODUCT_BOMLINE_V",
+      "matched": false,
+      "elapsed_seconds": 0.168,
+      "source_column_count": 31,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "PP_PRODUCT_BOMLINE_VT",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 31,
+      "target_column_count": 31
+    },
+    {
+      "name": "RV_ALLOCATION",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 38,
+      "target_column_count": 38
+    },
+    {
+      "name": "RV_ASSET_CUSTOMER",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 23,
+      "target_column_count": 23
+    },
+    {
+      "name": "RV_ASSET_DELIVERY",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 28,
+      "target_column_count": 28
+    },
+    {
+      "name": "RV_ASSET_SUMMONTH",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 23,
+      "target_column_count": 23
+    },
+    {
+      "name": "RV_BPARTNER",
+      "matched": true,
+      "elapsed_seconds": 0.019,
+      "source_column_count": 148,
+      "target_column_count": 148
+    },
+    {
+      "name": "RV_BPARTNEROPEN",
+      "matched": false,
+      "elapsed_seconds": 0.169,
+      "source_column_count": 33,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "RV_CASH_DETAIL",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 24,
+      "target_column_count": 24
+    },
+    {
+      "name": "RV_CLICK_MONTH",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 8,
+      "target_column_count": 8
+    },
+    {
+      "name": "RV_CLICK_UNPROCESSED",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 18,
+      "target_column_count": 18
+    },
+    {
+      "name": "RV_COMMISSIONRUNDETAIL",
+      "matched": true,
+      "elapsed_seconds": 0.033,
+      "source_column_count": 283,
+      "target_column_count": 283
+    },
+    {
+      "name": "RV_COST",
+      "matched": true,
+      "elapsed_seconds": 0.012,
+      "source_column_count": 92,
+      "target_column_count": 92
+    },
+    {
+      "name": "RV_COSTDETAIL",
+      "matched": true,
+      "elapsed_seconds": 0.014,
+      "source_column_count": 106,
+      "target_column_count": 106
+    },
+    {
+      "name": "RV_COSTSUMMARY",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 19,
+      "target_column_count": 19
+    },
+    {
+      "name": "RV_C_INVOICE",
+      "matched": true,
+      "elapsed_seconds": 0.02,
+      "source_column_count": 167,
+      "target_column_count": 167
+    },
+    {
+      "name": "RV_C_INVOICELINE",
+      "matched": true,
+      "elapsed_seconds": 0.016,
+      "source_column_count": 131,
+      "target_column_count": 131
+    },
+    {
+      "name": "RV_C_INVOICETAX",
+      "matched": true,
+      "elapsed_seconds": 0.017,
+      "source_column_count": 136,
+      "target_column_count": 136
+    },
+    {
+      "name": "RV_C_INVOICE_CUSTOMERPRODQTR",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 14,
+      "target_column_count": 14
+    },
+    {
+      "name": "RV_C_INVOICE_CUSTOMERVENDQTR",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 13,
+      "target_column_count": 13
+    },
+    {
+      "name": "RV_C_INVOICE_DAY",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 12,
+      "target_column_count": 12
+    },
+    {
+      "name": "RV_C_INVOICE_MONTH",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 12,
+      "target_column_count": 12
+    },
+    {
+      "name": "RV_C_INVOICE_PRODMONTH",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 13,
+      "target_column_count": 13
+    },
+    {
+      "name": "RV_C_INVOICE_PRODUCTMONTH",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 13,
+      "target_column_count": 13
+    },
+    {
+      "name": "RV_C_INVOICE_PRODUCTQTR",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 13,
+      "target_column_count": 13
+    },
+    {
+      "name": "RV_C_INVOICE_PRODWEEK",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 13,
+      "target_column_count": 13
+    },
+    {
+      "name": "RV_C_INVOICE_VENDORMONTH",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 13,
+      "target_column_count": 13
+    },
+    {
+      "name": "RV_C_INVOICE_WEEK",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 12,
+      "target_column_count": 12
+    },
+    {
+      "name": "RV_C_RFQRESPONSE",
+      "matched": true,
+      "elapsed_seconds": 0.007,
+      "source_column_count": 33,
+      "target_column_count": 33
+    },
+    {
+      "name": "RV_C_RFQ_UNANSWERED",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 20,
+      "target_column_count": 20
+    },
+    {
+      "name": "RV_DD_ORDERDETAIL",
+      "matched": true,
+      "elapsed_seconds": 0.009,
+      "source_column_count": 48,
+      "target_column_count": 48
+    },
+    {
+      "name": "RV_FACT_ACCT",
+      "matched": true,
+      "elapsed_seconds": 0.029,
+      "source_column_count": 200,
+      "target_column_count": 200
+    },
+    {
+      "name": "RV_FACT_ACCT_DAY",
+      "matched": true,
+      "elapsed_seconds": 0.009,
+      "source_column_count": 41,
+      "target_column_count": 41
+    },
+    {
+      "name": "RV_FACT_ACCT_PERIOD",
+      "matched": true,
+      "elapsed_seconds": 0.008,
+      "source_column_count": 40,
+      "target_column_count": 40
+    },
+    {
+      "name": "RV_FACT_ADAXA",
+      "matched": true,
+      "elapsed_seconds": 0.007,
+      "source_column_count": 43,
+      "target_column_count": 43
+    },
+    {
+      "name": "RV_FACT_SIMPLE",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 17,
+      "target_column_count": 17
+    },
+    {
+      "name": "RV_INOUTCONFIRM",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 21,
+      "target_column_count": 21
+    },
+    {
+      "name": "RV_INOUTDETAILS",
+      "matched": true,
+      "elapsed_seconds": 0.017,
+      "source_column_count": 125,
+      "target_column_count": 125
+    },
+    {
+      "name": "RV_INOUTLINECONFIRM",
+      "matched": true,
+      "elapsed_seconds": 0.007,
+      "source_column_count": 29,
+      "target_column_count": 29
+    },
+    {
+      "name": "RV_M_FORECAST",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 21,
+      "target_column_count": 21
+    },
+    {
+      "name": "RV_M_FORECAST_PERIOD",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 12,
+      "target_column_count": 12
+    },
+    {
+      "name": "RV_M_PRODUCT_WHEREUSED_V",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 12,
+      "target_column_count": 12
+    },
+    {
+      "name": "RV_M_REQUISITION",
+      "matched": true,
+      "elapsed_seconds": 0.007,
+      "source_column_count": 30,
+      "target_column_count": 30
+    },
+    {
+      "name": "RV_M_TRANSACTION",
+      "matched": true,
+      "elapsed_seconds": 0.014,
+      "source_column_count": 105,
+      "target_column_count": 105
+    },
+    {
+      "name": "RV_M_TRANSACTION_SUM",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 8,
+      "target_column_count": 8
+    },
+    {
+      "name": "RV_OPENITEM",
+      "matched": false,
+      "elapsed_seconds": 0.172,
+      "source_column_count": 69,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "RV_OPENITEMTODATE",
+      "matched": false,
+      "elapsed_seconds": 0.174,
+      "source_column_count": 24,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "RV_ORDERDETAIL",
+      "matched": true,
+      "elapsed_seconds": 0.023,
+      "source_column_count": 158,
+      "target_column_count": 158
+    },
+    {
+      "name": "RV_PAYMENT",
+      "matched": true,
+      "elapsed_seconds": 0.014,
+      "source_column_count": 89,
+      "target_column_count": 89
+    },
+    {
+      "name": "RV_PP_MRP",
+      "matched": false,
+      "elapsed_seconds": 0.172,
+      "source_column_count": 43,
+      "target_column_count": 0,
+      "exception": "RuntimeError",
+      "error_kind": "collection not found"
+    },
+    {
+      "name": "RV_PP_OPERATION_ACTIVITY",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 19,
+      "target_column_count": 19
+    },
+    {
+      "name": "RV_PP_ORDER",
+      "matched": true,
+      "elapsed_seconds": 0.009,
+      "source_column_count": 59,
+      "target_column_count": 59
+    },
+    {
+      "name": "RV_PP_ORDER_BOMLINE",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 23,
+      "target_column_count": 23
+    },
+    {
+      "name": "RV_PP_ORDER_RECEIPT_ISSUE",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 23,
+      "target_column_count": 23
+    },
+    {
+      "name": "RV_PP_ORDER_STORAGE",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 28,
+      "target_column_count": 28
+    },
+    {
+      "name": "RV_PP_ORDER_TRANSACTIONS",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 24,
+      "target_column_count": 24
+    },
+    {
+      "name": "RV_PP_ORDER_WORKFLOW",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 29,
+      "target_column_count": 29
+    },
+    {
+      "name": "RV_PP_PRODUCT_BOMLINE",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 29,
+      "target_column_count": 29
+    },
+    {
+      "name": "RV_PRINTFORMATDETAIL",
+      "matched": true,
+      "elapsed_seconds": 0.012,
+      "source_column_count": 67,
+      "target_column_count": 67
+    },
+    {
+      "name": "RV_PROJECTCYCLE",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 41,
+      "target_column_count": 41
+    },
+    {
+      "name": "RV_PROJECTLINEISSUE",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 32,
+      "target_column_count": 32
+    },
+    {
+      "name": "RV_REQUESTUPDATES",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 13,
+      "target_column_count": 13
+    },
+    {
+      "name": "RV_REQUESTUPDATES_ONLY",
+      "matched": true,
+      "elapsed_seconds": 0.002,
+      "source_column_count": 9,
+      "target_column_count": 9
+    },
+    {
+      "name": "RV_REQUESTUPDATES_V",
+      "matched": true,
+      "elapsed_seconds": 0.002,
+      "source_column_count": 9,
+      "target_column_count": 9
+    },
+    {
+      "name": "RV_STORAGE",
+      "matched": true,
+      "elapsed_seconds": 0.012,
+      "source_column_count": 96,
+      "target_column_count": 96
+    },
+    {
+      "name": "RV_STORAGE_PER_PRODUCT",
+      "matched": true,
+      "elapsed_seconds": 0.005,
+      "source_column_count": 20,
+      "target_column_count": 20
+    },
+    {
+      "name": "RV_TRANSACTION",
+      "matched": true,
+      "elapsed_seconds": 0.027,
+      "source_column_count": 215,
+      "target_column_count": 215
+    },
+    {
+      "name": "RV_T_1099EXTRACT",
+      "matched": true,
+      "elapsed_seconds": 0.007,
+      "source_column_count": 40,
+      "target_column_count": 40
+    },
+    {
+      "name": "RV_UNPOSTED",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 20,
+      "target_column_count": 20
+    },
+    {
+      "name": "RV_UNPROCESSED",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 18,
+      "target_column_count": 18
+    },
+    {
+      "name": "RV_WAREHOUSEPRICE",
+      "matched": true,
+      "elapsed_seconds": 0.004,
+      "source_column_count": 26,
+      "target_column_count": 26
+    },
+    {
+      "name": "R_REQUEST_V",
+      "matched": true,
+      "elapsed_seconds": 0.009,
+      "source_column_count": 64,
+      "target_column_count": 64
+    },
+    {
+      "name": "T_BOMLINE_COSTS",
+      "matched": true,
+      "elapsed_seconds": 0.006,
+      "source_column_count": 39,
+      "target_column_count": 39
+    },
+    {
+      "name": "T_INVOICEGL_V",
+      "matched": true,
+      "elapsed_seconds": 0.015,
+      "source_column_count": 126,
+      "target_column_count": 126
+    },
+    {
+      "name": "T_RV_RECONCILIATION",
+      "matched": true,
+      "elapsed_seconds": 0.024,
+      "source_column_count": 202,
+      "target_column_count": 202
+    },
+    {
+      "name": "X_PACKAGELINEWEIGHT",
+      "matched": true,
+      "elapsed_seconds": 0.003,
+      "source_column_count": 9,
+      "target_column_count": 9
+    }
+  ]
+}

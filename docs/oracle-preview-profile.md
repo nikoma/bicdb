@@ -1058,3 +1058,9 @@ Twelve Oracle and twelve native cases retain numeric values and NUMERIC transpor
 types through prepared text/binary queries, including NULL and empty results.
 General query typing and the separately reproduced pending typed-index visibility
 gap remain open; the application is not fully qualified.
+
+The [pending typed-index visibility checkpoint](evidence/sql-pending-index-visibility-2026-11-03/README.md)
+subsequently reuses the core committed-key projection for pending candidates.
+It matches 24 Oracle and 24 native transaction-workload expectations while
+retaining indexed execution. This qualifies the bounded own-write rules, not
+general isolation, distributed transactions or complete application workflows.

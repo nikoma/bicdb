@@ -1,0 +1,73 @@
+{
+  "format": 1,
+  "observed_at_utc": "2026-11-04T03:50:13.751547+00:00",
+  "source_commit": "15735661aefed754823f287451166a29c8d25fa1",
+  "runtime_binary_sha256": "7ef8fd930d27d96649407fa089d8fcdb073f6de94878462a4e6ef8830566948c",
+  "build": "development, unoptimized, debug=0",
+  "application_qualified": false,
+  "release_published": false,
+  "compiler_version": 25,
+  "language_oid": 999424,
+  "durable_metadata_format": 5,
+  "checks": {
+    "rust_passed": 1445,
+    "rust_ignored": 3,
+    "rust_batches": [
+      585,
+      7,
+      29,
+      17,
+      2,
+      60,
+      419,
+      121,
+      28,
+      169,
+      3,
+      4,
+      1
+    ],
+    "python_passed": 58,
+    "format": "passed",
+    "diff": "passed",
+    "licenses": "passed",
+    "open_core_boundary": "passed",
+    "ci": "not run in this local qualification"
+  },
+  "oracle": {
+    "matched": 24,
+    "total": 24,
+    "source_qualified": true,
+    "baseline_matched": 16
+  },
+  "postgres": {
+    "matched": 24,
+    "total": 24,
+    "source_qualified": true,
+    "baseline_matched": 16
+  },
+  "numeric_controls": {
+    "oracle_matched": 12,
+    "oracle_total": 12,
+    "postgres_matched": 12,
+    "postgres_total": 12
+  },
+  "execution_assertions": {
+    "index_lookup_required": true,
+    "full_scan_count": 0,
+    "matching_rows_materialized_maximum": 2,
+    "scope": "bounded regression workload in both SQL profiles"
+  },
+  "memory": {
+    "guard_floor_bytes": 8589934592,
+    "full_checks_peak_rss_bytes": 4635828224,
+    "full_checks_minimum_available_bytes": 18418479104,
+    "build_peak_rss_bytes": 2279710720,
+    "build_minimum_available_bytes": 25940078592
+  },
+  "remaining": [
+    "Actual application save and parent-total requalification",
+    "Complete order processing, invoicing, accounting and other application flows",
+    "General transaction/isolation qualification and remaining compatibility workstreams"
+  ]
+}

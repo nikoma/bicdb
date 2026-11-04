@@ -84,6 +84,11 @@ subsequently matches twelve Oracle and twelve native value/type cases through
 prepared text/binary results. It also repairs concurrent diagnostic log framing.
 A generic pending-write/index regression now reproduces the zero-total pattern;
 that transaction-visibility dependency and the complete application remain open.
+The [pending typed-index checkpoint](evidence/sql-pending-index-visibility-2026-11-03/README.md)
+subsequently corrects that generic visibility failure using the committed key
+projection. Oracle and native PostgreSQL controls each match 24/24. The actual
+application's save/totals workflow still requires independent requalification;
+the general transaction programme and full application remain open.
 The milestones below retain their results at the time each was measured.
 
 The original 913 tables and 185,292 rows loaded and passed complete value

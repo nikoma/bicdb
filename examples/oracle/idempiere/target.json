@@ -11,12 +11,15 @@
   "oracle_import_script": "org.adempiere.server-feature/utils.unix/oracle/ImportIdempiere.sh",
   "observed_oracle_database_sql_files": 59,
   "observed_oracle_migration_sql_files": 1085,
-  "status": "Oracle seed and release-13 data imported and reconciled on native BicDB; Oracle-provider desktop shell reached with errors; full application qualification outstanding",
+  "status": "Original Oracle-schema application runs through PostgreSQL drivers with 62 routine definitions and 160 views; selected sales and purchasing workflows qualified locally; full application qualification outstanding",
   "qualification_route": "Oracle schema and SQL, using PostgreSQL client transport with an explicit BicDB Oracle profile",
   "reference_seed_import_requires": "Oracle Data Pump-capable reference instance; seed import and release-13 clone upgrade validated in isolated development fixtures",
   "qualification_evidence": [
     "../../../docs/evidence/idempiere-seed-2026-11-01/README.md",
     "../../../docs/evidence/idempiere-release13-desktop-2026-11-01/README.md",
-    "../../../docs/evidence/idempiere-object-coverage-2026-11-01/README.md"
+    "../../../docs/evidence/idempiere-object-coverage-2026-11-01/README.md",
+    "../../../docs/evidence/idempiere-supplier-invoice-2026-11-04/README.md",
+    "../../../docs/evidence/idempiere-supplier-payment-2026-11-04/README.md",
+    "../../../docs/evidence/idempiere-supplier-reconciliation-2026-11-04/README.md"
   ]
 }

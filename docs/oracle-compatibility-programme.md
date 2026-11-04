@@ -42,8 +42,11 @@ and balanced receipt accounting. The
 [supplier invoice](evidence/idempiere-supplier-invoice-2026-11-04/README.md)
 then completes/posts from that receipt, with posted invoice/receipt and purchase
 matching, balanced accounting, and preserved stock and prior sales/bank state.
-Outbound payment, remaining application workflows and the broader programme
-remain unqualified.
+The [supplier payment](evidence/idempiere-supplier-payment-2026-11-04/README.md)
+then completes/posts with allocation and zero open balances, followed by
+[bank reconciliation](evidence/idempiere-supplier-reconciliation-2026-11-04/README.md)
+with balanced accounting and a bank balance of 87.49. Remaining application
+workflows and the broader programme remain unqualified.
 The checkpoint history below records what was measured at each earlier stage.
 
 The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used

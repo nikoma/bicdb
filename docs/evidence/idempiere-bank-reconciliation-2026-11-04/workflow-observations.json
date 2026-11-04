@@ -1,0 +1,191 @@
+{
+  "application_qualified": false,
+  "workflow_qualified": true,
+  "completion": {
+    "read_only": true,
+    "application_qualified": false,
+    "checks": [
+      {
+        "sql": "SELECT C_BankStatement_ID,DocumentNo,BeginningBalance,StatementDifference,EndingBalance,DocStatus,Processed,Processing,Posted FROM C_BankStatement WHERE C_BankStatement_ID=1000000",
+        "rows": [
+          [
+            "1000000",
+            "1000000",
+            "148",
+            "121.03",
+            "269.03",
+            "CO",
+            "Y",
+            "N",
+            "Y"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT CurrentBalance FROM C_BankAccount WHERE C_BankAccount_ID=100",
+        "rows": [
+          [
+            "269.03"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_Payment_ID,DocStatus,IsAllocated,IsReconciled,Posted FROM C_Payment WHERE C_Payment_ID=1000000",
+        "rows": [
+          [
+            "1000000",
+            "CO",
+            "Y",
+            "Y",
+            "Y"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT AD_PInstance_ID,AD_Process_ID,IsProcessing,Result,ErrorMsg FROM AD_PInstance ORDER BY AD_PInstance_ID DESC FETCH FIRST 2 ROWS ONLY",
+        "rows": [
+          [
+            "1000026",
+            "147",
+            "N",
+            "1",
+            "Completed"
+          ],
+          [
+            "1000025",
+            "149",
+            "N",
+            "1",
+            "Completed"
+          ]
+        ]
+      }
+    ]
+  },
+  "accounting": {
+    "read_only": true,
+    "application_qualified": false,
+    "runtime_binary_sha256": "32d2c0441d23b9a856e2cb45d2d85b263b3272b322b6c88acd2a9b6962eaa009",
+    "checks": [
+      {
+        "sql": "SELECT C_AcctSchema_ID,C_Currency_ID,PostingType,COUNT(*),SUM(AmtAcctDr),SUM(AmtAcctCr),SUM(AmtSourceDr),SUM(AmtSourceCr) FROM Fact_Acct WHERE AD_Table_ID=392 AND Record_ID=1000000 GROUP BY C_AcctSchema_ID,C_Currency_ID,PostingType ORDER BY C_AcctSchema_ID,C_Currency_ID,PostingType",
+        "rows": [
+          [
+            "101",
+            "100",
+            "A",
+            "2",
+            "121.03",
+            "121.03",
+            "121.03",
+            "121.03"
+          ],
+          [
+            "200000",
+            "100",
+            "A",
+            "2",
+            "102.88",
+            "102.88",
+            "121.03",
+            "121.03"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*),SUM(StmtAmt),SUM(TrxAmt),SUM(ChargeAmt),SUM(InterestAmt) FROM C_BankStatementLine WHERE C_Payment_ID=1000000",
+        "rows": [
+          [
+            "1",
+            "121.03",
+            "121.03",
+            "0.0",
+            "0.0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT IsPaid,Posted,GrandTotal FROM C_Invoice WHERE C_Invoice_ID=1000000",
+        "rows": [
+          [
+            "Y",
+            "Y",
+            "123.50"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT invoiceOpen(1000000,0),paymentAvailable(1000000) FROM DUAL",
+        "rows": [
+          [
+            "0",
+            "0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT BOMQtyAvailable(123,103,0),BOMQtyOnHand(123,103,0),BOMQtyReserved(123,103,0),BOMQtyOrdered(123,103,0) FROM DUAL",
+        "rows": [
+          [
+            "18",
+            "18",
+            "0",
+            "0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*),SUM(MovementQty) FROM M_Transaction WHERE M_InOutLine_ID=1000000",
+        "rows": [
+          [
+            "1",
+            "-2.0"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000000",
+        "rows": [
+          [
+            "0",
+            "2",
+            "2"
+          ]
+        ]
+      },
+      {
+        "sql": "SELECT C_BankStatement_ID,BeginningBalance,StatementDifference,EndingBalance,DocStatus,Processed,Posted FROM C_BankStatement WHERE C_BankStatement_ID IN(100,101) ORDER BY C_BankStatement_ID",
+        "rows": [
+          [
+            "100",
+            "0",
+            "148",
+            "148",
+            "CO",
+            "Y",
+            "Y"
+          ],
+          [
+            "101",
+            "0",
+            "0",
+            "0",
+            "DR",
+            "N",
+            "N"
+          ]
+        ]
+      }
+    ],
+    "bank_statement_table_id": 392
+  },
+  "single_statement_line": true,
+  "bank_balance_reconciled": true,
+  "receipt_reconciled": true,
+  "ledger_balanced": true,
+  "invoice_allocation_stock_preserved": true,
+  "seed_statements_preserved": true,
+  "source_commit": "c92dad68bc60184174902acdfedce2422a170420",
+  "source_main_commit": "ab8dda710795482b92f598222aa063d685a646a6",
+  "actions": "Created a new statement through the original UI, selected one receipt through Create lines from, confirmed Complete once; no direct SQL business writes."
+}

@@ -1,0 +1,89 @@
+{
+  "read_only": true,
+  "application_qualified": false,
+  "runtime_binary_sha256": "b78991f08d526131bea683ec9cd1d814f499a941cd8d769953dfe98e301e1f7e",
+  "main_commit": "de9f8b0bcf6b0996a57f3fa1f48ce0707a9a5b2b",
+  "checks": [
+    {
+      "sql": "SELECT DocumentNo,DocStatus,Processed,Processing,SendEMail,Posted FROM M_InOut WHERE M_InOut_ID=1000000",
+      "rows": [
+        [
+          "500000",
+          "CO",
+          "Y",
+          "N",
+          "N",
+          "Y"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT C_AcctSchema_ID,C_Currency_ID,PostingType,COUNT(*),SUM(AmtAcctDr),SUM(AmtAcctCr),SUM(AmtSourceDr),SUM(AmtSourceCr) FROM Fact_Acct WHERE AD_Table_ID=319 AND Record_ID=1000000 GROUP BY C_AcctSchema_ID,C_Currency_ID,PostingType ORDER BY C_AcctSchema_ID,C_Currency_ID,PostingType",
+      "rows": [
+        [
+          "101",
+          "100",
+          "A",
+          "2",
+          "104.19",
+          "104.19",
+          "104.19",
+          "104.19"
+        ],
+        [
+          "200000",
+          "102",
+          "A",
+          "2",
+          "88.56",
+          "88.56",
+          "88.56",
+          "88.56"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT COUNT(*),SUM(MovementQty) FROM M_Transaction WHERE M_InOutLine_ID IN (SELECT M_InOutLine_ID FROM M_InOutLine WHERE M_InOut_ID=1000000)",
+      "rows": [
+        [
+          "1",
+          "-2.0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT BOMQtyAvailable(123,103,0),BOMQtyOnHand(123,103,0),BOMQtyReserved(123,103,0),BOMQtyOrdered(123,103,0) FROM DUAL",
+      "rows": [
+        [
+          "18",
+          "18",
+          "0",
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "0",
+          "2",
+          "0"
+        ]
+      ]
+    }
+  ],
+  "shipment_table_id": 319,
+  "shipment_posted": true,
+  "ledger_balanced": true,
+  "inventory_unchanged_by_repost": true,
+  "ui_posting_error_before": true,
+  "ui_posted_after": true,
+  "posting_requested_through_normal_ui": true,
+  "business_statuses_or_amounts_repaired_with_sql": false,
+  "remaining_unqualified": [
+    "Order-line display lookup NVL/scalar expressions and numeric format pictures",
+    "Invoicing and payments",
+    "The entire application and Oracle compatibility programme"
+  ]
+}

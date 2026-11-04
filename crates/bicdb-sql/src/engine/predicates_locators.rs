@@ -3230,23 +3230,34 @@ impl<'db> SqlEngine<'db> {
         } else {
             composite_record_id_prefix_from_values(schema, &primary_key_columns, &prefix_values)?
         };
-        sql_profile_record_id_prefix_scan();
-        let ids = self.scan_record_ids_with_prefix(table, &id_prefix)?;
+        let ids = self.primary_key_prefix_record_ids(table, schema, &prefix_values, &id_prefix)?;
         let mut matched_ids = Vec::new();
-        for id in ids {
+        for id in ids.iter() {
             let Some(values) =
-                primary_key_values_from_record_id(schema, &primary_key_columns, &id)?
+                self.primary_key_values_for_record_id(table, schema, &primary_key_columns, id)?
             else {
                 return Ok(None);
             };
-            if !primary_key_values_match_prefix(&values, &prefix_values) {
+            if !primary_key_values_match_prefix(
+                schema,
+                &primary_key_columns,
+                &values,
+                &prefix_values,
+            )? {
                 continue;
             }
             let value = values.get(range_idx).cloned().unwrap_or(SqlValue::Null);
-            if primary_key_value_outside_range(&value, lower.as_ref(), upper.as_ref()) {
+            if primary_key_value_outside_range(
+                schema
+                    .column(&primary_key_columns[range_idx])
+                    .ok_or_else(|| SqlError::Unsupported("missing primary key column".into()))?,
+                &value,
+                lower.as_ref(),
+                upper.as_ref(),
+            )? {
                 continue;
             }
-            matched_ids.push(id);
+            matched_ids.push(id.clone());
         }
         if sql_trace_flags().plan {
             eprintln!(

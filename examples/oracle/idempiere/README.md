@@ -24,8 +24,15 @@ also completes/posts with paired stock movements, conserved quantity and balance
 accounting. Its
 [Reverse Correct](../../../docs/evidence/idempiere-inventory-reversal-2026-11-04/README.md)
 also completes/posts, restores stock and offsets accounting in each locator.
-The rest of the application, production operations and complete Oracle
-compatibility remain unqualified.
+The selected [physical inventory adjustment and reversal](../../../docs/evidence/idempiere-physical-inventory-2026-11-04/README.md)
+and [single-product production and reversal](../../../docs/evidence/idempiere-production-2026-11-04/README.md)
+also complete through the original UI. The latest
+[clean NVL2 runtime upgrade](../../../docs/evidence/oracle-nvl2-2026-11-04/README.md#subsequent-application-upgrade)
+preserves all 67 selected workflow observations, all original routine/view
+fingerprints and 141 saved report rows, and reaches the browser desktop.
+The rest of the application, broader production operations and complete Oracle
+compatibility remain unqualified. These observations count assertions, not
+application workflows or a percentage of compatibility.
 The earlier inventory and initial observations below retain their historical
 results; they do not replace this current checkpoint.
 

@@ -58,6 +58,108 @@ impl Running {
 }
 
 #[tokio::test]
+async fn qualified_scalar_aggregates_keep_prepared_types_with_empty_results() {
+    use tokio_postgres::types::Type;
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let directory = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(directory.path(), profile);
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(server.port)
+            .user("bicdb")
+            .dbname("bicdb");
+        if profile != "postgres" {
+            config.options("-c bicdb.sql_profile=oracle-preview-v1");
+        }
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        let connection = tokio::spawn(async move {
+            connection.await.unwrap();
+        });
+        client.batch_execute(r#"CREATE SCHEMA "typed.scope"; CREATE TABLE "public"."outer_keys"("k" INTEGER); CREATE TABLE "typed.scope"."amount_rows"("k" INTEGER,"amount" NUMERIC(20,2)); INSERT INTO "public"."outer_keys" VALUES(1); INSERT INTO "typed.scope"."amount_rows" VALUES(1,123.50)"#).await.unwrap();
+        let sql = r#"SELECT (SELECT COALESCE(SUM(l."amount"),0) FROM "typed.scope"."amount_rows" l WHERE h."k"=l."k") FROM "public"."outer_keys" h WHERE h."k"=$1"#;
+        let statement = client.prepare_typed(sql, &[Type::INT4]).await.unwrap();
+        assert_eq!(*statement.columns()[0].type_(), Type::NUMERIC, "{profile}");
+        let rows = client.query(&statement, &[&1_i32]).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(*rows[0].columns()[0].type_(), Type::NUMERIC);
+        assert!(client
+            .query(&statement, &[&9_i32])
+            .await
+            .unwrap()
+            .is_empty());
+        let messages = client.simple_query(&sql.replace("$1", "1")).await.unwrap();
+        let values: Vec<_> = messages
+            .iter()
+            .filter_map(|message| match message {
+                tokio_postgres::SimpleQueryMessage::Row(row) => {
+                    Some(row.get(0).map(str::to_string))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(values, vec![Some("123.50".into())]);
+        drop(client);
+        connection.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn query_logs_identify_connections_and_transaction_state() {
+    let directory = tempfile::tempdir().unwrap();
+    let log = directory.path().join("queries.jsonl");
+    let config = PgWireConfig {
+        fsync: false,
+        slow_query_log: Some(log.clone()),
+        slow_query_threshold: std::time::Duration::ZERO,
+        ..Default::default()
+    };
+    let engine = PgWireServer::open(directory.path().join("db"), config).unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let copy = engine.clone();
+    let server = Running {
+        server: engine,
+        port,
+        thread: Some(thread::spawn(move || {
+            bicdb_pgwire::serve_existing_listener(copy, listener)
+        })),
+    };
+    let (first, first_task) = server.connect(false).await.unwrap();
+    let (second, second_task) = server.connect(false).await.unwrap();
+    first.batch_execute("SELECT 17").await.unwrap();
+    second
+        .batch_execute("BEGIN; SELECT 18; ROLLBACK")
+        .await
+        .unwrap();
+    drop(first);
+    drop(second);
+    first_task.await.unwrap();
+    second_task.await.unwrap();
+    let entries: Vec<serde_json::Value> = std::fs::read_to_string(log)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert!(entries
+        .iter()
+        .all(|entry| entry["fields"]["connection_id"].as_u64().is_some()));
+    let ids: std::collections::BTreeSet<_> = entries
+        .iter()
+        .map(|entry| entry["fields"]["connection_id"].as_u64().unwrap())
+        .collect();
+    assert_eq!(ids.len(), 2);
+    assert!(entries
+        .iter()
+        .any(|entry| entry["fields"]["query"] == "BEGIN"
+            && entry["fields"]["transaction_active"] == true));
+    assert!(entries
+        .iter()
+        .any(|entry| entry["fields"]["query"] == "ROLLBACK"
+            && entry["fields"]["transaction_active"] == false));
+}
+
+#[tokio::test]
 async fn anchored_types_keep_owner_precision_and_driver_types_after_reopen() {
     use tokio_postgres::types::Type;
     for profile in ["postgres", "oracle-preview-v1"] {

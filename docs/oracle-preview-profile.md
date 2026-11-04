@@ -680,6 +680,12 @@ records query text using the normal bind-parameter redaction settings. This is
 an optional diagnostic for tracing application SQL; it does not alter execution
 or enable logging unless that variable is set.
 
+Query-log events include the server's connection ID and transaction-active state
+after execution, so transaction boundaries can be correlated without logging bind
+values. Structured records are formatted with their terminator before appending
+to avoid joining concurrent events on a JSON line. This diagnostic logger is not
+a durable transaction audit trail.
+
 ```sh
 cargo test --locked -p bicdb-sql --lib oracle::tests
 cargo test --locked -p bicdb-pgwire --test oracle_hr

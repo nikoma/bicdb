@@ -1691,6 +1691,61 @@ fn sql_function_columns_win_over_shadowed_arguments_across_schemas() {
 }
 
 #[test]
+fn qualified_scalar_subquery_aggregates_keep_declared_types() {
+    for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        if profile != oracle::POSTGRES_PROFILE {
+            oracle::ensure_database_profile(&mut db, profile).unwrap();
+        }
+        let mut session = SqlSession::new(&mut db);
+        let mut execute = |sql: &str| {
+            let sql = if profile == oracle::POSTGRES_PROFILE {
+                sql.to_string()
+            } else {
+                oracle::lower_profile_sql(session.db_ref(), sql, profile).unwrap()
+            };
+            session.execute(&sql)
+        };
+        for sql in [
+            r#"CREATE SCHEMA "other.scope""#,
+            r#"CREATE TABLE "public"."amount_rows"("k" INTEGER,"amount" INTEGER)"#,
+            r#"CREATE TABLE "other.scope"."amount_rows"("k" INTEGER,"amount" NUMERIC(20,2))"#,
+            r#"INSERT INTO "public"."amount_rows" VALUES(1,10)"#,
+            r#"INSERT INTO "other.scope"."amount_rows" VALUES(1,123.50)"#,
+        ] {
+            execute(sql).unwrap();
+        }
+        for (predicate, expected) in [(r#"h."k"=l."k""#, "123.50"), (r#"l."k"=9"#, "0")] {
+            let result = execute(&format!(r#"SELECT (SELECT COALESCE(SUM(l."amount"),0) FROM "other.scope"."amount_rows" l WHERE {predicate}) FROM "public"."amount_rows" h WHERE h."k"=1"#)).unwrap();
+            assert_eq!(
+                result.column_types,
+                vec![Some("numeric".into())],
+                "{profile}"
+            );
+            assert_eq!(result.rows[0][0].to_cell(), expected, "{profile}");
+        }
+        let result = execute(r#"SELECT (SELECT SUM(l."amount") FROM "other.scope"."amount_rows" l WHERE h."k"=l."k") FROM "public"."amount_rows" h WHERE h."k"=9"#).unwrap();
+        assert!(result.rows.is_empty());
+        assert_eq!(result.column_types, vec![Some("numeric".into())]);
+        if profile == oracle::POSTGRES_PROFILE {
+            let result = execute(
+                r#"SELECT (SELECT MAX(l."amount") FROM "public"."amount_rows" l WHERE l."k"=1)"#,
+            )
+            .unwrap();
+            assert_eq!(result.column_types, vec![Some("int4".into())]);
+        }
+        drop(execute);
+        let query = parse_single_query("SELECT MAX(amount) FROM amount_rows").unwrap();
+        assert_eq!(
+            scalar_subquery_pg_type(session.db_ref(), &query, &|name| name == "amount_rows"),
+            None,
+            "a CTE must not be typed from its physical namesake"
+        );
+    }
+}
+
+#[test]
 fn bound_expr_rejects_binary_operators_without_bound_semantics() {
     let columns = vec!["items.embedding_value".to_string()];
     let scope = BoundExprScope::new(&columns, &[]);

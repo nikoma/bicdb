@@ -59,7 +59,12 @@ pub fn append_structured_log(path: impl AsRef<Path>, event: &StructuredLogEvent)
         .create(true)
         .append(true)
         .open(path.as_ref())?;
-    writeln!(file, "{}", event.to_json_line()?)?;
+    // Format the complete record before appending. write_fmt can issue a
+    // separate write for the newline, allowing concurrent appenders to join
+    // otherwise valid JSON records on one line.
+    let mut line = event.to_json_line()?;
+    line.push('\n');
+    file.write_all(line.as_bytes())?;
     Ok(())
 }
 
@@ -297,14 +302,17 @@ impl SlowQueryLogEntry {
 }
 
 pub fn append_slow_query_log(path: impl AsRef<Path>, entry: &SlowQueryLogEntry) -> Result<()> {
-    append_structured_log(
-        path,
-        &StructuredLogEvent::new("query.slow", "warn")
+    append_structured_log(path, &StructuredLogEvent::from(entry))
+}
+
+impl From<&SlowQueryLogEntry> for StructuredLogEvent {
+    fn from(entry: &SlowQueryLogEntry) -> Self {
+        StructuredLogEvent::new("query.slow", "warn")
             .with_field("elapsed_ms", entry.elapsed_ms)
             .with_field("rows", entry.rows)
             .with_field("query", entry.query.clone())
-            .with_field("bind_parameters", entry.bind_parameters.clone()),
-    )
+            .with_field("bind_parameters", entry.bind_parameters.clone())
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -1322,6 +1330,45 @@ fn insert_fixed_latency_metrics(
 #[cfg(test)]
 mod redaction_tests {
     use super::*;
+
+    #[test]
+    fn concurrent_structured_appends_keep_complete_json_lines() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("events.jsonl");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+        std::thread::scope(|scope| {
+            for writer in 0..8 {
+                let path = &path;
+                let barrier = barrier.clone();
+                scope.spawn(move || {
+                    barrier.wait();
+                    for sequence in 0..100 {
+                        append_structured_log(
+                            path,
+                            &StructuredLogEvent::new("append.test", "info")
+                                .with_field("writer", writer)
+                                .with_field("sequence", sequence)
+                                .with_field("payload", "record\ncontent".repeat(128)),
+                        )
+                        .unwrap();
+                    }
+                });
+            }
+        });
+        let text = fs::read_to_string(path).unwrap();
+        assert!(text.ends_with('\n'));
+        let mut records = std::collections::BTreeSet::new();
+        for line in text.lines() {
+            let event: StructuredLogEvent = serde_json::from_str(line).unwrap();
+            assert_eq!(event.event, "append.test");
+            assert_eq!(event.fields["payload"], "record\ncontent".repeat(128));
+            assert!(records.insert((
+                event.fields["writer"].as_u64().unwrap(),
+                event.fields["sequence"].as_u64().unwrap()
+            )));
+        }
+        assert_eq!(records.len(), 800);
+    }
 
     /// The three shapes the field-driven redactor missed, each of which put
     /// a live secret or protected data value into the slow-query log, stderr and the

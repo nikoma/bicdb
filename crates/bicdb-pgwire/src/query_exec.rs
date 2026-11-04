@@ -6,6 +6,7 @@ use crate::*;
 
 pub(crate) fn maybe_log_slow_query(
     server: &PgWireServer,
+    state: &ConnectionState,
     sql: &str,
     rows: usize,
     elapsed: Duration,
@@ -23,7 +24,10 @@ pub(crate) fn maybe_log_slow_query(
         &[],
         &server.config.slow_query_redaction,
     );
-    if let Err(error) = append_slow_query_log(path, &entry) {
+    let event = bicdb_core::StructuredLogEvent::from(&entry)
+        .with_field("connection_id", state.connection_id)
+        .with_field("transaction_active", state.in_transaction);
+    if let Err(error) = append_structured_log(path, &event) {
         eprintln!("bicdb slow query log error: {error}");
     }
 }

@@ -1897,11 +1897,14 @@ pub(crate) fn scalar_subquery_pg_type(
             else {
                 return None;
             };
-            let name = object_name(name).ok()?;
-            if shadowed(&name) {
+            if shadowed(&object_name(name).ok()?) {
                 return None;
             }
-            load_schema_shared(db, &name).ok().flatten()?;
+            // Catalog lookup must use the same relation identity as execution:
+            // public qualifiers are elided and other schemas are encoded.
+            // Keep the SQL spelling above for the enclosing CTE shadow check.
+            let collection = relation_name(name).ok()?;
+            load_schema_shared(db, &collection).ok().flatten()?;
             // Aggregate return types need the subquery's relation/alias
             // environment. The schema-only helper cannot type MAX(alias.n)
             // and used to advertise int8 from the observed value instead of

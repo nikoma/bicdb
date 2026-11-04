@@ -61,7 +61,7 @@ use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use bicdb_core::replication_transport;
 use bicdb_core::{
-    append_slow_query_log, load_distribution_config, operational_event_json, plan_point_query,
+    append_structured_log, load_distribution_config, operational_event_json, plan_point_query,
     plan_scatter_query, plan_shard_local_write, redact_query_text, save_distribution_config,
     start_cluster_data_server, AuthenticationStrength, AutomaticRangeAntiEntropyController,
     AutomaticRangeAntiEntropyLimits, BicDb, BicDbError, CancellationToken, ClusterDataNodeService,
@@ -4548,7 +4548,7 @@ fn execute_server_sql_with_options_normalized(
         clear_active_query(server, state);
         return Err(error);
     }
-    maybe_log_slow_query(server, sql, result.rows.len(), started.elapsed());
+    maybe_log_slow_query(server, state, sql, result.rows.len(), started.elapsed());
 
     state.queries_executed += 1;
     server.queries_executed.fetch_add(1, Ordering::SeqCst);

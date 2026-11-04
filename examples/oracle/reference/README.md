@@ -412,6 +412,15 @@ variable-conflict policies. Both modes use `BICDB_PG_DSN`, prepared query parame
 explicit source expectations, and owned nonce-named tables/functions that are
 removed afterward. No reserved internal-function prefix is used.
 
+`scalar_subquery_types.py --reference oracle --oracle-config /private/oracle.json
+--output /private/scalar-types.json` compares scalar aggregate values and result
+types. `--reference postgres` uses `ORACLE_CONTROL_PG_DSN` for the native control;
+both modes use `BICDB_PG_DSN`. Six shapes run with prepared parameters in text and
+binary result formats, including NULL and empty results. The Oracle source must
+report NUMBER; the selected PostgreSQL transport must report NUMERIC OID 1700
+independently of row values. The native source checks that OID directly. This
+qualifies the bounded one-relation aggregate shapes, not general subquery typing.
+
 
 The `routine_namespaces.py --suite procedures` fixture checks actual Oracle CALL
 effects, replacement, defaults, qualified nested calls, OUT/IN OUT copyback and

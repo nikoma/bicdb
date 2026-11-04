@@ -217,6 +217,23 @@ fn projected(db: &BicDb, query: &Query, expr: &Expr, depth: usize) -> Option<Log
     }
     match expr {
         Expr::Nested(inner) => return projected(db, query, inner, depth + 1),
+        Expr::Subquery(inner) => {
+            let SetExpr::Select(select) = inner.body.as_ref() else {
+                return None;
+            };
+            let [item] = select.projection.as_slice() else {
+                return None;
+            };
+            let (SelectItem::UnnamedExpr(value) | SelectItem::ExprWithAlias { expr: value, .. }) =
+                item
+            else {
+                return None;
+            };
+            // SQL transport exposes both Oracle DATE and TIMESTAMP as a
+            // timestamp. Preserve the projected column's logical provenance
+            // before generic type inference loses that distinction.
+            return projected(db, inner, value, depth + 1);
+        }
         Expr::Cast {
             data_type: DataType::Date,
             ..

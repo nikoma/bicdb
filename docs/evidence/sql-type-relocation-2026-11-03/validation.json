@@ -1,0 +1,52 @@
+{
+  "format": 1,
+  "source_commit": "acd34767a7ff78cadb8db3bb3c0686886e6c2a2b",
+  "fixture_source_commit": "dde9cf7d4d25eb50946705edaaa613d1b0317215",
+  "runtime_binary_sha256": "86b09dee244d09f2665d4bfa6a84ee0bdf119b1f5be7560380d2a15f3571eef4",
+  "build": "development, unoptimized, debug=0",
+  "compiler_version": 26,
+  "durable_metadata_format": 5,
+  "application_qualified": false,
+  "release_published": false,
+  "production_deployment_verified": false,
+  "checks": {
+    "rust_passed_executions": 598,
+    "rust_batches": [
+      592,
+      6
+    ],
+    "rust_ignored": 3,
+    "python_passed": 25,
+    "format": "passed",
+    "diff": "passed",
+    "licenses": "passed",
+    "open_core_boundary": "passed",
+    "postgres_reference_matched": 7,
+    "postgres_reference_total": 7,
+    "prior_reference_matched": 3,
+    "oracle_clock_retained": 75,
+    "postgres_clock_retained": 12,
+    "ci": "New source CI not run in this local qualification; prior failing integration test now passes locally"
+  },
+  "resources": {
+    "start_available_gib": 14,
+    "minimum_available_gib": 8,
+    "minimum_observed_available_bytes": 10276024320,
+    "peak_process_group_rss_bytes": 5127581696,
+    "initial_collector_guard_status": "command_failed",
+    "initial_collector_guard_returncode": 1,
+    "initial_collector_failure": "Behavioral cases passed; schema cleanup returned two 0A000 errors. Corrected fixture scope and final reference reruns pass with zero cleanup errors.",
+    "cleanup": {
+      "format": 1,
+      "removed_files": 2,
+      "reclaimed_bytes": 646250760,
+      "by_category": {
+        "completed_test_executable": {
+          "files": 2,
+          "bytes": 646250760
+        }
+      },
+      "current_example_binary_preserved": true
+    }
+  }
+}

@@ -1,0 +1,265 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "reference_version": 180004,
+  "cases": [
+    {
+      "id": "initial_signature",
+      "source": {
+        "id": "initial_signature",
+        "expected": [
+          [
+            "value bicdb_type_moves_a.state_5383c1e081",
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "actual": [
+          [
+            "value bicdb_type_moves_a.state_5383c1e081",
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "initial_signature",
+        "expected": [
+          [
+            "value bicdb_type_moves_a.state_5383c1e081",
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "actual": [
+          [
+            "value bicdb_type_moves_a.state_5383c1e081",
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "signature_in_transaction",
+      "source": {
+        "id": "signature_in_transaction",
+        "expected": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_b.state_5383c1e081_moved"
+          ]
+        ],
+        "actual": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_b.state_5383c1e081_moved"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "signature_in_transaction",
+        "expected": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_b.state_5383c1e081_moved"
+          ]
+        ],
+        "actual": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "qualified": false
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "signature_after_rollback",
+      "source": {
+        "id": "signature_after_rollback",
+        "expected": [
+          [
+            "value bicdb_type_moves_a.state_5383c1e081",
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "actual": [
+          [
+            "value bicdb_type_moves_a.state_5383c1e081",
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "signature_after_rollback",
+        "expected": [
+          [
+            "value bicdb_type_moves_a.state_5383c1e081",
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "actual": [
+          [
+            "value bicdb_type_moves_a.state_5383c1e081",
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "committed_signature",
+      "source": {
+        "id": "committed_signature",
+        "expected": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_b.state_5383c1e081_moved"
+          ]
+        ],
+        "actual": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_b.state_5383c1e081_moved"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "committed_signature",
+        "expected": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_b.state_5383c1e081_moved"
+          ]
+        ],
+        "actual": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "qualified": false
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "relocated_argument_and_return",
+      "source": {
+        "id": "relocated_argument_and_return",
+        "expected": [
+          [
+            "ready"
+          ]
+        ],
+        "actual": [
+          [
+            "ready"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "relocated_argument_and_return",
+        "expected": [
+          [
+            "ready"
+          ]
+        ],
+        "qualified": false,
+        "exception": "FeatureNotSupported",
+        "sqlstate": "0A000"
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "body_literal_preserved",
+      "source": {
+        "id": "body_literal_preserved",
+        "expected": [
+          [
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "actual": [
+          [
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "body_literal_preserved",
+        "expected": [
+          [
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "actual": [
+          [
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "signature_after_reconnect",
+      "source": {
+        "id": "signature_after_reconnect",
+        "actual": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_b.state_5383c1e081_moved"
+          ]
+        ],
+        "expected": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_b.state_5383c1e081_moved"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "signature_after_reconnect",
+        "actual": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_a.state_5383c1e081"
+          ]
+        ],
+        "expected": [
+          [
+            "value bicdb_type_moves_b.state_5383c1e081_moved",
+            "bicdb_type_moves_b.state_5383c1e081_moved"
+          ]
+        ],
+        "qualified": false
+      },
+      "source_qualified": true,
+      "matched": false
+    }
+  ],
+  "total": 7,
+  "matched": 3,
+  "cleanup_errors": [],
+  "source_qualified": true,
+  "success": false,
+  "target_sql_profile": "postgres",
+  "reference": "postgres",
+  "runtime_binary_sha256": "0ce04cb2b5caa01712f8c0732ee62bd2e03210626d81a25be0be55ae8afa572d",
+  "postgres_version_num": 180004,
+  "fixture_source_sha256": "5a4b7ded04b523026543e12aa0631746b421fc0b17940f94217891b2099f65fc"
+}

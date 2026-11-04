@@ -1,0 +1,27 @@
+{
+  "observed_at_utc": "2026-11-04T06:03:54.778334+00:00",
+  "runtime_binary_sha256": "0ce04cb2b5caa01712f8c0732ee62bd2e03210626d81a25be0be55ae8afa572d",
+  "application_qualified": false,
+  "order": [
+    {
+      "c_order_id": "1000000",
+      "documentno": "50000",
+      "docstatus": "CO",
+      "docaction": "CL",
+      "processed": "Y",
+      "processing": "N",
+      "totallines": "123.50",
+      "grandtotal": "123.50"
+    }
+  ],
+  "line": [
+    {
+      "c_orderline_id": "1000000",
+      "qtyordered": "2",
+      "qtyreserved": "2",
+      "qtydelivered": "0",
+      "qtyinvoiced": "0",
+      "linenetamt": "123.50"
+    }
+  ]
+}

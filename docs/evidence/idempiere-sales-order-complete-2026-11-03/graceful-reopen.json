@@ -1,0 +1,42 @@
+{
+  "runtime_binary_sha256": "0ce04cb2b5caa01712f8c0732ee62bd2e03210626d81a25be0be55ae8afa572d",
+  "application_qualified": false,
+  "stopped_application_clone_only": true,
+  "checks": [
+    {
+      "sql": "SELECT DocumentNo,DocStatus,Processed,Processing,GrandTotal FROM C_Order WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "50000",
+          "CO",
+          "Y",
+          "N",
+          "123.50"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT QtyOrdered,QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "2",
+          "2",
+          "0",
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT BOMQTYAVAILABLE(123,103,0),BOMQTYONHAND(123,103,0),BOMQTYRESERVED(123,103,0),BOMQTYORDERED(123,103,0) FROM DUAL",
+      "rows": [
+        [
+          "18",
+          "20",
+          "2",
+          "0"
+        ]
+      ]
+    }
+  ],
+  "order_commit_survives_graceful_reopen": true
+}

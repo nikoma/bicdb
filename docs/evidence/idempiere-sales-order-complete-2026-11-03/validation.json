@@ -1,0 +1,38 @@
+{
+  "format": 1,
+  "source_commit": "cf8e65a58b0afaba739ca866cb48d40c1d24dc2e",
+  "merged_source_main_commit": "7474705f3b5a86e181a3dd6d7d8b3a9c7affb838",
+  "runtime_binary_sha256": "0ce04cb2b5caa01712f8c0732ee62bd2e03210626d81a25be0be55ae8afa572d",
+  "original_routine_definitions_loaded": 62,
+  "driver_transport": "PostgreSQL",
+  "application_qualified": false,
+  "selected_sales_order_complete_verified": true,
+  "fresh_browser_status_verified": true,
+  "graceful_reopen_verified": true,
+  "release_published": false,
+  "production_deployment_verified": false,
+  "application_running": false,
+  "intentional_graceful_stop": true,
+  "prior_browser_observations": [
+    "Initial login observation timed out at 30 seconds; independent browser diagnostic loaded login without JavaScript errors",
+    "A reload verifier searched body text, excluding input values. Its captured named document-status input was Completed. Corrected field-value verification passes on a fresh browser run."
+  ],
+  "resources": {
+    "start_available_gib": 14,
+    "minimum_available_gib": 8,
+    "minimum_observed_available_bytes": 10305437696,
+    "peak_process_group_rss_bytes": 12403494912,
+    "observed_database_rss_kib": 10770748,
+    "guard_status": "completed",
+    "guard_returncode": 0,
+    "memory_growth_qualified": false
+  },
+  "background_accounting_qualified": false,
+  "remaining_scope": [
+    "Shipment/invoice/payment/return/purchasing workflows",
+    "Accounting and background matching record decoding",
+    "Memory endurance and performance",
+    "Nonzero and inclusive tax, authorization, reporting, concurrency and recovery",
+    "Full Oracle compatibility and migration programme"
+  ]
+}

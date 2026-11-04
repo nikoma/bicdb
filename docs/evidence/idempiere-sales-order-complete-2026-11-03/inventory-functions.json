@@ -1,0 +1,26 @@
+{
+  "runtime_binary_sha256": "0ce04cb2b5caa01712f8c0732ee62bd2e03210626d81a25be0be55ae8afa572d",
+  "application_qualified": false,
+  "cases": [
+    {
+      "function": "BOMQTYAVAILABLE",
+      "value": "18",
+      "expected": "18"
+    },
+    {
+      "function": "BOMQTYONHAND",
+      "value": "20",
+      "expected": "20"
+    },
+    {
+      "function": "BOMQTYRESERVED",
+      "value": "2",
+      "expected": "2"
+    },
+    {
+      "function": "BOMQTYORDERED",
+      "value": "0",
+      "expected": "0"
+    }
+  ]
+}

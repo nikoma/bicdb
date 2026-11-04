@@ -598,3 +598,11 @@ typed Describe metadata plus a TO_CHAR ISO-offset value projection because Thin
 mode cannot decode named region IDs directly. The
 [bounded qualification](../../../docs/evidence/oracle-current-time-2026-11-03/README.md)
 documents the precision, transport and application limits.
+
+`postgres_type_relocation.py --reference postgres` exercises native function
+signatures, rollback, execution and body literals across type moves/renames.
+Provision `bicdb_type_moves_a` and `bicdb_type_moves_b` in both dedicated test
+databases first. They remain fixture infrastructure; each run removes its nonce
+functions and types. Schema removal is outside this fixture's qualification.
+The [bounded comparison](../../../docs/evidence/sql-type-relocation-2026-11-03/README.md)
+records the original schema-cleanup failures separately.

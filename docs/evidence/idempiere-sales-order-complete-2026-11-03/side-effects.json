@@ -1,0 +1,125 @@
+{
+  "observed_at_utc": "2026-11-04T06:05:48.327226+00:00",
+  "runtime_binary_sha256": "0ce04cb2b5caa01712f8c0732ee62bd2e03210626d81a25be0be55ae8afa572d",
+  "application_qualified": false,
+  "checks": [
+    {
+      "sql": "SELECT DocumentNo,DocStatus,DocAction,Processed,Processing,SendEMail,TotalLines,GrandTotal,C_DocType_ID FROM C_Order WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "50000",
+          "CO",
+          "CL",
+          "Y",
+          "N",
+          "N",
+          "123.50",
+          "123.50",
+          "132"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT QtyOrdered,QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "2",
+          "2",
+          "0",
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT M_Product_ID,M_Warehouse_ID,Qty,IsSOTrx FROM M_StorageReservation WHERE M_Product_ID=123 AND M_Warehouse_ID=103",
+      "rows": [
+        [
+          "123",
+          "103",
+          "0",
+          "N"
+        ],
+        [
+          "123",
+          "103",
+          "2.0",
+          "Y"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT AD_WF_Process_ID,WFState,Processed,TextMsg FROM AD_WF_Process WHERE Record_ID=1000000 AND AD_Table_ID=259",
+      "rows": [
+        [
+          "1000000",
+          "CT",
+          "Y",
+          "50000: Grand Total=123.50 - BicDB application qualification draft\n - Could not lock record for MOrder[1000000-50000,IsSOTrx=true,C_DocType_ID=0, GrandTotal=123.50] caused by ERROR: invalid SQL: sql parser error: Expected: end of statement, found: \"WAIT\" at Line: 1, Column: 71\n - Could not lock record for MOrder[1000000-50000,IsSOTrx=true,C_DocType_ID=0, GrandTotal=123.50] caused by ERROR: invalid SQL: sql parser error: Expected: end of statement, found: \"WAIT\" at Line: 1, Column: 71"
+        ],
+        [
+          "1000001",
+          "CT",
+          "Y",
+          "50000: Grand Total=123.50 - BicDB application qualification draft\n - Cannot invoke \"java.sql.Timestamp.getTime()\" because \"ts\" is null\n - Cannot invoke \"java.sql.Timestamp.getTime()\" because \"ts\" is null"
+        ],
+        [
+          "1000002",
+          "CC",
+          "Y",
+          "50000: Grand Total=123.50 - BicDB application qualification draft"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT ProcessedOn FROM C_Order WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "1793772201204.2048"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT C_Tax_ID,TaxBaseAmt,TaxAmt FROM C_OrderTax WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "104",
+          "123.50",
+          "0.0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT COUNT(*) FROM M_InOut WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT COUNT(*) FROM C_Invoice WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT WFState,Processed FROM AD_WF_Activity WHERE AD_WF_Process_ID=(SELECT MAX(AD_WF_Process_ID) FROM AD_WF_Process WHERE Record_ID=1000000 AND AD_Table_ID=259)",
+      "rows": [
+        [
+          "CC",
+          "Y"
+        ],
+        [
+          "CC",
+          "Y"
+        ],
+        [
+          "CC",
+          "Y"
+        ]
+      ]
+    }
+  ]
+}

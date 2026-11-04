@@ -1,0 +1,28 @@
+{
+  "runtime_binary_sha256": "0ce04cb2b5caa01712f8c0732ee62bd2e03210626d81a25be0be55ae8afa572d",
+  "fresh_browser_reload": true,
+  "document_number": "50000",
+  "document_fields": [
+    {
+      "name": "C_Order0TotalLines",
+      "value": "123.50",
+      "text": ""
+    },
+    {
+      "name": "C_Order0GrandTotal",
+      "value": "123.50",
+      "text": ""
+    },
+    {
+      "name": "C_Order0DocStatus",
+      "value": "Completed",
+      "text": ""
+    },
+    {
+      "name": "C_Order0DocAction",
+      "value": "",
+      "text": "Document Action"
+    }
+  ],
+  "application_qualified": false
+}

@@ -1,0 +1,729 @@
+{
+  "application_qualified": false,
+  "observations": [
+    {
+      "model": "999.99",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "999.99",
+      "literal": "0",
+      "oracle": "    .00",
+      "postgres": "    .00"
+    },
+    {
+      "model": "999.99",
+      "literal": "12.5",
+      "oracle": "  12.50",
+      "postgres": "  12.50"
+    },
+    {
+      "model": "999.99",
+      "literal": "-12.5",
+      "oracle": " -12.50",
+      "postgres": " -12.50"
+    },
+    {
+      "model": "999.99",
+      "literal": "1234.56",
+      "oracle": "#######",
+      "postgres": " ###.##"
+    },
+    {
+      "model": "999.99",
+      "literal": "-0.004",
+      "oracle": "   -.00",
+      "postgres": "    .00"
+    },
+    {
+      "model": "999.99",
+      "literal": "9999.995",
+      "oracle": "#######",
+      "postgres": " ###.##"
+    },
+    {
+      "model": "999.99",
+      "literal": "1234567890123",
+      "oracle": "#######",
+      "postgres": " ###.##"
+    },
+    {
+      "model": "FM999.99",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "FM999.99",
+      "literal": "0",
+      "oracle": "0.",
+      "postgres": "0."
+    },
+    {
+      "model": "FM999.99",
+      "literal": "12.5",
+      "oracle": "12.5",
+      "postgres": "12.5"
+    },
+    {
+      "model": "FM999.99",
+      "literal": "-12.5",
+      "oracle": "-12.5",
+      "postgres": "-12.5"
+    },
+    {
+      "model": "FM999.99",
+      "literal": "1234.56",
+      "oracle": "#######",
+      "postgres": "###.##"
+    },
+    {
+      "model": "FM999.99",
+      "literal": "-0.004",
+      "oracle": "-0.",
+      "postgres": "0."
+    },
+    {
+      "model": "FM999.99",
+      "literal": "9999.995",
+      "oracle": "#######",
+      "postgres": "###.##"
+    },
+    {
+      "model": "FM999.99",
+      "literal": "1234567890123",
+      "oracle": "#######",
+      "postgres": "###.##"
+    },
+    {
+      "model": "9G990D00",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "9G990D00",
+      "literal": "0",
+      "oracle": "     0.00",
+      "postgres": "     0.00"
+    },
+    {
+      "model": "9G990D00",
+      "literal": "12.5",
+      "oracle": "    12.50",
+      "postgres": "    12.50"
+    },
+    {
+      "model": "9G990D00",
+      "literal": "-12.5",
+      "oracle": "   -12.50",
+      "postgres": "   -12.50"
+    },
+    {
+      "model": "9G990D00",
+      "literal": "1234.56",
+      "oracle": " 1,234.56",
+      "postgres": " 1,234.56"
+    },
+    {
+      "model": "9G990D00",
+      "literal": "-0.004",
+      "oracle": "    -0.00",
+      "postgres": "     0.00"
+    },
+    {
+      "model": "9G990D00",
+      "literal": "9999.995",
+      "oracle": "#########",
+      "postgres": " #,###.##"
+    },
+    {
+      "model": "9G990D00",
+      "literal": "1234567890123",
+      "oracle": "#########",
+      "postgres": " #,###.##"
+    },
+    {
+      "model": "FM9G990D00",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "FM9G990D00",
+      "literal": "0",
+      "oracle": "0.00",
+      "postgres": "0.00"
+    },
+    {
+      "model": "FM9G990D00",
+      "literal": "12.5",
+      "oracle": "12.50",
+      "postgres": "12.50"
+    },
+    {
+      "model": "FM9G990D00",
+      "literal": "-12.5",
+      "oracle": "-12.50",
+      "postgres": "-12.50"
+    },
+    {
+      "model": "FM9G990D00",
+      "literal": "1234.56",
+      "oracle": "1,234.56",
+      "postgres": "1,234.56"
+    },
+    {
+      "model": "FM9G990D00",
+      "literal": "-0.004",
+      "oracle": "-0.00",
+      "postgres": "0.00"
+    },
+    {
+      "model": "FM9G990D00",
+      "literal": "9999.995",
+      "oracle": "#########",
+      "postgres": "#,###.##"
+    },
+    {
+      "model": "FM9G990D00",
+      "literal": "1234567890123",
+      "oracle": "#########",
+      "postgres": "#,###.##"
+    },
+    {
+      "model": "999G999G999G990D00",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "999G999G999G990D00",
+      "literal": "0",
+      "oracle": "               0.00",
+      "postgres": "               0.00"
+    },
+    {
+      "model": "999G999G999G990D00",
+      "literal": "12.5",
+      "oracle": "              12.50",
+      "postgres": "              12.50"
+    },
+    {
+      "model": "999G999G999G990D00",
+      "literal": "-12.5",
+      "oracle": "             -12.50",
+      "postgres": "             -12.50"
+    },
+    {
+      "model": "999G999G999G990D00",
+      "literal": "1234.56",
+      "oracle": "           1,234.56",
+      "postgres": "           1,234.56"
+    },
+    {
+      "model": "999G999G999G990D00",
+      "literal": "-0.004",
+      "oracle": "              -0.00",
+      "postgres": "               0.00"
+    },
+    {
+      "model": "999G999G999G990D00",
+      "literal": "9999.995",
+      "oracle": "          10,000.00",
+      "postgres": "          10,000.00"
+    },
+    {
+      "model": "999G999G999G990D00",
+      "literal": "1234567890123",
+      "oracle": "###################",
+      "postgres": " ###,###,###,###.##"
+    },
+    {
+      "model": "FM999G999G999G990D00",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "FM999G999G999G990D00",
+      "literal": "0",
+      "oracle": "0.00",
+      "postgres": "0.00"
+    },
+    {
+      "model": "FM999G999G999G990D00",
+      "literal": "12.5",
+      "oracle": "12.50",
+      "postgres": "12.50"
+    },
+    {
+      "model": "FM999G999G999G990D00",
+      "literal": "-12.5",
+      "oracle": "-12.50",
+      "postgres": "-12.50"
+    },
+    {
+      "model": "FM999G999G999G990D00",
+      "literal": "1234.56",
+      "oracle": "1,234.56",
+      "postgres": "1,234.56"
+    },
+    {
+      "model": "FM999G999G999G990D00",
+      "literal": "-0.004",
+      "oracle": "-0.00",
+      "postgres": "0.00"
+    },
+    {
+      "model": "FM999G999G999G990D00",
+      "literal": "9999.995",
+      "oracle": "10,000.00",
+      "postgres": "10,000.00"
+    },
+    {
+      "model": "FM999G999G999G990D00",
+      "literal": "1234567890123",
+      "oracle": "###################",
+      "postgres": "###,###,###,###.##"
+    },
+    {
+      "model": "000G000D00",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "000G000D00",
+      "literal": "0",
+      "oracle": " 000,000.00",
+      "postgres": " 000,000.00"
+    },
+    {
+      "model": "000G000D00",
+      "literal": "12.5",
+      "oracle": " 000,012.50",
+      "postgres": " 000,012.50"
+    },
+    {
+      "model": "000G000D00",
+      "literal": "-12.5",
+      "oracle": "-000,012.50",
+      "postgres": "-000,012.50"
+    },
+    {
+      "model": "000G000D00",
+      "literal": "1234.56",
+      "oracle": " 001,234.56",
+      "postgres": " 001,234.56"
+    },
+    {
+      "model": "000G000D00",
+      "literal": "-0.004",
+      "oracle": "-000,000.00",
+      "postgres": " 000,000.00"
+    },
+    {
+      "model": "000G000D00",
+      "literal": "9999.995",
+      "oracle": " 010,000.00",
+      "postgres": " 010,000.00"
+    },
+    {
+      "model": "000G000D00",
+      "literal": "1234567890123",
+      "oracle": "###########",
+      "postgres": " ###,###.##"
+    },
+    {
+      "model": "FM000G000D00",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "FM000G000D00",
+      "literal": "0",
+      "oracle": "000,000.00",
+      "postgres": "000,000.00"
+    },
+    {
+      "model": "FM000G000D00",
+      "literal": "12.5",
+      "oracle": "000,012.50",
+      "postgres": "000,012.50"
+    },
+    {
+      "model": "FM000G000D00",
+      "literal": "-12.5",
+      "oracle": "-000,012.50",
+      "postgres": "-000,012.50"
+    },
+    {
+      "model": "FM000G000D00",
+      "literal": "1234.56",
+      "oracle": "001,234.56",
+      "postgres": "001,234.56"
+    },
+    {
+      "model": "FM000G000D00",
+      "literal": "-0.004",
+      "oracle": "-000,000.00",
+      "postgres": "000,000.00"
+    },
+    {
+      "model": "FM000G000D00",
+      "literal": "9999.995",
+      "oracle": "010,000.00",
+      "postgres": "010,000.00"
+    },
+    {
+      "model": "FM000G000D00",
+      "literal": "1234567890123",
+      "oracle": "###########",
+      "postgres": "###,###.##"
+    },
+    {
+      "model": "909D090",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "909D090",
+      "literal": "0",
+      "oracle": "  00.000",
+      "postgres": "  00.000"
+    },
+    {
+      "model": "909D090",
+      "literal": "12.5",
+      "oracle": "  12.500",
+      "postgres": "  12.500"
+    },
+    {
+      "model": "909D090",
+      "literal": "-12.5",
+      "oracle": " -12.500",
+      "postgres": " -12.500"
+    },
+    {
+      "model": "909D090",
+      "literal": "1234.56",
+      "oracle": "########",
+      "postgres": " ###.###"
+    },
+    {
+      "model": "909D090",
+      "literal": "-0.004",
+      "oracle": " -00.004",
+      "postgres": " -00.004"
+    },
+    {
+      "model": "909D090",
+      "literal": "9999.995",
+      "oracle": "########",
+      "postgres": " ###.###"
+    },
+    {
+      "model": "909D090",
+      "literal": "1234567890123",
+      "oracle": "########",
+      "postgres": " ###.###"
+    },
+    {
+      "model": "FM909D090",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "FM909D090",
+      "literal": "0",
+      "oracle": "00.000",
+      "postgres": "00.000"
+    },
+    {
+      "model": "FM909D090",
+      "literal": "12.5",
+      "oracle": "12.500",
+      "postgres": "12.500"
+    },
+    {
+      "model": "FM909D090",
+      "literal": "-12.5",
+      "oracle": "-12.500",
+      "postgres": "-12.500"
+    },
+    {
+      "model": "FM909D090",
+      "literal": "1234.56",
+      "oracle": "########",
+      "postgres": "###.###"
+    },
+    {
+      "model": "FM909D090",
+      "literal": "-0.004",
+      "oracle": "-00.004",
+      "postgres": "-00.004"
+    },
+    {
+      "model": "FM909D090",
+      "literal": "9999.995",
+      "oracle": "########",
+      "postgres": "###.###"
+    },
+    {
+      "model": "FM909D090",
+      "literal": "1234567890123",
+      "oracle": "########",
+      "postgres": "###.###"
+    },
+    {
+      "model": "9,990.00",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "9,990.00",
+      "literal": "0",
+      "oracle": "     0.00",
+      "postgres": "     0.00"
+    },
+    {
+      "model": "9,990.00",
+      "literal": "12.5",
+      "oracle": "    12.50",
+      "postgres": "    12.50"
+    },
+    {
+      "model": "9,990.00",
+      "literal": "-12.5",
+      "oracle": "   -12.50",
+      "postgres": "   -12.50"
+    },
+    {
+      "model": "9,990.00",
+      "literal": "1234.56",
+      "oracle": " 1,234.56",
+      "postgres": " 1,234.56"
+    },
+    {
+      "model": "9,990.00",
+      "literal": "-0.004",
+      "oracle": "    -0.00",
+      "postgres": "     0.00"
+    },
+    {
+      "model": "9,990.00",
+      "literal": "9999.995",
+      "oracle": "#########",
+      "postgres": " #,###.##"
+    },
+    {
+      "model": "9,990.00",
+      "literal": "1234567890123",
+      "oracle": "#########",
+      "postgres": " #,###.##"
+    },
+    {
+      "model": "FM9,990.00",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "FM9,990.00",
+      "literal": "0",
+      "oracle": "0.00",
+      "postgres": "0.00"
+    },
+    {
+      "model": "FM9,990.00",
+      "literal": "12.5",
+      "oracle": "12.50",
+      "postgres": "12.50"
+    },
+    {
+      "model": "FM9,990.00",
+      "literal": "-12.5",
+      "oracle": "-12.50",
+      "postgres": "-12.50"
+    },
+    {
+      "model": "FM9,990.00",
+      "literal": "1234.56",
+      "oracle": "1,234.56",
+      "postgres": "1,234.56"
+    },
+    {
+      "model": "FM9,990.00",
+      "literal": "-0.004",
+      "oracle": "-0.00",
+      "postgres": "0.00"
+    },
+    {
+      "model": "FM9,990.00",
+      "literal": "9999.995",
+      "oracle": "#########",
+      "postgres": "#,###.##"
+    },
+    {
+      "model": "FM9,990.00",
+      "literal": "1234567890123",
+      "oracle": "#########",
+      "postgres": "#,###.##"
+    },
+    {
+      "model": ".99",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": ".99",
+      "literal": "0",
+      "oracle": " .00",
+      "postgres": " .##"
+    },
+    {
+      "model": ".99",
+      "literal": "12.5",
+      "oracle": "####",
+      "postgres": " .##"
+    },
+    {
+      "model": ".99",
+      "literal": "-12.5",
+      "oracle": "####",
+      "postgres": "-.##"
+    },
+    {
+      "model": ".99",
+      "literal": "1234.56",
+      "oracle": "####",
+      "postgres": " .##"
+    },
+    {
+      "model": ".99",
+      "literal": "-0.004",
+      "oracle": "-.00",
+      "postgres": " .##"
+    },
+    {
+      "model": ".99",
+      "literal": "9999.995",
+      "oracle": "####",
+      "postgres": " .##"
+    },
+    {
+      "model": ".99",
+      "literal": "1234567890123",
+      "oracle": "####",
+      "postgres": " .##"
+    },
+    {
+      "model": "FM.99",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "FM.99",
+      "literal": "0",
+      "oracle": ".",
+      "postgres": ".##"
+    },
+    {
+      "model": "FM.99",
+      "literal": "12.5",
+      "oracle": "####",
+      "postgres": ".##"
+    },
+    {
+      "model": "FM.99",
+      "literal": "-12.5",
+      "oracle": "####",
+      "postgres": "-.##"
+    },
+    {
+      "model": "FM.99",
+      "literal": "1234.56",
+      "oracle": "####",
+      "postgres": ".##"
+    },
+    {
+      "model": "FM.99",
+      "literal": "-0.004",
+      "oracle": "-.",
+      "postgres": ".##"
+    },
+    {
+      "model": "FM.99",
+      "literal": "9999.995",
+      "oracle": "####",
+      "postgres": ".##"
+    },
+    {
+      "model": "FM.99",
+      "literal": "1234567890123",
+      "oracle": "####",
+      "postgres": ".##"
+    },
+    {
+      "model": "90D99",
+      "literal": "CAST(NULL AS NUMERIC)",
+      "oracle": null,
+      "postgres": null
+    },
+    {
+      "model": "90D99",
+      "literal": "0",
+      "oracle": "  0.00",
+      "postgres": "  0.00"
+    },
+    {
+      "model": "90D99",
+      "literal": "12.5",
+      "oracle": " 12.50",
+      "postgres": " 12.50"
+    },
+    {
+      "model": "90D99",
+      "literal": "-12.5",
+      "oracle": "-12.50",
+      "postgres": "-12.50"
+    },
+    {
+      "model": "90D99",
+      "literal": "1234.56",
+      "oracle": "######",
+      "postgres": " ##.##"
+    },
+    {
+      "model": "90D99",
+      "literal": "-0.004",
+      "oracle": " -0.00",
+      "postgres": "  0.00"
+    },
+    {
+      "model": "90D99",
+      "literal": "9999.995",
+      "oracle": "######",
+      "postgres": " ##.##"
+    },
+    {
+      "model": "90D99",
+      "literal": "1234567890123",
+      "oracle": "######",
+      "postgres": " ##.##"
+    }
+  ],
+  "oracle_version": "23.26.3.0.0",
+  "postgres_version": 180004,
+  "oracle_numeric_characters": ".,",
+  "postgres_lc_numeric": "en_US.utf8"
+}

@@ -1,5 +1,15 @@
 # Oracle reference queries
 
+`numeric_format_pictures.py --reference oracle --oracle-config /private/oracle.json
+--output /private/numeric-pictures.json` checks 120 fixed numeric pictures using
+9/0 digit positions, G/D separators and FM padding. Independent Oracle and
+PostgreSQL expectations retain their differences at rounded negative zero and
+overflow. The recorded locale is `.,` on Oracle and `en_US.utf8` on PostgreSQL.
+Use `--reference postgres` with `ORACLE_CONTROL_PG_DSN` for the PostgreSQL source;
+both modes use `BICDB_PG_DSN` for the target. No persistent objects are created.
+These cases do not qualify other locales, currency, sign directives, exponent
+pictures or malformed-format error codes.
+
 `scalar_subquery_defaults.py --reference oracle --oracle-config /private/oracle.json
 --output /private/scalar-defaults.json` checks seven scalar-subquery cases:
 character and number defaults, nested defaults and concatenation, DATE

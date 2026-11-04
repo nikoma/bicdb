@@ -291,6 +291,33 @@ impl ParameterTypeResolver<'_, '_> {
         env: &[RelationColumns],
     ) {
         for assignment in assignments {
+            if let AssignmentTarget::Tuple(names) = &assignment.target {
+                let types = names
+                    .iter()
+                    .map(|name| {
+                        assignment_target_type(&AssignmentTarget::ColumnName(name.clone()), columns)
+                    })
+                    .collect::<Vec<_>>();
+                let mut source = &assignment.value;
+                while let Expr::Nested(inner) = source {
+                    source = inner;
+                }
+                match source {
+                    Expr::Subquery(query) => self.query(query, Some(&types)),
+                    Expr::Tuple(values) => {
+                        for (index, value) in values.iter().enumerate() {
+                            self.expr(value, env, types.get(index).and_then(Option::as_deref));
+                        }
+                    }
+                    Expr::Function(function) if is_row_constructor(function) => {
+                        for (index, value) in function_args(function).iter().enumerate() {
+                            self.expr(value, env, types.get(index).and_then(Option::as_deref));
+                        }
+                    }
+                    _ => self.expr(source, env, None),
+                }
+                continue;
+            }
             let expected = assignment_target_type(&assignment.target, columns);
             self.expr(&assignment.value, env, expected.as_deref());
         }
@@ -342,10 +369,7 @@ impl ParameterTypeResolver<'_, '_> {
             .engine
             .from_relation_columns(std::slice::from_ref(&update.table))
             .unwrap_or_default();
-        for assignment in &update.assignments {
-            let expected = assignment_target_type(&assignment.target, &flatten_relation_env(&env));
-            self.expr(&assignment.value, &env, expected.as_deref());
-        }
+        self.assignments(&update.assignments, &flatten_relation_env(&env), &env);
         if let Some(selection) = &update.selection {
             self.expr(selection, &env, Some("bool"));
         }
@@ -3552,6 +3576,23 @@ fn typed_index_predicate_value(
     };
     let value = cast_value_to_pg_type(sql_value_from_index_value(&value), &pg_type)?;
     pg_typed_index_label(&pg_type, &value).map(IndexValue::String)
+}
+
+fn index_range_probe_is_compatible(
+    schema: &TableSchema,
+    field: &IndexField,
+    value: &IndexValue,
+) -> bool {
+    // Integer indexes store integer keys. NUMERIC/string or floating bounds
+    // must retain SQL comparison semantics rather than enum-variant ordering.
+    // Decline those probes instead of rounding a fractional/out-of-range bound.
+    match index_field_pg_type(schema, field)
+        .as_deref()
+        .and_then(pg_type_oid_by_name)
+    {
+        Some(20 | 21 | 23) => matches!(value, IndexValue::Int(_) | IndexValue::Null),
+        _ => true,
+    }
 }
 
 impl<'db> SqlEngine<'db> {

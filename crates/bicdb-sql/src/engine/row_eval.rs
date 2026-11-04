@@ -218,6 +218,14 @@ impl<'db> SqlEngine<'db> {
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
                 {
                     Some("inet".to_string())
+                } else if left_type
+                    .as_deref()
+                    .is_some_and(|t| is_numeric_pg_type(t) || matches!(t, "float4" | "float8"))
+                    && right_type
+                        .as_deref()
+                        .is_some_and(|t| is_numeric_pg_type(t) || matches!(t, "float4" | "float8"))
+                {
+                    numeric_combine_pg_type(left_type.as_deref(), right_type.as_deref())
                 } else {
                     left_type.clone().or_else(|| right_type.clone())
                 };
@@ -385,6 +393,14 @@ impl<'db> SqlEngine<'db> {
                     && matches!(right_type.as_deref(), Some("inet" | "cidr"))
                 {
                     Some("inet".to_string())
+                } else if left_type
+                    .as_deref()
+                    .is_some_and(|t| is_numeric_pg_type(t) || matches!(t, "float4" | "float8"))
+                    && right_type
+                        .as_deref()
+                        .is_some_and(|t| is_numeric_pg_type(t) || matches!(t, "float4" | "float8"))
+                {
+                    numeric_combine_pg_type(left_type.as_deref(), right_type.as_deref())
                 } else {
                     left_type.clone().or_else(|| right_type.clone())
                 };

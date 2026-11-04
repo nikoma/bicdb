@@ -3193,6 +3193,38 @@ mod tests {
     }
 
     #[test]
+    fn numeric_bind_literals_keep_declared_type_for_comparisons() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute("CREATE TABLE numeric_bind_bounds(id INTEGER PRIMARY KEY)")
+            .unwrap();
+        session
+            .execute("INSERT INTO numeric_bind_bounds VALUES(0),(2),(3)")
+            .unwrap();
+        // PostgreSQL NUMERIC: two base-10000 digits [1,5000], scale one.
+        let binary = [0, 2, 0, 0, 0, 0, 0, 1, 0, 1, 19, 136];
+        for literal in [
+            sql_literal_for_text_parameter("1.5", 1700).unwrap(),
+            decode_binary_parameter(&binary, 1700).unwrap(),
+        ] {
+            let result = session
+                .execute(&format!(
+                    "SELECT id FROM numeric_bind_bounds WHERE id>{literal} ORDER BY id"
+                ))
+                .unwrap();
+            assert_eq!(
+                result.rows,
+                vec![vec![SqlValue::Int(2)], vec![SqlValue::Int(3)]],
+                "{literal}"
+            );
+            let result = session.execute(&format!("SELECT {literal}")).unwrap();
+            assert_eq!(result.column_types[0].as_deref(), Some("numeric"));
+        }
+    }
+
+    #[test]
     fn numeric_binary_codec_rejects_malformed_payloads() {
         for payload in [
             vec![],

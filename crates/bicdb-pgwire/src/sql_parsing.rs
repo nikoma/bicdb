@@ -3221,7 +3221,8 @@ pub(crate) fn decode_binary_parameter(bytes: &[u8], oid: i32) -> Result<String> 
                 i64::from_be_bytes(bytes.try_into().unwrap()),
             )))
         }
-        1700 => decode_binary_numeric_parameter(bytes).map(|value| quote_sql_string(&value)),
+        1700 => decode_binary_numeric_parameter(bytes)
+            .map(|value| format!("CAST({} AS numeric)", quote_sql_string(&value))),
         114 => decode_binary_text_parameter(bytes),
         600 | 601 | 602 | 603 | 604 | 628 | 718 => decode_binary_geometric_parameter(bytes, oid),
         650 | 869 => decode_binary_network_parameter(bytes, oid),

@@ -3611,7 +3611,12 @@ pub(crate) fn slot_row_from_cells(
                 cell_field_name(field).and_then(|name| {
                     cells
                         .iter()
-                        .position(|(key, _)| key.as_ref() == name || key.eq_ignore_ascii_case(name))
+                        .position(|(key, _)| key.as_ref() == name)
+                        .or_else(|| {
+                            cells
+                                .iter()
+                                .position(|(key, _)| key.eq_ignore_ascii_case(name))
+                        })
                 })
             })
             .collect()
@@ -3629,12 +3634,9 @@ pub(crate) fn slot_row_from_cells(
             | FieldRef::TypedColumn { name, pg_type, .. } => {
                 let cell = planned
                     .and_then(|index| cells.get(index))
-                    .filter(|(key, _)| key.as_ref() == name || key.eq_ignore_ascii_case(name))
-                    .or_else(|| {
-                        cells
-                            .iter()
-                            .find(|(key, _)| key.as_ref() == name || key.eq_ignore_ascii_case(name))
-                    })
+                    .filter(|(key, _)| key.as_ref() == name)
+                    .or_else(|| cells.iter().find(|(key, _)| key.as_ref() == name))
+                    .or_else(|| cells.iter().find(|(key, _)| key.eq_ignore_ascii_case(name)))
                     .map(|(_, cell)| cell);
                 match cell {
                     Some(cell) => {

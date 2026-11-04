@@ -1701,7 +1701,7 @@ impl<'db> SqlEngine<'db> {
             }
         }
         let mut candidates: Vec<(usize, SecondaryCandidate<'_>)> = Vec::new();
-        for plan in &strategy.indexes {
+        'plans: for plan in &strategy.indexes {
             let mut prefix = Vec::with_capacity(plan.prefix_exprs.len());
             let mut prefix_complete = true;
             for (field_idx, expr) in plan.prefix_exprs.iter().enumerate() {
@@ -1747,6 +1747,11 @@ impl<'db> SqlEngine<'db> {
                     } else {
                         value
                     };
+                    if let (Some(schema), Some(field)) = (schema, range_field) {
+                        if !index_range_probe_is_compatible(schema, field, &value) {
+                            continue 'plans;
+                        }
+                    }
                     update_dynamic_range_bound(
                         op.clone(),
                         sql_value_from_index_value(&value),
@@ -2294,6 +2299,11 @@ impl<'db> SqlEngine<'db> {
                         }
                         _ => value,
                     };
+                    if let (Some(schema), Some(field)) = (schema, range_field) {
+                        if !index_range_probe_is_compatible(schema, field, &value) {
+                            continue 'plans;
+                        }
+                    }
                     update_dynamic_range_bound(
                         op.clone(),
                         sql_value_from_index_value(&value),
@@ -3358,6 +3368,9 @@ impl<'db> SqlEngine<'db> {
                 let value = if let Some(schema) = schema {
                     let value =
                         typed_index_predicate_value(schema, field, index_value_from_sql(value)?)?;
+                    if !index_range_probe_is_compatible(schema, field, &value) {
+                        return Ok(None);
+                    }
                     sql_value_from_index_value(&value)
                 } else {
                     value
@@ -3382,6 +3395,9 @@ impl<'db> SqlEngine<'db> {
                 let value = if let Some(schema) = schema {
                     let value =
                         typed_index_predicate_value(schema, field, index_value_from_sql(value)?)?;
+                    if !index_range_probe_is_compatible(schema, field, &value) {
+                        return Ok(None);
+                    }
                     sql_value_from_index_value(&value)
                 } else {
                     value
@@ -3451,9 +3467,19 @@ impl<'db> SqlEngine<'db> {
                 {
                     continue;
                 }
+                let value = self.eval_dynamic_bound_expr(right)?;
+                if let Some(schema) = schema {
+                    if !index_range_probe_is_compatible(
+                        schema,
+                        field,
+                        &index_value_from_sql(value.clone())?,
+                    ) {
+                        return Ok(None);
+                    }
+                }
                 update_dynamic_sql_range_bound(
                     op.clone(),
-                    self.eval_dynamic_bound_expr(right)?,
+                    value,
                     &mut lower,
                     &mut upper,
                     &mut has_null_bound,
@@ -3467,9 +3493,19 @@ impl<'db> SqlEngine<'db> {
                 {
                     continue;
                 }
+                let value = self.eval_dynamic_bound_expr(left)?;
+                if let Some(schema) = schema {
+                    if !index_range_probe_is_compatible(
+                        schema,
+                        field,
+                        &index_value_from_sql(value.clone())?,
+                    ) {
+                        return Ok(None);
+                    }
+                }
                 update_dynamic_sql_range_bound(
                     reverse_comparison(op),
-                    self.eval_dynamic_bound_expr(left)?,
+                    value,
                     &mut lower,
                     &mut upper,
                     &mut has_null_bound,

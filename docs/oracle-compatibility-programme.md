@@ -50,7 +50,9 @@ workflows and the broader programme remain unqualified.
 The [prepared-request checkpoint](evidence/prepared-request-boundaries-2026-11-04/README.md)
 subsequently qualifies single-statement Parse requests and transaction recovery
 against PostgreSQL in both profiles, retaining independent Oracle/PostgreSQL
-set-operand comparisons; the application runtime upgrade is separately pending.
+set-operand comparisons. Its subsequent local runtime upgrade preserves both
+settled business flows and all 62 routine/160 view definitions across a clean
+restart, with 27 preservation gates, 25 workflow checks and fresh login/navigation.
 The checkpoint history below records what was measured at each earlier stage.
 
 The separate [`oracle-preview-v1`](oracle-preview-profile.md) profile is now used

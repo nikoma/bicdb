@@ -1,0 +1,5072 @@
+{
+  "oracle": {
+    "before": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "joined_aggregate",
+          "source": {
+            "id": "joined_aggregate",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "joined_aggregate",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "union_all",
+          "source": {
+            "id": "union_all",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "union_all",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "exception": "FeatureNotSupported",
+            "detail": "unsupported SQL: function nvl is not supported without FROM",
+            "oracle_code": null,
+            "sqlstate": "0A000",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "union_distinct",
+          "source": {
+            "id": "union_distinct",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "union_distinct",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "exception": "FeatureNotSupported",
+            "detail": "unsupported SQL: function nvl is not supported without FROM",
+            "oracle_code": null,
+            "sqlstate": "0A000",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "ordered_page",
+          "source": {
+            "id": "ordered_page",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "ordered_page",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "exception": "FeatureNotSupported",
+            "detail": "unsupported SQL: function nvl is not supported without FROM",
+            "oracle_code": null,
+            "sqlstate": "0A000",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "nested_set",
+          "source": {
+            "id": "nested_set",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nested_set",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "exception": "FeatureNotSupported",
+            "detail": "unsupported SQL: function nvl is not supported without FROM",
+            "oracle_code": null,
+            "sqlstate": "0A000",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "intersection",
+          "source": {
+            "id": "intersection",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "intersection",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "exception": "FeatureNotSupported",
+            "detail": "unsupported SQL: function nvl is not supported without FROM",
+            "oracle_code": null,
+            "sqlstate": "0A000",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "difference",
+          "source": {
+            "id": "difference",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "difference",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "exception": "SyntaxError",
+            "detail": "invalid SQL: sql parser error: Expected: end of statement, found: SELECT at Line: 1, Column: 99",
+            "oracle_code": null,
+            "sqlstate": "42601",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "stored_view",
+          "source": {
+            "id": "stored_view",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "stored_view",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "exception": "FeatureNotSupported",
+            "detail": "unsupported SQL: function nvl is not supported without FROM",
+            "oracle_code": null,
+            "sqlstate": "0A000",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "stored_view_count",
+          "source": {
+            "id": "stored_view_count",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "stored_view_count",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "exception": "FeatureNotSupported",
+            "detail": "unsupported SQL: function nvl is not supported without FROM",
+            "oracle_code": null,
+            "sqlstate": "0A000",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "cte_input",
+          "source": {
+            "id": "cte_input",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "cte_input",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "exception": "FeatureNotSupported",
+            "detail": "unsupported SQL: function nvl is not supported without FROM",
+            "oracle_code": null,
+            "sqlstate": "0A000",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "logical_date",
+          "source": {
+            "id": "logical_date",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "logical_date",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "exception": "FeatureNotSupported",
+            "detail": "unsupported SQL: function nvl is not supported without FROM",
+            "oracle_code": null,
+            "sqlstate": "0A000",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "scalar_default",
+          "source": {
+            "id": "scalar_default",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "scalar_default",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "exception": "FeatureNotSupported",
+            "detail": "unsupported SQL: function nvl is not supported without FROM",
+            "oracle_code": null,
+            "sqlstate": "0A000",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "alias_scope",
+          "source": {
+            "id": "alias_scope",
+            "expected": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "alias_scope",
+            "expected": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "exception": "FeatureNotSupported",
+            "detail": "unsupported SQL: function nvl is not supported without FROM",
+            "oracle_code": null,
+            "sqlstate": "0A000",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "evaluation_order",
+          "source": {
+            "id": "evaluation_order",
+            "expected": "division_by_zero",
+            "exception": "DatabaseError",
+            "detail": "ORA-01476: divisor is equal to zero\nHelp: https://docs.oracle.com/error-help/db/ora-01476/",
+            "oracle_code": 1476,
+            "sqlstate": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "evaluation_order",
+            "expected": "division_by_zero",
+            "exception": "DivisionByZero",
+            "detail": "division by zero",
+            "oracle_code": null,
+            "sqlstate": "22012",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 14,
+      "matched": 2,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": false,
+      "target_sql_profile": "oracle-preview-v1",
+      "reference": "oracle",
+      "oracle_disable_oob": false,
+      "runtime_binary_sha256": "32d2c0441d23b9a856e2cb45d2d85b263b3272b322b6c88acd2a9b6962eaa009",
+      "fixture_source_sha256": "2bd9346d6f5ff549f6baef761401f7789af7f6b26fcbb146e7be65598a24723b",
+      "comparison_exit_status": 1,
+      "target_qualified_cases": 2
+    },
+    "after": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "joined_aggregate",
+          "source": {
+            "id": "joined_aggregate",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "joined_aggregate",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "union_all",
+          "source": {
+            "id": "union_all",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "union_all",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "union_distinct",
+          "source": {
+            "id": "union_distinct",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "union_distinct",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "ordered_page",
+          "source": {
+            "id": "ordered_page",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "ordered_page",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "nested_set",
+          "source": {
+            "id": "nested_set",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nested_set",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "intersection",
+          "source": {
+            "id": "intersection",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "intersection",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "difference",
+          "source": {
+            "id": "difference",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "difference",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "stored_view",
+          "source": {
+            "id": "stored_view",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "stored_view",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "stored_view_count",
+          "source": {
+            "id": "stored_view_count",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "stored_view_count",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "cte_input",
+          "source": {
+            "id": "cte_input",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "cte_input",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "logical_date",
+          "source": {
+            "id": "logical_date",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "logical_date",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "scalar_default",
+          "source": {
+            "id": "scalar_default",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "scalar_default",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "alias_scope",
+          "source": {
+            "id": "alias_scope",
+            "expected": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "alias_scope",
+            "expected": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "evaluation_order",
+          "source": {
+            "id": "evaluation_order",
+            "expected": "division_by_zero",
+            "exception": "DatabaseError",
+            "detail": "ORA-01476: divisor is equal to zero\nHelp: https://docs.oracle.com/error-help/db/ora-01476/",
+            "oracle_code": 1476,
+            "sqlstate": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "evaluation_order",
+            "expected": "division_by_zero",
+            "exception": "DivisionByZero",
+            "detail": "division by zero",
+            "oracle_code": null,
+            "sqlstate": "22012",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 14,
+      "matched": 14,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true,
+      "target_sql_profile": "oracle-preview-v1",
+      "reference": "oracle",
+      "oracle_disable_oob": false,
+      "runtime_binary_sha256": "64a3be06c438851f3a59a55c396aedcfea812699299dc38e5686a2c5b1c26366",
+      "fixture_source_sha256": "2bd9346d6f5ff549f6baef761401f7789af7f6b26fcbb146e7be65598a24723b",
+      "comparison_exit_status": 0,
+      "target_qualified_cases": 14
+    },
+    "first_candidate": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "joined_aggregate",
+          "source": {
+            "id": "joined_aggregate",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "joined_aggregate",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "union_all",
+          "source": {
+            "id": "union_all",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "union_all",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "union_distinct",
+          "source": {
+            "id": "union_distinct",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "union_distinct",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "ordered_page",
+          "source": {
+            "id": "ordered_page",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "ordered_page",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "nested_set",
+          "source": {
+            "id": "nested_set",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nested_set",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "intersection",
+          "source": {
+            "id": "intersection",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "intersection",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "difference",
+          "source": {
+            "id": "difference",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "difference",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "exception": "SyntaxError",
+            "detail": "invalid SQL: sql parser error: Expected: end of statement, found: SELECT at Line: 1, Column: 99",
+            "oracle_code": null,
+            "sqlstate": "42601",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "stored_view",
+          "source": {
+            "id": "stored_view",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "stored_view",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "stored_view_count",
+          "source": {
+            "id": "stored_view_count",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "stored_view_count",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "cte_input",
+          "source": {
+            "id": "cte_input",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "cte_input",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "logical_date",
+          "source": {
+            "id": "logical_date",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "logical_date",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "scalar_default",
+          "source": {
+            "id": "scalar_default",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "scalar_default",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "alias_scope",
+          "source": {
+            "id": "alias_scope",
+            "expected": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "alias_scope",
+            "expected": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "evaluation_order",
+          "source": {
+            "id": "evaluation_order",
+            "expected": "division_by_zero",
+            "exception": "DatabaseError",
+            "detail": "ORA-01476: divisor is equal to zero\nHelp: https://docs.oracle.com/error-help/db/ora-01476/",
+            "oracle_code": 1476,
+            "sqlstate": null,
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "evaluation_order",
+            "expected": "division_by_zero",
+            "exception": "DivisionByZero",
+            "detail": "division by zero",
+            "oracle_code": null,
+            "sqlstate": "22012",
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 14,
+      "matched": 13,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": false,
+      "target_sql_profile": "oracle-preview-v1",
+      "reference": "oracle",
+      "oracle_disable_oob": false,
+      "runtime_binary_sha256": "3264bf5d9d01879c71c036c4dfe87d54ea8942ba747a8e76d2be32557eb5ffca",
+      "fixture_source_sha256": "2bd9346d6f5ff549f6baef761401f7789af7f6b26fcbb146e7be65598a24723b",
+      "comparison_exit_status": 1,
+      "target_qualified_cases": 13
+    }
+  },
+  "postgres": {
+    "before": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "joined_aggregate",
+          "source": {
+            "id": "joined_aggregate",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "joined_aggregate",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "union_all",
+          "source": {
+            "id": "union_all",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "union_all",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "union_distinct",
+          "source": {
+            "id": "union_distinct",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "union_distinct",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "ordered_page",
+          "source": {
+            "id": "ordered_page",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "ordered_page",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "nested_set",
+          "source": {
+            "id": "nested_set",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nested_set",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "intersection",
+          "source": {
+            "id": "intersection",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "intersection",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "difference",
+          "source": {
+            "id": "difference",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "difference",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "stored_view",
+          "source": {
+            "id": "stored_view",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "stored_view",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "stored_view_count",
+          "source": {
+            "id": "stored_view_count",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "stored_view_count",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "cte_input",
+          "source": {
+            "id": "cte_input",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "cte_input",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "logical_date",
+          "source": {
+            "id": "logical_date",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "logical_date",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "scalar_default",
+          "source": {
+            "id": "scalar_default",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "scalar_default",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "alias_scope",
+          "source": {
+            "id": "alias_scope",
+            "expected": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "alias_scope",
+            "expected": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "evaluation_order",
+          "source": {
+            "id": "evaluation_order",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "evaluation_order",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 14,
+      "matched": 14,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true,
+      "target_sql_profile": "postgres",
+      "reference": "postgres",
+      "runtime_binary_sha256": "32d2c0441d23b9a856e2cb45d2d85b263b3272b322b6c88acd2a9b6962eaa009",
+      "postgres_version_num": 180004,
+      "fixture_source_sha256": "2bd9346d6f5ff549f6baef761401f7789af7f6b26fcbb146e7be65598a24723b"
+    },
+    "after": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "joined_aggregate",
+          "source": {
+            "id": "joined_aggregate",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "joined_aggregate",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "union_all",
+          "source": {
+            "id": "union_all",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "union_all",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "union_distinct",
+          "source": {
+            "id": "union_distinct",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "union_distinct",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "ordered_page",
+          "source": {
+            "id": "ordered_page",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "ordered_page",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "nested_set",
+          "source": {
+            "id": "nested_set",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nested_set",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ],
+              [
+                {
+                  "number": "3"
+                },
+                {
+                  "number": "5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "intersection",
+          "source": {
+            "id": "intersection",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "intersection",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "difference",
+          "source": {
+            "id": "difference",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "difference",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "8"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "stored_view",
+          "source": {
+            "id": "stored_view",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "stored_view",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "stored_view_count",
+          "source": {
+            "id": "stored_view_count",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "stored_view_count",
+            "expected": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "cte_input",
+          "source": {
+            "id": "cte_input",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "cte_input",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "7"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "0"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "logical_date",
+          "source": {
+            "id": "logical_date",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "logical_date",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "2"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "scalar_default",
+          "source": {
+            "id": "scalar_default",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "scalar_default",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "3"
+                }
+              ],
+              [
+                {
+                  "number": "2"
+                },
+                {
+                  "number": "7"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "alias_scope",
+          "source": {
+            "id": "alias_scope",
+            "expected": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "alias_scope",
+            "expected": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "actual": [
+              [
+                "abc"
+              ],
+              [
+                "none"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "evaluation_order",
+          "source": {
+            "id": "evaluation_order",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "evaluation_order",
+            "expected": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "1"
+                },
+                {
+                  "number": "1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 14,
+      "matched": 14,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true,
+      "target_sql_profile": "postgres",
+      "reference": "postgres",
+      "runtime_binary_sha256": "64a3be06c438851f3a59a55c396aedcfea812699299dc38e5686a2c5b1c26366",
+      "postgres_version_num": 180004,
+      "fixture_source_sha256": "2bd9346d6f5ff549f6baef761401f7789af7f6b26fcbb146e7be65598a24723b"
+    }
+  }
+}

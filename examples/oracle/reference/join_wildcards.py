@@ -105,10 +105,16 @@ def observe(factory, nonce):
             execute(f"INSERT INTO {b} VALUES(7,2.50,'right')")
             execute(f"INSERT INTO {c} VALUES(7,'third')")
             try:
-                execute(f"CREATE VIEW {view}(l_key,l_time,l_common,r_key,r_amount,r_common) AS SELECT * FROM " + join)
+                if oracle_semantics:
+                    # The reference environment returns ORA-25716 when reading
+                    # the declared-column joined-wildcard form. Keep that form
+                    # unqualified for Oracle; use its readable explicit form.
+                    execute(f"CREATE VIEW {view} AS SELECT l.left_key AS l_key,l.event_time AS l_time,l.common_value AS l_common,r.right_key AS r_key,r.amount AS r_amount,r.common_value AS r_common FROM " + join)
+                else:
+                    execute(f"CREATE VIEW {view}(l_key,l_time,l_common,r_key,r_amount,r_common) AS SELECT * FROM " + join)
                 view_created = True
             except Exception as exc:
-                view_error = dict(exception=type(exc).__name__, sqlstate=getattr(exc, "sqlstate", None))
+                view_error = dict(exception=type(exc).__name__, sqlstate=getattr(exc, "sqlstate", None), oracle_error=getattr(exc.args[0], "code", None) if exc.args else None)
             for name, sql, expected_columns, expected_types, expected_rows in cases:
                 row = dict(id=name, expected_columns=expected_columns, expected_types=expected_types, expected_rows=expected_rows)
                 if "view_star" in name and view_error:
@@ -119,7 +125,7 @@ def observe(factory, nonce):
                                qualified=[label.lower() for label in labels] == expected_columns
                                and actual_types == expected_types and values == expected_rows)
                 except Exception as exc:
-                    row.update(qualified=False, exception=type(exc).__name__, sqlstate=getattr(exc, "sqlstate", None))
+                    row.update(qualified=False, exception=type(exc).__name__, sqlstate=getattr(exc, "sqlstate", None), oracle_error=getattr(exc.args[0], "code", None) if exc.args else None)
                 report["cases"].append(row)
         finally:
             if view_created:

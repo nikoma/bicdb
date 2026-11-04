@@ -1,0 +1,73 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "runtime_changed": false,
+  "runtime_binary_sha256": "1e683572cf27d76db38eb802af54f3b4abd27e1a424e7b40f66ac1c56c3df3fd",
+  "runtime_source_commit": "ea5faf1b6df302a331b430e976439d698299ed69",
+  "runtime_delivery_checkpoint": "4afd731b59cac54a75f6eddfd7cc2e6f4e1cb77e",
+  "runtime_build": "development, unoptimized, debug=0",
+  "release_published": false,
+  "production_qualified": false,
+  "canonical_migration_database_modified": false,
+  "existing_order": {
+    "document_no": "80002",
+    "source_order_id": 102,
+    "line_count": 3,
+    "total_lines": "152.00",
+    "grand_total": "161.12",
+    "currency": "USD",
+    "oracle_reference_values": [
+      {
+        "number": "102"
+      },
+      "80002",
+      {
+        "number": "152"
+      },
+      {
+        "number": "161.12"
+      },
+      "USD",
+      {
+        "number": "3"
+      }
+    ],
+    "ui_values_match": true,
+    "browser_errors": []
+  },
+  "saved_draft": {
+    "document_no": "50000",
+    "order_id": 1000000,
+    "record_saved_observed": true,
+    "separate_database_connection_verified": true,
+    "fresh_browser_retrieved": true,
+    "description": "BicDB application qualification draft",
+    "status": "DR",
+    "processed": "N",
+    "line_count": 0,
+    "grand_total": "0",
+    "browser_errors": [],
+    "restart_durability_qualified": false,
+    "full_business_workflow_qualified": false,
+    "screenshot_sha256": "a06a1da87cddae823a187a50da424b8a7c6c8f6f520a798cd5f7cea9885282bb"
+  },
+  "validation": {
+    "python_tests_passed": 58,
+    "rust_tests_rerun": false,
+    "cargo_fmt_check": "passed",
+    "git_diff_check": "passed",
+    "licenses": "passed",
+    "open_core_boundary": "passed",
+    "ci": "not run in this local observation checkpoint"
+  },
+  "remaining": [
+    "line entry and line save",
+    "document completion",
+    "inventory and invoicing",
+    "payments and accounting posting",
+    "package APIs",
+    "repeated-session transport reliability",
+    "restart and failure qualification",
+    "full Oracle compatibility programme"
+  ]
+}

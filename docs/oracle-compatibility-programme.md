@@ -51,6 +51,14 @@ adds bounded predicate propagation through ordinary view projections, with separ
 Oracle/PostgreSQL comparisons and exact reconciliation of the selected original
 application field view. This improves a measured materialization bottleneck;
 full optimizer and application qualification remain open.
+The [draft-order observation](evidence/idempiere-sales-order-draft-2026-11-03/README.md)
+adds an existing-order read matching Oracle and a saved draft header verified by
+another database connection and a fresh browser session. Lines, processing and
+accounting remain unqualified. A separate
+[output-buffer baseline](evidence/oracle-output-buffer-baseline-2026-11-03/README.md)
+qualifies 27 expectations on Oracle; all 27 target cases are blocked at the
+missing DISABLE call. It defines package implementation dependencies without
+claiming supplied-package support.
 The milestones below retain their results at the time each was measured.
 
 The original 913 tables and 185,292 rows loaded and passed complete value
@@ -308,7 +316,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 10. PL/SQL | Records, anchored types, cursors/refcursors, collections, parameter modes, control flow, dynamic SQL, exceptions and bulk operations | Partial: scoped blocks/declarations and nested handlers, standalone functions and version-12 procedures with OUT/IN OUT copyback, version-8 parameterized bound cursors with query-local formals/defaults and independent native scope checks, version-16 bounded EXECUTE IMMEDIATE with typed IN binds and scalar query INTO, declared-type procedural TRUNC and versioned logical DATE arithmetic; version-17 bounded AL16UTF16 NVARCHAR2/NCHAR routine variables and typed host values; version-19 dense named nested-table constructors, COUNT/EXTEND, element access and registered routine types; version-20 bounded TRIM/regex and typed character conversion; version-21 bounded named nested-table multiset operators and empty predicates; sparse/bulk collections, broader national SQL/NLS semantics, full language and application routines outstanding |
 | 11. Packages | Specs/bodies, visibility, overloads, initialization, session variables and invalidation with pool/session isolation | Outstanding |
 | 12. Autonomous transactions | Independent commit/rollback and lock behavior, nested calls, exceptions and restart tests | Partial: [version-15 standalone routine transactions](evidence/oracle-autonomous-transactions-2026-11-03/README.md), separate parent/observer visibility, active-return errors, parent-lock deadlocks, snapshot boundaries, Describe safeguards and restart; child DDL, package/session-state integration, distributed commits and broader failure qualification outstanding |
-| 13. Supplied package APIs | Qualify used DBMS/UTL APIs, including LOB, SQL, OUTPUT, UTILITY, APPLICATION_INFO, RANDOM, LOCK and SCHEDULER; file/network ACL enforcement | Outstanding |
+| 13. Supplied package APIs | Qualify used DBMS/UTL APIs, including LOB, SQL, OUTPUT, UTILITY, APPLICATION_INFO, RANDOM, LOCK and SCHEDULER; file/network ACL enforcement | Outstanding: [OUTPUT acceptance and dependencies](evidence/oracle-output-buffer-baseline-2026-11-03/README.md) define 27 source-qualified expectations; all target cases stop at missing DISABLE; implementation and other APIs remain open |
 | 14. Triggers | Row/statement/compound/INSTEAD OF/system triggers, order, transition state, mutating-table rules and transactional effects | Outstanding for Oracle; sample triggers explicitly deferred |
 | 15. Session state | NLS, temporary tables, cursors, sequence visibility and cache behavior, pool reset, reconnect and isolation | Partial: sample sequences; broader Oracle state semantics unqualified |
 | 16. Drivers and frameworks | PostgreSQL simple/extended/binary protocol, bindings, metadata and representative application/framework acceptance | Partial: tokio-postgres/psycopg HR acceptance and bounded procedure output/DATE bind metadata over PostgreSQL drivers; full application acceptance outstanding, Oracle Net/TTC conditional on unchanged-driver scope |

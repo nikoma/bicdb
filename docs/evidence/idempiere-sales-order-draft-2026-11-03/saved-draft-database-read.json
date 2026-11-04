@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "runtime_binary_sha256": "1e683572cf27d76db38eb802af54f3b4abd27e1a424e7b40f66ac1c56c3df3fd",
+  "application_qualified": false,
+  "columns": [
+    "C_ORDER_ID",
+    "DOCUMENTNO",
+    "DESCRIPTION",
+    "DOCSTATUS",
+    "PROCESSED",
+    "TOTALLINES",
+    "GRANDTOTAL",
+    "C_BPARTNER_ID",
+    "C_BPARTNER_LOCATION_ID",
+    "M_WAREHOUSE_ID",
+    "(SELECT count(*) FROM \"IDEMPIERE_QUAL\".\"C_ORDERLINE\" \"L\" WHERE \"L\".\"C_ORDER_ID\" = \"O\".\"C_ORDER_ID\")"
+  ],
+  "rows": [
+    [
+      "1000000",
+      "50000",
+      "BicDB application qualification draft",
+      "DR",
+      "N",
+      "0",
+      "0",
+      "117",
+      "112",
+      "103",
+      "0"
+    ]
+  ]
+}

@@ -1,0 +1,3003 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "reference": "oracle",
+  "source": {
+    "cases": [
+      {
+        "id": "disabled_output",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "partial_and_terminated",
+        "expected": [
+          [
+            "abcd",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "abcd",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "empty_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "null_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "empty_string_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "embedded_newline",
+        "expected": [
+          [
+            "a\nb",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "a\nb",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "unicode_line",
+        "expected": [
+          [
+            "caf\u00e9 \ud83c\udf32",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "caf\u00e9 \ud83c\udf32",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "unfinished_line_invisible",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "read_discards_unretrieved_on_write",
+        "expected": [
+          [
+            "three",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "GET",
+            "value": [
+              "one",
+              0
+            ],
+            "expected": [
+              "one",
+              0
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "three",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "read_discards_partial_on_write",
+        "expected": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "GET",
+            "value": [
+              null,
+              1
+            ],
+            "expected": [
+              null,
+              1
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "reenable_preserves_lines",
+        "expected": [
+          [
+            "one",
+            0
+          ],
+          [
+            "two",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "one",
+            0
+          ],
+          [
+            "two",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "disable_purges",
+        "expected": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "rollback_preserves_output",
+        "expected": [
+          [
+            "before rollback",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "before rollback",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "savepoint_preserves_output",
+        "expected": [
+          [
+            "after savepoint",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "after savepoint",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "numeric_input",
+        "expected": [
+          [
+            "123",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "123",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "line_byte_boundary",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LENGTH_GET",
+            "value": [
+              32764,
+              32767,
+              0
+            ],
+            "expected": [
+              32764,
+              32767,
+              0
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "line_overflow_discards_partial",
+        "expected": [
+          [
+            "complete",
+            0
+          ],
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "EXPECT_ERROR",
+            "error": {
+              "exception": "DatabaseError",
+              "sqlstate": null,
+              "oracle_code": 20000,
+              "message": "ORA-20000: ORU-10028: line length overflow, limit of 32767 bytes per line"
+            },
+            "matched": true
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "complete",
+            0
+          ],
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "unicode_line_overflow",
+        "expected": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "EXPECT_ERROR",
+            "error": {
+              "exception": "DatabaseError",
+              "sqlstate": null,
+              "oracle_code": 20000,
+              "message": "ORA-20000: ORU-10028: line length overflow, limit of 32767 bytes per line"
+            },
+            "matched": true
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "minimum_buffer_boundary",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "EXPECT_ERROR",
+            "error": {
+              "exception": "DatabaseError",
+              "sqlstate": null,
+              "oracle_code": 20000,
+              "message": "ORA-20000: ORU-10027: buffer overflow, limit of 2000 bytes"
+            },
+            "matched": true
+          },
+          {
+            "op": "LENGTH_GET",
+            "value": [
+              2000,
+              2000,
+              0
+            ],
+            "expected": [
+              2000,
+              2000,
+              0
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "buffer_overflow_preserves_complete_lines",
+        "expected": [
+          [
+            "first",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "EXPECT_ERROR",
+            "error": {
+              "exception": "DatabaseError",
+              "sqlstate": null,
+              "oracle_code": 20000,
+              "message": "ORA-20000: ORU-10027: buffer overflow, limit of 2000 bytes"
+            },
+            "matched": true
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "first",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "unlimited_buffer",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LENGTH_GET",
+            "value": [
+              21000,
+              21000,
+              0
+            ],
+            "expected": [
+              21000,
+              21000,
+              0
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "get_lines_disabled",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              0,
+              null,
+              null,
+              null
+            ],
+            "expected": [
+              0,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "get_lines_empty",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              0,
+              null,
+              null,
+              null
+            ],
+            "expected": [
+              0,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "get_lines_batch",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              2,
+              "one",
+              "two",
+              null
+            ],
+            "expected": [
+              2,
+              "one",
+              "two",
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "get_lines_zero",
+        "expected": [
+          [
+            "one",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              0,
+              null,
+              null,
+              null
+            ],
+            "expected": [
+              0,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "one",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "get_lines_empty_line",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              1,
+              null,
+              null,
+              null
+            ],
+            "expected": [
+              1,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      {
+        "id": "get_lines_discards_unretrieved_on_write",
+        "expected": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              2,
+              "one",
+              "two",
+              null
+            ],
+            "expected": [
+              2,
+              "one",
+              "two",
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      }
+    ],
+    "cleanup_errors": [],
+    "database_version": "23.26.3.0.0"
+  },
+  "bicdb": {
+    "cases": [
+      {
+        "id": "disabled_output",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "partial_and_terminated",
+        "expected": [
+          [
+            "abcd",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "empty_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "null_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "empty_string_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "embedded_newline",
+        "expected": [
+          [
+            "a\nb",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "unicode_line",
+        "expected": [
+          [
+            "caf\u00e9 \ud83c\udf32",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "unfinished_line_invisible",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "read_discards_unretrieved_on_write",
+        "expected": [
+          [
+            "three",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "read_discards_partial_on_write",
+        "expected": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "reenable_preserves_lines",
+        "expected": [
+          [
+            "one",
+            0
+          ],
+          [
+            "two",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "disable_purges",
+        "expected": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "rollback_preserves_output",
+        "expected": [
+          [
+            "before rollback",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "savepoint_preserves_output",
+        "expected": [
+          [
+            "after savepoint",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "numeric_input",
+        "expected": [
+          [
+            "123",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "line_byte_boundary",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "line_overflow_discards_partial",
+        "expected": [
+          [
+            "complete",
+            0
+          ],
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "unicode_line_overflow",
+        "expected": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "minimum_buffer_boundary",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "buffer_overflow_preserves_complete_lines",
+        "expected": [
+          [
+            "first",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "unlimited_buffer",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "get_lines_disabled",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "get_lines_empty",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "get_lines_batch",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "get_lines_zero",
+        "expected": [
+          [
+            "one",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "get_lines_empty_line",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      {
+        "id": "get_lines_discards_unretrieved_on_write",
+        "expected": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      }
+    ],
+    "cleanup_errors": [],
+    "buffer_reset_error": {
+      "exception": "SyntaxError",
+      "sqlstate": "42601",
+      "oracle_code": null,
+      "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+    }
+  },
+  "cases": [
+    {
+      "id": "disabled_output",
+      "source": {
+        "id": "disabled_output",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "disabled_output",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "partial_and_terminated",
+      "source": {
+        "id": "partial_and_terminated",
+        "expected": [
+          [
+            "abcd",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "abcd",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "partial_and_terminated",
+        "expected": [
+          [
+            "abcd",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "empty_line",
+      "source": {
+        "id": "empty_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "empty_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "null_line",
+      "source": {
+        "id": "null_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "null_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "empty_string_line",
+      "source": {
+        "id": "empty_string_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "empty_string_line",
+        "expected": [
+          [
+            null,
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "embedded_newline",
+      "source": {
+        "id": "embedded_newline",
+        "expected": [
+          [
+            "a\nb",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "a\nb",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "embedded_newline",
+        "expected": [
+          [
+            "a\nb",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "unicode_line",
+      "source": {
+        "id": "unicode_line",
+        "expected": [
+          [
+            "caf\u00e9 \ud83c\udf32",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "caf\u00e9 \ud83c\udf32",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "unicode_line",
+        "expected": [
+          [
+            "caf\u00e9 \ud83c\udf32",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "unfinished_line_invisible",
+      "source": {
+        "id": "unfinished_line_invisible",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "unfinished_line_invisible",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "read_discards_unretrieved_on_write",
+      "source": {
+        "id": "read_discards_unretrieved_on_write",
+        "expected": [
+          [
+            "three",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "GET",
+            "value": [
+              "one",
+              0
+            ],
+            "expected": [
+              "one",
+              0
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "three",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "read_discards_unretrieved_on_write",
+        "expected": [
+          [
+            "three",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "read_discards_partial_on_write",
+      "source": {
+        "id": "read_discards_partial_on_write",
+        "expected": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "GET",
+            "value": [
+              null,
+              1
+            ],
+            "expected": [
+              null,
+              1
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "read_discards_partial_on_write",
+        "expected": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "reenable_preserves_lines",
+      "source": {
+        "id": "reenable_preserves_lines",
+        "expected": [
+          [
+            "one",
+            0
+          ],
+          [
+            "two",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "one",
+            0
+          ],
+          [
+            "two",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "reenable_preserves_lines",
+        "expected": [
+          [
+            "one",
+            0
+          ],
+          [
+            "two",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "disable_purges",
+      "source": {
+        "id": "disable_purges",
+        "expected": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "disable_purges",
+        "expected": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "rollback_preserves_output",
+      "source": {
+        "id": "rollback_preserves_output",
+        "expected": [
+          [
+            "before rollback",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "before rollback",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "rollback_preserves_output",
+        "expected": [
+          [
+            "before rollback",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "savepoint_preserves_output",
+      "source": {
+        "id": "savepoint_preserves_output",
+        "expected": [
+          [
+            "after savepoint",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "after savepoint",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "savepoint_preserves_output",
+        "expected": [
+          [
+            "after savepoint",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "numeric_input",
+      "source": {
+        "id": "numeric_input",
+        "expected": [
+          [
+            "123",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "123",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "numeric_input",
+        "expected": [
+          [
+            "123",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "line_byte_boundary",
+      "source": {
+        "id": "line_byte_boundary",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LENGTH_GET",
+            "value": [
+              32764,
+              32767,
+              0
+            ],
+            "expected": [
+              32764,
+              32767,
+              0
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "line_byte_boundary",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "line_overflow_discards_partial",
+      "source": {
+        "id": "line_overflow_discards_partial",
+        "expected": [
+          [
+            "complete",
+            0
+          ],
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "EXPECT_ERROR",
+            "error": {
+              "exception": "DatabaseError",
+              "sqlstate": null,
+              "oracle_code": 20000,
+              "message": "ORA-20000: ORU-10028: line length overflow, limit of 32767 bytes per line"
+            },
+            "matched": true
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "complete",
+            0
+          ],
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "line_overflow_discards_partial",
+        "expected": [
+          [
+            "complete",
+            0
+          ],
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "unicode_line_overflow",
+      "source": {
+        "id": "unicode_line_overflow",
+        "expected": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "EXPECT_ERROR",
+            "error": {
+              "exception": "DatabaseError",
+              "sqlstate": null,
+              "oracle_code": 20000,
+              "message": "ORA-20000: ORU-10028: line length overflow, limit of 32767 bytes per line"
+            },
+            "matched": true
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "unicode_line_overflow",
+        "expected": [
+          [
+            "tail",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "minimum_buffer_boundary",
+      "source": {
+        "id": "minimum_buffer_boundary",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "EXPECT_ERROR",
+            "error": {
+              "exception": "DatabaseError",
+              "sqlstate": null,
+              "oracle_code": 20000,
+              "message": "ORA-20000: ORU-10027: buffer overflow, limit of 2000 bytes"
+            },
+            "matched": true
+          },
+          {
+            "op": "LENGTH_GET",
+            "value": [
+              2000,
+              2000,
+              0
+            ],
+            "expected": [
+              2000,
+              2000,
+              0
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "minimum_buffer_boundary",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "buffer_overflow_preserves_complete_lines",
+      "source": {
+        "id": "buffer_overflow_preserves_complete_lines",
+        "expected": [
+          [
+            "first",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "EXPECT_ERROR",
+            "error": {
+              "exception": "DatabaseError",
+              "sqlstate": null,
+              "oracle_code": 20000,
+              "message": "ORA-20000: ORU-10027: buffer overflow, limit of 2000 bytes"
+            },
+            "matched": true
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "first",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "buffer_overflow_preserves_complete_lines",
+        "expected": [
+          [
+            "first",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "unlimited_buffer",
+      "source": {
+        "id": "unlimited_buffer",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LENGTH_GET",
+            "value": [
+              21000,
+              21000,
+              0
+            ],
+            "expected": [
+              21000,
+              21000,
+              0
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "unlimited_buffer",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "get_lines_disabled",
+      "source": {
+        "id": "get_lines_disabled",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              0,
+              null,
+              null,
+              null
+            ],
+            "expected": [
+              0,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "get_lines_disabled",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "get_lines_empty",
+      "source": {
+        "id": "get_lines_empty",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              0,
+              null,
+              null,
+              null
+            ],
+            "expected": [
+              0,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "get_lines_empty",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "get_lines_batch",
+      "source": {
+        "id": "get_lines_batch",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              2,
+              "one",
+              "two",
+              null
+            ],
+            "expected": [
+              2,
+              "one",
+              "two",
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "get_lines_batch",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "get_lines_zero",
+      "source": {
+        "id": "get_lines_zero",
+        "expected": [
+          [
+            "one",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              0,
+              null,
+              null,
+              null
+            ],
+            "expected": [
+              0,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "one",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "get_lines_zero",
+        "expected": [
+          [
+            "one",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "get_lines_empty_line",
+      "source": {
+        "id": "get_lines_empty_line",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              1,
+              null,
+              null,
+              null
+            ],
+            "expected": [
+              1,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "get_lines_empty_line",
+        "expected": [
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "get_lines_discards_unretrieved_on_write",
+      "source": {
+        "id": "get_lines_discards_unretrieved_on_write",
+        "expected": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [
+          {
+            "op": "LINES_GET",
+            "value": [
+              2,
+              "one",
+              "two",
+              null
+            ],
+            "expected": [
+              2,
+              "one",
+              "two",
+              null
+            ]
+          }
+        ],
+        "success": true,
+        "phase": "complete",
+        "lines": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ]
+      },
+      "bicdb": {
+        "id": "get_lines_discards_unretrieved_on_write",
+        "expected": [
+          [
+            "new",
+            0
+          ],
+          [
+            null,
+            1
+          ]
+        ],
+        "observations": [],
+        "success": false,
+        "phase": "reset",
+        "error": {
+          "exception": "SyntaxError",
+          "sqlstate": "42601",
+          "oracle_code": null,
+          "message": "invalid SQL: procedure \"dbms_output.disable\" does not exist"
+        }
+      },
+      "source_qualified": true,
+      "matched": false
+    }
+  ],
+  "total": 27,
+  "matched": 0,
+  "source_qualified": true,
+  "cleanup_errors": [],
+  "buffers_reset": false,
+  "success": false,
+  "target_sql_profile": "oracle-preview-v1",
+  "runtime_binary_sha256": "1e683572cf27d76db38eb802af54f3b4abd27e1a424e7b40f66ac1c56c3df3fd",
+  "fixture_exit_status": 1,
+  "fixture_source_sha256": "f5ca16d3fcbc50d4f36fad31636465309feb385e0b490493f7d984a5153a7d97"
+}

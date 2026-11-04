@@ -514,3 +514,19 @@ python examples/oracle/reference/postgres_view_dependencies.py \
 Set ORACLE_CONTROL_PG_DSN privately to PostgreSQL and BICDB_PG_DSN to a native
 PostgreSQL-profile target. The fixture removes its own tables and view. Wildcard
 dependencies and general view invalidation are separate qualification.
+
+`output_buffers.py` adds a failing supplied-package acceptance fixture:
+
+```sh
+python examples/oracle/reference/output_buffers.py \
+  --oracle-config /private/reference.json --output /private/output-buffers.json
+```
+
+Set BICDB_PG_DSN privately to an explicit Oracle-preview target. Its 27 cases
+cover output buffers, reads/writes, NULLs, Unicode byte limits, overflow recovery,
+rollback/savepoints and bounded CHARARR batches. Dedicated source schemas and
+nonce-named helper procedures keep schema changes isolated. The fixture removes
+its helpers and returns nonzero while any case is unqualified. The current
+[baseline](../../../docs/evidence/oracle-output-buffer-baseline-2026-11-03/README.md)
+passes 27/27 on Oracle; BicDB's 27 cases are blocked by missing DISABLE. This
+does not implement the package or qualify full application execution.

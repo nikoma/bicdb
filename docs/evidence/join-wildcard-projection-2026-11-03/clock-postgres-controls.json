@@ -1,0 +1,323 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "UTC:CURRENT_TIMESTAMP",
+      "source": {
+        "id": "UTC:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "UTC",
+        "value": "2026-11-04T07:56:00.015844+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "UTC",
+        "value": "2026-11-04T07:56:00.113566+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:CURRENT_DATE",
+      "source": {
+        "id": "UTC:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "UTC",
+        "value": "2026-11-04",
+        "type": "1082",
+        "nonnull": true,
+        "expected_type": "1082",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "UTC",
+        "value": "2026-11-04",
+        "type": "1082",
+        "nonnull": true,
+        "expected_type": "1082",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:clock_timestamp()",
+      "source": {
+        "id": "UTC:clock_timestamp()",
+        "expression": "clock_timestamp()",
+        "zone": "UTC",
+        "value": "2026-11-04T07:56:00.016501+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "UTC:clock_timestamp()",
+        "expression": "clock_timestamp()",
+        "zone": "UTC",
+        "value": "2026-11-04T07:56:00.116117+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "UTC:transaction_clock",
+      "source": {
+        "id": "UTC:transaction_clock",
+        "zone": "UTC",
+        "expected": "transaction_stable",
+        "qualified": true,
+        "first": "2026-11-04 07:56:00.016629+00:00",
+        "second": "2026-11-04 07:56:00.016629+00:00"
+      },
+      "bicdb": {
+        "id": "UTC:transaction_clock",
+        "zone": "UTC",
+        "expected": "transaction_stable",
+        "qualified": true,
+        "first": "2026-11-04 07:56:00.116494+00:00",
+        "second": "2026-11-04 07:56:00.116494+00:00"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:CURRENT_TIMESTAMP",
+      "source": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T13:26:00.047425+05:30",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T07:56:00.149577+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:CURRENT_DATE",
+      "source": {
+        "id": "Asia/Kolkata:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04",
+        "type": "1082",
+        "nonnull": true,
+        "expected_type": "1082",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04",
+        "type": "1082",
+        "nonnull": true,
+        "expected_type": "1082",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:clock_timestamp()",
+      "source": {
+        "id": "Asia/Kolkata:clock_timestamp()",
+        "expression": "clock_timestamp()",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T13:26:00.047867+05:30",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:clock_timestamp()",
+        "expression": "clock_timestamp()",
+        "zone": "Asia/Kolkata",
+        "value": "2026-11-04T07:56:00.151587+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "Asia/Kolkata:transaction_clock",
+      "source": {
+        "id": "Asia/Kolkata:transaction_clock",
+        "zone": "Asia/Kolkata",
+        "expected": "transaction_stable",
+        "qualified": true,
+        "first": "2026-11-04 13:26:00.047963+05:30",
+        "second": "2026-11-04 13:26:00.047963+05:30"
+      },
+      "bicdb": {
+        "id": "Asia/Kolkata:transaction_clock",
+        "zone": "Asia/Kolkata",
+        "expected": "transaction_stable",
+        "qualified": true,
+        "first": "2026-11-04 07:56:00.151923+00:00",
+        "second": "2026-11-04 07:56:00.151923+00:00"
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:CURRENT_TIMESTAMP",
+      "source": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T23:56:00.079190-08:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:CURRENT_TIMESTAMP",
+        "expression": "CURRENT_TIMESTAMP",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-04T07:56:00.184463+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:CURRENT_DATE",
+      "source": {
+        "id": "America/Los_Angeles:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03",
+        "type": "1082",
+        "nonnull": true,
+        "expected_type": "1082",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:CURRENT_DATE",
+        "expression": "CURRENT_DATE",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03",
+        "type": "1082",
+        "nonnull": true,
+        "expected_type": "1082",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:clock_timestamp()",
+      "source": {
+        "id": "America/Los_Angeles:clock_timestamp()",
+        "expression": "clock_timestamp()",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-03T23:56:00.079841-08:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:clock_timestamp()",
+        "expression": "clock_timestamp()",
+        "zone": "America/Los_Angeles",
+        "value": "2026-11-04T07:56:00.186438+00:00",
+        "type": "1184",
+        "nonnull": true,
+        "expected_type": "1184",
+        "value_qualified": true,
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "America/Los_Angeles:transaction_clock",
+      "source": {
+        "id": "America/Los_Angeles:transaction_clock",
+        "zone": "America/Los_Angeles",
+        "expected": "transaction_stable",
+        "qualified": true,
+        "first": "2026-11-03 23:56:00.079943-08:00",
+        "second": "2026-11-03 23:56:00.079943-08:00"
+      },
+      "bicdb": {
+        "id": "America/Los_Angeles:transaction_clock",
+        "zone": "America/Los_Angeles",
+        "expected": "transaction_stable",
+        "qualified": true,
+        "first": "2026-11-04 07:56:00.186768+00:00",
+        "second": "2026-11-04 07:56:00.186768+00:00"
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "reference_version": 180004,
+  "total": 12,
+  "matched": 12,
+  "source_qualified": true,
+  "cleanup_errors": [],
+  "success": true,
+  "target_sql_profile": "postgres",
+  "reference": "postgres",
+  "runtime_binary_sha256": "e80a31e35ba311db3952d822441360b6aedfbdc0a472fe218d8f840502626cd4",
+  "postgres_version_num": 180004,
+  "fixture_source_sha256": "c67a3f36f7b1cf8cef4acccac9f80c3ca7a844ee3cf8b36bdf116ffdb5e3d060"
+}

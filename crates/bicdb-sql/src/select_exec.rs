@@ -278,6 +278,52 @@ pub(crate) fn row_wildcard_output_column(column: &str) -> String {
     column.rsplit('.').next().unwrap_or(column).to_string()
 }
 
+/// Resolve visible output columns to physical slots. Binding aliases, hidden
+/// fields and join order can make output positions differ from input slots.
+/// Consume duplicate names in order so derived columns with repeated labels
+/// keep their separate values; each wildcard occurrence starts a fresh mapping.
+pub(crate) fn wildcard_column_slots(
+    row_columns: &[String],
+    output_columns: &[String],
+) -> Result<Vec<usize>> {
+    let mut slots: HashMap<String, std::collections::VecDeque<usize>> = HashMap::new();
+    for (index, name) in row_columns.iter().enumerate() {
+        slots
+            .entry(name.to_ascii_lowercase())
+            .or_default()
+            .push_back(index);
+    }
+    output_columns
+        .iter()
+        .map(|name| {
+            slots
+                .get_mut(&name.to_ascii_lowercase())
+                .and_then(|positions| positions.pop_front())
+                .ok_or_else(|| SqlError::UndefinedColumn {
+                    table: "wildcard projection".into(),
+                    column: name.clone(),
+                })
+        })
+        .collect()
+}
+
+pub(crate) fn qualified_wildcard_slots(
+    qualifier: &SelectItemQualifiedWildcardKind,
+    row_columns: &[String],
+    visible_columns: &[String],
+) -> Result<Vec<(usize, String, String)>> {
+    let columns = qualified_wildcard_columns(qualifier, visible_columns)?;
+    let sources = columns
+        .iter()
+        .map(|(source, _)| source.clone())
+        .collect::<Vec<_>>();
+    Ok(wildcard_column_slots(row_columns, &sources)?
+        .into_iter()
+        .zip(columns)
+        .map(|(index, (source, output))| (index, source, output))
+        .collect())
+}
+
 pub(crate) fn aliased_row_output_columns(alias: &str, columns: &[String]) -> Vec<String> {
     columns
         .iter()

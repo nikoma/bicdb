@@ -415,3 +415,13 @@ addresses a separately reproduced main CI failure while retaining Oracle
 custom-type regressions and source-backed clock controls. It qualifies native
 function declaration/type identity updates, not Oracle schema-move syntax or
 schema removal. All outstanding workstreams in the programme remain required.
+
+The [logical wildcard projection checkpoint](evidence/join-wildcard-projection-2026-11-03/README.md)
+qualifies 23 Oracle and 23 native PostgreSQL join/projection cases, preserving
+logical source order, typed row slots and distinct repeated-label ordinals through
+physical join reordering. The stopped application copy's matching query now reads
+81 correct columns with ordinary driver decoding, and the completed order and
+reservation survive reopen. Oracle's declared-column joined-wildcard view form
+remains unqualified after a retained source-side ORA-25716 observation; its final
+view controls use explicit aliases. Full background execution, legacy view metadata,
+memory behavior, remaining application workflows and the wider programme remain open.

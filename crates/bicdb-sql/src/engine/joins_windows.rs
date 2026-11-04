@@ -901,21 +901,18 @@ impl<'db> SqlEngine<'db> {
             }
             match item {
                 SelectItem::Wildcard(_) => {
-                    for (idx, column) in wildcard_columns.iter().enumerate() {
+                    for (column, idx) in wildcard_columns
+                        .iter()
+                        .zip(wildcard_column_slots(row_columns, wildcard_columns)?)
+                    {
                         columns.push(row_wildcard_output_column(column));
                         actions.push(RowProjectionAction::Column(idx));
                     }
                 }
                 SelectItem::QualifiedWildcard(qualifier, _) => {
-                    for (source_column, output_column) in
-                        qualified_wildcard_columns(qualifier, row_columns)?
+                    for (idx, _source_column, output_column) in
+                        qualified_wildcard_slots(qualifier, row_columns, row_columns)?
                     {
-                        let Some(idx) = slot_row_column_index(row_columns, &source_column) else {
-                            return Err(SqlError::UndefinedColumn {
-                                table: qualifier.to_string(),
-                                column: source_column,
-                            });
-                        };
                         columns.push(output_column);
                         actions.push(RowProjectionAction::Column(idx));
                     }
@@ -1068,21 +1065,18 @@ impl<'db> SqlEngine<'db> {
             }
             match item {
                 SelectItem::Wildcard(_) => {
-                    for (idx, column) in wildcard_columns.iter().enumerate() {
+                    for (column, idx) in wildcard_columns
+                        .iter()
+                        .zip(wildcard_column_slots(row_columns, wildcard_columns)?)
+                    {
                         columns.push(row_wildcard_output_column(column));
                         actions.push(RowProjectionAction::Column(idx));
                     }
                 }
                 SelectItem::QualifiedWildcard(qualifier, _) => {
-                    for (source_column, output_column) in
-                        qualified_wildcard_columns(qualifier, wildcard_columns)?
+                    for (idx, _source_column, output_column) in
+                        qualified_wildcard_slots(qualifier, row_columns, wildcard_columns)?
                     {
-                        let Some(idx) = slot_row_column_index(row_columns, &source_column) else {
-                            return Err(SqlError::UndefinedColumn {
-                                table: qualifier.to_string(),
-                                column: source_column,
-                            });
-                        };
                         columns.push(output_column);
                         actions.push(RowProjectionAction::Column(idx));
                     }
@@ -1203,14 +1197,17 @@ impl<'db> SqlEngine<'db> {
             self.check_cancellation()?;
             match item {
                 SelectItem::Wildcard(_) => {
-                    for (idx, column) in wildcard_columns.iter().enumerate() {
+                    for (column, idx) in wildcard_columns
+                        .iter()
+                        .zip(wildcard_column_slots(row_columns, wildcard_columns)?)
+                    {
                         columns.push(row_wildcard_output_column(column));
                         actions.push(RowProjectionAction::Column(idx));
                     }
                 }
                 SelectItem::QualifiedWildcard(qualifier, _) => {
-                    for (source_column, output_column) in
-                        qualified_wildcard_columns(qualifier, row_columns)?
+                    for (idx, source_column, output_column) in
+                        qualified_wildcard_slots(qualifier, row_columns, row_columns)?
                     {
                         // `alias.*` hides VERSIONS pseudocolumns exactly when `*`
                         // does (they are absent from `wildcard_columns`).
@@ -1222,12 +1219,6 @@ impl<'db> SqlEngine<'db> {
                         {
                             continue;
                         }
-                        let Some(idx) = slot_row_column_index(row_columns, &source_column) else {
-                            return Err(SqlError::UndefinedColumn {
-                                table: qualifier.to_string(),
-                                column: source_column,
-                            });
-                        };
                         columns.push(output_column);
                         actions.push(RowProjectionAction::Column(idx));
                     }
@@ -2319,6 +2310,18 @@ impl<'db> SqlEngine<'db> {
         order_types: &[Option<String>],
         keep: Option<usize>,
     ) -> Result<()> {
+        self.apply_row_order_by_with_slots(rows, order_by, columns, order_types, &[], keep)
+    }
+
+    pub(crate) fn apply_row_order_by_with_slots(
+        &self,
+        rows: &mut Vec<SlotRow>,
+        order_by: Option<&OrderBy>,
+        columns: &[String],
+        order_types: &[Option<String>],
+        order_slots: &[Option<usize>],
+        keep: Option<usize>,
+    ) -> Result<()> {
         self.check_cancellation()?;
         let Some(order_by) = order_by else {
             return Ok(());
@@ -2345,15 +2348,22 @@ impl<'db> SqlEngine<'db> {
                     .zip(&bound)
                     .enumerate()
                     .map(|(index, (order, bound))| {
-                        let evaluated = match bound {
-                            Some(bound) => bound.eval(&BoundExprFrame {
-                                user_calls: &[],
-                                db: self.db_ref(),
-                                columns: BoundExprColumns::Values(&row),
-                                vars: &context.var_values,
-                            }),
-                            None => self.eval_slot_row_value(&row, &context, &order.expr),
-                        };
+                        let evaluated =
+                            if let Some(slot) = order_slots.get(index).copied().flatten() {
+                                Ok(row.get(slot).cloned().ok_or_else(|| {
+                                    SqlError::InvalidSql("ORDER BY source slot is missing".into())
+                                })?)
+                            } else {
+                                match bound {
+                                    Some(bound) => bound.eval(&BoundExprFrame {
+                                        user_calls: &[],
+                                        db: self.db_ref(),
+                                        columns: BoundExprColumns::Values(&row),
+                                        vars: &context.var_values,
+                                    }),
+                                    None => self.eval_slot_row_value(&row, &context, &order.expr),
+                                }
+                            };
                         let value = match evaluated {
                             Ok(value) => value,
                             Err(error @ SqlError::DataException { .. }) => return Err(error),

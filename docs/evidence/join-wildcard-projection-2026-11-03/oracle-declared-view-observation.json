@@ -1,0 +1,29 @@
+{
+  "steps": [
+    {
+      "kind": "TABLE",
+      "success": true,
+      "warning": null
+    },
+    {
+      "kind": "TABLE",
+      "success": true,
+      "warning": null
+    },
+    {
+      "kind": "VIEW",
+      "success": true,
+      "warning": null
+    },
+    {
+      "select": "SELECT * FROM WC_V_AB60C651",
+      "error": 25716,
+      "message": "ORA-25716: The identifier contains a double quotation mark (\") character\nHelp: https://docs.oracle.com/error-help/db/ora-25716/"
+    },
+    {
+      "select": "SELECT v.* FROM WC_V_AB60C651 v",
+      "error": 25716,
+      "message": "ORA-25716: The identifier contains a double quotation mark (\") character\nHelp: https://docs.oracle.com/error-help/db/ora-25716/"
+    }
+  ]
+}

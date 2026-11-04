@@ -1,0 +1,905 @@
+{
+  "runtime_binary_sha256": "e80a31e35ba311db3952d822441360b6aedfbdc0a472fe218d8f840502626cd4",
+  "application_qualified": false,
+  "stopped_application_clone_only": true,
+  "checks": [
+    {
+      "sql": "SELECT DocumentNo,DocStatus,Processed,Processing,GrandTotal FROM C_Order WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "50000",
+          "CO",
+          "Y",
+          "N",
+          "123.50"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT QtyOrdered,QtyReserved,QtyDelivered,QtyInvoiced FROM C_OrderLine WHERE C_Order_ID=1000000",
+      "rows": [
+        [
+          "2",
+          "2",
+          "0",
+          "0"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT BOMQTYAVAILABLE(123,103,0),BOMQTYONHAND(123,103,0),BOMQTYRESERVED(123,103,0),BOMQTYORDERED(123,103,0) FROM DUAL",
+      "rows": [
+        [
+          "18",
+          "20",
+          "2",
+          "0"
+        ]
+      ]
+    }
+  ],
+  "projections": [
+    {
+      "sql": "SELECT * FROM M_MatchPO mi INNER JOIN C_InvoiceLine il ON mi.C_InvoiceLine_ID=il.C_InvoiceLine_ID ORDER BY mi.M_MatchPO_ID FETCH FIRST 1 ROWS ONLY",
+      "columns": [
+        {
+          "name": "M_MATCHPO_ID",
+          "oid": 1700
+        },
+        {
+          "name": "AD_CLIENT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "AD_ORG_ID",
+          "oid": 1700
+        },
+        {
+          "name": "ISACTIVE",
+          "oid": 1042
+        },
+        {
+          "name": "CREATED",
+          "oid": 1114
+        },
+        {
+          "name": "CREATEDBY",
+          "oid": 1700
+        },
+        {
+          "name": "UPDATED",
+          "oid": 1114
+        },
+        {
+          "name": "UPDATEDBY",
+          "oid": 1700
+        },
+        {
+          "name": "C_ORDERLINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "M_PRODUCT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "M_INOUTLINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_INVOICELINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "DATETRX",
+          "oid": 1114
+        },
+        {
+          "name": "QTY",
+          "oid": 1700
+        },
+        {
+          "name": "PROCESSING",
+          "oid": 1042
+        },
+        {
+          "name": "PROCESSED",
+          "oid": 1042
+        },
+        {
+          "name": "POSTED",
+          "oid": 1042
+        },
+        {
+          "name": "DOCUMENTNO",
+          "oid": 1043
+        },
+        {
+          "name": "DATEACCT",
+          "oid": 1114
+        },
+        {
+          "name": "M_ATTRIBUTESETINSTANCE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "PRICEMATCHDIFFERENCE",
+          "oid": 1700
+        },
+        {
+          "name": "ISAPPROVED",
+          "oid": 1042
+        },
+        {
+          "name": "DESCRIPTION",
+          "oid": 1043
+        },
+        {
+          "name": "PROCESSEDON",
+          "oid": 1700
+        },
+        {
+          "name": "M_MATCHPO_UU",
+          "oid": 1043
+        },
+        {
+          "name": "REVERSAL_ID",
+          "oid": 1700
+        },
+        {
+          "name": "REF_MATCHPO_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_INVOICELINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "AD_CLIENT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "AD_ORG_ID",
+          "oid": 1700
+        },
+        {
+          "name": "ISACTIVE",
+          "oid": 1042
+        },
+        {
+          "name": "CREATED",
+          "oid": 1114
+        },
+        {
+          "name": "CREATEDBY",
+          "oid": 1700
+        },
+        {
+          "name": "UPDATED",
+          "oid": 1114
+        },
+        {
+          "name": "UPDATEDBY",
+          "oid": 1700
+        },
+        {
+          "name": "C_INVOICE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_ORDERLINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "M_INOUTLINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "LINE",
+          "oid": 1700
+        },
+        {
+          "name": "DESCRIPTION",
+          "oid": 1043
+        },
+        {
+          "name": "M_PRODUCT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "QTYINVOICED",
+          "oid": 1700
+        },
+        {
+          "name": "PRICELIST",
+          "oid": 1700
+        },
+        {
+          "name": "PRICEACTUAL",
+          "oid": 1700
+        },
+        {
+          "name": "PRICELIMIT",
+          "oid": 1700
+        },
+        {
+          "name": "LINENETAMT",
+          "oid": 1700
+        },
+        {
+          "name": "C_CHARGE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_UOM_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_TAX_ID",
+          "oid": 1700
+        },
+        {
+          "name": "S_RESOURCEASSIGNMENT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "A_ASSET_ID",
+          "oid": 1700
+        },
+        {
+          "name": "TAXAMT",
+          "oid": 1700
+        },
+        {
+          "name": "M_ATTRIBUTESETINSTANCE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "ISDESCRIPTION",
+          "oid": 1042
+        },
+        {
+          "name": "ISPRINTED",
+          "oid": 1042
+        },
+        {
+          "name": "LINETOTALAMT",
+          "oid": 1700
+        },
+        {
+          "name": "REF_INVOICELINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "PROCESSED",
+          "oid": 1042
+        },
+        {
+          "name": "QTYENTERED",
+          "oid": 1700
+        },
+        {
+          "name": "PRICEENTERED",
+          "oid": 1700
+        },
+        {
+          "name": "C_PROJECT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_PROJECTPHASE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_PROJECTTASK_ID",
+          "oid": 1700
+        },
+        {
+          "name": "RRSTARTDATE",
+          "oid": 1114
+        },
+        {
+          "name": "RRAMT",
+          "oid": 1700
+        },
+        {
+          "name": "C_CAMPAIGN_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_ACTIVITY_ID",
+          "oid": 1700
+        },
+        {
+          "name": "USER1_ID",
+          "oid": 1700
+        },
+        {
+          "name": "USER2_ID",
+          "oid": 1700
+        },
+        {
+          "name": "AD_ORGTRX_ID",
+          "oid": 1700
+        },
+        {
+          "name": "M_RMALINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "A_CREATEASSET",
+          "oid": 1042
+        },
+        {
+          "name": "A_PROCESSED",
+          "oid": 1042
+        },
+        {
+          "name": "A_CAPVSEXP",
+          "oid": 1043
+        },
+        {
+          "name": "A_ASSET_GROUP_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_INVOICELINE_UU",
+          "oid": 1043
+        },
+        {
+          "name": "ISFIXEDASSETINVOICE",
+          "oid": 1042
+        },
+        {
+          "name": "C_1099BOX_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_DEPARTMENT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_COSTCENTER_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_EMPLOYEE_ID",
+          "oid": 1700
+        }
+      ],
+      "values": [
+        "119",
+        "11",
+        "11",
+        "Y",
+        "2003-04-18 12:47:32",
+        "0",
+        "2003-04-18 12:47:32",
+        "0",
+        "111",
+        "136",
+        null,
+        "107",
+        "2003-01-22 18:08:37",
+        "40",
+        "N",
+        "Y",
+        "Y",
+        "119",
+        "2003-01-22 18:08:37",
+        null,
+        null,
+        "Y",
+        null,
+        "1050670052000",
+        "4271d482-a881-4ce8-b728-67514329242f",
+        null,
+        null,
+        "107",
+        "11",
+        "11",
+        "Y",
+        "2003-01-22 18:08:38",
+        "100",
+        "2003-01-22 18:08:38",
+        "0",
+        "105",
+        "111",
+        "107",
+        "10",
+        null,
+        "136",
+        "40",
+        "20",
+        "18",
+        "17",
+        "720",
+        null,
+        "100",
+        "109",
+        null,
+        null,
+        "0",
+        "0",
+        "N",
+        "Y",
+        "0",
+        null,
+        "Y",
+        "40",
+        "18",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "N",
+        "N",
+        null,
+        null,
+        "ba3231dc-beba-4d8c-b591-344a04471e1e",
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "sql": "SELECT mi.* FROM M_MatchPO mi INNER JOIN C_InvoiceLine il ON mi.C_InvoiceLine_ID=il.C_InvoiceLine_ID ORDER BY mi.M_MatchPO_ID FETCH FIRST 1 ROWS ONLY",
+      "columns": [
+        {
+          "name": "M_MATCHPO_ID",
+          "oid": 1700
+        },
+        {
+          "name": "AD_CLIENT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "AD_ORG_ID",
+          "oid": 1700
+        },
+        {
+          "name": "ISACTIVE",
+          "oid": 1042
+        },
+        {
+          "name": "CREATED",
+          "oid": 1114
+        },
+        {
+          "name": "CREATEDBY",
+          "oid": 1700
+        },
+        {
+          "name": "UPDATED",
+          "oid": 1114
+        },
+        {
+          "name": "UPDATEDBY",
+          "oid": 1700
+        },
+        {
+          "name": "C_ORDERLINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "M_PRODUCT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "M_INOUTLINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_INVOICELINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "DATETRX",
+          "oid": 1114
+        },
+        {
+          "name": "QTY",
+          "oid": 1700
+        },
+        {
+          "name": "PROCESSING",
+          "oid": 1042
+        },
+        {
+          "name": "PROCESSED",
+          "oid": 1042
+        },
+        {
+          "name": "POSTED",
+          "oid": 1042
+        },
+        {
+          "name": "DOCUMENTNO",
+          "oid": 1043
+        },
+        {
+          "name": "DATEACCT",
+          "oid": 1114
+        },
+        {
+          "name": "M_ATTRIBUTESETINSTANCE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "PRICEMATCHDIFFERENCE",
+          "oid": 1700
+        },
+        {
+          "name": "ISAPPROVED",
+          "oid": 1042
+        },
+        {
+          "name": "DESCRIPTION",
+          "oid": 1043
+        },
+        {
+          "name": "PROCESSEDON",
+          "oid": 1700
+        },
+        {
+          "name": "M_MATCHPO_UU",
+          "oid": 1043
+        },
+        {
+          "name": "REVERSAL_ID",
+          "oid": 1700
+        },
+        {
+          "name": "REF_MATCHPO_ID",
+          "oid": 1700
+        }
+      ],
+      "values": [
+        "119",
+        "11",
+        "11",
+        "Y",
+        "2003-04-18 12:47:32",
+        "0",
+        "2003-04-18 12:47:32",
+        "0",
+        "111",
+        "136",
+        null,
+        "107",
+        "2003-01-22 18:08:37",
+        "40",
+        "N",
+        "Y",
+        "Y",
+        "119",
+        "2003-01-22 18:08:37",
+        null,
+        null,
+        "Y",
+        null,
+        "1050670052000",
+        "4271d482-a881-4ce8-b728-67514329242f",
+        null,
+        null
+      ]
+    },
+    {
+      "sql": "SELECT il.* FROM M_MatchPO mi INNER JOIN C_InvoiceLine il ON mi.C_InvoiceLine_ID=il.C_InvoiceLine_ID ORDER BY mi.M_MatchPO_ID FETCH FIRST 1 ROWS ONLY",
+      "columns": [
+        {
+          "name": "C_INVOICELINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "AD_CLIENT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "AD_ORG_ID",
+          "oid": 1700
+        },
+        {
+          "name": "ISACTIVE",
+          "oid": 1042
+        },
+        {
+          "name": "CREATED",
+          "oid": 1114
+        },
+        {
+          "name": "CREATEDBY",
+          "oid": 1700
+        },
+        {
+          "name": "UPDATED",
+          "oid": 1114
+        },
+        {
+          "name": "UPDATEDBY",
+          "oid": 1700
+        },
+        {
+          "name": "C_INVOICE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_ORDERLINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "M_INOUTLINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "LINE",
+          "oid": 1700
+        },
+        {
+          "name": "DESCRIPTION",
+          "oid": 1043
+        },
+        {
+          "name": "M_PRODUCT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "QTYINVOICED",
+          "oid": 1700
+        },
+        {
+          "name": "PRICELIST",
+          "oid": 1700
+        },
+        {
+          "name": "PRICEACTUAL",
+          "oid": 1700
+        },
+        {
+          "name": "PRICELIMIT",
+          "oid": 1700
+        },
+        {
+          "name": "LINENETAMT",
+          "oid": 1700
+        },
+        {
+          "name": "C_CHARGE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_UOM_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_TAX_ID",
+          "oid": 1700
+        },
+        {
+          "name": "S_RESOURCEASSIGNMENT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "A_ASSET_ID",
+          "oid": 1700
+        },
+        {
+          "name": "TAXAMT",
+          "oid": 1700
+        },
+        {
+          "name": "M_ATTRIBUTESETINSTANCE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "ISDESCRIPTION",
+          "oid": 1042
+        },
+        {
+          "name": "ISPRINTED",
+          "oid": 1042
+        },
+        {
+          "name": "LINETOTALAMT",
+          "oid": 1700
+        },
+        {
+          "name": "REF_INVOICELINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "PROCESSED",
+          "oid": 1042
+        },
+        {
+          "name": "QTYENTERED",
+          "oid": 1700
+        },
+        {
+          "name": "PRICEENTERED",
+          "oid": 1700
+        },
+        {
+          "name": "C_PROJECT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_PROJECTPHASE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_PROJECTTASK_ID",
+          "oid": 1700
+        },
+        {
+          "name": "RRSTARTDATE",
+          "oid": 1114
+        },
+        {
+          "name": "RRAMT",
+          "oid": 1700
+        },
+        {
+          "name": "C_CAMPAIGN_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_ACTIVITY_ID",
+          "oid": 1700
+        },
+        {
+          "name": "USER1_ID",
+          "oid": 1700
+        },
+        {
+          "name": "USER2_ID",
+          "oid": 1700
+        },
+        {
+          "name": "AD_ORGTRX_ID",
+          "oid": 1700
+        },
+        {
+          "name": "M_RMALINE_ID",
+          "oid": 1700
+        },
+        {
+          "name": "A_CREATEASSET",
+          "oid": 1042
+        },
+        {
+          "name": "A_PROCESSED",
+          "oid": 1042
+        },
+        {
+          "name": "A_CAPVSEXP",
+          "oid": 1043
+        },
+        {
+          "name": "A_ASSET_GROUP_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_INVOICELINE_UU",
+          "oid": 1043
+        },
+        {
+          "name": "ISFIXEDASSETINVOICE",
+          "oid": 1042
+        },
+        {
+          "name": "C_1099BOX_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_DEPARTMENT_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_COSTCENTER_ID",
+          "oid": 1700
+        },
+        {
+          "name": "C_EMPLOYEE_ID",
+          "oid": 1700
+        }
+      ],
+      "values": [
+        "107",
+        "11",
+        "11",
+        "Y",
+        "2003-01-22 18:08:38",
+        "100",
+        "2003-01-22 18:08:38",
+        "0",
+        "105",
+        "111",
+        "107",
+        "10",
+        null,
+        "136",
+        "40",
+        "20",
+        "18",
+        "17",
+        "720",
+        null,
+        "100",
+        "109",
+        null,
+        null,
+        "0",
+        "0",
+        "N",
+        "Y",
+        "0",
+        null,
+        "Y",
+        "40",
+        "18",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "N",
+        "N",
+        null,
+        null,
+        "ba3231dc-beba-4d8c-b591-344a04471e1e",
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "sql": "SELECT mi.M_MATCHPO_ID,mi.DateTrx,mi.Ref_MatchPO_ID,mi.M_Product_ID FROM M_MatchPO mi INNER JOIN C_InvoiceLine il ON mi.C_InvoiceLine_ID=il.C_InvoiceLine_ID ORDER BY mi.M_MatchPO_ID FETCH FIRST 1 ROWS ONLY",
+      "columns": [
+        {
+          "name": "m_matchpo_id",
+          "oid": 1700
+        },
+        {
+          "name": "datetrx",
+          "oid": 1114
+        },
+        {
+          "name": "ref_matchpo_id",
+          "oid": 1700
+        },
+        {
+          "name": "m_product_id",
+          "oid": 1700
+        }
+      ],
+      "values": [
+        "119",
+        "2003-01-22 18:08:37",
+        null,
+        "136"
+      ]
+    }
+  ],
+  "order_commit_survives_graceful_reopen": true,
+  "typed_projection_matches_qualified_sources": true,
+  "projection_column_count": 81,
+  "ordinary_driver_decoding_verified": true
+}

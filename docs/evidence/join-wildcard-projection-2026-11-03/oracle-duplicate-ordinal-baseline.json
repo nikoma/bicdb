@@ -1,0 +1,2658 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "reference_version": "23.26.3.0.0",
+  "cases": [
+    {
+      "id": "bare_inner",
+      "source": {
+        "id": "bare_inner",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "bare_inner",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "aliased_inner",
+      "source": {
+        "id": "aliased_inner",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "aliased_inner",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "reverse_source_order",
+      "source": {
+        "id": "reverse_source_order",
+        "expected_columns": [
+          "right_key",
+          "amount",
+          "common_value",
+          "left_key",
+          "event_time",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "number",
+          "text",
+          "number",
+          "timestamp",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07"
+          ]
+        ],
+        "columns": [
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE",
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "number",
+          "text",
+          "number",
+          "timestamp",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "reverse_source_order",
+        "expected_columns": [
+          "right_key",
+          "amount",
+          "common_value",
+          "left_key",
+          "event_time",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "number",
+          "text",
+          "number",
+          "timestamp",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07"
+          ]
+        ],
+        "columns": [
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE",
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "number",
+          "text",
+          "number",
+          "timestamp",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "comma_join",
+      "source": {
+        "id": "comma_join",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "comma_join",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "cross_join",
+      "source": {
+        "id": "cross_join",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "cross_join",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "left_join",
+      "source": {
+        "id": "left_join",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "left_join",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "right_join",
+      "source": {
+        "id": "right_join",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "right_join",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "qualified_stars",
+      "source": {
+        "id": "qualified_stars",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "qualified_stars",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "mixed_projection",
+      "source": {
+        "id": "mixed_projection",
+        "expected_columns": [
+          "first_key",
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value",
+          "last_amount"
+        ],
+        "expected_types": [
+          "number",
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "2.5"
+            }
+          ]
+        ],
+        "columns": [
+          "FIRST_KEY",
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE",
+          "LAST_AMOUNT"
+        ],
+        "types": [
+          "number",
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "2.5"
+            }
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "mixed_projection",
+        "expected_columns": [
+          "first_key",
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value",
+          "last_amount"
+        ],
+        "expected_types": [
+          "number",
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "2.5"
+            }
+          ]
+        ],
+        "columns": [
+          "FIRST_KEY",
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE",
+          "LAST_AMOUNT"
+        ],
+        "types": [
+          "number",
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "2.5"
+            }
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_result",
+      "source": {
+        "id": "empty_result",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "empty_result",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "derived_star",
+      "source": {
+        "id": "derived_star",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "derived_star",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "cte_star",
+      "source": {
+        "id": "cte_star",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "cte_star",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "explicit_control",
+      "source": {
+        "id": "explicit_control",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "explicit_control",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "repeated_qualified_star",
+      "source": {
+        "id": "repeated_qualified_star",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "left_key",
+          "event_time",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "timestamp",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "timestamp",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "repeated_qualified_star",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "left_key",
+          "event_time",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "timestamp",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "timestamp",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "three_inner_relations",
+      "source": {
+        "id": "three_inner_relations",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value",
+          "third_key",
+          "note"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "7"
+            },
+            "third"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE",
+          "THIRD_KEY",
+          "NOTE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "7"
+            },
+            "third"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "three_inner_relations",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value",
+          "third_key",
+          "note"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "7"
+            },
+            "third"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE",
+          "THIRD_KEY",
+          "NOTE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "7"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_07",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right",
+            {
+              "number": "7"
+            },
+            "third"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "empty_three_relations",
+      "source": {
+        "id": "empty_three_relations",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value",
+          "third_key",
+          "note"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number",
+          "text"
+        ],
+        "expected_rows": [],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE",
+          "THIRD_KEY",
+          "NOTE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number",
+          "text"
+        ],
+        "rows": [],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "empty_three_relations",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value",
+          "third_key",
+          "note"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number",
+          "text"
+        ],
+        "expected_rows": [],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE",
+          "THIRD_KEY",
+          "NOTE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text",
+          "number",
+          "text"
+        ],
+        "rows": [],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "positional_order",
+      "source": {
+        "id": "positional_order",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "32"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_32",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "32"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_32",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "positional_order",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "32"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_32",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "32"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_32",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "derived_first_duplicate_ordinal",
+      "source": {
+        "id": "derived_first_duplicate_ordinal",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "32"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_32",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "32"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_32",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "derived_first_duplicate_ordinal",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "32"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_32",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "1"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_01",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": false
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "derived_second_duplicate_ordinal",
+      "source": {
+        "id": "derived_second_duplicate_ordinal",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "32"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_32",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "32"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_32",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "bicdb": {
+        "id": "derived_second_duplicate_ordinal",
+        "expected_columns": [
+          "left_key",
+          "event_time",
+          "common_value",
+          "right_key",
+          "amount",
+          "common_value"
+        ],
+        "expected_types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "expected_rows": [
+          [
+            {
+              "number": "32"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_32",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "columns": [
+          "LEFT_KEY",
+          "EVENT_TIME",
+          "COMMON_VALUE",
+          "RIGHT_KEY",
+          "AMOUNT",
+          "COMMON_VALUE"
+        ],
+        "types": [
+          "number",
+          "timestamp",
+          "text",
+          "number",
+          "number",
+          "text"
+        ],
+        "rows": [
+          [
+            {
+              "number": "32"
+            },
+            "2024-02-29T12:34:56.123456",
+            "left_32",
+            {
+              "number": "7"
+            },
+            {
+              "number": "2.5"
+            },
+            "right"
+          ]
+        ],
+        "qualified": true
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "total": 19,
+  "matched": 18,
+  "cleanup_errors": [],
+  "source_qualified": true,
+  "success": false,
+  "target_sql_profile": "oracle-preview-v1",
+  "reference": "oracle",
+  "oracle_disable_oob": false,
+  "runtime_binary_sha256": "be699a864f636a3cd9afe5e2687cbe19ac393dd2af168d7bdb0de054f5a7ee13",
+  "fixture_source_sha256": "d8ab71a85093a230f0260a87b7a30b95df5d43ce6a757620e694622a97583bd9",
+  "comparison_exit_status": 1,
+  "target_qualified_cases": 18
+}

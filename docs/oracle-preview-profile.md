@@ -1093,3 +1093,13 @@ cases and 12 native PostgreSQL controls; 11 reader checks cover compiler version
 26, language OID 999425 and retained version 25. Metadata format remains 5.
 Higher precision, the complete clock family, full identifier/declaration and
 cursor semantics, application completion and the wider programme remain open.
+
+The [logical wildcard projection checkpoint](evidence/join-wildcard-projection-2026-11-03/README.md)
+qualifies 23 Oracle and 23 native PostgreSQL join/projection cases, preserving
+logical source order, typed row slots and distinct repeated-label ordinals through
+physical join reordering. The stopped application copy's matching query now reads
+81 correct columns with ordinary driver decoding, and the completed order and
+reservation survive reopen. Oracle's declared-column joined-wildcard view form
+remains unqualified after a retained source-side ORA-25716 observation; its final
+view controls use explicit aliases. Full background execution, legacy view metadata,
+memory behavior, remaining application workflows and the wider programme remain open.

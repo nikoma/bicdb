@@ -1,0 +1,108 @@
+{
+  "source_commit": "30cd314777e9d352a5f591e25e178e6e03eeaaf6",
+  "binary_sha256": "c56656a4051dcee36ab64fa962c81ce51073480e07948b62b0a081a1618321f3",
+  "steps": [
+    {
+      "name": "sql",
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 617,
+          "failed": 0,
+          "ignored": 3
+        }
+      ]
+    },
+    {
+      "name": "pgwire",
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 123,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 36,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 169,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "build",
+      "returncode": 0,
+      "counts": []
+    }
+  ],
+  "formatting_passed": true,
+  "diff_check_passed": true,
+  "compiler_version": 27,
+  "previous_version_26_retained": true,
+  "previous_language_oid": 999425,
+  "current_language_oid": 999426,
+  "metadata_format_unchanged": true,
+  "reference_cases_each_profile": 59,
+  "application_qualified": false,
+  "release_published": false,
+  "memory_guard": {
+    "start_available_gib": 14,
+    "minimum_available_gib": 8,
+    "minimum_observed_available_bytes": 20273115136
+  }
+}

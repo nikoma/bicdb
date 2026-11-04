@@ -1651,11 +1651,13 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         match unqualified_name {
             "nextval" | "currval" | "setval" => return Some("int8".to_string()),
             "bicdb_oracle_nvl_text"
+            | "bicdb_oracle_nvl2_text"
             | "bicdb_oracle_nvl_convert_text"
             | "bicdb_oracle_column_type"
             | "chr"
             | "bicdb_oracle_chr"
             | "bicdb_oracle_national_value"
+            | "bicdb_oracle_national_literal"
             | "bicdb_oracle_decode_key"
             | "bicdb_oracle_decode_text"
             | "bicdb_oracle_concat"
@@ -1676,6 +1678,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             "to_date" => return Some("date".to_string()),
             "trunc" if argument_nodes.len() == 2 => return Some("numeric".to_string()),
             "bicdb_oracle_nvl_number"
+            | "bicdb_oracle_nvl2_number"
             | "bicdb_oracle_decode_number"
             | "bicdb_oracle_number_divide"
             | "bicdb_oracle_number_arithmetic"
@@ -1684,8 +1687,10 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             | "bicdb_oracle_plsql_number_trunc" => return Some("numeric".to_string()),
             "bicdb_oracle_decode_date"
             | "bicdb_oracle_nvl_timestamp"
+            | "bicdb_oracle_nvl2_timestamp"
             | "bicdb_oracle_nvl_convert_timestamp"
             | "bicdb_oracle_nvl_date"
+            | "bicdb_oracle_nvl2_date"
             | "bicdb_oracle_decode_timestamp"
             | "bicdb_oracle_date_coerce"
             | "bicdb_oracle_add_months"

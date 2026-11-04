@@ -3420,10 +3420,12 @@ impl<'db> SqlEngine<'db> {
             | "rpad"
             | "bicdb_variadic_call" => Some("text".to_string()),
             "bicdb_oracle_nvl_text"
+            | "bicdb_oracle_nvl2_text"
             | "bicdb_oracle_nvl_convert_text"
             | "bicdb_oracle_column_type"
             | "bicdb_oracle_chr"
             | "bicdb_oracle_national_value"
+            | "bicdb_oracle_national_literal"
             | "bicdb_oracle_decode_key"
             | "bicdb_oracle_decode_text"
             | "bicdb_oracle_concat"
@@ -3439,6 +3441,7 @@ impl<'db> SqlEngine<'db> {
             "to_date" => Some("date".to_string()),
             "trunc" if args.len() == 2 => Some("numeric".to_string()),
             "bicdb_oracle_nvl_number"
+            | "bicdb_oracle_nvl2_number"
             | "bicdb_oracle_decode_number"
             | "bicdb_oracle_number_divide"
             | "bicdb_oracle_number_arithmetic"
@@ -3446,8 +3449,10 @@ impl<'db> SqlEngine<'db> {
             | "bicdb_oracle_number_trunc" => Some("numeric".to_string()),
             "bicdb_oracle_decode_date"
             | "bicdb_oracle_nvl_timestamp"
+            | "bicdb_oracle_nvl2_timestamp"
             | "bicdb_oracle_nvl_convert_timestamp"
             | "bicdb_oracle_nvl_date"
+            | "bicdb_oracle_nvl2_date"
             | "bicdb_oracle_decode_timestamp"
             | "bicdb_oracle_date_coerce"
             | "bicdb_oracle_add_months"

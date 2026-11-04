@@ -1,0 +1,4052 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "c56656a4051dcee36ab64fa962c81ce51073480e07948b62b0a081a1618321f3",
+  "fixture_sha256": "63c8bfb68581a11537905f7d0ab49ad7d225d0f3934092ecb922450d83197625",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "nonnull",
+          "source": {
+            "id": "nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "null",
+          "source": {
+            "id": "null",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "zero_nonnull",
+          "source": {
+            "id": "zero_nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "zero_nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "text_condition",
+          "source": {
+            "id": "text_condition",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "text_condition",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "null_yes",
+          "source": {
+            "id": "null_yes",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null_yes",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "null_yes_fallback",
+          "source": {
+            "id": "null_yes_fallback",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null_yes_fallback",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "null_no",
+          "source": {
+            "id": "null_no",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null_no",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "column_values",
+          "source": {
+            "id": "column_values",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "column_values",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "number_conversion",
+          "source": {
+            "id": "number_conversion",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "number_conversion",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "nested",
+          "source": {
+            "id": "nested",
+            "expected": {
+              "value": {
+                "number": "9"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "9"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nested",
+            "expected": {
+              "value": {
+                "number": "9"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "9"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "character_number",
+          "source": {
+            "id": "character_number",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "character_number",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_yes_character",
+          "source": {
+            "id": "empty_yes_character",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_yes_character",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_condition",
+          "source": {
+            "id": "empty_condition",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_condition",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "padded_character",
+          "source": {
+            "id": "padded_character",
+            "expected": {
+              "value": "a  ",
+              "error": null
+            },
+            "actual": {
+              "value": "a  ",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "padded_character",
+            "expected": {
+              "value": "a  ",
+              "error": null
+            },
+            "actual": {
+              "value": "a  ",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "eager_unused_no",
+          "source": {
+            "id": "eager_unused_no",
+            "expected": {
+              "value": null,
+              "error": "division"
+            },
+            "detail": "ORA-01476: divisor is equal to zero\nHelp: https://docs.oracle.com/error-help/db/ora-01476/",
+            "actual": {
+              "value": null,
+              "error": "division"
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "eager_unused_no",
+            "expected": {
+              "value": null,
+              "error": "division"
+            },
+            "detail": "division by zero",
+            "actual": {
+              "value": null,
+              "error": "division"
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "eager_unused_yes",
+          "source": {
+            "id": "eager_unused_yes",
+            "expected": {
+              "value": null,
+              "error": "division"
+            },
+            "detail": "ORA-01476: divisor is equal to zero\nHelp: https://docs.oracle.com/error-help/db/ora-01476/",
+            "actual": {
+              "value": null,
+              "error": "division"
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "eager_unused_yes",
+            "expected": {
+              "value": null,
+              "error": "division"
+            },
+            "detail": "division by zero",
+            "actual": {
+              "value": null,
+              "error": "division"
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "unused_number_conversion",
+          "source": {
+            "id": "unused_number_conversion",
+            "expected": {
+              "value": null,
+              "error": "number"
+            },
+            "detail": "ORA-01722: unable to convert string value containing 'b' to a number: LABEL\nORA-03302: (ORA-01722 details) invalid string value: bad\nHelp: https://docs.oracle.com/error-help/db/ora-01722/",
+            "actual": {
+              "value": null,
+              "error": "number"
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "unused_number_conversion",
+            "expected": {
+              "value": null,
+              "error": "number"
+            },
+            "detail": "invalid input syntax for type numeric: \"bad\"",
+            "actual": {
+              "value": null,
+              "error": "number"
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "selected_number_conversion",
+          "source": {
+            "id": "selected_number_conversion",
+            "expected": {
+              "value": null,
+              "error": "number"
+            },
+            "detail": "ORA-01722: unable to convert string value containing 'b' to a number: LABEL\nORA-03302: (ORA-01722 details) invalid string value: bad\nHelp: https://docs.oracle.com/error-help/db/ora-01722/",
+            "actual": {
+              "value": null,
+              "error": "number"
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "selected_number_conversion",
+            "expected": {
+              "value": null,
+              "error": "number"
+            },
+            "detail": "invalid input syntax for type numeric: \"bad\"",
+            "actual": {
+              "value": null,
+              "error": "number"
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "date_values",
+          "source": {
+            "id": "date_values",
+            "expected": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "date_values",
+            "expected": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "date_timestamp",
+          "source": {
+            "id": "date_timestamp",
+            "expected": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "date_timestamp",
+            "expected": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "timestamp_date",
+          "source": {
+            "id": "timestamp_date",
+            "expected": {
+              "value": "2024-02-29T12:34:56.125000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.125000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "timestamp_date",
+            "expected": {
+              "value": "2024-02-29T12:34:56.125000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.125000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "date_arithmetic",
+          "source": {
+            "id": "date_arithmetic",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "date_arithmetic",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "scalar_subquery",
+          "source": {
+            "id": "scalar_subquery",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "scalar_subquery",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "cte_scope",
+          "source": {
+            "id": "cte_scope",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "cte_scope",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prepared_nonnull",
+          "source": {
+            "id": "prepared_nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prepared_nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prepared_null",
+          "source": {
+            "id": "prepared_null",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prepared_null",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_empty_character",
+          "source": {
+            "id": "quoted_empty_character",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_empty_character",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_date_timestamp",
+          "source": {
+            "id": "quoted_date_timestamp",
+            "expected": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_date_timestamp",
+            "expected": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_upper_builtin",
+          "source": {
+            "id": "quoted_upper_builtin",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_upper_builtin",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_yes_null_value",
+          "source": {
+            "id": "empty_yes_null_value",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_yes_null_value",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_nonnull",
+          "source": {
+            "id": "national_nonnull",
+            "expected": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_nonnull",
+            "expected": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_null",
+          "source": {
+            "id": "national_null",
+            "expected": {
+              "value": "\u03b2",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b2",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_null",
+            "expected": {
+              "value": "\u03b2",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b2",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_length",
+          "source": {
+            "id": "national_length",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_length",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "timestamp_precision",
+          "source": {
+            "id": "timestamp_precision",
+            "expected": {
+              "value": "2024-02-29T12:34:56.123456",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.123456",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "timestamp_precision",
+            "expected": {
+              "value": "2024-02-29T12:34:56.123456",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.123456",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "unused_date_conversion",
+          "source": {
+            "id": "unused_date_conversion",
+            "expected": {
+              "value": null,
+              "error": "date"
+            },
+            "detail": "ORA-01858: A non-numeric character was found instead of a numeric character.\nHelp: https://docs.oracle.com/error-help/db/ora-01858/",
+            "actual": {
+              "value": null,
+              "error": "date"
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "unused_date_conversion",
+            "expected": {
+              "value": null,
+              "error": "date"
+            },
+            "detail": "invalid Oracle DATE input in DECODE",
+            "actual": {
+              "value": null,
+              "error": "date"
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "constant_timestamp_character",
+          "source": {
+            "id": "constant_timestamp_character",
+            "expected": {
+              "value": null,
+              "error": "type"
+            },
+            "detail": "ORA-00932: expression is of data type CHAR, which is incompatible with expected data type TIMESTAMP\nHelp: https://docs.oracle.com/error-help/db/ora-00932/",
+            "actual": {
+              "value": null,
+              "error": "type"
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "constant_timestamp_character",
+            "expected": {
+              "value": null,
+              "error": "type"
+            },
+            "detail": "incompatible character operand for constant Oracle TIMESTAMP NVL",
+            "actual": {
+              "value": null,
+              "error": "type"
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "shared_nvl_national",
+          "source": {
+            "id": "shared_nvl_national",
+            "expected": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "shared_nvl_national",
+            "expected": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_literal_length",
+          "source": {
+            "id": "national_literal_length",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_literal_length",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_literal_padding",
+          "source": {
+            "id": "national_literal_padding",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_literal_padding",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_empty_length",
+          "source": {
+            "id": "national_empty_length",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_empty_length",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_empty_nvl",
+          "source": {
+            "id": "national_empty_nvl",
+            "expected": {
+              "value": "7",
+              "error": null
+            },
+            "actual": {
+              "value": "7",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_empty_nvl",
+            "expected": {
+              "value": "7",
+              "error": null
+            },
+            "actual": {
+              "value": "7",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_unused_no",
+          "source": {
+            "id": "sql_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_unused_no_calls",
+          "source": {
+            "id": "sql_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_unused_yes",
+          "source": {
+            "id": "sql_unused_yes",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_unused_yes",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_unused_yes_calls",
+          "source": {
+            "id": "sql_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_all_arguments",
+          "source": {
+            "id": "sql_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_all_arguments_calls",
+          "source": {
+            "id": "sql_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_unused_no",
+          "source": {
+            "id": "procedure_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_unused_no_calls",
+          "source": {
+            "id": "procedure_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_unused_yes",
+          "source": {
+            "id": "procedure_unused_yes",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_unused_yes",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_unused_yes_calls",
+          "source": {
+            "id": "procedure_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_all_arguments",
+          "source": {
+            "id": "procedure_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_all_arguments_calls",
+          "source": {
+            "id": "procedure_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_unused_no",
+          "source": {
+            "id": "embedded_sql_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_unused_no_calls",
+          "source": {
+            "id": "embedded_sql_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_unused_yes",
+          "source": {
+            "id": "embedded_sql_unused_yes",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_unused_yes",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_unused_yes_calls",
+          "source": {
+            "id": "embedded_sql_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_all_arguments",
+          "source": {
+            "id": "embedded_sql_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_all_arguments_calls",
+          "source": {
+            "id": "embedded_sql_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "3"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 59,
+      "matched": 59,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "nonnull",
+          "source": {
+            "id": "nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "null",
+          "source": {
+            "id": "null",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "zero_nonnull",
+          "source": {
+            "id": "zero_nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "zero_nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "text_condition",
+          "source": {
+            "id": "text_condition",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "text_condition",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "null_yes",
+          "source": {
+            "id": "null_yes",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null_yes",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "null_yes_fallback",
+          "source": {
+            "id": "null_yes_fallback",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null_yes_fallback",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "null_no",
+          "source": {
+            "id": "null_no",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "null_no",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "column_values",
+          "source": {
+            "id": "column_values",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "column_values",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "number_conversion",
+          "source": {
+            "id": "number_conversion",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "number_conversion",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "nested",
+          "source": {
+            "id": "nested",
+            "expected": {
+              "value": {
+                "number": "9"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "9"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nested",
+            "expected": {
+              "value": {
+                "number": "9"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "9"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "character_number",
+          "source": {
+            "id": "character_number",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "character_number",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_yes_character",
+          "source": {
+            "id": "empty_yes_character",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_yes_character",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_condition",
+          "source": {
+            "id": "empty_condition",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_condition",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "padded_character",
+          "source": {
+            "id": "padded_character",
+            "expected": {
+              "value": "a  ",
+              "error": null
+            },
+            "actual": {
+              "value": "a  ",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "padded_character",
+            "expected": {
+              "value": "a  ",
+              "error": null
+            },
+            "actual": {
+              "value": "a  ",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "eager_unused_no",
+          "source": {
+            "id": "eager_unused_no",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "eager_unused_no",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "eager_unused_yes",
+          "source": {
+            "id": "eager_unused_yes",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "eager_unused_yes",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "unused_number_conversion",
+          "source": {
+            "id": "unused_number_conversion",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "unused_number_conversion",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "selected_number_conversion",
+          "source": {
+            "id": "selected_number_conversion",
+            "expected": {
+              "value": null,
+              "error": "number"
+            },
+            "detail": "invalid input syntax for type numeric: \"bad\"",
+            "actual": {
+              "value": null,
+              "error": "number"
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "selected_number_conversion",
+            "expected": {
+              "value": null,
+              "error": "number"
+            },
+            "detail": "invalid input syntax for type numeric: \"bad\"",
+            "actual": {
+              "value": null,
+              "error": "number"
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "date_values",
+          "source": {
+            "id": "date_values",
+            "expected": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "date_values",
+            "expected": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "date_timestamp",
+          "source": {
+            "id": "date_timestamp",
+            "expected": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "date_timestamp",
+            "expected": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "timestamp_date",
+          "source": {
+            "id": "timestamp_date",
+            "expected": {
+              "value": "2024-02-29T12:34:56.125000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.125000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "timestamp_date",
+            "expected": {
+              "value": "2024-02-29T12:34:56.125000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.125000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "date_arithmetic",
+          "source": {
+            "id": "date_arithmetic",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "date_arithmetic",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "scalar_subquery",
+          "source": {
+            "id": "scalar_subquery",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "scalar_subquery",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "cte_scope",
+          "source": {
+            "id": "cte_scope",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "cte_scope",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prepared_nonnull",
+          "source": {
+            "id": "prepared_nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prepared_nonnull",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prepared_null",
+          "source": {
+            "id": "prepared_null",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prepared_null",
+            "expected": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "8"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_empty_character",
+          "source": {
+            "id": "quoted_empty_character",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_empty_character",
+            "expected": {
+              "value": "42",
+              "error": null
+            },
+            "actual": {
+              "value": "42",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_date_timestamp",
+          "source": {
+            "id": "quoted_date_timestamp",
+            "expected": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_date_timestamp",
+            "expected": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "quoted_upper_builtin",
+          "source": {
+            "id": "quoted_upper_builtin",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "quoted_upper_builtin",
+            "expected": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "7"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_yes_null_value",
+          "source": {
+            "id": "empty_yes_null_value",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_yes_null_value",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_nonnull",
+          "source": {
+            "id": "national_nonnull",
+            "expected": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_nonnull",
+            "expected": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_null",
+          "source": {
+            "id": "national_null",
+            "expected": {
+              "value": "\u03b2",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b2",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_null",
+            "expected": {
+              "value": "\u03b2",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b2",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_length",
+          "source": {
+            "id": "national_length",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_length",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "timestamp_precision",
+          "source": {
+            "id": "timestamp_precision",
+            "expected": {
+              "value": "2024-02-29T12:34:56.123456",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.123456",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "timestamp_precision",
+            "expected": {
+              "value": "2024-02-29T12:34:56.123456",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T12:34:56.123456",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "unused_date_conversion",
+          "source": {
+            "id": "unused_date_conversion",
+            "expected": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "unused_date_conversion",
+            "expected": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-02-29T00:00:00.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "constant_timestamp_character",
+          "source": {
+            "id": "constant_timestamp_character",
+            "expected": {
+              "value": "2024-01-01T00:00:00.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-01-01T00:00:00.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "constant_timestamp_character",
+            "expected": {
+              "value": "2024-01-01T00:00:00.000000",
+              "error": null
+            },
+            "actual": {
+              "value": "2024-01-01T00:00:00.000000",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "shared_nvl_national",
+          "source": {
+            "id": "shared_nvl_national",
+            "expected": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "shared_nvl_national",
+            "expected": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "actual": {
+              "value": "\u03b1",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_literal_length",
+          "source": {
+            "id": "national_literal_length",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_literal_length",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_literal_padding",
+          "source": {
+            "id": "national_literal_padding",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_literal_padding",
+            "expected": {
+              "value": {
+                "number": "0"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "0"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_empty_length",
+          "source": {
+            "id": "national_empty_length",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_empty_length",
+            "expected": {
+              "value": null,
+              "error": null
+            },
+            "actual": {
+              "value": null,
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "national_empty_nvl",
+          "source": {
+            "id": "national_empty_nvl",
+            "expected": {
+              "value": "7",
+              "error": null
+            },
+            "actual": {
+              "value": "7",
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "national_empty_nvl",
+            "expected": {
+              "value": "7",
+              "error": null
+            },
+            "actual": {
+              "value": "7",
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_unused_no",
+          "source": {
+            "id": "sql_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_unused_no_calls",
+          "source": {
+            "id": "sql_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_unused_yes",
+          "source": {
+            "id": "sql_unused_yes",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_unused_yes",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_unused_yes_calls",
+          "source": {
+            "id": "sql_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_all_arguments",
+          "source": {
+            "id": "sql_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "sql_all_arguments_calls",
+          "source": {
+            "id": "sql_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "sql_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_unused_no",
+          "source": {
+            "id": "procedure_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_unused_no_calls",
+          "source": {
+            "id": "procedure_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_unused_yes",
+          "source": {
+            "id": "procedure_unused_yes",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_unused_yes",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_unused_yes_calls",
+          "source": {
+            "id": "procedure_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_all_arguments",
+          "source": {
+            "id": "procedure_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "procedure_all_arguments_calls",
+          "source": {
+            "id": "procedure_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "procedure_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_unused_no",
+          "source": {
+            "id": "embedded_sql_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_unused_no",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_unused_no_calls",
+          "source": {
+            "id": "embedded_sql_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_unused_no_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_unused_yes",
+          "source": {
+            "id": "embedded_sql_unused_yes",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_unused_yes",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_unused_yes_calls",
+          "source": {
+            "id": "embedded_sql_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_unused_yes_calls",
+            "expected": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "1"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_all_arguments",
+          "source": {
+            "id": "embedded_sql_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_all_arguments",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "embedded_sql_all_arguments_calls",
+          "source": {
+            "id": "embedded_sql_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "embedded_sql_all_arguments_calls",
+            "expected": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "actual": {
+              "value": {
+                "number": "2"
+              },
+              "error": null
+            },
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 59,
+      "matched": 59,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true
+    }
+  },
+  "cleanup_complete": true
+}

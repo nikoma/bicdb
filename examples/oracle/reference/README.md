@@ -1,5 +1,17 @@
 # Oracle reference queries
 
+`nvl2.py --reference oracle --oracle-config /private/oracle.json
+--output /private/nvl2.json` checks 59 explicit expectations for typed NVL2,
+empty-character identity, DATE/TIMESTAMP conversion and arithmetic, quoted
+builtin names, declared national literals, prepared parameters, and eager
+argument evaluation in SQL and stored routines. Shared NVL, national length,
+padding and NULL controls protect the literal provenance rule. The independent
+PostgreSQL controls use native CASE/COALESCE and ordinary text semantics.
+Both references must satisfy their own expectations. `--reference postgres`
+uses `ORACLE_CONTROL_PG_DSN`; both use `BICDB_PG_DSN` for the target. Nonce
+objects are removed. These checks do not qualify every result type, NLS option,
+LOB, floating-point precedence, modifier or exact descriptor width.
+
 `primary_key_extrema.py --reference oracle --oracle-config /private/oracle.json
 --output /private/key-extrema.json` checks 20 explicit expectations for numeric
 primary-key MIN/MAX and ranges: exact 30-digit integers, fractional composite

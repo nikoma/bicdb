@@ -274,16 +274,23 @@ fn projected(db: &BicDb, query: &Query, expr: &Expr, depth: usize) -> Option<Log
                 | "bicdb_oracle_plsql_trunc_date"
                 | "bicdb_oracle_add_months"
                 | "bicdb_oracle_decode_date"
-                | "bicdb_oracle_nvl_date" => return Some(LogicalTemporal::date()),
+                | "bicdb_oracle_nvl_date"
+                | "bicdb_oracle_nvl2_date" => return Some(LogicalTemporal::date()),
                 "bicdb_oracle_decode_timestamp" => return Some(LogicalTemporal::timestamp(None)),
-                "bicdb_oracle_nvl_timestamp" => {
-                    let precision = function_args(function).get(2).and_then(|expr| match expr {
-                        Expr::Value(value) => match &value.value {
-                            Value::Number(n, _) => n.parse::<u8>().ok(),
+                "bicdb_oracle_nvl_timestamp" | "bicdb_oracle_nvl2_timestamp" => {
+                    let precision = function_args(function)
+                        .get(if name == "bicdb_oracle_nvl2_timestamp" {
+                            3
+                        } else {
+                            2
+                        })
+                        .and_then(|expr| match expr {
+                            Expr::Value(value) => match &value.value {
+                                Value::Number(n, _) => n.parse::<u8>().ok(),
+                                _ => None,
+                            },
                             _ => None,
-                        },
-                        _ => None,
-                    });
+                        });
                     return Some(LogicalTemporal::timestamp(precision));
                 }
                 _ => {}

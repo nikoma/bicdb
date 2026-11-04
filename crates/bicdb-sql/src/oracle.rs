@@ -27,6 +27,7 @@ mod namespaces;
 pub(crate) mod national;
 pub(crate) mod number_formats;
 mod nvl;
+mod nvl2;
 mod outer_joins;
 pub(crate) mod output;
 pub(crate) mod procedures;
@@ -177,7 +178,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V22: &str = "bicdb_oracle_preview_v22"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V23: &str = "bicdb_oracle_preview_v23";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V24: &str = "bicdb_oracle_preview_v24";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V25: &str = "bicdb_oracle_preview_v25";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v26";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V26: &str = "bicdb_oracle_preview_v26";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v27";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -203,7 +205,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V22_OID: i64 = 999_421;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V23_OID: i64 = 999_422;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V24_OID: i64 = 999_423;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V25_OID: i64 = 999_424;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_425;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V26_OID: i64 = 999_425;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_426;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -237,7 +240,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V23 => Some(23),
         PREVIEW_ROUTINE_LANGUAGE_V24 => Some(24),
         PREVIEW_ROUTINE_LANGUAGE_V25 => Some(25),
-        PREVIEW_ROUTINE_LANGUAGE => Some(26),
+        PREVIEW_ROUTINE_LANGUAGE_V26 => Some(26),
+        PREVIEW_ROUTINE_LANGUAGE => Some(27),
         _ => None,
     }
 }
@@ -455,6 +459,11 @@ fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
     ]
     .iter()
     .any(|name| sql.to_ascii_lowercase().contains(name))
+        && !tokens(sql).is_ok_and(|source| {
+            source
+                .iter()
+                .any(|token| matches!(token, Token::NationalStringLiteral(_)))
+        })
         || raw_do_block_body(sql)?.is_some()
     {
         return Ok(sql.to_string());
@@ -1207,11 +1216,13 @@ fn canonical_tokens_with_routine_types(
     for (index, token) in source.iter().enumerate() {
         if *token == Token::LParen {
             let opens_decode = index >= 1
-                && (word(&source[index - 1], "DECODE") || word(&source[index - 1], "NVL"))
+                && (word(&source[index - 1], "DECODE")
+                    || word(&source[index - 1], "NVL")
+                    || nvl2::is_word(&source[index - 1]))
                 && (index < 2 || source[index - 2] != Token::Period);
             decode_scope.push(opens_decode || decode_scope.last().copied().unwrap_or(false));
             let opens_nvl = index >= 1
-                && word(&source[index - 1], "NVL")
+                && (word(&source[index - 1], "NVL") || nvl2::is_word(&source[index - 1]))
                 && (index < 2 || source[index - 2] != Token::Period);
             nvl_scope.push(opens_nvl || nvl_scope.last().copied().unwrap_or(false));
         }
@@ -1396,6 +1407,8 @@ fn canonical_tokens_with_routine_types(
                     "NVL" if !preview => pieces.push("coalesce".into()),
                     "NVL" if source.get(i+1)==Some(&Token::LParen)
                         && (i==0 || source[i-1]!=Token::Period) => pieces.push("nvl".into()),
+                    "NVL2" if preview && source.get(i+1)==Some(&Token::LParen)
+                        && (i==0 || source[i-1]!=Token::Period) => pieces.push("nvl2".into()),
                     "TO_DATE" if source.get(i + 1) == Some(&Token::LParen) => {
                         pieces.push("bicdb_oracle_to_date".into())
                     }

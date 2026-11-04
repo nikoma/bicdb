@@ -135,6 +135,27 @@ pub(super) fn evaluate(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
             arity(name, args, 2..=2)?;
             timestamp_input(&args[0], &args[1].to_cell())
         }
+        "bicdb_oracle_nvl2_text"
+        | "bicdb_oracle_nvl2_number"
+        | "bicdb_oracle_nvl2_date"
+        | "bicdb_oracle_nvl2_timestamp" => {
+            arity(
+                name,
+                args,
+                if name.ends_with("_timestamp") {
+                    4..=4
+                } else {
+                    3..=3
+                },
+            )?;
+            // All three argument expressions and result conversions have
+            // already run once, in order, through the generic evaluator.
+            Ok(if is_null(&args[0]) {
+                args[2].clone()
+            } else {
+                args[1].clone()
+            })
+        }
         "bicdb_oracle_nvl_text"
         | "bicdb_oracle_nvl_number"
         | "bicdb_oracle_nvl_date"

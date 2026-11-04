@@ -187,6 +187,8 @@ struct Environment {
     decode: bool,
     character_conversion: bool,
     nvl: bool,
+    nvl2: bool,
+    national_literals: bool,
     sql_builtins_only: bool,
     defer_bind_types: bool,
     text_patterns: bool,
@@ -323,6 +325,9 @@ impl Resolve<'_> {
                 Value::Null => Kind::Null,
                 Value::Number(..) => Kind::Number,
                 Value::SingleQuotedString(_) => Kind::Text,
+                Value::NationalStringLiteral(_) if self.env.national_literals => {
+                    Kind::FixedNationalText
+                }
                 Value::Placeholder(name) => self
                     .env
                     .variables
@@ -398,6 +403,7 @@ impl Resolve<'_> {
                         }
                     }
                     Some("bicdb_oracle_national_value") => return Kind::NationalText,
+                    Some("bicdb_oracle_national_literal") => return Kind::FixedNationalText,
                     Some("concat" | "pg_catalog.concat" | "concat_ws" | "pg_catalog.concat_ws") => {
                         return Kind::Text
                     }
@@ -431,22 +437,32 @@ impl Resolve<'_> {
                         | "bicdb_oracle_add_months",
                     ) => return Kind::Date,
                     Some("bicdb_oracle_decode_timestamp") => return Kind::Timestamp(None),
-                    Some("bicdb_oracle_nvl_timestamp") => {
-                        return Kind::Timestamp(function_args(function).get(2).and_then(|value| {
-                            match value {
-                                Expr::Value(value) => match &value.value {
-                                    Value::Number(n, _) => n.parse().ok(),
+                    Some(name @ ("bicdb_oracle_nvl_timestamp" | "bicdb_oracle_nvl2_timestamp")) => {
+                        return Kind::Timestamp(
+                            function_args(function)
+                                .get(if name == "bicdb_oracle_nvl2_timestamp" {
+                                    3
+                                } else {
+                                    2
+                                })
+                                .and_then(|value| match value {
+                                    Expr::Value(value) => match &value.value {
+                                        Value::Number(n, _) => n.parse().ok(),
+                                        _ => None,
+                                    },
                                     _ => None,
-                                },
-                                _ => None,
-                            }
-                        }))
+                                }),
+                        )
                     }
-                    Some("bicdb_oracle_nvl_date") => return Kind::Date,
-                    Some("bicdb_oracle_nvl_number") => return Kind::Number,
-                    Some("bicdb_oracle_nvl_text" | "bicdb_oracle_nvl_convert_text") => {
-                        return Kind::Text
+                    Some("bicdb_oracle_nvl_date" | "bicdb_oracle_nvl2_date") => return Kind::Date,
+                    Some("bicdb_oracle_nvl_number" | "bicdb_oracle_nvl2_number") => {
+                        return Kind::Number
                     }
+                    Some(
+                        "bicdb_oracle_nvl_text"
+                        | "bicdb_oracle_nvl2_text"
+                        | "bicdb_oracle_nvl_convert_text",
+                    ) => return Kind::Text,
                     Some(
                         "bicdb_oracle_decode_number"
                         | "bicdb_oracle_date_subtract"
@@ -552,6 +568,21 @@ impl Resolve<'_> {
     }
 
     fn rewrite(&self, expr: &mut Expr) -> Result<()> {
+        if self.env.national_literals {
+            if let Expr::Value(value) = expr {
+                if let Value::NationalStringLiteral(text) = &value.value {
+                    // Runtime payloads use the ordinary text codec. The
+                    // wrapper retains fixed national identity and normalizes
+                    // the empty literal to NULL without changing native SQL.
+                    *expr = expression(&format!(
+                        "bicdb_oracle_national_literal('{}')",
+                        text.replace('\'', "''")
+                    ))?;
+                    return Ok(());
+                }
+            }
+        }
+
         if self.env.character_conversion {
             let convert = |value: &mut Expr| -> Result<()> {
                 if self.kind(value) == Kind::Raw {
@@ -733,6 +764,32 @@ impl Resolve<'_> {
                 if object_name_lowercase(&function.name).is_ok_and(|name| name == "chr") {
                     function.name = ObjectName::from(vec![Ident::new("bicdb_oracle_chr")]);
                 }
+            }
+        }
+        if self.env.nvl2 {
+            let national_result = if let Expr::Function(function) = expr {
+                if super::nvl2::is_call(function) {
+                    let args = function_args(function);
+                    args.get(1).is_some_and(|arg| self.kind(arg).is_national())
+                        || (args.get(1).is_some_and(|arg| self.kind(arg) == Kind::Null)
+                            && args.get(2).is_some_and(|arg| self.kind(arg).is_national()))
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+            super::nvl2::lower_call(
+                expr,
+                |value| self.kind(value),
+                self.sql_depth > 0 || !self.queries.is_empty(),
+                self.env.defer_bind_types,
+            )?;
+            if national_result {
+                *expr = expression(&format!(
+                    "bicdb_oracle_national_value({})",
+                    super::render_sql(expr)
+                ))?;
             }
         }
         if self.env.nvl {
@@ -1033,6 +1090,8 @@ pub(super) fn lower_sql_builtins(
         decode: true,
         character_conversion: true,
         nvl: true,
+        nvl2: true,
+        national_literals: true,
         statement_provenance: true,
         number_formats: true,
         sql_builtins_only: true,
@@ -1602,6 +1661,7 @@ pub(crate) fn lower(
     decode: bool,
     character_conversion: bool,
     nvl: bool,
+    nvl2: bool,
     params: &mut [RoutineParam],
     declarations: &mut [RoutineDecl],
     body: &mut [RoutineStmt],
@@ -1618,6 +1678,10 @@ pub(crate) fn lower(
         decode,
         character_conversion,
         nvl,
+        nvl2,
+        // Contract 27 introduces national literal provenance with NVL2;
+        // previous persisted compiler contracts retain their existing rules.
+        national_literals: nvl2,
         ..Environment::default()
     };
     for param in params.iter() {

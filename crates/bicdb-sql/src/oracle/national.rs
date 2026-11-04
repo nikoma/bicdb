@@ -369,3 +369,60 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod literal_identity_tests {
+    use super::*;
+
+    fn run(db: &mut BicDb, sql: &str) -> Result<SqlResult> {
+        let lowered = lower_session_sql(db, sql, ORACLE_PREVIEW_PROFILE, None, "bicdb")?;
+        SqlSession::new(db).execute(&lowered)
+    }
+
+    #[test]
+    fn national_literals_keep_fixed_character_and_null_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            dir.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        for (sql, expected) in [
+            ("SELECT LENGTH(N'😀') FROM DUAL", "2"),
+            ("SELECT NVL(N'α',N'β') FROM DUAL", "α"),
+            ("SELECT NVL2(1,N'α',N'β') FROM DUAL", "α"),
+            ("SELECT NVL2(NULL,N'α',N'β') FROM DUAL", "β"),
+            (
+                "SELECT CASE WHEN N'a'=N'a ' THEN 1 ELSE 0 END FROM DUAL",
+                "1",
+            ),
+            ("SELECT NVL(N'',7) FROM DUAL", "7"),
+        ] {
+            assert_eq!(
+                run(&mut db, sql).unwrap().rows[0][0].to_cell(),
+                expected,
+                "{sql}"
+            );
+        }
+        assert_eq!(
+            run(&mut db, "SELECT LENGTH(N'') FROM DUAL").unwrap().rows,
+            vec![vec![SqlValue::Null]]
+        );
+        let old=lower_session_sql(&db,"CREATE FUNCTION previous_national RETURN VARCHAR2 IS BEGIN RETURN NVL(N'α',N'β'); END;",ORACLE_PREVIEW_PROFILE,None,"bicdb").unwrap().replace(PREVIEW_ROUTINE_LANGUAGE,PREVIEW_ROUTINE_LANGUAGE_V26);
+        SqlSession::new(&mut db).execute(&old).unwrap();
+        assert!(run(&mut db, "SELECT previous_national() FROM DUAL").is_err());
+        let native = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(native.path()).unwrap();
+        let result = SqlSession::new(&mut db)
+            .execute("SELECT LENGTH('😀'),CASE WHEN 'a'='a ' THEN 1 ELSE 0 END")
+            .unwrap();
+        assert_eq!(
+            result.rows[0]
+                .iter()
+                .map(SqlValue::to_cell)
+                .collect::<Vec<_>>(),
+            vec!["1", "0"]
+        );
+    }
+}

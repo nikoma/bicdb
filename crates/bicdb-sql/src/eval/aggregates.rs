@@ -1292,23 +1292,17 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
         let argument_nodes = function_arg_list(function);
         let name = object_name(&function.name).ok()?.to_ascii_lowercase();
         let unqualified_name = name.strip_prefix("pg_catalog.").unwrap_or(&name);
+        if let Some(pg_type) =
+            current_datetime_function_pg_type(unqualified_name, argument_nodes.len())
+        {
+            return Some(pg_type.into());
+        }
         if matches!(
             unqualified_name,
             "current_user" | "current_role" | "session_user" | "user"
         ) && argument_nodes.is_empty()
         {
             return Some("name".to_string());
-        }
-        if matches!(
-            unqualified_name,
-            "now"
-                | "current_timestamp"
-                | "transaction_timestamp"
-                | "statement_timestamp"
-                | "clock_timestamp"
-        ) && argument_nodes.is_empty()
-        {
-            return Some("timestamptz".to_string());
         }
         if matches!(unqualified_name, "version" | "bicdb_version") && argument_nodes.is_empty() {
             return Some("text".to_string());

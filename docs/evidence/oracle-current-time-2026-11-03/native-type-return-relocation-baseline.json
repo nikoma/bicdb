@@ -1,0 +1,16 @@
+{
+  "success": false,
+  "application_qualified": false,
+  "observed": [
+    [
+      "value type_target.moved_priority",
+      "type_source.priority"
+    ]
+  ],
+  "expected": [
+    [
+      "value type_target.moved_priority",
+      "type_target.moved_priority"
+    ]
+  ]
+}

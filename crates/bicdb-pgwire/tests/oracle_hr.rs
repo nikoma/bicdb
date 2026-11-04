@@ -58,6 +58,73 @@ impl Running {
 }
 
 #[tokio::test]
+async fn preview_current_time_has_typed_nonnull_prepared_binary_values() {
+    use std::time::{Duration, SystemTime};
+    use tokio_postgres::types::Type;
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let mut config = tokio_postgres::Config::new();
+    config
+        .host("127.0.0.1")
+        .port(server.port)
+        .user("bicdb")
+        .dbname("bicdb")
+        .options("-c bicdb.sql_profile=oracle-preview-v1");
+    let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+    let connection = tokio::spawn(async move { connection.await.unwrap() });
+    let statement = client
+        .prepare("SELECT CURRENT_TIMESTAMP,LOCALTIMESTAMP,CURRENT_DATE FROM DUAL")
+        .await
+        .unwrap();
+    let types: Vec<_> = statement
+        .columns()
+        .iter()
+        .map(|c| c.type_().clone())
+        .collect();
+    assert_eq!(
+        types,
+        vec![Type::TIMESTAMPTZ, Type::TIMESTAMP, Type::TIMESTAMP]
+    );
+    client.batch_execute("BEGIN").await.unwrap();
+    let row = client.query_one(&statement, &[]).await.unwrap();
+    let instant: SystemTime = row.get(0);
+    assert!(SystemTime::now().duration_since(instant).unwrap() < Duration::from_secs(5));
+    assert_eq!(instant, row.get::<_, SystemTime>(1));
+    let date: SystemTime = row.get(2);
+    assert!(instant.duration_since(date).unwrap() < Duration::from_secs(1));
+    tokio::time::sleep(Duration::from_millis(30)).await;
+    let later: SystemTime = client.query_one(&statement, &[]).await.unwrap().get(0);
+    assert!(later > instant);
+    client.batch_execute("ROLLBACK").await.unwrap();
+    drop(client);
+    connection.await.unwrap();
+
+    let native_dir = tempfile::tempdir().unwrap();
+    let native = Running::new(native_dir.path(), false);
+    let (client, connection) = native.connect(false).await.unwrap();
+    let statement = client
+        .prepare("SELECT CURRENT_TIMESTAMP,CURRENT_DATE,clock_timestamp()")
+        .await
+        .unwrap();
+    assert_eq!(
+        statement
+            .columns()
+            .iter()
+            .map(|c| c.type_().clone())
+            .collect::<Vec<_>>(),
+        vec![Type::TIMESTAMPTZ, Type::DATE, Type::TIMESTAMPTZ]
+    );
+    client.batch_execute("BEGIN").await.unwrap();
+    let first: SystemTime = client.query_one(&statement, &[]).await.unwrap().get(0);
+    tokio::time::sleep(Duration::from_millis(30)).await;
+    let second: SystemTime = client.query_one(&statement, &[]).await.unwrap().get(0);
+    assert_eq!(first, second);
+    client.batch_execute("ROLLBACK").await.unwrap();
+    drop(client);
+    connection.await.unwrap();
+}
+
+#[tokio::test]
 async fn preview_bounded_locks_preserve_prepared_describe_cancel_and_connection_reuse() {
     use std::time::Duration;
     use tokio_postgres::types::Type;

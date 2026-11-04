@@ -2713,6 +2713,12 @@ impl<'db> SqlEngine<'db> {
             }
             Expr::Identifier(ident)
                 if ident.quote_style.is_none()
+                    && ident.value.eq_ignore_ascii_case("current_date") =>
+            {
+                Some("date".into())
+            }
+            Expr::Identifier(ident)
+                if ident.quote_style.is_none()
                     && matches!(
                         ident.value.to_ascii_lowercase().as_str(),
                         "current_user" | "current_role" | "session_user" | "user"
@@ -2844,6 +2850,9 @@ impl<'db> SqlEngine<'db> {
             });
         }
         let args = function_args(function);
+        if let Some(pg_type) = current_datetime_function_pg_type(bare_name, args.len()) {
+            return Some(pg_type.into());
+        }
         if matches!(
             bare_name,
             "jsonb_array_elements_text"

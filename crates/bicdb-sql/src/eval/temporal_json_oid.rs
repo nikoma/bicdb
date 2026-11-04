@@ -2695,7 +2695,7 @@ pub(crate) fn unix_now_micros() -> i64 {
         .unwrap_or_default()
 }
 
-fn pg_timestamp_from_unix_micros(micros: i64) -> PgTimestamp {
+pub(crate) fn pg_timestamp_from_unix_micros(micros: i64) -> PgTimestamp {
     PgTimestamp::Finite(micros - 946_684_800_000_000)
 }
 

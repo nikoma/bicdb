@@ -1,0 +1,83 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "two_successive_waits",
+      "source": {
+        "id": "two_successive_waits",
+        "wait_seconds": 1,
+        "first_release_seconds": 0.6,
+        "second_release_seconds": 1.2,
+        "outcome": "success",
+        "rows": [
+          [
+            1
+          ],
+          [
+            2
+          ]
+        ],
+        "elapsed_seconds": 1.206,
+        "completed_before_second_release": false,
+        "connection_recovers": true
+      },
+      "bicdb": {
+        "id": "two_successive_waits",
+        "wait_seconds": 1,
+        "first_release_seconds": 0.6,
+        "second_release_seconds": 1.2,
+        "outcome": "other_error",
+        "sqlstate": "42601",
+        "oracle_code": null,
+        "elapsed_seconds": 0.001,
+        "completed_before_second_release": true,
+        "connection_recovers": true
+      },
+      "source_qualified": true,
+      "matched": false
+    },
+    {
+      "id": "second_row_expiry",
+      "source": {
+        "id": "second_row_expiry",
+        "wait_seconds": 1,
+        "first_release_seconds": 0.6,
+        "second_release_seconds": 1.9,
+        "outcome": "unavailable",
+        "sqlstate": null,
+        "oracle_code": 54,
+        "elapsed_seconds": 1.601,
+        "completed_before_second_release": true,
+        "connection_recovers": true
+      },
+      "bicdb": {
+        "id": "second_row_expiry",
+        "wait_seconds": 1,
+        "first_release_seconds": 0.6,
+        "second_release_seconds": 1.9,
+        "outcome": "other_error",
+        "sqlstate": "42601",
+        "oracle_code": null,
+        "elapsed_seconds": 0.001,
+        "completed_before_second_release": true,
+        "connection_recovers": true
+      },
+      "source_qualified": true,
+      "matched": false
+    }
+  ],
+  "total": 2,
+  "matched": 0,
+  "reference_version": "23.26.3.0.0",
+  "source_qualified": true,
+  "cleanup_errors": [],
+  "success": false,
+  "target_sql_profile": "oracle-preview-v1",
+  "reference": "oracle",
+  "oracle_disable_oob": false,
+  "runtime_binary_sha256": "7ef8fd930d27d96649407fa089d8fcdb073f6de94878462a4e6ef8830566948c",
+  "fixture_source_sha256": "1965d360f60035a8f883e7ba66f9fe42342784f9dacc8a150892a4b9aeb93894",
+  "comparison_exit_status": 1,
+  "target_qualified_cases": 0
+}

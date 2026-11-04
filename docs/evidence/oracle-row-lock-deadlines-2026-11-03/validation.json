@@ -1,0 +1,84 @@
+{
+  "format": 1,
+  "reported_at_utc": "2026-11-04T04:42:26.532937+00:00",
+  "source_commit": "c5c1165844d540444b8c0b50325e883ad212e584",
+  "runtime_binary_sha256": "52b9c5a760386ddce41bd9559a977608be49be168fd1b1ebce6195a15f1713d7",
+  "build": "development, unoptimized, debug=0",
+  "application_qualified": false,
+  "release_published": false,
+  "production_deployment_verified": false,
+  "compiler_version": 25,
+  "durable_metadata_format": 5,
+  "checks": {
+    "rust_passed_executions": 1486,
+    "rust_ignored": 3,
+    "rust_batches": [
+      589,
+      7,
+      29,
+      17,
+      2,
+      60,
+      419,
+      121,
+      29,
+      169,
+      3,
+      4,
+      1,
+      6,
+      4,
+      2,
+      8,
+      8,
+      8
+    ],
+    "core_lock_policy_configs": [
+      "default",
+      "wait-graph",
+      "key notification with 250000 microsecond interval"
+    ],
+    "python_passed": 58,
+    "format": "passed",
+    "diff": "passed",
+    "licenses": "passed",
+    "open_core_boundary": "passed",
+    "ci": "not run in this local qualification"
+  },
+  "reference_scope": {
+    "oracle_deadline_matched": 4,
+    "oracle_deadline_total": 5,
+    "oracle_deadline_source_qualified": false,
+    "oracle_timed_reference_cancellation_qualified": false,
+    "target_deadline_expectations_qualified": 5,
+    "multirow_matched": 2,
+    "multirow_total": 2,
+    "native_lock_controls_matched": 3,
+    "native_lock_controls_total": 3,
+    "pending_index_oracle_matched": 24,
+    "pending_index_postgres_matched": 24,
+    "numeric_oracle_matched": 12,
+    "numeric_postgres_matched": 12
+  },
+  "resources": {
+    "start_available_gib": 14,
+    "minimum_available_gib": 8,
+    "full_minimum_observed_available_bytes": 18872664064,
+    "full_peak_process_group_rss_bytes": 5122588672,
+    "build_minimum_observed_available_bytes": 21636026368,
+    "build_peak_process_group_rss_bytes": 2294636544,
+    "build_cache_cleanup": {
+      "format": 1,
+      "removed_files": 14,
+      "reclaimed_bytes": 4395918128,
+      "by_category": {
+        "completed_test_executable": {
+          "files": 14,
+          "bytes": 4395918128
+        }
+      },
+      "current_example_binary_preserved": true
+    },
+    "remaining_build_cache_gib_approx": 7.5
+  }
+}

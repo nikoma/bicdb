@@ -583,3 +583,9 @@ A nonzero result means the complete contract is unqualified, including when a
 source expectation fails. The current
 [baseline](../../../docs/evidence/oracle-row-lock-deadlines-baseline-2026-11-03/README.md)
 retains both the missing target syntax and a timed source-cancellation gap.
+
+`row_lock_multiwait.py` uses the same Oracle-only connection arguments as
+`row_lock_deadlines.py`. Two independent row owners distinguish successful
+successive waits from expiry on the second row. The current
+[qualification](../../../docs/evidence/oracle-row-lock-deadlines-2026-11-03/README.md)
+retains the timed source-cancellation gap from the five-case deadline fixture.

@@ -1,0 +1,19 @@
+{
+  "application_qualified": false,
+  "reference": "postgres",
+  "cases": [
+    {
+      "mode": "batch",
+      "owner_status": "INTRANS",
+      "outcome": "error",
+      "sqlstate": "42P01"
+    },
+    {
+      "mode": "separate",
+      "owner_status": "INTRANS",
+      "outcome": "error",
+      "sqlstate": "55P03"
+    }
+  ],
+  "postgres_version_num": 180004
+}

@@ -1,0 +1,44 @@
+{
+  "application_qualified": false,
+  "cases": [
+    {
+      "profile": "postgres",
+      "mode": "batch",
+      "owner_status": "IDLE",
+      "outcome": "success",
+      "rows": [
+        [
+          1
+        ]
+      ]
+    },
+    {
+      "profile": "postgres",
+      "mode": "separate",
+      "owner_status": "INTRANS",
+      "outcome": "error",
+      "sqlstate": "55P03"
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "mode": "batch",
+      "owner_status": "IDLE",
+      "outcome": "success",
+      "rows": [
+        [
+          1
+        ]
+      ]
+    },
+    {
+      "profile": "oracle-preview-v1",
+      "mode": "separate",
+      "owner_status": "INTRANS",
+      "outcome": "error",
+      "sqlstate": "55P03"
+    }
+  ],
+  "runtime_binary_sha256": "7ef8fd930d27d96649407fa089d8fcdb073f6de94878462a4e6ef8830566948c",
+  "source_commit": "15735661aefed754823f287451166a29c8d25fa1",
+  "scope": "Pre-existing observations on the prior binary; not fixed by the lock deadline change."
+}

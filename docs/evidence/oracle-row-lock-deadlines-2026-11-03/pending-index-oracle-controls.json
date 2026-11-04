@@ -1,0 +1,811 @@
+{
+  "format": 1,
+  "reference": "oracle",
+  "application_qualified": false,
+  "target_protocol": "prepared mutations and reads, simple DDL",
+  "cases": [
+    {
+      "id": "scan_own_update",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scan_range_read",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scan_correlated_read",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scan_parent_update",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scan_pending_insert",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "190.5"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "190.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "190.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scan_move_from",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "5.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "5.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "5.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scan_move_to",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "205.5"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "205.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "205.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scan_pending_delete",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scan_savepoint_restore",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scan_savepoint_other",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "20.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "20.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "20.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scan_rollback_restore",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "scan_commit_visible",
+      "indexed": false,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "200.5"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "200.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "200.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_own_update",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_range_read",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_correlated_read",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_parent_update",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_pending_insert",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "190.5"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "190.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "190.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_move_from",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "5.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "5.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "5.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_move_to",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "205.5"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "205.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "205.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_pending_delete",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "0"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_savepoint_restore",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "185.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_savepoint_other",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "20.25"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "20.25"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "20.25"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_rollback_restore",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "123.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "indexed_commit_visible",
+      "indexed": true,
+      "expected": {
+        "rows": [
+          [
+            {
+              "number": "200.5"
+            }
+          ]
+        ]
+      },
+      "source": {
+        "rows": [
+          [
+            {
+              "number": "200.5"
+            }
+          ]
+        ]
+      },
+      "bicdb": {
+        "rows": [
+          [
+            {
+              "number": "200.5"
+            }
+          ]
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "backend_errors": [],
+  "cleanup_errors": [],
+  "success": true,
+  "total": 24,
+  "matched": 24,
+  "source_qualified": true,
+  "source_version": "23.26.3.0.0",
+  "target_sql_profile": "oracle-preview-v1",
+  "runtime_binary_sha256": "52b9c5a760386ddce41bd9559a977608be49be168fd1b1ebce6195a15f1713d7",
+  "fixture_sha256": "280755a931dab82e436921065f05c42dd1d2fd2d3e18f55cec82f8219360eea6",
+  "fixture_exit_status": 0
+}

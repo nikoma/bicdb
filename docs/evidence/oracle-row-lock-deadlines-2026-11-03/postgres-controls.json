@@ -1,0 +1,115 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "blocking_latest_row",
+      "source": {
+        "id": "blocking_latest_row",
+        "owner_hold_seconds": 10,
+        "outcome": "success",
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "elapsed_seconds": 10.001
+      },
+      "bicdb": {
+        "id": "blocking_latest_row",
+        "owner_hold_seconds": 10,
+        "outcome": "success",
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "elapsed_seconds": 10.036
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "explicit_cancel",
+      "source": {
+        "id": "explicit_cancel",
+        "outcome": "cancelled",
+        "sqlstate": "57014",
+        "oracle_code": null,
+        "elapsed_seconds": 0.252,
+        "completed_before_owner_release": true,
+        "connection_recovers": true
+      },
+      "bicdb": {
+        "id": "explicit_cancel",
+        "outcome": "cancelled",
+        "sqlstate": "57014",
+        "oracle_code": null,
+        "elapsed_seconds": 0.251,
+        "completed_before_owner_release": true,
+        "connection_recovers": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "row_cycle",
+      "source": {
+        "id": "row_cycle",
+        "participants": [
+          {
+            "outcome": "success",
+            "rows": [
+              [
+                0
+              ]
+            ]
+          },
+          {
+            "outcome": "deadlock",
+            "sqlstate": "40P01",
+            "oracle_code": null
+          }
+        ],
+        "outcomes": [
+          "deadlock",
+          "success"
+        ]
+      },
+      "bicdb": {
+        "id": "row_cycle",
+        "participants": [
+          {
+            "outcome": "deadlock",
+            "sqlstate": "40P01",
+            "oracle_code": null
+          },
+          {
+            "outcome": "success",
+            "rows": [
+              [
+                1
+              ]
+            ]
+          }
+        ],
+        "outcomes": [
+          "deadlock",
+          "success"
+        ]
+      },
+      "source_qualified": true,
+      "matched": true
+    }
+  ],
+  "total": 3,
+  "matched": 3,
+  "source_qualified": true,
+  "cleanup_errors": [],
+  "success": true,
+  "target_sql_profile": "postgres",
+  "reference": "postgres",
+  "runtime_binary_sha256": "52b9c5a760386ddce41bd9559a977608be49be168fd1b1ebce6195a15f1713d7",
+  "postgres_version_num": 180004,
+  "fixture_source_sha256": "2bf9c9d2a635391ddfdb0fd7527cb16cdef4cbb26f8fa011730aec36c0a782f7"
+}

@@ -1,0 +1,147 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "cases": [
+    {
+      "id": "uncontended",
+      "source": {
+        "id": "uncontended",
+        "wait_seconds": 2,
+        "outcome": "success",
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "elapsed_seconds": 0.009,
+        "connection_recovers": true
+      },
+      "bicdb": {
+        "id": "uncontended",
+        "wait_seconds": 2,
+        "outcome": "success",
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "elapsed_seconds": 0.006,
+        "connection_recovers": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "wait_zero",
+      "source": {
+        "id": "wait_zero",
+        "wait_seconds": 0,
+        "outcome": "unavailable",
+        "sqlstate": null,
+        "oracle_code": 54,
+        "elapsed_seconds": 0.001,
+        "connection_recovers": true
+      },
+      "bicdb": {
+        "id": "wait_zero",
+        "wait_seconds": 0,
+        "outcome": "lock_unavailable",
+        "sqlstate": "55P03",
+        "oracle_code": null,
+        "elapsed_seconds": 0.004,
+        "connection_recovers": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "deadline_expiry",
+      "source": {
+        "id": "deadline_expiry",
+        "wait_seconds": 1,
+        "outcome": "unavailable",
+        "sqlstate": null,
+        "oracle_code": 54,
+        "elapsed_seconds": 1.001,
+        "connection_recovers": true
+      },
+      "bicdb": {
+        "id": "deadline_expiry",
+        "wait_seconds": 1,
+        "outcome": "lock_unavailable",
+        "sqlstate": "55P03",
+        "oracle_code": null,
+        "elapsed_seconds": 1.004,
+        "connection_recovers": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "owner_release",
+      "source": {
+        "id": "owner_release",
+        "wait_seconds": 2,
+        "outcome": "success",
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "elapsed_seconds": 0.301,
+        "connection_recovers": true
+      },
+      "bicdb": {
+        "id": "owner_release",
+        "wait_seconds": 2,
+        "outcome": "success",
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "elapsed_seconds": 0.329,
+        "connection_recovers": true
+      },
+      "source_qualified": true,
+      "matched": true
+    },
+    {
+      "id": "explicit_cancel",
+      "source": {
+        "id": "explicit_cancel",
+        "wait_seconds": 5,
+        "outcome": "unavailable",
+        "sqlstate": null,
+        "oracle_code": 54,
+        "elapsed_seconds": 4.992,
+        "connection_recovers": true
+      },
+      "bicdb": {
+        "id": "explicit_cancel",
+        "wait_seconds": 5,
+        "outcome": "cancelled",
+        "sqlstate": "57014",
+        "oracle_code": null,
+        "elapsed_seconds": 0.301,
+        "connection_recovers": true
+      },
+      "source_qualified": false,
+      "matched": false
+    }
+  ],
+  "total": 5,
+  "matched": 4,
+  "reference_version": "23.26.3.0.0",
+  "source_qualified_cases": 4,
+  "source_qualified": false,
+  "cleanup_errors": [],
+  "success": false,
+  "target_sql_profile": "oracle-preview-v1",
+  "reference": "oracle",
+  "oracle_disable_oob": false,
+  "runtime_binary_sha256": "52b9c5a760386ddce41bd9559a977608be49be168fd1b1ebce6195a15f1713d7",
+  "fixture_source_sha256": "f9f16ca09ed746c129304f012163bdad72d8287afb3e463233c251e6cbb504d4",
+  "comparison_exit_status": 1,
+  "target_qualified_cases": 5
+}

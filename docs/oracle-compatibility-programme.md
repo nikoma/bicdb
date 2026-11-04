@@ -385,3 +385,10 @@ records the actual Complete attempt failing at unsupported `FOR UPDATE WAIT n`.
 The order remains draft. Four of five source expectations qualify; the target
 matches zero, and timed reference cancellation remains separately unqualified.
 Deadline syntax/execution and the full application workflow remain open.
+
+The [bounded row-wait checkpoint](evidence/oracle-row-lock-deadlines-2026-11-03/README.md)
+adds per-row integer-second `FOR UPDATE WAIT n` through PostgreSQL-driver prepared
+paths, with independent source comparisons and native lock controls. Four of five
+deadline comparisons and both multirow cases match; timed source cancellation
+remains unqualified. A pre-existing DDL/BEGIN batch-boundary gap is retained.
+The actual application Complete action and the full programme remain open.

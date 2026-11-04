@@ -17,6 +17,14 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [project issue checkpoint](evidence/idempiere-project-issue-2026-11-04/README.md)
+completes, posts and reverses a work-order stock issue through the original UI.
+All 77 selected observations pass, including the prior 67. Stock totals and
+project balance are restored; ledger entries offset and average-cost rounding
+matches upstream rules and independently checked currency precision. Original
+definitions and saved report rows are preserved. Broader project operations,
+full costing coverage and the entire application remain unqualified.
+
 The [row-valued UPDATE checkpoint](evidence/sql-row-update-2026-11-04/README.md)
 adds selected constructor/subquery assignments with source cardinality checks,
 original-row values and rollback controls: 18/18 independent expectations in

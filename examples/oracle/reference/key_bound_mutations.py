@@ -7,6 +7,10 @@ def observe(factory):
     table = 'BICDB_BM_' + uuid.uuid4().hex[:8].upper()
     original = [[1, 1, 'done'], [1, 2, 'done'], [2, 1, 'done']]
     expected = {
+        'update_conflicting_key': dict(affected=0, rows=original),
+        'delete_conflicting_key': dict(affected=0, rows=original),
+        'update_repeated_key': dict(affected=1, rows=[[1, 1, 'changed'], [1, 2, 'done'], [2, 1, 'done']]),
+        'delete_repeated_key': dict(affected=1, rows=[[1, 2, 'done'], [2, 1, 'done']]),
         'update_empty_scalar': dict(affected=0, rows=original),
         'delete_empty_scalar': dict(affected=0, rows=original),
         'update_empty_aggregate': dict(affected=0, rows=original),
@@ -43,6 +47,10 @@ def observe(factory):
             aggregate = f"(SELECT MAX(b) FROM {table} WHERE status='queued')"
             nonnull = f'(SELECT MAX(b) FROM {table} WHERE a=1)'
             for name, predicate in [
+                ('update_conflicting_key', 'a=1 AND b=1 AND b=2'),
+                ('delete_conflicting_key', 'a=1 AND b=1 AND b=2'),
+                ('update_repeated_key', 'a=1 AND b=1 AND b=1'),
+                ('delete_repeated_key', 'a=1 AND b=1 AND b=1'),
                 ('update_empty_scalar', f'a=1 AND b={empty}'),
                 ('delete_empty_scalar', f'a=1 AND b={empty}'),
                 ('update_empty_aggregate', f'a=1 AND b={aggregate}'),
@@ -88,7 +96,7 @@ def run(source_factory, target_factory):
                 cleanup_errors=cleanup,
                 source_execution_error=source.get('execution_error'),
                 target_execution_error=target.get('execution_error'),
-                success=len(cases) == 8 and all(case['matched'] for case in cases) and not cleanup)
+                success=len(cases) == 12 and all(case['matched'] for case in cases) and not cleanup)
 
 
 if __name__ == '__main__':

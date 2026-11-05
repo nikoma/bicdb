@@ -3249,7 +3249,11 @@ impl<'db> SqlEngine<'db> {
             let Some(idx) = matched else {
                 return Ok(false);
             };
-            matched_columns.insert(idx);
+            // The lookup binds one value per column. Additional equalities
+            // still need checking, even when they name that same key column.
+            if !matched_columns.insert(idx) {
+                return Ok(false);
+            }
         }
         Ok(matched_columns.len() == primary_key_columns.len())
     }
@@ -6769,6 +6773,96 @@ pub(crate) fn nth_and_term(expr: &Expr, index: usize) -> Option<&Expr> {
     }
     let mut remaining = index;
     walk(expr, &mut remaining)
+}
+
+#[cfg(test)]
+mod key_predicate_coverage_tests {
+    use super::*;
+
+    fn duplicate_key_terms(profile: &str) {
+        for delete in [false, true] {
+            for conflict in [false, true] {
+                for explicit_transaction in [false, true] {
+                    let directory = tempfile::tempdir().unwrap();
+                    let mut db = BicDb::open(directory.path()).unwrap();
+                    oracle::ensure_database_profile(&mut db, profile).unwrap();
+                    for sql in [
+                        "CREATE TABLE key_terms(a INTEGER,b INTEGER,status VARCHAR(12),PRIMARY KEY(a,b))",
+                        "INSERT INTO key_terms VALUES(1,1,'done'),(1,2,'done'),(2,1,'done')",
+                    ] {
+                        let sql = if oracle::is_oracle_profile(profile) {
+                            oracle::lower_session_sql(&db, sql, profile, None, "bicdb").unwrap()
+                        } else { sql.to_string() };
+                        SqlSession::new(&mut db).execute(&sql).unwrap();
+                    }
+                    let lower = |sql: &str| {
+                        if oracle::is_oracle_profile(profile) {
+                            oracle::lower_session_sql(&db, sql, profile, None, "bicdb").unwrap()
+                        } else {
+                            sql.to_string()
+                        }
+                    };
+                    let verb = if delete { "DELETE" } else { "UPDATE" };
+                    let operation = if delete {
+                        "DELETE FROM key_terms"
+                    } else {
+                        "UPDATE key_terms SET status='changed'"
+                    };
+                    let other = if conflict { 2 } else { 1 };
+                    let mutation = lower(&format!("{operation} WHERE a=1 AND b=1 AND b={other}"));
+                    let select = lower("SELECT a,b,status FROM key_terms ORDER BY a,b");
+                    let original = vec![
+                        vec!["1".to_string(), "1".to_string(), "done".to_string()],
+                        vec!["1".to_string(), "2".to_string(), "done".to_string()],
+                        vec!["2".to_string(), "1".to_string(), "done".to_string()],
+                    ];
+                    let mut expected = original.clone();
+                    if !conflict {
+                        if delete {
+                            expected.remove(0);
+                        } else {
+                            expected[0][2] = "changed".into();
+                        }
+                    }
+                    let mut session = SqlSession::new(&mut db);
+                    if explicit_transaction {
+                        session.execute("BEGIN").unwrap();
+                    }
+                    let result = session.execute(&mutation).unwrap();
+                    let expected_tag = format!("{verb} {}", usize::from(!conflict));
+                    assert_eq!(
+                        result.command_tag.as_deref(),
+                        Some(expected_tag.as_str()),
+                        "{profile}: {mutation}"
+                    );
+                    let rows = |session: &mut SqlSession<'_>| {
+                        session
+                            .execute(&select)
+                            .unwrap()
+                            .rows
+                            .iter()
+                            .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                            .collect::<Vec<_>>()
+                    };
+                    assert_eq!(rows(&mut session), expected, "{profile}: {mutation}");
+                    if explicit_transaction {
+                        session.execute("ROLLBACK").unwrap();
+                        assert_eq!(rows(&mut session), original, "{profile}: caller rollback");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn postgres_duplicate_primary_key_terms_retain_residual_predicates() {
+        duplicate_key_terms(oracle::POSTGRES_PROFILE);
+    }
+
+    #[test]
+    fn oracle_duplicate_primary_key_terms_retain_residual_predicates() {
+        duplicate_key_terms(oracle::ORACLE_PREVIEW_PROFILE);
+    }
 }
 
 #[cfg(test)]

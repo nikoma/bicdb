@@ -2042,6 +2042,19 @@ pub(crate) fn projected_binary_expr_pg_type(
 ) -> Option<String> {
     let left_type = projected_expr_pg_type(left, schema);
     let right_type = projected_expr_pg_type(right, schema);
+    projected_binary_expr_pg_type_with_types(left, op, right, schema, left_type, right_type)
+}
+
+/// The operator result rules shared by schema and row-context expression typing.
+/// The caller resolves each operand using its own column/alias environment.
+pub(crate) fn projected_binary_expr_pg_type_with_types(
+    left: &Expr,
+    op: &BinaryOperator,
+    right: &Expr,
+    schema: Option<&TableSchema>,
+    left_type: Option<String>,
+    right_type: Option<String>,
+) -> Option<String> {
     if let Some(pg_type) =
         geometric_binary_result_pg_type(op, left_type.as_deref(), right_type.as_deref())
     {

@@ -919,7 +919,15 @@ impl<'db> SqlSession<'db> {
         // Resolve named routine variables and positional parameters in every
         // nested row-count clause before CTE materialization.
         if let Some(bound) = self.bind_limit_clause_placeholders(query) {
-            return self.execute_query(&bound);
+            // Rewritten nodes are temporary, not addresses in the stored IR.
+            // Do not let their operand/branch types enter routine-node memos.
+            let _scope = crate::eval::suspend_expr_type_scope();
+            let previous_ir = self.current_routine_ir.take();
+            let previous_owned = std::mem::replace(&mut self.ir_owned_statement, false);
+            let result = self.execute_query(&bound);
+            self.ir_owned_statement = previous_owned;
+            self.current_routine_ir = previous_ir;
+            return result;
         }
         if let Some(with) = &query.with {
             if with.recursive {

@@ -36,6 +36,31 @@ fn routine_row_limits_bind_named_variables_inside_ctes_and_subqueries() {
 }
 
 #[test]
+fn routine_paginated_jsonb_case_keeps_column_types_and_changed_arguments() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE feed(version BIGINT PRIMARY KEY,collection TEXT,deleted BOOLEAN,data JSONB); INSERT INTO feed VALUES(1,'meal_entries',false,'{\"kcal\":750}'),(2,'factor_logs',false,'{\"value\":3}')").unwrap();
+    let direct=session.execute("SELECT CASE WHEN collection='factor_logs' THEN data || jsonb_build_object('factor_type','loader') ELSE data END AS data FROM feed ORDER BY version").unwrap();
+    assert_eq!(direct.column_types, vec![Some("jsonb".into())]);
+    assert!(matches!(&direct.rows[0][0],SqlValue::Json(value) if value["kcal"]==750));
+    session.execute("CREATE FUNCTION sync_page(p_limit INT) RETURNS JSONB LANGUAGE plpgsql AS $$ DECLARE result JSONB; BEGIN WITH page AS (SELECT version,CASE WHEN collection='factor_logs' AND NOT deleted THEN data || jsonb_build_object('factor_type','loader') ELSE data END AS data FROM feed ORDER BY version LIMIT p_limit), metadata AS (SELECT max(version) AS last_version FROM page) SELECT jsonb_build_object('changes',COALESCE((SELECT jsonb_agg(to_jsonb(page) ORDER BY version) FROM page),'[]'),'next',(SELECT last_version FROM metadata)) INTO result; RETURN result; END $$").unwrap();
+    for limit in [1, 2, 1, 2] {
+        let result = session
+            .execute(&format!("SELECT sync_page({limit})"))
+            .unwrap();
+        let SqlValue::Json(value) = &result.rows[0][0] else {
+            panic!("JSONB expected")
+        };
+        assert_eq!(value["changes"].as_array().unwrap().len(), limit as usize);
+        assert_eq!(value["changes"][0]["data"]["kcal"], 750);
+        if limit == 2 {
+            assert_eq!(value["changes"][1]["data"]["factor_type"], "loader");
+        }
+    }
+}
+
+#[test]
 fn routine_row_limits_preserve_null_zero_negative_and_fetch_semantics() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

@@ -69,3 +69,7 @@ Oracle conformance, production qualification or a deployed release.
 The [execution record](evidence/oracle-blob-storage-2026-11-05/README.md) separates
 storage and driver regression evidence from the remaining runtime and deployment
 work.
+
+[Selected persistent execution evidence](evidence/oracle-persistent-blobs-2026-11-05/README.md)
+covers the runtime follow-up. Quiesce writers before binary-column reconciliation;
+this operation does not implement distributed DDL coordination.

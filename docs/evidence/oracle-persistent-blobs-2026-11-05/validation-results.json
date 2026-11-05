@@ -1,0 +1,102 @@
+{
+  "format": 1,
+  "source_commit": "8140ac7b2aef397a054f811fab6dcea988520ddb",
+  "checks": [
+    {
+      "name": "core",
+      "command": "cargo test -p bicdb-core --test transaction_receipts",
+      "exit_code": 0,
+      "results": [
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "sql",
+      "command": "cargo test -p bicdb-sql --lib",
+      "exit_code": 0,
+      "results": [
+        {
+          "passed": 688,
+          "failed": 0,
+          "ignored": 3
+        }
+      ]
+    },
+    {
+      "name": "protocol",
+      "command": "cargo test -p bicdb-pgwire --test oracle_hr --test protocol",
+      "exit_code": 0,
+      "results": [
+        {
+          "passed": 48,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 179,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "workspace",
+      "command": "cargo check --workspace --all-targets",
+      "exit_code": 0,
+      "results": []
+    }
+  ],
+  "source_sha256": {
+    "crates/bicdb-core/src/db/transaction_receipts.rs": "0cb78255866449eb2ff9ecaf60d9738a02c30a7a378ec26911bcbc1f0851e439",
+    "crates/bicdb-core/tests/transaction_receipts.rs": "6fe623e2d474c4ae83afba18ca0d41452ff0660ad1a45cbc3b3258fd24cc8cd7",
+    "crates/bicdb-pgwire/src/protocol_wire.rs": "43b898b9c3329ab4776f4941112e5e77b4625c069d67a0eb6367efed359a4333",
+    "crates/bicdb-pgwire/tests/oracle_hr.rs": "2139f1462b3e6c62088a1deb795cf54dd78e02cfdfdcfe3ba26288e14a401a39",
+    "crates/bicdb-sql/src/eval/value_ops1.rs": "43e1edfcd58e4e0669a4aa7a67a8eb62eed6ccd65d4efcf17a3fb1f3cea0da61",
+    "crates/bicdb-sql/src/lib.rs": "129f8a9f44c6dea74abfb72eabde1b14ff2a05e1e737e8a1d82fd4a9dd468e1e",
+    "crates/bicdb-sql/src/oracle.rs": "58436133cca0472cc0b8018ed2fa9512eebab631a7e5adde396562614972f48b",
+    "crates/bicdb-sql/src/oracle/lob_storage.rs": "ccd19e26883389c955c6bc5c853848905f6bac31036aab730e8f6dbd39f34c65",
+    "crates/bicdb-sql/src/oracle/lobs.rs": "0df00826c4d43154b1621102d68b44f51399070cb1c40593e14cf5e92f1bd1d0",
+    "crates/bicdb-sql/src/oracle/lobs/history.rs": "9022a3bc2fce5262a8a4167b6bb1d9a43e81ea5f55ebff184c08649ea8482675",
+    "crates/bicdb-sql/src/oracle/lobs/persistent.rs": "cdd7a4e12f513e56476b9fb333442d50a25b9b90de12071af784bfbfc2172bb9",
+    "crates/bicdb-sql/src/schema_meta.rs": "768933950d808dc206cfd39293f1fa720181a37c4c3ef0a3f36d95365ef08bd2",
+    "crates/bicdb-sql/src/session/domain_types.rs": "e5951f8e4ae297f41e3f1402941636b4b7e6024ed9873ea03f308ddc57f2a504",
+    "crates/bicdb-sql/src/session/functions_insert.rs": "a77841e9cbb76bd76d50bf51d5ed7c46706134adcee2370bda2fbcd1ca27378e",
+    "crates/bicdb-sql/src/session/raw_index_fts.rs": "3fc81deabb485c57ab194945d2d6701552ff113f429a11efdd43368a7844d5b5",
+    "crates/bicdb-sql/src/session/txn_update.rs": "b44bc0067d58e4c220a67d6640dbd87a9f4835f16267c6509e933dba6089b0de"
+  },
+  "environment": "Local Linux; one compiler job; incremental compilation and debug information disabled",
+  "resource_guard": {
+    "status": "completed",
+    "peak_group_rss_bytes": 5461622784,
+    "minimum_observed_available_bytes": 15363997696,
+    "minimum_observed_disk_available_bytes": 13413724160
+  },
+  "native_tests_fsync": "Most functional fixtures disable fsync; existing receipt WAL-failure tests retain their own durability settings",
+  "tests_passed": 924,
+  "source_reference": "Earlier published native Oracle ownership/acquisition observations; no new native Oracle probe run in this checkpoint",
+  "resolved_failures": [
+    "Stored RETURNING fast projection erased identity; it now uses the schema-qualified reader and acquires from the actual normalized row",
+    "Procedural locking queries after authored commit auto-committed before acquisition; their next procedural transaction is now retained",
+    "RETURNING was rendered as an identifier in the Oracle lexer; it now remains a keyword",
+    "Initial error-capture fixtures incorrectly used SQLCODE directly in SQL; fixtures now assign a PL/SQL variable before SQL use",
+    "Existing-data conversion wrote cells without owner mappings; schema/rows/owner reconciliation now shares one native commit"
+  ],
+  "deployed": false,
+  "full_application_qualified": false,
+  "full_oracle_programme_complete": false,
+  "production_qualified": false,
+  "workflows": "No workflow changes or manual workflow runs",
+  "remaining": [
+    "Source-manifest application migration and original application acceptance",
+    "Rename/drop/truncate/recycle/flashback lifecycle",
+    "Cursor and dynamic-SQL BLOB acquisition",
+    "Complete DBMS_LOB APIs, error combinations and NLS",
+    "General functional indexes, OPEN/CLOSE, deferred effects and extension behavior",
+    "Transactional/partitioned/distributed DDL and recovery fault qualification",
+    "Remaining Oracle compatibility programme workstreams"
+  ]
+}

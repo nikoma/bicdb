@@ -2585,7 +2585,7 @@ pub(crate) fn pg_depend_rows(db: &BicDb) -> Result<Vec<BTreeMap<String, SqlValue
     // EXECUTE on CHECK helpers, which PostgreSQL requires.
     let routines = list_routines(db)?;
     let constraint_rows =
-        pg_constraint_rows_from_schemas(db, &schemas, &relation_oids, None, None, None);
+        pg_constraint_rows_from_schemas(db, &schemas, &relation_oids, None, None, None)?;
     for row in &constraint_rows {
         if virtual_cell(row, "contype").to_cell() != "c" {
             continue;
@@ -4813,7 +4813,7 @@ pub(crate) fn pg_constraint_rows_filtered(
     let table_oids = table_oids(db);
     let schemas = load_schemas_for_relation_oid_filter(db, &table_oids, relation_oids)?;
     let mut rows =
-        pg_constraint_rows_from_schemas(db, &schemas, &table_oids, names, types, relation_oids);
+        pg_constraint_rows_from_schemas(db, &schemas, &table_oids, names, types, relation_oids)?;
     if relation_oids.is_none() {
         rows.extend(pg_domain_constraint_rows(db, names, types)?);
     }
@@ -4949,16 +4949,15 @@ pub(crate) fn pg_constraint_rows_from_schemas(
     names: Option<&BTreeSet<String>>,
     types: Option<&BTreeSet<String>>,
     relation_oids: Option<&BTreeSet<i64>>,
-) -> Vec<BTreeMap<String, SqlValue>> {
+) -> Result<Vec<BTreeMap<String, SqlValue>>> {
     let mut rows = Vec::new();
     for schema in schemas {
         let primary_key_columns = primary_key_columns_for_schema(schema);
-        if primary_key_columns.is_empty() {
-            continue;
-        }
         let table_oid = *table_oids.get(&schema.name).unwrap_or(&0);
         let name = schema.primary_key_constraint_name();
-        if pg_constraint_filter_matches(&name, "p", table_oid, names, types, relation_oids) {
+        if !primary_key_columns.is_empty()
+            && pg_constraint_filter_matches(&name, "p", table_oid, names, types, relation_oids)
+        {
             rows.push(pg_constraint_row(PgConstraintRow {
                 condeferrable: false,
                 condeferred: false,
@@ -5134,7 +5133,19 @@ pub(crate) fn pg_constraint_rows_from_schemas(
                             confupdtype: fk_action_code(*on_update),
                             confdeltype: fk_action_code(*on_delete),
                             conkey: constraint_attnums(schemas, &schema.name, columns),
-                            confkey: constraint_attnums(schemas, foreign_table, referred_columns),
+                            // A conrelid filter selects emitted rows, not the
+                            // referenced schema needed to describe each FK.
+                            confkey: if schemas.iter().any(|parent| parent.name == *foreign_table) {
+                                constraint_attnums(schemas, foreign_table, referred_columns)
+                            } else if let Some(parent) = load_schema_shared(db, foreign_table)? {
+                                constraint_attnums(
+                                    std::slice::from_ref(parent.as_ref()),
+                                    foreign_table,
+                                    referred_columns,
+                                )
+                            } else {
+                                vec![0; referred_columns.len()]
+                            },
                             conbin: None,
                             convalidated: *validated,
                         }));
@@ -5180,7 +5191,7 @@ pub(crate) fn pg_constraint_rows_from_schemas(
             }
         }
     }
-    rows
+    Ok(rows)
 }
 
 pub(crate) fn pg_constraint_oid(table_oid: i64, local_slot: i64) -> i64 {
@@ -5209,7 +5220,8 @@ pub(crate) fn validate_constraint_catalog_oids(db: &BicDb) -> Result<()> {
         return Ok(());
     }
     let schemas = list_schemas(db)?;
-    let mut rows = pg_constraint_rows_from_schemas(db, &schemas, &table_oids(db), None, None, None);
+    let mut rows =
+        pg_constraint_rows_from_schemas(db, &schemas, &table_oids(db), None, None, None)?;
     rows.extend(pg_domain_constraint_rows(db, None, None)?);
     let mut seen = BTreeSet::new();
     for row in rows {
@@ -5591,7 +5603,7 @@ pub(crate) fn postgres_constraints_view_rows_filtered(
         filters.names.as_ref(),
         filters.constraint_types.as_ref(),
         relation_oids.as_ref(),
-    );
+    )?;
     let mut rows = Vec::new();
 
     for constraint in constraint_rows {
@@ -5687,7 +5699,7 @@ pub(crate) fn postgres_foreign_key_view_rows_filtered(
         filters.names.as_ref(),
         Some(&fk_types),
         constrained_oids.as_ref(),
-    ) {
+    )? {
         let Some(constrained_oid) = sql_value_i64(&virtual_cell(&constraint, "conrelid")) else {
             continue;
         };
@@ -5982,7 +5994,7 @@ pub(crate) fn pg_constraint_definition_for_oid(
         .filter_map(|schema| table_oids.get(&schema.name).map(|oid| (*oid, schema)))
         .collect::<BTreeMap<_, _>>();
     let Some(constraint) =
-        pg_constraint_rows_from_schemas(db, &schemas, &table_oids, None, None, None)
+        pg_constraint_rows_from_schemas(db, &schemas, &table_oids, None, None, None)?
             .into_iter()
             .find(|constraint| {
                 sql_value_i64(&virtual_cell(constraint, "oid")) == Some(constraint_oid)
@@ -7831,4 +7843,81 @@ pub(crate) fn sequence_catalog_namespace(db: &BicDb, name: &str) -> Result<Strin
         return relation_catalog_namespace(db, &canonical);
     }
     Ok("public".into())
+}
+
+#[cfg(test)]
+mod foreign_key_projection_tests {
+    use super::*;
+    #[test]
+    fn tables_without_declared_primary_keys_still_publish_foreign_keys_and_checks() {
+        for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open(root.path()).unwrap();
+            oracle::ensure_database_profile(&mut db, profile).unwrap();
+            let mut session = SqlSession::new(&mut db);
+            session.execute("CREATE TABLE p(id INTEGER PRIMARY KEY); CREATE TABLE c(pid INTEGER,val INTEGER,CONSTRAINT child_fk FOREIGN KEY(pid) REFERENCES p(id),CONSTRAINT child_ck CHECK(val>=0))").unwrap();
+            let oid = session
+                .execute("SELECT oid FROM pg_catalog.pg_class WHERE relname='c'")
+                .unwrap()
+                .rows[0][0]
+                .to_cell();
+            let rows = session.execute(&format!("SELECT conname,contype,conkey,confkey FROM pg_catalog.pg_constraint WHERE conrelid={oid} ORDER BY conname")).unwrap().rows;
+            assert_eq!(
+                rows,
+                vec![
+                    vec![
+                        SqlValue::String("child_ck".into()),
+                        SqlValue::String("c".into()),
+                        SqlValue::json(serde_json::json!([2]).into()),
+                        SqlValue::Null
+                    ],
+                    vec![
+                        SqlValue::String("child_fk".into()),
+                        SqlValue::String("f".into()),
+                        SqlValue::json(serde_json::json!([1]).into()),
+                        SqlValue::json(serde_json::json!([1]).into())
+                    ]
+                ],
+                "{profile}"
+            );
+        }
+    }
+    #[test]
+    fn filtered_constraints_keep_referenced_attribute_positions_across_schemas() {
+        for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_PREVIEW_PROFILE] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open(root.path()).unwrap();
+            oracle::ensure_database_profile(&mut db, profile).unwrap();
+            let mut session = SqlSession::new(&mut db);
+            for sql in [
+                r#"CREATE SCHEMA "Parent.Scope""#,
+                r#"CREATE SCHEMA "Child.Scope""#,
+                r#"CREATE TABLE "Parent.Scope"."P"("PAD" INTEGER,"K1" INTEGER,"K2" INTEGER,PRIMARY KEY("K1","K2"))"#,
+                r#"CREATE TABLE "Child.Scope"."C"("K1" INTEGER,"ID" INTEGER PRIMARY KEY,"K2" INTEGER,CONSTRAINT "FK" FOREIGN KEY("K1","K2") REFERENCES "Parent.Scope"."P"("K1","K2"))"#,
+            ] {
+                let lowered = if oracle::is_oracle_profile(profile) {
+                    oracle::lower_session_sql(session.db_ref(), sql, profile, None, "bicdb")
+                        .unwrap()
+                } else {
+                    sql.into()
+                };
+                session.execute(&lowered).unwrap();
+            }
+            let oid = session
+                .execute(r#"SELECT "oid" FROM "pg_catalog"."pg_class" WHERE "relname"='C'"#)
+                .unwrap()
+                .rows[0][0]
+                .to_cell();
+            let expected = vec![vec![
+                SqlValue::json(serde_json::json!([1, 3]).into()),
+                SqlValue::json(serde_json::json!([2, 3]).into()),
+            ]];
+            for predicate in [
+                r#""conname"='FK'"#.to_string(),
+                format!(r#""conname"='FK' AND "conrelid"={oid}"#),
+            ] {
+                assert_eq!(session.execute(&format!(r#"SELECT "conkey","confkey" FROM "pg_catalog"."pg_constraint" WHERE {predicate}"#)).unwrap().rows,expected,"{profile}: {predicate}");
+            }
+        }
+    }
 }

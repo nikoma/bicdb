@@ -1658,7 +1658,9 @@ pub(crate) fn result_row_map(columns: &[String], values: &[SqlValue]) -> Result<
 pub(crate) fn select_item_needs_row_evaluator(item: &SelectItem) -> bool {
     match item {
         SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
-            expr_needs_row_evaluator(expr)
+            // Predicate support in the record filter does not make a predicate
+            // a field projection. Preserve the whole expression for row evaluation.
+            expr_needs_row_evaluator(expr) || FieldRef::from_expr_opt(expr).is_none()
         }
         SelectItem::Wildcard(_) => false,
         _ => true,
@@ -1701,9 +1703,9 @@ pub(crate) fn order_by_needs_row_evaluator(order_by: &OrderBy) -> bool {
     let OrderByKind::Expressions(expressions) = &order_by.kind else {
         return true;
     };
-    expressions
-        .iter()
-        .any(|order| expr_needs_row_evaluator(&order.expr))
+    expressions.iter().any(|order| {
+        expr_needs_row_evaluator(&order.expr) || FieldRef::from_expr_opt(&order.expr).is_none()
+    })
 }
 
 pub(crate) fn expr_needs_row_evaluator(expr: &Expr) -> bool {

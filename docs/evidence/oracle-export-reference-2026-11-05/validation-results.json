@@ -1,0 +1,78 @@
+{
+  "format": 1,
+  "source_commit": "1234cf2728a718cb7d455483623932a639dd2b00",
+  "oracle_version": "23.26.3.0.0",
+  "original_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "fresh_manifest_sha256": "7dadf0307c35f84faa897d1b94ec8ca9343cf641436465af4c404ebcbb302ad1",
+  "reference_replay": {
+    "tables_verified": 915,
+    "rows_verified": 185471,
+    "foreign_keys_counted": 3826,
+    "validated_foreign_keys": 912,
+    "not_validated_foreign_keys": 2914,
+    "relationships_with_orphans": 0,
+    "orphan_relationship_references": 0,
+    "reference_rows_equal_export": true,
+    "cleanup_completed": true,
+    "cleanup_errors": [],
+    "report_sha256": "183a08e4135c45bdecbf944d90aac5b2d4f7230fd5df3219b403875834459c6f"
+  },
+  "fresh_export_comparison": {
+    "status": "completed",
+    "tables_compared": 915,
+    "matching_tables": 915,
+    "different_tables": [],
+    "columns_equal": true,
+    "foreign_key_declarations_equal": true,
+    "old_rows": 185471,
+    "new_rows": 185471,
+    "new_value_encoding": {
+      "version": 2,
+      "timestamp_with_time_zone": "offset-preserved",
+      "lob_empty_values": "preserved"
+    },
+    "application_qualified": false,
+    "all_rows_equal": true
+  },
+  "python_tests": {
+    "passed": 85,
+    "failed": 0,
+    "skipped": 0,
+    "oracle_replay_tests": 10,
+    "command": [
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "examples/oracle/idempiere",
+      "-p",
+      "test_*.py",
+      "-v"
+    ]
+  },
+  "native_engine_source_commit": "2b645c97431b55e1e903ec16d9994489e3610f1a",
+  "native_engine_binary_sha256": "52cd4ceced937a468fa9f63bdb8511560ea6c074549bbc59da8fa19f50e5fbce",
+  "temporary_tablespace_max_bytes": 1073741824,
+  "oracle_container_memory_limit_bytes": 4294967296,
+  "native_target_inventory_compared": false,
+  "full_native_target_values_equal_export_qualified": false,
+  "application_qualified": false,
+  "github_workflows_changed_or_dispatched": false,
+  "resources": {
+    "reference-replay": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 128610304,
+      "minimum_observed_available_bytes": 17225433088,
+      "minimum_available_gib": 12.0
+    },
+    "python-tests": {
+      "status": "completed",
+      "returncode": 0,
+      "peak_group_rss_bytes": 176713728,
+      "minimum_observed_available_bytes": 11041218560,
+      "minimum_available_gib": 12.0
+    }
+  }
+}

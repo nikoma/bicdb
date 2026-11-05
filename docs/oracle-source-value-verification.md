@@ -41,6 +41,12 @@ the caller's Decimal context. The final digest streams sorted row hashes instead
 of allocating another concatenated copy. Per-table row hashes are still retained
 in memory for sorting; this is not a constant-memory external-sort verifier.
 
+New Oracle exports identify value encoding version 2, preserving numeric time
+zone offsets and reading LOB locators to distinguish empty values from NULL.
+See the [Oracle reference replay](oracle-export-reference-replay.md) for a full
+row check against Oracle. A missing version marker on an older export is not
+evidence that these source-driver properties were verified.
+
 `--resume` requires the same manifest, target endpoint, profile and completed
 table prefix. Every completed verification table is read and compared again,
 including its source file and saved value digest. Row count alone cannot

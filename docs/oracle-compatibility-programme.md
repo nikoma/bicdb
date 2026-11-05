@@ -17,6 +17,13 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [Oracle export reference checkpoint](evidence/oracle-export-reference-2026-11-05/README.md)
+replays all 915 tables and 185,471 rows, verifies their complete multisets, and
+counts all 3,826 source relationships on Oracle: zero unmatched references in
+this dataset. A fresh value-encoding-v2 export matches the original rows and FK
+declarations. Native target equality, orphan comparison and full application
+acceptance remain separate gates.
+
 The [strict source-value checkpoint](evidence/oracle-source-values-2026-11-05/README.md)
 authenticates exported row counts and widths before target queries and rechecks
 completed value-verification journals on resume. All 915 exported files and

@@ -61,6 +61,11 @@ references use the same counting query builder as ordinary relationships.
   an explicit policy for legacy rows and complete application acceptance are
   separate qualification gates.
 
+For an older export whose live source has changed, use the
+[isolated Oracle replay](oracle-export-reference-replay.md) to obtain independent
+counts from that exact saved dataset. Matching counts alone still do not prove
+that the complete BicDB target values equal the export.
+
 The output is saved after bounded batches and on ordinary failure. This command
 does not resume a partial count inventory; rerunning starts a new read-only
 inventory against the same completed migration baseline. It refuses to use the

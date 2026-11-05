@@ -202,6 +202,9 @@ impl AdvisoryLockManager {
                 return Err(SqlError::ConstraintViolation {
                     sqlstate: "40P01",
                     message: "deadlock detected while waiting for advisory lock".to_string(),
+                    schema: None,
+                    oracle_code: None,
+                    unique_origin: None,
                     table: None,
                     column: None,
                     constraint: None,

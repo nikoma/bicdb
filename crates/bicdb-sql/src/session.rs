@@ -2928,7 +2928,13 @@ impl<'db> SqlSession<'db> {
         self.independent_execution_observed = effects.independent_execution();
         self.latest_independent_sequence = effects.latest_sequence();
         self.observe_independent_commit()?;
-        result
+        match result {
+            Ok(result) => Ok(result),
+            Err(error) => Err(oracle::errors::profile_constraint_error(
+                self.db_ref(),
+                error,
+            )?),
+        }
     }
 
     /// Whether this statement crossed an independent durable commit boundary.
@@ -3759,9 +3765,31 @@ impl<'db> SqlSession<'db> {
         Ok(existed)
     }
 
-    pub(crate) fn create_session_index(&mut self, definition: IndexDefinition) -> Result<()> {
+    pub(crate) fn create_session_index(&mut self, mut definition: IndexDefinition) -> Result<()> {
+        let logical_name = catalog_display_name(&definition.name);
+        let schema = load_schema(self.db_ref(), &definition.collection)?;
+        if let Some(schema) = &schema {
+            definition.name = sql_index_storage_name(&schema.schema_name, &definition.name);
+        }
         let name = definition.name.clone();
-        self.db_mut()?.create_index(definition)?;
+        if let Err(error) = self.db_mut()?.create_index(definition) {
+            if matches!(error, BicDbError::UniqueIndexBuildConflict { .. }) {
+                if let Some(schema) = &schema {
+                    let mut error = unique_violation(schema, &logical_name);
+                    if let SqlError::ConstraintViolation {
+                        unique_origin,
+                        message,
+                        ..
+                    } = &mut error
+                    {
+                        *unique_origin = Some(UniqueViolationOrigin::IndexBuild);
+                        *message = format!("could not create unique index \"{logical_name}\"");
+                    }
+                    return Err(error);
+                }
+            }
+            return Err(error.into());
+        }
         sql_index_definitions_cache_clear();
         if self.tx.is_some() {
             self.ddl_undo.push(DdlUndo::DropIndex { name });
@@ -3769,22 +3797,35 @@ impl<'db> SqlSession<'db> {
         Ok(())
     }
 
-    pub(crate) fn drop_session_index(&mut self, name: &str) -> Result<bool> {
-        let internal_names = list_schemas(self.db_ref())?
-            .into_iter()
-            .flat_map(|schema| schema.indexes)
-            .find(|index| index.name.eq_ignore_ascii_case(name))
-            .map(|index| index.internal_index_names)
-            .unwrap_or_default();
+    pub(crate) fn drop_session_index(&mut self, name: &str, table: Option<&str>) -> Result<bool> {
+        let mut internal_names = Vec::new();
+        for schema in list_schemas(self.db_ref())? {
+            if table != Some(schema.name.as_str()) {
+                continue;
+            }
+            // Includes implicit constraint indexes, which have no IndexSchema.
+            internal_names.push(sql_index_storage_name(&schema.schema_name, name));
+            for index in &schema.indexes {
+                if index.name.eq_ignore_ascii_case(name) {
+                    internal_names.extend(
+                        index
+                            .internal_index_names
+                            .iter()
+                            .map(|name| sql_index_storage_name(&schema.schema_name, name)),
+                    );
+                }
+            }
+        }
         let executable_definitions = self
             .db_ref()
             .index_definitions()
             .into_iter()
             .filter(|definition| {
-                definition.name.eq_ignore_ascii_case(name)
-                    || internal_names
-                        .iter()
-                        .any(|internal| internal.eq_ignore_ascii_case(&definition.name))
+                table.is_none_or(|table| definition.collection == table)
+                    && (definition.name.eq_ignore_ascii_case(name)
+                        || internal_names
+                            .iter()
+                            .any(|internal| internal.eq_ignore_ascii_case(&definition.name)))
             })
             .collect::<Vec<_>>();
         let mut executable_existed = false;
@@ -3805,38 +3846,59 @@ impl<'db> SqlSession<'db> {
                 self.ddl_undo.push(DdlUndo::RestoreIndex { definition });
             }
         }
-        let metadata_existed = self.remove_session_index_from_schemas(name)?;
+        let metadata_existed = self.remove_session_index_from_schemas(name, table)?;
         Ok(executable_existed || metadata_existed)
     }
 
-    pub(crate) fn rename_session_index(&mut self, old_name: &str, new_name: &str) -> Result<bool> {
-        let executable_definition = self
-            .db_ref()
-            .index_definitions()
-            .into_iter()
-            .find(|definition| definition.name.eq_ignore_ascii_case(old_name));
+    pub(crate) fn rename_session_index(
+        &mut self,
+        old_name: &str,
+        new_name: &str,
+        table: &str,
+    ) -> Result<bool> {
+        let schema = load_schema(self.db_ref(), table)?
+            .ok_or_else(|| SqlError::InvalidCollection(table.into()))?;
+        let old_storage = sql_index_storage_name(&schema.schema_name, old_name);
+        let new_storage = sql_index_storage_name(&schema.schema_name, new_name);
+        let executable_definition =
+            self.db_ref()
+                .index_definitions()
+                .into_iter()
+                .find(|definition| {
+                    definition.collection == table
+                        && definition.name.eq_ignore_ascii_case(&old_storage)
+                });
         let Some(definition) = executable_definition else {
             return Ok(false);
         };
-        if definition.name.eq_ignore_ascii_case(new_name) {
+        if definition.name.eq_ignore_ascii_case(&new_storage) {
             return Ok(true);
         }
-        let renamed = self.db_mut()?.rename_index(&definition.name, new_name)?;
+        let renamed = self
+            .db_mut()?
+            .rename_index(&definition.name, &new_storage)?;
         if renamed {
             sql_index_definitions_cache_clear();
         }
         if self.tx.is_some() && renamed {
             self.ddl_undo.push(DdlUndo::RenameIndex {
                 old_name: definition.name,
-                new_name: new_name.to_string(),
+                new_name: new_storage,
             });
         }
         Ok(renamed)
     }
 
-    pub(crate) fn remove_session_index_from_schemas(&mut self, index_name: &str) -> Result<bool> {
+    pub(crate) fn remove_session_index_from_schemas(
+        &mut self,
+        index_name: &str,
+        table: Option<&str>,
+    ) -> Result<bool> {
         let mut removed = false;
         for mut schema in list_schemas(self.db_ref())? {
+            if table.is_some_and(|table| table != schema.name) {
+                continue;
+            }
             let before = schema.indexes.len();
             schema.indexes.retain(|index| index.name != index_name);
             if schema.indexes.len() != before {
@@ -4567,10 +4629,15 @@ impl<'db> SqlSession<'db> {
     /// rather than as an authorization decision.
     pub(crate) fn table_owning_index(&self, index: &str) -> Result<Option<String>> {
         if let Some(schema) = list_schemas(self.db_ref())?.into_iter().find(|schema| {
-            schema
-                .indexes
-                .iter()
-                .any(|candidate| candidate.name.eq_ignore_ascii_case(index))
+            schema.primary_key_constraint_name() == index
+                || schema
+                    .constraints
+                    .iter()
+                    .any(|constraint| constraint_name(constraint) == index)
+                || schema
+                    .indexes
+                    .iter()
+                    .any(|candidate| candidate.name.eq_ignore_ascii_case(index))
         }) {
             return Ok(Some(schema.name));
         }

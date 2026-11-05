@@ -1089,6 +1089,25 @@ pub(crate) fn validate_unique_constraint_index_compatibility(
     Ok(())
 }
 
+/// SQL identifiers are not filesystem identifiers. Keep existing safe storage
+/// names stable; encode other names using their namespace and complete spelling.
+pub(crate) fn sql_index_storage_name(namespace: &str, name: &str) -> String {
+    if !name.is_empty()
+        && name.len() <= 255
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    {
+        return name.to_string();
+    }
+    use sha2::Digest;
+    let identity = serde_json::to_vec(&(namespace, name)).expect("index identity is serializable");
+    format!(
+        "__bicdb_sql_index_{}",
+        hex::encode(sha2::Sha256::digest(identity))
+    )
+}
+
 pub(crate) fn unique_constraint_index_definitions_for_schema(
     schema: &TableSchema,
 ) -> Vec<IndexDefinition> {
@@ -1109,7 +1128,7 @@ pub(crate) fn unique_constraint_index_definitions_for_schema(
                 .index_options(schema, columns);
             Some(IndexDefinition {
                 nulls_not_distinct,
-                name: name.clone(),
+                name: sql_index_storage_name(&schema.schema_name, name),
                 collection: schema.name.clone(),
                 fields: primary_key_index_fields_for_columns(columns),
                 unique: true,
@@ -1189,7 +1208,7 @@ pub(crate) fn primary_key_index_definition_for_schema(
     }
     Some(IndexDefinition {
         nulls_not_distinct: false,
-        name: schema.primary_key_constraint_name(),
+        name: sql_index_storage_name(&schema.schema_name, &schema.primary_key_constraint_name()),
         collection: schema.name.clone(),
         fields: primary_key_index_fields_for_columns(&columns),
         unique: true,
@@ -2888,7 +2907,10 @@ pub(crate) fn grant_targets(
                     }
                     return Some(Err(SqlError::InvalidCollection(name)));
                 }
-                Some(Ok((PrivilegeObjectType::Table, name)))
+                Some(Ok((
+                    PrivilegeObjectType::Table,
+                    resolve_session_relation_name_if_exists(db, &name),
+                )))
             })
             .collect(),
         GrantObjects::AllTablesInSchema { schemas } => {
@@ -3021,9 +3043,15 @@ pub(crate) fn resolve_relation_name_memoized(db: &BicDb, name: &str) -> Option<S
     if let Some(resolved) = hit {
         return resolved;
     }
-    let resolved = catalog_table_names(db)
-        .into_iter()
-        .find(|table| table == name);
+    let names = catalog_table_names(db);
+    let resolved = names
+        .iter()
+        .find(|table| table.as_str() == name)
+        .cloned()
+        .or_else(|| {
+            let legacy = legacy_public_relation_name(name)?;
+            names.iter().find(|table| **table == legacy).cloned()
+        });
     RELATION_NAME_MEMO.with(|memo| {
         let mut memo = memo.borrow_mut();
         if memo.len() >= RELATION_NAME_MEMO_CAP {
@@ -3548,11 +3576,12 @@ fn role_has_table_privilege_uncached(
     privilege: &str,
 ) -> Result<bool> {
     let role = normalize_role_name(role);
-    let table = if relation_exists(db, table) {
-        table.to_string()
+    let table = if let Some(resolved) = resolve_relation_name_memoized(db, table) {
+        resolved
     } else {
         let parts = sql_identifier_parts(table)?;
-        relation_name_from_parts(&parts)?
+        let name = relation_name_from_parts(&parts)?;
+        resolve_session_relation_name_if_exists(db, &name)
     };
     // Native metadata has no SQL owner. Never let the legacy owner fallback
     // authorize a mutation of hidden or nonexistent collections.
@@ -4188,7 +4217,10 @@ pub(crate) fn unqualified_relation(name: &str) -> String {
 pub(crate) fn load_view(db: &BicDb, view: &str) -> Result<Option<ViewSchema>> {
     match db.get(VIEW_COLLECTION, view) {
         Ok(Some(record)) => Ok(Some(serde_json::from_value(record.metadata.clone())?)),
-        Ok(None) => Ok(None),
+        Ok(None) => match legacy_public_relation_name(view) {
+            Some(legacy) => load_view(db, &legacy),
+            None => Ok(None),
+        },
         Err(BicDbError::CollectionNotFound(_)) => Ok(None),
         Err(error) => Err(error.into()),
     }
@@ -4220,6 +4252,8 @@ pub(crate) fn save_view(db: &mut BicDb, view: &ViewSchema) -> Result<()> {
 }
 
 pub(crate) fn delete_view(db: &mut BicDb, view: &str) -> Result<bool> {
+    let existing = load_view(db, view)?.map(|view| view.name);
+    let view = existing.as_deref().unwrap_or(view);
     match db.delete(VIEW_COLLECTION, view) {
         Ok(existed) => Ok(existed),
         Err(BicDbError::CollectionNotFound(_)) => Ok(false),

@@ -1843,6 +1843,13 @@ fn sql_rows_memory_estimate<R: SqlRowMemoryEstimate>(rows: &[R]) -> usize {
     rows.iter().map(SqlRowMemoryEstimate::memory_estimate).sum()
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UniqueViolationOrigin {
+    Write,
+    ConstraintValidation { primary_key: bool },
+    IndexBuild,
+}
+
 #[derive(Debug, Error)]
 pub enum SqlError {
     #[error(transparent)]
@@ -1900,9 +1907,12 @@ pub enum SqlError {
     ConstraintViolation {
         sqlstate: &'static str,
         message: String,
+        schema: Option<String>,
         table: Option<String>,
         column: Option<String>,
         constraint: Option<String>,
+        oracle_code: Option<i32>,
+        unique_origin: Option<UniqueViolationOrigin>,
     },
 
     #[error("savepoint \"{name}\" does not exist")]
@@ -2055,6 +2065,9 @@ impl SqlError {
         Self::ConstraintViolation {
             sqlstate: "42710",
             message: format!("constraint \"{constraint}\" for relation \"{table}\" already exists"),
+            schema: None,
+            oracle_code: None,
+            unique_origin: None,
             table: Some(table.to_string()),
             column: None,
             constraint: Some(constraint.to_string()),
@@ -2118,12 +2131,22 @@ impl SqlError {
                 ..
             } => vec![SqlErrorField::DataType(data_type.clone())],
             Self::ConstraintViolation {
+                schema,
                 table,
                 column,
                 constraint,
+                oracle_code,
                 ..
             } => {
                 let mut fields = Vec::new();
+                if oracle_code.is_some() {
+                    fields.push(SqlErrorField::Detail(oracle::errors::transport_detail(
+                        self,
+                    )));
+                }
+                if let Some(schema) = schema {
+                    fields.push(SqlErrorField::Schema(schema.clone()));
+                }
                 if let Some(table) = table {
                     fields.push(SqlErrorField::Table(table.clone()));
                 }
@@ -2166,6 +2189,7 @@ fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::QueryMemoryLimit(_) => "53200",
         BicDbError::CollectionNotFound(_) => "42P01",
         BicDbError::CollectionAlreadyExists(_) => "42P07",
+        BicDbError::UniqueIndexBuildConflict { .. } => "23505",
         BicDbError::InvalidCollectionName(_) => "42602",
         BicDbError::TransactionConflict(_) => "40001",
         BicDbError::TransactionDeadlock(_) => "40P01",

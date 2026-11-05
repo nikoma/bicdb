@@ -3128,6 +3128,9 @@ pub(crate) fn finish_json_object_agg(
             return Err(SqlError::ConstraintViolation {
                 sqlstate: "22030",
                 message: format!("duplicate JSON object key value: \"{key}\""),
+                schema: None,
+                oracle_code: None,
+                unique_origin: None,
                 table: None,
                 column: None,
                 constraint: None,

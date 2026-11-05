@@ -3038,6 +3038,9 @@ pub(crate) fn json_agg_function_parts(
             message:
                 "in an aggregate with DISTINCT, ORDER BY expressions must appear in argument list"
                     .to_string(),
+            schema: None,
+            oracle_code: None,
+            unique_origin: None,
             table: None,
             column: None,
             constraint: None,
@@ -3068,6 +3071,9 @@ pub(crate) fn json_object_agg_function_parts(
             message:
                 "in an aggregate with DISTINCT, ORDER BY expressions must appear in argument list"
                     .to_string(),
+            schema: None,
+            oracle_code: None,
+            unique_origin: None,
             table: None,
             column: None,
             constraint: None,
@@ -3098,6 +3104,9 @@ pub(crate) fn string_agg_function_parts(
             message:
                 "in an aggregate with DISTINCT, ORDER BY expressions must appear in argument list"
                     .to_string(),
+            schema: None,
+            oracle_code: None,
+            unique_origin: None,
             table: None,
             column: None,
             constraint: None,

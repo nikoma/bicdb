@@ -1,0 +1,240 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "binary_sha256": "86d9fdbc8adc88242eefb892a4901b0e33140c97c23a07f83fcddd05b7db5180",
+  "fixture_sha256": "317b711f327ee56aa88b8535b4cb91e91edc86361bd171af84974a0b9e2a0bf1",
+  "profiles": {
+    "oracle": {
+      "reference_version": "23.26.3.0.0",
+      "total": 15,
+      "matched": 15,
+      "source_qualified": true,
+      "success": true,
+      "cases": [
+        {
+          "id": "plain_primary_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "plain_unique_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "plain_index_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "plain_primary_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "plain_unique_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "plain_index_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_primary_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_unique_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_index_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_primary_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_unique_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_index_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "ddl_primary_validation",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "ddl_unique_validation",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "ddl_index_build",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        }
+      ],
+      "target_setup_errors": 0,
+      "cleanup_diagnostic_count": 0
+    },
+    "postgres": {
+      "reference_version": 180004,
+      "total": 15,
+      "matched": 15,
+      "source_qualified": true,
+      "success": true,
+      "cases": [
+        {
+          "id": "plain_primary_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "plain_unique_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "plain_index_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "plain_primary_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "plain_unique_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "plain_index_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_primary_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_unique_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_index_insert",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_primary_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_unique_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "quoted_index_update",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "ddl_primary_validation",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "ddl_unique_validation",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        },
+        {
+          "id": "ddl_index_build",
+          "source_qualified": true,
+          "matched": true,
+          "target_identity_qualified": true,
+          "rollback_rows_unchanged": true
+        }
+      ],
+      "target_setup_errors": 0,
+      "cleanup_diagnostic_count": 0
+    }
+  }
+}

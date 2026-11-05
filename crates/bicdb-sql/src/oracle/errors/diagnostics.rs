@@ -243,6 +243,9 @@ pub(crate) fn prepare_diagnostics(
 }
 
 fn oracle_code(error: &SqlError) -> Result<i32> {
+    if let Some((code, _)) = unique_constraint_diagnostic(error) {
+        return Ok(code);
+    }
     match error {
         SqlError::OracleError { code, .. } => Ok(*code),
         SqlError::Rethrown(inner) | SqlError::OracleContext { inner, .. } => oracle_code(inner),
@@ -259,6 +262,9 @@ fn oracle_code(error: &SqlError) -> Result<i32> {
 }
 
 fn oracle_message(error: &SqlError) -> Result<String> {
+    if let Some((_, text)) = unique_constraint_diagnostic(error) {
+        return Ok(truncate_bytes(&text, 512).to_string());
+    }
     let text = match error {
         SqlError::OracleError {
             code,

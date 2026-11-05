@@ -591,3 +591,17 @@ as text; the general scalar type fix resolves them. Compiler 26 and metadata for
 5 remain unchanged, with 24 new/prior/new reader checks across both profiles.
 Full view values/type modifiers, remaining application workflows and the wider
 compatibility programme remain open.
+
+## Constraint identity and logical names checkpoint
+
+The [constraint diagnostic qualification](evidence/oracle-constraint-diagnostics-2026-11-04/README.md)
+carries resolved schema/table/constraint identity through write failures and
+distinguishes row writes, primary-key validation, unique-constraint validation
+and unique-index builds. Selected Oracle preview diagnostics preserve SQLSTATE
+23505 over PostgreSQL transport; default PostgreSQL messages remain unchanged.
+Quoted public table/index names use safe storage identities, and upgrade controls
+preserve old public view OIDs and positive/negative grants. Independent Oracle
+and PostgreSQL references each pass 15 cases. The selected original application
+foundation advances to 168/170 tests; LOB block execution, the savepoint test
+assertion and broader full-application acceptance remain open. This checkpoint
+does not complete any broader Oracle conformance or production qualification.

@@ -43,11 +43,103 @@ pub(crate) fn database_error(code: i32, state: &'static str, text: &str) -> SqlE
     error(code, state, text, None)
 }
 
+/// A constraint's owning namespace comes from its resolved table, never the
+/// current user/search path or a name parsed out of a rendered SQL statement.
+pub(crate) fn unique_constraint_diagnostic(error: &SqlError) -> Option<(i32, String)> {
+    match error {
+        SqlError::ConstraintViolation {
+            sqlstate: "23505",
+            schema: Some(schema),
+            constraint: Some(constraint),
+            unique_origin,
+            ..
+        } => Some(
+            match unique_origin.unwrap_or(UniqueViolationOrigin::Write) {
+                UniqueViolationOrigin::Write => (
+                    -1,
+                    format!("ORA-00001: unique constraint ({schema}.{constraint}) violated"),
+                ),
+                UniqueViolationOrigin::ConstraintValidation { primary_key: true } => (
+                    -2437,
+                    format!(
+                        "ORA-02437: cannot validate ({schema}.{constraint}) - primary key violated"
+                    ),
+                ),
+                UniqueViolationOrigin::ConstraintValidation { primary_key: false } => (
+                    -2299,
+                    format!(
+                        "ORA-02299: cannot validate ({schema}.{constraint}) - duplicate keys found"
+                    ),
+                ),
+                UniqueViolationOrigin::IndexBuild => (
+                    -1452,
+                    "ORA-01452: cannot CREATE UNIQUE INDEX; duplicate keys found".into(),
+                ),
+            },
+        ),
+        SqlError::Rethrown(inner) | SqlError::OracleContext { inner, .. } => {
+            unique_constraint_diagnostic(inner)
+        }
+        _ => None,
+    }
+}
+
+fn profiled_unique_error(error: &SqlError) -> Option<SqlError> {
+    match error {
+        SqlError::ConstraintViolation {
+            sqlstate,
+            schema,
+            table,
+            column,
+            constraint,
+            unique_origin,
+            ..
+        } => {
+            let (code, message) = unique_constraint_diagnostic(error)?;
+            Some(SqlError::ConstraintViolation {
+                sqlstate,
+                message,
+                schema: schema.clone(),
+                table: table.clone(),
+                column: column.clone(),
+                constraint: constraint.clone(),
+                oracle_code: Some(code),
+                unique_origin: *unique_origin,
+            })
+        }
+        SqlError::Rethrown(inner) => {
+            Some(SqlError::Rethrown(Arc::new(profiled_unique_error(inner)?)))
+        }
+        SqlError::OracleContext { inner, valid } => Some(SqlError::OracleContext {
+            inner: Arc::new(profiled_unique_error(inner)?),
+            valid: Arc::clone(valid),
+        }),
+        _ => None,
+    }
+}
+
+pub(crate) fn profile_constraint_error(db: &BicDb, error: SqlError) -> Result<SqlError> {
+    if unique_constraint_diagnostic(&error).is_some() && preview_routine_language_enabled(db)? {
+        if let Some(mapped) = profiled_unique_error(&error) {
+            return Ok(mapped);
+        }
+    }
+    Ok(error)
+}
+
 pub(crate) fn transport_detail(error: &SqlError) -> String {
     let mut stack = Vec::new();
     let mut current = Some(error);
     while let Some(error) = current {
         match error {
+            SqlError::ConstraintViolation {
+                oracle_code: Some(code),
+                message,
+                ..
+            } => {
+                stack.push(serde_json::json!({"code":code,"message":message}));
+                break;
+            }
             SqlError::OracleError {
                 code,
                 message,

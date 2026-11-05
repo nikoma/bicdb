@@ -712,6 +712,9 @@ fn is_json_predicate(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
                         _ => "unknown",
                     }
                 ),
+                schema: None,
+                oracle_code: None,
+                unique_origin: None,
                 table: None,
                 column: None,
                 constraint: None,
@@ -2044,6 +2047,9 @@ fn data_error(sqlstate: &'static str, message: impl Into<String>) -> SqlError {
     SqlError::ConstraintViolation {
         sqlstate,
         message: message.into(),
+        schema: None,
+        oracle_code: None,
+        unique_origin: None,
         table: None,
         column: None,
         constraint: None,

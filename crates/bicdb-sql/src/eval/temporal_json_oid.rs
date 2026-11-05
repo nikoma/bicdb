@@ -2107,6 +2107,9 @@ pub(crate) fn jsonb_numeric_range_error() -> SqlError {
     SqlError::ConstraintViolation {
         sqlstate: "22003",
         message: "value overflows numeric format".to_string(),
+        schema: None,
+        oracle_code: None,
+        unique_origin: None,
         table: None,
         column: None,
         constraint: None,
@@ -2477,6 +2480,9 @@ pub(crate) fn reject_invalid_json_unicode(value: &SqlValue) -> Result<()> {
             sqlstate: "22P02",
             message: "invalid input syntax for type json: unsupported Unicode escape sequence"
                 .to_string(),
+            schema: None,
+            oracle_code: None,
+            unique_origin: None,
             table: None,
             column: None,
             constraint: None,
@@ -2637,6 +2643,9 @@ pub(crate) fn delete_json_path(
         return Err(SqlError::ConstraintViolation {
             sqlstate: "22004",
             message: format!("path element at position {} is null", level + 1),
+            schema: None,
+            oracle_code: None,
+            unique_origin: None,
             table: None,
             column: None,
             constraint: None,

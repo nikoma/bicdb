@@ -2599,7 +2599,7 @@ impl<'db> SqlEngine<'db> {
                 let alias_name = alias
                     .as_ref()
                     .map(|alias| alias.name.value.clone())
-                    .unwrap_or_else(|| short.clone());
+                    .unwrap_or_else(|| relation_default_alias(name));
                 let alias_cols = alias
                     .as_ref()
                     .map(|alias| alias.columns.as_slice())

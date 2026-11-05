@@ -2140,6 +2140,9 @@ where
             sqlstate: "42804",
             message: "cannot subscript type json because it does not support subscripting"
                 .to_string(),
+            schema: None,
+            oracle_code: None,
+            unique_origin: None,
             table: None,
             column: None,
             constraint: None,

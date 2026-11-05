@@ -213,7 +213,7 @@ impl SqlSession<'_> {
             validate_record_local_constraints(table, schema, &after, Some(&self.sql_engine()))?;
             let new_key = record_column_values(&after, schema, &keys);
             if !seen.insert(typed_column_key_label(schema, &keys, &new_key)?) {
-                return Err(unique_violation(&primary.name));
+                return Err(unique_violation(schema, &primary.name));
             }
             if !statement_uniqueness {
                 // PostgreSQL immediate checks observe earlier rows already

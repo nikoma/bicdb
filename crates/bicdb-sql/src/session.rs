@@ -1030,6 +1030,9 @@ pub struct SqlSession<'db> {
     /// Such a session never begins or owns a transaction and refuses
     /// data-modifying statements.
     pub(crate) row_routine_call: bool,
+    /// A function invoked by SQL keeps Oracle's SQL-call restrictions through
+    /// nested procedural calls. Autonomous children establish a new context.
+    pub(crate) in_oracle_sql_function: bool,
     /// PL/SQL expression calls have different character-result boundaries
     /// from calls made by SQL, including SQL inside a routine.
     pub(crate) in_routine_expression: bool,
@@ -2319,6 +2322,7 @@ impl<'db> SqlSession<'db> {
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             tx: None,
             row_routine_call: false,
+            in_oracle_sql_function: false,
             in_routine_expression: false,
             oracle_autonomous: false,
             oracle_autonomous_active: false,

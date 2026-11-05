@@ -34,6 +34,9 @@ impl<'db> SqlSession<'db> {
                 )));
             }
         }
+        let _lobs = oracle::lobs::Scope::new(
+            oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 29),
+        );
         let args = raw_parenthesized_args(rest);
         let arg_types = raw_routine_argument_type_schemas(&args)?;
         let return_type_schema = raw_routine_type_schema(&return_type)?;
@@ -153,8 +156,11 @@ impl<'db> SqlSession<'db> {
                 "CREATE OR ALTER PROCEDURE is not supported".to_string(),
             ));
         }
-        let arg_types = procedure_argument_type_schemas(params)?;
         let language = routine_language(language, "void")?;
+        let _lobs = oracle::lobs::Scope::new(
+            oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 29),
+        );
+        let arg_types = procedure_argument_type_schemas(params)?;
         validate_routine_pseudo_types(&arg_types, &[], arg_types.len(), None, &language)?;
         let (procedure_schema, procedure_name) = routine_schema_and_name(&object_name(name)?);
         let routine = RoutineSchema {
@@ -204,6 +210,9 @@ impl<'db> SqlSession<'db> {
                 )));
             }
         }
+        let _lobs = oracle::lobs::Scope::new(
+            oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 29),
+        );
         let args = raw_parenthesized_args(rest);
         let arg_types = raw_routine_argument_type_schemas(&args)?;
         let (input_types, output_types) = raw_routine_argument_directions(&args, &arg_types);

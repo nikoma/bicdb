@@ -2262,6 +2262,9 @@ impl<'db> SqlSession<'db> {
                 "DO language {language} is not supported"
             )));
         }
+        let _lobs = oracle::lobs::Scope::new(
+            oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 29),
+        );
         let _number_formats = oracle::number_formats::Scope::new(
             oracle::preview_routine_language_version(&language)
                 .is_some_and(|version| version >= 24),
@@ -2307,6 +2310,9 @@ impl<'db> SqlSession<'db> {
             if oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 25) {
                 oracle::output::lower(&mut statements, &mut exception_handlers)?;
             }
+            if oracle::lobs::enabled() {
+                oracle::lobs::lower(&mut statements, &mut exception_handlers)?;
+            }
             if oracle::preview_routine_language_version(&language).is_some_and(|v| v >= 14) {
                 oracle::errors::lower(&mut statements, &mut exception_handlers)?;
                 oracle_error_diagnostics = oracle::errors::prepare_diagnostics(
@@ -2332,6 +2338,7 @@ impl<'db> SqlSession<'db> {
             );
             oracle::routine_arithmetic::lower(
                 self.db_ref(),
+                false,
                 oracle::collections::routine_constructors_enabled().then_some(schema.as_str()),
                 oracle::preview_routine_language_version(&language)
                     .is_some_and(|version| version >= 23),
@@ -3062,6 +3069,17 @@ impl<'db> SqlSession<'db> {
         // site). `relation_name` would hash a non-public schema into the
         // key, making this function invisible to every one of those — the
         // restored-trigger "function does not exist" failure.
+        let _lobs = oracle::lobs::Scope::new(
+            oracle::preview_routine_language_version(
+                create_function
+                    .language
+                    .as_ref()
+                    .map(ident_value)
+                    .as_deref()
+                    .unwrap_or("sql"),
+            )
+            .is_some_and(|v| v >= 29),
+        );
         let (function_schema, name) = routine_schema_and_name(&object_name(&create_function.name)?);
         let (return_type, returns_set) = create_function
             .return_type

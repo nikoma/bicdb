@@ -658,3 +658,15 @@ identities. The combined source passes 209 selected Oracle unit regressions,
 worker-stack and routine-privilege controls. Persistent and temporary locator
 semantics, BLOB expression/view provenance, complete LOB APIs and full application
 qualification remain open. The accepted running application was not replaced.
+
+
+## Routine-local BLOB checkpoint
+
+The [routine-local BLOB checkpoint](evidence/oracle-temporary-blobs-2026-11-05/README.md)
+adds compiler contract 29 for logical BLOB declarations and selected temporary
+DBMS_LOB operations. Prior compiler identities and PostgreSQL binary value
+semantics remain independent. Its reference fixture covers 18 observations,
+including copy-on-write assignment and SQL/PLSQL error-context differences.
+Persistent row-backed locators, the original application's full LOB test,
+complete application acceptance and the remaining programme workstreams stay
+open. This checkpoint does not replace the accepted running application.

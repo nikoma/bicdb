@@ -3464,6 +3464,7 @@ pub(crate) fn push_aggregate_value(
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum SqlValueDistinctKey {
+    OracleLob(Vec<u8>),
     Null,
     Bool(bool),
     Int(i64),
@@ -3477,6 +3478,7 @@ pub(crate) enum SqlValueDistinctKey {
 
 pub(crate) fn sql_value_distinct_key(value: &SqlValue) -> SqlValueDistinctKey {
     match value {
+        SqlValue::OracleLob(value) => SqlValueDistinctKey::OracleLob(value.bytes().to_vec()),
         SqlValue::Null => SqlValueDistinctKey::Null,
         SqlValue::Bool(value) => SqlValueDistinctKey::Bool(*value),
         SqlValue::Int(value) => SqlValueDistinctKey::Int(*value),

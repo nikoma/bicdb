@@ -143,6 +143,7 @@ pub fn value_type_tag(v: &SqlValue) -> u8 {
         SqlValue::Json(_) => 5,
         SqlValue::Geometry(_) => 6,
         SqlValue::Composite(_) => 8,
+        SqlValue::OracleLob(_) => 9,
     }
 }
 

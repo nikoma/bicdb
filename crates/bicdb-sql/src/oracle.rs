@@ -24,6 +24,7 @@ mod function_attributes;
 pub(crate) mod hierarchy;
 pub mod host_binds;
 pub(crate) mod lob_columns;
+pub mod lobs;
 pub(crate) mod lock_waits;
 mod namespaces;
 pub(crate) mod national;
@@ -220,7 +221,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V24: &str = "bicdb_oracle_preview_v24"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V25: &str = "bicdb_oracle_preview_v25";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V26: &str = "bicdb_oracle_preview_v26";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V27: &str = "bicdb_oracle_preview_v27";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v28";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V28: &str = "bicdb_oracle_preview_v28";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v29";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -248,7 +250,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V24_OID: i64 = 999_423;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V25_OID: i64 = 999_424;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V26_OID: i64 = 999_425;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V27_OID: i64 = 999_426;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_427;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V28_OID: i64 = 999_427;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_428;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -284,7 +287,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V25 => Some(25),
         PREVIEW_ROUTINE_LANGUAGE_V26 => Some(26),
         PREVIEW_ROUTINE_LANGUAGE_V27 => Some(27),
-        PREVIEW_ROUTINE_LANGUAGE => Some(28),
+        PREVIEW_ROUTINE_LANGUAGE_V28 => Some(28),
+        PREVIEW_ROUTINE_LANGUAGE => Some(29),
         _ => None,
     }
 }
@@ -1462,6 +1466,9 @@ fn canonical_tokens_with_routine_types(
                     "BOTH" | "LEADING" | "TRAILING" if preview && i >= 2
                         && source[i - 1] == Token::LParen && word(&source[i - 2], "TRIM")
                         && (i < 3 || source[i - 3] != Token::Period) => pieces.push(upper),
+                    "EMPTY_BLOB" if preview
+                        && (i == 0 || source[i - 1] != Token::Period)
+                        && source.get(i + 1) == Some(&Token::LParen) => pieces.push("bicdb_oracle_empty_blob".into()),
                     "CLOB" if preview => pieces.push("TEXT".into()),
                     "BLOB" if preview => pieces.push(if preserve_blob { "BLOB" } else { "BYTEA" }.into()),
                     "OCTET_LENGTH" if preview => pieces.push("octet_length".into()),
@@ -1574,7 +1581,7 @@ fn lower_block(
         source,
         preview,
         preview && (routine || preview_routine_language_enabled(db)?),
-        false,
+        preview,
         definition_namespace.as_deref(),
     )?;
     let (header, body) = if routine {

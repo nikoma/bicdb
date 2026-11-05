@@ -16,6 +16,7 @@ pub(crate) fn truncate_bytes(value: &str, limit: usize) -> &str {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Builtin {
     RaiseApplicationError,
+    LobAppend,
     Output(super::output::Operation),
 }
 

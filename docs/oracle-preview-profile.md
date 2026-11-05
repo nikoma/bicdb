@@ -1190,10 +1190,34 @@ if the last BLOB column is subsequently removed.
 
 Existing imported BYTEA columns are not automatically reclassified: migration
 must use the original source type inventory and an explicit type conversion.
-This column metadata is a prerequisite for persistent locator identities. It
-does not yet implement `EMPTY_BLOB()`, `DBMS_LOB.APPEND`, temporary LOBs or JDBC
-LOB locator APIs. Procedural BLOB declarations still use the earlier binary
-lowering until the versioned procedural locator implementation is qualified.
+This column metadata is a prerequisite for persistent locator identities.
+Persistent locator mutation and JDBC LOB locator APIs remain unimplemented.
+
+New routines and anonymous blocks use compiler contract 29 to retain logical
+BLOB declarations while transporting results as PostgreSQL `bytea`. Contract 28
+and its catalog OID retain their existing binary value semantics. `EMPTY_BLOB()`
+creates a non-NULL, zero-length value; it is distinct from SQL NULL and cannot
+be appended to as a standalone PL/SQL destination (`ORA-22275`). Typed
+`HEXTORAW` expressions can initialize, assign or return a temporary BLOB. The
+compiler chooses that conversion from expression types, never a text value's
+binary-looking prefix.
+
+Selected routine-local `DBMS_LOB` operations are supported: `APPEND`,
+`GETLENGTH` and `ISTEMPORARY`, including the `SYS` package qualifier. Temporary
+assignment copies on write, self-append reads its original source, and temporary
+writes survive transaction rollback, savepoint rollback and commit. Either NULL
+operand to APPEND reports `ORA-06502`. Read operations on a NULL BLOB return
+NULL. For a non-temporary destination inside a SQL-called function, the SQL
+write restriction reports `ORA-14553` after checking NULL arguments.
+
+The [temporary BLOB comparison](../examples/oracle/reference/temporary_blobs.py)
+uses nonce-named functions and removes them after observation. Its scope is
+routine-local values and the selected operations above. Existing stored BLOB
+payloads do not yet acquire locator identities when read. Persistent APPEND,
+LOB expression/view provenance, all implicit conversion paths, CLOBs, arrays,
+streaming, and the complete supplied-package/JDBC APIs remain separate work.
+In particular, these local operations do not complete the upstream application
+LOB test or full application qualification.
 
 
 ## Hexadecimal RAW conversion
@@ -1210,5 +1234,5 @@ PostgreSQL functions named `hextoraw` retain their independent behavior.
 The [reference comparison](../examples/oracle/reference/hex_to_raw.py) checks
 literal and bound text, NUMBER and RAW operands against Oracle. General RAW size
 limits, BLOB operands and all implicit conversion families remain separate
-qualification items. New stored routines use contract 28 for this conversion;
+qualification items. Contract 28 introduced this conversion; later contracts retain it, while
 contract 27 and its catalog OID remain available with their previous rules.

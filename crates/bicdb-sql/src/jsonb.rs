@@ -1869,6 +1869,7 @@ fn jsonb_compare_function(name: &str, args: &[SqlValue]) -> Result<SqlValue> {
 
 pub(crate) fn sql_value_to_json(value: &SqlValue) -> JsonValue {
     match value {
+        SqlValue::OracleLob(value) => JsonValue::String(value.to_cell()),
         SqlValue::Null => JsonValue::Null,
         SqlValue::Bool(value) => JsonValue::Bool(*value),
         SqlValue::Int(value) => JsonValue::Number(JsonNumber::from(*value)),

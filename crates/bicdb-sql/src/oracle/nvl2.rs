@@ -253,12 +253,12 @@ mod tests {
         );
         assert_eq!(
             preview_routine_language_version(PREVIEW_ROUTINE_LANGUAGE),
-            Some(28)
+            Some(29)
         );
         let languages = SqlSession::new(&mut db)
             .execute(
                 r#"SELECT "lanname","oid" FROM "pg_catalog"."pg_language"
-               WHERE "lanname" IN ('bicdb_oracle_preview_v26','bicdb_oracle_preview_v28')
+               WHERE "lanname" IN ('bicdb_oracle_preview_v26','bicdb_oracle_preview_v29')
                ORDER BY "oid""#,
             )
             .unwrap();

@@ -783,6 +783,9 @@ pub(crate) fn routine_return_type_schema(
 }
 
 pub(crate) fn routine_type_schema(data_type: &DataType) -> Result<RoutineTypeSchema> {
+    if let Some(schema) = oracle::lobs::routine_type(data_type)? {
+        return Ok(schema);
+    }
     if let Some(schema) = oracle::routine_characters::routine_type(data_type)? {
         return Ok(schema);
     }
@@ -5874,6 +5877,11 @@ pub(crate) fn limit_for_plan(query: &Query) -> Result<Option<usize>> {
 
 pub(crate) fn index_value_from_sql(value: SqlValue) -> Result<IndexValue> {
     Ok(match value {
+        SqlValue::OracleLob(_) => {
+            return Err(SqlError::Unsupported(
+                "LOB values require a scalar indexing expression".into(),
+            ))
+        }
         SqlValue::Null => IndexValue::Null,
         SqlValue::Bool(value) => IndexValue::Bool(value),
         SqlValue::Int(value) => IndexValue::Int(value),

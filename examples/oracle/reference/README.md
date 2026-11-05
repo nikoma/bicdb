@@ -722,3 +722,14 @@ continuation of the caller transaction, explicit commits inside a block and
 rollback of later uncommitted writes. Each run creates and removes its own
 nonce table. This compares protocol submission; JDBC statement splitting and
 LOB locators require separate qualification.
+
+
+### Routine-local BLOB values
+
+`temporary_blobs.py` compares 18 cases for BLOB initialization, assignment,
+return values, temporary aliasing and self-append, named APPEND arguments,
+GETLENGTH/ISTEMPORARY, NULLs and standalone empty destination errors. It creates
+nonce-named functions in dedicated reference/target schemas and drops them.
+Run with the same `BICDB_PG_DSN`, `--reference oracle`, `--oracle-config` and
+`--output` arguments as the other Oracle comparisons. Persistent row locators,
+LOB streaming and complete application qualification are outside this fixture.

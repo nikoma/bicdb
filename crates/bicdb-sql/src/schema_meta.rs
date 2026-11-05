@@ -439,6 +439,9 @@ pub(crate) fn cast_routine_return_value(
     value: SqlValue,
     routine: &RoutineSchema,
 ) -> Result<SqlValue> {
+    if oracle::lobs::returns_blob(routine)? {
+        return oracle::lobs::coerce(value);
+    }
     let return_type = routine.return_type.trim();
     if matches!(return_type, "" | "void" | "record" | "trigger") {
         return Ok(value);
@@ -4870,6 +4873,9 @@ pub(crate) fn coerce_routine_assignment(
     value: SqlValue,
     schema: &RoutineTypeSchema,
 ) -> Result<SqlValue> {
+    if oracle::lobs::is_modifier(schema.type_modifier.as_ref()) {
+        return oracle::lobs::coerce(value);
+    }
     if matches!(schema.pg_type.as_str(), "record" | "trigger" | "void") {
         return Ok(value);
     }

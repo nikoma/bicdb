@@ -773,6 +773,11 @@ fn read_bytes(reader: &mut impl Read, max_bytes: usize) -> Result<Option<Vec<u8>
 /// the caller treats that as "this query cannot spill" and falls back.
 fn encode_value(value: &SqlValue, out: &mut Vec<u8>) -> Result<()> {
     match value {
+        SqlValue::OracleLob(_) => {
+            return Err(SqlError::Unsupported(
+                "LOB locator rows require an in-memory sort".into(),
+            ))
+        }
         SqlValue::Null => out.push(0),
         SqlValue::Bool(value) => {
             out.push(1);

@@ -3189,6 +3189,9 @@ impl<'db> SqlSession<'db> {
             return Ok(Some(value));
         }
         let sql_boundary = !self.in_routine_expression;
+        let previous_sql_function = self.in_oracle_sql_function;
+        self.in_oracle_sql_function |= sql_boundary
+            && oracle::preview_routine_language_version(&routine.schema.language).is_some();
         let value = self.execute_with_routine_security(&routine.schema, |session| {
             if routine.schema.language.eq_ignore_ascii_case("sql") {
                 session.execute_sql_function_value(&routine.schema, &routine.ir, args)
@@ -3196,6 +3199,7 @@ impl<'db> SqlSession<'db> {
                 session.execute_plpgsql_function_value(&routine.schema, &routine.ir, args)
             }
         });
+        self.in_oracle_sql_function = previous_sql_function;
         // Oracle's SQL call boundary converts an unhandled NO_DATA_FOUND to a
         // null result. PL/SQL callers still receive it and may handle it.
         let value = match value {
@@ -4216,13 +4220,19 @@ impl<'db> SqlSession<'db> {
                 builtin: oracle::errors::Builtin::Output(op),
                 arguments,
             } => oracle::output::invoke(self, frame, *op, arguments),
+            RoutineStmt::OracleBuiltin {
+                builtin: oracle::errors::Builtin::LobAppend,
+                arguments,
+            } => oracle::lobs::append(self, frame, arguments),
             RoutineStmt::OracleBuiltin { builtin, arguments } => {
                 let values = arguments
                     .iter()
                     .map(|arg| self.eval_routine_expr(frame, arg))
                     .collect::<Result<Vec<_>>>()?;
                 match builtin {
-                    oracle::errors::Builtin::Output(_) => unreachable!("output handled above"),
+                    oracle::errors::Builtin::Output(_) | oracle::errors::Builtin::LobAppend => {
+                        unreachable!("supplied operation handled above")
+                    }
                     oracle::errors::Builtin::RaiseApplicationError => {
                         Err(oracle::errors::invoke(self, &values))
                     }

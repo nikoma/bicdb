@@ -46,6 +46,9 @@ pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
 }
 
 fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) -> Result<RoutineIR> {
+    let _lobs = oracle::lobs::Scope::new(
+        oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 29),
+    );
     let _number_formats = oracle::number_formats::Scope::new(
         oracle::preview_routine_language_version(&routine.language)
             .is_some_and(|version| version >= 24),
@@ -121,6 +124,9 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
     if oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 25) {
         oracle::output::lower(&mut statements, &mut exception_handlers)?;
     }
+    if oracle::lobs::enabled() {
+        oracle::lobs::lower(&mut statements, &mut exception_handlers)?;
+    }
     let oracle_error_diagnostics =
         if oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 14) {
             oracle::errors::lower(&mut statements, &mut exception_handlers)?;
@@ -172,6 +178,7 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
                     "typed Oracle routine compilation requires catalog context".into(),
                 )
             })?,
+            oracle::lobs::returns_blob(routine)?,
             oracle::collections::routine_constructors_enabled().then_some(routine.schema.as_str()),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 23),
@@ -829,6 +836,10 @@ pub(crate) fn parse_routine_param(arg: &str, index: usize) -> Result<RoutinePara
     let type_schema = details.map(|(schema, _)| schema).map(|mut schema| {
         // PostgreSQL routine argument signatures discard type modifiers.
         schema.type_modifier = match schema.type_modifier {
+            // This is logical provenance, not a PostgreSQL length/precision
+            // modifier. Discarding it would turn BLOB IN/OUT parameters back
+            // into ordinary bytea values during routine compilation.
+            Some(PgTypeModifier::OracleBlobV1) => Some(PgTypeModifier::OracleBlobV1),
             Some(PgTypeModifier::OracleNationalV1 { fixed, .. }) => {
                 Some(PgTypeModifier::OracleNationalV1 {
                     fixed,

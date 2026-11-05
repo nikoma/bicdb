@@ -5941,6 +5941,7 @@ fn raw_sql_json_matches(value: &Value, field_type: &FieldType, parameter: bool) 
 
 fn raw_sql_value_json(value: SqlValue) -> Result<Value> {
     Ok(match value {
+        value @ SqlValue::OracleLob(_) => serde_json::to_value(value)?,
         SqlValue::Null => Value::Null,
         SqlValue::Bool(value) => Value::Bool(value),
         SqlValue::Int(value) => Value::from(value),

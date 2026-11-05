@@ -22,6 +22,9 @@ pub(super) fn returns_date(routine: &RoutineSchema) -> Result<bool> {
 }
 
 pub(crate) fn prepare_physical_metadata(routine: &mut RoutineSchema) -> Result<()> {
+    let _lobs = oracle::lobs::Scope::new(
+        oracle::preview_routine_language_version(&routine.language).is_some_and(|v| v >= 29),
+    );
     let _national = national::Scope::new(
         preview_routine_language_version(&routine.language).is_some_and(|v| v >= 17),
     );
@@ -34,16 +37,29 @@ pub(crate) fn prepare_physical_metadata(routine: &mut RoutineSchema) -> Result<(
     for (param, physical) in params.iter().zip(&mut routine.arg_types) {
         if param.declared_date {
             *physical = raw_routine_type_schema("timestamp(0)")?;
-        } else if param
-            .type_schema
-            .as_ref()
-            .is_some_and(|schema| national::is_modifier(schema.type_modifier.as_ref()))
-        {
+        } else if param.type_schema.as_ref().is_some_and(|schema| {
+            national::is_modifier(schema.type_modifier.as_ref())
+                || lobs::is_modifier(schema.type_modifier.as_ref())
+        }) {
             *physical = RoutineTypeSchema {
-                pg_type: "varchar".into(),
+                pg_type: if param
+                    .type_schema
+                    .as_ref()
+                    .is_some_and(|schema| lobs::is_modifier(schema.type_modifier.as_ref()))
+                {
+                    "bytea"
+                } else {
+                    "varchar"
+                }
+                .into(),
                 type_modifier: None,
             };
         }
+    }
+    if lobs::returns_blob(routine)? {
+        routine.return_type = "bytea".into();
+        routine.return_type_modifier = None;
+        routine.return_type_declaration = Some("bytea".into());
     }
     if national::returns_national(routine)? {
         routine.return_type = "varchar".into();
@@ -109,6 +125,7 @@ pub(super) enum Kind {
     Number,
     Text,
     Raw,
+    Blob,
     NationalText,
     FixedNationalText,
     Interval,
@@ -136,7 +153,9 @@ fn pg_kind(kind: &str) -> Kind {
 }
 
 fn schema_kind(schema: &RoutineTypeSchema) -> Kind {
-    if let Some(PgTypeModifier::OracleNationalV1 { fixed, .. }) = &schema.type_modifier {
+    if lobs::is_modifier(schema.type_modifier.as_ref()) {
+        Kind::Blob
+    } else if let Some(PgTypeModifier::OracleNationalV1 { fixed, .. }) = &schema.type_modifier {
         if *fixed {
             Kind::FixedNationalText
         } else {
@@ -181,6 +200,7 @@ impl Kind {
 
 #[derive(Clone, Default)]
 struct Environment {
+    blob_return: bool,
     v4_semantics: bool,
     concatenation: bool,
     number_arithmetic: bool,
@@ -380,6 +400,11 @@ impl Resolve<'_> {
             Expr::Function(function) => {
                 let name = object_name_lowercase(&function.name).ok();
                 match name.as_deref() {
+                    Some("bicdb_oracle_empty_blob" | "bicdb_oracle_blob_from_raw")
+                        if lobs::enabled() =>
+                    {
+                        return Kind::Blob
+                    }
                     // SYS_GUID lowers to the existing random-byte intrinsic.
                     // Do not infer RAW from a text value's bytea-looking prefix.
                     Some(
@@ -387,6 +412,8 @@ impl Resolve<'_> {
                     ) => return Kind::Raw,
                     Some(
                         "bicdb_oracle_current_sqlcode"
+                        | "bicdb_oracle_blob_getlength"
+                        | "bicdb_oracle_blob_istemporary"
                         | "bicdb_oracle_national_length"
                         | "length"
                         | "lengthb"
@@ -508,6 +535,9 @@ impl Resolve<'_> {
                 }
                 if let Ok(name) = object_name(&function.name) {
                     if let Ok(Some(routine)) = load_routine(self.db, RoutineKind::Function, &name) {
+                        if lobs::enabled() && lobs::returns_blob(&routine).unwrap_or(false) {
+                            return Kind::Blob;
+                        }
                         if let Some(schema) = national::return_type(&routine).ok().flatten() {
                             return schema_kind(&schema);
                         }
@@ -1233,6 +1263,30 @@ impl sqlparser::ast::VisitorMut for Resolve<'_> {
         ControlFlow::Continue(())
     }
     fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<Box<SqlError>> {
+        if lobs::enabled() {
+            if let Expr::Function(function) = expr {
+                if let Some(operation) = lobs::package_operation(function) {
+                    if matches!(operation.as_str(), "GETLENGTH" | "ISTEMPORARY") {
+                        let lower = (|| -> Result<Expr> {
+                            let params = parse_routine_params(&["lob_loc bytea".into()])?;
+                            let inputs = procedure_actual_arguments(function, &params, false)?;
+                            let mut input = inputs[0]
+                                .cloned()
+                                .ok_or_else(|| unsupported("missing LOB scalar argument"))?;
+                            blob_input(self.db, self.env, &mut input)?;
+                            expression(&format!(
+                                "bicdb_oracle_blob_{}({input})",
+                                operation.to_ascii_lowercase()
+                            ))
+                        })();
+                        match lower {
+                            Ok(lowered) => *expr = lowered,
+                            Err(error) => return ControlFlow::Break(Box::new(error)),
+                        }
+                    }
+                }
+            }
+        }
         if self.env.number_formats && super::number_formats::input(expr).is_some() {
             let input = super::number_formats::input(expr).expect("checked input");
             let kind = match self.kind(input) {
@@ -1403,6 +1457,29 @@ fn prepare_cursor(
     Ok(record_types(db, &scope, query))
 }
 
+/// Select the conversion from compiler provenance, never from a runtime
+/// string's spelling. A PostgreSQL bytea-looking text is still character data.
+fn blob_input(db: &BicDb, env: &Environment, value: &mut Expr) -> Result<()> {
+    let resolve = Resolve {
+        db,
+        env,
+        queries: Vec::new(),
+        selects: Vec::new(),
+        sql_depth: 0,
+        statement_from: Vec::new(),
+    };
+    match resolve.kind(value) {
+        Kind::Blob | Kind::Null => Ok(()),
+        Kind::Raw => {
+            *value = expression(&format!("bicdb_oracle_blob_from_raw({value})"))?;
+            Ok(())
+        }
+        _ => Err(unsupported(
+            "BLOB assignment requires a qualified binary conversion",
+        )),
+    }
+}
+
 fn statements(
     db: &BicDb,
     env: &Environment,
@@ -1442,7 +1519,9 @@ fn statements(
                             } else if pg_type.as_deref() == Some("timestamp") {
                                 Kind::Timestamp(temporal_precision(type_modifier.as_ref()))
                             } else {
-                                if national::is_modifier(type_modifier.as_ref()) {
+                                if national::is_modifier(type_modifier.as_ref())
+                                    || lobs::is_modifier(type_modifier.as_ref())
+                                {
                                     schema_kind(&RoutineTypeSchema {
                                         pg_type: pg_type.clone().unwrap_or_default(),
                                         type_modifier: type_modifier.clone(),
@@ -1468,9 +1547,17 @@ fn statements(
                 for declaration in declarations {
                     match declaration {
                         RoutineDecl::Variable {
+                            name,
                             default_expr: Some(expr),
                             ..
-                        } => visit(db, &local_env, &mut expr.expr)?,
+                        } => {
+                            visit(db, &local_env, &mut expr.expr)?;
+                            if local_env.variables.get(&normalize_object_name(name))
+                                == Some(&Kind::Blob)
+                            {
+                                blob_input(db, &local_env, &mut expr.expr)?;
+                            }
+                        }
                         RoutineDecl::Cursor {
                             name,
                             params,
@@ -1492,6 +1579,11 @@ fn statements(
                     visit(db, env, &mut index.expr)?;
                 }
                 visit(db, env, &mut expr.expr)?;
+                if let RoutineAssignmentTarget::Variable(name) = target {
+                    if env.variables.get(&normalize_object_name(name)) == Some(&Kind::Blob) {
+                        blob_input(db, env, &mut expr.expr)?;
+                    }
+                }
             }
             RoutineStmt::If {
                 condition,
@@ -1606,10 +1698,35 @@ fn statements(
                     }
                 }
             }
-            RoutineStmt::Return(Some(expr)) | RoutineStmt::DynamicExecute(expr) => {
-                visit(db, env, &mut expr.expr)?
+            RoutineStmt::Return(Some(expr)) => {
+                visit(db, env, &mut expr.expr)?;
+                if env.blob_return {
+                    blob_input(db, env, &mut expr.expr)?;
+                }
+            }
+            RoutineStmt::DynamicExecute(expr) => {
+                visit(db, env, &mut expr.expr)?;
             }
             RoutineStmt::OracleBuiltin { builtin, arguments } => {
+                if matches!(builtin, super::errors::Builtin::LobAppend) {
+                    let Expr::Identifier(destination) = &arguments[0].expr else {
+                        return Err(unsupported(
+                            "LOB APPEND destination requires a declared BLOB variable",
+                        ));
+                    };
+                    if env
+                        .variables
+                        .get(&normalize_object_name(&ident_value(destination)))
+                        != Some(&Kind::Blob)
+                    {
+                        return Err(unsupported(
+                            "LOB APPEND destination requires a declared BLOB variable",
+                        ));
+                    }
+                    visit(db, env, &mut arguments[1].expr)?;
+                    blob_input(db, env, &mut arguments[1].expr)?;
+                    continue;
+                }
                 // Output destinations are lvalues, never converted input
                 // expressions. Other supplied operations have independent
                 // signatures rather than application-error's three arguments.
@@ -1678,6 +1795,7 @@ fn statements(
 
 pub(crate) fn lower(
     db: &BicDb,
+    blob_return: bool,
     collection_namespace: Option<&str>,
     statement_provenance: bool,
     text_patterns: bool,
@@ -1695,6 +1813,7 @@ pub(crate) fn lower(
     handlers: &mut [RoutineExceptionHandler],
 ) -> Result<()> {
     let mut env = Environment {
+        blob_return,
         collection_namespace: collection_namespace.map(str::to_string),
         number_formats: super::number_formats::enabled(),
         statement_provenance,
@@ -1743,7 +1862,9 @@ pub(crate) fn lower(
                 } else if pg_type.as_deref() == Some("timestamp") {
                     Kind::Timestamp(temporal_precision(type_modifier.as_ref()))
                 } else {
-                    if national::is_modifier(type_modifier.as_ref()) {
+                    if national::is_modifier(type_modifier.as_ref())
+                        || lobs::is_modifier(type_modifier.as_ref())
+                    {
                         schema_kind(&RoutineTypeSchema {
                             pg_type: pg_type.clone().unwrap_or_default(),
                             type_modifier: type_modifier.clone(),
@@ -1789,9 +1910,15 @@ pub(crate) fn lower(
     for declaration in declarations {
         match declaration {
             RoutineDecl::Variable {
+                name,
                 default_expr: Some(expr),
                 ..
-            } => visit(db, &env, &mut expr.expr)?,
+            } => {
+                visit(db, &env, &mut expr.expr)?;
+                if env.variables.get(&normalize_object_name(name)) == Some(&Kind::Blob) {
+                    blob_input(db, &env, &mut expr.expr)?;
+                }
+            }
             RoutineDecl::Cursor {
                 name,
                 params,

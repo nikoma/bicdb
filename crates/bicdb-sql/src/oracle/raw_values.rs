@@ -211,7 +211,7 @@ mod tests {
         ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
         assert_eq!(
             preview_routine_language_version(PREVIEW_ROUTINE_LANGUAGE),
-            Some(28)
+            Some(29)
         );
         assert_eq!(
             preview_routine_language_version(PREVIEW_ROUTINE_LANGUAGE_V27),
@@ -225,7 +225,8 @@ mod tests {
             "bicdb",
         )
         .unwrap()
-        .replace(PREVIEW_ROUTINE_LANGUAGE, PREVIEW_ROUTINE_LANGUAGE_V27);
+        .replace(PREVIEW_ROUTINE_LANGUAGE, PREVIEW_ROUTINE_LANGUAGE_V27)
+        .replace("BLOB", "BYTEA");
         SqlSession::new(&mut db).execute(&definition).unwrap();
         assert!(run(&mut db, "SELECT previous_hex() FROM DUAL").is_err());
         let rows=SqlSession::new(&mut db).execute("SELECT lanname,oid FROM pg_catalog.pg_language WHERE lanname IN ('bicdb_oracle_preview_v27','bicdb_oracle_preview_v28') ORDER BY oid").unwrap().rows;
@@ -237,7 +238,7 @@ mod tests {
                     SqlValue::Int(999_426)
                 ],
                 vec![
-                    SqlValue::String(PREVIEW_ROUTINE_LANGUAGE.into()),
+                    SqlValue::String(PREVIEW_ROUTINE_LANGUAGE_V28.into()),
                     SqlValue::Int(999_427)
                 ]
             ]

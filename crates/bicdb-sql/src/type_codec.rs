@@ -1595,6 +1595,7 @@ mod tests {
                     (_, SqlValue::Json(value)) => (**value).clone(),
                     (_, SqlValue::Geometry(_)) => unreachable!("no geometry key fixtures"),
                     (_, SqlValue::Composite(_)) => unreachable!("no composite key fixtures"),
+                    (_, SqlValue::OracleLob(_)) => unreachable!("no Oracle LOB array fixtures"),
                 };
                 let array = SqlValue::json(json!([element]));
                 let first = codec.index_key(&array, array_context).unwrap();

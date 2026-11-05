@@ -551,6 +551,11 @@ fn trigram_set(text: &str) -> Result<std::collections::BTreeSet<String>> {
 }
 
 pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Option<SqlValue>> {
+    if let Some(value) =
+        oracle::lobs::scalar(name.strip_prefix("pg_catalog.").unwrap_or(name), args)?
+    {
+        return Ok(Some(value));
+    }
     match name.strip_prefix("pg_catalog.").unwrap_or(name) {
         "bicdb_oracle_multiset" => return oracle::collections::multisets::evaluate(args).map(Some),
         "bicdb_oracle_collection_is_empty" => {

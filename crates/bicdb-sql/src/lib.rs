@@ -2684,6 +2684,18 @@ pub enum SqlValue {
     Geometry(Geometry),
     TsQuery(#[serde(serialize_with = "serialize_sql_tsquery")] PgTsQuery),
     Composite(SqlComposite),
+    #[serde(skip_deserializing, serialize_with = "serialize_sql_lob")]
+    OracleLob(std::sync::Arc<oracle::lobs::Value>),
+}
+
+fn serialize_sql_lob<S>(
+    value: &std::sync::Arc<oracle::lobs::Value>,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(&value.to_cell())
 }
 
 fn serialize_sql_tsquery<S>(
@@ -2804,6 +2816,7 @@ fn sql_value_memory_estimate(value: &SqlValue) -> usize {
         SqlValue::Int(_) => std::mem::size_of::<i64>(),
         SqlValue::Float(_) => std::mem::size_of::<f64>(),
         SqlValue::String(value) => value.len(),
+        SqlValue::OracleLob(value) => value.bytes().len(),
         SqlValue::TsQuery(value) => value.to_postgres_text().len(),
         SqlValue::JsonText(value) => value.raw.len() + value.parsed.to_string().len(),
         SqlValue::Json(value) => value.to_string().len(),
@@ -2879,6 +2892,7 @@ impl SqlValue {
                 .map(pg_internal_char_text)
                 .unwrap_or_else(|| value.clone()),
             Self::TsQuery(value) => value.to_postgres_text(),
+            Self::OracleLob(value) => value.to_cell(),
             Self::JsonText(value) => value.raw.clone(),
             Self::Json(value) => crate::jsonb::compact_jsonb_cell_text(value),
             Self::Geometry(value) => value.to_wkt(),

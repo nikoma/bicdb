@@ -1706,6 +1706,7 @@ pub(crate) fn postgres_xml_function_column_name(name: &str) -> String {
 
 pub(crate) fn sql_value_to_json_ref(value: &SqlValue) -> JsonValue {
     match value {
+        SqlValue::OracleLob(value) => JsonValue::String(value.to_cell()),
         SqlValue::Null => JsonValue::Null,
         SqlValue::Bool(value) => JsonValue::Bool(*value),
         SqlValue::Int(value) => JsonValue::from(*value),

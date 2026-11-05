@@ -557,6 +557,7 @@ pub(crate) fn type_oid(result: &SqlResult, column: usize) -> i32 {
     // arbitrariness this fix removes.
     match first_non_null(result, column) {
         Some(SqlValue::Bool(_)) => 16,
+        Some(SqlValue::OracleLob(_)) => 17,
         Some(SqlValue::Int(_)) => 20,
         Some(SqlValue::Float(_)) => 701,
         Some(SqlValue::JsonText(_)) => 114,

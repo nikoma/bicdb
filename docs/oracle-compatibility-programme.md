@@ -605,3 +605,16 @@ and PostgreSQL references each pass 15 cases. The selected original application
 foundation advances to 168/170 tests; LOB block execution, the savepoint test
 assertion and broader full-application acceptance remain open. This checkpoint
 does not complete any broader Oracle conformance or production qualification.
+
+## Recursive query analysis checkpoint
+
+The [recursive query qualification](evidence/sql-recursive-query-stack-2026-11-04/README.md)
+records a stack overflow exposed by subsequent browser qualification and a
+neutral correlated-query reproducer. The type resolver and lock-policy scanner
+carry boxed diagnostics through recursive AST visitors, preserving the ordinary
+2 MiB worker stack and structured error behavior. Both profile controls pass;
+independent Oracle and PostgreSQL source controls and the corrected protocol
+server agree on ownership and private-access exclusions. All 1,118 selected
+engine regressions and 13 retained reference families pass. The failed runtime
+was rejected and the previous runtime restored with 77 workflow observations
+preserved; full application qualification remains a separate gate.

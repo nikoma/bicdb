@@ -1,0 +1,192 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "programme_complete": false,
+  "worker_stack_bytes": 2097152,
+  "fixture_sha256": "681efe0d087265cfd4c75d5c15630996b1fd9d7ee6369255b93e61ff5876ab56",
+  "baseline_and_rejected_cases": [
+    {
+      "label": "baseline",
+      "profile": "postgres",
+      "binary_sha256": "e54a20a5b5ff5a25360780bc9392078868b7cf7fbc88912e082ba0a20ebfd1ce",
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "success": true,
+      "stack_overflow": false
+    },
+    {
+      "label": "baseline",
+      "profile": "oracle-preview-v1",
+      "binary_sha256": "e54a20a5b5ff5a25360780bc9392078868b7cf7fbc88912e082ba0a20ebfd1ce",
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "success": true,
+      "stack_overflow": false
+    },
+    {
+      "label": "candidate",
+      "profile": "postgres",
+      "binary_sha256": "86d9fdbc8adc88242eefb892a4901b0e33140c97c23a07f83fcddd05b7db5180",
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "success": true,
+      "stack_overflow": false
+    },
+    {
+      "label": "candidate",
+      "profile": "oracle-preview-v1",
+      "binary_sha256": "86d9fdbc8adc88242eefb892a4901b0e33140c97c23a07f83fcddd05b7db5180",
+      "success": false,
+      "error": "OperationalError:consuming input failed: server closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while processing the request.",
+      "stack_overflow": true
+    }
+  ],
+  "corrected_cases": [
+    {
+      "label": "corrected",
+      "profile": "postgres",
+      "binary_sha256": "fc3ea87583188d3eb283b42d767b10cdc4761385d7abfdb52c2b94de290ce6c6",
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "access_filtered_rows": [
+        [
+          1
+        ]
+      ],
+      "success": true,
+      "stack_overflow": false
+    },
+    {
+      "label": "corrected",
+      "profile": "oracle-preview-v1",
+      "binary_sha256": "fc3ea87583188d3eb283b42d767b10cdc4761385d7abfdb52c2b94de290ce6c6",
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "access_filtered_rows": [
+        [
+          1
+        ]
+      ],
+      "success": true,
+      "stack_overflow": false
+    }
+  ],
+  "independent_sources": {
+    "oracle": {
+      "application_qualified": false,
+      "original_objects_mutated": false,
+      "fixture_sha256": "681efe0d087265cfd4c75d5c15630996b1fd9d7ee6369255b93e61ff5876ab56",
+      "cases": [
+        {
+          "id": "correlated_owner_and_responsible_predicate",
+          "expected": [
+            [
+              2
+            ]
+          ],
+          "actual": [
+            [
+              2
+            ]
+          ],
+          "qualified": true
+        },
+        {
+          "id": "private_access_excludes_another_users_record",
+          "expected": [
+            [
+              1
+            ]
+          ],
+          "actual": [
+            [
+              1
+            ]
+          ],
+          "qualified": true
+        }
+      ],
+      "source_version": "23.26.3.0.0",
+      "cleanup_complete": true,
+      "success": true
+    },
+    "postgres": {
+      "application_qualified": false,
+      "fixture_sha256": "681efe0d087265cfd4c75d5c15630996b1fd9d7ee6369255b93e61ff5876ab56",
+      "cases": [
+        {
+          "id": "correlated_owner_and_responsible_predicate",
+          "expected": [
+            [
+              2
+            ]
+          ],
+          "actual": [
+            [
+              2
+            ]
+          ],
+          "qualified": true
+        },
+        {
+          "id": "private_access_excludes_another_users_record",
+          "expected": [
+            [
+              1
+            ]
+          ],
+          "actual": [
+            [
+              1
+            ]
+          ],
+          "qualified": true
+        }
+      ],
+      "cleanup_complete": true,
+      "source_version": 180004,
+      "success": true
+    }
+  },
+  "original_prepared_query": {
+    "query_sha256": "70ef187124717916f5ea306744340c8c34d84b3334c772d9b3f4d55ed0109fc1",
+    "baseline_result": [
+      [
+        0
+      ]
+    ],
+    "rejected_binary_stack_overflow": true,
+    "corrected_binary_sha256": "fc3ea87583188d3eb283b42d767b10cdc4761385d7abfdb52c2b94de290ce6c6",
+    "corrected_result": [
+      [
+        0
+      ]
+    ]
+  },
+  "failed_upgrade_accepted": false,
+  "failure_call_path": [
+    "routine_arithmetic::lower_sql_builtins",
+    "Resolve::post_visit_expr",
+    "Resolve::kind",
+    "Resolve::query_kind",
+    "engine::infer_query_result_types",
+    "engine::parse_inference_statements",
+    "oracle::lock_waits::validate",
+    "sqlparser::ast::Statement::visit"
+  ]
+}

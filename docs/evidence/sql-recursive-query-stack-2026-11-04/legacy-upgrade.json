@@ -1,0 +1,63 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "baseline_binary_sha256": "e54a20a5b5ff5a25360780bc9392078868b7cf7fbc88912e082ba0a20ebfd1ce",
+  "candidate_binary_sha256": "fc3ea87583188d3eb283b42d767b10cdc4761385d7abfdb52c2b94de290ce6c6",
+  "reads_and_oids_preserved": true,
+  "observations": {
+    "view_dot": [
+      [
+        1,
+        10
+      ]
+    ],
+    "view_space": [
+      [
+        1,
+        10
+      ]
+    ],
+    "class_identity": [
+      [
+        1690679344,
+        "Legacy View With Space"
+      ],
+      [
+        1679135461,
+        "Legacy.View.With.Dot"
+      ]
+    ]
+  },
+  "privileges": {
+    "baseline": {
+      "granted_view": [
+        [
+          1,
+          10
+        ]
+      ],
+      "ungranted_view": {
+        "sqlstate": "42501"
+      },
+      "base_table": {
+        "sqlstate": "42501"
+      }
+    },
+    "candidate": {
+      "granted_view": [
+        [
+          1,
+          10
+        ]
+      ],
+      "ungranted_view": {
+        "sqlstate": "42501"
+      },
+      "base_table": {
+        "sqlstate": "42501"
+      }
+    },
+    "preserved": true,
+    "qualified": true
+  }
+}

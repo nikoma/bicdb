@@ -10,6 +10,7 @@ pub mod preview;
 pub mod recovery;
 pub mod runtime;
 pub mod server;
+pub mod sql_listener;
 pub mod state;
 pub mod store;
 pub mod sync;

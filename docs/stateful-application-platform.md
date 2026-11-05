@@ -137,6 +137,39 @@ and native state replication remain separate from that synchronization protocol.
 Completed jobs and dead letters are retained; operators must account for their
 storage until retention and redrive management are exposed by the platform.
 
+## Authenticated SQL clients
+
+An operator can expose an application's existing database over an authenticated,
+loopback-only PostgreSQL listener. This is useful for a `node_http` application
+that already uses a PostgreSQL driver. It shares the supervisor's open database;
+starting a second database process on its data directory is unnecessary and
+would violate single-writer ownership.
+
+Create `DATA/apps/APPLICATION/sql-listener.json`, owned by the supervisor's user
+with mode 0600, before deploying or restarting that application:
+
+```json
+{"format":1,"listen":"127.0.0.1:5435","max_connections":64}
+```
+
+Authentication is mandatory SCRAM. Provision the database's SQL roles, wire
+logins and any transaction-delegation policies separately through the existing
+BicDB administration tools against `DATA/apps/APPLICATION/database/data`.
+A listener never grants SQL superuser status or tenant authority. Supply each
+application its own restricted credentials through the operator's runtime
+configuration; credentials do not belong in release packages. RLS, verified
+identity and transaction delegation retain their ordinary wire semantics.
+
+A package cannot select this listener through its manifest. Remote addresses,
+symlinks, public-readable configuration, unknown options and out-of-range limits
+are refused. The listener remains available while application execution is
+stopped and shuts down with the supervisor. An unexpected listener exit makes
+application requests fail. This binding currently refuses replicated state
+groups, whose writer-replacement lifecycle requires separate integration.
+It does not change the process tier's existing trusted-code authority; applications
+requiring stronger operating-system isolation still need a qualified execution
+configuration.
+
 ## Reactive application queries
 
 The fetch adapter exposes `env.DB.subscribe(sql, params, { signal })` as an async

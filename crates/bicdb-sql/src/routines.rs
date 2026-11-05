@@ -1767,7 +1767,9 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
             targets,
         });
     }
-    if crate::session::deferred_constraints::parse_constraint_command(statement)?.is_some() {
+    if is_raw_function_privilege_list(statement)?
+        || crate::session::deferred_constraints::parse_constraint_command(statement)?.is_some()
+    {
         // sqlparser has no AST for these PostgreSQL commands. Preserve only a
         // validated constant statement and dispatch through the normal session
         // executor with the same transaction and routine ownership checks.

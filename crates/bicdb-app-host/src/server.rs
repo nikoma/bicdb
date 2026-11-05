@@ -41,6 +41,7 @@ mod state_lifecycle;
 pub struct Application {
     deployment: Mutex<Deployment>,
     database: DatabaseHandle,
+    sql_listener: Mutex<Option<crate::sql_listener::SqlListener>>,
     replica: Option<Arc<Replica>>,
     process: Mutex<Option<Execution>>,
     release: Mutex<Release>,
@@ -80,6 +81,7 @@ impl From<anyhow::Error> for ApiError {
         let status = if message.contains("state writer authority")
             || message.contains("state replica has no active writer authority")
             || message.contains("application state is reopening")
+            || message.contains("application SQL listener is unavailable")
         {
             StatusCode::SERVICE_UNAVAILABLE
         } else {
@@ -208,6 +210,11 @@ impl Platform {
                     .join("database"),
             )?),
         };
+        let sql_listener = crate::sql_listener::SqlListener::open(
+            &self.store.app_dir(&deployment.application)?,
+            &*database.lock()?,
+            replica.is_some(),
+        )?;
         let peer_cipher = replica
             .as_ref()
             .and_then(|replica| {
@@ -241,6 +248,7 @@ impl Platform {
             snapshotting: AtomicBool::new(false),
             deployment: Mutex::new(deployment.clone()),
             database,
+            sql_listener: Mutex::new(sql_listener),
             replica,
             process: Mutex::new(None),
             release: Mutex::new(release),
@@ -531,6 +539,13 @@ impl Application {
         ensure!(
             self.authoritative(),
             "state writer authority is unavailable"
+        );
+        ensure!(
+            self.sql_listener
+                .lock()
+                .as_ref()
+                .is_none_or(|sql| sql.healthy()),
+            "application SQL listener is unavailable"
         );
         Ok(())
     }
@@ -1239,6 +1254,7 @@ pub async fn serve_with_events(
     // Drop children before releasing the exclusive platform lock.
     for app in platform.applications.lock().values() {
         app.process.lock().take();
+        app.sql_listener.lock().take();
     }
     for replica in platform.replicas.values() {
         if let Some(database) = replica.database.0.lock().as_ref() {
@@ -1767,6 +1783,7 @@ impl Drop for Platform {
     fn drop(&mut self) {
         for app in self.applications.lock().values() {
             app.process.lock().take();
+            app.sql_listener.lock().take();
             app.database.0.lock().take();
         }
         for replica in self.replicas.values() {

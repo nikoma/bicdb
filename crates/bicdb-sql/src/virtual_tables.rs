@@ -4694,6 +4694,19 @@ pub(crate) fn parse_raw_function_privilege_ddl(
     db: &BicDb,
     sql: &str,
 ) -> Result<Option<RawFunctionPrivilegeDdl>> {
+    parse_function_privileges(Some(db), sql)
+}
+
+/// Recognize and validate explicit identity lists without resolving a catalog.
+/// The routine interpreter uses the ordinary grant executor at execution time.
+pub(crate) fn is_raw_function_privilege_list(sql: &str) -> Result<bool> {
+    Ok(parse_function_privileges(None, sql)?.is_some_and(|ddl| ddl.routines.len() > 1))
+}
+
+fn parse_function_privileges(
+    db: Option<&BicDb>,
+    sql: &str,
+) -> Result<Option<RawFunctionPrivilegeDdl>> {
     let trimmed = trim_sql_statement(sql).trim();
     let (grant, rest, role_keyword) = if let Some(rest) = strip_sql_keywords(trimmed, &["GRANT"]) {
         (true, rest, "TO")
@@ -4759,7 +4772,9 @@ pub(crate) fn parse_raw_function_privilege_ddl(
                 "ALL FUNCTIONS IN SCHEMA requires an SQL identifier".to_string(),
             ));
         }
-        list_routines(db)?
+        db.map(list_routines)
+            .transpose()?
+            .unwrap_or_default()
             .into_iter()
             .filter(|routine| routine.kind == RoutineKind::Function)
             .filter(|routine| routine_schema_name(routine).eq_ignore_ascii_case(schema))

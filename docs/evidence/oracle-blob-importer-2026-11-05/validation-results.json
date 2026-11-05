@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "source_files_sha256": {
+    "examples/oracle/idempiere/blob_types.py": "e468eea1adddf72ff6be8ea2e22718b3bb8db45dec3eb69a4b360076e83a547f",
+    "examples/oracle/idempiere/import_bicdb.py": "05c09113ab48c4c3864958be4ce9cdb5ec62a45aa0f443259dde79de6058f5dd",
+    "examples/oracle/idempiere/test_blob_types.py": "0c3597914a81953b095b2c793e17471fc1165d8447e8331eb05f47fc9c775d04"
+  },
+  "server_source_commit": "af9f99657e11bc8ced2db3b0cbfb9ae1a5f89bb9",
+  "server_sha256": "9be2f588d79ab7f5933c8e70fc1ae5a77934ab1b5431cc3cef586d2ba61dab8c",
+  "python_tests": {
+    "run": 41,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "log_sha256": "49ab862c1e726e66df0b0e1ad649e812be80657a6177d7736cae8f5507dace6e"
+  },
+  "resource_guard": {
+    "status": "completed",
+    "minimum_observed_available_bytes": 18787549184,
+    "peak_owned_rss_bytes": 1381605376
+  },
+  "application_qualified": false,
+  "goal_complete": false,
+  "full_snapshot_qualification": {
+    "driver_implementation": "binary",
+    "steps": [
+      {
+        "phase": "preflight",
+        "returncode": 0
+      },
+      {
+        "phase": "apply",
+        "returncode": 0
+      },
+      {
+        "phase": "resume",
+        "returncode": 0
+      }
+    ],
+    "result_summary": {
+      "source_blob_columns": 16,
+      "completed_columns": 16,
+      "tables": 16,
+      "all_complete_table_fingerprints_preserved": true,
+      "data_compared_to_source": false,
+      "manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7"
+    },
+    "database_exit_code": 0,
+    "processes_stopped": true,
+    "primary_database_used_for_test_mutations": false,
+    "reports_sha256": {
+      "preflight": "3720c1308d01909e002ceeeb9e83a9e7d3ce524fe5d829f8e6df4fef01bdf039",
+      "apply": "0382da0e7114a6a7642e81c8bfe230515c332c0ece1738ce9e2683f7099df485",
+      "resume": "0382da0e7114a6a7642e81c8bfe230515c332c0ece1738ce9e2683f7099df485"
+    }
+  }
+}

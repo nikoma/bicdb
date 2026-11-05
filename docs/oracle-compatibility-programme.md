@@ -508,7 +508,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 20. Optimizer and performance | Statistics, pruning, indexes, joins, spill and hint policy; measured representative workload and peak/batch SLOs | Partial: typed-index join regression; no Oracle workload qualification |
 | 21. Availability and distributed work | Fencing, replication, recovery, uncertain commits, session recovery, XA/JTA and defined distributed SQL/transaction behavior | Unqualified for Oracle workloads |
 | 22. Backup and flashback | Backup/PITR, historical-query equivalence, retention, corruption handling, restore and disaster-recovery drills | Unqualified for Oracle workloads; native mechanisms require workload validation |
-| 23. Schema and data migration | Dependency ordering, resumable import, exact value/LOB reconciliation, constraints, sequences and schema validation | Partial: adapted HR and exported application table/data import; resumable index, temporal and source-backed character declaration reconciliation; complete source-value checks; full schema, foreign-key timing/validation and cutover qualification outstanding |
+| 23. Schema and data migration | Dependency ordering, resumable import, exact value/LOB reconciliation, constraints, sequences and schema validation | Partial: adapted HR and exported application table/data import; resumable index, temporal, source-backed character and [BLOB declaration reconciliation](oracle-blob-migration.md); complete source-value checks; full schema, foreign-key timing/validation and cutover qualification outstanding |
 | 24. Snapshot and CDC | Consistent source position, SCNs, transaction ordering, long transactions, deletes, LOBs, DDL, gaps and replay | Outstanding; source capture tooling and Oracle privileges must be explicit |
 | 25. Cutover and rollback | Write fencing, catch-up, reconciliation, go/no-go criteria, reverse migration and rehearsed rollback | Outstanding |
 | 26. Qualification and operations | Differential/property/application testing, release gates, tooling, documentation, maintenance/support policy and operational runbooks | Partial: local regression suites and reference harness; broad qualification outstanding |
@@ -759,3 +759,24 @@ definitions, and 53/53 original `POTest` plus 20/20 `POInsertSQLTest` results. P
 metadata checks accompany the general catalog-read boundary. This is selected
 application evidence; the accepted application still uses its earlier binary,
 and full application, broader original tests and programme acceptance remain open.
+
+
+## Public legacy BLOB migration phase
+
+The [BLOB migration guide](oracle-blob-migration.md) documents the public importer
+phase with read-only preflight, explicit source declarations, a stored-append
+capability probe, per-column conversion, complete target-table fingerprints and
+resumable journals. The [implementation record](evidence/oracle-blob-importer-2026-11-05/README.md)
+separates real-server/Python regression checks from source value equality,
+application acceptance and remaining Oracle DDL/LOB lifecycle work.
+
+
+## PostgreSQL session timezone status
+
+The [timezone status checkpoint](evidence/pgwire-timezone-status-2026-11-05/README.md)
+adds startup TimeZone reporting and session/transaction status updates before
+result metadata and rows. Default PostgreSQL and Oracle-preview wire checks
+cover simple and extended execution, transaction-local changes, rollback and
+resets. A C-driver NULL timestamptz reproduction distinguishes the earlier client
+crash from successful decoding with the patched server. Broader startup options,
+timezone/NLS conformance and full application acceptance remain open.

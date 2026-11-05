@@ -79,3 +79,6 @@ The [source-backed application checkpoint](evidence/oracle-persistent-blob-appli
 records explicit migration of the export's 16 BLOB columns and the original
 application's binary-data test on an isolated clone. It does not promote the
 accepted deployment or qualify the remaining LOB/DDL lifecycle.
+
+The [legacy BLOB migration guide](oracle-blob-migration.md) documents the public
+importer phase, read-only preflight, resumable target-value checks and limits.

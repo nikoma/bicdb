@@ -1,0 +1,119 @@
+{
+  "format": 1,
+  "driver": {
+    "psycopg": "3.3.6",
+    "implementation": "binary",
+    "libpq": 180006
+  },
+  "negative": {
+    "server_source_commit": "e2fb8ee5c4c0e7a10083f6cda2a1afdbe0fca586",
+    "server_sha256": "ea564e4cfedcf368d1ef7b318fecd99836198bf05cce4aeb9f169ad9acdc54b6",
+    "timezone_parameter": null,
+    "checks": [
+      {
+        "cast": "timestamp",
+        "returncode": 0
+      },
+      {
+        "cast": "timestamptz",
+        "returncode": -11
+      }
+    ],
+    "server_exit_code": 0
+  },
+  "positive_control": {
+    "server_source_commit": "151821b825d592626ed2c2ed9b7ec2a31682dab5",
+    "server_sha256": "12800c56e4160d2d38803fc33b47bf4c1dfb71c6e535ba5b4a29ad521ba81fdf",
+    "timezone_parameter": "UTC",
+    "checks": [
+      {
+        "cast": "timestamp",
+        "returncode": 0
+      },
+      {
+        "cast": "timestamptz",
+        "returncode": 0
+      }
+    ],
+    "server_exit_code": 0
+  },
+  "application_qualified": false,
+  "goal_complete": false,
+  "combined_validation": {
+    "source_commit": "af9f99657e11bc8ced2db3b0cbfb9ae1a5f89bb9",
+    "server_sha256": "9be2f588d79ab7f5933c8e70fc1ae5a77934ab1b5431cc3cef586d2ba61dab8c",
+    "steps": [
+      {
+        "name": "build",
+        "returncode": 0,
+        "log_sha256": "dae5dd0a552f44a8763227e48491ce70e04f7fc72e8816f6938a8d34539bff92"
+      },
+      {
+        "name": "jsonb-srf",
+        "returncode": 0,
+        "log_sha256": "4338d868967409956881999533d2a0ae8534e7ae1a6423ed1dc1269cd48b2011",
+        "passed": 11,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "protocol",
+        "returncode": 0,
+        "log_sha256": "286fd1505a9fde55ad9812abcdd862128451defe17410135f926ab9988da5ea9",
+        "passed": 181,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "oracle-protocol",
+        "returncode": 0,
+        "log_sha256": "6ab86c037731827095bfbae37134738ac1d5ce9a17235c9aeb161cb80adb0520",
+        "passed": 48,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "workspace",
+        "returncode": 0,
+        "log_sha256": "8a2cc083293e184fb40f23021c0c2a6c7943e64664bfb862d5622290884e9358"
+      }
+    ],
+    "guard_status": "completed",
+    "minimum_observed_available_bytes": 15498997760
+  },
+  "default_c_driver_full_snapshot": {
+    "server_source_commit": "af9f99657e11bc8ced2db3b0cbfb9ae1a5f89bb9",
+    "server_sha256": "9be2f588d79ab7f5933c8e70fc1ae5a77934ab1b5431cc3cef586d2ba61dab8c",
+    "driver_implementation": "binary",
+    "steps": [
+      {
+        "phase": "preflight",
+        "returncode": 0
+      },
+      {
+        "phase": "apply",
+        "returncode": 0
+      },
+      {
+        "phase": "resume",
+        "returncode": 0
+      }
+    ],
+    "result_summary": {
+      "source_blob_columns": 16,
+      "completed_columns": 16,
+      "tables": 16,
+      "all_complete_table_fingerprints_preserved": true,
+      "data_compared_to_source": false,
+      "manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7"
+    },
+    "database_exit_code": 0,
+    "processes_stopped": true,
+    "primary_database_used_for_test_mutations": false,
+    "reports_sha256": {
+      "preflight": "3720c1308d01909e002ceeeb9e83a9e7d3ce524fe5d829f8e6df4fef01bdf039",
+      "apply": "0382da0e7114a6a7642e81c8bfe230515c332c0ece1738ce9e2683f7099df485",
+      "resume": "0382da0e7114a6a7642e81c8bfe230515c332c0ece1738ce9e2683f7099df485"
+    }
+  }
+}

@@ -316,5 +316,66 @@
       },
       "definitions_preserved": true
     }
+  },
+  "broader_application_batch": {
+    "status": "resource_interrupted",
+    "guard_status": "aborted_low_memory",
+    "guard_exit_code": 125,
+    "minimum_observed_available_bytes": 10589691904,
+    "completed_reports": [
+      {
+        "name": "org.idempiere.test.base.POInfoTest",
+        "tests": "49",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0"
+      },
+      {
+        "name": "org.idempiere.test.base.GetBOMFunctionsTest",
+        "tests": "1",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0"
+      },
+      {
+        "name": "org.idempiere.test.base.MStorageTest",
+        "tests": "1",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0"
+      },
+      {
+        "name": "org.idempiere.test.base.QueryTest",
+        "tests": "20",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0"
+      },
+      {
+        "name": "org.idempiere.test.base.DBTest",
+        "tests": "55",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0"
+      },
+      {
+        "name": "org.idempiere.test.base.DocumentStatusTest",
+        "tests": "1",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0"
+      },
+      {
+        "name": "org.idempiere.test.base.POCrossTenantTest",
+        "tests": "11",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0"
+      }
+    ],
+    "completed_test_count": 138,
+    "unfinished_class": "org.idempiere.test.workflow.WFMaterialReceiptTest",
+    "all_selected_classes_passed": false,
+    "application_qualified": false
   }
 }

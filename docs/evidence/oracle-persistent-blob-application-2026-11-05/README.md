@@ -66,3 +66,14 @@ Oracle insert test that failed at persistent BLOB append now passes. All 16
 source BLOB columns were reconciled again, values and definitions were preserved,
 and both owned processes exited successfully. The reports and tested binary
 hashes distinguish this 73-test run from the preceding candidate.
+
+
+A subsequent eight-class batch completed seven green JUnit reports: DBTest
+55/55, DocumentStatusTest 1/1, GetBOMFunctionsTest 1/1, MStorageTest 1/1,
+POCrossTenantTest 11/11, POInfoTest 49/49 and QueryTest 20/20. The host-memory
+guard then stopped its owned JVM/database group below the 10 GiB headroom floor
+(exit 125) while WFMaterialReceiptTest was still running. That is 138 reported
+tests, not a successful eight-class batch. The unfinished workflow is not counted
+as passed or as an assertion failure. Both owned processes were confirmed gone,
+and the accepted application still returned HTTP 200. Application tenant checks
+do not establish Oracle database-role/VPD conformance or production security.

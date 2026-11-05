@@ -316,3 +316,8 @@ Each stage needs executable evidence. Oracle-reference success, BicDB schema
 import, application startup and complete business-workflow acceptance are
 separate states. This application target also does not replace the remaining
 [Oracle compatibility programme](../../../docs/oracle-compatibility-programme.md).
+
+For legacy BLOB columns, the explicit `blob-types` phase supports read-only
+preflight, target-value fingerprints and resumable conversion. See the
+[BLOB migration guide](../../../docs/oracle-blob-migration.md) for commands,
+writer-quiescence requirements and limits.

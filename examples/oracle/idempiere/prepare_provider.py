@@ -19,7 +19,7 @@ def replace_once(source, before, after):
     return source.replace(before, after, 1)
 
 
-def prepare(checkout, report):
+def prepare(checkout, report, jdbc_blocks=False):
     checkout = checkout.resolve()
     if checkout.is_relative_to(ROOT): raise ValueError('use an external application checkout')
     commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
@@ -43,7 +43,7 @@ def prepare(checkout, report):
         }
 """ + anchor)
     anchor = '        m_connectionURL = "jdbc:oracle:thin:@"'
-    source = replace_once(source, anchor, """        if (Boolean.getBoolean("bicdb.pgwire")) {
+    source = replace_once(source, anchor, r"""        if (Boolean.getBoolean("bicdb.pgwire")) {
             String host = dbHost.contains(":") && !dbHost.startsWith("[") ? "[" + dbHost + "]" : dbHost;
             String database = java.net.URLEncoder.encode(dbName, java.nio.charset.StandardCharsets.UTF_8);
             String schema = java.net.URLEncoder.encode("\"" + userName.toUpperCase(java.util.Locale.ROOT).replace("\"", "\"\"") + "\"", java.nio.charset.StandardCharsets.UTF_8);
@@ -60,10 +60,19 @@ def prepare(checkout, report):
     updated = replace_once(manifest_before.decode(),
         ' wrapped.com.oracle.database.jdbc.ojdbc17;bundle-version="23.26.0.0"',
         ' wrapped.com.oracle.database.jdbc.ojdbc17;bundle-version="23.26.0.0",\n org.postgresql.jdbc;bundle-version="42.7.8"')
+    if jdbc_blocks:
+        source = replace_once(source, '"org.postgresql.Driver"', '"org.bicdb.jdbc.oracle.OracleDriver"')
+        source = replace_once(source, 'new org.postgresql.Driver()', 'new org.bicdb.jdbc.oracle.OracleDriver()')
+        source = replace_once(source, '"jdbc:postgresql://"', '"jdbc:bicdb:oracle://"')
+        updated = replace_once(updated, ' org.postgresql.jdbc;bundle-version="42.7.8"',
+            ' org.postgresql.jdbc;bundle-version="42.7.8",\n org.bicdb.jdbc.oracle;bundle-version="[0.1.0,0.1.1)"')
     report_data = dict(source_commit=commit, mode_property='-Dbicdb.pgwire=true',
         sql_profile='oracle-preview-v1', application_qualified=False,
         adaptations=['Oracle provider retained; PostgreSQL JDBC transport selected explicitly'],
         files=[])
+    if jdbc_blocks:
+        report_data['adaptations'].append('General JDBC adapter preserves anonymous block boundaries and input parameters')
+        report_data['jdbc_adapter_bundle'] = 'org.bicdb.jdbc.oracle;bundle-version="[0.1.0,0.1.1)"'
     for destination, old, new in [(path, before, source.encode()), (manifest, manifest_before, updated.encode())]:
         report_data['files'].append(dict(path=str(destination.relative_to(checkout)),
             before_sha256=hashlib.sha256(old).hexdigest(), after_sha256=hashlib.sha256(new).hexdigest()))
@@ -76,8 +85,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--checkout', required=True, type=Path)
     parser.add_argument('--report', required=True, type=Path)
+    parser.add_argument('--jdbc-blocks', action='store_true', help='require the separate Oracle preview JDBC adapter bundle')
     args = parser.parse_args()
-    print(json.dumps(prepare(args.checkout, args.report), indent=2))
+    print(json.dumps(prepare(args.checkout, args.report, args.jdbc_blocks), indent=2))
 
 
 if __name__ == '__main__': main()

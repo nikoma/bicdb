@@ -630,3 +630,17 @@ paths retain independent regression coverage. The source checkpoint passes 993
 selected Rust regressions and 13 retained reference families. JDBC application
 integration, LOB locators, Parse/Bind continuation, broader procedural semantics
 and complete application/programme acceptance remain open.
+
+
+## JDBC anonymous block checkpoint
+
+The [JDBC adapter qualification](evidence/oracle-jdbc-blocks-2026-11-05/README.md)
+records 112 integration checks, ten Java unit tests and four generated-provider
+compilation tests. The explicit adapter preserves input-only anonymous submissions
+over PostgreSQL JDBC; ordinary PostgreSQL connections retain their own driver.
+A separately staged original application provider loads the adapter and passes
+19 of 20 tests in the selected original PO insert class. The remaining failure
+reaches unsupported `EMPTY_BLOB()` execution, exposing the next server-semantic
+gap after transport repair. Oracle LOB locators, callable OUT bindings, broader
+JDBC APIs and complete application/programme acceptance remain open. This client
+checkpoint does not replace the accepted running application or qualify a release.

@@ -1166,5 +1166,9 @@ transaction-failure handling; this is not complete Oracle error continuation.
 This server contract does not prevent a client library from splitting a block
 before transmission. In particular, stock PostgreSQL JDBC preparation requires
 separate integration to submit an Oracle block atomically with its input binds.
+The [reference JDBC adapter](../examples/oracle/jdbc/README.md) now provides
+that bounded integration using public PostgreSQL JDBC interfaces. Its
+[qualification evidence](evidence/oracle-jdbc-blocks-2026-11-05/README.md)
+covers input-only prepared blocks, direct statements and three query modes.
 Callable OUT parameters, complete PL/SQL transaction conformance and Oracle LOB
-locators are not qualified by anonymous input binding.
+locators remain unqualified.

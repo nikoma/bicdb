@@ -250,6 +250,15 @@ quoted application schema through startup parameters. The private report records
 source/output hashes. The generated application sources retain upstream licensing;
 this repository does not contain the application implementation or binaries.
 
+For input-only Oracle anonymous blocks, build the
+[reference JDBC adapter](../jdbc/README.md) and add `--jdbc-blocks` to the
+preparation command. This selects `jdbc:bicdb:oracle:` and adds the adapter's
+OSGi dependency while retaining the Oracle SQL provider and explicit profile.
+Install the adapter alongside PostgreSQL JDBC 42.7.8. Build/install the changed
+provider with a fresh OSGi bundle version: replacing a JAR while retaining an
+already resolved version can leave the old provider class active. Verify actual
+class origins when qualifying an installation.
+
 Rebuild the application after preparation. The resulting provider needs the
 PostgreSQL JDBC bundle as well as its existing dependencies. The local Linux
 reference build used Java 17, the pinned Maven wrapper, a Linux-only target
@@ -264,7 +273,9 @@ product's `plugins/*` classpath and run with that classpath, the compiled probe,
 `-Dbicdb.pgwire=true`, and the local BicDB port as its single argument. It creates
 a dedicated schema/table; do not run it in a populated application schema. It
 checks that the Oracle provider remains selected while PostgreSQL JDBC performs
-an exact numeric prepared insert, commit and lookup. This probe passed against
+an exact numeric prepared insert, commit and lookup. With the adapter installed,
+add `-Dbicdb.jdbc.blocks=true` to also check an exact numeric anonymous input
+block. This probe passed against
 the native BicDB development server; it does not establish application acceptance.
 
 The application is maintained as an external checkout under its upstream GPL

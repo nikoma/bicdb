@@ -1293,6 +1293,14 @@ impl<'db> SqlSession<'db> {
             updated += 1;
         }
         if let Some(schema) = schema.as_deref() {
+            let assigned_columns = update
+                .assignments
+                .iter()
+                .flat_map(|assignment| {
+                    super::row_assignments::assignment_columns(&assignment.target)
+                })
+                .map(relation_name)
+                .collect::<Result<Vec<_>>>()?;
             validate_updated_records(
                 self.db_ref(),
                 self.tx.as_ref(),
@@ -1301,6 +1309,7 @@ impl<'db> SqlSession<'db> {
                 &updated_records,
                 &before_after_records,
                 Some(&self.sql_engine()),
+                &assigned_columns,
             )?;
         }
         self.enforce_rls_checks(

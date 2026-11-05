@@ -1,17 +1,29 @@
 # Oracle reference queries
 
+`foreign_key_writer_fence.py --current-server /path/to/current/oracle_server
+--previous-server /path/to/previous/oracle_server --output /private/fence.json`
+qualifies an upgrade on a disposable database created by the previous binary.
+The previous binary must reproduce the former unchanged-key exemption. The
+current binary must retain legacy values, reject explicitly assigned invalid
+references, and block the previous executable from serving the upgraded
+database. Restart, repaired references, BLOB preservation and a subsequent
+BLOB schema save are checked. Both paths must be local compatibility-example
+executables with the documented `oracle_server` command-line interface.
+
 `foreign_key_timing.py --reference oracle --oracle-config /private/oracle.json
---output /private/foreign-key-timing.json` checks 13 explicit expectations for
+--output /private/foreign-key-timing.json` checks 17 explicit expectations for
 deferred foreign keys: catalogs, child-before-parent writes, commit failure,
 SET CONSTRAINTS, savepoints, NOVALIDATE legacy rows, validation and delete
 actions. PostgreSQL uses `--reference postgres` and `ORACLE_CONTROL_PG_DSN`;
 both modes use `BICDB_PG_DSN` for the target. The target profile must match the
 reference. Each case creates and drops nonce tables in a dedicated schema.
 Oracle and PostgreSQL have separate expectations for unchanged-key assignments
-and named non-deferrable constraints. PostgreSQL SQLSTATEs are also compared;
+and named non-deferrable constraints. Composite child-before-parent writes,
+partially NULL composite references and tuple self-assignments have separate
+cases. PostgreSQL SQLSTATEs are also compared;
 Oracle numeric errors are recorded but not claimed equivalent. These checks
 do not qualify application constraint migration, all concurrency schedules,
-composite/null keys or recovery.
+all composite/null-key combinations or recovery.
 
 `integer_bounds.py --reference oracle --oracle-config /private/oracle.json
 --output /private/integer-bounds.json` checks 18 independent expectations for

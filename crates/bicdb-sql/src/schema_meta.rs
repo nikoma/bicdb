@@ -1330,6 +1330,7 @@ pub(crate) fn prepare_schema_record(db: &mut BicDb, schema: &TableSchema) -> Res
     oracle::temporal_columns::prepare_save(db, schema)?;
     oracle::character_columns::prepare_save(db, schema)?;
     oracle::lob_columns::prepare_save(db, schema)?;
+    oracle::prepare_foreign_key_save(db, schema)?;
     ensure_schema_collection(db)?;
     let metadata = serde_json::to_value(schema)?;
     if sql_profile_active() {

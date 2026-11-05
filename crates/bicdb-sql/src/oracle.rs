@@ -84,11 +84,62 @@ fn metadata_v7() -> JsonValue {
         .push(serde_json::json!("oracle_blob_value_identity_v1"));
     value
 }
+fn metadata_v8() -> JsonValue {
+    let mut value = metadata_v7();
+    value["format"] = serde_json::json!(8);
+    value["features"]
+        .as_array_mut()
+        .expect("feature array")
+        .push(serde_json::json!("oracle_foreign_key_assignments_v1"));
+    value
+}
+fn metadata_v8_enabled(db: &BicDb) -> Result<bool> {
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+        Ok(record) => Ok(record.is_some_and(|record| record.metadata == metadata_v8())),
+    }
+}
+fn enable_metadata_v8(db: &mut BicDb) -> Result<()> {
+    // Preserve prerequisite storage infrastructure even when a foreign key is
+    // the first feature that advances a new database beyond the base profile.
+    enable_metadata_v7(db)?;
+    if !metadata_v8_enabled(db)? {
+        db.insert(
+            PROFILE_COLLECTION,
+            Record::new("profile").with_metadata(metadata_v8()),
+        )?;
+    }
+    Ok(())
+}
+pub(crate) fn prepare_foreign_key_save(db: &mut BicDb, schema: &TableSchema) -> Result<()> {
+    if has_foreign_keys(schema) && is_preview_database(db)? {
+        enable_metadata_v8(db)?;
+    }
+    Ok(())
+}
+fn has_foreign_keys(schema: &TableSchema) -> bool {
+    schema
+        .constraints
+        .iter()
+        .any(|constraint| matches!(constraint, ConstraintSchema::ForeignKey { .. }))
+}
+pub(crate) fn recheck_assigned_foreign_keys(db: &BicDb, schema: &TableSchema) -> Result<bool> {
+    if !has_foreign_keys(schema) || !is_preview_database(db)? {
+        return Ok(false);
+    }
+    if !metadata_v8_enabled(db)? {
+        return Err(unsupported("Oracle foreign-key assignments require the durable enforcement contract; reopen with a current server to upgrade the profile"));
+    }
+    Ok(true)
+}
 fn metadata_v7_enabled(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
         Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
-        Ok(record) => Ok(record.is_some_and(|record| record.metadata == metadata_v7())),
+        Ok(record) => Ok(record.is_some_and(|record| {
+            record.metadata == metadata_v7() || record.metadata == metadata_v8()
+        })),
     }
 }
 fn enable_metadata_v7(db: &mut BicDb) -> Result<()> {
@@ -116,9 +167,11 @@ fn metadata_v6_enabled(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
         Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
-        Ok(record) => Ok(
-            record.is_some_and(|r| (r.metadata == metadata_v6() || r.metadata == metadata_v7()))
-        ),
+        Ok(record) => Ok(record.is_some_and(|r| {
+            r.metadata == metadata_v6()
+                || r.metadata == metadata_v7()
+                || r.metadata == metadata_v8()
+        })),
     }
 }
 fn enable_metadata_v6(db: &mut BicDb) -> Result<()> {
@@ -141,7 +194,8 @@ fn metadata_v5_enabled(db: &BicDb) -> Result<bool> {
         Err(error) => Err(error.into()),
         Ok(record) => Ok(record.is_some_and(|r| {
             r.metadata == metadata_v5()
-                || (r.metadata == metadata_v6() || r.metadata == metadata_v7())
+                || (r.metadata == metadata_v6()
+                    || (r.metadata == metadata_v7() || r.metadata == metadata_v8()))
         })),
     }
 }
@@ -183,7 +237,8 @@ fn metadata_v3_enabled(db: &BicDb) -> Result<bool> {
         r.metadata == metadata_v3()
             || r.metadata == metadata_v4()
             || r.metadata == metadata_v5()
-            || (r.metadata == metadata_v6() || r.metadata == metadata_v7())
+            || (r.metadata == metadata_v6()
+                || (r.metadata == metadata_v7() || r.metadata == metadata_v8()))
     }))
 }
 fn enable_metadata_v3(db: &mut BicDb) -> Result<()> {
@@ -207,7 +262,8 @@ fn matches_profile(metadata: &JsonValue, profile: &str) -> bool {
                 || *metadata == metadata_v3()
                 || *metadata == metadata_v4()
                 || *metadata == metadata_v5()
-                || (*metadata == metadata_v6() || *metadata == metadata_v7()))
+                || (*metadata == metadata_v6()
+                    || (*metadata == metadata_v7() || *metadata == metadata_v8())))
 }
 
 fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
@@ -216,7 +272,8 @@ fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
             || record.metadata == metadata_v3()
             || record.metadata == metadata_v4()
             || record.metadata == metadata_v5()
-            || (record.metadata == metadata_v6() || record.metadata == metadata_v7())),
+            || (record.metadata == metadata_v6()
+                || (record.metadata == metadata_v7() || record.metadata == metadata_v8()))),
         Ok(None) | Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
     }
@@ -379,6 +436,14 @@ pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
             return Err(unsupported(
                 "database SQL profile does not match server configuration",
             ));
+        }
+        // Upgrade legacy preview foreign keys before serving any sessions.
+        // No row values or validation state are changed by this marker upgrade.
+        if profile == ORACLE_PREVIEW_PROFILE
+            && !metadata_v8_enabled(db)?
+            && list_schemas_raw(db)?.iter().any(has_foreign_keys)
+        {
+            enable_metadata_v8(db)?;
         }
         return Ok(());
     }

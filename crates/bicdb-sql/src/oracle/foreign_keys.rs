@@ -227,6 +227,150 @@ mod tests {
     }
 
     #[test]
+    fn oracle_novalidate_rechecks_explicit_unchanged_foreign_key_assignments() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        run(&mut session, "CREATE TABLE p(id INTEGER PRIMARY KEY)").unwrap();
+        run(
+            &mut session,
+            "CREATE TABLE c(id INTEGER PRIMARY KEY,pid INTEGER,note INTEGER)",
+        )
+        .unwrap();
+        run(&mut session, "INSERT INTO c VALUES(1,999,0)").unwrap();
+        run(&mut session, "ALTER TABLE c ADD CONSTRAINT legacy_fk FOREIGN KEY(pid) REFERENCES p(id) DEFERRABLE INITIALLY DEFERRED NOT VALID").unwrap();
+        run(&mut session, "BEGIN").unwrap();
+        run(&mut session, "UPDATE c SET note=1 WHERE id=1").unwrap();
+        run(&mut session, "COMMIT").unwrap();
+        for assignment in ["pid=pid", "(pid,note)=(pid,2)"] {
+            run(&mut session, "BEGIN").unwrap();
+            run(
+                &mut session,
+                &format!("UPDATE c SET {assignment} WHERE id=1"),
+            )
+            .unwrap();
+            assert_eq!(run(&mut session, "COMMIT").unwrap_err().sqlstate(), "23503");
+            run(&mut session, "ROLLBACK").unwrap();
+        }
+        run(&mut session, "INSERT INTO p VALUES(999)").unwrap();
+        run(&mut session, "BEGIN").unwrap();
+        run(&mut session, "UPDATE c SET pid=pid WHERE id=1").unwrap();
+        run(&mut session, "COMMIT").unwrap();
+        assert_eq!(
+            run(&mut session, "SELECT note FROM c").unwrap().rows[0][0].to_cell(),
+            "1"
+        );
+    }
+
+    #[test]
+    fn postgres_novalidate_keeps_unchanged_foreign_key_assignments_exempt() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE TABLE p(id INTEGER PRIMARY KEY); CREATE TABLE c(id INTEGER PRIMARY KEY,pid INTEGER,note INTEGER); INSERT INTO c VALUES(1,999,0); ALTER TABLE c ADD CONSTRAINT legacy_fk FOREIGN KEY(pid) REFERENCES p(id) DEFERRABLE INITIALLY DEFERRED NOT VALID; BEGIN; UPDATE c SET (pid,note)=(pid,2) WHERE id=1; COMMIT").unwrap();
+        assert_eq!(
+            session.execute("SELECT note FROM c").unwrap().rows,
+            vec![vec![SqlValue::Int(2)]]
+        );
+    }
+
+    #[test]
+    fn oracle_foreign_key_profile_is_durable_and_never_downgraded() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            run(&mut session, "CREATE TABLE p(id INTEGER PRIMARY KEY)").unwrap();
+            run(
+                &mut session,
+                "CREATE TABLE c(id INTEGER PRIMARY KEY,pid INTEGER REFERENCES p(id))",
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            db.get(PROFILE_COLLECTION, "profile")
+                .unwrap()
+                .unwrap()
+                .metadata,
+            metadata_v8()
+        );
+        assert!(db
+            .collections()
+            .iter()
+            .any(|collection| collection.name == lob_storage::OWNERS));
+        enable_metadata_v2(&mut db).unwrap();
+        enable_metadata_v3(&mut db).unwrap();
+        prepare_hierarchy_save(&mut db, "SELECT id FROM p CONNECT BY PRIOR id=id").unwrap();
+        enable_metadata_v5(&mut db).unwrap();
+        enable_metadata_v6(&mut db).unwrap();
+        enable_metadata_v7(&mut db).unwrap();
+        assert_eq!(
+            db.get(PROFILE_COLLECTION, "profile")
+                .unwrap()
+                .unwrap()
+                .metadata,
+            metadata_v8()
+        );
+        assert!(!matches_profile(&metadata_v8(), POSTGRES_PROFILE));
+        assert!(!matches_profile(&metadata_v8(), ORACLE_HR_PROFILE));
+        drop(db);
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        assert_eq!(
+            db.get(PROFILE_COLLECTION, "profile")
+                .unwrap()
+                .unwrap()
+                .metadata,
+            metadata_v8()
+        );
+    }
+
+    #[test]
+    fn legacy_oracle_foreign_keys_require_startup_upgrade_before_new_update_rules() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            run(&mut session, "CREATE TABLE p(id INTEGER PRIMARY KEY)").unwrap();
+            run(
+                &mut session,
+                "CREATE TABLE c(id INTEGER PRIMARY KEY,pid INTEGER,note INTEGER)",
+            )
+            .unwrap();
+            run(&mut session, "INSERT INTO c VALUES(1,999,0)").unwrap();
+            run(&mut session, "ALTER TABLE c ADD CONSTRAINT legacy_fk FOREIGN KEY(pid) REFERENCES p(id) DEFERRABLE INITIALLY DEFERRED NOT VALID").unwrap();
+        }
+        // Simulate the durable marker in a pre-upgrade database; no source rows change.
+        db.insert(
+            PROFILE_COLLECTION,
+            Record::new("profile").with_metadata(metadata_v7()),
+        )
+        .unwrap();
+        {
+            let mut session = SqlSession::new_shared(&db);
+            assert_eq!(
+                run(&mut session, "UPDATE c SET pid=pid WHERE id=1")
+                    .unwrap_err()
+                    .sqlstate(),
+                "0A000"
+            );
+        }
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        run(&mut session, "BEGIN").unwrap();
+        run(&mut session, "UPDATE c SET pid=pid WHERE id=1").unwrap();
+        assert_eq!(run(&mut session, "COMMIT").unwrap_err().sqlstate(), "23503");
+        run(&mut session, "ROLLBACK").unwrap();
+        assert_eq!(
+            run(&mut session, "SELECT note FROM c").unwrap().rows[0][0].to_cell(),
+            "0"
+        );
+    }
+
+    #[test]
     fn postgres_information_schema_reports_actual_foreign_key_timing() {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();

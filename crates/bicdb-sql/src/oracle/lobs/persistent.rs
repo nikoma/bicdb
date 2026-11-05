@@ -247,6 +247,7 @@ pub(super) fn append(
         std::slice::from_ref(&after),
         &[((*before).clone(), after.clone())],
         Some(&session.sql_engine()),
+        &[],
     )?;
     session.enforce_rls_checks(
         &owner.collection,

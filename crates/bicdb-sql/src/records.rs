@@ -385,10 +385,12 @@ pub(crate) fn validate_updated_records(
     after_records: &[Record],
     before_after_records: &[(Record, Record)],
     check_engine: Option<&SqlEngine<'_>>,
+    assigned_columns: &[String],
 ) -> Result<()> {
     if after_records.is_empty() {
         return Ok(());
     }
+    let recheck_assignments = oracle::recheck_assigned_foreign_keys(db, schema)?;
     let before_by_id = before_after_records
         .iter()
         .map(|(before, after)| (after.id.as_str(), before))
@@ -402,7 +404,14 @@ pub(crate) fn validate_updated_records(
             {
                 let old_key = record_column_values(before, schema, columns);
                 let new_key = record_column_values(record, schema, columns);
-                if before.id == record.id
+                // Oracle observes assignment intent as well as key values.
+                // PostgreSQL and native locator writes retain unchanged-key exemption.
+                let assigned = recheck_assignments
+                    && columns
+                        .iter()
+                        .any(|column| assigned_columns.contains(column));
+                if !assigned
+                    && before.id == record.id
                     && typed_column_values_not_distinct(schema, columns, &old_key, &new_key)?
                 {
                     continue;

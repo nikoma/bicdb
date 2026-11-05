@@ -15,12 +15,14 @@ CASES = [
     'novalidate_payload_update', 'novalidate_unchanged_key',
     'validate_existing_orphan', 'cascade_is_immediate', 'set_null_is_immediate',
     'set_immediate_failure_keeps_pending_check', 'nondeferrable_cannot_defer',
+    'tuple_novalidate_unchanged_key', 'composite_child_before_parent',
+    'composite_partial_null', 'composite_novalidate_unchanged_key',
 ]
 
 
 def expectations(case, oracle):
     """Require explicit behavior, so equal failures cannot count as compatibility."""
-    legacy = case.startswith('novalidate_') or case == 'validate_existing_orphan'
+    legacy = 'novalidate_' in case or case == 'validate_existing_orphan'
     fixed = case == 'nondeferrable_cannot_defer'
     action = {'cascade_is_immediate': 'CASCADE', 'set_null_is_immediate': 'SET NULL'}.get(case, 'NO ACTION')
     catalog = [not fixed, not fixed, not legacy, action, ['NO', 'NO'] if fixed else ['YES', 'YES']]
@@ -33,6 +35,10 @@ def expectations(case, oracle):
         'parent_delete_repaired': dict(commit='ok', rows=0),
         'novalidate_payload_update': dict(update='ok', commit='ok', rows=1, note=1),
         'novalidate_unchanged_key': dict(update='ok', commit='foreign_key' if oracle else 'ok', rows=1, note=0),
+        'tuple_novalidate_unchanged_key': dict(update='ok', commit='foreign_key' if oracle else 'ok', rows=1, note=0 if oracle else 2),
+        'composite_child_before_parent': dict(commit='ok', rows=2),
+        'composite_partial_null': dict(commit='ok', rows=2),
+        'composite_novalidate_unchanged_key': dict(update='ok', commit='foreign_key' if oracle else 'ok', rows=1, note=0),
         'validate_existing_orphan': dict(validate='foreign_key', after_failure=catalog, after_repair=[True, True, True, 'NO ACTION', ['YES', 'YES']]),
         'cascade_is_immediate': dict(rows_before_commit=0, commit='ok'),
         'set_null_is_immediate': dict(rows_before_commit=1, parent_before_commit=None, commit='ok'),
@@ -98,14 +104,17 @@ def observe(factory, progress=None):
                 execute('SELECT \"is_deferrable\",\"initially_deferred\" FROM \"information_schema\".\"table_constraints\" WHERE \"constraint_name\"=%s',[name])
                 result.append(list(cursor.fetchone()))
                 return result
-            legacy = case.startswith('novalidate_') or case == 'validate_existing_orphan'
+            legacy = 'novalidate_' in case or case == 'validate_existing_orphan'
             action = 'CASCADE' if case=='cascade_is_immediate' else 'SET NULL' if case=='set_null_is_immediate' else 'NO ACTION'
             try:
-                execute('CREATE TABLE '+p+'("ID" INTEGER PRIMARY KEY)');created.append(p);connection.commit()
+                composite = case.startswith('composite_')
+                parent_columns = '("ID" INTEGER PRIMARY KEY,"SUBID" INTEGER,UNIQUE("ID","SUBID"))' if composite else '("ID" INTEGER PRIMARY KEY)'
+                execute('CREATE TABLE '+p+parent_columns);created.append(p);connection.commit()
                 execute('CREATE TABLE '+c+'("ID" INTEGER PRIMARY KEY,"PID" INTEGER,"NOTE" INTEGER)');created.append(c);connection.commit()
-                execute('INSERT INTO '+p+' VALUES(1)')
+                execute('INSERT INTO '+p+(' VALUES(1,0)' if composite else ' VALUES(1)'))
                 execute('INSERT INTO '+c+' VALUES(1,'+('999' if legacy else '1')+',0)');connection.commit()
-                ddl='ALTER TABLE '+c+' ADD CONSTRAINT '+fk+' FOREIGN KEY("PID") REFERENCES '+p+'("ID")'
+                reference = ' FOREIGN KEY("PID","NOTE") REFERENCES '+p+'("ID","SUBID")' if composite else ' FOREIGN KEY("PID") REFERENCES '+p+'("ID")'
+                ddl='ALTER TABLE '+c+' ADD CONSTRAINT '+fk+reference
                 if action!='NO ACTION':ddl+=' ON DELETE '+action
                 ddl+=(' NOT DEFERRABLE' if case=='nondeferrable_cannot_defer' else ' DEFERRABLE INITIALLY DEFERRED')
                 if legacy:ddl+=' ENABLE NOVALIDATE' if native else ' NOT VALID'
@@ -147,8 +156,21 @@ def observe(factory, progress=None):
                 elif case=='parent_delete_repaired':
                     execute('DELETE FROM '+p+' WHERE "ID"=1');execute('DELETE FROM '+c+' WHERE "ID"=1')
                     outcome['commit']=attempt(connection.commit);outcome['rows']=scalar('SELECT COUNT(*) FROM '+c)
-                elif case in ('novalidate_payload_update','novalidate_unchanged_key'):
+                elif case in ('composite_child_before_parent', 'composite_partial_null'):
+                    if case == 'composite_child_before_parent':
+                        execute('INSERT INTO '+c+' VALUES(2,2,20)')
+                        execute('INSERT INTO '+p+' VALUES(2,20)')
+                    else:
+                        execute('INSERT INTO '+c+' VALUES(2,999,NULL)')
+                        execute('UPDATE '+c+' SET "PID"="PID" WHERE "ID"=2')
+                    outcome['commit']=attempt(connection.commit)
+                    outcome['rows']=scalar('SELECT COUNT(*) FROM '+c)
+                elif case in ('novalidate_payload_update','novalidate_unchanged_key','tuple_novalidate_unchanged_key','composite_novalidate_unchanged_key'):
                     assignment='"NOTE"=1' if case=='novalidate_payload_update' else '"PID"="PID"'
+                    if case=='tuple_novalidate_unchanged_key':
+                        assignment='("PID","NOTE")=(SELECT "PID",2'+(' FROM DUAL' if oracle_semantics else '')+')'
+                    elif case=='composite_novalidate_unchanged_key':
+                        assignment='"NOTE"="NOTE"'
                     outcome['update']=attempt(lambda:execute('UPDATE '+c+' SET '+assignment+' WHERE "ID"=1'))
                     outcome['commit']=attempt(connection.commit)
                     outcome['rows']=scalar('SELECT COUNT(*) FROM '+c)

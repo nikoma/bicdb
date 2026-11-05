@@ -508,7 +508,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 20. Optimizer and performance | Statistics, pruning, indexes, joins, spill and hint policy; measured representative workload and peak/batch SLOs | Partial: typed-index join regression; no Oracle workload qualification |
 | 21. Availability and distributed work | Fencing, replication, recovery, uncertain commits, session recovery, XA/JTA and defined distributed SQL/transaction behavior | Unqualified for Oracle workloads |
 | 22. Backup and flashback | Backup/PITR, historical-query equivalence, retention, corruption handling, restore and disaster-recovery drills | Unqualified for Oracle workloads; native mechanisms require workload validation |
-| 23. Schema and data migration | Dependency ordering, resumable import, exact value/LOB reconciliation, constraints, sequences and schema validation | Partial: adapted HR and exported application table/data import; resumable index, temporal, source-backed character and [BLOB declaration reconciliation](oracle-blob-migration.md); complete source-value checks; full schema, foreign-key timing/validation and cutover qualification outstanding |
+| 23. Schema and data migration | Dependency ordering, resumable import, exact value/LOB reconciliation, constraints, sequences and schema validation | Partial: adapted HR and exported application table/data import; resumable index, temporal, source-backed character and [BLOB declaration reconciliation](oracle-blob-migration.md); complete source-value checks and a [source-faithful foreign-key phase](oracle-foreign-key-migration.md); full schema/workflow and cutover qualification outstanding |
 | 24. Snapshot and CDC | Consistent source position, SCNs, transaction ordering, long transactions, deletes, LOBs, DDL, gaps and replay | Outstanding; source capture tooling and Oracle privileges must be explicit |
 | 25. Cutover and rollback | Write fencing, catch-up, reconciliation, go/no-go criteria, reverse migration and rehearsed rollback | Outstanding |
 | 26. Qualification and operations | Differential/property/application testing, release gates, tooling, documentation, maintenance/support policy and operational runbooks | Partial: local regression suites and reference harness; broad qualification outstanding |
@@ -823,3 +823,14 @@ child-key diagnostics while preserving deferred timing. Separate native
 references, trace counts and executable fencing results accompany the change.
 Source relationship installation, orphan inventory and application workflows
 with all relationships enforced remain open migration gates.
+
+
+## Public foreign-key migration phase
+
+The [migration checkpoint](evidence/oracle-foreign-key-migration-2026-11-05/README.md)
+adds read-only preflight, quiesced apply, exact source/catalog matching and
+resumable target table fingerprints. It resolves all 3,826 source declarations
+and tests the phase on native disposable databases. Orphan inventory and full
+application acceptance remain separate. Filtered parent-column metadata and
+constraints on tables without declared primary keys have general regressions.
+Explicit key/index names still require schema-namespace compatibility work.

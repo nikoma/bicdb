@@ -1,0 +1,93 @@
+{
+  "source_commit": "738416306fec3c38927c85a291b89587ce0055dd",
+  "binary_sha256": "c33b5704537ba71fd9711dcaeeab11ecdbbffdf699fde107edec2a6601d0ff5a",
+  "application_qualified": false,
+  "goal_complete": false,
+  "checks": [
+    {
+      "name": "build",
+      "returncode": 0
+    },
+    {
+      "name": "migration",
+      "returncode": 0
+    },
+    {
+      "name": "blob-migration",
+      "returncode": 0
+    },
+    {
+      "name": "deferred-fk",
+      "returncode": 0
+    },
+    {
+      "name": "fk-authorization",
+      "returncode": 0
+    },
+    {
+      "name": "protocol",
+      "returncode": 0
+    },
+    {
+      "name": "oracle-protocol",
+      "returncode": 0
+    },
+    {
+      "name": "workspace",
+      "returncode": 0
+    }
+  ],
+  "sql_library": {
+    "passed": 709,
+    "failed": 0,
+    "ignored": 3
+  },
+  "test_counts": {
+    "migration": {
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    "blob-migration": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "deferred-fk": {
+      "passed": 20,
+      "failed": 0,
+      "ignored": 0
+    },
+    "fk-authorization": {
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    "protocol": {
+      "passed": 181,
+      "failed": 0,
+      "ignored": 0
+    },
+    "oracle-protocol": {
+      "passed": 48,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "module_sha256": "d0db9d319b7273af161d74f82bdfa1f94065c7a8d2e3e078216d9db10b2b13cf",
+  "native_test_sha256": "0ccac643c37d48724a13e839b66e4240e2b9119f193be32058523adde6e1cd30",
+  "resource_guards": {
+    "unit": {
+      "status": "completed",
+      "returncode": 0,
+      "minimum_observed_available_bytes": 13704245248,
+      "peak_group_rss_bytes": 5514919936
+    },
+    "integration": {
+      "status": "completed",
+      "returncode": 0,
+      "minimum_observed_available_bytes": 13862461440,
+      "peak_group_rss_bytes": 5184819200
+    }
+  }
+}

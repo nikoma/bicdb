@@ -87,8 +87,14 @@ pub(crate) fn alter_table_alter_column(
                     "ALTER COLUMN TYPE USING expressions are not supported".to_string(),
                 ));
             }
-            let (pg_type, vector_dim) = pg_type_from_data_type(data_type)?;
-            let type_modifier = oracle::character_columns::modifier(db, data_type)?
+            let blob = oracle::lob_columns::modifier(db, data_type)?;
+            let (pg_type, vector_dim) = if blob.is_some() {
+                ("bytea".into(), None)
+            } else {
+                pg_type_from_data_type(data_type)?
+            };
+            let type_modifier = blob
+                .or(oracle::character_columns::modifier(db, data_type)?)
                 .or(pg_type_modifier_from_data_type(data_type)?);
             let column_name = schema.columns[idx].name.clone();
             schema.columns[idx].pg_type = pg_type;
@@ -1503,6 +1509,8 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
     let (mut pg_type, vector_dim, user_type) =
         if let Some(serial_type) = serial_type(&column.data_type) {
             (serial_type.to_string(), None, None)
+        } else if oracle::lob_columns::modifier(db, &column.data_type)?.is_some() {
+            ("bytea".to_string(), None, None)
         } else if let Some(user_type) = user_type_column_from_data_type(db, &column.data_type)? {
             (user_type.formatted_name(), None, Some(user_type))
         } else {
@@ -1547,7 +1555,8 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
             } => Some(expr.to_string()),
             _ => None,
         });
-    let mut type_modifier = pg_type_modifier_from_data_type(&column.data_type)?;
+    let mut type_modifier = oracle::lob_columns::modifier(db, &column.data_type)?
+        .or(pg_type_modifier_from_data_type(&column.data_type)?);
     if let Some(source) = oracle::character_columns::modifier(db, &column.data_type)? {
         type_modifier = Some(source);
     }

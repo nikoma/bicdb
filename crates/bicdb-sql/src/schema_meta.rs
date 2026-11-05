@@ -906,6 +906,7 @@ pub(crate) fn load_schema_raw_shared(
             let schema = serde_json::from_value::<TableSchema>(record.metadata.clone())?;
             oracle::temporal_columns::validate(db, &schema)?;
             oracle::character_columns::validate(db, &schema)?;
+            oracle::lob_columns::validate(db, &schema)?;
             Some(std::sync::Arc::new(schema))
         }
         Ok(None) => {
@@ -1325,6 +1326,7 @@ pub(crate) fn save_schema(db: &mut BicDb, schema: &TableSchema) -> Result<()> {
     require_user_relation_name(&schema.name)?;
     oracle::temporal_columns::prepare_save(db, schema)?;
     oracle::character_columns::prepare_save(db, schema)?;
+    oracle::lob_columns::prepare_save(db, schema)?;
     ensure_schema_collection(db)?;
     let metadata = serde_json::to_value(schema)?;
     if sql_profile_active() {

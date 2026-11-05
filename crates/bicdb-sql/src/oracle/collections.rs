@@ -150,16 +150,28 @@ pub(super) fn lower_declaration(
     else {
         return Ok(None);
     };
-    let name =
-        canonical_tokens_with_routine_types(db, &source[2..boundary], true, false, namespace)?;
+    let name = canonical_tokens_with_routine_types(
+        db,
+        &source[2..boundary],
+        true,
+        false,
+        false,
+        namespace,
+    )?;
     let mut name = join(&name);
     if !source[2..boundary].contains(&Token::Period) {
         if let Some(namespace) = namespace {
             name = format!("\"{}\".{name}", namespace.replace('"', "\"\""));
         }
     }
-    let element =
-        canonical_tokens_with_routine_types(db, &source[boundary + 3..], true, false, namespace)?;
+    let element = canonical_tokens_with_routine_types(
+        db,
+        &source[boundary + 3..],
+        true,
+        false,
+        false,
+        namespace,
+    )?;
     let sql = format!("CREATE TYPE {name} AS TABLE OF {}", join(&element));
     declaration(db, &sql)?.ok_or_else(|| unsupported("invalid collection declaration"))?;
     Ok(Some(sql))

@@ -186,6 +186,8 @@ fn compile_routine_ir_in_catalog(routine: &RoutineSchema, db: Option<&BicDb>) ->
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 9),
             oracle::preview_routine_language_version(&routine.language)
+                .is_some_and(|version| version >= 28),
+            oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 10),
             oracle::preview_routine_language_version(&routine.language)
                 .is_some_and(|version| version >= 11),

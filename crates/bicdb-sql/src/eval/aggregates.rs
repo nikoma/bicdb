@@ -1673,6 +1673,7 @@ fn projected_expr_pg_type_uncached(expr: &Expr, schema: Option<&TableSchema>) ->
             "power" | "pow" | "sqrt" | "cbrt" | "exp" | "ln" | "log" => {
                 return Some("float8".to_string())
             }
+            "bicdb_oracle_hextoraw" => return Some("bytea".to_string()),
             "similarity" => return Some("float4".to_string()),
             "age" | "make_interval" => return Some("interval".to_string()),
             "to_date" => return Some("date".to_string()),

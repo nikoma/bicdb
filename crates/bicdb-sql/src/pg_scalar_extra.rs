@@ -623,6 +623,9 @@ pub(crate) fn eval_pg_scalar_extra(name: &str, args: &[SqlValue]) -> Result<Opti
         return oracle_concat::evaluate(args).map(Some);
     }
     let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
+    if name == "bicdb_oracle_hextoraw" {
+        return oracle::raw_values::evaluate(args).map(Some);
+    }
     let known = matches!(
         name,
         "strpos"

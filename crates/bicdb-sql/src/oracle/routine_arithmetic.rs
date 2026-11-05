@@ -185,6 +185,7 @@ struct Environment {
     concatenation: bool,
     number_arithmetic: bool,
     decode: bool,
+    raw_conversion: bool,
     character_conversion: bool,
     nvl: bool,
     nvl2: bool,
@@ -381,7 +382,9 @@ impl Resolve<'_> {
                 match name.as_deref() {
                     // SYS_GUID lowers to the existing random-byte intrinsic.
                     // Do not infer RAW from a text value's bytea-looking prefix.
-                    Some("gen_random_bytes" | "public.gen_random_bytes") => return Kind::Raw,
+                    Some(
+                        "gen_random_bytes" | "public.gen_random_bytes" | "bicdb_oracle_hextoraw",
+                    ) => return Kind::Raw,
                     Some(
                         "bicdb_oracle_current_sqlcode"
                         | "bicdb_oracle_national_length"
@@ -759,6 +762,14 @@ impl Resolve<'_> {
                 }
             }
         }
+        if self.env.raw_conversion {
+            super::raw_values::lower_call(
+                expr,
+                |value| self.kind(value),
+                self.env.defer_bind_types,
+                self.sql_depth > 0 || !self.queries.is_empty(),
+            )?;
+        }
         if self.env.character_conversion {
             if let Expr::Function(function) = expr {
                 if object_name_lowercase(&function.name).is_ok_and(|name| name == "chr") {
@@ -1089,6 +1100,7 @@ pub(super) fn lower_sql_builtins(
     let mut env = Environment {
         decode: true,
         character_conversion: true,
+        raw_conversion: true,
         nvl: true,
         nvl2: true,
         national_literals: true,
@@ -1115,6 +1127,10 @@ pub(super) fn lower_sql_builtins(
                         .map_or(Kind::Text, |spec| {
                             if spec.name == "timestamp" {
                                 Kind::Timestamp(Some(6))
+                            } else if spec.name == "bytea" && env.raw_conversion {
+                                // A binary protocol input is RAW, not a persistent
+                                // LOB locator. Keep earlier routine contracts intact.
+                                Kind::Raw
                             } else {
                                 pg_kind(spec.name)
                             }
@@ -1669,6 +1685,7 @@ pub(crate) fn lower(
     concatenation: bool,
     number_arithmetic: bool,
     decode: bool,
+    raw_conversion: bool,
     character_conversion: bool,
     nvl: bool,
     nvl2: bool,
@@ -1687,6 +1704,7 @@ pub(crate) fn lower(
         number_arithmetic,
         decode,
         character_conversion,
+        raw_conversion,
         nvl,
         nvl2,
         // Contract 27 introduces national literal provenance with NVL2;

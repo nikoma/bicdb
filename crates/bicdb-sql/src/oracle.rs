@@ -23,6 +23,7 @@ pub(crate) mod errors;
 mod function_attributes;
 pub(crate) mod hierarchy;
 pub mod host_binds;
+pub(crate) mod lob_columns;
 pub(crate) mod lock_waits;
 mod namespaces;
 pub(crate) mod national;
@@ -32,6 +33,7 @@ mod nvl2;
 mod outer_joins;
 pub(crate) mod output;
 pub(crate) mod procedures;
+pub(crate) mod raw_values;
 pub(crate) mod routine_arithmetic;
 pub(crate) mod routine_characters;
 pub(crate) mod routines;
@@ -61,11 +63,43 @@ fn metadata_v4() -> JsonValue {
 fn metadata_v5() -> JsonValue {
     serde_json::json!({"format":5,"profile":ORACLE_PREVIEW_PROFILE,"features":["oracle_temporal_columns_v1","oracle_character_columns_v1","oracle_hierarchical_queries_v1","oracle_nested_table_types_v1"]})
 }
+fn metadata_v6() -> JsonValue {
+    let mut value = metadata_v5();
+    value["format"] = serde_json::json!(6);
+    value["features"]
+        .as_array_mut()
+        .expect("feature array")
+        .push(serde_json::json!("oracle_blob_columns_v1"));
+    value
+}
+fn metadata_v6_enabled(db: &BicDb) -> Result<bool> {
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+        Ok(record) => Ok(record.is_some_and(|r| r.metadata == metadata_v6())),
+    }
+}
+fn enable_metadata_v6(db: &mut BicDb) -> Result<()> {
+    if !preview_routine_language_enabled(db)? {
+        return Err(unsupported(
+            "Oracle BLOB columns require the durable preview profile",
+        ));
+    }
+    if !metadata_v6_enabled(db)? {
+        db.insert(
+            PROFILE_COLLECTION,
+            Record::new("profile").with_metadata(metadata_v6()),
+        )?;
+    }
+    Ok(())
+}
 fn metadata_v5_enabled(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
         Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
-        Ok(record) => Ok(record.is_some_and(|r| r.metadata == metadata_v5())),
+        Ok(record) => {
+            Ok(record.is_some_and(|r| r.metadata == metadata_v5() || r.metadata == metadata_v6()))
+        }
     }
 }
 fn enable_metadata_v5(db: &mut BicDb) -> Result<()> {
@@ -103,7 +137,10 @@ pub(crate) fn prepare_hierarchy_save(db: &mut BicDb, sql: &str) -> Result<()> {
 }
 fn metadata_v3_enabled(db: &BicDb) -> Result<bool> {
     Ok(db.get(PROFILE_COLLECTION, "profile")?.is_some_and(|r| {
-        r.metadata == metadata_v3() || r.metadata == metadata_v4() || r.metadata == metadata_v5()
+        r.metadata == metadata_v3()
+            || r.metadata == metadata_v4()
+            || r.metadata == metadata_v5()
+            || r.metadata == metadata_v6()
     }))
 }
 fn enable_metadata_v3(db: &mut BicDb) -> Result<()> {
@@ -126,7 +163,8 @@ fn matches_profile(metadata: &JsonValue, profile: &str) -> bool {
             && (*metadata == metadata_v2()
                 || *metadata == metadata_v3()
                 || *metadata == metadata_v4()
-                || *metadata == metadata_v5())
+                || *metadata == metadata_v5()
+                || *metadata == metadata_v6())
 }
 
 fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
@@ -134,7 +172,8 @@ fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
         Ok(Some(record)) => Ok(record.metadata == metadata_v2()
             || record.metadata == metadata_v3()
             || record.metadata == metadata_v4()
-            || record.metadata == metadata_v5()),
+            || record.metadata == metadata_v5()
+            || record.metadata == metadata_v6()),
         Ok(None) | Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
     }
@@ -180,7 +219,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V23: &str = "bicdb_oracle_preview_v23"
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V24: &str = "bicdb_oracle_preview_v24";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V25: &str = "bicdb_oracle_preview_v25";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V26: &str = "bicdb_oracle_preview_v26";
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v27";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V27: &str = "bicdb_oracle_preview_v27";
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE: &str = "bicdb_oracle_preview_v28";
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V1_OID: i64 = 999_400;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V2_OID: i64 = 999_401;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V3_OID: i64 = 999_402;
@@ -207,7 +247,8 @@ pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V23_OID: i64 = 999_422;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V24_OID: i64 = 999_423;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V25_OID: i64 = 999_424;
 pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V26_OID: i64 = 999_425;
-pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_426;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_V27_OID: i64 = 999_426;
+pub(crate) const PREVIEW_ROUTINE_LANGUAGE_OID: i64 = 999_427;
 
 pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
     match language
@@ -242,7 +283,8 @@ pub(crate) fn preview_routine_language_version(language: &str) -> Option<u8> {
         PREVIEW_ROUTINE_LANGUAGE_V24 => Some(24),
         PREVIEW_ROUTINE_LANGUAGE_V25 => Some(25),
         PREVIEW_ROUTINE_LANGUAGE_V26 => Some(26),
-        PREVIEW_ROUTINE_LANGUAGE => Some(27),
+        PREVIEW_ROUTINE_LANGUAGE_V27 => Some(27),
+        PREVIEW_ROUTINE_LANGUAGE => Some(28),
         _ => None,
     }
 }
@@ -450,6 +492,7 @@ fn lower_decode(db: &BicDb, sql: &str, oids: Option<&[i32]>) -> Result<String> {
     }
     if ![
         "decode",
+        "hextoraw",
         "nvl",
         "chr",
         "to_char",
@@ -782,6 +825,7 @@ fn lower_oracle_sql(
                 &source[..modify],
                 true,
                 preserve_date,
+                true,
                 namespace,
             )?;
             let tail = source[modify + 1..]
@@ -804,6 +848,7 @@ fn lower_oracle_sql(
                 &groups[0],
                 true,
                 preserve_date,
+                true,
                 namespace,
             )?;
             let definitions = parse_statements(&format!(
@@ -868,6 +913,10 @@ fn lower_oracle_sql(
         &source,
         preview,
         preview && preview_routine_language_enabled(db)?,
+        source
+            .first()
+            .is_some_and(|t| word(t, "CREATE") || word(t, "ALTER"))
+            && source.iter().take(3).any(|t| word(t, "TABLE")),
         namespace,
     )?;
     expand_references(db, &mut canonical)?;
@@ -1218,6 +1267,7 @@ fn canonical_tokens_with_routine_types(
     source: &[Token],
     preview: bool,
     preserve_date: bool,
+    preserve_blob: bool,
     namespace: Option<&str>,
 ) -> Result<Vec<Token>> {
     let deterministic = if preview {
@@ -1406,14 +1456,14 @@ fn canonical_tokens_with_routine_types(
                     }
                     "MULTISET" if preview && source.get(i + 1).is_some_and(|token| ["INTERSECT","UNION","EXCEPT"].iter().any(|value| word(token,value))) => pieces.push("MULTISET".into()),
                     "EMPTY" if preview && i >= 1 && (word(&source[i-1],"IS") || (i >= 2 && word(&source[i-1],"NOT") && word(&source[i-2],"IS"))) => pieces.push("EMPTY".into()),
-                    "TRIM" | "REGEXP_SUBSTR" | "REGEXP_REPLACE" | "SYS_CONTEXT" if preview
+                    "HEXTORAW" | "TRIM" | "REGEXP_SUBSTR" | "REGEXP_REPLACE" | "SYS_CONTEXT" if preview
                         && (i == 0 || source[i - 1] != Token::Period)
                         && source.get(i + 1) == Some(&Token::LParen) => pieces.push(w.value.to_ascii_lowercase()),
                     "BOTH" | "LEADING" | "TRAILING" if preview && i >= 2
                         && source[i - 1] == Token::LParen && word(&source[i - 2], "TRIM")
                         && (i < 3 || source[i - 3] != Token::Period) => pieces.push(upper),
                     "CLOB" if preview => pieces.push("TEXT".into()),
-                    "BLOB" if preview => pieces.push("BYTEA".into()),
+                    "BLOB" if preview => pieces.push(if preserve_blob { "BLOB" } else { "BYTEA" }.into()),
                     "OCTET_LENGTH" if preview => pieces.push("octet_length".into()),
                     "NUMBER" => pieces.push("NUMERIC".into()),
                     "VARCHAR2" => pieces.push("VARCHAR".into()),
@@ -1524,6 +1574,7 @@ fn lower_block(
         source,
         preview,
         preview && (routine || preview_routine_language_enabled(db)?),
+        false,
         definition_namespace.as_deref(),
     )?;
     let (header, body) = if routine {

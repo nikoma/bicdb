@@ -3478,8 +3478,18 @@ impl<'db> SqlEngine<'db> {
             "length" | "char_length" | "character_length" | "octet_length" | "bit_length"
             | "position" | "strpos" | "ascii" => Some("int4".to_string()),
             "bit_count" | "crc32" | "crc32c" => Some("int8".to_string()),
-            "decode" | "convert" | "convert_to" | "digest" | "gen_random_bytes" | "hmac"
-            | "set_byte" | "sha224" | "sha256" | "sha384" | "sha512" => Some("bytea".to_string()),
+            "bicdb_oracle_hextoraw"
+            | "decode"
+            | "convert"
+            | "convert_to"
+            | "digest"
+            | "gen_random_bytes"
+            | "hmac"
+            | "set_byte"
+            | "sha224"
+            | "sha256"
+            | "sha384"
+            | "sha512" => Some("bytea".to_string()),
             "set_bit" => match self.infer_env_expr_type(args.first()?, env).as_deref() {
                 Some("bit" | "varbit") => Some("bit".to_string()),
                 _ => Some("bytea".to_string()),

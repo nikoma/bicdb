@@ -373,7 +373,7 @@ mod tests {
         ));
         assert_eq!(
             preview_routine_language_version(PREVIEW_ROUTINE_LANGUAGE),
-            Some(27)
+            Some(28)
         );
         for sql in [
             "SELECT CURRENT_TIMESTAMP(9) FROM DUAL",

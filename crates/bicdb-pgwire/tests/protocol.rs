@@ -18,6 +18,66 @@ use sqlx::{Connection as _, Row as _};
 type HmacSha256 = Hmac<Sha256>;
 
 #[test]
+fn exclusive_transaction_retry_preserves_backend_identity_and_advisory_locks() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(15)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    for sql in [
+        "CREATE TABLE permissions (id int PRIMARY KEY, backend bigint, transaction_id bigint, available boolean)",
+        "CREATE TABLE guarded_items (id int PRIMARY KEY)",
+        "CREATE TABLE changes (id bigserial PRIMARY KEY, item_id int)",
+        "CREATE FUNCTION check_permission() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE allowed boolean; BEGIN SELECT p.available INTO allowed FROM permissions p JOIN pg_catalog.pg_locks l ON l.pid=p.backend AND l.locktype='advisory' AND l.classid=17 AND l.objid=19 AND l.objsubid=2 AND l.granted WHERE p.id=1 AND p.backend=pg_backend_pid() AND p.transaction_id=txid_current() FOR UPDATE OF p; IF allowed IS DISTINCT FROM true THEN RAISE EXCEPTION 'missing one-use operation permission' USING ERRCODE='42501'; END IF; UPDATE permissions SET available=false WHERE id=1; RETURN NEW; END $$",
+        "CREATE FUNCTION capture_change() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO changes(item_id) VALUES(NEW.id); RETURN NEW; END $$",
+        "CREATE TRIGGER authority BEFORE INSERT ON guarded_items FOR EACH ROW EXECUTE FUNCTION check_permission()",
+        "CREATE TRIGGER synchronize AFTER INSERT ON guarded_items FOR EACH ROW EXECUTE FUNCTION capture_change()",
+        "BEGIN ISOLATION LEVEL READ COMMITTED",
+        "SELECT pg_advisory_lock(17,19)",
+        "INSERT INTO permissions VALUES(1,pg_backend_pid(),txid_current(),true)",
+    ] {
+        send_query(&mut client, sql);
+        read_query_rows(&mut client);
+    }
+    // A sequence default in the AFTER trigger requires exclusive access.
+    // The retry must retain the same backend, transaction and lock registry,
+    // and restore the consumed permission before executing the row again.
+    send_parse(
+        &mut client,
+        "guarded",
+        "INSERT INTO guarded_items VALUES($1)",
+        &[23],
+    );
+    send_bind(&mut client, "", "guarded", &["7"]);
+    send_describe_portal(&mut client, "");
+    send_execute(&mut client, "");
+    send_sync(&mut client);
+    assert_eq!(read_query_rows_with_status(&mut client), (vec![], b'T'));
+    send_query(&mut client, "SELECT (SELECT count(*) FROM guarded_items),(SELECT count(*) FROM changes),available FROM permissions");
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["1".to_owned(), "1".to_owned(), "f".to_owned()]]
+    );
+    send_query(&mut client, "COMMIT");
+    read_query_rows(&mut client);
+    send_query(&mut client, "INSERT INTO guarded_items VALUES(8)");
+    assert!(read_error_response(&mut client).contains("42501"));
+    send_query(&mut client, "SELECT count(*) FROM guarded_items");
+    assert_eq!(read_query_rows(&mut client), vec![vec!["1".to_owned()]]);
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn prepared_json_parameters_keep_their_types_without_query_casts() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

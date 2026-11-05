@@ -125,6 +125,11 @@ struct Claims {
     tenant_id: String,
     client_id: Option<String>,
     workspace_id: Option<String>,
+    email: Option<String>,
+    name: Option<String>,
+    // Older Carrier clients echo all challenge fields into the signed envelope.
+    // Capability metadata never becomes authorization or policy attributes.
+    identity_attributes: Option<Vec<String>>,
     #[serde(default)]
     roles: Vec<String>,
     #[serde(default)]
@@ -276,7 +281,9 @@ pub(crate) fn execute_delegation(
         let challenge = state
             .delegation_challenge
             .get_or_insert_with(|| Uuid::new_v4().to_string());
-        json!({"version": 1, "audience": state.user, "challenge": challenge}).to_string()
+        json!({"version": 1, "audience": state.user, "challenge": challenge,
+            "identity_attributes":["email","name"]})
+        .to_string()
     } else {
         if args.len() != 2
             || args[0].len() > 16384
@@ -306,6 +313,25 @@ pub(crate) fn execute_delegation(
             || claims.expires_at > now.saturating_add(60)
             || claims.expires_at <= claims.issued_at
             || claims.expires_at.saturating_sub(claims.issued_at) > 60
+            || claims
+                .email
+                .as_ref()
+                .is_some_and(|value| value.len() > 512 || value.contains('\0'))
+            || claims
+                .name
+                .as_ref()
+                .is_some_and(|value| value.len() > 1024 || value.contains('\0'))
+            || claims
+                .identity_attributes
+                .as_ref()
+                .is_some_and(|attributes| {
+                    attributes.len() > 16
+                        || attributes.iter().any(|name| {
+                            name.is_empty()
+                                || name.len() > 64
+                                || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+                        })
+                })
             || claims.roles.iter().chain(&claims.scopes).any(|value| {
                 value.is_empty()
                     || value.trim() != value
@@ -349,6 +375,12 @@ pub(crate) fn execute_delegation(
         );
         identity.client_id = claims.client_id;
         identity.workspace_id = claims.workspace_id;
+        if let Some(email) = claims.email {
+            identity.policy_attributes.insert("email".into(), email);
+        }
+        if let Some(name) = claims.name {
+            identity.policy_attributes.insert("name".into(), name);
+        }
         // A portal may already contain rows materialized under the login's
         // original identity. It cannot survive the switch to the delegate.
         invalidate_portals(server, state);
@@ -440,6 +472,105 @@ mod tests {
             payload.replace('\'', "''"),
             hex::encode(mac.finalize().into_bytes())
         )
+    }
+
+    #[test]
+    fn delegation_challenge_advertises_verified_profile_attributes() {
+        let (_dir, server, mut state) = fixture();
+        execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+        let result = execute_delegation(&server, &mut state, "SELECT bicdb_delegation_challenge()")
+            .unwrap()
+            .unwrap();
+        let SqlValue::String(value) = &result.rows[0][0] else {
+            panic!("JSON challenge expected");
+        };
+        let value: JsonValue = serde_json::from_str(value).unwrap();
+        assert_eq!(value["identity_attributes"], json!(["email", "name"]));
+        execute_server_sql(&server, &mut state, "ROLLBACK").unwrap();
+    }
+
+    #[test]
+    fn verified_profiles_reach_definer_functions_and_never_leak_after_transaction_end() {
+        let (_dir, server, mut state) = fixture();
+        {
+            let mut db = server.db.write();
+            SqlSession::new(&mut db).execute("CREATE SCHEMA carrier_private; CREATE FUNCTION carrier_private.profile() RETURNS JSONB LANGUAGE SQL SECURITY DEFINER AS $$ SELECT carrier_private.current_context()->'user' $$; GRANT USAGE ON SCHEMA carrier_private TO PUBLIC; GRANT EXECUTE ON FUNCTION carrier_private.profile() TO PUBLIC").unwrap();
+        }
+        for finish in ["COMMIT", "ROLLBACK"] {
+            execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+            let mut claims = envelope(&server, &mut state, "alice", "tenant-a");
+            claims["email"] = json!("alice@example.test");
+            claims["name"] = json!("Álice O'Connor");
+            execute_delegation(&server, &mut state, &signed_call(&claims, KEY)).unwrap();
+            assert_eq!(
+                execute_server_sql(
+                    &server,
+                    &mut state,
+                    "SELECT carrier_private.profile()->>'email',carrier_private.profile()->>'name'"
+                )
+                .unwrap()
+                .rows,
+                vec![vec![
+                    SqlValue::String("alice@example.test".into()),
+                    SqlValue::String("Álice O'Connor".into())
+                ]]
+            );
+            execute_server_sql(&server, &mut state, finish).unwrap();
+            let original = state.security_context.as_ref().unwrap();
+            assert_eq!(original.user_id, "app");
+            assert!(!original.policy_attributes.contains_key("email"));
+            assert!(!original.policy_attributes.contains_key("name"));
+        }
+    }
+
+    #[test]
+    fn profile_claims_are_bounded_signed_and_do_not_admit_arbitrary_policy_attributes() {
+        for (field, value) in [
+            ("email", json!("a".repeat(513))),
+            ("name", json!("n".repeat(1025))),
+            ("email", json!("alice\0@example.test")),
+            ("policy_attributes", json!({"superuser":true})),
+        ] {
+            let (_dir, server, mut state) = fixture();
+            execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+            let mut claims = envelope(&server, &mut state, "alice", "tenant-a");
+            claims[field] = value;
+            assert!(execute_delegation(&server, &mut state, &signed_call(&claims, KEY)).is_err());
+            assert_eq!(state.security_context.as_ref().unwrap().user_id, "app");
+            execute_server_sql(&server, &mut state, "ROLLBACK").unwrap();
+        }
+        let (_dir, server, mut state) = fixture();
+        execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+        let mut claims = envelope(&server, &mut state, "alice", "tenant-a");
+        claims["email"] = json!("alice@example.test");
+        let signed = signed_call(&claims, KEY);
+        assert!(execute_delegation(
+            &server,
+            &mut state,
+            &signed.replace("alice@example.test", "other@example.test")
+        )
+        .is_err());
+        execute_server_sql(&server, &mut state, "ROLLBACK").unwrap();
+    }
+
+    #[test]
+    fn legacy_challenge_echo_does_not_infer_email_from_an_opaque_subject() {
+        let (_dir, server, mut state) = fixture();
+        execute_server_sql(&server, &mut state, "BEGIN").unwrap();
+        let mut claims = envelope(&server, &mut state, "alice@example.test", "tenant-a");
+        claims["identity_attributes"] = json!(["email", "name"]);
+        execute_delegation(&server, &mut state, &signed_call(&claims, KEY)).unwrap();
+        assert_eq!(
+            state.security_context.as_ref().unwrap().user_id,
+            "alice@example.test"
+        );
+        assert!(!state
+            .security_context
+            .as_ref()
+            .unwrap()
+            .policy_attributes
+            .contains_key("email"));
+        execute_server_sql(&server, &mut state, "ROLLBACK").unwrap();
     }
 
     #[test]

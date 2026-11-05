@@ -35,9 +35,10 @@ Never distribute the delegation key to browsers or end users.
 
 1. Authenticate the pooled connection as the application and execute `BEGIN`.
 2. Execute `SELECT bicdb_delegation_challenge()`. The text result is a JSON object
-   with `version: 1`, `audience` (the SQL login) and a fresh `challenge`.
+   with `version: 1`, `audience` (the SQL login), a fresh `challenge`, and
+   `identity_attributes: ["email", "name"]` advertising supported profile claims.
 3. Add `issued_at` and `expires_at` as Unix seconds, `user_id`, `tenant_id`, and
-   optional `client_id`, `workspace_id`, `roles`, and `scopes`. These must come
+   optional `client_id`, `workspace_id`, `roles`, `scopes`, `email`, and `name`. These must come
    from verified authentication and authorization, never unverified request
    headers or a user-supplied identity object.
 4. Serialize the complete JSON object once. Compute HMAC-SHA256 over those exact
@@ -58,6 +59,14 @@ The JSON payload is limited to 16 KiB; unknown fields are rejected. Roles and
 scopes cannot contain commas, NUL characters, or surrounding whitespace. The server verifies signatures
 in constant time and checks audience, challenge, expiry and tenant authority.
 A captured token cannot be reused on another connection or transaction.
+
+Optional signed `email` and `name` are exposed as authenticated profile attributes
+to SQL context helpers, including inside SECURITY DEFINER functions. Their UTF-8
+limits are 512 and 1024 bytes respectively; NUL characters are rejected. They
+are restored with the rest of the identity at transaction completion. Email is
+never inferred from `user_id`. Older clients may echo the bounded
+`identity_attributes` capability list into their signed envelope; that metadata
+grants no authority and does not populate profile attributes.
 
 Delegation installs a trusted authenticated identity for RLS; it does not grant
 SQL privileges, superuser authority, an internal service identity, or RLS bypass.

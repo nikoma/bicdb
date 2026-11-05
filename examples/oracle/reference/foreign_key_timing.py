@@ -17,16 +17,22 @@ CASES = [
     'set_immediate_failure_keeps_pending_check', 'nondeferrable_cannot_defer',
     'tuple_novalidate_unchanged_key', 'composite_child_before_parent',
     'composite_partial_null', 'composite_novalidate_unchanged_key',
+    'postgres_cross_width_immediate', 'postgres_cross_width_deferred',
+    'postgres_cross_width_repaired', 'postgres_cross_width_validate',
 ]
 
 
 def expectations(case, oracle):
     """Require explicit behavior, so equal failures cannot count as compatibility."""
-    legacy = 'novalidate_' in case or case == 'validate_existing_orphan'
-    fixed = case == 'nondeferrable_cannot_defer'
+    legacy = 'novalidate_' in case or case in ('validate_existing_orphan','postgres_cross_width_validate')
+    fixed = case in ('nondeferrable_cannot_defer','postgres_cross_width_immediate','postgres_cross_width_validate')
     action = {'cascade_is_immediate': 'CASCADE', 'set_null_is_immediate': 'SET NULL'}.get(case, 'NO ACTION')
     catalog = [not fixed, not fixed, not legacy, action, ['NO', 'NO'] if fixed else ['YES', 'YES']]
     details = {
+        'postgres_cross_width_immediate': dict(insert='foreign_key', rows=1),
+        'postgres_cross_width_deferred': dict(insert='ok', commit='foreign_key', rows=1),
+        'postgres_cross_width_repaired': dict(insert='ok', commit='ok', rows=1),
+        'postgres_cross_width_validate': dict(validate='foreign_key', after_failure=catalog, rows=1),
         'initial_timing_catalog': dict(rows=1),
         'child_before_parent': dict(commit='ok', rows=2),
         'unresolved_commit': dict(commit='foreign_key', children=1, marker=0),
@@ -69,6 +75,8 @@ def observe(factory, progress=None):
         with factory() as connection:
             native = type(connection).__module__.startswith('oracledb')
             oracle_semantics = native or connection.info.parameter_status('bicdb_sql_profile') == 'oracle-preview-v1'
+            if case.startswith('postgres_cross_width_') and oracle_semantics:
+                continue  # Oracle SMALLINT has a different numeric domain.
             connection.autocommit = False
             report['server_version'] = connection.version if native else connection.info.server_version
             stem = 'BIC_FK_' + uuid.uuid4().hex[:12].upper()
@@ -104,23 +112,37 @@ def observe(factory, progress=None):
                 execute('SELECT \"is_deferrable\",\"initially_deferred\" FROM \"information_schema\".\"table_constraints\" WHERE \"constraint_name\"=%s',[name])
                 result.append(list(cursor.fetchone()))
                 return result
-            legacy = 'novalidate_' in case or case == 'validate_existing_orphan'
+            legacy = 'novalidate_' in case or case in ('validate_existing_orphan','postgres_cross_width_validate')
             action = 'CASCADE' if case=='cascade_is_immediate' else 'SET NULL' if case=='set_null_is_immediate' else 'NO ACTION'
             try:
                 composite = case.startswith('composite_')
+                cross_width = case.startswith('postgres_cross_width_')
                 parent_columns = '("ID" INTEGER PRIMARY KEY,"SUBID" INTEGER,UNIQUE("ID","SUBID"))' if composite else '("ID" INTEGER PRIMARY KEY)'
+                if cross_width:parent_columns='("ID" SMALLINT PRIMARY KEY)'
                 execute('CREATE TABLE '+p+parent_columns);created.append(p);connection.commit()
-                execute('CREATE TABLE '+c+'("ID" INTEGER PRIMARY KEY,"PID" INTEGER,"NOTE" INTEGER)');created.append(c);connection.commit()
+                child_columns = '("ID" INTEGER PRIMARY KEY,"PID" BIGINT,"NOTE" INTEGER)' if cross_width else '("ID" INTEGER PRIMARY KEY,"PID" INTEGER,"NOTE" INTEGER)'
+                execute('CREATE TABLE '+c+child_columns);created.append(c);connection.commit()
                 execute('INSERT INTO '+p+(' VALUES(1,0)' if composite else ' VALUES(1)'))
-                execute('INSERT INTO '+c+' VALUES(1,'+('999' if legacy else '1')+',0)');connection.commit()
+                execute('INSERT INTO '+c+' VALUES(1,'+('2147483648' if case=='postgres_cross_width_validate' else '999' if legacy else '1')+',0)');connection.commit()
                 reference = ' FOREIGN KEY("PID","NOTE") REFERENCES '+p+'("ID","SUBID")' if composite else ' FOREIGN KEY("PID") REFERENCES '+p+'("ID")'
                 ddl='ALTER TABLE '+c+' ADD CONSTRAINT '+fk+reference
                 if action!='NO ACTION':ddl+=' ON DELETE '+action
-                ddl+=(' NOT DEFERRABLE' if case=='nondeferrable_cannot_defer' else ' DEFERRABLE INITIALLY DEFERRED')
+                ddl+=(' NOT DEFERRABLE' if case in ('nondeferrable_cannot_defer','postgres_cross_width_immediate','postgres_cross_width_validate') else ' DEFERRABLE INITIALLY DEFERRED')
                 if legacy:ddl+=' ENABLE NOVALIDATE' if native else ' NOT VALID'
                 execute(ddl);connection.commit()
                 outcome['catalog']=metadata();connection.commit()
-                if case=='initial_timing_catalog':
+                if cross_width:
+                    if case=='postgres_cross_width_validate':
+                        outcome['validate']=attempt(lambda:execute('ALTER TABLE '+c+' VALIDATE CONSTRAINT '+fk))
+                        connection.rollback();outcome['after_failure']=metadata()
+                    else:
+                        outcome['insert']=attempt(lambda:execute('INSERT INTO '+c+' VALUES(2,2147483648,0)'))
+                        if case=='postgres_cross_width_immediate':connection.rollback()
+                        else:
+                            if case=='postgres_cross_width_repaired':execute('DELETE FROM '+c+' WHERE "ID"=2')
+                            outcome['commit']=attempt(connection.commit)
+                    outcome['rows']=scalar('SELECT COUNT(*) FROM '+c)
+                elif case=='initial_timing_catalog':
                     outcome['rows']=scalar('SELECT COUNT(*) FROM '+c)
                 elif case=='child_before_parent':
                     execute('INSERT INTO '+c+' VALUES(2,2,0)');execute('INSERT INTO '+p+' VALUES(2)')

@@ -11,7 +11,7 @@ BLOB schema save are checked. Both paths must be local compatibility-example
 executables with the documented `oracle_server` command-line interface.
 
 `foreign_key_timing.py --reference oracle --oracle-config /private/oracle.json
---output /private/foreign-key-timing.json` checks 17 explicit expectations for
+--output /private/foreign-key-timing.json` checks 17 Oracle and 21 PostgreSQL expectations for
 deferred foreign keys: catalogs, child-before-parent writes, commit failure,
 SET CONSTRAINTS, savepoints, NOVALIDATE legacy rows, validation and delete
 actions. PostgreSQL uses `--reference postgres` and `ORACLE_CONTROL_PG_DSN`;
@@ -23,7 +23,10 @@ partially NULL composite references and tuple self-assignments have separate
 cases. PostgreSQL SQLSTATEs are also compared;
 Oracle numeric errors are recorded but not claimed equivalent. These checks
 do not qualify application constraint migration, all concurrency schedules,
-all composite/null-key combinations or recovery.
+all composite/null-key combinations or recovery. PostgreSQL-only cross-width
+cases check immediate/deferred diagnostics, deleting the invalid child before
+commit and validation of existing rows; Oracle SMALLINT has a different numeric
+domain and is not treated as the same declaration.
 
 `integer_bounds.py --reference oracle --oracle-config /private/oracle.json
 --output /private/integer-bounds.json` checks 18 independent expectations for

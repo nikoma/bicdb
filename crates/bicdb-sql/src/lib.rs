@@ -643,6 +643,8 @@ struct SqlProfileStats {
     scalar_subquery_elapsed_ms: f64,
     foreign_key_parent_delete_schema_scans: usize,
     foreign_key_child_scans: usize,
+    foreign_key_parent_scans: usize,
+    foreign_key_parent_lookups: usize,
     write_elapsed_ms: f64,
     write_batches: usize,
     write_rows: usize,
@@ -1013,6 +1015,14 @@ impl SqlProfileScope {
                     stats.foreign_key_parent_delete_schema_scans
                 ),
                 format!("foreign_key_child_scans={}", stats.foreign_key_child_scans),
+                format!(
+                    "foreign_key_parent_scans={}",
+                    stats.foreign_key_parent_scans
+                ),
+                format!(
+                    "foreign_key_parent_lookups={}",
+                    stats.foreign_key_parent_lookups
+                ),
                 format!("write_elapsed_ms={:.3}", stats.write_elapsed_ms),
                 format!("write_batches={}", stats.write_batches),
                 format!("write_rows={}", stats.write_rows),

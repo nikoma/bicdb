@@ -2335,7 +2335,12 @@ pub(crate) fn validate_foreign_key_constraint(
             load_schema(db, foreign_table)?.ok_or_else(|| foreign_key_violation(table, name))?;
         // Reserve the same key now as immediate FK checks and parent writes.
         // Delaying the reservation would permit a concurrent parent deletion.
-        reserve_foreign_key(tx, &parent, referred_columns, &key)?;
+        if let Err(error) = reserve_foreign_key(tx, &parent, referred_columns, &key) {
+            // Impossible parent keys still respect deferred validation timing.
+            if error.sqlstate() != "22003" {
+                return Err(error);
+            }
+        }
         queue_foreign_key_check(tx.unwrap(), table, constraint, &record.id);
         return Ok(());
     }
@@ -2369,12 +2374,52 @@ pub(crate) fn validate_foreign_key_constraint_immediate(
     let Some(foreign_schema) = load_schema(db, foreign_table)? else {
         return Err(foreign_key_violation(table, name));
     };
-    reserve_foreign_key(tx, &foreign_schema, referred_columns, &key)?;
+    let domain_error = |error: SqlError| {
+        if error.sqlstate() == "22003" {
+            foreign_key_violation(table, name)
+        } else {
+            error
+        }
+    };
+    reserve_foreign_key(tx, &foreign_schema, referred_columns, &key).map_err(domain_error)?;
+    // This is an integrity read, not a transaction-snapshot read: match the
+    // existing scan's latest committed state with this transaction overlaid.
+    // Recheck typed equality even after deriving a physical primary-key id.
+    // Unsupported/coercing identities and misses retain the authoritative scan,
+    // including its error behavior for out-of-range cross-type references.
+    let primary = !foreign_schema.has_hidden_primary_key()
+        && primary_key_columns_for_schema(&foreign_schema) == *referred_columns;
+    let point_id = primary.then(|| {
+        record_id_from_column_values(foreign_table, &foreign_schema, referred_columns, &key)
+    });
+    if let Some(Ok(id)) = point_id {
+        sql_profile_record(|stats| stats.foreign_key_parent_lookups += 1);
+        let committed = db.get_unchecked(foreign_table, &id)?;
+        let parent = match tx {
+            Some(tx) => tx.overlay_pending_write(foreign_table, &id, committed),
+            None => committed,
+        };
+        if let Some(parent) = parent {
+            let parent_key = record_column_values(&parent, &foreign_schema, referred_columns);
+            if typed_column_values_not_distinct(
+                &foreign_schema,
+                referred_columns,
+                &parent_key,
+                &key,
+            )
+            .map_err(domain_error)?
+            {
+                return Ok(());
+            }
+        }
+    }
     let mut found = false;
+    sql_profile_record(|stats| stats.foreign_key_parent_scans += 1);
     let foreign_records = current_integrity_records(db, tx, foreign_table)?;
     for foreign_record in foreign_records {
         let foreign_key = record_column_values(&foreign_record, &foreign_schema, referred_columns);
-        if typed_column_values_not_distinct(&foreign_schema, referred_columns, &foreign_key, &key)?
+        if typed_column_values_not_distinct(&foreign_schema, referred_columns, &foreign_key, &key)
+            .map_err(domain_error)?
         {
             found = true;
             break;
@@ -5909,3 +5954,7 @@ mod alter_check_batches_tests {
         assert_eq!(db.scan_collection("batch_checks").unwrap(), before);
     }
 }
+
+#[cfg(test)]
+#[path = "records/foreign_key_lookup_tests.rs"]
+mod foreign_key_lookup_tests;

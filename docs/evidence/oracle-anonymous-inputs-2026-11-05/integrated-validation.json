@@ -1,0 +1,64 @@
+{
+  "format": 1,
+  "goal_complete": false,
+  "application_qualified": false,
+  "deployed": false,
+  "source_commit": "b0d9fb640a004f125fe3ddd8cdea10e3e045c8da",
+  "binary_sha256": "d36dd27fda59def47510bdf24c0f7a8a3a311260caf56ee64e090ea006639086",
+  "post_integration_tests_passed": 242,
+  "post_integration_tests_failed": 0,
+  "test_groups": [
+    {
+      "passed": 45,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 172,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "workspace_all_targets_check_passed": true,
+  "format_check_passed": true,
+  "whitespace_check_passed": true,
+  "new_oracle_transaction_controls_matched": 8,
+  "retained_reference_families_passed": 13,
+  "jdbc_optimistic_update_qualified": true,
+  "installed_jdbc_adapter_qualified": false
+}

@@ -46,3 +46,15 @@ compilation, formatting and whitespace checks pass. Thirteen retained independen
 Oracle/PostgreSQL reference families also pass against the frozen candidate.
 These results precede integration with later changes on main; any subsequent
 combined-build checks are recorded separately.
+
+## Combined main qualification
+
+The [combined record](integrated-validation.json) pins the subsequent merge with
+notice delivery and application-runtime savepoint changes. All 242 targeted
+protocol, transaction, routine, notice and stack checks pass on that source;
+workspace all-target compilation, formatting and whitespace checks also pass.
+The [repeated Oracle comparison](integrated-transaction-comparison.json) matches
+8/8 controls against the merged binary. All 13 retained reference families and
+the optimistic timestamp-update probe pass again. These are additional combined
+checks, not 242 new distinct tests added to the earlier 993-test source checkpoint.
+The candidate remains separate from the accepted application runtime.

@@ -848,18 +848,18 @@ impl<'db> SqlSession<'db> {
 
     fn execute_query_in_sql(&mut self, query: &Query) -> Result<SqlResult> {
         if let Some(rewritten) = normalize_fetch_clause(query)? {
-            return self.execute_query(&rewritten);
+            return self.execute_temporary_query(&rewritten);
         }
         if let Some(rewritten) = rewrite_ordinal_order_by(query, &|relation| {
             table_factor_column_names(self.db_ref(), relation)
         }) {
-            return self.execute_query(&rewritten);
+            return self.execute_temporary_query(&rewritten);
         }
         if let Some(rewritten) = rewrite_row_type_constructs(self.db_ref(), query)? {
-            return self.execute_query(&rewritten);
+            return self.execute_temporary_query(&rewritten);
         }
         if let Some(folded) = fold_statement_constants(query, &self.routine_vars) {
-            return self.execute_query(&folded);
+            return self.execute_temporary_query(&folded);
         }
         // Own the entire statement, including CTEs and its final DML. A
         // correlated function must never commit independently of that DML.
@@ -919,15 +919,7 @@ impl<'db> SqlSession<'db> {
         // Resolve named routine variables and positional parameters in every
         // nested row-count clause before CTE materialization.
         if let Some(bound) = self.bind_limit_clause_placeholders(query) {
-            // Rewritten nodes are temporary, not addresses in the stored IR.
-            // Do not let their operand/branch types enter routine-node memos.
-            let _scope = crate::eval::suspend_expr_type_scope();
-            let previous_ir = self.current_routine_ir.take();
-            let previous_owned = std::mem::replace(&mut self.ir_owned_statement, false);
-            let result = self.execute_query(&bound);
-            self.ir_owned_statement = previous_owned;
-            self.current_routine_ir = previous_ir;
-            return result;
+            return self.execute_temporary_query(&bound);
         }
         if let Some(with) = &query.with {
             if with.recursive {
@@ -971,6 +963,19 @@ impl<'db> SqlSession<'db> {
             return Ok(result);
         }
         self.sql_engine().execute_query(query)
+    }
+
+    /// Rewritten nodes have no stable identity in a stored routine. Their
+    /// addresses must not enter expression-type or routine plan memos, even
+    /// when a rewrite recursively reaches another routine or query rewrite.
+    fn execute_temporary_query(&mut self, query: &Query) -> Result<SqlResult> {
+        let _scope = crate::eval::suspend_expr_type_scope();
+        let previous_ir = self.current_routine_ir.take();
+        let previous_owned = std::mem::replace(&mut self.ir_owned_statement, false);
+        let result = self.execute_query(query);
+        self.ir_owned_statement = previous_owned;
+        self.current_routine_ir = previous_ir;
+        result
     }
 
     /// Bind row-count expressions at every query level before a CTE or

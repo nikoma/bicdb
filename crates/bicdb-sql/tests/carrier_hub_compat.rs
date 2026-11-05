@@ -13,6 +13,23 @@ fn session_rows(session: &mut SqlSession<'_>, sql: &str) -> Vec<Vec<SqlValue>> {
 }
 
 #[test]
+fn repeated_grouped_summary_routines_keep_timezone_and_date_types() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE patients(id int PRIMARY KEY,timezone text); CREATE TABLE practices(id int PRIMARY KEY,patient_id int,practiced_at timestamptz,duration_minutes int); INSERT INTO patients VALUES(1,NULL),(2,'UTC'); INSERT INTO practices VALUES(1,1,'2026-11-05T12:00:00Z',10),(2,2,'2026-11-05T12:00:00Z',20)").unwrap();
+    session.execute("CREATE FUNCTION practice_summary(p_patient int,p_day date) RETURNS jsonb LANGUAGE plpgsql STABLE AS $$ DECLARE readings jsonb; BEGIN SELECT COALESCE(jsonb_agg(to_jsonb(x)),'[]') INTO readings FROM (SELECT (r.practiced_at AT TIME ZONE COALESCE(NULLIF(p.timezone,''),'UTC'))::date AS day,sum(r.duration_minutes) AS minutes,count(*) AS sessions FROM practices r JOIN patients p ON p.id=r.patient_id WHERE r.patient_id=p_patient AND r.practiced_at>=p_day-90 AND r.practiced_at<p_day+2 GROUP BY 1 ORDER BY 1) x; RETURN jsonb_build_object('practices',readings,'day',p_day); END $$").unwrap();
+    for call in 0..100 {
+        let patient = 1 + call % 2;
+        let rows = session_rows(
+            &mut session,
+            &format!("SELECT practice_summary({patient},DATE '2026-11-05')"),
+        );
+        assert_eq!(rows,vec![vec![SqlValue::Json(serde_json::json!({"practices":[{"day":"2026-11-05","minutes":patient*10,"sessions":1}],"day":"2026-11-05"}).into())]],"call {call}");
+    }
+}
+
+#[test]
 fn dropping_an_obsolete_function_signature_preserves_the_current_table_function() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

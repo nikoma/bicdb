@@ -1458,10 +1458,10 @@ impl<'db> SqlEngine<'db> {
             }
             return Ok(SqlValue::Null);
         }
-        let arg_exprs = function_args(function);
+        let arg_exprs = function_arg_list(function);
         if let Some((alias, binary)) = whole_row_json_function_alias(&name, &arg_exprs) {
             let pretty = if arg_exprs.len() == 2 {
-                match self.eval_slot_row_value(row, context, &arg_exprs[1])? {
+                match self.eval_slot_row_value(row, context, arg_exprs.get(1).unwrap())? {
                     SqlValue::Null => return Ok(SqlValue::Null),
                     SqlValue::Bool(pretty) => pretty,
                     _ => {
@@ -2925,10 +2925,10 @@ impl<'db> SqlEngine<'db> {
             }
             return Ok(SqlValue::Null);
         }
-        let arg_exprs = function_args(function);
+        let arg_exprs = function_arg_list(function);
         if let Some((alias, binary)) = whole_row_json_function_alias(&name, &arg_exprs) {
             let pretty = if arg_exprs.len() == 2 {
-                match self.eval_row_value(row, &arg_exprs[1])? {
+                match self.eval_row_value(row, arg_exprs.get(1).unwrap())? {
                     SqlValue::Null => return Ok(SqlValue::Null),
                     SqlValue::Bool(pretty) => pretty,
                     _ => {

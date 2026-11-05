@@ -215,6 +215,15 @@ mod tests {
             "ALTER TABLE d VALIDATE CONSTRAINT cascading_fk",
         )
         .unwrap();
+        run(&mut session,"ALTER TABLE c ADD CONSTRAINT fixed_fk FOREIGN KEY(pid) REFERENCES p(deferrable) NOT DEFERRABLE").unwrap();
+        run(&mut session, "BEGIN").unwrap();
+        assert_eq!(
+            run(&mut session, "SET CONSTRAINTS fixed_fk IMMEDIATE")
+                .unwrap_err()
+                .sqlstate(),
+            "42809"
+        );
+        run(&mut session, "ROLLBACK").unwrap();
     }
 
     #[test]
@@ -245,6 +254,16 @@ mod tests {
                 .unwrap_err()
                 .sqlstate(),
             "42809"
+        );
+        session
+            .execute("ROLLBACK; BEGIN; SET CONSTRAINTS fixed_fk IMMEDIATE")
+            .unwrap();
+        assert_eq!(
+            session
+                .execute("INSERT INTO c VALUES(1,999)")
+                .unwrap_err()
+                .sqlstate(),
+            "23503"
         );
         session.execute("ROLLBACK").unwrap();
     }

@@ -395,6 +395,13 @@ impl<'db> SqlSession<'db> {
                                         return Err(SqlError::Unsupported("SET CONSTRAINTS timing is supported only for foreign keys".into()));
                                     };
                                     if !*deferrable {
+                                        // PostgreSQL permits an explicit no-op IMMEDIATE;
+                                        // Oracle rejects either mode for a non-deferrable FK.
+                                        if !deferred
+                                            && !crate::oracle::is_preview_database(self.db_ref())?
+                                        {
+                                            continue;
+                                        }
                                         return Err(SqlError::RaisedException {
                                             sqlstate: "42809".into(),
                                             message: format!("constraint {name} is not deferrable"),

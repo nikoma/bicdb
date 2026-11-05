@@ -408,26 +408,33 @@ pub fn is_known_profile(profile: &str) -> bool {
 }
 
 /// Constraint semantics follow the durable database profile, never a mutable
-/// connection setting. Explicit PostgreSQL NULLS clauses can select a policy.
-pub(crate) fn default_unique_null_policy(db: &BicDb) -> Result<UniqueNullPolicy> {
+/// connection setting.
+pub(crate) fn is_preview_database(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
-        Err(BicDbError::CollectionNotFound(_)) => Ok(UniqueNullPolicy::Distinct),
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
-        Ok(Some(record)) if matches_profile(&record.metadata, ORACLE_PREVIEW_PROFILE) => {
-            Ok(UniqueNullPolicy::AllNullsDistinct)
-        }
+        Ok(Some(record)) if matches_profile(&record.metadata, ORACLE_PREVIEW_PROFILE) => Ok(true),
         Ok(Some(record))
             if record.metadata == serde_json::json!({"format":1,"profile":ORACLE_HR_PROFILE}) =>
         {
-            Ok(UniqueNullPolicy::Distinct)
+            Ok(false)
         }
         Ok(Some(record))
             if record.metadata == serde_json::json!({"format":1,"profile":POSTGRES_PROFILE}) =>
         {
-            Ok(UniqueNullPolicy::Distinct)
+            Ok(false)
         }
         _ => Err(unsupported("invalid or missing durable SQL profile marker")),
     }
+}
+
+/// Explicit PostgreSQL NULLS clauses can select their own uniqueness policy.
+pub(crate) fn default_unique_null_policy(db: &BicDb) -> Result<UniqueNullPolicy> {
+    Ok(if is_preview_database(db)? {
+        UniqueNullPolicy::AllNullsDistinct
+    } else {
+        UniqueNullPolicy::Distinct
+    })
 }
 
 /// The preview profile grows independently of the bounded HR profile. Its

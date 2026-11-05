@@ -1,5 +1,18 @@
 # Oracle reference queries
 
+`foreign_key_timing.py --reference oracle --oracle-config /private/oracle.json
+--output /private/foreign-key-timing.json` checks 13 explicit expectations for
+deferred foreign keys: catalogs, child-before-parent writes, commit failure,
+SET CONSTRAINTS, savepoints, NOVALIDATE legacy rows, validation and delete
+actions. PostgreSQL uses `--reference postgres` and `ORACLE_CONTROL_PG_DSN`;
+both modes use `BICDB_PG_DSN` for the target. The target profile must match the
+reference. Each case creates and drops nonce tables in a dedicated schema.
+Oracle and PostgreSQL have separate expectations for unchanged-key assignments
+and named non-deferrable constraints. PostgreSQL SQLSTATEs are also compared;
+Oracle numeric errors are recorded but not claimed equivalent. These checks
+do not qualify application constraint migration, all concurrency schedules,
+composite/null keys or recovery.
+
 `integer_bounds.py --reference oracle --oracle-config /private/oracle.json
 --output /private/integer-bounds.json` checks 18 independent expectations for
 integer primary/secondary index bounds, numeric promotion, fractional/large

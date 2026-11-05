@@ -4,6 +4,86 @@ use super::*;
 #[allow(unused_imports)]
 use crate::*;
 
+fn is_boolean_spine(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::Nested(_)
+            | Expr::UnaryOp {
+                op: UnaryOperator::Not,
+                ..
+            }
+            | Expr::BinaryOp {
+                op: BinaryOperator::And | BinaryOperator::Or,
+                ..
+            }
+    )
+}
+
+/// Boolean policy trees can contain long role lists and redundant parentheses.
+/// Keep their traversal off the native call stack while preserving left-to-right
+/// short-circuiting and SQL's three-valued truth tables. Leaves retain their
+/// ordinary evaluator, including its privilege checks, types and effects.
+fn eval_boolean_spine(
+    expr: &Expr,
+    mut leaf: impl FnMut(&Expr) -> Result<Option<bool>>,
+) -> Result<Option<bool>> {
+    enum Frame<'a> {
+        Eval(&'a Expr),
+        AndRight(&'a Expr),
+        OrRight(&'a Expr),
+        And(Option<bool>),
+        Or(Option<bool>),
+        Not,
+    }
+    let mut frames: smallvec::SmallVec<[Frame<'_>; 16]> = smallvec::SmallVec::new();
+    frames.push(Frame::Eval(expr));
+    let mut value = None;
+    while let Some(frame) = frames.pop() {
+        match frame {
+            Frame::Eval(expr) => match expr {
+                Expr::Nested(inner) => frames.push(Frame::Eval(inner)),
+                Expr::UnaryOp {
+                    op: UnaryOperator::Not,
+                    expr,
+                } => {
+                    frames.push(Frame::Not);
+                    frames.push(Frame::Eval(expr));
+                }
+                Expr::BinaryOp {
+                    left,
+                    op: BinaryOperator::And,
+                    right,
+                } => {
+                    frames.push(Frame::AndRight(right));
+                    frames.push(Frame::Eval(left));
+                }
+                Expr::BinaryOp {
+                    left,
+                    op: BinaryOperator::Or,
+                    right,
+                } => {
+                    frames.push(Frame::OrRight(right));
+                    frames.push(Frame::Eval(left));
+                }
+                _ => value = leaf(expr)?,
+            },
+            Frame::AndRight(right) if value != Some(false) => {
+                frames.push(Frame::And(value));
+                frames.push(Frame::Eval(right));
+            }
+            Frame::OrRight(right) if value != Some(true) => {
+                frames.push(Frame::Or(value));
+                frames.push(Frame::Eval(right));
+            }
+            Frame::AndRight(_) | Frame::OrRight(_) => {}
+            Frame::And(left) => value = sql_and(left, value),
+            Frame::Or(left) => value = sql_or(left, value),
+            Frame::Not => value = sql_not(value),
+        }
+    }
+    Ok(value)
+}
+
 fn qualified_session_keyword_column_parts(
     function: &Function,
     normalized_name: &str,
@@ -457,25 +537,11 @@ impl<'db> SqlEngine<'db> {
         context: &BoundRowContext,
         expr: &Expr,
     ) -> Result<Option<bool>> {
+        if is_boolean_spine(expr) {
+            return eval_boolean_spine(expr, |leaf| self.eval_slot_row_truth(row, context, leaf));
+        }
         match expr {
             Expr::BinaryOp { left, op, right } => match op {
-                BinaryOperator::And => {
-                    let left = self.eval_slot_row_truth(row, context, left)?;
-                    if matches!(left, Some(false)) {
-                        return Ok(Some(false));
-                    }
-                    Ok(sql_and(
-                        left,
-                        self.eval_slot_row_truth(row, context, right)?,
-                    ))
-                }
-                BinaryOperator::Or => {
-                    let left = self.eval_slot_row_truth(row, context, left)?;
-                    if matches!(left, Some(true)) {
-                        return Ok(Some(true));
-                    }
-                    Ok(sql_or(left, self.eval_slot_row_truth(row, context, right)?))
-                }
                 BinaryOperator::Eq
                 | BinaryOperator::NotEq
                 | BinaryOperator::Gt
@@ -928,10 +994,6 @@ impl<'db> SqlEngine<'db> {
                     ))),
                 }
             }
-            Expr::UnaryOp { op, expr } if op.to_string().eq_ignore_ascii_case("NOT") => {
-                Ok(sql_not(self.eval_slot_row_truth(row, context, expr)?))
-            }
-            Expr::Nested(expr) => self.eval_slot_row_truth(row, context, expr),
             other => Err(SqlError::Unsupported(format!(
                 "unsupported WHERE expression {other}"
             ))),
@@ -2027,22 +2089,11 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn eval_row_truth(&self, row: &SqlRow, expr: &Expr) -> Result<Option<bool>> {
+        if is_boolean_spine(expr) {
+            return eval_boolean_spine(expr, |leaf| self.eval_row_truth(row, leaf));
+        }
         match expr {
             Expr::BinaryOp { left, op, right } => match op {
-                BinaryOperator::And => {
-                    let left = self.eval_row_truth(row, left)?;
-                    if matches!(left, Some(false)) {
-                        return Ok(Some(false));
-                    }
-                    Ok(sql_and(left, self.eval_row_truth(row, right)?))
-                }
-                BinaryOperator::Or => {
-                    let left = self.eval_row_truth(row, left)?;
-                    if matches!(left, Some(true)) {
-                        return Ok(Some(true));
-                    }
-                    Ok(sql_or(left, self.eval_row_truth(row, right)?))
-                }
                 BinaryOperator::Eq
                 | BinaryOperator::NotEq
                 | BinaryOperator::Gt
@@ -2536,13 +2587,9 @@ impl<'db> SqlEngine<'db> {
                     other.to_cell()
                 ))),
             },
-            Expr::UnaryOp { op, expr } if op.to_string().eq_ignore_ascii_case("NOT") => {
-                Ok(sql_not(self.eval_row_truth(row, expr)?))
-            }
             Expr::Value(_) | Expr::TypedString(_) => {
                 sql_value_truth(self.eval_row_value(row, expr)?)
             }
-            Expr::Nested(expr) => self.eval_row_truth(row, expr),
             other => Err(SqlError::Unsupported(format!(
                 "unsupported WHERE expression {other}"
             ))),

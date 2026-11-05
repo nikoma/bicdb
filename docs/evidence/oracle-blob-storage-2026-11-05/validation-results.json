@@ -1,0 +1,124 @@
+{
+  "format": 1,
+  "source_commit": "b53496b70e128a4b708398c76e2739a7f34c4d1e",
+  "scope": "identity-bearing Oracle BLOB cells and transactional owner metadata; prepared direct-column origin metadata",
+  "platform": "local Linux; single build job; incremental and debug information disabled; resource guards active",
+  "native_storage_tests_fsync": false,
+  "checks": [
+    {
+      "name": "sql",
+      "results": [
+        {
+          "passed": 674,
+          "failed": 0,
+          "ignored": 3,
+          "measured": 0,
+          "filtered": 0
+        }
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "protocol",
+      "results": [
+        {
+          "passed": 47,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered": 0
+        },
+        {
+          "passed": 179,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered": 0
+        }
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "upstream-exact",
+      "results": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered": 36
+        }
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "workspace",
+      "results": [],
+      "exit_code": 0
+    }
+  ],
+  "resource_guards": [
+    {
+      "status": "completed",
+      "minimum_observed_available_bytes": 15237591040,
+      "peak_group_rss_bytes": 5478825984,
+      "minimum_observed_disk_available_bytes": 12857311232
+    },
+    {
+      "status": "completed",
+      "minimum_observed_available_bytes": 20316127232,
+      "peak_group_rss_bytes": 24145920,
+      "minimum_observed_disk_available_bytes": 13030227968
+    }
+  ],
+  "source_sha256": {
+    "crates/bicdb-pgwire/src/lib.rs": "c9dd8a5553b07182b2298b6342d3af4d5cf64d8c58ab7e94fd0540c1bd582eb5",
+    "crates/bicdb-pgwire/tests/oracle_hr.rs": "8fca02d1481027873705493d11128aeb816a9ce6f24242d4d2a4621d9d4d14e3",
+    "crates/bicdb-sql/src/engine.rs": "11ac95e810847dffc9fda6e9b392149ba0f7834b83a7a3530929df4a4cc86908",
+    "crates/bicdb-sql/src/engine/materialize.rs": "65999fc8a5d9bafbb5d9cf420e77d38d0f218d50ef93daf1bb1e4afc0b7abf74",
+    "crates/bicdb-sql/src/eval/value_ops2.rs": "c0e7b603869381f36f84163f43e8a7bcce9f0f0872239fd36e21e96331d579b3",
+    "crates/bicdb-sql/src/lib.rs": "9fa7cd8b210aeb3983dd4d528f1cf2e42f0b8684709e69ce695e33a5e1c836f2",
+    "crates/bicdb-sql/src/oracle.rs": "42cf77c1d314cd9b8a62a7659361fad7ecac2bb44725542212e76faf7ee846e1",
+    "crates/bicdb-sql/src/oracle/lob_columns.rs": "e694fdfb37941d8c6f6eed86f894b2bece14fd97807a15a668c10ca43629edb3",
+    "crates/bicdb-sql/src/oracle/lob_storage.rs": "da4ecffd09d039f3cddfc70781d9cf7f7041b184504cb89b661e529c83872274",
+    "crates/bicdb-sql/src/oracle/lobs.rs": "1e4d706c93354d7fcbbbb6d0f6399fda4913f867cbedf72538825707f9987c58",
+    "crates/bicdb-sql/src/oracle/raw_values.rs": "f33fdba9be0122cb8a57255223b5dcfc5e4b7523735b2be28b88b0839eb27248",
+    "crates/bicdb-sql/src/oracle/temporal_columns.rs": "d149ddd52efcb86f0ea87298154af0c00b513a6af6fb773c3e29dc20011d42b2",
+    "crates/bicdb-sql/src/planner.rs": "2f5a96e67f0251022f2ef92838fb233ce25f7632dbac80f23f9b9f71a9571ecf",
+    "crates/bicdb-sql/src/records.rs": "6fa422104a245043190b58697bc13e2a756e911d80de51f566d06f7a2e956e1b",
+    "crates/bicdb-sql/src/routines.rs": "04edb52d97f6806f5726fae98251e84e2f2bbdbe4779a45ec637a64bd519b9dc",
+    "crates/bicdb-sql/src/session/functions_insert.rs": "3dd8f97df5ee17ad9c4f540eb663ef1650e5cdd41b6b331b9bd1191e587d5e57",
+    "crates/bicdb-sql/src/session/primary_key_updates.rs": "19e329629298503edc8d477a8b339886b2dc67b5daa949863e74a7578289c5e1",
+    "crates/bicdb-sql/src/session/raw_index_fts.rs": "5bff6881e0cd96e3870b90b52d235cc607e0a793fbf73f03099400c2bfc0fac5",
+    "crates/bicdb-sql/src/session/row_triggers.rs": "963c63f0eeda11f8cbf7687a647f010d956c7dde6ce9c73216276c382d9b585e",
+    "crates/bicdb-sql/src/session/txn_update.rs": "9ce4b8743ab2612200f55bbb0008759911b039c6380d76c4c379379250dbce46",
+    "crates/bicdb-sql/src/virtual_tables.rs": "fdd891a709eb7f86811f33890fca6e04f82becba5a536e7a282d14bf1d821b9c",
+    "crates/bicdb-sql/tests/carrier_hub_compat.rs": "49d9bd7f2eeb35f8a18fbc05e651a06b32c38bc72bb9ba0c2bd771eb860fe783"
+  },
+  "initial_failures_resolved": [
+    "BLOB payload assertions were updated to inspect binary wire values instead of the former internal String variant; RAW conversion expectations retained.",
+    "New prepared-origin tests exposed lowercased persisted-name lookup and a static Describe path dropping metadata; both fixed and retested in Oracle and PostgreSQL profiles."
+  ],
+  "non_acceptance_filter_run": {
+    "filter": "drop_function",
+    "matched_tests": 0,
+    "replacement": "exact upstream regression name executed separately"
+  },
+  "ci": "GitHub workflows were not invoked or added",
+  "standalone_runtime_binary_built": false,
+  "application_deployed": false,
+  "persistent_append_implemented": false,
+  "full_application_qualified": false,
+  "oracle_conformance_claimed": false,
+  "production_qualification_claimed": false,
+  "remaining": [
+    "DDL lifecycle and owner-registry cleanup",
+    "source-manifest legacy reconciliation",
+    "stored read-version binding and actual stored RETURNING identities",
+    "cross-transaction rebinding",
+    "current authorization and held-lock checks",
+    "persistent APPEND and index/constraint semantics without ordinary UPDATE triggers",
+    "original application LOB and complete application acceptance",
+    "remaining Oracle compatibility programme workstreams"
+  ]
+}

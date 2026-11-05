@@ -59,3 +59,7 @@ See [read-version tracking](oracle-lob-read-versions.md) for the separate runtim
 history layer and its native Oracle acquisition/ownership observations. Storage
 tests and PostgreSQL transport tests establish only their recorded scope, not
 Oracle conformance, production qualification or a deployed release.
+
+The [execution record](evidence/oracle-blob-storage-2026-11-05/README.md) separates
+storage and driver regression evidence from the remaining runtime and deployment
+work.

@@ -60,6 +60,9 @@ The subsequent combined source commit recorded in `validation-results.json`
 passed 690 SQL unit tests (three pre-existing ignored benchmarks), 48 Oracle
 protocol tests, 180 PostgreSQL protocol tests and eight locking tests. Workspace
 all-target checking and the example server build passed. The memory guard
-completed without interrupting that batch. Its application rerun is recorded
-separately from the earlier 53-test candidate; Rust checks alone do not establish
-that a later binary passed the application class.
+completed without interrupting that batch. Its subsequent application rerun passed both original classes: `POTest` 53/53
+and `POInsertSQLTest` 20/20, with zero failures, errors or skips. The earlier
+Oracle insert test that failed at persistent BLOB append now passes. All 16
+source BLOB columns were reconciled again, values and definitions were preserved,
+and both owned processes exited successfully. The reports and tested binary
+hashes distinguish this 73-test run from the preceding candidate.

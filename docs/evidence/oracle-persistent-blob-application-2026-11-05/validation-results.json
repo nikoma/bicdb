@@ -272,6 +272,49 @@
     "guard_status": "completed",
     "minimum_observed_available_bytes": 15309557760,
     "peak_owned_group_rss_bytes": 5328449536,
-    "application_rerun": "pending; separate from preceding 53-test candidate"
+    "application_rerun": {
+      "reports": [
+        {
+          "file": "TEST-org.idempiere.test.base.POInsertSQLTest.xml",
+          "name": "org.idempiere.test.base.POInsertSQLTest",
+          "tests": "20",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0"
+        },
+        {
+          "file": "TEST-org.idempiere.test.base.POTest.xml",
+          "name": "org.idempiere.test.base.POTest",
+          "tests": "53",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0"
+        }
+      ],
+      "report_sha256": {
+        "TEST-org.idempiere.test.base.POInsertSQLTest.xml": "fd659aa453461f17619a8ccfaaf4b54267c49a7244f06ec076f5713dc461565d",
+        "TEST-org.idempiere.test.base.POTest.xml": "a750b600abafb620699f732f0fe235a7281b8ee51e350e868f3a846e13ea7a9d"
+      },
+      "jvm_returncode": 0,
+      "shutdown_results": [
+        {
+          "role": "test_jvm",
+          "returncode": 0
+        },
+        {
+          "role": "database",
+          "returncode": 0
+        }
+      ],
+      "primary_database_used_for_test_mutations": false,
+      "external_network_isolated": true,
+      "reconciled_blob_columns": 16,
+      "all_binary_values_preserved": true,
+      "definitions_before": {
+        "routines": 62,
+        "views": 160
+      },
+      "definitions_preserved": true
+    }
   }
 }

@@ -18,7 +18,8 @@ workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
 The [persistent BLOB application checkpoint](evidence/oracle-persistent-blob-application-2026-11-05/README.md)
-records the newer 53/53 original persistence-class result on an isolated clone,
+records the newer 53/53 original persistence-class and 20/20 original insert-class
+results on an isolated clone,
 source-backed reconciliation of 16 BLOB columns, and PostgreSQL JDBC catalog
 metadata interoperability. Historical checkpoint counts below retain their
 original source/test scope. This newer result does not qualify the whole
@@ -754,7 +755,7 @@ qualification remain separate gates.
 The [application checkpoint](evidence/oracle-persistent-blob-application-2026-11-05/README.md)
 records explicit reconciliation of all 16 source-manifest BLOB columns on a clean
 isolated clone, preservation of exported binary values and original routine/view
-definitions, and a 53/53 original `POTest` class result. PostgreSQL JDBC base-column
+definitions, and 53/53 original `POTest` plus 20/20 `POInsertSQLTest` results. PostgreSQL JDBC base-column
 metadata checks accompany the general catalog-read boundary. This is selected
 application evidence; the accepted application still uses its earlier binary,
 and full application, broader original tests and programme acceptance remain open.

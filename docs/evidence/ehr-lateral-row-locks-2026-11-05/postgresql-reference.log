@@ -1,0 +1,15 @@
+BEGIN
+                                                      version
+--------------------------------------------------------------------------------------------------------------------
+ PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+(1 row)
+
+CREATE TABLE
+INSERT 0 2
+ id | node
+----+------
+  1 | 1
+(1 row)
+
+DO
+ROLLBACK

@@ -202,3 +202,69 @@ fn blocking_row_wait_honors_cancellation_and_releases_transaction_locks_on_rollb
     );
     owner.execute("ROLLBACK").unwrap();
 }
+
+#[test]
+fn lateral_table_functions_preserve_base_row_locks_and_skip_locked_limits() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut setup = SqlSession::new(&mut db);
+    setup.execute("CREATE TABLE lateral_jobs(id int PRIMARY KEY,owner int,nodes jsonb); CREATE TABLE lateral_owners(id int PRIMARY KEY); INSERT INTO lateral_owners VALUES(1); INSERT INTO lateral_jobs VALUES(1,1,'[1,2]'),(2,1,'[3,4]')").unwrap();
+    drop(setup);
+    let mut holder = SqlSession::new_shared(&db);
+    let mut worker = SqlSession::new_shared(&db);
+    let mut observer = SqlSession::new_shared(&db);
+    holder.execute("BEGIN").unwrap();
+    holder
+        .execute("SELECT id FROM lateral_jobs WHERE id=1 FOR UPDATE")
+        .unwrap();
+    worker.execute("BEGIN").unwrap();
+    let result = worker.execute("SELECT j.id,node FROM lateral_jobs j JOIN lateral_owners o ON o.id=j.owner CROSS JOIN LATERAL jsonb_array_elements(j.nodes) node ORDER BY j.id,node LIMIT 1 FOR UPDATE SKIP LOCKED").unwrap();
+    assert_eq!(
+        result.rows,
+        vec![vec![
+            SqlValue::Int(2),
+            SqlValue::Json(serde_json::json!(3).into())
+        ]]
+    );
+    observer.execute("BEGIN").unwrap();
+    assert_eq!(
+        observer
+            .execute("SELECT id FROM lateral_jobs WHERE id=2 FOR UPDATE NOWAIT")
+            .unwrap_err()
+            .sqlstate(),
+        "55P03"
+    );
+    observer.execute("ROLLBACK; BEGIN").unwrap();
+    assert_eq!(
+        observer
+            .execute("SELECT id FROM lateral_owners WHERE id=1 FOR UPDATE NOWAIT")
+            .unwrap_err()
+            .sqlstate(),
+        "55P03"
+    );
+    observer.execute("ROLLBACK").unwrap();
+    worker.execute("ROLLBACK").unwrap();
+    holder.execute("ROLLBACK").unwrap();
+    observer.execute("BEGIN").unwrap();
+    assert_eq!(
+        observer
+            .execute("SELECT id FROM lateral_jobs ORDER BY id FOR UPDATE NOWAIT")
+            .unwrap()
+            .rows
+            .len(),
+        2
+    );
+    observer.execute("ROLLBACK").unwrap();
+}
+
+#[test]
+fn explicit_lateral_function_lock_targets_are_refused_without_weakening_base_privileges() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(dir.path()).unwrap();
+    let mut setup = SqlSession::new(&mut db);
+    setup.execute("CREATE TABLE lateral_private_jobs(id int PRIMARY KEY,nodes jsonb); INSERT INTO lateral_private_jobs VALUES(1,'[1]'); CREATE ROLE lateral_reader; GRANT SELECT ON lateral_private_jobs TO lateral_reader").unwrap();
+    assert_eq!(setup.execute("SELECT j.id FROM lateral_private_jobs j CROSS JOIN LATERAL jsonb_array_elements(j.nodes) node FOR UPDATE OF node").unwrap_err().sqlstate(),"0A000");
+    drop(setup);
+    let mut reader = SqlSession::new_shared_unprivileged(&db, "lateral_reader");
+    assert_eq!(reader.execute("SELECT j.id FROM lateral_private_jobs j CROSS JOIN LATERAL jsonb_array_elements(j.nodes) node FOR UPDATE").unwrap_err().sqlstate(),"42501");
+}

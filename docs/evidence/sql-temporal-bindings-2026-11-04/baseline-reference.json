@@ -1,0 +1,3564 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "12a7525e48b7896d4a7eb4b87e59f5a8040649c47b0aec983f9a5d545e24159d",
+  "fixture_sha256": "d58cf2fe4a9a98ba87e6dc58220cc7500924a74894f3c5c5b2acee293d51cbdd",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "select_snapshot",
+          "source": {
+            "id": "select_snapshot",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "select_snapshot",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_fresh_snapshot",
+          "source": {
+            "id": "update_fresh_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_fresh_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_stale_snapshot",
+          "source": {
+            "id": "update_stale_snapshot",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_stale_snapshot",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_matching_snapshot",
+          "source": {
+            "id": "delete_matching_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_matching_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "delete_stale_snapshot",
+          "source": {
+            "id": "delete_stale_snapshot",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_stale_snapshot",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "fractional_mismatch",
+          "source": {
+            "id": "fractional_mismatch",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "fractional_mismatch",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "reversed_equality",
+          "source": {
+            "id": "reversed_equality",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "reversed_equality",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "timestamp_ignores_offset",
+          "source": {
+            "id": "timestamp_ignores_offset",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "timestamp_ignores_offset",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "binary_timestamp_update",
+          "source": {
+            "id": "binary_timestamp_update",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "binary_timestamp_update",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "inferred_timestamp_update",
+          "source": {
+            "id": "inferred_timestamp_update",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "inferred_timestamp_update",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "null_snapshot_matches_no_rows",
+          "source": {
+            "id": "null_snapshot_matches_no_rows",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "null_snapshot_matches_no_rows",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "date_column_snapshot",
+          "source": {
+            "id": "date_column_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "date_column_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "inferred_date_column_snapshot",
+          "source": {
+            "id": "inferred_date_column_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "inferred_date_column_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "date_column_fractional_guard",
+          "source": {
+            "id": "date_column_fractional_guard",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "date_column_fractional_guard",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "typed_parameter_pair",
+          "source": {
+            "id": "typed_parameter_pair",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "typed_parameter_pair",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": [
+                [
+                  0
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "mixed_wire_parameter_pair",
+          "source": {
+            "id": "mixed_wire_parameter_pair",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "mixed_wire_parameter_pair",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": [
+                [
+                  0
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "zoned_projection",
+          "source": {
+            "id": "zoned_projection",
+            "expected": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "zoned_projection",
+            "expected": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": [
+                [
+                  false
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "zoned_projection_reversed",
+          "source": {
+            "id": "zoned_projection_reversed",
+            "expected": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "zoned_projection_reversed",
+            "expected": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": [
+                [
+                  false
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "zoned_filter",
+          "source": {
+            "id": "zoned_filter",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "zoned_filter",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": [],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "zoned_mutation",
+          "source": {
+            "id": "zoned_mutation",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "zoned_mutation",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "caller_rollback_restores_snapshot",
+          "source": {
+            "id": "caller_rollback_restores_snapshot",
+            "expected": [
+              [
+                1,
+                "old",
+                "2000-01-01T00:00:00.123456",
+                "2000-01-01T00:00:00.000000"
+              ],
+              [
+                2,
+                "null",
+                null,
+                null
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                1,
+                "old",
+                "2000-01-01T00:00:00.123456",
+                "2000-01-01T00:00:00.000000"
+              ],
+              [
+                2,
+                "null",
+                null,
+                null
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "caller_rollback_restores_snapshot",
+            "expected": [
+              [
+                1,
+                "old",
+                "2000-01-01T00:00:00.123456",
+                "2000-01-01T00:00:00.000000"
+              ],
+              [
+                2,
+                "null",
+                null,
+                null
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                1,
+                "old",
+                "2000-01-01T00:00:00.123456",
+                "2000-01-01T00:00:00.000000"
+              ],
+              [
+                2,
+                "null",
+                null,
+                null
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 21,
+      "matched": 12,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "source_execution_error": null,
+      "target_execution_error": null,
+      "coarse_column_type": "DATE",
+      "success": false
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "select_snapshot",
+          "source": {
+            "id": "select_snapshot",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "select_snapshot",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "update_fresh_snapshot",
+          "source": {
+            "id": "update_fresh_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_fresh_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "update_stale_snapshot",
+          "source": {
+            "id": "update_stale_snapshot",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "update_stale_snapshot",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "delete_matching_snapshot",
+          "source": {
+            "id": "delete_matching_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_matching_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "delete_stale_snapshot",
+          "source": {
+            "id": "delete_stale_snapshot",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "delete_stale_snapshot",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "advanced",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "fractional_mismatch",
+          "source": {
+            "id": "fractional_mismatch",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "fractional_mismatch",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "reversed_equality",
+          "source": {
+            "id": "reversed_equality",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "reversed_equality",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "timestamp_ignores_offset",
+          "source": {
+            "id": "timestamp_ignores_offset",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "timestamp_ignores_offset",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "binary_timestamp_update",
+          "source": {
+            "id": "binary_timestamp_update",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "binary_timestamp_update",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "inferred_timestamp_update",
+          "source": {
+            "id": "inferred_timestamp_update",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "inferred_timestamp_update",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "null_snapshot_matches_no_rows",
+          "source": {
+            "id": "null_snapshot_matches_no_rows",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "null_snapshot_matches_no_rows",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "date_column_snapshot",
+          "source": {
+            "id": "date_column_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "date_column_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "inferred_date_column_snapshot",
+          "source": {
+            "id": "inferred_date_column_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "inferred_date_column_snapshot",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "date",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:01.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "date_column_fractional_guard",
+          "source": {
+            "id": "date_column_fractional_guard",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "date_column_fractional_guard",
+            "expected": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "typed_parameter_pair",
+          "source": {
+            "id": "typed_parameter_pair",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "typed_parameter_pair",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": [
+                [
+                  0
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "mixed_wire_parameter_pair",
+          "source": {
+            "id": "mixed_wire_parameter_pair",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "mixed_wire_parameter_pair",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": [
+                [
+                  0
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "zoned_projection",
+          "source": {
+            "id": "zoned_projection",
+            "expected": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "zoned_projection",
+            "expected": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": [
+                [
+                  false
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "zoned_projection_reversed",
+          "source": {
+            "id": "zoned_projection_reversed",
+            "expected": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "zoned_projection_reversed",
+            "expected": {
+              "result": [
+                [
+                  true
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": [
+                [
+                  false
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "zoned_filter",
+          "source": {
+            "id": "zoned_filter",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "zoned_filter",
+            "expected": {
+              "result": [
+                [
+                  1
+                ]
+              ],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": [],
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "zoned_mutation",
+          "source": {
+            "id": "zoned_mutation",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": true,
+            "actual": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "bicdb": {
+            "id": "zoned_mutation",
+            "expected": {
+              "result": 1,
+              "rows": [
+                [
+                  1,
+                  "changed",
+                  "2000-01-01T00:00:01.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            },
+            "qualified": false,
+            "actual": {
+              "result": 0,
+              "rows": [
+                [
+                  1,
+                  "old",
+                  "2000-01-01T00:00:00.123456",
+                  "2000-01-01T00:00:00.000000"
+                ],
+                [
+                  2,
+                  "null",
+                  null,
+                  null
+                ]
+              ]
+            }
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "caller_rollback_restores_snapshot",
+          "source": {
+            "id": "caller_rollback_restores_snapshot",
+            "expected": [
+              [
+                1,
+                "old",
+                "2000-01-01T00:00:00.123456",
+                "2000-01-01T00:00:00.000000"
+              ],
+              [
+                2,
+                "null",
+                null,
+                null
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                1,
+                "old",
+                "2000-01-01T00:00:00.123456",
+                "2000-01-01T00:00:00.000000"
+              ],
+              [
+                2,
+                "null",
+                null,
+                null
+              ]
+            ]
+          },
+          "bicdb": {
+            "id": "caller_rollback_restores_snapshot",
+            "expected": [
+              [
+                1,
+                "old",
+                "2000-01-01T00:00:00.123456",
+                "2000-01-01T00:00:00.000000"
+              ],
+              [
+                2,
+                "null",
+                null,
+                null
+              ]
+            ],
+            "qualified": true,
+            "actual": [
+              [
+                1,
+                "old",
+                "2000-01-01T00:00:00.123456",
+                "2000-01-01T00:00:00.000000"
+              ],
+              [
+                2,
+                "null",
+                null,
+                null
+              ]
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 21,
+      "matched": 8,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "source_execution_error": null,
+      "target_execution_error": null,
+      "coarse_column_type": "TIMESTAMP(0)",
+      "success": false
+    }
+  },
+  "cleanup_complete": true
+}

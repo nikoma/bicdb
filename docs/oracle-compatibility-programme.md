@@ -17,6 +17,15 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [temporal-binding checkpoint](evidence/sql-temporal-bindings-2026-11-04/README.md)
+preserves typed temporal parameters and column comparison semantics across
+queries, mutations and projections, including explicit spaced UTC offsets.
+Independent Oracle and PostgreSQL controls pass 21/21 each. The original
+optimistic-locking test passes over PostgreSQL transport; the persistence class
+passes 52/53 and the BOM test 1/1. The remaining Oracle unique-error translation
+failure, LOB support, broader datetime/NLS behavior and full application
+acceptance remain open.
+
 The [lookup-binding checkpoint](evidence/sql-join-key-bindings-2026-11-04/README.md)
 defers unavailable join inputs before primary/secondary index probes and keeps
 residual mutation predicates for unbound or repeated key equalities. Independent

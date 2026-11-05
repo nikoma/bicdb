@@ -1,0 +1,582 @@
+{
+  "seed_restoration": {
+    "application_qualified": false,
+    "primary_database_used": false,
+    "read_only": true,
+    "source_version": "23.26.3.0.0",
+    "source_objects_mutated": false,
+    "seed_rows_restored": true,
+    "prices": 7,
+    "products": 4,
+    "scope": "Selected price amounts/active flags and product stock/override flags, with update timestamps and users"
+  },
+  "format": 1,
+  "application_qualified": false,
+  "programme_complete": false,
+  "binary_sha256": "e54a20a5b5ff5a25360780bc9392078868b7cf7fbc88912e082ba0a20ebfd1ce",
+  "source_parent": "e25926ae45511eaae00b82e621c84dfdd96ea8c4",
+  "source_files_sha256": {
+    "crates/bicdb-pgwire/src/sql_parsing.rs": "6a87b5673a0af1537894d205bacf6550b22af9ec01e6fb4ac5120798375c042e",
+    "crates/bicdb-pgwire/tests/protocol.rs": "f00b262c3525dde140264a90466050af05f21c314786af86be982518142f0177",
+    "crates/bicdb-sql/src/adaptive/lower.rs": "b18ef801803ce3c5e780b30d3ee1ffff12d99d56b5bbe19bf0e89147b6963976",
+    "crates/bicdb-sql/src/engine/row_eval.rs": "4c07bd58615922be0d81aa2e8e2e8c92fd58dbc8f077fbc256f4dedca55bc312",
+    "crates/bicdb-sql/src/eval/operators_compare.rs": "1265c57b2e4e8268252ff90d90e9a61f663e3cf600c5784eeacebd684003ddca",
+    "crates/bicdb-sql/src/eval/ranges_network.rs": "2de3166973e2a1725bedb2c6c4fbfab5b860b7461ebb90e4857a5d88259f72ec",
+    "crates/bicdb-sql/src/eval/temporal_json_oid.rs": "94de7f22c8ad7781b36d303b65bc06e0728541578b0d389a4f7c906bdec1d7d0",
+    "crates/bicdb-sql/src/planner.rs": "7a488e8e68a7c09ad22b713806a764509aaba1ac74a8f6b2edd73add61a29baa",
+    "crates/bicdb-sql/tests/temporal_mutation_predicates.rs": "8af447fdd6490b772e03298f6fd1b58c99a7955f553c59b2f4a5a3785f3a1051",
+    "examples/oracle/reference/temporal_mutations.py": "d58cf2fe4a9a98ba87e6dc58220cc7500924a74894f3c5c5b2acee293d51cbdd"
+  },
+  "validation": [
+    {
+      "name": "build",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "oracle_server"
+      ],
+      "returncode": 0,
+      "counts": []
+    },
+    {
+      "name": "sql",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 632,
+          "failed": 0,
+          "ignored": 3
+        }
+      ]
+    },
+    {
+      "name": "type_consistency",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "type_consistency",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "sql_regressions",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "cell_rows",
+        "--test",
+        "projection_pushdown",
+        "--test",
+        "column_references",
+        "--test",
+        "typed_comparison",
+        "--test",
+        "prepared_typed_join",
+        "--test",
+        "write_path_authorization",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "scope_regressions",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "view_owner_execution_identity",
+        "--test",
+        "ownership_authorization",
+        "--test",
+        "view_column_lineage",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "temporal_regressions",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "temporal_mutation_predicates",
+        "--test",
+        "temporal_storage",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "name": "pgwire",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "returncode": 0,
+      "counts": [
+        {
+          "passed": 124,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 39,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 171,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    }
+  ],
+  "retained_reference_families": [
+    {
+      "family": "temporal-mutations",
+      "profiles": {
+        "oracle": {
+          "matched": 21,
+          "total": 21,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 21,
+          "total": 21,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "d58cf2fe4a9a98ba87e6dc58220cc7500924a74894f3c5c5b2acee293d51cbdd"
+    },
+    {
+      "family": "view-pending-joins",
+      "profiles": {
+        "oracle": {
+          "matched": 23,
+          "total": 23,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 23,
+          "total": 23,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "984e442b065b73f9db18c3fee38952d356c92b32c6d0f86748fcb681364f0d34"
+    },
+    {
+      "family": "key-bound-mutations",
+      "profiles": {
+        "oracle": {
+          "matched": 12,
+          "total": 12,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 12,
+          "total": 12,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "8131175175dbc3c6b3d420d97569aacfac23e2c1d1b1783dab434edd52ca7830"
+    },
+    {
+      "family": "row-update",
+      "profiles": {
+        "oracle": {
+          "matched": 18,
+          "total": 18,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 18,
+          "total": 18,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "6d68e3ed2b04a5596b85477ba290d2ca4a299966dcb2dfd5996ceb652cc37392"
+    },
+    {
+      "family": "integer-bounds",
+      "profiles": {
+        "oracle": {
+          "matched": 18,
+          "total": 18,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 18,
+          "total": 18,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "049908215fe9d6d59db862c10aeac6b52ca4e3deb081bdc02b0fb5bf2ba05b90"
+    },
+    {
+      "family": "nvl2",
+      "profiles": {
+        "oracle": {
+          "matched": 59,
+          "total": 59,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 59,
+          "total": 59,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "63c8bfb68581a11537905f7d0ab49ad7d225d0f3934092ecb922450d83197625"
+    },
+    {
+      "family": "numeric-extrema",
+      "profiles": {
+        "oracle": {
+          "matched": 20,
+          "total": 20,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 20,
+          "total": 20,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "21f8fcb55745a309b870e7345c3aaecd63b07e974ecaade51e3c981aa6293dfd"
+    },
+    {
+      "family": "merge-update",
+      "profiles": {
+        "oracle": {
+          "matched": 15,
+          "total": 15,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 15,
+          "total": 15,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "27d3c397c83d59f5783f5c895f3b10ae35b5495f70b6a597602620b9af028775"
+    },
+    {
+      "family": "between-evaluation",
+      "profiles": {
+        "oracle": {
+          "matched": 19,
+          "total": 19,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 20,
+          "total": 20,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "269ca61e45ffa74b13a7d1d2ae3605fd43e9aff9756cdeabbdb6e0ea14b092a5"
+    },
+    {
+      "family": "typed-between",
+      "profiles": {
+        "oracle": {
+          "matched": 16,
+          "total": 16,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 16,
+          "total": 16,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "b07008bf7d7bf69c9cfd4079ea308dab9e5b3e43dd52565b2c5962ced7a208c9"
+    },
+    {
+      "family": "raw-character",
+      "profiles": {
+        "oracle": {
+          "matched": 13,
+          "total": 13,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 13,
+          "total": 13,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "699b768d6ea6f1537f98a335c6aa8a30c59864b7f2567d67581f68e0586153f0"
+    },
+    {
+      "family": "session-isolation",
+      "profiles": {
+        "oracle": {
+          "matched": 11,
+          "total": 11,
+          "reference_version": "23.26.3.0.0",
+          "source_qualified": true,
+          "success": true
+        },
+        "postgres": {
+          "matched": 8,
+          "total": 8,
+          "reference_version": 180004,
+          "source_qualified": true,
+          "success": true
+        }
+      },
+      "fixture_sha256": "ff82276841f6852c1a3eb45051df5c5ad74462750bd73be64a7ffa5346f6be05"
+    }
+  ],
+  "stock_postgresql_jdbc_snapshot_update": true,
+  "original_upstream_tests": [
+    {
+      "name": "org.idempiere.test.base.POTest",
+      "tests": 53,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failed_methods": [
+        "testValidateUniqueIndex"
+      ]
+    },
+    {
+      "name": "org.idempiere.test.base.GetBOMFunctionsTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed_methods": []
+    }
+  ],
+  "original_optimistic_locking_test_passed": true,
+  "rollback": {
+    "format": 1,
+    "application_qualified": false,
+    "read_only": true,
+    "prior_workflow_checks": 67,
+    "settled_business_queries": 27,
+    "object_fingerprints": {
+      "routines": {
+        "count": 62,
+        "sha256": "f444b2e861c0b5ea8712d20306c6beff6dc98ffad2ef3b9e717d4408593e73ec"
+      },
+      "views": {
+        "count": 160,
+        "sha256": "65e8ca1aa9aac0f1b4c7df2d9e8f66e39db6a3075a52e3a95cabb2ddb9305915"
+      }
+    },
+    "new_business_records": {
+      "orders": 0,
+      "receipts": 0,
+      "projects": 0,
+      "issues": 0,
+      "project_lines": 0
+    },
+    "upstream_transaction_rollback_verified": true,
+    "primary_database_used": false
+  }
+}

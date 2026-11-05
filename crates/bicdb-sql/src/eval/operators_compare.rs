@@ -103,6 +103,56 @@ pub(crate) fn comparison_from_ordering(op: &BinaryOperator, ordering: Ordering) 
     }
 }
 
+/// Row predicates need the same temporal interpretation as typed SELECTs.
+/// Stored values and bound literals may spell one instant differently; text
+/// ordering cannot implement a date/time comparison.
+pub(crate) fn compare_temporal_values(
+    left_type: Option<&str>,
+    right_type: Option<&str>,
+    left: &SqlValue,
+    op: &BinaryOperator,
+    right: &SqlValue,
+) -> Result<Option<Option<bool>>> {
+    fn temporal(pg_type: &str) -> bool {
+        let pg_type = pg_type.strip_suffix("[]").unwrap_or(pg_type);
+        matches!(
+            pg_type,
+            "date" | "timestamp" | "timestamptz" | "time" | "timetz" | "interval"
+        )
+    }
+    fn datetime_rank(pg_type: &str) -> Option<usize> {
+        match pg_type {
+            "date" => Some(0),
+            "timestamp" => Some(1),
+            "timestamptz" => Some(2),
+            _ => None,
+        }
+    }
+    let pg_type = match (left_type, right_type) {
+        (Some(left), Some(right))
+            if datetime_rank(left).is_some() && datetime_rank(right).is_some() =>
+        {
+            ["date", "timestamp", "timestamptz"][datetime_rank(left)
+                .unwrap()
+                .max(datetime_rank(right).unwrap())]
+        }
+        (Some(left), Some(right)) if left == right && temporal(left) => left,
+        (Some(pg_type), None) | (None, Some(pg_type)) if temporal(pg_type) => pg_type,
+        _ => return Ok(None),
+    };
+    if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
+        return Ok(Some(None));
+    }
+    // Casts apply the active timezone to naive timestamptz/timetz inputs;
+    // the canonical comparator then compares normalized values.
+    let left = cast_value_to_pg_type(left.clone(), pg_type)?;
+    let right = cast_value_to_pg_type(right.clone(), pg_type)?;
+    Ok(Some(Some(comparison_from_ordering(
+        op,
+        pg_typed_compare(pg_type, &left, &right)?,
+    ))))
+}
+
 pub(crate) fn comparison_collation(
     left: &Expr,
     right: &Expr,

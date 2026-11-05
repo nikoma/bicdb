@@ -2285,7 +2285,7 @@ pub(crate) fn bind_message(
             .copied()
             .unwrap_or_default();
         if len < 0 {
-            params.push("NULL".to_string());
+            params.push(temporal_parameter_literal(oid, "NULL".to_string()));
             continue;
         }
         let len = len as usize;
@@ -3111,7 +3111,7 @@ pub(crate) fn decode_parameter_with_db(
     format: i16,
     oid: i32,
 ) -> Result<String> {
-    match format {
+    let literal = match format {
         0 => {
             let value = std::str::from_utf8(bytes)
                 .map_err(|error| PgWireError::Protocol(error.to_string()))?;
@@ -3121,7 +3121,21 @@ pub(crate) fn decode_parameter_with_db(
         other => Err(PgWireError::Protocol(format!(
             "unsupported parameter format code {other}"
         ))),
+    }?;
+    Ok(temporal_parameter_literal(oid, literal))
+}
+
+/// A wire encoding is not the SQL type. Preserve resolved temporal identity
+/// after decoding, including NULLs and arrays, without putting SQL casts into
+/// nested array/range/composite value text.
+pub(crate) fn temporal_parameter_literal(oid: i32, literal: String) -> String {
+    let scalar = array_element_oid(oid).unwrap_or(oid);
+    if matches!(scalar, 1082 | 1083 | 1114 | 1184 | 1186 | 1266) {
+        if let Some(name) = bicdb_sql::pg_type_name_by_oid(oid) {
+            return format!("CAST({literal} AS {name})");
+        }
     }
+    literal
 }
 
 pub(crate) fn decode_binary_parameter_with_db(

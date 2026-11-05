@@ -243,6 +243,15 @@ impl<'db> SqlEngine<'db> {
                 if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
                     return Ok(None);
                 }
+                if let Some(truth) = compare_temporal_values(
+                    left_type.as_deref(),
+                    right_type.as_deref(),
+                    &left,
+                    op,
+                    &right,
+                )? {
+                    return Ok(truth);
+                }
                 let ordering = pg_typed_compare_for_db(self.db_ref(), &pg_type, &left, &right)?;
                 Ok(Some(match op {
                     BinaryOperator::Eq => ordering == Ordering::Equal,
@@ -418,6 +427,15 @@ impl<'db> SqlEngine<'db> {
                 if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
                     return Ok(None);
                 }
+                if let Some(truth) = compare_temporal_values(
+                    left_type.as_deref(),
+                    right_type.as_deref(),
+                    &left,
+                    op,
+                    &right,
+                )? {
+                    return Ok(truth);
+                }
                 let ordering = pg_typed_compare_for_db(self.db_ref(), &pg_type, &left, &right)?;
                 Ok(Some(match op {
                     BinaryOperator::Eq => ordering == Ordering::Equal,
@@ -479,6 +497,15 @@ impl<'db> SqlEngine<'db> {
                         self.eval_slot_row_value(row, context, right)?,
                         right_type.as_deref(),
                     )?;
+                    if let Some(truth) = compare_temporal_values(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )? {
+                        return Ok(truth);
+                    }
                     if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                         && matches!(right_type.as_deref(), Some("inet" | "cidr"))
                     {
@@ -1823,6 +1850,15 @@ impl<'db> SqlEngine<'db> {
                     else {
                         return Ok(None);
                     };
+                    if let Some(truth) = compare_temporal_values(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )? {
+                        return Ok(truth);
+                    }
                     if left_type.as_deref() == Some("pg_lsn") && left_type == right_type {
                         return Ok(Some(comparison_from_ordering(
                             op,
@@ -2036,6 +2072,15 @@ impl<'db> SqlEngine<'db> {
                         self.eval_row_value(row, right)?,
                         right_type.as_deref(),
                     )?;
+                    if let Some(truth) = compare_temporal_values(
+                        left_type.as_deref(),
+                        right_type.as_deref(),
+                        &left,
+                        op,
+                        &right,
+                    )? {
+                        return Ok(truth);
+                    }
                     if matches!(left_type.as_deref(), Some("inet" | "cidr"))
                         && matches!(right_type.as_deref(), Some("inet" | "cidr"))
                     {

@@ -2885,8 +2885,18 @@ pub(crate) fn eval_binary_expr_value_typed(
             | BinaryOperator::Lt
             | BinaryOperator::LtEq
     ) {
-        return compare_expr_values(left_expr, op, right_expr, &left, &right, schema)
-            .map(|value| value.map(SqlValue::Bool).unwrap_or(SqlValue::Null));
+        // Row evaluation supplies resolved column types that cannot be
+        // reconstructed from an expression without its row schema.
+        return compare_expr_values_resolved(
+            left_expr,
+            op,
+            right_expr,
+            &left,
+            &right,
+            schema,
+            [left_type.clone(), right_type.clone()],
+        )
+        .map(|value| value.map(SqlValue::Bool).unwrap_or(SqlValue::Null));
     }
     if left_type.as_deref() == Some("oid") || right_type.as_deref() == Some("oid") {
         return Err(SqlError::undefined_function(format!(
@@ -3800,6 +3810,15 @@ pub(crate) fn compare_expr_values_resolved(
     if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
         return Ok(None);
     }
+    if let Some(truth) = compare_temporal_values(
+        left_expr_type.as_deref(),
+        right_expr_type.as_deref(),
+        left,
+        op,
+        right,
+    )? {
+        return Ok(truth);
+    }
     if left_expr_type.as_deref() == Some("pg_lsn") && right_expr_type.as_deref() == Some("pg_lsn") {
         return Ok(Some(comparison_from_ordering(
             op,
@@ -3916,22 +3935,6 @@ pub(crate) fn compare_expr_values_resolved(
             && matches!(left_expr_type.as_deref(), Some("timestamp") | None));
     if timestamp_comparison {
         let ordering = pg_typed_compare("timestamp", left, right)?;
-        return Ok(Some(comparison_from_ordering(op, ordering)));
-    }
-    let timestamptz_comparison = (matches!(left_expr_type.as_deref(), Some("timestamptz"))
-        && matches!(right_expr_type.as_deref(), Some("timestamptz") | None))
-        || (matches!(right_expr_type.as_deref(), Some("timestamptz"))
-            && matches!(left_expr_type.as_deref(), Some("timestamptz") | None));
-    if timestamptz_comparison {
-        let ordering = pg_typed_compare("timestamptz", left, right)?;
-        return Ok(Some(comparison_from_ordering(op, ordering)));
-    }
-    let interval_comparison = (matches!(left_expr_type.as_deref(), Some("interval"))
-        && matches!(right_expr_type.as_deref(), Some("interval") | None))
-        || (matches!(right_expr_type.as_deref(), Some("interval"))
-            && matches!(left_expr_type.as_deref(), Some("interval") | None));
-    if interval_comparison {
-        let ordering = pg_typed_compare("interval", left, right)?;
         return Ok(Some(comparison_from_ordering(op, ordering)));
     }
     let range_comparison = left_expr_type

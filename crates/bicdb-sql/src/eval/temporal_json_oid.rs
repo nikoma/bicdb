@@ -2962,13 +2962,22 @@ pub(crate) fn split_named_timestamp_zone(value: &str) -> (&str, Option<&str>) {
 
 pub(crate) fn timestamp_has_iso_offset(value: &str) -> bool {
     let value = value.trim();
-    let time = value
-        .find(['T', 't'])
+    let tail = value
+        .find(|ch: char| matches!(ch, 'T' | 't') || ch.is_whitespace())
         .map(|index| &value[index + 1..])
-        .or_else(|| value.split_whitespace().nth(1))
         .unwrap_or("");
+    let mut parts = tail.split_whitespace();
+    let time = parts.next().unwrap_or("");
+    // PostgreSQL also accepts a numeric zone separated from the clock by
+    // whitespace. Do not treat hyphens within named zones as numeric offsets.
+    let separated_offset = parts.next().is_some_and(|zone| {
+        zone.eq_ignore_ascii_case("z")
+            || (zone.starts_with(['+', '-'])
+                && zone.as_bytes().get(1).is_some_and(u8::is_ascii_digit))
+    });
     time.ends_with('Z')
         || time.ends_with('z')
+        || separated_offset
         || time
             .char_indices()
             .any(|(index, ch)| index > 0 && matches!(ch, '+' | '-'))

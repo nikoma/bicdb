@@ -94,6 +94,11 @@ public final class OracleAdapterProbe {
                     try (ResultSet row = statement.executeQuery()) {
                         check("result_statement_identity", row.getStatement() == statement
                                 && row.getStatement().getConnection() == connection);
+                        org.postgresql.PGResultSetMetaData origin = row.getMetaData().unwrap(org.postgresql.PGResultSetMetaData.class);
+                        check("catalog_column_origin_schema", !origin.getBaseSchemaName(1).isEmpty());
+                        check("standard_schema_name_keeps_driver_behavior", row.getMetaData().getSchemaName(1).isEmpty());
+                        check("catalog_column_origin_table", row.getMetaData().getTableName(1).equalsIgnoreCase(table));
+                        check("catalog_column_origin_name", row.getMetaData().getColumnName(1).equalsIgnoreCase("payload"));
                         check("repeat_unicode_and_delimiter_payload", row.next() && payload.equals(row.getString(1)) && !row.next());
                     }
                 }

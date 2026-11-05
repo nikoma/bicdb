@@ -1236,3 +1236,19 @@ literal and bound text, NUMBER and RAW operands against Oracle. General RAW size
 limits, BLOB operands and all implicit conversion families remain separate
 qualification items. Contract 28 introduced this conversion; later contracts retain it, while
 contract 27 and its catalog OID remain available with their previous rules.
+
+## PostgreSQL client catalog queries
+
+PostgreSQL drivers issue catalog queries even when application statements use
+Oracle syntax. SELECT statements whose relation references are explicitly
+qualified by `pg_catalog` or `information_schema`, with no data-modifying CTEs or
+row locks, retain PostgreSQL syntax and identifier folding. Detection inspects
+the parsed relations; a catalog name inside a string does not select this path.
+Other statements continue through the Oracle namespace and expression rules.
+The bounded HR profile also accepts this catalog-query boundary.
+
+This supports stock JDBC field-origin lookup after RowDescription identifies a
+base table and column. With PostgreSQL JDBC 42.7.8, the PostgreSQL-specific
+`getBaseSchemaName` supplies the origin schema; the standard `getSchemaName`
+retains that driver's empty-string behavior. This does not establish general
+Oracle JDBC compatibility or change the selected PostgreSQL wire transport.

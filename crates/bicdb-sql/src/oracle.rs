@@ -446,6 +446,9 @@ fn lower_profile_sql_in_namespace(
             "Oracle front end requires an Oracle SQL profile",
         ));
     }
+    if postgres_catalog_read(sql) {
+        return Ok(sql.to_string());
+    }
     let lowered = lower_oracle_sql(db, sql, profile == ORACLE_PREVIEW_PROFILE, namespace).map_err(
         |error| match error {
             SqlError::Unsupported(message) if profile == ORACLE_PREVIEW_PROFILE => {
@@ -488,6 +491,40 @@ pub fn lower_typed_native_sql(
 /// Resolve preview application relations in one explicitly selected schema.
 /// The bounded HR profile keeps its public-namespace contract. Native table
 /// privileges still apply after qualification; selecting a schema grants none.
+fn postgres_catalog_read(sql: &str) -> bool {
+    // A cheap rejection only; the AST below decides the dialect boundary.
+    if !sql
+        .as_bytes()
+        .windows(b"pg_catalog".len())
+        .any(|part| part.eq_ignore_ascii_case(b"pg_catalog"))
+        && !sql
+            .as_bytes()
+            .windows(b"information_schema".len())
+            .any(|part| part.eq_ignore_ascii_case(b"information_schema"))
+    {
+        return false;
+    }
+    let Ok(statements) = Parser::parse_sql(&PostgreSqlDialect {}, sql) else {
+        return false;
+    };
+    let [Statement::Query(query)] = statements.as_slice() else {
+        return false;
+    };
+    if query_may_write(query) || query_has_row_locks(query) {
+        return false;
+    }
+    let mut found = false;
+    let result = sqlparser::ast::visit_relations(query.as_ref(), |relation| {
+        let parts = object_name_parts(relation);
+        if parts.len() != 2 || !matches!(parts[0].as_str(), "pg_catalog" | "information_schema") {
+            return std::ops::ControlFlow::Break(());
+        }
+        found = true;
+        std::ops::ControlFlow::Continue(())
+    });
+    found && result.is_continue()
+}
+
 pub fn lower_session_sql(
     db: &BicDb,
     sql: &str,
@@ -497,6 +534,13 @@ pub fn lower_session_sql(
 ) -> Result<String> {
     if profile != ORACLE_PREVIEW_PROFILE {
         return lower_profile_sql(db, sql, profile);
+    }
+    // PostgreSQL clients issue their own catalog SQL even on a connection
+    // whose application statements use Oracle syntax. Preserve those native
+    // identifiers/operators; literals or mixed application queries do not
+    // select this boundary.
+    if postgres_catalog_read(sql) {
+        return Ok(sql.to_string());
     }
     let schema = preview_schema(db, search_path, user)?.unwrap_or_else(default_schema_name);
     let lowered = lower_profile_sql_in_namespace(db, sql, profile, Some(&schema))?;
@@ -3503,5 +3547,80 @@ mod tests {
             .unwrap();
         assert!(ensure_database_profile(&mut db, ORACLE_HR_PROFILE).is_err());
         ensure_database_profile(&mut db, POSTGRES_PROFILE).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod postgres_catalog_boundary_tests {
+    use super::*;
+    #[test]
+    fn native_catalog_boundary_uses_relations_not_literal_or_identifier_substrings() {
+        for sql in ["SELECT c.oid,n.nspname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace",
+            "SELECT table_name FROM information_schema.tables",
+            "SELECT c.oid FROM pg_catalog.pg_class c JOIN (SELECT 1 AS oid) v ON v.oid=c.oid"] {assert!(postgres_catalog_read(sql),"{sql}");}
+        for sql in [
+            "SELECT 'pg_catalog.pg_class' FROM app_rows",
+            "SELECT pg_catalog_label FROM app_rows",
+            "SELECT * FROM pg_catalog.pg_class c JOIN app_rows a ON a.id=c.oid",
+            "SELECT * FROM \"PG_CATALOG\".pg_class",
+            "UPDATE pg_catalog.pg_class SET relname='x'",
+            "SELECT * FROM pg_catalog.pg_class FOR UPDATE",
+            "SELECT 1; SELECT * FROM pg_catalog.pg_class",
+        ] {
+            assert!(!postgres_catalog_read(sql), "{sql}");
+        }
+    }
+    #[test]
+    fn oracle_session_preserves_postgres_catalog_names_while_application_sql_remains_namespace_bound(
+    ) {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        ensure_database_profile(&mut db, ORACLE_PREVIEW_PROFILE).unwrap();
+        SqlSession::new(&mut db)
+            .execute("CREATE SCHEMA \"APP\";CREATE TABLE \"APP\".records(id INTEGER)")
+            .unwrap();
+        let sql="SELECT c.relname,n.nspname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE c.relname='records'";
+        let lowered =
+            lower_session_sql(&db, sql, ORACLE_PREVIEW_PROFILE, Some("\"APP\""), "bicdb").unwrap();
+        assert_eq!(lowered, sql);
+        let rows = SqlSession::new(&mut db).execute(&lowered).unwrap().rows;
+        assert!(rows.iter().any(|row| row
+            == &vec![
+                SqlValue::String("records".into()),
+                SqlValue::String("APP".into())
+            ]));
+        let app = lower_session_sql(
+            &db,
+            "SELECT id FROM records",
+            ORACLE_PREVIEW_PROFILE,
+            Some("\"APP\""),
+            "bicdb",
+        )
+        .unwrap();
+        assert!(app.contains("\"APP\""), "{app}");
+        assert!(lower_session_sql(&db, sql, POSTGRES_PROFILE, None, "bicdb").is_err());
+        assert_eq!(
+            lower_session_sql(&db, sql, ORACLE_HR_PROFILE, None, "bicdb").unwrap(),
+            sql
+        );
+        let native_root = tempfile::tempdir().unwrap();
+        let mut native = BicDb::open_with_config(
+            native_root.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        SqlSession::new(&mut native)
+            .execute("CREATE TABLE records(id INTEGER)")
+            .unwrap();
+        let rows = SqlSession::new(&mut native).execute(sql).unwrap().rows;
+        assert!(rows.iter().any(|row| row
+            == &vec![
+                SqlValue::String("records".into()),
+                SqlValue::String("public".into())
+            ]));
     }
 }

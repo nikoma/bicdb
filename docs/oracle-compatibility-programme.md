@@ -731,3 +731,13 @@ is bounded to unpartitioned tables outside active transactions. See the
 [BLOB contract](oracle-blob-storage.md) for remaining DDL, acquisition, package,
 index and migration limits. Full application and programme acceptance remain
 open; a local regression run does not qualify a deployed application.
+
+## PostgreSQL JDBC field-origin interoperability
+
+Selected qualified PostgreSQL catalog SELECT statements retain their native
+syntax on Oracle-profile connections. This lets stock JDBC resolve base-column
+metadata without interpreting PostgreSQL system names as Oracle application
+identifiers. Parsed relation boundaries protect application SQL and literal
+contents. Independent native/default PostgreSQL checks and real JDBC metadata
+checks accompany the change; complete driver, application and programme
+qualification remain separate gates.

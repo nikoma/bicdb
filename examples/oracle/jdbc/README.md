@@ -88,3 +88,10 @@ The JAR includes an OSGi manifest requiring the pinned PostgreSQL JDBC bundle.
 Application-bundle installation and runtime qualification are separate from the
 classpath checks. The adapter inherits the Apache-2.0 license of `examples/`;
 its JAR carries that license, and the PostgreSQL dependency retains its own license.
+
+The executable probe also checks field-origin schema, table and column lookup
+through stock PostgreSQL JDBC catalog queries. It uses PostgreSQL's
+`getBaseSchemaName` API for the origin schema and preserves the driver's standard
+`getSchemaName` behavior. Server-side catalog handling remains a separately
+versioned capability; passing the adapter's lexical unit tests alone does not
+establish this interoperability.

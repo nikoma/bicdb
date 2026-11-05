@@ -98,6 +98,8 @@ class ForeignKeyPlanTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('BICDB_ORACLE_SERVER'),'set BICDB_ORACLE_SERVER for native migration acceptance')
 class ForeignKeyMigrationIntegrationTests(unittest.TestCase):
+    profile = 'oracle-preview-v1'
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory(prefix='bicdb-fk-migration-test-');self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name)
@@ -106,7 +108,7 @@ class ForeignKeyMigrationIntegrationTests(unittest.TestCase):
         self.start_server();self.addCleanup(self.stop_server);self.connect_server()
 
     def start_server(self):
-        self.child=subprocess.Popen([os.environ['BICDB_ORACLE_SERVER'],str(self.root/'db'),str(self.port),'oracle-preview-v1','8','4'],stdout=self.log,stderr=subprocess.STDOUT)
+        self.child=subprocess.Popen([os.environ['BICDB_ORACLE_SERVER'],str(self.root/'db'),str(self.port),self.profile,'8','4'],stdout=self.log,stderr=subprocess.STDOUT)
 
     def stop_server(self):
         if self.child.poll() is None:
@@ -121,7 +123,7 @@ class ForeignKeyMigrationIntegrationTests(unittest.TestCase):
         for _ in range(300):
             if self.child.poll() is not None:raise RuntimeError('fixture startup failed: '+(self.root/'server.log').read_text())
             try:
-                self.conn=psycopg.connect(self.dsn,autocommit=True,options='-c bicdb.sql_profile=oracle-preview-v1',connect_timeout=1)
+                self.conn=psycopg.connect(self.dsn,autocommit=True,options='-c bicdb.sql_profile='+self.profile,connect_timeout=1)
                 self.addCleanup(self.conn.close);return
             except psycopg.OperationalError as error:
                 if error.sqlstate is not None:raise

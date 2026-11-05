@@ -132,7 +132,8 @@ and application execution as outstanding. COPY loads each table atomically.
 `--resume` checks the journal's manifest digest, profile, endpoint and completed
 prefix, plus completed table columns/counts. The journal is a development resume
 mechanism; it does not certify an unmodified target or make import atomic across
-all tables. Use the independent `verify` phase to compare complete row multisets,
+all tables. See the [source-value verification contract](../../../docs/oracle-source-value-verification.md).
+Use the independent `verify` phase to compare complete row multisets,
 preserving exact decimal digits, bytes, text whitespace and duplicate rows.
 The reports always retain `application_qualified: false` at this stage.
 

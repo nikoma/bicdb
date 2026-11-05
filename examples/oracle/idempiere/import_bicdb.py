@@ -193,24 +193,46 @@ def row_hash(row):
                                    separators=(',', ':')).encode()).digest()
 
 
+def source_row_hashes(snapshot, table):
+    """Validate the exact bytes, projection and row count of one exported file."""
+    columns = table['columns']
+    count = table['rows']
+    if not columns or len(columns) != len(set(columns)):
+        raise ValueError('invalid snapshot table projection')
+    if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+        raise ValueError('invalid snapshot table row count')
+    path = snapshot / table['file']
+    if path.resolve().parent != snapshot.resolve(): raise ValueError('invalid snapshot row path')
+    expected, digest = [], hashlib.sha256()
+    with path.open('rb') as source:
+        for line in source:
+            digest.update(line)
+            values = json.loads(line)
+            if not isinstance(values, list) or len(values) != len(columns):
+                raise ValueError('snapshot row width differs from table projection')
+            expected.append(row_hash([decode(value) for value in values]))
+    if digest.hexdigest() != table['sha256']:
+        raise ValueError('snapshot row file digest mismatch')
+    if len(expected) != count:
+        raise ValueError('snapshot row count differs from table manifest')
+    expected.sort()
+    return expected
+
+
 def verify_values(cursor, snapshot, schema, table):
     # Sorting row digests preserves multiplicity without assuming that the two
     # engines enumerate heap rows in the same order. No float/Decimal-context
     # rounding or whitespace trimming is allowed in this comparison.
-    path = snapshot / table['file']
-    if path.resolve().parent != snapshot.resolve(): raise ValueError('invalid snapshot row path')
-    with path.open('rb') as source:
-        if hashlib.file_digest(source, 'sha256').hexdigest() != table['sha256']:
-            raise ValueError('snapshot row file digest mismatch')
-    with path.open() as source:
-        expected = sorted(row_hash([decode(value) for value in json.loads(line)]) for line in source)
+    expected = source_row_hashes(snapshot, table)
     columns = ','.join(quote(name) for name in table['columns'])
     cursor.execute('SELECT ' + columns + ' FROM ' + quote(schema) + '.' + quote(table['name']))
     actual = []
     while batch := cursor.fetchmany(500): actual.extend(row_hash(row) for row in batch)
     actual.sort()
     if actual != expected: raise ValueError(f"target values differ in {table['name']}")
-    return hashlib.sha256(b''.join(actual)).hexdigest()
+    digest = hashlib.sha256()
+    for value in actual: digest.update(value)
+    return digest.hexdigest()
 
 
 def save_report(path, report):
@@ -317,10 +339,15 @@ def main():
                         cursor.execute('SELECT * FROM ' + quote(schema) + '.' + quote(name) + ' WHERE FALSE')
                         if [description.name for description in cursor.description] != table['columns']:
                             raise ValueError('completed target table columns differ from snapshot')
-                        cursor.execute('SELECT COUNT(*) FROM ' + quote(schema) + '.' + quote(name))
-                        expected = 0 if args.phase == 'tables' else table['rows']
-                        if int(cursor.fetchone()[0]) != expected:
-                            raise ValueError('completed target table row count differs from journal phase')
+                        if args.phase == 'verify':
+                            digest = verify_values(cursor, args.snapshot, schema, table)
+                            if report.get('value_digests', {}).get(name) != digest:
+                                raise ValueError('completed value verification has no matching saved digest')
+                        else:
+                            cursor.execute('SELECT COUNT(*) FROM ' + quote(schema) + '.' + quote(name))
+                            expected = 0 if args.phase == 'tables' else table['rows']
+                            if int(cursor.fetchone()[0]) != expected:
+                                raise ValueError('completed target table row count differs from journal phase')
                         continue
                     print(f"{args.phase}: {name}", flush=True)
                     if args.phase == 'tables':

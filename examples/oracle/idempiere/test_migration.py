@@ -1,12 +1,91 @@
 """Value fidelity and migration-policy regression tests; no database required."""
 import datetime
 import decimal
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
 import export_reference as export
 import import_bicdb as target
+
+
+class SourceValueVerificationTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+
+    def table(self, rows, columns=None):
+        data = b''.join((json.dumps([export.cell(value) for value in row], ensure_ascii=False) + '\n').encode() for row in rows)
+        (self.root/'rows.jsonl').write_bytes(data)
+        return dict(name='T', columns=columns if columns is not None else ['C'+str(i) for i in range(len(rows[0]) if rows else 1)],
+                    rows=len(rows), file='rows.jsonl', sha256=hashlib.sha256(data).hexdigest())
+
+    def cursor(self, rows):
+        class Cursor:
+            def __init__(self):self.calls = []
+            def execute(self, sql):self.calls.append(sql);self.rows = iter(rows)
+            def fetchmany(self, count):
+                import itertools
+                return list(itertools.islice(self.rows, count))
+        return Cursor()
+
+    def test_reordered_rows_keep_precision_padding_binary_and_duplicate_multiplicity(self):
+        row = [None, 'flag ', decimal.Decimal('12345678901234567890123456789012345678'), bytes(range(256)),
+               datetime.datetime(2026, 11, 1, 12, 34, 56, 123456, datetime.timezone(datetime.timedelta(hours=8)))]
+        other = [None, 'flag', decimal.Decimal('0.00000000000000000000000000000000000001'), b'', row[-1]]
+        table = self.table([row, other, row])
+        with decimal.localcontext() as context:
+            context.prec = 2
+            left = target.verify_values(self.cursor([row, row, other]), self.root, 'S"Q', table)
+            right = target.verify_values(self.cursor([other, row, row]), self.root, 'S"Q', table)
+        self.assertEqual(left, right);self.assertEqual(len(left), 64)
+        with self.assertRaisesRegex(ValueError, 'target values differ'):
+            target.verify_values(self.cursor([row, other]), self.root, 'S"Q', table)
+        with self.assertRaisesRegex(ValueError, 'target values differ'):
+            target.verify_values(self.cursor([row, other, other]), self.root, 'S"Q', table)
+
+    def test_empty_table_and_literal_identifier_projection(self):
+        table = self.table([], ['C"D'])
+        cursor = self.cursor([])
+        self.assertEqual(target.verify_values(cursor, self.root, 'S"Q', table), hashlib.sha256(b'').hexdigest())
+        self.assertEqual(cursor.calls, ['SELECT "C""D" FROM "S""Q"."T"'])
+
+    def test_source_row_count_is_required_even_when_target_matches_file(self):
+        table = self.table([[1]])
+        for count in [0, 2, -1, True, 1.0, '1']:
+            cursor = self.cursor([[1]])
+            with self.subTest(count=count), self.assertRaisesRegex(ValueError, 'row count'):
+                target.verify_values(cursor, self.root, 'S', dict(table, rows=count))
+            self.assertEqual(cursor.calls, [])
+
+    def test_source_row_width_and_projection_are_checked_before_target_access(self):
+        table = self.table([[1]])
+        for columns in [[], ['C', 'C'], ['C', 'D']]:
+            cursor = self.cursor([[1]])
+            with self.subTest(columns=columns), self.assertRaisesRegex(ValueError, 'projection'):
+                target.verify_values(cursor, self.root, 'S', dict(table, columns=columns))
+            self.assertEqual(cursor.calls, [])
+        data = b'{"C":1}\n';(self.root/'rows.jsonl').write_bytes(data)
+        with self.assertRaisesRegex(ValueError, 'row width'):
+            target.verify_values(self.cursor([[1]]), self.root, 'S', dict(table, sha256=hashlib.sha256(data).hexdigest()))
+
+    def test_corrupt_file_and_external_path_are_refused_before_target_access(self):
+        table = self.table([[1]])
+        for changed in [dict(table, sha256='0'*64), dict(table, file='../rows.jsonl')]:
+            cursor = self.cursor([[1]])
+            with self.subTest(table=changed), self.assertRaises(ValueError):
+                target.verify_values(cursor, self.root, 'S', changed)
+            self.assertEqual(cursor.calls, [])
+
+    def test_unknown_or_inexact_source_values_are_not_coerced(self):
+        table = self.table([[1]])
+        for data in [b'[{"unknown":"value"}]\n', b'[1.2]\n']:
+            (self.root/'rows.jsonl').write_bytes(data);cursor = self.cursor([[1]])
+            with self.subTest(data=data), self.assertRaises((ValueError, TypeError)):
+                target.verify_values(cursor, self.root, 'S', dict(table, sha256=hashlib.sha256(data).hexdigest()))
+            self.assertEqual(cursor.calls, [])
 
 
 class MigrationTests(unittest.TestCase):

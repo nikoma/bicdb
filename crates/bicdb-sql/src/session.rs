@@ -2928,13 +2928,14 @@ impl<'db> SqlSession<'db> {
         self.independent_execution_observed = effects.independent_execution();
         self.latest_independent_sequence = effects.latest_sequence();
         self.observe_independent_commit()?;
-        match result {
+        let result = match result {
             Ok(result) => Ok(result),
             Err(error) => Err(oracle::errors::profile_constraint_error(
                 self.db_ref(),
                 error,
             )?),
-        }
+        };
+        effects.finish(result)
     }
 
     /// Whether this statement crossed an independent durable commit boundary.
@@ -3024,7 +3025,7 @@ impl<'db> SqlSession<'db> {
         self.independent_execution_observed = effects.independent_execution();
         self.latest_independent_sequence = effects.latest_sequence();
         self.observe_independent_commit()?;
-        result
+        effects.finish(result)
     }
 
     /// Execute a stored procedure directly from its already-typed arguments,
@@ -3047,7 +3048,7 @@ impl<'db> SqlSession<'db> {
         self.independent_execution_observed = effects.independent_execution();
         self.latest_independent_sequence = effects.latest_sequence();
         self.observe_independent_commit()?;
-        result
+        effects.finish(result)
     }
 
     pub(crate) fn execute_inner(&mut self, sql: &str) -> Result<SqlResult> {

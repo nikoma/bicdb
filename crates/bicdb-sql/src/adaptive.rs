@@ -523,6 +523,7 @@ mod tests {
             command_tag: None,
             column_types: Vec::new(),
             column_metadata: Vec::new(),
+            notices: Vec::new(),
         }
     }
 

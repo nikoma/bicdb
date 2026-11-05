@@ -965,20 +965,18 @@ pub(crate) fn parse_single_quoted_sql_string(sql: &str) -> Result<Option<String>
     let Some(rest) = sql.strip_prefix('\'') else {
         return Ok(None);
     };
-    let bytes = rest.as_bytes();
-    let mut idx = 0usize;
+    let mut chars = rest.chars().peekable();
     let mut out = String::new();
-    while idx < bytes.len() {
-        if bytes[idx] == b'\'' {
-            if bytes.get(idx + 1) == Some(&b'\'') {
+    while let Some(ch) = chars.next() {
+        if ch == '\'' {
+            if chars.peek() == Some(&'\'') {
                 out.push('\'');
-                idx += 2;
+                chars.next();
                 continue;
             }
             return Ok(Some(out));
         }
-        out.push(bytes[idx] as char);
-        idx += 1;
+        out.push(ch);
     }
     Err(SqlError::InvalidSql(
         "unterminated routine single-quoted body".to_string(),
@@ -1786,11 +1784,14 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
     if statement.trim().is_empty() {
         return Ok(RoutineStmt::Rethrow);
     }
-    if !starts_with_plpgsql_word(statement, "EXCEPTION") {
+    if !starts_with_plpgsql_word(statement, "EXCEPTION")
+        && !starts_with_plpgsql_word(statement, "NOTICE")
+    {
         if let Ok(RoutineExceptionCondition::SqlState(sqlstate)) =
             routine_exception_condition(statement)
         {
             return Ok(RoutineStmt::RaiseException {
+                notice: false,
                 message: normalize_object_name(statement),
                 arguments: Vec::new(),
                 detail: None,
@@ -1799,9 +1800,13 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
             });
         }
     }
-    let Some(rest) = strip_prefix_ci(statement, "EXCEPTION") else {
+    let (notice, rest) = if let Some(rest) = strip_routine_keyword(statement, "NOTICE") {
+        (true, rest)
+    } else if let Some(rest) = strip_routine_keyword(statement, "EXCEPTION") {
+        (false, rest)
+    } else {
         return Err(SqlError::UnsupportedPlpgsqlFeature(
-            "only RAISE EXCEPTION is implemented".to_string(),
+            "only RAISE EXCEPTION and NOTICE are implemented".to_string(),
         ));
     };
     let rest = rest.trim();
@@ -1826,7 +1831,7 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
         .skip(1)
         .map(|argument| parse_routine_expr(argument.trim()).map(RoutineExpr::unbound))
         .collect::<Result<Vec<_>>>()?;
-    let mut sqlstate = "P0001".to_string();
+    let mut sqlstate = if notice { "00000" } else { "P0001" }.to_string();
     let mut detail = None;
     let mut error_fields = RaiseErrorFields::default();
     let mut seen = std::collections::HashSet::new();
@@ -1888,7 +1893,26 @@ pub(crate) fn parse_routine_raise(statement: &str) -> Result<RoutineStmt> {
     }
     let message =
         message.ok_or_else(|| SqlError::InvalidSql("RAISE EXCEPTION requires a message".into()))?;
+    if notice {
+        let mut chars = message.chars().peekable();
+        let mut placeholders = 0;
+        while let Some(ch) = chars.next() {
+            if ch == '%' {
+                if chars.peek() == Some(&'%') {
+                    chars.next();
+                } else {
+                    placeholders += 1;
+                }
+            }
+        }
+        if placeholders != arguments.len() {
+            return Err(SqlError::InvalidSql(
+                "RAISE NOTICE format parameters do not match its placeholders".into(),
+            ));
+        }
+    }
     Ok(RoutineStmt::RaiseException {
+        notice,
         message,
         arguments,
         detail,

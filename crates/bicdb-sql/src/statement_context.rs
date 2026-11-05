@@ -1,4 +1,5 @@
 //! Synchronous statement context shared by nested row and routine evaluators.
+use crate::{Result, SqlError, SqlNotice, SqlResult};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -12,6 +13,8 @@ struct Effects {
     independent_execution: Cell<bool>,
     independent_commits: Cell<bool>,
     latest_sequence: Cell<u64>,
+    notices: RefCell<Vec<SqlNotice>>,
+    notice_bytes: Cell<usize>,
 }
 
 /// Prevent independently committing routines from executing during metadata
@@ -60,6 +63,47 @@ impl StatementScope {
     pub(crate) fn latest_sequence(&self) -> u64 {
         self.effects.latest_sequence.get()
     }
+    pub(crate) fn finish(&self, result: Result<SqlResult>) -> Result<SqlResult> {
+        if !self.root {
+            return result;
+        }
+        let notices = self.effects.notices.take();
+        if notices.is_empty() {
+            return result;
+        }
+        match result {
+            Ok(mut result) => {
+                result.notices.extend(notices);
+                Ok(result)
+            }
+            Err(error) => Err(SqlError::WithNotices {
+                error: Box::new(error),
+                notices,
+            }),
+        }
+    }
+}
+
+pub(crate) fn note_notice(notice: SqlNotice) -> Result<()> {
+    EFFECTS.with(|current| {
+        let current = current.borrow();
+        let effects = current
+            .as_ref()
+            .ok_or_else(|| SqlError::Unsupported("NOTICE requires a statement context".into()))?;
+        let bytes = effects
+            .notice_bytes
+            .get()
+            .saturating_add(notice.memory_estimate());
+        if effects.notices.borrow().len() >= 1024 || bytes > 1024 * 1024 {
+            return Err(SqlError::resource_limit(
+                "54000",
+                "statement NOTICE output exceeds the bounded diagnostic buffer",
+            ));
+        }
+        effects.notice_bytes.set(bytes);
+        effects.notices.borrow_mut().push(notice);
+        Ok(())
+    })
 }
 impl Drop for StatementScope {
     fn drop(&mut self) {

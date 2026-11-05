@@ -17,6 +17,87 @@ use sqlx::{Connection as _, Row as _};
 
 type HmacSha256 = Hmac<Sha256>;
 
+#[test]
+fn plpgsql_notice_reaches_client_once_and_preserves_later_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    drop(BicDb::open(dir.path()).unwrap());
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(15)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    let read_reply = |client: &mut TcpStream| {
+        let mut messages = Vec::new();
+        loop {
+            let (tag, payload) = read_message(client);
+            if tag == b'Z' {
+                return messages;
+            }
+            messages.push((tag, payload));
+        }
+    };
+    send_query(&mut client, "DO $$ BEGIN RAISE NOTICE 'count=%', 7; END $$");
+    let reply = read_reply(&mut client);
+    assert_eq!(
+        reply.iter().map(|(tag, _)| *tag).collect::<Vec<_>>(),
+        vec![b'N', b'C']
+    );
+    let diagnostic = String::from_utf8_lossy(&reply[0].1);
+    assert!(
+        diagnostic.contains("NOTICE")
+            && diagnostic.contains("00000")
+            && diagnostic.contains("count=7")
+    );
+
+    send_query(&mut client, "DO $$ BEGIN RAISE NOTICE 'before'; RAISE EXCEPTION 'blocked' USING ERRCODE='23514'; END $$");
+    let reply = read_reply(&mut client);
+    assert_eq!(
+        reply.iter().map(|(tag, _)| *tag).collect::<Vec<_>>(),
+        vec![b'N', b'E']
+    );
+    assert!(String::from_utf8_lossy(&reply[0].1).contains("before"));
+    assert!(String::from_utf8_lossy(&reply[1].1).contains("23514"));
+
+    send_query(&mut client, "CREATE FUNCTION notice_value() RETURNS integer LANGUAGE plpgsql AS $$ BEGIN RAISE NOTICE 'row'; RETURN 7; END $$");
+    assert!(!read_reply(&mut client).iter().any(|(tag, _)| *tag == b'E'));
+    send_parse(
+        &mut client,
+        "notice_stmt",
+        "SELECT notice_value() FROM generate_series(1,3)",
+        &[],
+    );
+    send_bind(&mut client, "notice_portal", "notice_stmt", &[]);
+    send_describe_portal(&mut client, "notice_portal");
+    send_sync(&mut client);
+    let description = read_reply(&mut client);
+    assert!(!description
+        .iter()
+        .any(|(tag, _)| matches!(*tag, b'N' | b'E')));
+    send_execute_max(&mut client, "notice_portal", 1);
+    send_sync(&mut client);
+    let first = read_reply(&mut client);
+    assert!(!first.iter().any(|(tag, _)| *tag == b'E'));
+    assert_eq!(first.iter().filter(|(tag, _)| *tag == b'N').count(), 3);
+    assert!(first.iter().any(|(tag, _)| *tag == b's'));
+    for _ in 0..2 {
+        send_execute_max(&mut client, "notice_portal", 1);
+        send_sync(&mut client);
+        let reply = read_reply(&mut client);
+        assert!(!reply.iter().any(|(tag, _)| matches!(*tag, b'N' | b'E')));
+        assert_eq!(reply.iter().filter(|(tag, _)| *tag == b'D').count(), 1);
+    }
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
 const TEST_CERT: &str = r#"-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIUKL73D38tL6nPoGBW491LKbwVJOIwDQYJKoZIhvcNAQEL
 BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDYyMDAyMjkxOFoXDTM2MDYx

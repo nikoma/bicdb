@@ -6762,6 +6762,7 @@ pub(crate) mod tests {
             command_tag: Some("SELECT 1".to_string()),
             column_types: vec![Some("text".to_string())],
             column_metadata: vec![],
+            notices: vec![],
         };
 
         assert_eq!(

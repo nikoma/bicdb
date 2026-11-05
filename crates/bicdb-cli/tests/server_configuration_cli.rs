@@ -1,4 +1,5 @@
 use serde_json::Value;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -195,8 +196,22 @@ fn running_diff_supports_verified_tls_scram_and_rejects_wrong_hostname() {
     );
     let started = Instant::now();
     loop {
-        if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
-            break;
+        // The recovery listener accepts TCP but declines TLS until the
+        // database is open. Wait for protocol readiness, not just a port.
+        if let Ok(mut stream) = std::net::TcpStream::connect(("127.0.0.1", port)) {
+            stream
+                .set_read_timeout(Some(Duration::from_secs(1)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(1)))
+                .unwrap();
+            let mut response = [0_u8];
+            if stream.write_all(&[0, 0, 0, 8, 4, 210, 22, 47]).is_ok()
+                && stream.read_exact(&mut response).is_ok()
+                && response == [b'S']
+            {
+                break;
+            }
         }
         assert!(server.0.try_wait().unwrap().is_none(), "TLS server exited");
         assert!(

@@ -73,3 +73,10 @@ address cannot carry a different expression's cached type into a later call.
 The Carrier compatibility suite covers direct row projection and the EHR-shaped
 paginated JSONB feed with changed limits on repeated invocations. The regression
 fails before the fix; 55 Carrier/type/JSON storage and composite checks pass.
+
+COPY FROM preserves single-column blank records: text represents an empty string,
+CSV represents NULL unless quoted, and a blank CSV header is consumed as a header.
+An empty input remains zero rows and CRLF blank records remain real rows. The
+original wire regression drops a row; all 17 focused COPY protocol checks pass
+after the fix. This was exposed by the EHR transfer's count/hash reconciliation,
+which refused the incomplete target instead of admitting it.

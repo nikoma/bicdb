@@ -1922,9 +1922,9 @@ pub(crate) fn append_copy_insert_statements(
 }
 
 pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
-    if line.is_empty() {
-        return Ok(());
-    }
+    // A blank record is one field: empty text, or CSV NULL. It is also a
+    // real header record when HEADER is set. No input is handled by the
+    // pending-buffer boundary, not by discarding a parsed record here.
     if copy.spec.format == CopyFormat::Text && line == "\\." {
         return Ok(());
     }

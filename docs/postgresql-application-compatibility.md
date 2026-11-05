@@ -90,3 +90,11 @@ without the fix and verifies that a volatile body's insert never runs during
 description. All 8 type-consistency and 35 Carrier compatibility tests pass.
 This is query-metadata qualification; the full hosted EHR goal workflow is
 qualified separately and is not implied by these unit results.
+
+Extended-protocol Bind also preserves a resolved JSON/JSONB parameter's SQL
+identity after decoding its wire payload. A valid JSON object must not become a
+SQL text value when the query omits an explicit cast. The regression covers
+objects, arrays, numbers, strings, JSON null and booleans in text and binary
+parameter formats. It fails before the fix; all 179 protocol tests pass after
+restoration. This complements stored-function argument description; it does not
+claim that the remaining hosted EHR goal and nested-query failures are resolved.

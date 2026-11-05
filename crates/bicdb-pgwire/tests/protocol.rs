@@ -17,6 +17,60 @@ use sqlx::{Connection as _, Row as _};
 
 type HmacSha256 = Hmac<Sha256>;
 
+#[test]
+fn prepared_json_parameters_keep_their_types_without_query_casts() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(15)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_parse(
+        &mut client,
+        "json_kinds",
+        "SELECT json_typeof($1),jsonb_typeof($2)",
+        &[114, 3802],
+    );
+    for format in [0, 1] {
+        for (left, right, expected) in [
+            (r#"{"value":1}"#, "[1,2]", ["object", "array"]),
+            ("42", r#""text""#, ["number", "string"]),
+            ("null", "true", ["null", "boolean"]),
+        ] {
+            let left = left.as_bytes().to_vec();
+            let right = if format == 1 {
+                [vec![1], right.as_bytes().to_vec()].concat()
+            } else {
+                right.as_bytes().to_vec()
+            };
+            send_bind_binary(
+                &mut client,
+                "",
+                "json_kinds",
+                &[(format, left), (format, right)],
+                &[],
+            );
+            send_execute(&mut client, "");
+            send_sync(&mut client);
+            assert_eq!(
+                read_query_rows(&mut client),
+                vec![expected.map(str::to_owned).to_vec()],
+                "format {format}"
+            );
+        }
+    }
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
 #[tokio::test]
 async fn startup_custom_setting_reaches_stored_functions_without_changing_identity() {
     let root = tempfile::tempdir().unwrap();

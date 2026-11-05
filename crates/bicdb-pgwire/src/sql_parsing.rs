@@ -3177,12 +3177,12 @@ pub(crate) fn decode_parameter_with_db(
     Ok(temporal_parameter_literal(oid, literal))
 }
 
-/// A wire encoding is not the SQL type. Preserve resolved temporal identity
+/// A wire encoding is not the SQL type. Preserve resolved temporal/JSON identity
 /// after decoding, including NULLs and arrays, without putting SQL casts into
 /// nested array/range/composite value text.
 pub(crate) fn temporal_parameter_literal(oid: i32, literal: String) -> String {
     let scalar = array_element_oid(oid).unwrap_or(oid);
-    if matches!(scalar, 1082 | 1083 | 1114 | 1184 | 1186 | 1266) {
+    if matches!(scalar, 114 | 3802 | 1082 | 1083 | 1114 | 1184 | 1186 | 1266) {
         if let Some(name) = bicdb_sql::pg_type_name_by_oid(oid) {
             return format!("CAST({literal} AS {name})");
         }

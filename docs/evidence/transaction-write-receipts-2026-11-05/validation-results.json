@@ -1,0 +1,173 @@
+{
+  "format": 1,
+  "application_qualified": false,
+  "programme_complete": false,
+  "implementation_commit": "ee1a51e",
+  "test_follow_up_commit": "8a848a7960d65b2df2c4afdcc500ef6f41d00fa5",
+  "source_base_commit": "50c32877cda8185222ef0b13afd21c9c6fc33ea3",
+  "source_files_sha256": {
+    "crates/bicdb-core/src/db.rs": "c59a428ac6eb7b17c35239f704289a4b38c3ab41f1f0dd0fd20b9a33837e9179",
+    "crates/bicdb-core/src/db/access_mutation.rs": "fadd56eac6f4587150e498069f53ba00b663d6b940bb9f7b70b1d90e99e69401",
+    "crates/bicdb-core/src/db/commit_snapshot.rs": "51722bcec741a4312049fd70b15a19975ea2683b1cc4331ee6d6d1eff6da805b",
+    "crates/bicdb-core/src/db/flashback.rs": "3e8f6c95d76968e1a0582c387d4d09392706e8dcf31ab2d2e14f1956532fe0a3",
+    "crates/bicdb-core/src/db/spatial_paged.rs": "276227a7e3d48e5faf03f11031e625bb2b28ea9cdc533efd7e1fb41522e03374",
+    "crates/bicdb-core/src/lib.rs": "002a544ce1708285c71c6c2985ff8df8428ec9d1d3efe59c9924f09a40924f28",
+    "crates/bicdb-core/tests/commit_recovery_atomicity.rs": "59991a7c0f49480111bdd32d2ce1e3bfd9bcc548b05e184ac30b4f431a05870d",
+    "crates/bicdb-core/src/db/transaction_receipts.rs": "4782e5fd86f8c138648b07af9dee29bfa6d458359077b7370cc8603e853a701d",
+    "crates/bicdb-core/tests/transaction_receipts.rs": "b55772503bdbfe42306dcb3684e9f100e7d75d2a825647a79a48c37dad5b9ea9"
+  },
+  "candidate_binary_sha256": "3aad00c9f3f382584f2a0f0ac47abc86b125ade06bcd38013c41fde0a4a660c7",
+  "candidate_deployed": false,
+  "accepted_application_replaced": false,
+  "rust_tests_passed": 935,
+  "targeted_core_tests_passed": 12,
+  "post_decision_recovery_variants": 5,
+  "real_short_wal_append": "passed in isolated Linux child",
+  "test_only_follow_up": {
+    "file": "crates/bicdb-core/tests/transaction_receipts.rs",
+    "targeted_core_tests_passed": 12,
+    "workspace_all_targets": "passed",
+    "engine_sources_unchanged": true
+  },
+  "checks": [
+    {
+      "name": "core-regressions",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "commit_apply_failure",
+        "--test",
+        "transaction_isolation",
+        "--test",
+        "snapshot",
+        "--test",
+        "sync_transaction_visibility"
+      ],
+      "returncode": 0,
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s",
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.48s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s"
+      ]
+    },
+    {
+      "name": "sql-library",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--lib"
+      ],
+      "returncode": 0,
+      "results": [
+        "test result: ok. 656 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 49.91s"
+      ]
+    },
+    {
+      "name": "sql-transactions",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "transaction_system_types",
+        "--test",
+        "transaction_uniqueness",
+        "--test",
+        "deferred_foreign_keys",
+        "--test",
+        "deferred_trigger_rollback",
+        "--test",
+        "recursive_query_stack"
+      ],
+      "returncode": 0,
+      "results": [
+        "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.06s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.15s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.97s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.13s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.95s"
+      ]
+    },
+    {
+      "name": "protocol",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "oracle_hr",
+        "--test",
+        "protocol"
+      ],
+      "returncode": 0,
+      "results": [
+        "test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.29s",
+        "test result: ok. 176 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.13s"
+      ]
+    },
+    {
+      "name": "workspace",
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "--workspace",
+        "--all-targets"
+      ],
+      "returncode": 0,
+      "results": []
+    },
+    {
+      "name": "build",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "oracle_server"
+      ],
+      "returncode": 0,
+      "results": []
+    }
+  ],
+  "ignored_sql_benchmarks": 3,
+  "oracle_reference_comparisons": {
+    "temporary_blobs": {
+      "matched": 18,
+      "total": 18
+    },
+    "hextoraw": {
+      "matched": 24,
+      "total": 24
+    }
+  },
+  "postgres_binary_control": {
+    "success": true,
+    "binary_result_preserved": true,
+    "oracle_function_rejected": true,
+    "connection_recovers": true
+  },
+  "owned_probe_servers_stopped": true,
+  "owned_probe_data_removed": true,
+  "github_workflows_added": false,
+  "github_workflows_manually_run": false,
+  "remaining": [
+    "Persistent LOB identities, snapshots, reads and mutation",
+    "Source-inventory-based BLOB reconciliation on a disposable application clone",
+    "Unmodified upstream application LOB test and complete application/programme acceptance"
+  ]
+}

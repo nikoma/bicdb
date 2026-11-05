@@ -670,3 +670,15 @@ including copy-on-write assignment and SQL/PLSQL error-context differences.
 Persistent row-backed locators, the original application's full LOB test,
 complete application acceptance and the remaining programme workstreams stay
 open. This checkpoint does not replace the accepted running application.
+
+
+## Transaction receipt prerequisite
+
+[Native outcome/write receipts](transaction-outcome-receipts.md) now preserve
+transaction outcome and write survival across savepoints, reused log positions,
+commit, abort and post-decision recovery failures. The
+[qualification checkpoint](evidence/transaction-write-receipts-2026-11-05/README.md)
+records native, SQL, protocol and actual WAL append-failure checks. These are
+building blocks for persistent LOB snapshot semantics. Persistent LOB storage and
+mutation, source-type reconciliation and complete application acceptance remain
+open; this checkpoint does not change the accepted application deployment.

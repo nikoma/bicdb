@@ -17,6 +17,45 @@ use sqlx::{Connection as _, Row as _};
 
 type HmacSha256 = Hmac<Sha256>;
 
+#[tokio::test]
+async fn parameterized_expiry_interval_uses_a_numeric_multiplier() {
+    let root = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(root.path(), PgWireConfig::default()).unwrap();
+    let serving = server.clone();
+    let thread = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+    let config = format!(
+        "host=127.0.0.1 port={} user=bicdb dbname=bicdb",
+        address.port()
+    );
+    let (client, connection) = tokio_postgres::connect(&config, tokio_postgres::NoTls)
+        .await
+        .unwrap();
+    let task = tokio::spawn(async move {
+        let _ = connection.await;
+    });
+    client
+        .batch_execute("CREATE TABLE ttl_rows(id TEXT PRIMARY KEY,expires_at TIMESTAMPTZ)")
+        .await
+        .unwrap();
+    let statement=client.prepare("INSERT INTO ttl_rows VALUES('a',TIMESTAMPTZ '2026-11-05 00:00:00+00'+($1*INTERVAL '1 second'))").await.unwrap();
+    assert_eq!(statement.params(), &[tokio_postgres::types::Type::FLOAT8]);
+    client.execute(&statement, &[&86400.0_f64]).await.unwrap();
+    let row = client
+        .query_one(
+            "SELECT expires_at=TIMESTAMPTZ '2026-11-06 00:00:00+00' AS correct FROM ttl_rows",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert!(row.get::<_, bool>(0));
+    drop(client);
+    server.request_shutdown();
+    task.await.unwrap();
+    thread.join().unwrap().unwrap();
+}
+
 #[test]
 fn schema_qualified_function_lists_apply_over_a_transactional_wire_session() {
     let dir = tempfile::tempdir().unwrap();

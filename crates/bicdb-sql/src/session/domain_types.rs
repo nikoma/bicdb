@@ -1070,6 +1070,27 @@ impl<'db> SqlSession<'db> {
                     )? {
                         self.ddl_undo.push(undo);
                     }
+                    // Foreign keys retain the referenced relation's identity
+                    // when PostgreSQL renames it. Our persisted metadata uses
+                    // collection names, so update every incoming reference,
+                    // including self references, with ordinary schema undo.
+                    for mut dependent in list_schemas(self.db_ref())? {
+                        let mut changed = false;
+                        for constraint in &mut dependent.constraints {
+                            if let ConstraintSchema::ForeignKey { foreign_table, .. } = constraint {
+                                if foreign_table == &table {
+                                    *foreign_table = new_table.clone();
+                                    changed = true;
+                                }
+                            }
+                        }
+                        if changed {
+                            self.save_session_schema(&dependent)?;
+                            if dependent.name == new_table {
+                                schema = dependent;
+                            }
+                        }
+                    }
                     for mut grant in list_privileges(self.db_ref())? {
                         if grant.object_type == PrivilegeObjectType::Table
                             && grant.object_name == table

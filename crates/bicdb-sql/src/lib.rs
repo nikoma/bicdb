@@ -200,6 +200,7 @@ pub(crate) use constraint_nulls::*;
 mod statement_cache;
 pub use schema_meta::*;
 mod catalog_memo;
+mod postgres_control;
 mod routines;
 pub(crate) use routines::*;
 mod ddl_alter;
@@ -1107,6 +1108,7 @@ fn routine_statement_profile_kind(statement: &RoutineStmt) -> String {
         RoutineStmt::DynamicExecute(_) | RoutineStmt::OracleDynamicExecute(_) => {
             "ROUTINE_DYNAMIC_EXECUTE".to_string()
         }
+        RoutineStmt::PostgresControl(_) => "ROUTINE_POSTGRES_CONTROL".into(),
         RoutineStmt::If { .. } => "ROUTINE_IF".to_string(),
         RoutineStmt::Case { .. } => "ROUTINE_CASE".to_string(),
         RoutineStmt::ForLoop { .. } => "ROUTINE_FOR_LOOP".to_string(),
@@ -1164,6 +1166,7 @@ fn routine_statement_profile_signature(statement: &RoutineStmt) -> String {
             )
         }
         RoutineStmt::DynamicExecute(expr) => format!("EXECUTE {expr}"),
+        RoutineStmt::PostgresControl(_) => "POSTGRES_CONTROL".into(),
         RoutineStmt::OracleDynamicExecute(dynamic) => {
             format!("EXECUTE IMMEDIATE {}", dynamic.command)
         }
@@ -4545,6 +4548,7 @@ enum RoutineStmt {
         targets: Vec<String>,
     },
     DynamicExecute(RoutineExpr),
+    PostgresControl(Box<postgres_control::PostgresControl>),
     OracleDynamicExecute(Box<oracle::dynamic_sql::Immediate>),
     If {
         condition: RoutineExpr,
@@ -4694,6 +4698,10 @@ fn routine_statement_may_write(statement: &RoutineStmt) -> bool {
             statement_may_write(statement)
         }
         RoutineStmt::DynamicExecute(_) | RoutineStmt::OracleDynamicExecute(_) => true,
+        RoutineStmt::PostgresControl(control) => matches!(
+            control.as_ref(),
+            postgres_control::PostgresControl::Execute { .. }
+        ),
         RoutineStmt::SelectInto { query, .. } => query_may_write(query),
         RoutineStmt::Perform { query } | RoutineStmt::ReturnQuery(query) => query_may_write(query),
         RoutineStmt::QueryForLoop { query, body, .. } => {
@@ -4800,6 +4808,7 @@ fn set_expr_may_write(expr: &SetExpr) -> bool {
 
 #[derive(Clone, Debug)]
 struct RoutineFrame {
+    last_sql_row_count: i64,
     // Derived from the stored routine language, never from its caller's profile.
     oracle_statement_rollback: bool,
     oracle_procedural_evaluation: bool,

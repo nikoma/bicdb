@@ -4712,6 +4712,11 @@ pub(crate) fn parse_raw_function_privilege_ddl(
     {
         return Ok(None);
     }
+    // A leading GRANT does not own subsequent statements in a migration batch.
+    // Let the ordinary split dispatcher apply the same handler to each one.
+    if split_sql_statements(trimmed).len() != 1 {
+        return Ok(None);
+    }
     // Find the final unquoted, top-level keyword. Whitespace is not syntax,
     // and quoted routine/role names or signature types must not split a grant.
     let mut role_index = None;
@@ -4745,32 +4750,45 @@ pub(crate) fn parse_raw_function_privilege_ddl(
     }
     let grantees = parse_role_membership_identifiers(tail)?;
 
-    let routines =
-        if let Some(schema) = strip_sql_keywords(target, &["ALL", "FUNCTIONS", "IN", "SCHEMA"]) {
-            let schema = schema.trim().trim_matches('"');
-            if schema.is_empty() || !schema.chars().all(is_ident_char) {
-                return Err(SqlError::InvalidSql(
-                    "ALL FUNCTIONS IN SCHEMA requires an SQL identifier".to_string(),
-                ));
-            }
-            list_routines(db)?
-                .into_iter()
-                .filter(|routine| routine.kind == RoutineKind::Function)
-                .filter(|routine| routine_schema_name(routine).eq_ignore_ascii_case(schema))
-                .map(|routine| normalize_object_name(&routine.name))
-                .collect()
-        } else if let Some(functions) = strip_sql_keywords(target, &["FUNCTION"]) {
-            let name_end = functions.find('(').unwrap_or(functions.len());
-            let name = normalize_object_name(functions[..name_end].trim());
-            if name.is_empty() || !name.chars().all(is_ident_char) {
-                return Err(SqlError::InvalidSql(
-                    "FUNCTION privilege requires a routine name".to_string(),
-                ));
-            }
-            vec![name]
-        } else {
-            return Ok(None);
+    let routines = if let Some(schema) =
+        strip_sql_keywords(target, &["ALL", "FUNCTIONS", "IN", "SCHEMA"])
+    {
+        let schema = schema.trim().trim_matches('"');
+        if schema.is_empty() || !schema.chars().all(is_ident_char) {
+            return Err(SqlError::InvalidSql(
+                "ALL FUNCTIONS IN SCHEMA requires an SQL identifier".to_string(),
+            ));
+        }
+        list_routines(db)?
+            .into_iter()
+            .filter(|routine| routine.kind == RoutineKind::Function)
+            .filter(|routine| routine_schema_name(routine).eq_ignore_ascii_case(schema))
+            .map(|routine| normalize_object_name(&routine.name))
+            .collect()
+    } else if let Some(functions) = strip_sql_keywords(target, &["FUNCTION"]) {
+        // Reuse the parser's routine-identity list grammar, including
+        // commas inside argument lists and quoted identifiers. Never
+        // silently grant only the first routine in a valid list.
+        let parsed =
+            Parser::parse_sql(&PostgreSqlDialect {}, &format!("DROP FUNCTION {functions}"))
+                .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+        let [Statement::DropFunction(drop)] = parsed.as_slice() else {
+            return Err(SqlError::InvalidSql(
+                "invalid FUNCTION privilege targets".into(),
+            ));
         };
+        if drop.if_exists || drop.drop_behavior.is_some() || drop.func_desc.is_empty() {
+            return Err(SqlError::InvalidSql(
+                "FUNCTION privilege requires routine identities without DROP options".into(),
+            ));
+        }
+        drop.func_desc
+            .iter()
+            .map(|function| object_name(&function.name).map(|name| normalize_object_name(&name)))
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        return Ok(None);
+    };
     Ok(Some(RawFunctionPrivilegeDdl {
         grant,
         with_grant_option,

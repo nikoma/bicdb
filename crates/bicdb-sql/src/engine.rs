@@ -377,6 +377,19 @@ impl ParameterTypeResolver<'_, '_> {
                     }
                 }
                 RoutineStmt::DynamicExecute(value) => self.expr(&value.expr, &env, Some("text")),
+                RoutineStmt::PostgresControl(control) => {
+                    if let postgres_control::PostgresControl::Execute {
+                        command,
+                        parameters,
+                        ..
+                    } = control.as_ref()
+                    {
+                        self.expr(&command.expr, &env, Some("text"));
+                        for parameter in parameters {
+                            self.expr(&parameter.expr, &env, None);
+                        }
+                    }
+                }
                 RoutineStmt::OracleDynamicExecute(immediate) => {
                     self.expr(&immediate.command.expr, &env, Some("text"));
                     for value in &immediate.using {

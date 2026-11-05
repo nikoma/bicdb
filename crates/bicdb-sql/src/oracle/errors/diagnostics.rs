@@ -205,6 +205,9 @@ fn visit_body(body: &mut [RoutineStmt], names: &BTreeSet<String>, symbols: &mut 
                     rewrite(&mut expr.expr, names, symbols);
                 }
             }
+            RoutineStmt::PostgresControl(control) => {
+                control.for_each_expr_mut(|expr| rewrite(&mut expr.expr, names, symbols))
+            }
             RoutineStmt::OracleDynamicExecute(dynamic) => {
                 rewrite(&mut dynamic.command.expr, names, symbols);
                 for bind in &mut dynamic.using {

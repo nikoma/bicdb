@@ -189,7 +189,7 @@ fn bind_namespace_statements(
                 }
                 dynamic.namespace = Some(schema.into());
             }
-            RoutineStmt::DynamicExecute(_) => {
+            RoutineStmt::DynamicExecute(_) | RoutineStmt::PostgresControl(_) => {
                 return Err(SqlError::Unsupported(
                     "Oracle preview routine v2 dynamic SQL namespace binding is not implemented"
                         .into(),
@@ -440,6 +440,9 @@ fn lower_statements(statements: &mut [RoutineStmt], types: &Types) {
             }
             RoutineStmt::QueryForLoop { body, .. } | RoutineStmt::Loop { body } => {
                 lower_statements(body, types)
+            }
+            RoutineStmt::PostgresControl(control) => {
+                control.for_each_expr_mut(|expr| lower_expression(&mut expr.expr, types))
             }
             RoutineStmt::OracleDynamicExecute(dynamic) => {
                 lower_expression(&mut dynamic.command.expr, types);

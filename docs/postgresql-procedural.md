@@ -39,12 +39,20 @@ SLICE 1 IN ARRAY` iterates their rows. The pgwire `procedural_migration` regress
 executes this form with nested IF checks and dynamic table renames/compatibility
 views twice, preserving data through both names.
 
-This does not imply full application migration compatibility. In particular,
-dynamic `EXECUTE ... INTO` and `EXECUTE ... USING`, plain LOOP/WHILE blocks and
-other unimplemented PL/pgSQL constructs still need support before applications
-using them can provision from scratch. Opening an existing database tests storage
-upgrade compatibility, not migration compatibility. A failed fresh migration does
-not establish how an existing production schema was originally provisioned.
+Dynamic `EXECUTE expression [INTO [STRICT] targets] [USING values]` supports a
+single SELECT or DML statement. USING binds typed values; SQL identifiers must
+still be quoted in the command expression. Local variable names are never
+substituted inside dynamic SQL. GET [CURRENT] DIAGNOSTICS supports ROW_COUNT for
+the preceding SQL command. Dynamic EXECUTE updates that count without changing
+FOUND. Other diagnostics and utility commands with INTO/USING fail explicitly.
+
+PostgreSQL scalar stored-function effects belong to their entire calling SQL
+statement. An error in a later expression rolls them back, and a failed statement
+in an explicit transaction preserves earlier transaction work. Read-only row
+functions retain the caller's pending snapshot and cannot acquire write authority.
+These paths do not imply full application migration compatibility: unimplemented
+PL/pgSQL constructs still fail explicitly. Opening an existing database tests
+storage upgrade compatibility, not migration compatibility.
 
 ## Returning rows and strict lookups
 
@@ -88,6 +96,10 @@ including before `TO`/`FROM`. Quoted role names are preserved and execution
 privileges are still enforced. A redundant `WITH GRANT OPTION` is accepted for
 owners and superusers; granting that authority to other roles remains unsupported
 until dependent-grant tracking is implemented.
+Function identity lists, including commas within argument signatures, apply to
+every named routine in standalone statements and migration batches. All routine
+existence, ownership and grantee checks precede any privilege changes; a missing
+or unauthorized later target cannot leave an earlier target granted.
 
 `pg_timezone_names` and `pg_catalog.pg_timezone_names` expose IANA names and
 aliases from the same chrono-tz database used by AT TIME ZONE, with current

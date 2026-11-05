@@ -344,6 +344,11 @@ pub(crate) fn collect_routine_stmt_symbols(
                     add_routine_symbol(target, names, seen);
                 }
             }
+            RoutineStmt::PostgresControl(control) => {
+                for target in control.targets() {
+                    add_routine_symbol(target, names, seen);
+                }
+            }
             RoutineStmt::Perform { .. } => {}
             RoutineStmt::If {
                 then_body,
@@ -640,6 +645,9 @@ pub(crate) fn bind_routine_statement_exprs(statements: &mut [RoutineStmt], scope
                 for bind in &mut dynamic.using {
                     bind.bind(scope);
                 }
+            }
+            RoutineStmt::PostgresControl(control) => {
+                control.for_each_expr_mut(|expr| expr.bind(scope))
             }
             RoutineStmt::DynamicExecute(_) => {}
         }
@@ -1565,6 +1573,9 @@ pub(crate) fn parse_routine_statement(statement: &str) -> Result<RoutineStmt> {
     let statement = statement.trim();
     if statement.is_empty() {
         return Err(SqlError::InvalidSql("empty routine statement".to_string()));
+    }
+    if let Some(control) = crate::postgres_control::parse(statement)? {
+        return Ok(RoutineStmt::PostgresControl(Box::new(control)));
     }
     if starts_with_plpgsql_word(statement, "BEGIN")
         || starts_with_plpgsql_word(statement, "DECLARE")

@@ -4094,6 +4094,7 @@ impl<'db> SqlSession<'db> {
             RoutineStmt::OracleDynamicExecute(dynamic) => {
                 self.execute_oracle_dynamic(frame, dynamic)
             }
+            RoutineStmt::PostgresControl(control) => self.execute_postgres_control(frame, control),
             RoutineStmt::DynamicExecute(expr) => {
                 let value = self.eval_routine_expr(frame, expr)?;
                 let SqlValue::String(sql) = value else {
@@ -4112,7 +4113,7 @@ impl<'db> SqlSession<'db> {
                     let previous = self.bind_routine_frame(frame);
                     let result = self.execute(&sql);
                     self.unbind_routine_frame(previous);
-                    result?;
+                    frame.last_sql_row_count = crate::postgres_control::row_count(&result?);
                     return Ok(RoutineControl::Continue);
                 }
                 match parse_single_statement(&sql) {
@@ -4123,7 +4124,7 @@ impl<'db> SqlSession<'db> {
                         let result = self.execute_parsed_statement(&parsed);
                         self.ir_owned_statement = owned;
                         self.unbind_routine_frame(previous);
-                        result?;
+                        frame.last_sql_row_count = crate::postgres_control::row_count(&result?);
                     }
                     // Raw-only DDL (GRANT EXECUTE ON FUNCTION and friends)
                     // never reaches the sqlparser AST; route it through the
@@ -4132,7 +4133,7 @@ impl<'db> SqlSession<'db> {
                         let previous = self.bind_routine_frame(frame);
                         let result = self.execute(&sql);
                         self.unbind_routine_frame(previous);
-                        result?;
+                        frame.last_sql_row_count = crate::postgres_control::row_count(&result?);
                     }
                 }
                 Ok(RoutineControl::Continue)
@@ -4796,6 +4797,9 @@ impl<'db> SqlSession<'db> {
         self.unbind_routine_frame(previous);
         self.oracle_exception = oracle_context;
         self.oracle_error_tokens = oracle_tokens;
+        if let Ok(result) = &result {
+            frame.last_sql_row_count = crate::postgres_control::row_count(result);
+        }
         result
     }
 
@@ -4915,6 +4919,11 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
+        frame.last_sql_row_count = if call {
+            0
+        } else {
+            crate::postgres_control::row_count(&result)
+        };
         Ok(result)
     }
 

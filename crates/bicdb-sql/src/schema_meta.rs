@@ -4427,6 +4427,7 @@ impl RoutineFrame {
     ) -> Result<Self> {
         let slot_count = template.slot_names.len();
         let mut frame = Self {
+            last_sql_row_count: 0,
             oracle_statement_rollback: false,
             oracle_procedural_evaluation: false,
             active_exception: None,

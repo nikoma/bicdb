@@ -1565,6 +1565,11 @@ fn statements(
             RoutineStmt::Sql(statement) | RoutineStmt::SqlInto { statement, .. } => {
                 visit(db, env, statement)?
             }
+            RoutineStmt::PostgresControl(_) => {
+                return Err(SqlError::Unsupported(
+                    "PostgreSQL procedural controls are not Oracle preview statements".into(),
+                ))
+            }
             RoutineStmt::OracleDynamicExecute(dynamic) => {
                 visit(db, env, &mut dynamic.command.expr)?;
                 for bind in &mut dynamic.using {

@@ -3538,6 +3538,10 @@ impl<'db> SqlSession<'db> {
                 last_result = Some(result);
                 continue;
             }
+            if let Some(result) = self.execute_raw_function_privileges(&statement)? {
+                last_result = Some(result);
+                continue;
+            }
             if let Some(result) = self.execute_raw_create_partition_table(&statement)? {
                 last_result = Some(result);
                 continue;

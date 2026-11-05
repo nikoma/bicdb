@@ -60,6 +60,38 @@ fn plpgsql_table_call(
 }
 
 impl<'db> SqlSession<'db> {
+    /// PostgreSQL scalar routines may write, including through another routine
+    /// or dynamic SQL. Their effects belong to the complete calling statement,
+    /// never to an independently committed function invocation.
+    pub(crate) fn query_has_postgres_scalar_routines(&self, query: &Query) -> Result<bool> {
+        use sqlparser::ast::visit_expressions;
+        use std::ops::ControlFlow;
+        match visit_expressions(query, |expr| {
+            let Expr::Function(function) = expr else {
+                return ControlFlow::Continue(());
+            };
+            let found =
+                (|| {
+                    let name = object_name(&function.name)?;
+                    let Some(routine) =
+                        resolve_routine_cached(self.db_ref(), RoutineKind::Function, &name)?
+                    else {
+                        return Ok(false);
+                    };
+                    let language = routine.schema.language.trim().trim_matches('\'');
+                    Ok(language.eq_ignore_ascii_case("plpgsql")
+                        || language.eq_ignore_ascii_case("sql"))
+                })();
+            match found {
+                Ok(false) => ControlFlow::Continue(()),
+                other => ControlFlow::Break(other),
+            }
+        }) {
+            ControlFlow::Break(result) => result,
+            ControlFlow::Continue(()) => Ok(false),
+        }
+    }
+
     pub(crate) fn query_has_plpgsql_set_functions(&self, query: &Query) -> Result<bool> {
         if let Some(with) = &query.with {
             for cte in &with.cte_tables {

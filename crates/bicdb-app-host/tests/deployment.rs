@@ -961,3 +961,81 @@ fn cli_creates_inactive_isolated_previews_and_can_explicitly_activate_them() {
         "failed preview creation must leave the parent serving"
     );
 }
+
+#[test]
+fn operator_sql_listener_and_http_application_share_durable_state_across_restart() {
+    use bicdb_app_host::database::Database;
+    use bicdb_sql::SqlSession;
+    use std::os::unix::fs::PermissionsExt;
+    let mut service = Service::start();
+    let app_dir = service.root.path().join("apps/counter");
+    std::fs::create_dir_all(&app_dir).unwrap();
+    let database = Database::open(&app_dir.join("database")).unwrap();
+    SqlSession::new(&mut database.db.write())
+        .execute("CREATE ROLE listener_owner LOGIN SUPERUSER")
+        .unwrap();
+    bicdb_pgwire::create_user(
+        app_dir.join("database/data"),
+        "listener_owner",
+        "fixture-password",
+    )
+    .unwrap();
+    drop(database);
+    let sql_port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let path = app_dir.join("sql-listener.json");
+    std::fs::write(
+        &path,
+        serde_json::to_vec(&json!({"format":1,"listen":format!("127.0.0.1:{sql_port}")})).unwrap(),
+    )
+    .unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let response = service.deploy(&fixture());
+    assert!(
+        response.status().is_success(),
+        "{}",
+        response.text().unwrap()
+    );
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        let (client, connection) = tokio_postgres::Config::new()
+            .host("127.0.0.1")
+            .port(sql_port)
+            .user("listener_owner")
+            .password("fixture-password")
+            .dbname("bicdb")
+            .connect(tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        let task = tokio::spawn(async move {
+            connection.await.unwrap();
+        });
+        client
+            .execute("UPDATE counters SET value=8 WHERE id='requests'", &[])
+            .await
+            .unwrap();
+        drop(client);
+        task.await.unwrap();
+    });
+    assert_eq!(service.state()[1]["value"], 8);
+    service.restart();
+    wait(|| {
+        service
+            .client
+            .get(format!("{}/apps/counter", service.base()))
+            .send()
+            .is_ok_and(|r| r.status().is_success())
+    });
+    assert_eq!(service.state()[1]["value"], 8);
+    service
+        .client
+        .post(format!("{}/apps/counter/increment", service.base()))
+        .header("idempotency-key", "after-sql-restart")
+        .send()
+        .unwrap()
+        .error_for_status()
+        .unwrap();
+    assert_eq!(service.state()[1]["value"], 9);
+}

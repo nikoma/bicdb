@@ -34,3 +34,4 @@ uuid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+tokio-postgres = "0.7.18"

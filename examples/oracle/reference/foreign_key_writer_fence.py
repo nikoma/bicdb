@@ -86,10 +86,10 @@ def run(current, previous):
         with server(previous, database, root / 'legacy.log') as connection:
             for sql in [
                 'CREATE TABLE p(id INTEGER PRIMARY KEY)',
-                'CREATE TABLE c(id INTEGER PRIMARY KEY,pid INTEGER,note INTEGER)',
+                'CREATE TABLE c(id INTEGER PRIMARY KEY,pid INTEGER,note INTEGER,payload BLOB)',
                 'CREATE TABLE blobs(id INTEGER PRIMARY KEY,payload BLOB)',
                 "INSERT INTO blobs VALUES(1,HEXTORAW('00FF'))",
-                'INSERT INTO c VALUES(1,999,0)',
+                "INSERT INTO c VALUES(1,999,0,HEXTORAW('11'))",
                 'ALTER TABLE c ADD CONSTRAINT legacy_fk FOREIGN KEY(pid) REFERENCES p(id) DEFERRABLE INITIALLY DEFERRED NOT VALID',
                 'BEGIN', 'UPDATE c SET pid=pid,note=2 WHERE id=1', 'COMMIT',
             ]:
@@ -98,6 +98,13 @@ def run(current, previous):
         report['checks'].append('previous_binary_reproduces_unchanged_key_exemption')
         with server(current, database, root / 'upgrade.log') as connection:
             expect_row(connection, (999, 2))
+            connection.execute('BEGIN')
+            connection.execute("DECLARE d BLOB; BEGIN SELECT payload INTO d FROM c WHERE id=1 FOR UPDATE; DBMS_LOB.APPEND(d,HEXTORAW('22')); END;", prepare=False)
+            connection.execute('COMMIT')
+            payload = connection.execute('SELECT payload FROM c WHERE id=1').fetchone()[0]
+            if bytes(payload) != bytes.fromhex('1122'):
+                raise AssertionError('native BLOB append changed legacy foreign-key behavior')
+            report['checks'].append('native_blob_append_does_not_invent_foreign_key_assignment_intent')
             for sql in ['BEGIN', 'UPDATE c SET note=3 WHERE id=1', 'COMMIT',
                         'BEGIN', 'UPDATE c SET pid=pid,note=4 WHERE id=1']:
                 connection.execute(sql)
@@ -130,6 +137,9 @@ def run(current, previous):
         report['checks'].append('previous_binary_rejects_upgraded_profile_before_serving')
         with server(current, database, root / 'reopen.log') as connection:
             expect_row(connection, (999, 3))
+            payload = connection.execute('SELECT payload FROM c WHERE id=1').fetchone()[0]
+            if bytes(payload) != bytes.fromhex('1122'):
+                raise AssertionError('native BLOB append did not survive rejection and restart')
             for sql in ['INSERT INTO p VALUES(999)', 'BEGIN',
                         'UPDATE c SET pid=pid,note=4 WHERE id=1', 'COMMIT']:
                 connection.execute(sql)

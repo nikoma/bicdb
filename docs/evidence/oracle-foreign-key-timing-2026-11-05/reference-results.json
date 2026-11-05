@@ -1,0 +1,2256 @@
+{
+  "source_commit": "d60d44b3605334ce03495550d8c5f3a9a49c7f93",
+  "binary_sha256": "baf321e9447a874c9baf511432eb4a433a2acdf81f2da3570c1f76123abdc3cf",
+  "fixture_source_sha256": "9d46179c8ba016e038f93bd9cd307002bc12183e3f2c165ce653e042cea6746a",
+  "application_qualified": false,
+  "goal_complete": false,
+  "results": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "oracle_error_codes_qualified": false,
+      "source_version": "23.26.3.0.0",
+      "target_version": 180004,
+      "cases": [
+        {
+          "id": "initial_timing_catalog",
+          "source": {
+            "id": "initial_timing_catalog",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "initial_timing_catalog",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "child_before_parent",
+          "source": {
+            "id": "child_before_parent",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 2
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 2
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "child_before_parent",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 2
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 2
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "unresolved_commit",
+          "source": {
+            "id": "unresolved_commit",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "foreign_key",
+              "children": 1,
+              "marker": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "foreign_key",
+              "children": 1,
+              "marker": 0
+            },
+            "diagnostics": [
+              {
+                "oracle_code": 2091,
+                "sqlstate": null
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "unresolved_commit",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "foreign_key",
+              "children": 1,
+              "marker": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "foreign_key",
+              "children": 1,
+              "marker": 0
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "set_immediate_repair",
+          "source": {
+            "id": "set_immediate_repair",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "pending": 1,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "pending": 1,
+              "commit": "ok"
+            },
+            "diagnostics": [
+              {
+                "oracle_code": 2291,
+                "sqlstate": null
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "set_immediate_repair",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "pending": 1,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "pending": 1,
+              "commit": "ok"
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "savepoint_discards_check",
+          "source": {
+            "id": "savepoint_discards_check",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "savepoint_discards_check",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "parent_delete_repaired",
+          "source": {
+            "id": "parent_delete_repaired",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 0
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "parent_delete_repaired",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 0
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "novalidate_payload_update",
+          "source": {
+            "id": "novalidate_payload_update",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "novalidate_payload_update",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "novalidate_unchanged_key",
+          "source": {
+            "id": "novalidate_unchanged_key",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "foreign_key",
+              "rows": 1,
+              "note": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "foreign_key",
+              "rows": 1,
+              "note": 0
+            },
+            "diagnostics": [
+              {
+                "oracle_code": 2091,
+                "sqlstate": null
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "novalidate_unchanged_key",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "foreign_key",
+              "rows": 1,
+              "note": 0
+            },
+            "diagnostics": [],
+            "qualified": false
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": false
+        },
+        {
+          "id": "validate_existing_orphan",
+          "source": {
+            "id": "validate_existing_orphan",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "validate": "foreign_key",
+              "after_failure": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "after_repair": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ]
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "validate": "foreign_key",
+              "after_failure": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "after_repair": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ]
+            },
+            "diagnostics": [
+              {
+                "oracle_code": 2298,
+                "sqlstate": null
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "validate_existing_orphan",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "validate": "foreign_key",
+              "after_failure": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "after_repair": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ]
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "validate": "foreign_key",
+              "after_failure": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "after_repair": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ]
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "cascade_is_immediate",
+          "source": {
+            "id": "cascade_is_immediate",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "CASCADE",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 0,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "CASCADE",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 0,
+              "commit": "ok"
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "cascade_is_immediate",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "CASCADE",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 0,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "CASCADE",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 0,
+              "commit": "ok"
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "set_null_is_immediate",
+          "source": {
+            "id": "set_null_is_immediate",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "SET NULL",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 1,
+              "parent_before_commit": null,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "SET NULL",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 1,
+              "parent_before_commit": null,
+              "commit": "ok"
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "set_null_is_immediate",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "SET NULL",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 1,
+              "parent_before_commit": null,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "SET NULL",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 1,
+              "parent_before_commit": null,
+              "commit": "ok"
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "set_immediate_failure_keeps_pending_check",
+          "source": {
+            "id": "set_immediate_failure_keeps_pending_check",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "commit": "foreign_key",
+              "children": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "commit": "foreign_key",
+              "children": 1
+            },
+            "diagnostics": [
+              {
+                "oracle_code": 2291,
+                "sqlstate": null
+              },
+              {
+                "oracle_code": 2091,
+                "sqlstate": null
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "set_immediate_failure_keeps_pending_check",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "commit": "foreign_key",
+              "children": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "commit": "foreign_key",
+              "children": 1
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              },
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "nondeferrable_cannot_defer",
+          "source": {
+            "id": "nondeferrable_cannot_defer",
+            "observations": {
+              "catalog": [
+                false,
+                false,
+                true,
+                "NO ACTION",
+                [
+                  "NO",
+                  "NO"
+                ]
+              ],
+              "set_deferred": "constraint_mode",
+              "set_immediate": "constraint_mode",
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                false,
+                false,
+                true,
+                "NO ACTION",
+                [
+                  "NO",
+                  "NO"
+                ]
+              ],
+              "set_deferred": "constraint_mode",
+              "set_immediate": "constraint_mode",
+              "rows": 1
+            },
+            "diagnostics": [
+              {
+                "oracle_code": 2447,
+                "sqlstate": null
+              },
+              {
+                "oracle_code": 2447,
+                "sqlstate": null
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nondeferrable_cannot_defer",
+            "observations": {
+              "catalog": [
+                false,
+                false,
+                true,
+                "NO ACTION",
+                [
+                  "NO",
+                  "NO"
+                ]
+              ],
+              "set_deferred": "constraint_mode",
+              "set_immediate": "constraint_mode",
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                false,
+                false,
+                true,
+                "NO ACTION",
+                [
+                  "NO",
+                  "NO"
+                ]
+              ],
+              "set_deferred": "constraint_mode",
+              "set_immediate": "constraint_mode",
+              "rows": 1
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "42809"
+              },
+              {
+                "oracle_code": null,
+                "sqlstate": "42809"
+              }
+            ],
+            "qualified": true
+          },
+          "diagnostics_compared": false,
+          "diagnostics_matched": true,
+          "matched": true
+        }
+      ],
+      "total": 13,
+      "matched": 12,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": false
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "oracle_error_codes_qualified": false,
+      "source_version": 180004,
+      "target_version": 180004,
+      "cases": [
+        {
+          "id": "initial_timing_catalog",
+          "source": {
+            "id": "initial_timing_catalog",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "initial_timing_catalog",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "child_before_parent",
+          "source": {
+            "id": "child_before_parent",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 2
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 2
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "child_before_parent",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 2
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 2
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "unresolved_commit",
+          "source": {
+            "id": "unresolved_commit",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "foreign_key",
+              "children": 1,
+              "marker": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "foreign_key",
+              "children": 1,
+              "marker": 0
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "unresolved_commit",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "foreign_key",
+              "children": 1,
+              "marker": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "foreign_key",
+              "children": 1,
+              "marker": 0
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "set_immediate_repair",
+          "source": {
+            "id": "set_immediate_repair",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "pending": 1,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "pending": 1,
+              "commit": "ok"
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "set_immediate_repair",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "pending": 1,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "pending": 1,
+              "commit": "ok"
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "savepoint_discards_check",
+          "source": {
+            "id": "savepoint_discards_check",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "savepoint_discards_check",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "parent_delete_repaired",
+          "source": {
+            "id": "parent_delete_repaired",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 0
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "parent_delete_repaired",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "commit": "ok",
+              "rows": 0
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "novalidate_payload_update",
+          "source": {
+            "id": "novalidate_payload_update",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "novalidate_payload_update",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 1
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "novalidate_unchanged_key",
+          "source": {
+            "id": "novalidate_unchanged_key",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 0
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "novalidate_unchanged_key",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 0
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "update": "ok",
+              "commit": "ok",
+              "rows": 1,
+              "note": 0
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "validate_existing_orphan",
+          "source": {
+            "id": "validate_existing_orphan",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "validate": "foreign_key",
+              "after_failure": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "after_repair": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ]
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "validate": "foreign_key",
+              "after_failure": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "after_repair": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ]
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "validate_existing_orphan",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "validate": "foreign_key",
+              "after_failure": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "after_repair": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ]
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "validate": "foreign_key",
+              "after_failure": [
+                true,
+                true,
+                false,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "after_repair": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ]
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "cascade_is_immediate",
+          "source": {
+            "id": "cascade_is_immediate",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "CASCADE",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 0,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "CASCADE",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 0,
+              "commit": "ok"
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "cascade_is_immediate",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "CASCADE",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 0,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "CASCADE",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 0,
+              "commit": "ok"
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "set_null_is_immediate",
+          "source": {
+            "id": "set_null_is_immediate",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "SET NULL",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 1,
+              "parent_before_commit": null,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "SET NULL",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 1,
+              "parent_before_commit": null,
+              "commit": "ok"
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "set_null_is_immediate",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "SET NULL",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 1,
+              "parent_before_commit": null,
+              "commit": "ok"
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "SET NULL",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "rows_before_commit": 1,
+              "parent_before_commit": null,
+              "commit": "ok"
+            },
+            "diagnostics": [],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "set_immediate_failure_keeps_pending_check",
+          "source": {
+            "id": "set_immediate_failure_keeps_pending_check",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "commit": "foreign_key",
+              "children": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "commit": "foreign_key",
+              "children": 1
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              },
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "set_immediate_failure_keeps_pending_check",
+            "observations": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "commit": "foreign_key",
+              "children": 1
+            },
+            "expected": {
+              "catalog": [
+                true,
+                true,
+                true,
+                "NO ACTION",
+                [
+                  "YES",
+                  "YES"
+                ]
+              ],
+              "immediate": "foreign_key",
+              "commit": "foreign_key",
+              "children": 1
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              },
+              {
+                "oracle_code": null,
+                "sqlstate": "23503"
+              }
+            ],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        },
+        {
+          "id": "nondeferrable_cannot_defer",
+          "source": {
+            "id": "nondeferrable_cannot_defer",
+            "observations": {
+              "catalog": [
+                false,
+                false,
+                true,
+                "NO ACTION",
+                [
+                  "NO",
+                  "NO"
+                ]
+              ],
+              "set_deferred": "constraint_mode",
+              "set_immediate": "ok",
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                false,
+                false,
+                true,
+                "NO ACTION",
+                [
+                  "NO",
+                  "NO"
+                ]
+              ],
+              "set_deferred": "constraint_mode",
+              "set_immediate": "ok",
+              "rows": 1
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "42809"
+              }
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "nondeferrable_cannot_defer",
+            "observations": {
+              "catalog": [
+                false,
+                false,
+                true,
+                "NO ACTION",
+                [
+                  "NO",
+                  "NO"
+                ]
+              ],
+              "set_deferred": "constraint_mode",
+              "set_immediate": "ok",
+              "rows": 1
+            },
+            "expected": {
+              "catalog": [
+                false,
+                false,
+                true,
+                "NO ACTION",
+                [
+                  "NO",
+                  "NO"
+                ]
+              ],
+              "set_deferred": "constraint_mode",
+              "set_immediate": "ok",
+              "rows": 1
+            },
+            "diagnostics": [
+              {
+                "oracle_code": null,
+                "sqlstate": "42809"
+              }
+            ],
+            "qualified": true
+          },
+          "diagnostics_compared": true,
+          "diagnostics_matched": true,
+          "matched": true
+        }
+      ],
+      "total": 13,
+      "matched": 13,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true
+    }
+  },
+  "processes_stopped": true,
+  "container_removed": true
+}

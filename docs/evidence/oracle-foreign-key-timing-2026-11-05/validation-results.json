@@ -1,0 +1,107 @@
+{
+  "source_commit": "d60d44b3605334ce03495550d8c5f3a9a49c7f93",
+  "binary_sha256": "baf321e9447a874c9baf511432eb4a433a2acdf81f2da3570c1f76123abdc3cf",
+  "application_qualified": false,
+  "goal_complete": false,
+  "checks": [
+    {
+      "name": "build",
+      "returncode": 0
+    },
+    {
+      "name": "routine-expression-stack",
+      "returncode": 0
+    },
+    {
+      "name": "deferred-fk",
+      "returncode": 0
+    },
+    {
+      "name": "unchanged-fk",
+      "returncode": 0
+    },
+    {
+      "name": "fk-authorization",
+      "returncode": 0
+    },
+    {
+      "name": "renamed-fk",
+      "returncode": 0
+    },
+    {
+      "name": "rls-depth",
+      "returncode": 0
+    },
+    {
+      "name": "protocol",
+      "returncode": 0
+    },
+    {
+      "name": "oracle-protocol",
+      "returncode": 0
+    },
+    {
+      "name": "workspace",
+      "returncode": 0
+    }
+  ],
+  "sql_library": {
+    "passed": 695,
+    "failed": 0,
+    "ignored": 3
+  },
+  "test_counts": {
+    "routine-expression-stack": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    "deferred-fk": {
+      "passed": 20,
+      "failed": 0,
+      "ignored": 0
+    },
+    "unchanged-fk": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    "fk-authorization": {
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    "renamed-fk": {
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    "rls-depth": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    "protocol": {
+      "passed": 181,
+      "failed": 0,
+      "ignored": 0
+    },
+    "oracle-protocol": {
+      "passed": 48,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "unit_resources": {
+    "status": "completed",
+    "returncode": 0,
+    "minimum_observed_available_bytes": 14792970240,
+    "peak_group_rss_bytes": 5561548800
+  },
+  "integration_resources": {
+    "status": "completed",
+    "returncode": 0,
+    "minimum_observed_available_bytes": 15197298688,
+    "peak_group_rss_bytes": 5047750656
+  }
+}

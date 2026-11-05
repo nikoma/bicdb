@@ -32,3 +32,24 @@ inventory, and original business workflows with enforcement enabled. Composite
 and nullable keys, concurrency, recovery and privilege behavior require broader
 reference qualification. This is not Oracle certification or production
 qualification.
+
+## Recorded validation
+
+The merged-source [reference results](reference-results.json) record Oracle 23.26.3 at 12/13
+matching cases and PostgreSQL 18.4 at 13/13. Every reference case independently
+satisfied its expected outcome. All nonce objects were cleaned up, both native
+comparison servers stopped, and the disposable PostgreSQL container was removed.
+The sole mismatch is `novalidate_unchanged_key` in Oracle mode.
+
+The candidate SQL library passed 693 tests with three ignored. Integration
+checks passed 20 deferred-key, two unchanged-key, eight authorization, four
+rename and one RLS-depth tests. Protocol checks passed 181 PostgreSQL and
+48 Oracle-profile tests. Workspace/all-target checks and the candidate server
+build also passed. These counts describe this candidate, not all Oracle features
+or the accepted application deployment.
+
+After merging the latest upstream source, the SQL library passed 695 tests
+with three ignored. The full integration/protocol/workspace/build batch passed
+again, including the upstream routine-expression stack regression. The
+[merged-source validation](validation-results.json) identifies the tested source
+commit and frozen binary digest separately from the delivery commit.

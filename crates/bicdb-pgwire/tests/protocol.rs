@@ -849,6 +849,90 @@ fn cluster_shares_transactional_roles_but_isolates_user_types() {
 }
 
 #[test]
+fn timezone_status_tracks_session_and_transaction_changes_before_rows() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let dir = tempfile::tempdir().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open(
+            dir.path(),
+            PgWireConfig {
+                sql_profile: profile.into(),
+                fsync: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let serving = server.clone();
+        let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+        let mut client = TcpStream::connect(address).unwrap();
+        send_startup_version_with_options(
+            &mut client,
+            196_608,
+            true,
+            &[("options", &format!("-c bicdb.sql_profile={profile}"))],
+        );
+        let parameters = read_startup_parameters_until_ready(&mut client);
+        assert_eq!(
+            parameters.get("TimeZone").map(String::as_str),
+            Some("UTC"),
+            "{profile}"
+        );
+        let read_zone = |client: &mut TcpStream, expected: Option<&str>| {
+            let mut zone = None;
+            loop {
+                let (tag, payload) = read_message(client);
+                match tag {
+                    b'S' if payload.starts_with(b"TimeZone\0") => {
+                        zone = Some(
+                            String::from_utf8(payload[9..payload.len() - 1].to_vec()).unwrap(),
+                        );
+                    }
+                    b'T' | b'D' | b'Z' => {
+                        assert_eq!(zone.as_deref(), expected, "{profile}");
+                        if tag == b'Z' {
+                            break;
+                        }
+                    }
+                    b'E' => panic!("server error: {}", String::from_utf8_lossy(&payload)),
+                    _ => {}
+                }
+            }
+        };
+        for (sql, expected) in [
+            (
+                "SET TIME ZONE 'Europe/Berlin'; SELECT CURRENT_TIMESTAMP;",
+                Some("Europe/Berlin"),
+            ),
+            (
+                "BEGIN; SET LOCAL TIME ZONE 'Asia/Tokyo'; SELECT CURRENT_TIMESTAMP;",
+                Some("Asia/Tokyo"),
+            ),
+            ("ROLLBACK; SELECT CURRENT_TIMESTAMP;", Some("Europe/Berlin")),
+            ("RESET timezone; SELECT CURRENT_TIMESTAMP;", Some("UTC")),
+            ("SELECT CURRENT_TIMESTAMP;", None),
+        ] {
+            send_query(&mut client, sql);
+            read_zone(&mut client, expected);
+        }
+        for (sql, expected) in [
+            ("SET TIME ZONE 'America/New_York'", Some("America/New_York")),
+            ("SELECT CURRENT_TIMESTAMP", None),
+            ("RESET ALL", Some("UTC")),
+        ] {
+            send_parse(&mut client, "", sql, &[]);
+            send_bind(&mut client, "", "", &[]);
+            send_execute(&mut client, "");
+            send_sync(&mut client);
+            read_zone(&mut client, expected);
+        }
+        client.write_all(b"X\0\0\0\x04").unwrap();
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+    }
+}
+
+#[test]
 fn interval_style_status_tracks_session_and_transaction_changes_before_rows() {
     let dir = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

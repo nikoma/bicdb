@@ -2631,7 +2631,7 @@ fn handle_frontend_message(
             let _ = bicdb_core::take_thread_commit_seq();
             match execute_server_query(stream, server, state, query) {
                 Ok(QueryFlow::Complete) => {
-                    write_interval_style_status(stream, state)?;
+                    write_session_parameter_status(stream, state)?;
                     flush_notifications(stream, server, state.connection_id)?;
                     ready_for_query_status(stream, state.transaction_status())?;
                 }
@@ -2642,7 +2642,7 @@ fn handle_frontend_message(
                     state.record_query_error(&server.config.sql_profile);
                     log_failed_query(server, state, Some(query), &error);
                     error_response_for_error(stream, &error)?;
-                    write_interval_style_status(stream, state)?;
+                    write_session_parameter_status(stream, state)?;
                     if error.closes_connection() {
                         return Ok(false);
                     }
@@ -2750,7 +2750,7 @@ fn handle_frontend_message(
             });
             match executed {
                 Ok(executed) => {
-                    write_interval_style_status(stream, state)?;
+                    write_session_parameter_status(stream, state)?;
                     let stats = write_query_result(
                         stream,
                         server,
@@ -2789,7 +2789,7 @@ fn handle_frontend_message(
                     error_response_for_error(stream, &error)?;
                 }
             }
-            write_interval_style_status(stream, state)?;
+            write_session_parameter_status(stream, state)?;
             ready_for_query_status(stream, state.transaction_status())?;
         }
         b'C' => match close_message_with_server(&payload, server, state) {
@@ -2992,6 +2992,7 @@ struct ConnectionState {
     portals: FxHashMap<String, Portal>,
     session_state: SqlSessionGucState,
     reported_interval_style: String,
+    reported_time_zone: String,
     catalog_cache: SqlSessionCatalogCache,
     copy_in: Option<CopyInState>,
     /// A COPY FROM STDIN failed: PostgreSQL discards the client's remaining
@@ -3116,6 +3117,7 @@ impl ConnectionState {
             portals: FxHashMap::default(),
             session_state: SqlSessionGucState::from_session_gucs(session_gucs),
             reported_interval_style: "postgres".into(),
+            reported_time_zone: "UTC".into(),
             catalog_cache: SqlSessionCatalogCache::default(),
             copy_in: None,
             copy_in_discarding: false,
@@ -3402,7 +3404,7 @@ fn execute_server_query(
         let normalized = normalize_executable_sql(sql);
         if let Some(result) = execute_sql_prepared_statement_query(server, state, sql, &normalized)?
         {
-            write_interval_style_status(stream, state)?;
+            write_session_parameter_status(stream, state)?;
             write_query_result(
                 stream,
                 server,
@@ -3415,7 +3417,7 @@ fn execute_server_query(
         } else {
             let result =
                 execute_server_sql_with_options_normalized(server, state, sql, &normalized, true)?;
-            write_interval_style_status(stream, state)?;
+            write_session_parameter_status(stream, state)?;
             let source_sql = normalized.starts_with("select ").then_some(sql);
             write_query_result(stream, server, &result, &[], source_sql, true, true)?;
         }
@@ -3428,7 +3430,7 @@ struct SqlPreparedStatementResult {
     source_sql: Option<String>,
 }
 
-fn write_interval_style_status(
+fn write_session_parameter_status(
     stream: &mut ClientStream,
     state: &mut ConnectionState,
 ) -> Result<()> {
@@ -3441,6 +3443,16 @@ fn write_interval_style_status(
     if style != state.reported_interval_style {
         parameter_status(stream, "IntervalStyle", style)?;
         state.reported_interval_style = style.to_string();
+    }
+    let timezone = state
+        .session_state
+        .session_gucs()
+        .get("timezone")
+        .map(String::as_str)
+        .unwrap_or("UTC");
+    if timezone != state.reported_time_zone {
+        parameter_status(stream, "TimeZone", timezone)?;
+        state.reported_time_zone = timezone.to_string();
     }
     Ok(())
 }

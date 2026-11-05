@@ -2039,6 +2039,7 @@ pub(crate) fn startup(
                 parameter_status(stream, "server_encoding", "UTF8")?;
                 parameter_status(stream, "client_encoding", "UTF8")?;
                 parameter_status(stream, "DateStyle", "ISO, MDY")?;
+                parameter_status(stream, "TimeZone", "UTC")?;
                 parameter_status(stream, "IntervalStyle", "postgres")?;
                 parameter_status(stream, "integer_datetimes", "on")?;
                 parameter_status(stream, "standard_conforming_strings", "on")?;

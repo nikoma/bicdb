@@ -60,5 +60,8 @@
     "adaptive::host::tests::bench_host_vs_oracle_read_path",
     "adaptive::lower::tests::bench_control_flow_interpreter_vs_wasm",
     "adaptive::lower::tests::bench_proc_with_sql_interpreter_vs_wasm"
-  ]
+  ],
+  "combined_workspace_source_commit": "38347ed3a39413ee33ceb5e4d64a4d4a349de9d3",
+  "combined_workspace_all_targets": "passed",
+  "merged_platform_changes_modified_core_or_sql": false
 }

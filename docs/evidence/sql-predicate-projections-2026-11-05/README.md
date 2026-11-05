@@ -38,3 +38,8 @@ remain ignored and are listed explicitly in the results. Workspace/all-target
 compilation passed. The passing batch observed at least 16.318 GiB available RAM.
 This source checkpoint was validated independently of the unfinished locator
 runtime prototype.
+
+Main's subsequent platform changes modified neither the core nor SQL sources.
+Combined source `38347ed3a39413ee33ceb5e4d64a4d4a349de9d3` also passed
+workspace/all-target compilation before delivery. Local checks are reported here;
+no GitHub workflow was created or manually run.

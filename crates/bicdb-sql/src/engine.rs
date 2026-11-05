@@ -2418,7 +2418,10 @@ fn json_text_object_entries(raw: &str) -> Result<Vec<(String, Box<serde_json::va
         .map_err(|error| SqlError::InvalidSql(error.to_string()))
 }
 
-fn whole_row_json_function_alias<'a>(name: &str, args: &'a [Expr]) -> Option<(&'a str, bool)> {
+fn whole_row_json_function_alias<'a>(
+    name: &str,
+    args: &'a FunctionArgList<'_>,
+) -> Option<(&'a str, bool)> {
     let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
     let valid_arity = match name {
         "row_to_json" => matches!(args.len(), 1 | 2),
@@ -2437,7 +2440,9 @@ fn whole_row_json_function_alias<'a>(name: &str, args: &'a [Expr]) -> Option<(&'
         }
     }
 
-    alias(&args[0]).map(|alias| (alias, name == "to_jsonb"))
+    args.first()
+        .and_then(alias)
+        .map(|alias| (alias, name == "to_jsonb"))
 }
 
 fn whole_slot_row_json_value(

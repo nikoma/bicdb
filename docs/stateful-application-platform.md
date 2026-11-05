@@ -80,6 +80,8 @@ The platform never includes these bindings in release digests or downloads.
   "format": 1,
   "environment": { "APPLICATION_SECRET": "operator-provisioned-deployment-secret" },
   "startup_timeout_ms": 120000,
+  "request_body_limit_bytes": 33554432,
+  "response_body_limit_bytes": 33554432,
   "identity": {
     "uid": 32001,
     "gid": 32001,
@@ -109,6 +111,15 @@ needed. Their private state must remain outside the execution root, with private
 directory permissions. This is operating-system credential separation, not a
 filesystem jail or network sandbox; use microVM execution when that is required.
 Private configuration is currently refused with remote placement or microVMs.
+
+Private HTTP limits default to 8 MiB per request and 16 MiB per buffered
+response. Operators may set either limit between 1 byte and 128 MiB for local
+process applications, with concurrency chosen to fit available memory. The
+manifest request timeout also bounds upload collection. Oversized uploads are
+rejected before invoking the application; oversized buffered responses fail
+truthfully instead of returning a truncated success. Event-stream limits retain
+their existing separate bounds. The large-body deployment regression covers a
+48 MiB upload, a rejected 112 MiB overflow and buffered-response limits.
 
 Runtime stdout and stderr go to the application log. Management log reads are
 bounded to the final 64 KiB. An operator must rotate the underlying log file.

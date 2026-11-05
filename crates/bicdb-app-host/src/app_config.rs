@@ -20,6 +20,16 @@ pub struct Config {
     pub identity: Option<Identity>,
     #[serde(default = "startup_timeout")]
     pub startup_timeout_ms: u64,
+    #[serde(default = "request_body_limit")]
+    pub request_body_limit_bytes: usize,
+    #[serde(default = "response_body_limit")]
+    pub response_body_limit_bytes: usize,
+}
+fn request_body_limit() -> usize {
+    8 * 1024 * 1024
+}
+fn response_body_limit() -> usize {
+    16 * 1024 * 1024
 }
 fn startup_timeout() -> u64 {
     10_000
@@ -31,6 +41,8 @@ impl Default for Config {
             environment: BTreeMap::new(),
             identity: None,
             startup_timeout_ms: startup_timeout(),
+            request_body_limit_bytes: request_body_limit(),
+            response_body_limit_bytes: response_body_limit(),
         }
     }
 }
@@ -122,6 +134,11 @@ impl Config {
             (1000..=300_000).contains(&config.startup_timeout_ms),
             "invalid application startup deadline"
         );
+        ensure!(
+            (1..=128 * 1024 * 1024).contains(&config.request_body_limit_bytes)
+                && (1..=128 * 1024 * 1024).contains(&config.response_body_limit_bytes),
+            "application HTTP body limits must be between 1 byte and 128 MiB"
+        );
         if let Some(identity) = &config.identity {
             ensure!(
                 cfg!(target_os = "linux") && unsafe { libc::geteuid() } == 0,
@@ -143,6 +160,8 @@ impl Config {
         if !self.environment.is_empty()
             || self.identity.is_some()
             || self.startup_timeout_ms != startup_timeout()
+            || self.request_body_limit_bytes != request_body_limit()
+            || self.response_body_limit_bytes != response_body_limit()
         {
             ensure!(
                 release.manifest.placement.is_none()

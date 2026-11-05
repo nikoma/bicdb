@@ -93,6 +93,8 @@ fn private_configuration_refuses_unknown_fields_and_invalid_bounds() {
         json!({"format":1,"unknown":true}),
         json!({"format":1,"startup_timeout_ms":0}),
         json!({"format":1,"startup_timeout_ms":300001}),
+        json!({"format":1,"request_body_limit_bytes":0}),
+        json!({"format":1,"response_body_limit_bytes":134217729}),
         json!({"format":1,"environment":{"GREETING":"a".repeat(16385)}}),
         json!({"format":1,"identity":{"uid":0,"gid":0,"execution_root":"/tmp/private/execution"}}),
     ] {

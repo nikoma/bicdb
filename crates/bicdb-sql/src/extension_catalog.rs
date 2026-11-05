@@ -1495,8 +1495,9 @@ impl<'a> SqlCursor<'a> {
     fn consume_keyword(&mut self, keyword: &str) -> bool {
         self.skip_space();
         let remaining = self.remaining();
-        if remaining.len() < keyword.len()
-            || !remaining[..keyword.len()].eq_ignore_ascii_case(keyword)
+        if !remaining
+            .get(..keyword.len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(keyword))
         {
             return false;
         }

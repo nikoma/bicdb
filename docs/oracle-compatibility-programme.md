@@ -17,6 +17,13 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [read-only orphan inventory](oracle-foreign-key-orphan-inventory.md) requires
+a completed source-declared FK migration, exact journal/endpoint identity and
+unchanged target fingerprints. It counts every supported relationship without
+repair; independent query fixtures distinguish PostgreSQL and Oracle empty-string
+behavior. Full application orphan counts and source inventory equality remain
+separate, uncompleted gates.
+
 The [constraint catalog checkpoint](evidence/constraint-oid-validation-2026-11-05/README.md)
 removes table-row construction from global identifier validation while preserving
 identifier slots and collision checks in both profiles. A retained application

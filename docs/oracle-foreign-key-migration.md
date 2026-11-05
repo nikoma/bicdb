@@ -115,3 +115,7 @@ application workflows with all relationships enabled. Decide how to handle
 source `NOT VALIDATED` rows explicitly. Validation and any approved data repair
 are separate operations. Online migration, mixed-version cluster upgrades and
 complete production qualification remain broader programme gates.
+
+The [read-only orphan inventory](oracle-foreign-key-orphan-inventory.md) uses the
+completed migration journal and checks its target baseline before and after
+counting. It does not repair legacy rows or qualify source-data equality.

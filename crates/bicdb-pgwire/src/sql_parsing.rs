@@ -1922,9 +1922,9 @@ pub(crate) fn append_copy_insert_statements(
 }
 
 pub(crate) fn copy_in_line(copy: &mut CopyInState, line: &str) -> Result<()> {
-    if line.is_empty() {
-        return Ok(());
-    }
+    // A blank record is one field: empty text, or CSV NULL. It is also a
+    // real header record when HEADER is set. No input is handled by the
+    // pending-buffer boundary, not by discarding a parsed record here.
     if copy.spec.format == CopyFormat::Text && line == "\\." {
         return Ok(());
     }
@@ -3177,12 +3177,12 @@ pub(crate) fn decode_parameter_with_db(
     Ok(temporal_parameter_literal(oid, literal))
 }
 
-/// A wire encoding is not the SQL type. Preserve resolved temporal identity
+/// A wire encoding is not the SQL type. Preserve resolved temporal/JSON identity
 /// after decoding, including NULLs and arrays, without putting SQL casts into
 /// nested array/range/composite value text.
 pub(crate) fn temporal_parameter_literal(oid: i32, literal: String) -> String {
     let scalar = array_element_oid(oid).unwrap_or(oid);
-    if matches!(scalar, 1082 | 1083 | 1114 | 1184 | 1186 | 1266) {
+    if matches!(scalar, 114 | 3802 | 1082 | 1083 | 1114 | 1184 | 1186 | 1266) {
         if let Some(name) = bicdb_sql::pg_type_name_by_oid(oid) {
             return format!("CAST({literal} AS {name})");
         }

@@ -17,6 +17,60 @@ use sqlx::{Connection as _, Row as _};
 
 type HmacSha256 = Hmac<Sha256>;
 
+#[test]
+fn prepared_json_parameters_keep_their_types_without_query_casts() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(15)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    send_parse(
+        &mut client,
+        "json_kinds",
+        "SELECT json_typeof($1),jsonb_typeof($2)",
+        &[114, 3802],
+    );
+    for format in [0, 1] {
+        for (left, right, expected) in [
+            (r#"{"value":1}"#, "[1,2]", ["object", "array"]),
+            ("42", r#""text""#, ["number", "string"]),
+            ("null", "true", ["null", "boolean"]),
+        ] {
+            let left = left.as_bytes().to_vec();
+            let right = if format == 1 {
+                [vec![1], right.as_bytes().to_vec()].concat()
+            } else {
+                right.as_bytes().to_vec()
+            };
+            send_bind_binary(
+                &mut client,
+                "",
+                "json_kinds",
+                &[(format, left), (format, right)],
+                &[],
+            );
+            send_execute(&mut client, "");
+            send_sync(&mut client);
+            assert_eq!(
+                read_query_rows(&mut client),
+                vec![expected.map(str::to_owned).to_vec()],
+                "format {format}"
+            );
+        }
+    }
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
 #[tokio::test]
 async fn startup_custom_setting_reaches_stored_functions_without_changing_identity() {
     let root = tempfile::tempdir().unwrap();
@@ -1467,6 +1521,55 @@ fn copy_from_stdin_keeps_the_schema_qualifier() {
     send_query(&mut client, "");
     drop(client);
     let _ = server.join();
+}
+
+#[test]
+fn copy_single_column_empty_records_preserve_text_csv_and_empty_headers() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    for (index, format, bytes, total, empty, null) in [
+        (0, "", b"same\n\n\\N\n\\\\N\n".as_slice(), "4", "1", "1"),
+        (1, "CSV", b"same\n\n\"\"\n".as_slice(), "3", "1", "1"),
+        (2, "CSV HEADER", b"\n\"\"\n\n".as_slice(), "2", "1", "1"),
+        (3, "", b"".as_slice(), "0", "0", "0"),
+        (4, "", b"\r\n".as_slice(), "1", "1", "0"),
+    ] {
+        send_query(
+            &mut client,
+            &format!("CREATE TABLE empty_copy_{index}(value TEXT)"),
+        );
+        read_query_rows(&mut client);
+        send_query(
+            &mut client,
+            &format!("COPY empty_copy_{index} FROM STDIN {format}"),
+        );
+        let (tag, _) = read_message(&mut client);
+        assert_eq!(tag, b'G');
+        if !bytes.is_empty() {
+            send_message(&mut client, b'd', bytes);
+        }
+        send_message(&mut client, b'c', &[]);
+        let (tags, status) = read_tags_until_ready(&mut client);
+        assert_eq!(status, b'I');
+        assert!(tags.contains(&b'C'));
+        send_query(&mut client,&format!("SELECT count(*)::text,count(*) FILTER(WHERE value='')::text,count(*) FILTER(WHERE value IS NULL)::text FROM empty_copy_{index}"));
+        assert_eq!(
+            read_query_rows(&mut client),
+            vec![vec![total.to_string(), empty.to_string(), null.to_string()]],
+            "{format} case {index}"
+        );
+    }
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
 }
 
 /// Regression (crawl-ingestion incident): non-canonical transaction enders

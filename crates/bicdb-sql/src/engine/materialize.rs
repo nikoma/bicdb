@@ -368,10 +368,18 @@ impl<'db> SqlEngine<'db> {
                 }
                 eval_builtin_function_value(function)
             }
-            // A SELECT without FROM can still depend on session identity.
-            // The pure constant evaluator drops that context for expressions
-            // such as current_context() -> 'roles' in stored SQL helpers.
-            Expr::BinaryOp { .. } => self.eval_row_value(&SqlRow::default(), expr),
+            // Expressions without FROM still need database/session context,
+            // including catalogue predicates in VALUES-based schema checks.
+            // The pure evaluator cannot resolve nested to_regclass() calls.
+            Expr::BinaryOp { .. }
+            | Expr::IsNull(_)
+            | Expr::IsNotNull(_)
+            | Expr::IsTrue(_)
+            | Expr::IsNotTrue(_)
+            | Expr::IsFalse(_)
+            | Expr::IsNotFalse(_)
+            | Expr::IsUnknown(_)
+            | Expr::IsNotUnknown(_) => self.eval_row_value(&SqlRow::default(), expr),
             Expr::Cast {
                 expr, data_type, ..
             } => {

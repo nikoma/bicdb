@@ -17,6 +17,13 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [persistent BLOB application checkpoint](evidence/oracle-persistent-blob-application-2026-11-05/README.md)
+records the newer 53/53 original persistence-class result on an isolated clone,
+source-backed reconciliation of 16 BLOB columns, and PostgreSQL JDBC catalog
+metadata interoperability. Historical checkpoint counts below retain their
+original source/test scope. This newer result does not qualify the whole
+application or update the accepted running deployment.
+
 The [temporal-binding checkpoint](evidence/sql-temporal-bindings-2026-11-04/README.md)
 preserves typed temporal parameters and column comparison semantics across
 queries, mutations and projections, including explicit spaced UTC offsets.
@@ -481,7 +488,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 1. Versioned profiles | Durable profile identity, explicit startup selection, incompatible-open rejection, upgrade rules and PostgreSQL isolation | Partial: bounded HR and separate preview profiles, durable identity and versioned preview routine compiler; general upgrade qualification outstanding |
 | 2. Migration assessment | Inventory source and runtime dependencies; report object locations, dynamic SQL, wrapped code, blockers and manual changes | Partial: [offline lexical inventory](oracle-migration-assessment.md); semantic/catalog/runtime assessment and dependency resolution outstanding |
 | 3. SQL value semantics | Differential null/empty-string, concatenation, padding, comparison, coercion, uniqueness and composite-key tests | Partial: HR lowering and version-7 typed routine concatenation with NULL/padding/caller-length reference cases; general SQL coercion and padding qualification outstanding |
-| 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings, bounded NUMBER arithmetic/reference infinity transport, and durable DATE/TIMESTAMP column provenance with storage/anchor/reference checks; 2,263-column application temporal backfill and complete target-value preservation verified; durable BYTE/CHAR columns with STANDARD capacity and importer provenance checks; legacy character reconciliation, timezone regions and full conversion rules unqualified; [BLOB declaration provenance and bounded HEXTORAW conversion](evidence/oracle-blob-types-2026-11-05/README.md) added, locator semantics still open |
+| 4. Types and conversions | Boundary/property tests for NUMBER, byte/character lengths, national types, DATE, timestamps/time zones, intervals, RAW and LOBs | Partial: native mappings, bounded NUMBER arithmetic/reference infinity transport, and durable DATE/TIMESTAMP column provenance with storage/anchor/reference checks; 2,263-column application temporal backfill and complete target-value preservation verified; durable BYTE/CHAR columns with STANDARD capacity and importer provenance checks; legacy character reconciliation, timezone regions and full conversion rules unqualified; [BLOB declaration provenance and bounded HEXTORAW conversion](evidence/oracle-blob-types-2026-11-05/README.md), selected transaction-aware APPEND/locator execution and [source-backed column reconciliation](evidence/oracle-persistent-blob-application-2026-11-05/README.md); complete LOB/DDL lifecycle still open |
 | 5. Scalar and analytic functions | Oracle type selection, short-circuiting, NLS, date arithmetic, conversion, aggregation and analytic behavior | Partial: bounded NVL, date formats and Gregorian ADD_MONTHS; version-9 bounded DECODE, version-10 AL32UTF8 CHR/default TO_CHAR, and version-11 eager typed NVL with timestamp precision; bounded [logical primary-key extrema/ranges](evidence/sql-primary-key-extrema-2026-11-04/README.md) with independent Oracle/PostgreSQL references; version-27 bounded [NVL2 and national literal provenance](evidence/oracle-nvl2-2026-11-04/README.md); PL/SQL constant propagation, broader NVL2 types, scalar/NLS and analytic semantics outstanding |
 | 6. SQL and DML constructs | DUAL, binds, alternative quoting, legacy joins, ROWNUM, hierarchy, MERGE, multitable INSERT, RETURNING, PIVOT/UNPIVOT | Partial: DUAL, pgwire parameters and literal-integer ROWNUM prefix predicates in plain blocks; bounded [row-valued UPDATE](evidence/sql-row-update-2026-11-04/README.md); [single matched-update MERGE](evidence/sql-merge-matched-update-2026-11-04/README.md) with separate Oracle/PostgreSQL duplicate-match rules, filters and statement rollback; multi-action MERGE and other Oracle constructs unqualified; assess MODEL and MATCH_RECOGNIZE per workload |
 | 7. Names and schema DDL | Quoted/unquoted resolution, cross-schema objects, synonyms, current schema and an explicit physical-clause migration policy | Partial: application-schema selection, versioned static function/procedure relation binding, CALL namespaces and documented heap adaptation; general resolution and synonyms outstanding |
@@ -493,7 +500,7 @@ acceptance remains unproven, including when related native BicDB features exist.
 | 13. Supplied package APIs | Qualify used DBMS/UTL APIs, including LOB, SQL, OUTPUT, UTILITY, APPLICATION_INFO, RANDOM, LOCK and SCHEDULER; file/network ACL enforcement | Partial: [version-25 output operations](evidence/oracle-output-buffers-2026-11-03/README.md) match 32/38 source expectations; six GET_LINES cases, package types/ACLs, further conversions and the other DBMS/UTL APIs remain open |
 | 14. Triggers | Row/statement/compound/INSTEAD OF/system triggers, order, transition state, mutating-table rules and transactional effects | Outstanding for Oracle; sample triggers explicitly deferred |
 | 15. Session state | NLS, temporary tables, cursors, sequence visibility and cache behavior, pool reset, reconnect and isolation | Partial: sample sequences; broader Oracle state semantics unqualified |
-| 16. Drivers and frameworks | PostgreSQL simple/extended/binary protocol, bindings, metadata and representative application/framework acceptance | Partial: tokio-postgres/psycopg HR acceptance and bounded procedure output/DATE bind metadata over PostgreSQL drivers; explicit [PostgreSQL JDBC adapter](evidence/oracle-jdbc-blocks-2026-11-05/README.md) passes 112 anonymous-input checks; callable OUT bindings, complete LOB APIs and full application acceptance outstanding, Oracle Net/TTC conditional on unchanged-driver scope |
+| 16. Drivers and frameworks | PostgreSQL simple/extended/binary protocol, bindings, metadata and representative application/framework acceptance | Partial: tokio-postgres/psycopg HR acceptance and bounded procedure output/DATE bind metadata over PostgreSQL drivers; explicit [PostgreSQL JDBC adapter](evidence/oracle-jdbc-blocks-2026-11-05/README.md) has a newer [124-check metadata/input record](evidence/oracle-persistent-blob-application-2026-11-05/README.md); callable OUT bindings, complete LOB APIs and full application acceptance outstanding, Oracle Net/TTC conditional on unchanged-driver scope |
 | 17. Catalogs and errors | USER_/ALL_/DBA_ objects, source, arguments, dependencies, compile errors, ORA diagnostics and SQLCODE/SQLERRM | Partial: version-14 application errors, bounded current diagnostics and PostgreSQL error metadata; broader error catalog, SQLERRM(code), EXCEPTION_INIT, backtraces and Oracle catalogs outstanding |
 | 18. Security | Roles/grants, definer/invoker rights, context/VPD, auditing, encryption, external identity and key rotation under adversarial tests | Unqualified for Oracle semantics; native security does not establish compatibility |
 | 19. Physical and specialized objects | Partition/index maintenance and materialized refresh; assess external tables, object/collection types, XML, spatial, text and queues for target workloads | Unqualified; unsupported reference features need a full/appropriate Oracle edition |
@@ -741,3 +748,13 @@ identifiers. Parsed relation boundaries protect application SQL and literal
 contents. Independent native/default PostgreSQL checks and real JDBC metadata
 checks accompany the change; complete driver, application and programme
 qualification remain separate gates.
+
+## Source BLOB reconciliation and original application class
+
+The [application checkpoint](evidence/oracle-persistent-blob-application-2026-11-05/README.md)
+records explicit reconciliation of all 16 source-manifest BLOB columns on a clean
+isolated clone, preservation of exported binary values and original routine/view
+definitions, and a 53/53 original `POTest` class result. PostgreSQL JDBC base-column
+metadata checks accompany the general catalog-read boundary. This is selected
+application evidence; the accepted application still uses its earlier binary,
+and full application, broader original tests and programme acceptance remain open.

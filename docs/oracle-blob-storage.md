@@ -73,3 +73,9 @@ work.
 [Selected persistent execution evidence](evidence/oracle-persistent-blobs-2026-11-05/README.md)
 covers the runtime follow-up. Quiesce writers before binary-column reconciliation;
 this operation does not implement distributed DDL coordination.
+
+
+The [source-backed application checkpoint](evidence/oracle-persistent-blob-application-2026-11-05/README.md)
+records explicit migration of the export's 16 BLOB columns and the original
+application's binary-data test on an isolated clone. It does not promote the
+accepted deployment or qualify the remaining LOB/DDL lifecycle.

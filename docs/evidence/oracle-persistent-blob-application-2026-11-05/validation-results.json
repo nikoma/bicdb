@@ -1,0 +1,277 @@
+{
+  "format": 1,
+  "scope": "Original POTest class on isolated migrated clone; not full application acceptance",
+  "candidate": {
+    "main_commit": null,
+    "source_base_commit": "ca96174088ca527eaa2ef2acb8757bad219192b0",
+    "source_overrides": {
+      "crates/bicdb-sql/src/oracle.rs": "70246378b014c98e99a16e81b7e9a8d25e66a1157a7c05697e9b583ea814ed78"
+    },
+    "binary_sha256": "207b2a0aae5a024bec5c19fd4066bdc256cfc7ae6532441aaedf34f11ee7dbef",
+    "application_qualified": false,
+    "goal_complete": false
+  },
+  "upstream_test_bundle": {
+    "name": "org.idempiere.test",
+    "version": "13.0.0.202611011311",
+    "sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7"
+  },
+  "source_manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+  "reconciliation": {
+    "columns": 16,
+    "column_row_observations": 1481,
+    "non_null_payload_bytes": 32504,
+    "all_binary_values_preserved": true,
+    "definitions_before": {
+      "routines": 62,
+      "views": 160
+    },
+    "definitions_preserved": true
+  },
+  "original_application_test": {
+    "reports": [
+      {
+        "file": "TEST-org.idempiere.test.base.POTest.xml",
+        "name": "org.idempiere.test.base.POTest",
+        "tests": "53",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0"
+      }
+    ],
+    "report_sha256": "9ce0974b5c1f8306a6a8b67f01bec70b5963ffae18188c9220a225eed782f6d6",
+    "jvm_returncode": 0,
+    "shutdown_results": [
+      {
+        "role": "test_jvm",
+        "returncode": 0
+      },
+      {
+        "role": "database",
+        "returncode": 0
+      }
+    ],
+    "primary_database_used_for_test_mutations": false,
+    "external_network_isolated": true
+  },
+  "jdbc": {
+    "format": 1,
+    "success": true,
+    "application_qualified": false,
+    "source_databases_mutated": false,
+    "server_sha256": "207b2a0aae5a024bec5c19fd4066bdc256cfc7ae6532441aaedf34f11ee7dbef",
+    "adapter_sha256": "73abaf3043495fb5c395cc864925966775eb43f86c03c82e431c2a760df24618",
+    "postgres_jdbc_version": "42.7.8",
+    "postgres_jdbc_sha256": "2a32a9dcbc42d67a50ad3a0de5efd102c8d2be46720045f2cbd6689f160ab7c7",
+    "total": 124
+  },
+  "jdbc_modes": [
+    {
+      "mode": "extended",
+      "profile": "oracle-preview-v1",
+      "checks": [
+        "connection_wrapper_identity",
+        "metadata_connection_identity",
+        "metadata_unwrap_connection_identity",
+        "prepared_connection_identity",
+        "parameter_count",
+        "parameter_native_types",
+        "metadata_restores_query_mode",
+        "anonymous_metadata_has_no_result_columns",
+        "prepare_has_no_effects",
+        "result_statement_identity",
+        "catalog_column_origin_schema",
+        "standard_schema_name_keeps_driver_behavior",
+        "catalog_column_origin_table",
+        "catalog_column_origin_name",
+        "repeat_unicode_and_delimiter_payload",
+        "alternative_quote_input_count",
+        "statement_connection_identity",
+        "raw_multistatement_block",
+        "alternative_quote_value",
+        "national_alternative_quote_value",
+        "prepared_batch_results",
+        "all_standalone_writes",
+        "block_error_identity",
+        "prior_write_survives_block_failure",
+        "caller_rollback_restores_baseline",
+        "post_commit_error_identity",
+        "explicit_commit_survives_caller_rollback",
+        "explicit_helper_input_metadata",
+        "explicit_helper_connection_identity",
+        "wrapped_helper_connection_identity",
+        "both_helper_writes_preserved",
+        "invalid_metadata_is_rejected",
+        "failed_metadata_restores_query_mode",
+        "generated_keys_rejected_before_execution",
+        "callable_blocks_rejected_before_execution",
+        "raw_block_batch_rejected_before_execution",
+        "disabled_cache_fails_before_execution",
+        "disabled_cache_with_alternative_quotes_fails_before_execution",
+        "raw_block_does_not_require_query_cache",
+        "zero_byte_cache_fails_before_execution",
+        "unsupported_calls_have_no_write_effects"
+      ],
+      "total": 41
+    },
+    {
+      "mode": "simple",
+      "profile": "oracle-preview-v1",
+      "checks": [
+        "connection_wrapper_identity",
+        "metadata_connection_identity",
+        "metadata_unwrap_connection_identity",
+        "prepared_connection_identity",
+        "parameter_count",
+        "parameter_native_types",
+        "metadata_restores_query_mode",
+        "anonymous_metadata_has_no_result_columns",
+        "prepare_has_no_effects",
+        "result_statement_identity",
+        "catalog_column_origin_schema",
+        "standard_schema_name_keeps_driver_behavior",
+        "catalog_column_origin_table",
+        "catalog_column_origin_name",
+        "repeat_unicode_and_delimiter_payload",
+        "alternative_quote_input_count",
+        "statement_connection_identity",
+        "raw_multistatement_block",
+        "alternative_quote_value",
+        "national_alternative_quote_value",
+        "prepared_batch_results",
+        "all_standalone_writes",
+        "block_error_identity",
+        "prior_write_survives_block_failure",
+        "caller_rollback_restores_baseline",
+        "post_commit_error_identity",
+        "explicit_commit_survives_caller_rollback",
+        "explicit_helper_input_metadata",
+        "explicit_helper_connection_identity",
+        "wrapped_helper_connection_identity",
+        "both_helper_writes_preserved",
+        "invalid_metadata_is_rejected",
+        "failed_metadata_restores_query_mode",
+        "generated_keys_rejected_before_execution",
+        "callable_blocks_rejected_before_execution",
+        "raw_block_batch_rejected_before_execution",
+        "disabled_cache_fails_before_execution",
+        "disabled_cache_with_alternative_quotes_fails_before_execution",
+        "raw_block_does_not_require_query_cache",
+        "zero_byte_cache_fails_before_execution",
+        "unsupported_calls_have_no_write_effects"
+      ],
+      "total": 41
+    },
+    {
+      "mode": "extendedCacheEverything",
+      "profile": "oracle-preview-v1",
+      "checks": [
+        "connection_wrapper_identity",
+        "metadata_connection_identity",
+        "metadata_unwrap_connection_identity",
+        "prepared_connection_identity",
+        "parameter_count",
+        "parameter_native_types",
+        "metadata_restores_query_mode",
+        "anonymous_metadata_has_no_result_columns",
+        "prepare_has_no_effects",
+        "result_statement_identity",
+        "catalog_column_origin_schema",
+        "standard_schema_name_keeps_driver_behavior",
+        "catalog_column_origin_table",
+        "catalog_column_origin_name",
+        "repeat_unicode_and_delimiter_payload",
+        "alternative_quote_input_count",
+        "statement_connection_identity",
+        "raw_multistatement_block",
+        "alternative_quote_value",
+        "national_alternative_quote_value",
+        "prepared_batch_results",
+        "all_standalone_writes",
+        "block_error_identity",
+        "prior_write_survives_block_failure",
+        "caller_rollback_restores_baseline",
+        "post_commit_error_identity",
+        "explicit_commit_survives_caller_rollback",
+        "explicit_helper_input_metadata",
+        "explicit_helper_connection_identity",
+        "wrapped_helper_connection_identity",
+        "both_helper_writes_preserved",
+        "invalid_metadata_is_rejected",
+        "failed_metadata_restores_query_mode",
+        "generated_keys_rejected_before_execution",
+        "callable_blocks_rejected_before_execution",
+        "raw_block_batch_rejected_before_execution",
+        "disabled_cache_fails_before_execution",
+        "disabled_cache_with_alternative_quotes_fails_before_execution",
+        "raw_block_does_not_require_query_cache",
+        "zero_byte_cache_fails_before_execution",
+        "unsupported_calls_have_no_write_effects"
+      ],
+      "total": 41
+    },
+    {
+      "mode": "postgres_profile",
+      "profile": "postgres",
+      "checks": [
+        "postgres_profile_not_wrapped"
+      ],
+      "total": 1
+    }
+  ],
+  "application_qualified": false,
+  "accepted_application_deployed": false,
+  "goal_complete": false,
+  "combined_source_validation": {
+    "source_commit": "e2fb8ee5c4c0e7a10083f6cda2a1afdbe0fca586",
+    "binary_sha256": "ea564e4cfedcf368d1ef7b318fecd99836198bf05cce4aeb9f169ad9acdc54b6",
+    "steps": [
+      {
+        "name": "build",
+        "returncode": 0,
+        "log_sha256": "2c5e63f68b36e277d204c15a1a76288427e48a99b23cc3c47a010abb7e7482ec"
+      },
+      {
+        "name": "sql",
+        "returncode": 0,
+        "log_sha256": "48dfb5cb3bfbc13d4d2b988e8e2580e6386cf04944c5e4de75d3e61c0120e02c",
+        "passed": 690,
+        "failed": 0,
+        "ignored": 3
+      },
+      {
+        "name": "oracle-protocol",
+        "returncode": 0,
+        "log_sha256": "501a3878d6b30a87fe975b0bf6cf9069e911858697d427740ff350332e23dd3d",
+        "passed": 48,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "protocol",
+        "returncode": 0,
+        "log_sha256": "e1fefb8da8c582804245e08827a4f62879f2c5107078332577cf95bd6e02ae8b",
+        "passed": 180,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "locking",
+        "returncode": 0,
+        "log_sha256": "350a1ce8be96c98307eaf2a3ec0bb98e07cbe90423968b3f0099207b39f60b92",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "workspace",
+        "returncode": 0,
+        "log_sha256": "e54b15ae8d369aca38ec1ef584d7c56443719ede14a0e3506f79e89ddf17837d"
+      }
+    ],
+    "guard_status": "completed",
+    "minimum_observed_available_bytes": 15309557760,
+    "peak_owned_group_rss_bytes": 5328449536,
+    "application_rerun": "pending; separate from preceding 53-test candidate"
+  }
+}

@@ -50,6 +50,8 @@ class OracleReplayPlanTests(unittest.TestCase):
         sql = target.create_table_sql('TEMP"Q', columns)
         self.assertIn('"Q""R" RAW(16)', sql);self.assertIn('CHAR(3 BYTE)', sql);self.assertIn('VARCHAR2(3 CHAR)', sql)
         self.assertIn('ON COMMIT PRESERVE ROWS', sql);self.assertNotIn('BYTEA', sql)
+        columns[0]['bytes'] = '16'
+        self.assertEqual(target.reference_type(columns[0]), 'RAW(16)')
         columns[0]['bytes'] = -1
         with self.assertRaises(ValueError):target.reference_type(columns[0])
 
@@ -115,6 +117,10 @@ class OracleReplayIntegrationTests(unittest.TestCase):
             for flag in ['live_source_compared', 'target_inventory_compared', 'application_qualified']:self.assertFalse(report[flag])
             args.cleanup_only = True
             self.assertTrue(target.replay(args)['cleanup_completed'])
+            incomplete = json.loads(args.report.read_text());incomplete.update(success=False, inventory_completed=False)
+            args.report.write_text(json.dumps(incomplete))
+            cleaned = target.replay(args)
+            self.assertTrue(cleaned['cleanup_completed']);self.assertFalse(cleaned['success'])
 
     def test_saved_orphans_are_replayed_and_removed(self):self.check_replay(False)
 

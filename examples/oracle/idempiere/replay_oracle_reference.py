@@ -39,6 +39,8 @@ def replay_columns(manifest):
 def reference_type(column):
     if column['type'] == 'RAW':
         size = column['bytes']
+        # Oracle NUMBER catalog fields can be exported as Decimal strings.
+        if isinstance(size, str) and re.fullmatch('[1-9][0-9]*', size):size = int(size)
         if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
             raise ValueError('invalid RAW byte width')
         return 'RAW(' + str(size) + ')'

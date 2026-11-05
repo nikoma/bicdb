@@ -17,6 +17,12 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [strict source-value checkpoint](evidence/oracle-source-values-2026-11-05/README.md)
+authenticates exported row counts and widths before target queries and rechecks
+completed value-verification journals on resume. All 915 exported files and
+185,471 source rows pass integrity checks; full equality with an already
+exercised application target remains unqualified.
+
 The [read-only orphan inventory](oracle-foreign-key-orphan-inventory.md) requires
 a completed source-declared FK migration, exact journal/endpoint identity and
 unchanged target fingerprints. It counts every supported relationship without

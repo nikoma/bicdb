@@ -1,0 +1,87 @@
+{
+  "format": 1,
+  "source_commit": "7b2557ae693fc510b47f01ce25743d41224ab4a1",
+  "native_engine_source_commit": "2b645c97431b55e1e903ec16d9994489e3610f1a",
+  "native_engine_main_delivery_commit": "a46ab7ad9e26737e379e11e2e6473473abdc2f25",
+  "native_engine_binary_sha256": "52cd4ceced937a468fa9f63bdb8511560ea6c074549bbc59da8fa19f50e5fbce",
+  "python_tests": {
+    "passed": 75,
+    "failed": 0,
+    "skipped": 0,
+    "command": [
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "examples/oracle/idempiere",
+      "-p",
+      "test_*.py",
+      "-v"
+    ]
+  },
+  "prior_full_suite_attempt": {
+    "passed": 73,
+    "failed": 2,
+    "reason": "JDBC provider generator dependency jar absent in the isolated worktree",
+    "resolution": "built the local JDBC SDK with its unit tests, then reran all 75 tests successfully"
+  },
+  "jdbc_build": {
+    "command": [
+      "mvn",
+      "-o",
+      "-B",
+      "-q",
+      "-f",
+      "examples/oracle/jdbc/pom.xml",
+      "-DargLine=-Xmx256m",
+      "package"
+    ],
+    "suites": [
+      {
+        "name": "org.bicdb.jdbc.oracle.OracleSqlTest",
+        "tests": "10",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0"
+      }
+    ],
+    "jar_sha256": "6d937726103d4b20d82f12b851220b4dfa8d6f2dbed156591aeb39b9fb90522d",
+    "installed_in_accepted_application": false
+  },
+  "source_export_integrity": {
+    "status": "completed",
+    "manifest_sha256": "2701a281dd2dcfd931f0e7f390afcc192eb20cab4056a19fd6707f2ba39f41d7",
+    "tables_checked": 915,
+    "rows_checked": 185471,
+    "all_source_counts_widths_and_file_digests_match": true,
+    "target_values_compared": false,
+    "application_qualified": false,
+    "elapsed_seconds": 2.973
+  },
+  "prior_verifier_negative_regression": {
+    "expected_failure": true,
+    "reason": "wrong manifest row count was accepted and target SQL was issued"
+  },
+  "native_value_cases": [
+    "default PostgreSQL and Oracle preview profiles over PostgreSQL transport",
+    "38-digit exact numeric values under Decimal precision 2",
+    "binary bytes including zero and high bytes",
+    "timestamp microseconds, fixed-character padding and Unicode",
+    "duplicate multiplicity and Oracle/PostgreSQL empty-string differences",
+    "successful initial and resumed Oracle-profile CLI verification",
+    "missing completed digest rejected",
+    "same-count value change rejected by resumed verification"
+  ],
+  "resources": {
+    "status": "completed",
+    "returncode": 0,
+    "peak_group_rss_bytes": 178909184,
+    "minimum_observed_available_bytes": 14223515648,
+    "minimum_available_gib": 12.0
+  },
+  "all_target_source_values_verified": false,
+  "source_snapshot_equality_qualified": false,
+  "application_qualified": false,
+  "github_workflows_changed_or_dispatched": false
+}

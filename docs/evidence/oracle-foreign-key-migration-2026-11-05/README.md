@@ -56,3 +56,9 @@ constraints, external references, unsupported parent states, complete orphan
 inventory, source comparison, business workflows with every relationship
 installed, rolling upgrades and production qualification remain broader gates.
 The accepted application deployment is separate from the candidate used here.
+
+After merging the upstream SQL cache-ownership change, the
+[merged-source validation](merged-validation-results.json) passed 710 SQL library
+tests with three ignored and repeated all migration, BLOB, deferred, authorization,
+protocol, workspace and build checks successfully. Candidate source commits and
+binary digests remain distinct from the documentation delivery commit.

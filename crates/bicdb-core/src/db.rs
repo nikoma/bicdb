@@ -16785,6 +16785,20 @@ impl Transaction {
         self.locked_keys.lock().len()
     }
 
+    /// Whether this pending transaction already owns a record lock. This is a
+    /// capability check, not an acquisition: callers which require an existing
+    /// lock must not silently obtain one while testing for ownership.
+    pub fn holds_record_lock(&self, collection: &str, record_id: &str) -> bool {
+        if self.state != TxState::Pending
+            || self.tx_states.get_copied(&self.id.0) != Some(TxState::Pending)
+        {
+            return false;
+        }
+        self.write_locks
+            .get_copied(&(collection.to_owned(), record_id.to_owned()))
+            == Some(self.id)
+    }
+
     pub fn truncate_writes(&mut self, len: usize) -> Result<()> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);

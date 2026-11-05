@@ -29,17 +29,26 @@ fn read_lock_release_preserves_earlier_locks_and_refuses_write_locks() {
     db.insert("rows", Record::new("1")).unwrap();
     db.insert("rows", Record::new("2")).unwrap();
     let mut first = db.begin_transaction().unwrap();
+    assert!(!first.holds_record_lock("rows", "1"));
+    assert_eq!(first.lock_len(), 0);
     assert!(first.try_lock_visible_record(None, "rows", "1").unwrap());
+    assert!(first.holds_record_lock("rows", "1"));
+    assert!(!first.holds_record_lock("rows", "2"));
+    assert!(!first.holds_record_lock("other_rows", "1"));
     let mark = first.rollback_mark();
     assert!(first.try_lock_visible_record(None, "rows", "2").unwrap());
     let later_mark = first.rollback_mark();
     first.release_read_locks_since(mark).unwrap();
+    assert!(first.holds_record_lock("rows", "1"));
+    assert!(!first.holds_record_lock("rows", "2"));
     assert!(first.release_read_locks_since(later_mark).is_err());
     first.release_read_locks_since(mark).unwrap();
     let second = db.begin_transaction().unwrap();
     assert!(second.release_read_locks_since(mark).is_err());
     assert!(!second.try_lock_visible_record(None, "rows", "1").unwrap());
     assert!(second.try_lock_visible_record(None, "rows", "2").unwrap());
+    assert!(second.holds_record_lock("rows", "2"));
+    assert!(!second.holds_record_lock("rows", "1"));
     second.rollback().unwrap();
     first
         .update(
@@ -48,6 +57,7 @@ fn read_lock_release_preserves_earlier_locks_and_refuses_write_locks() {
         )
         .unwrap();
     assert!(first.release_read_locks_since(mark).is_err());
+    assert!(first.holds_record_lock("rows", "2"));
     let probe = db.begin_transaction().unwrap();
     assert!(!probe.try_lock_visible_record(None, "rows", "2").unwrap());
     probe.rollback().unwrap();

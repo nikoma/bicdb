@@ -81,13 +81,16 @@ class OrphanInventoryIntegrationTests(unittest.TestCase):
         # Reuse the migration fixture's native process lifecycle and schema setup.
         # Its test methods are not invoked by this composition.
         self.fixture = migration_fixture.ForeignKeyMigrationIntegrationTests(methodName='runTest')
-        self.addCleanup(self.fixture.doCleanups)
+        self.addCleanup(self.cleanup_fixture)
         self.fixture.setUp()
         self.manifest, self.migration_args = self.fixture.setup_schema()
         self.migration_args.check_only = False;self.migration_args.writers_quiesced = True
         self.fixture.migrate(self.migration_args)
         self.args = SimpleNamespace(snapshot=self.migration_args.snapshot, migration_report=self.migration_args.report,
                                     report=self.fixture.root/'orphans.json', pg_dsn_env='BICDB_FK_TEST_DSN', writers_quiesced=True)
+
+    def cleanup_fixture(self):
+        self.assertTrue(self.fixture.doCleanups(), 'native fixture cleanup failed')
 
     def inventory(self):
         with patch.dict(os.environ, BICDB_FK_TEST_DSN=self.fixture.dsn):return target.inventory(self.args)

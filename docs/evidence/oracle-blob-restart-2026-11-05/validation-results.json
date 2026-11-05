@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "source_files_sha256": {
+    "examples/oracle/idempiere/blob_types.py": "e468eea1adddf72ff6be8ea2e22718b3bb8db45dec3eb69a4b360076e83a547f",
+    "examples/oracle/idempiere/test_blob_types.py": "91f816c8118ed81f02f94ef942d66ab0e15a716631d68c9eaacd540a14fe7e8b"
+  },
+  "server_source_commit": "ed9ca8b74bea10e14beeb9c0e02e46279d2e5a1b",
+  "server_sha256": "d8f47af87a8eaa2e930a66d97f9f44ce57db8a15b14e980575884e6d84d87dd4",
+  "python_tests": {
+    "run": 41,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "log_sha256": "a65b97a53c7ca98ccec374332307dd3b405a8857eed56aa8350dad5850d3d5b5"
+  },
+  "resource_guard": {
+    "status": "completed",
+    "minimum_observed_available_bytes": 13410762752,
+    "peak_owned_rss_bytes": 175874048
+  },
+  "clean_restart_before_resume": true,
+  "owner_append_and_rollback_checked_before_resumed_rewrite": true,
+  "power_loss_qualified": false,
+  "application_qualified": false,
+  "goal_complete": false
+}

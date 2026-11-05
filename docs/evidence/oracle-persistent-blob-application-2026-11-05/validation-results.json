@@ -377,5 +377,35 @@
     "unfinished_class": "org.idempiere.test.workflow.WFMaterialReceiptTest",
     "all_selected_classes_passed": false,
     "application_qualified": false
+  },
+  "material_receipt_retry": {
+    "server_source_commit": "ed9ca8b74bea10e14beeb9c0e02e46279d2e5a1b",
+    "server_sha256": "d8f47af87a8eaa2e930a66d97f9f44ce57db8a15b14e980575884e6d84d87dd4",
+    "reports": [
+      {
+        "file": "TEST-org.idempiere.test.workflow.WFMaterialReceiptTest.xml",
+        "name": "org.idempiere.test.workflow.WFMaterialReceiptTest",
+        "tests": "1",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0"
+      }
+    ],
+    "report_sha256": "cca0de842766f65c61862847390817c14730e21bc3a1082382108f0a07334118",
+    "shutdown_results": [
+      {
+        "role": "test_jvm",
+        "returncode": 0
+      },
+      {
+        "role": "database",
+        "returncode": 0
+      }
+    ],
+    "guard_status": "completed",
+    "minimum_observed_available_bytes": 13321433088,
+    "primary_database_used_for_test_mutations": false,
+    "external_network_isolated": true,
+    "application_qualified": false
   }
 }

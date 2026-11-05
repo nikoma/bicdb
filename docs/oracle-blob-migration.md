@@ -89,3 +89,9 @@ The [BLOB storage contract](oracle-blob-storage.md) describes locator semantics,
 reader-version fences and remaining DDL/package boundaries. This migration phase
 is not complete LOB compatibility, a backup service, or full application and
 production qualification.
+
+
+A [real-server restart fixture](evidence/oracle-blob-restart-2026-11-05/README.md)
+covers clean shutdown/reopen before journal resume, including an append/rollback
+through the reopened owner registry before resume can rewrite it. This does not
+establish crash or power-loss recovery; retain the backup and cutover policy.

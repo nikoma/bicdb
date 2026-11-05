@@ -76,33 +76,52 @@ class BlobTypesTests(unittest.TestCase):
 class BlobMigrationIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import psycopg
         cls.temp=tempfile.TemporaryDirectory(prefix='bicdb-blob-migration-test-')
         cls.addClassCleanup(cls.temp.cleanup)
         cls.root=Path(cls.temp.name)
         with socket.socket() as sock:sock.bind(('127.0.0.1',0));cls.port=sock.getsockname()[1]
         cls.log=(cls.root/'server.log').open('wb')
         cls.addClassCleanup(cls.log.close)
-        cls.child=subprocess.Popen([os.environ['BICDB_ORACLE_SERVER'],str(cls.root/'db'),str(cls.port),'oracle-preview-v1','8','4'],stdout=cls.log,stderr=subprocess.STDOUT)
-        def stop_server():
-            if cls.child.poll() is None:
-                cls.child.send_signal(signal.SIGINT)
-                try:cls.child.wait(timeout=20)
-                except subprocess.TimeoutExpired:cls.child.kill();cls.child.wait()
-            if cls.child.returncode != 0:
-                raise RuntimeError('migration fixture server exited with '+str(cls.child.returncode))
-        cls.addClassCleanup(stop_server)
+        cls.start_server()
+        cls.addClassCleanup(cls.stop_server)
         cls.dsn=f'host=127.0.0.1 port={cls.port} user=bicdb dbname=bicdb'
+        cls.connect_server()
+
+    @classmethod
+    def start_server(cls):
+        cls.child=subprocess.Popen([os.environ['BICDB_ORACLE_SERVER'],str(cls.root/'db'),str(cls.port),'oracle-preview-v1','8','4'],stdout=cls.log,stderr=subprocess.STDOUT)
+
+    @classmethod
+    def stop_server(cls):
+        if cls.child.poll() is None:
+            cls.child.send_signal(signal.SIGINT)
+            try:cls.child.wait(timeout=20)
+            except subprocess.TimeoutExpired:cls.child.kill();cls.child.wait()
+        if cls.child.returncode != 0:
+            raise RuntimeError('migration fixture server exited with '+str(cls.child.returncode))
+
+    @classmethod
+    def connect_server(cls):
+        import psycopg
         for _ in range(600):
             if cls.child.poll() is not None:raise RuntimeError('test server exited: '+(cls.root/'server.log').read_text())
             try:
                 cls.conn=psycopg.connect(cls.dsn,autocommit=True,options='-c bicdb.sql_profile=oracle-preview-v1',connect_timeout=1)
                 cls.addClassCleanup(cls.conn.close)
                 break
-            except psycopg.OperationalError:time.sleep(.1)
+            except psycopg.OperationalError as error:
+                if error.sqlstate is not None:raise
+                time.sleep(.1)
         else:raise RuntimeError('test server startup timed out')
 
-    def test_preflight_apply_resume_and_changed_rows_refusal(self):
+    @classmethod
+    def restart_server(cls):
+        cls.conn.close()
+        cls.stop_server()
+        cls.start_server()
+        cls.connect_server()
+
+    def test_preflight_apply_restart_resume_and_changed_rows_refusal(self):
         self.assertEqual(self.conn.info.parameter_status('TimeZone'), 'UTC')
         schema='MIG_'+str(time.time_ns())+'"Q'
         q=target.quote
@@ -122,6 +141,20 @@ class BlobMigrationIntegrationTests(unittest.TestCase):
             args.check_only=False;args.writers_quiesced=True;target.migrate(args)
             report=json.loads(args.report.read_text());self.assertTrue(report['success']);self.assertTrue(report['conversion_capability_verified']);self.assertEqual(len(report['completed']),1)
             self.assertEqual(report['table_fingerprints']['T']['before'],report['table_fingerprints']['T']['after'])
+            original_pid=self.child.pid
+            self.restart_server()
+            self.assertNotEqual(self.child.pid,original_pid)
+            self.assertEqual(self.conn.info.parameter_status('TimeZone'),'UTC')
+            # Check the reopened owner registry before resume can rewrite it.
+            with self.conn.cursor() as c:
+                c.execute('BEGIN')
+                try:
+                    c.execute('DECLARE d BLOB; BEGIN SELECT "B" INTO d FROM '+relation+' WHERE "ID"=1 FOR UPDATE; DBMS_LOB.APPEND(d,HEXTORAW(\'34\')); END;')
+                    c.execute('SELECT "B" FROM '+relation+' WHERE "ID"=1')
+                    self.assertEqual(c.fetchone(),(bytes.fromhex('00FF34'),))
+                finally:c.execute('ROLLBACK')
+                c.execute('SELECT "B" FROM '+relation+' WHERE "ID"=1')
+                self.assertEqual(c.fetchone(),(bytes.fromhex('00FF'),))
             args.resume=True;target.migrate(args)
             saved=args.report.read_bytes();original_manifest=(snap/'manifest.json').read_bytes()
             (snap/'manifest.json').write_text(json.dumps(dict(m,source_schema='DIFFERENT')))

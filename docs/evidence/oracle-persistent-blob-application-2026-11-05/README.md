@@ -77,3 +77,12 @@ tests, not a successful eight-class batch. The unfinished workflow is not counte
 as passed or as an assertion failure. Both owned processes were confirmed gone,
 and the accepted application still returned HTTP 200. Application tenant checks
 do not establish Oracle database-role/VPD conformance or production security.
+
+
+The unfinished WFMaterialReceiptTest subsequently passed alone on a fresh clone:
+1 test, zero failures, errors or skips, with both owned processes exiting 0 and
+the memory guard completing. The original test checks document completion and
+seven processed workflow activities. Its cost-posting warning is not treated as
+financial-posting acceptance; receipt costs and account balances need their own
+checks. This result does not retroactively turn the interrupted eight-class batch
+into a successful combined run. Source and binary hashes are recorded separately.

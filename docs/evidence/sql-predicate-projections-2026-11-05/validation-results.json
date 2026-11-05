@@ -1,0 +1,64 @@
+{
+  "source_commit": "c6bb1a8a1b3864c04ccb572f3515ccb968a20616",
+  "application_qualified": false,
+  "success": true,
+  "checks": {
+    "core_rollback_mark": {
+      "passed": 2,
+      "failed": 0
+    },
+    "sql_library": {
+      "passed": 644,
+      "failed": 0,
+      "ignored": 3
+    },
+    "column_references": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    "locking_projection": {
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    "predicate_projection": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    "projection_pushdown": {
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    "recursive_query_stack": {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    "wildcard_projection": {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "workspace_all_targets": "passed",
+  "minimum_observed_available_gib": 16.318,
+  "build_start_gib": 18,
+  "build_stop_gib": 12,
+  "service_stop_gib": 8,
+  "application_recovery": {
+    "same_binary": true,
+    "same_database": true,
+    "workflow_checks": 77,
+    "original_definitions_preserved": true,
+    "http_status": 200
+  },
+  "workflows_added": false,
+  "ignored_tests": [
+    "adaptive::host::tests::bench_host_vs_oracle_read_path",
+    "adaptive::lower::tests::bench_control_flow_interpreter_vs_wasm",
+    "adaptive::lower::tests::bench_proc_with_sql_interpreter_vs_wasm"
+  ]
+}

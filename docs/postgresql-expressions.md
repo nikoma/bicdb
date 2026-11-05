@@ -49,3 +49,24 @@ Differential coverage lives in:
 - `fixtures/postgres-compat/026-array-columns-supported.json`
 - `fixtures/postgres-compat/027-expected-difference-enum-types.json`
 - `fixtures/postgres-compat/028-expected-difference-domain-types.json`
+
+
+## Predicate values in projections and ordering
+
+NULL and truth predicates can produce boolean values in a SELECT list and in
+ORDER BY expressions, including aliased and parenthesized forms. Computed
+predicates use the expression evaluator while ordinary record fields retain
+the field projection path. Three-valued logic is preserved for `IS NULL`,
+`IS NOT NULL`, `IS TRUE`, `IS NOT TRUE`, `IS FALSE`, `IS NOT FALSE`,
+`IS UNKNOWN` and `IS NOT UNKNOWN` in PostgreSQL.
+
+```sql
+SELECT id, (value IS NULL) AS missing
+FROM samples
+ORDER BY (value IS NULL) DESC, id;
+```
+
+The Oracle preview regression uses its NULL predicate for unknown boolean values,
+matching the Oracle 23.26.3 reference observations. That reference rejects
+PostgreSQL's `IS UNKNOWN` spelling. Separate regression
+cases protect the two front ends.

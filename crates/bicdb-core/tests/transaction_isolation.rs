@@ -28,6 +28,102 @@ fn account(id: &str, balance: i64) -> Record {
 }
 
 #[test]
+fn statement_conflict_checks_are_opt_in_and_keep_commit_validation() {
+    for immediate in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            directory.path(),
+            bicdb_core::DbConfig::default().with_fsync(false),
+        )
+        .unwrap();
+        db.create_collection("accounts").unwrap();
+        db.insert("accounts", account("a", 100)).unwrap();
+        let mut reader = db.begin_transaction().unwrap();
+        reader.set_snapshot_isolation(true, 0).unwrap();
+        if immediate {
+            reader.set_statement_write_conflict_check(true).unwrap();
+        }
+        assert_eq!(
+            reader.get("accounts", "a").unwrap().unwrap().metadata["balance"],
+            100
+        );
+        let mut writer = db.begin_transaction().unwrap();
+        writer.update("accounts", account("a", 75)).unwrap();
+        writer.commit().unwrap();
+        // READ COMMITTED repair APIs must not widen a fixed snapshot.
+        assert!(reader
+            .read_committed_update_record("accounts", "a")
+            .unwrap()
+            .is_none());
+        assert!(reader
+            .read_committed_update_stored("accounts", "a")
+            .unwrap()
+            .is_none());
+        assert!(reader
+            .read_committed_delete_record("accounts", "a")
+            .unwrap()
+            .is_none());
+        if immediate {
+            assert!(matches!(
+                reader.update("accounts", account("a", 50)),
+                Err(BicDbError::TransactionConflict(_))
+            ));
+            assert_eq!(reader.write_len(), 0);
+            reader.rollback().unwrap();
+        } else {
+            reader.update("accounts", account("a", 50)).unwrap();
+            assert!(matches!(
+                reader.commit(),
+                Err(BicDbError::TransactionConflict(_))
+            ));
+        }
+        assert_eq!(
+            db.get("accounts", "a").unwrap().unwrap().metadata["balance"],
+            75
+        );
+    }
+}
+
+#[test]
+fn statement_conflict_checks_do_not_buffer_a_partial_batch_or_stale_delete() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(
+        directory.path(),
+        bicdb_core::DbConfig::default().with_fsync(false),
+    )
+    .unwrap();
+    db.create_collection("accounts").unwrap();
+    db.insert("accounts", account("a", 100)).unwrap();
+    db.insert("accounts", account("b", 100)).unwrap();
+    let mut reader = db.begin_transaction().unwrap();
+    reader.set_snapshot_isolation(true, 0).unwrap();
+    reader.set_statement_write_conflict_check(true).unwrap();
+    assert!(reader.get("accounts", "a").unwrap().is_some());
+    let mut writer = db.begin_transaction().unwrap();
+    writer.delete("accounts", "a").unwrap();
+    writer.commit().unwrap();
+    assert!(matches!(
+        reader.write_upserts_with_statement_snapshots(
+            "accounts",
+            [(account("b", 50), 0), (account("a", 50), 0)]
+        ),
+        Err(BicDbError::TransactionConflict(_))
+    ));
+    assert_eq!(reader.write_len(), 0);
+    assert!(matches!(
+        reader.delete("accounts", "a"),
+        Err(BicDbError::TransactionConflict(_))
+    ));
+    assert_eq!(reader.write_len(), 0);
+    reader.rollback().unwrap();
+    assert!(db.get("accounts", "a").unwrap().is_none());
+    assert_eq!(
+        db.get("accounts", "b").unwrap().unwrap().metadata["balance"],
+        100
+    );
+}
+
+#[test]
 fn repeatable_read_keeps_its_fixed_mvcc_snapshot() {
     let directory = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(directory.path()).unwrap();

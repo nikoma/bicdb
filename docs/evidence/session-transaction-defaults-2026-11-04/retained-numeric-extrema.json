@@ -1,0 +1,1592 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "12687fcf127e097e1b79005d353bc02d6a0853008be56e8e6e9ff50721a8cb74",
+  "fixture_sha256": "21f8fcb55745a309b870e7345c3aaecd63b07e974ecaade51e3c981aa6293dfd",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "cases": [
+        {
+          "id": "numeric_min",
+          "source": {
+            "id": "numeric_min",
+            "expected": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "numeric_min",
+            "expected": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "numeric_max",
+          "source": {
+            "id": "numeric_max",
+            "expected": [
+              [
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "numeric_max",
+            "expected": [
+              [
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "numeric_both",
+          "source": {
+            "id": "numeric_both",
+            "expected": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                },
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                },
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "numeric_both",
+            "expected": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                },
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                },
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_min",
+          "source": {
+            "id": "empty_min",
+            "expected": [
+              [
+                null
+              ]
+            ],
+            "actual": [
+              [
+                null
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_min",
+            "expected": [
+              [
+                null
+              ]
+            ],
+            "actual": [
+              [
+                null
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_max",
+          "source": {
+            "id": "empty_max",
+            "expected": [
+              [
+                null
+              ]
+            ],
+            "actual": [
+              [
+                null
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_max",
+            "expected": [
+              [
+                null
+              ]
+            ],
+            "actual": [
+              [
+                null
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prefix_min",
+          "source": {
+            "id": "prefix_min",
+            "expected": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prefix_min",
+            "expected": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prefix_max",
+          "source": {
+            "id": "prefix_max",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prefix_max",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "suffix_filter",
+          "source": {
+            "id": "suffix_filter",
+            "expected": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "suffix_filter",
+            "expected": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "suffix_filter_max",
+          "source": {
+            "id": "suffix_filter_max",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "suffix_filter_max",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "range_inclusive",
+          "source": {
+            "id": "range_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ],
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ],
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "range_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ],
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ],
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "range_exclusive",
+          "source": {
+            "id": "range_exclusive",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "range_exclusive",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "range_negative",
+          "source": {
+            "id": "range_negative",
+            "expected": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "range_negative",
+            "expected": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "range_empty",
+          "source": {
+            "id": "range_empty",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "range_empty",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "text_suffix_min",
+          "source": {
+            "id": "text_suffix_min",
+            "expected": [
+              [
+                "01"
+              ]
+            ],
+            "actual": [
+              [
+                "01"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "text_suffix_min",
+            "expected": [
+              [
+                "01"
+              ]
+            ],
+            "actual": [
+              [
+                "01"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prepared_prefix",
+          "source": {
+            "id": "prepared_prefix",
+            "expected": [
+              [
+                {
+                  "number": "2E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prepared_prefix",
+            "expected": [
+              [
+                {
+                  "number": "2E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_insert",
+          "source": {
+            "id": "pending_insert",
+            "expected": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "pending_insert",
+            "expected": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_range",
+          "source": {
+            "id": "pending_range",
+            "expected": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "pending_range",
+            "expected": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_key_update",
+          "source": {
+            "id": "pending_key_update",
+            "expected": [
+              [
+                {
+                  "number": "4E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "4E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "pending_key_update",
+            "expected": [
+              [
+                {
+                  "number": "4E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "4E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_delete",
+          "source": {
+            "id": "pending_delete",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "pending_delete",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback",
+          "source": {
+            "id": "rollback",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "rollback",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 20,
+      "matched": 20,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "cases": [
+        {
+          "id": "numeric_min",
+          "source": {
+            "id": "numeric_min",
+            "expected": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "numeric_min",
+            "expected": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "numeric_max",
+          "source": {
+            "id": "numeric_max",
+            "expected": [
+              [
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "numeric_max",
+            "expected": [
+              [
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "numeric_both",
+          "source": {
+            "id": "numeric_both",
+            "expected": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                },
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                },
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "numeric_both",
+            "expected": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                },
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-100000000000000000000000000001"
+                },
+                {
+                  "number": "100000000000000000000000000003"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_min",
+          "source": {
+            "id": "empty_min",
+            "expected": [
+              [
+                null
+              ]
+            ],
+            "actual": [
+              [
+                null
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_min",
+            "expected": [
+              [
+                null
+              ]
+            ],
+            "actual": [
+              [
+                null
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "empty_max",
+          "source": {
+            "id": "empty_max",
+            "expected": [
+              [
+                null
+              ]
+            ],
+            "actual": [
+              [
+                null
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "empty_max",
+            "expected": [
+              [
+                null
+              ]
+            ],
+            "actual": [
+              [
+                null
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prefix_min",
+          "source": {
+            "id": "prefix_min",
+            "expected": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prefix_min",
+            "expected": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prefix_max",
+          "source": {
+            "id": "prefix_max",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prefix_max",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "suffix_filter",
+          "source": {
+            "id": "suffix_filter",
+            "expected": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "suffix_filter",
+            "expected": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "suffix_filter_max",
+          "source": {
+            "id": "suffix_filter_max",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "suffix_filter_max",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "range_inclusive",
+          "source": {
+            "id": "range_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ],
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ],
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "range_inclusive",
+            "expected": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ],
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3.25"
+                }
+              ],
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "range_exclusive",
+          "source": {
+            "id": "range_exclusive",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "range_exclusive",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "range_negative",
+          "source": {
+            "id": "range_negative",
+            "expected": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "range_negative",
+            "expected": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "-2.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "range_empty",
+          "source": {
+            "id": "range_empty",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "range_empty",
+            "expected": [],
+            "actual": [],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "text_suffix_min",
+          "source": {
+            "id": "text_suffix_min",
+            "expected": [
+              [
+                "01"
+              ]
+            ],
+            "actual": [
+              [
+                "01"
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "text_suffix_min",
+            "expected": [
+              [
+                "01"
+              ]
+            ],
+            "actual": [
+              [
+                "01"
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "prepared_prefix",
+          "source": {
+            "id": "prepared_prefix",
+            "expected": [
+              [
+                {
+                  "number": "2E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "prepared_prefix",
+            "expected": [
+              [
+                {
+                  "number": "2E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "2E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_insert",
+          "source": {
+            "id": "pending_insert",
+            "expected": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "pending_insert",
+            "expected": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_range",
+          "source": {
+            "id": "pending_range",
+            "expected": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "pending_range",
+            "expected": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "3E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_key_update",
+          "source": {
+            "id": "pending_key_update",
+            "expected": [
+              [
+                {
+                  "number": "4E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "4E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "pending_key_update",
+            "expected": [
+              [
+                {
+                  "number": "4E+1"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "4E+1"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "pending_delete",
+          "source": {
+            "id": "pending_delete",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "pending_delete",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback",
+          "source": {
+            "id": "rollback",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "bicdb": {
+            "id": "rollback",
+            "expected": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "actual": [
+              [
+                {
+                  "number": "10.5"
+                }
+              ]
+            ],
+            "qualified": true
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 20,
+      "matched": 20,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "success": true
+    }
+  },
+  "cleanup_complete": true
+}

@@ -2080,6 +2080,14 @@ pub(crate) fn eval_session_function_value(
             if let Some(value) = session_gucs.get(&key) {
                 return Ok(Some(SqlValue::String(value.clone())));
             }
+            if key == "transaction_isolation" {
+                return Ok(Some(SqlValue::String(
+                    session_gucs
+                        .get("default_transaction_isolation")
+                        .cloned()
+                        .unwrap_or_else(|| "read committed".into()),
+                )));
+            }
             if let Some(value) = default_session_guc(&key) {
                 return Ok(Some(SqlValue::String(value.to_string())));
             }
@@ -2559,6 +2567,7 @@ pub(crate) fn default_session_guc(name: &str) -> Option<&'static str> {
         "intervalstyle" => Some("postgres"),
         "jit" => Some("off"),
         "search_path" => Some("public"),
+        "default_transaction_isolation" => Some("read committed"),
         _ => None,
     }
 }

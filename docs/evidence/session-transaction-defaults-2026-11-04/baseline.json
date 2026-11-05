@@ -1,0 +1,506 @@
+{
+  "application_qualified": false,
+  "binary_sha256": "81f4a2669addfdd4a4bdd57a570fa0143a0de147376e87721cb7ca2de809b451",
+  "fixture_sha256": "ff82276841f6852c1a3eb45051df5c5ad74462750bd73be64a7ffa5346f6be05",
+  "profiles": {
+    "oracle": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": "23.26.3.0.0",
+      "oracle_contract": true,
+      "cases": [
+        {
+          "id": "read_committed_refresh",
+          "source": {
+            "id": "read_committed_refresh",
+            "expected": [
+              1,
+              2
+            ],
+            "qualified": true,
+            "actual": [
+              1,
+              2
+            ]
+          },
+          "bicdb": {
+            "id": "read_committed_refresh",
+            "expected": [
+              1,
+              2
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "read_own_writes",
+          "source": {
+            "id": "read_own_writes",
+            "expected": [
+              7,
+              0
+            ],
+            "qualified": true,
+            "actual": [
+              7,
+              0
+            ]
+          },
+          "bicdb": {
+            "id": "read_own_writes",
+            "expected": [
+              7,
+              0
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "rollback_removes_writes",
+          "source": {
+            "id": "rollback_removes_writes",
+            "expected": 0,
+            "qualified": true,
+            "actual": 0
+          },
+          "bicdb": {
+            "id": "rollback_removes_writes",
+            "expected": 0,
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "default_visibility",
+          "source": {
+            "id": "default_visibility",
+            "expected": [
+              2,
+              2
+            ],
+            "qualified": true,
+            "actual": [
+              2,
+              2
+            ]
+          },
+          "bicdb": {
+            "id": "default_visibility",
+            "expected": [
+              2,
+              2
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "default_reused",
+          "source": {
+            "id": "default_reused",
+            "expected": [
+              3,
+              3
+            ],
+            "qualified": true,
+            "actual": [
+              3,
+              3
+            ]
+          },
+          "bicdb": {
+            "id": "default_reused",
+            "expected": [
+              3,
+              3
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "explicit_read_committed_override",
+          "source": {
+            "id": "explicit_read_committed_override",
+            "expected": [
+              4,
+              5
+            ],
+            "qualified": true,
+            "actual": [
+              4,
+              5
+            ]
+          },
+          "bicdb": {
+            "id": "explicit_read_committed_override",
+            "expected": [
+              4,
+              5
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "connection_defaults_independent",
+          "source": {
+            "id": "connection_defaults_independent",
+            "expected": [
+              5,
+              6
+            ],
+            "qualified": true,
+            "actual": [
+              5,
+              6
+            ]
+          },
+          "bicdb": {
+            "id": "connection_defaults_independent",
+            "expected": [
+              5,
+              6
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "stale_writer",
+          "source": {
+            "id": "stale_writer",
+            "expected": "serialization_failure",
+            "qualified": true,
+            "actual": "serialization_failure"
+          },
+          "bicdb": {
+            "id": "stale_writer",
+            "expected": "serialization_failure",
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "fixed_snapshot_own_write",
+          "source": {
+            "id": "fixed_snapshot_own_write",
+            "expected": [
+              2,
+              1
+            ],
+            "qualified": true,
+            "actual": [
+              2,
+              1
+            ]
+          },
+          "bicdb": {
+            "id": "fixed_snapshot_own_write",
+            "expected": [
+              2,
+              1
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "fixed_snapshot_rollback",
+          "source": {
+            "id": "fixed_snapshot_rollback",
+            "expected": 1,
+            "qualified": true,
+            "actual": 1
+          },
+          "bicdb": {
+            "id": "fixed_snapshot_rollback",
+            "expected": 1,
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        },
+        {
+          "id": "restored_read_committed",
+          "source": {
+            "id": "restored_read_committed",
+            "expected": [
+              7,
+              8
+            ],
+            "qualified": true,
+            "actual": [
+              7,
+              8
+            ]
+          },
+          "bicdb": {
+            "id": "restored_read_committed",
+            "expected": [
+              7,
+              8
+            ],
+            "qualified": false
+          },
+          "source_qualified": true,
+          "matched": false
+        }
+      ],
+      "total": 11,
+      "matched": 0,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "source_execution_error": null,
+      "target_execution_error": "SyntaxError:invalid SQL: sql parser error: Expected: equals sign or TO, found: \"CHARACTERISTICS\" at Line: 1, Column: 15",
+      "success": false
+    },
+    "postgres": {
+      "format": 1,
+      "application_qualified": false,
+      "reference_version": 180004,
+      "oracle_contract": false,
+      "cases": [
+        {
+          "id": "read_committed_refresh",
+          "source": {
+            "id": "read_committed_refresh",
+            "expected": [
+              1,
+              2
+            ],
+            "qualified": true,
+            "actual": [
+              1,
+              2
+            ]
+          },
+          "bicdb": {
+            "id": "read_committed_refresh",
+            "expected": [
+              1,
+              2
+            ],
+            "qualified": true,
+            "actual": [
+              1,
+              2
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "read_own_writes",
+          "source": {
+            "id": "read_own_writes",
+            "expected": [
+              7,
+              0
+            ],
+            "qualified": true,
+            "actual": [
+              7,
+              0
+            ]
+          },
+          "bicdb": {
+            "id": "read_own_writes",
+            "expected": [
+              7,
+              0
+            ],
+            "qualified": true,
+            "actual": [
+              7,
+              0
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "rollback_removes_writes",
+          "source": {
+            "id": "rollback_removes_writes",
+            "expected": 0,
+            "qualified": true,
+            "actual": 0
+          },
+          "bicdb": {
+            "id": "rollback_removes_writes",
+            "expected": 0,
+            "qualified": true,
+            "actual": 0
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "default_visibility",
+          "source": {
+            "id": "default_visibility",
+            "expected": [
+              2,
+              3
+            ],
+            "qualified": true,
+            "actual": [
+              2,
+              3
+            ]
+          },
+          "bicdb": {
+            "id": "default_visibility",
+            "expected": [
+              2,
+              3
+            ],
+            "qualified": true,
+            "actual": [
+              2,
+              3
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "default_reused",
+          "source": {
+            "id": "default_reused",
+            "expected": [
+              3,
+              4
+            ],
+            "qualified": true,
+            "actual": [
+              3,
+              4
+            ]
+          },
+          "bicdb": {
+            "id": "default_reused",
+            "expected": [
+              3,
+              4
+            ],
+            "qualified": true,
+            "actual": [
+              3,
+              4
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "explicit_read_committed_override",
+          "source": {
+            "id": "explicit_read_committed_override",
+            "expected": [
+              4,
+              5
+            ],
+            "qualified": true,
+            "actual": [
+              4,
+              5
+            ]
+          },
+          "bicdb": {
+            "id": "explicit_read_committed_override",
+            "expected": [
+              4,
+              5
+            ],
+            "qualified": true,
+            "actual": [
+              4,
+              5
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "connection_defaults_independent",
+          "source": {
+            "id": "connection_defaults_independent",
+            "expected": [
+              5,
+              6
+            ],
+            "qualified": true,
+            "actual": [
+              5,
+              6
+            ]
+          },
+          "bicdb": {
+            "id": "connection_defaults_independent",
+            "expected": [
+              5,
+              6
+            ],
+            "qualified": true,
+            "actual": [
+              5,
+              6
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        },
+        {
+          "id": "restored_read_committed",
+          "source": {
+            "id": "restored_read_committed",
+            "expected": [
+              6,
+              7
+            ],
+            "qualified": true,
+            "actual": [
+              6,
+              7
+            ]
+          },
+          "bicdb": {
+            "id": "restored_read_committed",
+            "expected": [
+              6,
+              7
+            ],
+            "qualified": true,
+            "actual": [
+              6,
+              7
+            ]
+          },
+          "source_qualified": true,
+          "matched": true
+        }
+      ],
+      "total": 8,
+      "matched": 8,
+      "source_qualified": true,
+      "cleanup_errors": [],
+      "source_execution_error": null,
+      "target_execution_error": null,
+      "success": true
+    }
+  },
+  "cleanup_complete": true
+}

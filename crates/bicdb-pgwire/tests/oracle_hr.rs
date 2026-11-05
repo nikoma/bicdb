@@ -9,6 +9,225 @@ struct Running {
     port: u16,
 }
 
+async fn transaction_defaults_connect(
+    server: &Running,
+    profile: &str,
+) -> (tokio_postgres::Client, tokio::task::JoinHandle<()>) {
+    let mut config = tokio_postgres::Config::new();
+    config
+        .host("127.0.0.1")
+        .port(server.port)
+        .user("bicdb")
+        .dbname("bicdb");
+    if profile != "postgres" {
+        config.options("-c bicdb.sql_profile=oracle-preview-v1");
+    }
+    let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+    (
+        client,
+        tokio::spawn(async move {
+            connection.await.unwrap();
+        }),
+    )
+}
+
+async fn transaction_defaults_text(client: &tokio_postgres::Client, sql: &str) -> String {
+    client.query_one(sql, &[]).await.unwrap().get(0)
+}
+
+#[tokio::test]
+async fn session_transaction_defaults_preserve_visibility_and_explicit_overrides() {
+    for profile in ["postgres", "oracle-preview-v1"] {
+        let root = tempfile::tempdir().unwrap();
+        let server = Running::with_profile(root.path(), profile);
+        let (a, a_task) = transaction_defaults_connect(&server, profile).await;
+        let (b, b_task) = transaction_defaults_connect(&server, profile).await;
+        a.batch_execute("CREATE TABLE session_rows(id INTEGER PRIMARY KEY,v INTEGER);INSERT INTO session_rows VALUES(1,0)").await.unwrap();
+        let mode = if profile == "postgres" {
+            "read committed"
+        } else {
+            "serializable"
+        };
+        a.batch_execute(&format!(
+            "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL {mode}"
+        ))
+        .await
+        .unwrap();
+        assert_eq!(
+            transaction_defaults_text(&a, "SHOW TRANSACTION ISOLATION LEVEL").await,
+            mode
+        );
+        assert_eq!(
+            transaction_defaults_text(&b, "SHOW transaction_isolation").await,
+            "read committed"
+        );
+        a.batch_execute("BEGIN").await.unwrap();
+        let count = "SELECT CAST(COUNT(*) AS VARCHAR(30)) FROM session_rows";
+        assert_eq!(transaction_defaults_text(&a, count).await, "1");
+        b.batch_execute("INSERT INTO session_rows VALUES(2,0)")
+            .await
+            .unwrap();
+        assert_eq!(
+            transaction_defaults_text(&a, count).await,
+            if profile == "postgres" { "2" } else { "1" }
+        );
+        a.batch_execute("UPDATE session_rows SET v=7 WHERE id=1")
+            .await
+            .unwrap();
+        let value = "SELECT CAST(v AS VARCHAR(30)) FROM session_rows WHERE id=1";
+        assert_eq!(transaction_defaults_text(&a, value).await, "7");
+        assert_eq!(transaction_defaults_text(&b, value).await, "0");
+        a.batch_execute("COMMIT").await.unwrap();
+        assert_eq!(transaction_defaults_text(&b, value).await, "7");
+        a.batch_execute("BEGIN").await.unwrap();
+        assert_eq!(transaction_defaults_text(&a, count).await, "2");
+        b.batch_execute("INSERT INTO session_rows VALUES(3,0)")
+            .await
+            .unwrap();
+        assert_eq!(
+            transaction_defaults_text(&a, count).await,
+            if profile == "postgres" { "3" } else { "2" }
+        );
+        a.batch_execute("ROLLBACK;BEGIN ISOLATION LEVEL READ COMMITTED")
+            .await
+            .unwrap();
+        assert_eq!(transaction_defaults_text(&a, count).await, "3");
+        b.batch_execute("INSERT INTO session_rows VALUES(4,0)")
+            .await
+            .unwrap();
+        assert_eq!(transaction_defaults_text(&a, count).await, "4");
+        assert_eq!(
+            transaction_defaults_text(&a, "SHOW transaction_isolation").await,
+            "read committed"
+        );
+        a.batch_execute("COMMIT").await.unwrap();
+        assert_eq!(
+            transaction_defaults_text(&a, "SHOW transaction_isolation").await,
+            mode
+        );
+        if profile == "postgres" {
+            let error = a
+                .batch_execute(
+                    "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+                )
+                .await
+                .unwrap_err();
+            assert_eq!(error.code().unwrap().code(), "0A000");
+            assert_eq!(
+                transaction_defaults_text(&a, "SHOW default_transaction_isolation").await,
+                "read committed"
+            );
+        }
+        drop(a);
+        drop(b);
+        a_task.await.unwrap();
+        b_task.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn session_transaction_defaults_restore_with_savepoints_reset_and_chain() {
+    let root = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(root.path(), "oracle-preview-v1");
+    let (client, task) = transaction_defaults_connect(&server, "oracle-preview-v1").await;
+    client.batch_execute("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE;BEGIN ISOLATION LEVEL READ COMMITTED;SELECT 1 FROM DUAL;COMMIT AND CHAIN").await.unwrap();
+    assert_eq!(
+        transaction_defaults_text(&client, "SHOW transaction_isolation").await,
+        "read committed"
+    );
+    assert_eq!(
+        transaction_defaults_text(&client, "SHOW default_transaction_isolation").await,
+        "serializable"
+    );
+    client
+        .batch_execute("SET default_transaction_isolation='read committed';ROLLBACK AND CHAIN")
+        .await
+        .unwrap();
+    assert_eq!(
+        transaction_defaults_text(&client, "SHOW transaction_isolation").await,
+        "read committed"
+    );
+    assert_eq!(
+        transaction_defaults_text(&client, "SHOW default_transaction_isolation").await,
+        "serializable"
+    );
+    client.batch_execute("COMMIT;BEGIN;SAVEPOINT defaults_mark;SET default_transaction_isolation='read committed';ROLLBACK TO defaults_mark").await.unwrap();
+    assert_eq!(
+        transaction_defaults_text(&client, "SHOW default_transaction_isolation").await,
+        "serializable"
+    );
+    client
+        .batch_execute("SELECT 1 FROM DUAL;RESET ALL")
+        .await
+        .unwrap();
+    assert_eq!(
+        transaction_defaults_text(&client, "SHOW transaction_isolation").await,
+        "serializable"
+    );
+    assert_eq!(
+        transaction_defaults_text(&client, "SHOW default_transaction_isolation").await,
+        "read committed"
+    );
+    client.batch_execute("COMMIT AND CHAIN").await.unwrap();
+    assert_eq!(
+        transaction_defaults_text(&client, "SHOW transaction_isolation").await,
+        "serializable"
+    );
+    assert_eq!(
+        transaction_defaults_text(
+            &client,
+            "SELECT current_setting('transaction_isolation') FROM DUAL"
+        )
+        .await,
+        "serializable"
+    );
+    client.batch_execute("COMMIT").await.unwrap();
+    assert_eq!(
+        transaction_defaults_text(&client, "SHOW transaction_isolation").await,
+        "read committed"
+    );
+    drop(client);
+    task.await.unwrap();
+}
+
+#[tokio::test]
+async fn oracle_session_serializable_default_rejects_stale_updates() {
+    let root = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(root.path(), "oracle-preview-v1");
+    let (a, a_task) = transaction_defaults_connect(&server, "oracle-preview-v1").await;
+    let (b, b_task) = transaction_defaults_connect(&server, "oracle-preview-v1").await;
+    a.batch_execute("CREATE TABLE stale_session_rows(id INTEGER PRIMARY KEY,v INTEGER);INSERT INTO stale_session_rows VALUES(1,0);SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE;BEGIN").await.unwrap();
+    assert_eq!(
+        transaction_defaults_text(
+            &a,
+            "SELECT CAST(v AS VARCHAR(30)) FROM stale_session_rows WHERE id=1"
+        )
+        .await,
+        "0"
+    );
+    b.batch_execute("UPDATE stale_session_rows SET v=1 WHERE id=1")
+        .await
+        .unwrap();
+    let error = a
+        .batch_execute("UPDATE stale_session_rows SET v=2 WHERE id=1")
+        .await
+        .unwrap_err();
+    assert_eq!(error.code().unwrap().code(), "40001");
+    a.batch_execute("ROLLBACK").await.unwrap();
+    assert_eq!(
+        transaction_defaults_text(
+            &b,
+            "SELECT CAST(v AS VARCHAR(30)) FROM stale_session_rows WHERE id=1"
+        )
+        .await,
+        "1"
+    );
+    drop(a);
+    drop(b);
+    a_task.await.unwrap();
+    b_task.await.unwrap();
+}
+
 #[tokio::test]
 async fn prepared_requests_reject_batches_before_execution_and_preserve_routine_bodies() {
     for profile in ["postgres", "oracle-preview-v1"] {

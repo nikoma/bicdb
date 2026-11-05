@@ -17,6 +17,14 @@ Oracle reference comparisons establish the latter where available. Application
 workloads expose gaps and provide acceptance tests. Their identities must never
 select special engine behavior.
 
+The [connection-isolation checkpoint](evidence/session-transaction-defaults-2026-11-04/README.md)
+separates future connection defaults from active transaction modes, preserves
+transaction boundaries after batch setup statements, and checks Oracle-profile
+stale snapshot writes at the statement boundary. Independent behavior references
+pass 11/11 Oracle and 8/8 PostgreSQL controls. Native PostgreSQL SERIALIZABLE,
+broader Oracle ALTER SESSION and full isolation conformance remain unsupported
+or unqualified as described in that checkpoint.
+
 The [project issue checkpoint](evidence/idempiere-project-issue-2026-11-04/README.md)
 completes, posts and reverses a work-order stock issue through the original UI.
 All 77 selected observations pass, including the prior 67. Stock totals and

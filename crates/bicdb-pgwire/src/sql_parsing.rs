@@ -1132,7 +1132,10 @@ pub(crate) fn begin_buffered_transaction(
             "nested transactions are not supported".to_string(),
         ))
     } else {
-        let (tx, watermark) = {
+        let isolation = state
+            .session_state
+            .default_transaction_isolation(&server.config.sql_profile)?;
+        let (mut tx, watermark) = {
             let db = server.read_db()?;
             let watermark = *server.replica_read_watermark.lock().unwrap();
             (
@@ -1140,7 +1143,15 @@ pub(crate) fn begin_buffered_transaction(
                 watermark,
             )
         };
+        if isolation == "serializable" {
+            tx.set_snapshot_isolation(true, state.last_commit_seq)?;
+            tx.set_statement_write_conflict_check(true)?;
+        }
         state.session_state.begin_transaction();
+        state
+            .session_state
+            .set_transaction_isolation_label(isolation)?;
+        state.tx_fixed_snapshot = isolation == "serializable";
         state.replica_tx_watermark = watermark;
         state.in_transaction = true;
         state.failed_transaction = false;

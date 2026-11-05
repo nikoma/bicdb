@@ -812,6 +812,7 @@ impl BicDb {
             // provide a more exact mutation boundary.
             applied_snapshot: applied_watermark,
             observed_record_versions: Mutex::new(FxHashMap::default()),
+            statement_write_conflicts: false,
             state: TxState::Pending,
             writes: Vec::new(),
             write_index: FxHashMap::default(),

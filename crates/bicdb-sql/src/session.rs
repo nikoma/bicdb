@@ -19,6 +19,7 @@ mod raw_index_fts;
 mod row_assignments;
 mod row_triggers;
 mod set_functions;
+mod transaction_defaults;
 pub(crate) mod txn_update;
 // Glue import: bring every crate-root item (including the root's private
 // imports and the other split modules' re-exports) into scope so the moved
@@ -1541,6 +1542,7 @@ impl GucAssignmentTargets {
             SESSION_AUTHORIZATION_GUC,
             CURRENT_ROLE_GUC,
             INITIAL_SESSION_AUTHORIZATION_GUC,
+            "transaction_isolation",
         ];
         Self {
             gucs: local_restore
@@ -2516,10 +2518,16 @@ impl<'db> SqlSession<'db> {
         if self.row_routine_call {
             return Err(row_routine_write_error());
         }
-        Ok(self.db_ref().begin_transaction_after(
-            self.snapshot_floor
-                .max(crate::statement_context::latest_independent_commit()),
-        )?)
+        let isolation = self.default_transaction_isolation()?;
+        let floor = self
+            .snapshot_floor
+            .max(crate::statement_context::latest_independent_commit());
+        let mut tx = self.db_ref().begin_transaction_after(floor)?;
+        if isolation == "serializable" {
+            tx.set_snapshot_isolation(true, floor)?;
+            tx.set_statement_write_conflict_check(true)?;
+        }
+        Ok(tx)
     }
 
     /// The transaction this session reads through: its own, or for a per-row
@@ -3540,6 +3548,7 @@ impl<'db> SqlSession<'db> {
                     ));
                 }
                 self.tx = Some(self.begin_session_transaction()?);
+                self.set_transaction_isolation_label(self.default_transaction_isolation()?)?;
                 self.apply_transaction_modes(modes)?;
                 Ok(SqlResult::command("BEGIN"))
             }
@@ -4361,16 +4370,17 @@ impl<'db> SqlSession<'db> {
     fn apply_transaction_modes(&mut self, modes: &[TransactionMode]) -> Result<()> {
         let oracle_preview = oracle::preview_routine_language_enabled(self.db_ref())?;
         validate_profile_transaction_modes(modes, oracle_preview)?;
-        let fixed = modes.iter().find_map(|mode| match mode {
-            TransactionMode::IsolationLevel(level) => Some(matches!(
-                level,
-                TransactionIsolationLevel::RepeatableRead | TransactionIsolationLevel::Serializable
-            )),
+        let level = modes.iter().find_map(|mode| match mode {
+            TransactionMode::IsolationLevel(level) => Some(level),
             _ => None,
         });
-        let Some(fixed) = fixed else {
+        let Some(level) = level else {
             return Ok(());
         };
+        let fixed = matches!(
+            level,
+            TransactionIsolationLevel::RepeatableRead | TransactionIsolationLevel::Serializable
+        );
         if oracle_preview && self.tx.is_none() {
             self.tx = Some(self.begin_session_transaction()?);
         }
@@ -4386,6 +4396,8 @@ impl<'db> SqlSession<'db> {
                 ));
             }
             tx.set_snapshot_isolation(fixed, floor)?;
+            tx.set_statement_write_conflict_check(oracle_preview && fixed)?;
+            self.set_transaction_isolation_label(transaction_defaults::isolation_label(level))?;
         }
         Ok(())
     }
@@ -4393,14 +4405,20 @@ impl<'db> SqlSession<'db> {
     pub(crate) fn execute_set(&mut self, set: &Set) -> Result<SqlResult> {
         match set {
             Set::SetTransaction {
-                modes, snapshot, ..
+                modes,
+                snapshot,
+                session,
             } => {
                 if snapshot.is_some() {
                     return Err(SqlError::Unsupported(
                         "transaction snapshots are not supported".to_string(),
                     ));
                 }
-                self.apply_transaction_modes(modes)?;
+                if *session {
+                    self.set_session_transaction_modes(modes)?;
+                } else {
+                    self.apply_transaction_modes(modes)?;
+                }
             }
             Set::SingleAssignment {
                 scope,
@@ -4901,6 +4919,7 @@ impl<'db> SqlSession<'db> {
                 "server_version",
                 "server_version_num",
                 "bicdb.sql_profile",
+                "transaction_isolation",
             ];
             Arc::make_mut(&mut self.session_gucs).retain(|key, _| {
                 preserved.contains(&key.as_str())
@@ -4940,6 +4959,7 @@ impl<'db> SqlSession<'db> {
             | "datestyle"
             | "default_table_access_method"
             | "default_tablespace"
+            | "default_transaction_isolation"
             | "extra_float_digits"
             | "bytea_output"
             | "standard_conforming_strings"

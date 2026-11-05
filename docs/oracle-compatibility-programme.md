@@ -801,3 +801,14 @@ exercise both engines with independent expectations. Oracle's explicit
 unchanged-key assignment rule and older-writer fencing remain open before
 application relationship migration; no source foreign keys are counted as
 installed by this checkpoint.
+
+
+## Oracle foreign-key assignment enforcement
+
+The [assignment and writer-fence checkpoint](evidence/oracle-foreign-key-assignments-2026-11-05/README.md)
+implements explicit unchanged-key rechecks for Oracle-preview UPDATE, preserves
+PostgreSQL exemptions, and advances the durable Oracle profile for the new
+contract. The reference fixture includes tuple, composite and partially NULL
+relationships; the executable upgrade fixture checks legacy values and old
+server rejection. These checks remain distinct from the pending import of all
+application relationships and their business-workflow qualification.

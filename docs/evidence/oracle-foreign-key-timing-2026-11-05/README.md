@@ -1,5 +1,9 @@
 # Selected foreign-key timing contracts
 
+The [assignment follow-up](../oracle-foreign-key-assignments-2026-11-05/README.md)
+resolves the Oracle mismatch recorded below and adds actual old-server rejection
+evidence. This page retains the earlier candidate results.
+
 Oracle-preview lowering preserves foreign-key grammar while continuing to fold
 ordinary Oracle identifiers, including columns named `DEFERRED` or `DEFERRABLE`.
 Complete `SET CONSTRAINTS` statements bypass the unrelated session-variable
@@ -22,7 +26,7 @@ are recorded without claiming error-number equivalence. See its
 This checkpoint does not qualify full foreign-key conformance or migrate
 application relationships. In particular, Oracle rechecks an explicitly assigned
 unchanged foreign-key value on a legacy orphan under `ENABLE NOVALIDATE`;
-PostgreSQL skips that check. The Oracle-preview implementation still needs that
+PostgreSQL skips that check. At this checkpoint, the Oracle-preview implementation still needed that
 assignment-sensitive rule, with a writer compatibility fence. Unrelated-column
 updates must continue to tolerate pre-existing orphans.
 

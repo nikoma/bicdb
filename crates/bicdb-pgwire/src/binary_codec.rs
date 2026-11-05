@@ -2071,19 +2071,64 @@ pub(crate) fn startup_session_gucs(params: &HashMap<String, String>) -> HashMap<
         return gucs;
     };
 
-    let mut parts = options.split_whitespace().peekable();
+    // libpq startup options use backslash escaping, rather than shell quotes.
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut chars = options.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            if let Some(escaped) = chars.next() {
+                word.push(escaped);
+            }
+        } else if ch.is_ascii_whitespace() {
+            if !word.is_empty() {
+                words.push(std::mem::take(&mut word));
+            }
+        } else {
+            word.push(ch);
+        }
+    }
+    if !word.is_empty() {
+        words.push(word);
+    }
+    let mut parts = words.iter();
     while let Some(part) = parts.next() {
-        if let Some(value) = part.strip_prefix("-csearch_path=") {
-            gucs.insert("search_path".to_string(), value.replace("%2C", ","));
+        let assignment = if part == "-c" {
+            parts.next().map(String::as_str)
+        } else {
+            part.strip_prefix("-c")
+        };
+        let Some((key, value)) = assignment.and_then(|value| value.split_once('=')) else {
+            continue;
+        };
+        let key = key.to_ascii_lowercase();
+        if key == "search_path" {
+            gucs.insert(key, value.replace("%2C", ","));
             continue;
         }
-        if part == "-c" {
-            if let Some(value) = parts
-                .next()
-                .and_then(|part| part.strip_prefix("search_path="))
-            {
-                gucs.insert("search_path".to_string(), value.replace("%2C", ","));
-            }
+        // Native/Carrier identity and host controls are never client options.
+        // Ordinary application namespaces may carry lookup keys or preferences.
+        let namespace = key.split('.').next().unwrap_or("");
+        if key.len() <= 255
+            && value.len() <= 16384
+            && gucs.len() < 128
+            && key.contains('.')
+            && !matches!(
+                namespace,
+                "bicdb" | "carrier" | "pg_catalog" | "information_schema"
+            )
+            && !namespace.starts_with("pg_")
+            && key.split('.').all(|part| {
+                !part.is_empty()
+                    && part
+                        .bytes()
+                        .next()
+                        .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+                    && part.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            })
+            && !bicdb_sql::is_protected_security_setting(&key)
+        {
+            gucs.insert(key, value.to_string());
         }
     }
     gucs

@@ -4,6 +4,46 @@ use super::*;
 #[allow(unused_imports)]
 use crate::*;
 
+#[test]
+fn startup_custom_settings_preserve_values_and_libpq_backslash_escapes() {
+    let params=HashMap::from([("options".into(),
+        r"-c walknorth.phi_lookup_hmac_key=synthetic-key -capp.label=hello\ world -c app.path=C:\\fixture -c app.unicode=食事 -c search_path=public%2Ccare".into())]);
+    let settings = startup_session_gucs(&params);
+    assert_eq!(
+        settings
+            .get("walknorth.phi_lookup_hmac_key")
+            .map(String::as_str),
+        Some("synthetic-key")
+    );
+    assert_eq!(
+        settings.get("app.label").map(String::as_str),
+        Some("hello world")
+    );
+    assert_eq!(
+        settings.get("app.path").map(String::as_str),
+        Some(r"C:\fixture")
+    );
+    assert_eq!(
+        settings.get("app.unicode").map(String::as_str),
+        Some("食事")
+    );
+    assert_eq!(
+        settings.get("search_path").map(String::as_str),
+        Some("public,care")
+    );
+}
+
+#[test]
+fn startup_custom_settings_never_import_native_or_carrier_authority() {
+    let params=HashMap::from([("options".into(),
+        "-c app.safe=kept -c bicdb.rls_check_as=owner -c carrier.current_tenant=other -c bicdb.postgres_version_banner=on -c role=bicdb -c pg_catalog.flag=on".into())]);
+    let settings = startup_session_gucs(&params);
+    assert_eq!(
+        settings,
+        HashMap::from([("app.safe".into(), "kept".into())])
+    );
+}
+
 pub(crate) fn validate_username(username: &str) -> Result<()> {
     if username.is_empty()
         || !username

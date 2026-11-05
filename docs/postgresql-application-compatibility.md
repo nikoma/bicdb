@@ -1,5 +1,15 @@
 # PostgreSQL application compatibility fixes (2026-10)
 
+Pgwire startup `options` accepts ordinary application settings in dotted,
+unreserved namespaces through both `-c name=value` and `-cname=value`. Backslash
+escapes preserve spaces and backslashes; values may contain Unicode. Settings
+are visible to stored functions and survive transaction-local override rollback,
+including lookup keys supplied through `PGOPTIONS`. Native identity, Carrier
+authority and host/system namespaces remain excluded from client startup
+settings. Existing `search_path` handling is retained. Unit and protocol
+regressions cover these boundaries; PostgreSQL controls agree on application
+setting values and escaping.
+
 Found by loading a production PostgreSQL 16 application database (the WeWoBo owner API: 157 tables,
 row-level security, PL/pgSQL, views from `pg_dump`) into BicDB and running the application against it.
 Each item below now behaves as in PostgreSQL; regression tests are in

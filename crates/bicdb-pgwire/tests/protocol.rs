@@ -18,6 +18,48 @@ use sqlx::{Connection as _, Row as _};
 type HmacSha256 = Hmac<Sha256>;
 
 #[tokio::test]
+async fn startup_custom_setting_reaches_stored_functions_without_changing_identity() {
+    let root = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = PgWireServer::open(root.path(), PgWireConfig::default()).unwrap();
+    let serving = server.clone();
+    let thread = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+    let (client,connection)=tokio_postgres::Config::new().host("127.0.0.1").port(address.port()).user("bicdb").dbname("bicdb")
+        .options("-c walknorth.phi_lookup_hmac_key=synthetic-startup-key -c carrier.current_tenant=forged -c bicdb.rls_check_as=forged")
+        .connect(tokio_postgres::NoTls).await.unwrap();
+    let task = tokio::spawn(async move {
+        let _ = connection.await;
+    });
+    client.batch_execute("CREATE FUNCTION read_startup_key() RETURNS TEXT LANGUAGE plpgsql AS $$ BEGIN RETURN current_setting('walknorth.phi_lookup_hmac_key',true); END $$").await.unwrap();
+    let row=client.query_one("SELECT read_startup_key(),current_setting('carrier.current_tenant',true),current_setting('bicdb.rls_check_as',true)",&[]).await.unwrap();
+    assert_eq!(
+        row.get::<_, Option<String>>(0).as_deref(),
+        Some("synthetic-startup-key")
+    );
+    assert_ne!(row.get::<_, Option<String>>(1).as_deref(), Some("forged"));
+    assert_ne!(row.get::<_, Option<String>>(2).as_deref(), Some("forged"));
+    client
+        .batch_execute(
+            "BEGIN; SELECT set_config('walknorth.phi_lookup_hmac_key','temporary',true); ROLLBACK",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        client
+            .query_one("SELECT read_startup_key()", &[])
+            .await
+            .unwrap()
+            .get::<_, String>(0),
+        "synthetic-startup-key"
+    );
+    drop(client);
+    server.request_shutdown();
+    task.await.unwrap();
+    thread.join().unwrap().unwrap();
+}
+
+#[tokio::test]
 async fn parameterized_expiry_interval_uses_a_numeric_multiplier() {
     let root = tempfile::tempdir().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

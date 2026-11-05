@@ -8,9 +8,12 @@ schema; one foreign key has multiple columns. The [metadata inventory](source-st
 contains counts only, without source rows or connection configuration.
 
 The target still has zero migrated foreign keys. This inventory does not
-qualify referential integrity. Native durable ForeignKey metadata currently
-has no constraint-timing fields, so importing these declarations requires
-transaction-timing work as well as migration tooling.
+qualify referential integrity. At this November 2 inventory checkpoint, native
+ForeignKey metadata lacked constraint-timing fields. Native deferred constraints
+have since been implemented; the [November 5 reference checkpoint](../oracle-foreign-key-timing-2026-11-05/README.md)
+tracks Oracle grammar, timing catalogs and independently observed differences.
+Importing all source relationships still requires the remaining semantic,
+writer-compatibility and migration acceptance below.
 
 Required acceptance before counting the migration complete:
 

@@ -790,3 +790,14 @@ BLOB migration phase. Accounting-entry assertions come from the unmodified
 upstream test bundle. This does not qualify foreign-key enforcement, which has
 not yet been installed for the exported application, or the complete application.
 The invoice attempt was resource-interrupted before Java and is not counted.
+
+
+## Selected deferred foreign-key reference contracts
+
+The [foreign-key timing checkpoint](evidence/oracle-foreign-key-timing-2026-11-05/README.md)
+tracks Oracle grammar, schema-qualified mode changes, standard timing catalogs
+and separate PostgreSQL/Oracle non-deferrable mode rules. Public reference cases
+exercise both engines with independent expectations. Oracle's explicit
+unchanged-key assignment rule and older-writer fencing remain open before
+application relationship migration; no source foreign keys are counted as
+installed by this checkpoint.

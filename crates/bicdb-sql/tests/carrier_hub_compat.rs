@@ -13,6 +13,51 @@ fn session_rows(session: &mut SqlSession<'_>, sql: &str) -> Vec<Vec<SqlValue>> {
 }
 
 #[test]
+fn scalar_derived_commands_write_once_in_the_owning_statement_transaction() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE commands(id INT PRIMARY KEY); CREATE FUNCTION issue_command(p_id INT) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN INSERT INTO commands VALUES(p_id); RETURN jsonb_build_object('id',p_id); END $$").unwrap();
+    assert_eq!(session_rows(&mut session,"SELECT (r->>'id')::int AS id,r->>'error' AS error FROM (SELECT issue_command(1) AS r) q"),vec![vec![SqlValue::Int(1),SqlValue::Null]]);
+    assert_eq!(
+        session_rows(&mut session, "SELECT count(*) FROM commands"),
+        vec![vec![SqlValue::Int(1)]]
+    );
+    session.execute("BEGIN").unwrap();
+    session
+        .execute("SELECT r->>'id' FROM (SELECT issue_command(2) AS r) q")
+        .unwrap();
+    session.execute("ROLLBACK").unwrap();
+    assert_eq!(
+        session_rows(&mut session, "SELECT count(*) FROM commands"),
+        vec![vec![SqlValue::Int(1)]]
+    );
+    assert!(session
+        .execute("SELECT (r->>'id')::int/0 FROM (SELECT issue_command(3) AS r) q")
+        .is_err());
+    assert_eq!(
+        session_rows(&mut session, "SELECT count(*) FROM commands"),
+        vec![vec![SqlValue::Int(1)]]
+    );
+    session
+        .execute("SELECT r FROM (SELECT issue_command(4) AS r) q LIMIT 0")
+        .unwrap();
+    assert_eq!(
+        session_rows(&mut session, "SELECT count(*) FROM commands"),
+        vec![vec![SqlValue::Int(1)]]
+    );
+    session.execute("CREATE ROLE command_reader;REVOKE ALL ON FUNCTION issue_command(INT) FROM PUBLIC; SET ROLE command_reader").unwrap();
+    assert!(session
+        .execute("SELECT r FROM (SELECT issue_command(5) AS r) q")
+        .is_err());
+    session.execute("RESET ROLE").unwrap();
+    assert_eq!(
+        session_rows(&mut session, "SELECT count(*) FROM commands"),
+        vec![vec![SqlValue::Int(1)]]
+    );
+}
+
+#[test]
 fn named_user_exception_handlers_allow_success_and_match_only_their_sqlstates() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

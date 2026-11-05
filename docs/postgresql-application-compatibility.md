@@ -98,3 +98,15 @@ objects, arrays, numbers, strings, JSON null and booleans in text and binary
 parameter formats. It fails before the fix; all 179 protocol tests pass after
 restoration. This complements stored-function argument description; it does not
 claim that the remaining hosted EHR goal and nested-query failures are resolved.
+
+Unfiltered scalar command wrappers of the form `SELECT ... FROM (SELECT f(...)
+AS result) q` execute their inner command once in the owning session rather than
+the read-only per-row host. Its returned fields retain their logical types and
+the complete outer statement owns transaction effects, so an outer projection
+error rolls back the command. Explicit transaction rollback, denied routine
+EXECUTE and an outer LIMIT 0 are covered. The new regression fails with the
+read-only-host error before the fix; all 36 Carrier compatibility and 8 type tests
+pass after restoration. Joins, lateral/correlated sources, filtered wrappers,
+nonzero outer row-count clauses and projection set-returning sources retain their
+existing execution path. This adds the scalar command shape used by the EHR;
+the complete clinical workflow and deployment are qualified separately.

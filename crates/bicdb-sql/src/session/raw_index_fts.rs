@@ -964,6 +964,9 @@ impl<'db> SqlSession<'db> {
         if select.from.is_empty() {
             return self.execute_session_select_without_from(select, query);
         }
+        if let Some(result) = self.try_execute_scalar_derived_command(query)? {
+            return Ok(result);
+        }
         if let Some(result) = self.try_execute_set_function_query(query, BTreeMap::new())? {
             return Ok(result);
         }

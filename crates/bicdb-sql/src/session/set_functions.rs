@@ -60,6 +60,105 @@ fn plpgsql_table_call(
 }
 
 impl<'db> SqlSession<'db> {
+    /// An unfiltered single-row command wrapper belongs to this session, not
+    /// the read-only per-row routine host. Materialize its scalar subquery once
+    /// before projecting its returned fields. The enclosing statement still
+    /// owns commit/rollback, routine privileges and SECURITY DEFINER behavior.
+    pub(crate) fn try_execute_scalar_derived_command(
+        &mut self,
+        query: &Query,
+    ) -> Result<Option<SqlResult>> {
+        if self.row_routine_call || query.with.is_some() {
+            return Ok(None);
+        }
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            return Ok(None);
+        };
+        if select.selection.is_some()
+            || select.prewhere.is_some()
+            || select.having.is_some()
+            || select.qualify.is_some()
+            || select.top.is_some()
+            || !query.pipe_operators.is_empty()
+        {
+            return Ok(None);
+        }
+        let [from] = select.from.as_slice() else {
+            return Ok(None);
+        };
+        if !from.joins.is_empty() {
+            return Ok(None);
+        }
+        let TableFactor::Derived {
+            lateral: false,
+            subquery,
+            alias: Some(alias),
+            sample: None,
+        } = &from.relation
+        else {
+            return Ok(None);
+        };
+        let SetExpr::Select(inner) = subquery.body.as_ref() else {
+            return Ok(None);
+        };
+        if !inner.from.is_empty()
+            || subquery.with.is_some()
+            || !array_projection_set_returning_calls(&inner.projection)?.is_empty()
+            || json_projection_set_returning_call(&inner.projection)?.is_some()
+            || !self.query_has_postgres_scalar_routines(subquery)?
+        {
+            return Ok(None);
+        }
+        let zero_limit = order_by_keep_bound(query)? == Some(0);
+        if query.limit_clause.is_some() && !zero_limit {
+            return Ok(None);
+        }
+        let result = if zero_limit {
+            // Resolve the inner projection's schema with the outer zero limit;
+            // scalar commands must not run for rows the caller never requests.
+            self.execute_session_select_without_from(inner, query)?
+        } else {
+            self.execute_query(subquery)?
+        };
+        let source = query.to_string().to_ascii_lowercase();
+        let mut name = "__bicdb_scalar_command".to_string();
+        while source.contains(&name) {
+            name.push('_');
+        }
+        let columns = cte_columns(&name, &[], &result.columns)?;
+        let cte = CteResult::new(name.clone(), columns, result.rows)
+            .with_column_types(result.column_types);
+        let mut projected = query.clone();
+        let SetExpr::Select(outer) = projected.body.as_mut() else {
+            unreachable!();
+        };
+        outer.from[0].relation = TableFactor::Table {
+            name: ObjectName(vec![sqlparser::ast::ObjectNamePart::Identifier(
+                Ident::new(&name),
+            )]),
+            alias: Some(alias.clone()),
+            args: None,
+            with_hints: vec![],
+            version: None,
+            with_ordinality: false,
+            partitions: vec![],
+            json_path: None,
+            sample: None,
+            index_hints: vec![],
+        };
+        // The projection is a temporary tree; its node addresses must never
+        // enter type/plan memos belonging to persistent stored routine IR.
+        let _scope = crate::eval::suspend_expr_type_scope();
+        let previous_ir = self.current_routine_ir.take();
+        let previous_owned = std::mem::replace(&mut self.ir_owned_statement, false);
+        let result = self
+            .sql_engine_with_ctes(BTreeMap::from([(cte_key(&name), cte)]))
+            .execute_query(&projected);
+        self.ir_owned_statement = previous_owned;
+        self.current_routine_ir = previous_ir;
+        result.map(Some)
+    }
+
     /// PostgreSQL scalar routines may write, including through another routine
     /// or dynamic SQL. Their effects belong to the complete calling statement,
     /// never to an independently committed function invocation.

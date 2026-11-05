@@ -12,6 +12,32 @@ fn declaration_name(name: &str) -> String {
 }
 
 #[test]
+fn stored_function_parameter_types_follow_the_declared_signature_without_running_the_body() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    {
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE SCHEMA clinical; CREATE TABLE calls(n INT); CREATE FUNCTION clinical.command(patient UUID,previous UUID,version BIGINT,title TEXT,why TEXT,target_text TEXT,status TEXT,day DATE,program TEXT,priority TEXT,owner TEXT,target JSONB,focus BOOLEAN) RETURNS JSONB LANGUAGE plpgsql AS $$ BEGIN INSERT INTO calls VALUES(1); RETURN jsonb_build_object('record_id',patient,'kind',jsonb_typeof(target)); END $$").unwrap();
+    }
+    let query="SELECT (r->>'record_id')::uuid AS record_id,r->>'error' AS error FROM (SELECT clinical.command($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) AS r) q";
+    let expected = [
+        "uuid", "uuid", "int8", "text", "text", "text", "text", "date", "text", "text", "text",
+        "jsonb", "bool",
+    ]
+    .into_iter()
+    .map(|ty| Some(ty.into()))
+    .collect::<Vec<_>>();
+    assert_eq!(infer_parameter_types(&db, query).unwrap(), expected);
+    assert_eq!(
+        SqlSession::new(&mut db)
+            .execute("SELECT count(*) FROM calls")
+            .unwrap()
+            .rows[0][0],
+        SqlValue::Int(0)
+    );
+}
+
+#[test]
 fn registry_catalog_attribute_and_planner_types_agree_exhaustively() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

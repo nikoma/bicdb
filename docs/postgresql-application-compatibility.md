@@ -80,3 +80,13 @@ An empty input remains zero rows and CRLF blank records remain real rows. The
 original wire regression drops a row; all 17 focused COPY protocol checks pass
 after the fix. This was exposed by the EHR transfer's count/hash reconciliation,
 which refused the incomplete target instead of admitting it.
+
+Parameter description for positional calls to stored functions reads the declared
+input types, including calls inside a derived table. It does not compile or
+execute the function body to discover those types. This preserves UUID, bigint,
+date, JSONB and boolean parameter types in the EHR's 13-argument goal command;
+previously every argument was described as unknown. The focused regression fails
+without the fix and verifies that a volatile body's insert never runs during
+description. All 8 type-consistency and 35 Carrier compatibility tests pass.
+This is query-metadata qualification; the full hosted EHR goal workflow is
+qualified separately and is not implied by these unit results.

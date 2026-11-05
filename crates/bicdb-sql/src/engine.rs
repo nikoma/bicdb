@@ -1117,6 +1117,44 @@ impl ParameterTypeResolver<'_, '_> {
             }
             _ => None,
         };
+        if argument_type.is_none() {
+            // Describe ordinary stored calls from their declarations. Reading
+            // metadata must not compile or execute a possibly volatile body.
+            let positional = match &function.args {
+                FunctionArguments::List(list) => list
+                    .args
+                    .iter()
+                    .all(|arg| matches!(arg, FunctionArg::Unnamed(FunctionArgExpr::Expr(_)))),
+                _ => false,
+            };
+            if positional {
+                if let Ok(Some(routine)) =
+                    load_routine(self.engine.db_ref(), RoutineKind::Function, &name)
+                {
+                    if let Ok(params) = parse_routine_params(&routine.args) {
+                        let inputs = params
+                            .iter()
+                            .filter(|param| param.mode != RoutineArgMode::Out)
+                            .collect::<Vec<_>>();
+                        if args.len() <= inputs.len()
+                            && inputs
+                                .iter()
+                                .skip(args.len())
+                                .all(|param| param.default_expr.is_some())
+                        {
+                            for (arg, param) in args.iter().zip(inputs) {
+                                self.expr(
+                                    arg,
+                                    env,
+                                    param.type_schema.as_ref().map(|kind| kind.pg_type.as_str()),
+                                );
+                            }
+                            return;
+                        }
+                    }
+                }
+            }
+        }
         for arg in args {
             self.expr(&arg, env, argument_type);
         }

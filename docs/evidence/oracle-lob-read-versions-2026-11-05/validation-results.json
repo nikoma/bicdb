@@ -76,5 +76,83 @@
   "application_replaced": false,
   "candidate_deployed": false,
   "published_release": false,
-  "programme_complete": false
+  "programme_complete": false,
+  "implementation_commit": "f0e3e79",
+  "merged_code_commit": "1d1eeafa0a2697fcda8a65ecd9a0f51be17a3f91",
+  "post_merge_checks": [
+    {
+      "name": "type-inference",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "type_consistency",
+        "stored_function_parameter_types_follow_the_declared_signature",
+        "--",
+        "--test-threads=1"
+      ],
+      "status": "passed",
+      "returncode": 0,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.50s"
+      ]
+    },
+    {
+      "name": "json-bind",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "protocol",
+        "prepared_json_parameters_keep_their_types_without_query_casts",
+        "--",
+        "--test-threads=1"
+      ],
+      "status": "passed",
+      "returncode": 0,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 178 filtered out; finished in 0.34s"
+      ]
+    },
+    {
+      "name": "copy-blank",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "protocol",
+        "copy_single_column_empty_records_preserve_text_csv_and_empty_headers",
+        "--",
+        "--test-threads=1"
+      ],
+      "status": "passed",
+      "returncode": 0,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 178 filtered out; finished in 1.32s"
+      ]
+    },
+    {
+      "name": "workspace",
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "--workspace",
+        "--all-targets"
+      ],
+      "status": "passed",
+      "returncode": 0,
+      "summaries": []
+    }
+  ],
+  "history_and_session_sources_unchanged_by_merge": true
 }

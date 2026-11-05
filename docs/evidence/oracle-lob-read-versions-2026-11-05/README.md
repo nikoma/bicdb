@@ -44,3 +44,8 @@ checks passed. One broader run was stopped by its memory guard; its completed
 Oracle suite was retained and the remaining protocol/workspace checks resumed.
 Native history tests disable fsync and establish transaction/read-version
 behavior, not a durable LOB storage contract.
+
+A concurrent upstream merge added COPY, prepared JSON and stored-function
+parameter-inference fixes. The combined source passed those three targeted
+regressions and workspace/all-target checks. The history/session implementation
+files were unchanged by that merge; the full 177-test protocol run predates it.

@@ -639,6 +639,31 @@ pub(crate) fn execute_server_virtual_query_for_normalized(
         ));
     }
     match normalized {
+        "select * from bicdb_server_configuration" => {
+            let rows = if let Some(caller) = caller {
+                if !server.user_is_admin(caller.user) {
+                    return Err(PgWireError::BicDb(BicDbError::Authorization(
+                        "server configuration requires a superuser".into(),
+                    )));
+                }
+                let snapshot = server
+                    .config
+                    .startup_configuration
+                    .as_ref()
+                    .ok_or_else(|| {
+                        PgWireError::Sql(bicdb_sql::SqlError::Unsupported(
+                            "this host does not publish a startup configuration snapshot".into(),
+                        ))
+                    })?;
+                vec![vec![SqlValue::String(snapshot.to_string())]]
+            } else {
+                Vec::new()
+            };
+            Ok(Some(
+                SqlResult::new(vec!["configuration".into()], rows)
+                    .with_column_types(vec![Some("text".into())]),
+            ))
+        }
         "select sum(xact_commit + xact_rollback) from pg_stat_database"
         | "select sum(xact_commit + xact_rollback) from pg_catalog.pg_stat_database" => {
             let stats = server.stats_snapshot();
@@ -1358,6 +1383,7 @@ pub(crate) fn is_server_status_query_normalized(normalized: &str) -> bool {
             | "select sum(xact_commit + xact_rollback) from pg_catalog.pg_stat_database"
             | "select * from bicdb_server_connections"
             | "select * from bicdb_server_stats"
+            | "select * from bicdb_server_configuration"
             | "select * from bicdb_ha_status"
             | "select * from bicdb_connectors"
             | "select * from bicdb_region"

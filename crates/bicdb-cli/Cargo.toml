@@ -52,6 +52,11 @@ serde_json.workspace = true
 sha2.workspace = true
 tokio.workspace = true
 tokio-postgres = "0.7.18"
+toml = "0.9.12"
+rustls.workspace = true
+rustls-pemfile.workspace = true
+rustls-native-certs = "0.8"
+tokio-postgres-rustls = "0.14"
 
 [dev-dependencies]
 osmpbfreader.workspace = true

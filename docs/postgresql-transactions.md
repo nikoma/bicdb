@@ -3,9 +3,9 @@
 BicDB supports single-node transactions through the SQL engine and PostgreSQL
 wire server. The implemented isolation behavior is `READ COMMITTED` style:
 statements never see uncommitted writes from other transactions, and later
-statements can see rows committed by other transactions. application mode relies on
-this visibility plus optimistic conflict detection; it does not require or
-claim PostgreSQL `REPEATABLE READ` or `SERIALIZABLE`.
+statements can see rows committed by other transactions. Explicit
+`REPEATABLE READ READ ONLY` transactions use a fixed snapshot. PostgreSQL
+`SERIALIZABLE` and read-write repeatable read are not supported.
 
 Accepted PostgreSQL isolation command forms:
 
@@ -16,20 +16,22 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED READ WRITE;
 START TRANSACTION ISOLATION LEVEL READ COMMITTED;
 ```
 
-`READ ONLY` and `READ WRITE` transaction access modes are parsed for client
+`BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY` is also accepted.
+
+Outside that snapshot selection, `READ ONLY` and `READ WRITE` access modes are parsed for client
 compatibility and currently do not change execution behavior.
 
 Unsupported isolation levels are rejected instead of being silently accepted:
 
-- `REPEATABLE READ`
+- `REPEATABLE READ READ WRITE`
 - `SERIALIZABLE`
 - `READ UNCOMMITTED`
 - `SNAPSHOT`
 - transaction snapshots
 
 These return SQLSTATE `0A000` through PostgreSQL-shaped error responses on the
-wire protocol. BicDB does not implement serializable validation or repeatable
-read snapshots.
+wire protocol. Native engine and Oracle-profile isolation capabilities do not
+imply PostgreSQL SERIALIZABLE/SSI support.
 
 Concurrent writes use per-record locks and optimistic conflict checks. A
 transaction conflict is reported as SQLSTATE `40001`; the application must retry

@@ -41,6 +41,9 @@ pub use log_archive::LogArchiveConfig;
 mod tls_binding;
 mod validation;
 use rustc_hash::{FxHashMap, FxHashSet};
+mod database_options;
+pub use database_options::ServerDatabaseOptions;
+
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
@@ -363,6 +366,10 @@ pub struct PgWireConfig {
     pub max_live_subscriptions_per_connection: usize,
     /// Connectors to external messaging systems (`--connectors FILE`).
     pub connectors: Option<ConnectorsConfig>,
+    /// Stable engine tuning applied before opening each served database.
+    pub database_options: ServerDatabaseOptions,
+    /// Immutable, already-redacted CLI startup snapshot for administrator inspection.
+    pub startup_configuration: Option<Arc<serde_json::Value>>,
 }
 
 impl Default for PgWireConfig {
@@ -442,6 +449,8 @@ impl Default for PgWireConfig {
             metrics_listen: None,
             max_live_subscriptions_per_connection: 1_000,
             connectors: None,
+            database_options: ServerDatabaseOptions::default(),
+            startup_configuration: None,
         }
     }
 }
@@ -463,7 +472,9 @@ fn default_max_queued_queries() -> usize {
 
 fn database_config_for_server(path: &Path, config: &PgWireConfig) -> Result<DbConfig> {
     // The server checkpoints from its own background worker (BICDB_AUTO_COMPACT_WAL_MB).
-    let mut db_config = DbConfig::default()
+    let mut base_config = DbConfig::default();
+    config.database_options.apply(&mut base_config);
+    let mut db_config = base_config
         .with_storage_mode(bicdb_core::storage_mode(path)?)
         .with_auto_checkpoint_wal_bytes(0)
         .with_fsync(config.fsync)
@@ -530,6 +541,27 @@ mod database_config_tests {
 
         assert!(!database.paged_rowid_registry);
     }
+
+    #[test]
+    fn server_engine_options_reach_database_without_overriding_durability() {
+        let root = tempfile::tempdir().unwrap();
+        let config = PgWireConfig {
+            database_options: ServerDatabaseOptions {
+                query_work_memory_bytes: Some(2 * 1024 * 1024),
+                query_temp_space_bytes: Some(16 * 1024 * 1024),
+                paged_value_compression: Some(false),
+                ..Default::default()
+            },
+            fsync: true,
+            ..PgWireConfig::default()
+        };
+        let database = database_config_for_server(root.path(), &config).unwrap();
+        assert_eq!(database.query_work_memory_bytes, 2 * 1024 * 1024);
+        assert_eq!(database.query_temp_space_bytes, 16 * 1024 * 1024);
+        assert!(!database.paged_value_compression);
+        assert!(database.fsync);
+        assert!(!root.path().join("database").exists());
+    }
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -549,6 +581,29 @@ pub enum ChannelBindingPolicy {
 }
 
 impl PgWireConfig {
+    /// Validate parameters and referenced TLS material without opening a
+    /// database, binding a listener, or contacting another node.
+    pub fn validate(&self) -> Result<()> {
+        validate_server_config(self)?;
+        self.database_options.validate()?;
+        let tls = load_tls_config(self)?;
+        if self.require_auth
+            && self.auth_method == AuthMethod::ScramSha256
+            && self.effective_channel_binding_policy() == ChannelBindingPolicy::Require
+        {
+            if let Some(tls) = tls {
+                if let Err(error) = &tls.channel_binding {
+                    return Err(PgWireError::Server(error.clone()));
+                }
+            }
+        }
+        if let Some(ha) = &self.high_availability {
+            bicdb_core::replication_transport::validate_transport_config(
+                &ha.database_replication(),
+            )?;
+        }
+        Ok(())
+    }
     pub fn effective_channel_binding_policy(&self) -> ChannelBindingPolicy {
         self.channel_binding.unwrap_or(if self.tls_cert.is_some() {
             ChannelBindingPolicy::Require
@@ -4358,13 +4413,24 @@ fn execute_server_sql_with_options_normalized(
         delegation::validate_delegation(server, state)?;
     }
     if is_server_status_query_normalized(normalized) {
+        let gucs = state.session_state.session_gucs();
+        let configuration_user = gucs
+            .get("role")
+            .filter(|role| !role.is_empty() && !role.eq_ignore_ascii_case("none"))
+            .or_else(|| gucs.get("session_authorization"))
+            .map(String::as_str)
+            .unwrap_or(state.user.as_str());
         if let Some(result) = execute_server_virtual_query_for_normalized(
             server,
             sql,
             normalized,
             Some(VirtualQueryCaller {
                 connection_id: state.connection_id,
-                user: state.user.as_str(),
+                user: if normalized == "select * from bicdb_server_configuration" {
+                    configuration_user
+                } else {
+                    state.user.as_str()
+                },
             }),
         )? {
             return Ok(result);

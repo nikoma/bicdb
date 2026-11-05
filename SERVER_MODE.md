@@ -492,3 +492,11 @@ The optional [login operator API](docs/login-operator-api.md) creates, binds, ro
 disables, and revokes pgwire logins without stopping queries. It uses a separate
 operator credential, not SQL role grants. The guide defines TLS, input limits,
 operation logging, shared catalog locking, and existing-session behavior.
+
+## Configuration files and production operations
+
+Use [versioned TOML configuration](docs/server-configuration.md) for readable
+server settings, validation, effective settings and running drift inspection.
+See [production deployment](docs/production-deployment.md), the
+[PostgreSQL operations comparison](docs/postgresql-operations-comparison.md)
+and [migration guide](docs/postgresql-migration.md) before moving a workload.

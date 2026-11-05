@@ -36,4 +36,20 @@ with tempfile.TemporaryDirectory() as scratch:
                 *([digest] if digest else []), *extra)
         if name in ['sha256', 'sha384', 'ed25519']:
             (root / (name + '.key')).write_bytes(key.read_bytes())
+    # A distinct, non-CA server leaf is needed by strict WebPKI clients.
+    leaf_key = root / 'config-server.key'
+    request = scratch / 'config-server.csr'
+    extensions = scratch / 'config-server.ext'
+    extensions.write_text('basicConstraints=critical,CA:FALSE\n'
+                          'keyUsage=critical,digitalSignature\n'
+                          'extendedKeyUsage=serverAuth\n'
+                          'subjectAltName=DNS:localhost,IP:127.0.0.1\n'
+                          'authorityKeyIdentifier=keyid,issuer\n'
+                          'subjectKeyIdentifier=hash\n')
+    openssl('ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', leaf_key)
+    openssl('req', '-new', '-key', leaf_key, '-subj', '/CN=config.localhost', '-out', request)
+    openssl('x509', '-req', '-in', request, '-CA', root / 'sha256.pem',
+            '-CAkey', root / 'sha256.key', '-set_serial', '20261105', '-days', '14000',
+            '-sha256', '-extfile', extensions, '-out', root / 'config-server.pem')
+    openssl('verify', '-CAfile', root / 'sha256.pem', root / 'config-server.pem')
 print('Generated public test-only fixtures in', root)

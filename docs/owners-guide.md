@@ -1565,3 +1565,10 @@ invariant to test. A running process is not necessarily ready; a replica is not
 a backup; an authenticated operator is not automatically a data reader; a
 signed package is not automatically least-privileged; and a completed command
 is not a completed change until the desired after-state has been verified.
+
+### Operator configuration and PostgreSQL migration
+
+- [Server configuration and drift inspection](server-configuration.md)
+- [PostgreSQL operations comparison](postgresql-operations-comparison.md)
+- [PostgreSQL migration](postgresql-migration.md)
+- [Native, container and Kubernetes deployment](production-deployment.md)

@@ -740,6 +740,7 @@ impl NotificationBus {
 
 impl PgWireServer {
     pub fn open(path: impl AsRef<Path>, config: PgWireConfig) -> Result<Arc<Self>> {
+        config.validate()?;
         let db = BicDb::open_with_config(
             path.as_ref(),
             database_config_for_server(path.as_ref(), &config)?,
@@ -799,7 +800,7 @@ impl PgWireServer {
         distribution_router: Option<ClusterRequestRouter>,
         resource_governor: Option<ResourceGovernor>,
     ) -> Result<Arc<Self>> {
-        validate_server_config(&config)?;
+        config.validate()?;
         bicdb_sql::oracle::ensure_database_profile(&mut db.write(), &config.sql_profile)?;
         if config.automatic_paged_read_ahead {
             if let Some(snapshot) = db.read().paged_storage_snapshot()? {
@@ -1895,7 +1896,7 @@ impl PgWireCluster {
         default_database: impl Into<String>,
         config: PgWireConfig,
     ) -> Result<Arc<Self>> {
-        validate_server_config(&config)?;
+        config.validate()?;
         if config.sql_profile != bicdb_sql::oracle::POSTGRES_PROFILE {
             return Err(PgWireError::Server(
                 "Oracle HR profile currently requires a standalone database".to_string(),

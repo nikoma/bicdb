@@ -24,3 +24,8 @@ because it needs `psql`. Run it explicitly with:
 ```sh
 cargo test -p bicdb-pgwire --test tls_channel_binding libpq_requires -- --ignored
 ```
+
+`config-server.pem` is a CA:FALSE localhost/127.0.0.1 server certificate for
+the CLI configuration drift TLS test. It uses its public test-only `config-server.key`
+and is signed by `sha256.pem` (serial 20261105, SHA-256, serverAuth). Unlike
+the signature-algorithm CA fixtures, it is suitable as a rustls server leaf.

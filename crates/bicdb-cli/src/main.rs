@@ -9,6 +9,7 @@ mod backup_command;
 use backup_command::BackupConnectionArgs;
 mod cluster_events_command;
 mod oracle_command;
+mod server_config;
 mod sync_server;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -109,6 +110,15 @@ mod tui;
     )
 )]
 struct Cli {
+    /// Commented TOML server configuration (also BICDB_CONFIG).
+    #[arg(long, global = true, value_name = "FILE")]
+    config: Option<PathBuf>,
+    /// Validate server configuration without opening the database or listening.
+    #[arg(long, global = true)]
+    check_config: bool,
+    /// Print resolved, redacted startup options without starting the server.
+    #[arg(long, global = true)]
+    print_effective_config: bool,
     #[arg(long, value_name = "PATH", num_args = 0..=1, default_missing_value = ".")]
     tui: Option<PathBuf>,
     #[arg(long = "tui-key")]
@@ -220,6 +230,11 @@ impl std::fmt::Display for HardeningProfile {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Validate, inspect and compare server configuration.
+    Config {
+        #[command(subcommand)]
+        command: server_config::ConfigCommand,
+    },
     /// Inventory Oracle migration source without executing SQL.
     Oracle {
         #[command(subcommand)]
@@ -3442,7 +3457,10 @@ fn write_status_spill_outcomes(path: &Path, outcomes: &[(u64, TxStatus)]) -> Res
 }
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let invocation = server_config::parse().unwrap_or_else(|error| error.exit());
+    let cli = invocation.cli;
+    let engine_options = invocation.engine;
+    let effective_configuration = invocation.effective;
     let runtime_mode = std::env::var("BICDB_RUNTIME_MODE").ok();
 
     if runtime_mode.as_deref() == Some("cell") {
@@ -3480,6 +3498,7 @@ fn main() -> Result<()> {
     };
 
     match command {
+        Command::Config { command } => return server_config::run(command, cli.config),
         Command::Oracle { command } => oracle_command::run(command)?,
         Command::Cell { command } => run_cell_command(command)?,
         Command::AppPackage { command } => app_command::run_package_command(command)?,
@@ -5694,165 +5713,25 @@ fn main() -> Result<()> {
                 },
             )?;
         }
-        Command::Serve {
-            path,
-            cluster,
-            default_database,
-            host,
-            port,
-            postgres_server_version,
-            postgres_server_version_num,
-            postgres_version_banner,
-            sql_profile,
-            require_auth,
-            auth_method,
-            channel_binding,
-            operator,
-            allow_remote_no_auth,
-            max_connections,
-            max_connections_per_ip,
-            max_pending_accepts,
-            max_active_queries,
-            max_queued_queries,
-            max_active_reads,
-            max_queued_reads,
-            max_active_writes,
-            max_queued_writes,
-            idle_timeout_seconds,
-            shutdown_grace_seconds,
-            query_timeout_ms,
-            overload_timeout_ms,
-            write_timeout_ms,
-            max_result_rows,
-            max_request_bytes,
-            per_connection_memory_limit,
-            paged_rowid_registry,
-            tls_cert,
-            tls_key,
-            require_tls,
-            tls_client_ca,
-            slow_query_log,
-            slow_query_threshold_ms,
-            redact_query_text,
-            redact_fields,
-            storage_sync,
-            replication,
-        }
-        | Command::ServePg {
-            path,
-            cluster,
-            default_database,
-            host,
-            port,
-            postgres_server_version,
-            postgres_server_version_num,
-            postgres_version_banner,
-            sql_profile,
-            require_auth,
-            auth_method,
-            channel_binding,
-            operator,
-            allow_remote_no_auth,
-            max_connections,
-            max_connections_per_ip,
-            max_pending_accepts,
-            max_active_queries,
-            max_queued_queries,
-            max_active_reads,
-            max_queued_reads,
-            max_active_writes,
-            max_queued_writes,
-            idle_timeout_seconds,
-            shutdown_grace_seconds,
-            query_timeout_ms,
-            overload_timeout_ms,
-            write_timeout_ms,
-            max_result_rows,
-            max_request_bytes,
-            per_connection_memory_limit,
-            paged_rowid_registry,
-            tls_cert,
-            tls_key,
-            require_tls,
-            tls_client_ca,
-            slow_query_log,
-            slow_query_threshold_ms,
-            redact_query_text,
-            redact_fields,
-            storage_sync,
-            replication,
-        } => {
-            let mut config = pgwire_config_from_cli(
-                host,
-                port,
-                postgres_server_version,
-                postgres_server_version_num,
-                postgres_version_banner,
-                require_auth,
-                auth_method,
-                channel_binding,
-                allow_remote_no_auth,
-                max_connections,
-                max_connections_per_ip,
-                max_pending_accepts,
-                max_active_queries,
-                max_queued_queries,
-                max_active_reads,
-                max_queued_reads,
-                max_active_writes,
-                max_queued_writes,
-                idle_timeout_seconds,
-                shutdown_grace_seconds,
-                query_timeout_ms,
-                overload_timeout_ms,
-                write_timeout_ms,
-                max_result_rows,
-                max_request_bytes,
-                per_connection_memory_limit,
-                paged_rowid_registry,
-                tls_cert,
-                tls_key,
-                require_tls,
-                tls_client_ca,
-                slow_query_log,
-                slow_query_threshold_ms,
-                redact_query_text,
-                redact_fields,
-                storage_sync,
-            )?;
-            if cluster && sql_profile != "postgres" {
-                anyhow::bail!("Oracle HR SQL profile currently requires standalone serve");
+        command @ (Command::Serve { .. } | Command::ServePg { .. }) => {
+            let PreparedServer {
+                path,
+                cluster,
+                default_database,
+                mut config,
+                host_services,
+            } = prepare_server_command(command)?;
+            config.database_options = engine_options;
+            config.validate()?;
+            let mut report =
+                effective_configuration.context("missing resolved server configuration")?;
+            report["validation"] = serde_json::json!("passed");
+            config.startup_configuration = Some(Arc::new(report.clone()));
+            if cli.check_config || cli.print_effective_config {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+                return Ok(());
             }
-            config.sql_profile = sql_profile;
-            config.log_archive = replication.log_archive_config()?;
-            backup_command::configure(&mut config, &operator)?;
-            config.metrics_listen = operator.metrics_listen;
-            config.region = operator.region.clone();
-            config.workload = operator
-                .workload_limits
-                .as_ref()
-                .map(|path| -> Result<bicdb_pgwire::WorkloadConfig> {
-                    Ok(serde_json::from_slice(
-                        &std::fs::read(path).with_context(|| format!("read {}", path.display()))?,
-                    )?)
-                })
-                .transpose()?
-                .unwrap_or_default();
-            config.verification =
-                (operator.verify_interval_secs > 0).then(|| bicdb_pgwire::VerificationConfig {
-                    interval: Duration::from_secs(operator.verify_interval_secs),
-                    scratch_root: operator
-                        .verify_scratch
-                        .clone()
-                        .unwrap_or_else(|| std::env::temp_dir().join("bicdb-verification")),
-                });
-            config.connectors = operator
-                .connectors
-                .as_deref()
-                .map(bicdb_pgwire::ConnectorsConfig::load)
-                .transpose()?;
-            config.high_availability = replication.into_config()?;
-            let host_services = cli_host_services(&operator)?;
+
             if cluster {
                 serve_cluster_with_host_services(path, default_database, config, host_services)?;
             } else {
@@ -8816,6 +8695,187 @@ fn cluster_join_transport(
     }
     base.validate()?;
     Ok(base)
+}
+
+struct PreparedServer {
+    path: PathBuf,
+    cluster: bool,
+    default_database: String,
+    config: PgWireConfig,
+    host_services: Vec<Arc<dyn PgWireHostService>>,
+}
+
+fn prepare_server_command(command: Command) -> Result<PreparedServer> {
+    match command {
+        Command::Serve {
+            path,
+            cluster,
+            default_database,
+            host,
+            port,
+            postgres_server_version,
+            postgres_server_version_num,
+            postgres_version_banner,
+            sql_profile,
+            require_auth,
+            auth_method,
+            channel_binding,
+            operator,
+            allow_remote_no_auth,
+            max_connections,
+            max_connections_per_ip,
+            max_pending_accepts,
+            max_active_queries,
+            max_queued_queries,
+            max_active_reads,
+            max_queued_reads,
+            max_active_writes,
+            max_queued_writes,
+            idle_timeout_seconds,
+            shutdown_grace_seconds,
+            query_timeout_ms,
+            overload_timeout_ms,
+            write_timeout_ms,
+            max_result_rows,
+            max_request_bytes,
+            per_connection_memory_limit,
+            paged_rowid_registry,
+            tls_cert,
+            tls_key,
+            require_tls,
+            tls_client_ca,
+            slow_query_log,
+            slow_query_threshold_ms,
+            redact_query_text,
+            redact_fields,
+            storage_sync,
+            replication,
+        }
+        | Command::ServePg {
+            path,
+            cluster,
+            default_database,
+            host,
+            port,
+            postgres_server_version,
+            postgres_server_version_num,
+            postgres_version_banner,
+            sql_profile,
+            require_auth,
+            auth_method,
+            channel_binding,
+            operator,
+            allow_remote_no_auth,
+            max_connections,
+            max_connections_per_ip,
+            max_pending_accepts,
+            max_active_queries,
+            max_queued_queries,
+            max_active_reads,
+            max_queued_reads,
+            max_active_writes,
+            max_queued_writes,
+            idle_timeout_seconds,
+            shutdown_grace_seconds,
+            query_timeout_ms,
+            overload_timeout_ms,
+            write_timeout_ms,
+            max_result_rows,
+            max_request_bytes,
+            per_connection_memory_limit,
+            paged_rowid_registry,
+            tls_cert,
+            tls_key,
+            require_tls,
+            tls_client_ca,
+            slow_query_log,
+            slow_query_threshold_ms,
+            redact_query_text,
+            redact_fields,
+            storage_sync,
+            replication,
+        } => {
+            let mut config = pgwire_config_from_cli(
+                host,
+                port,
+                postgres_server_version,
+                postgres_server_version_num,
+                postgres_version_banner,
+                require_auth,
+                auth_method,
+                channel_binding,
+                allow_remote_no_auth,
+                max_connections,
+                max_connections_per_ip,
+                max_pending_accepts,
+                max_active_queries,
+                max_queued_queries,
+                max_active_reads,
+                max_queued_reads,
+                max_active_writes,
+                max_queued_writes,
+                idle_timeout_seconds,
+                shutdown_grace_seconds,
+                query_timeout_ms,
+                overload_timeout_ms,
+                write_timeout_ms,
+                max_result_rows,
+                max_request_bytes,
+                per_connection_memory_limit,
+                paged_rowid_registry,
+                tls_cert,
+                tls_key,
+                require_tls,
+                tls_client_ca,
+                slow_query_log,
+                slow_query_threshold_ms,
+                redact_query_text,
+                redact_fields,
+                storage_sync,
+            )?;
+            if cluster && sql_profile != "postgres" {
+                anyhow::bail!("Oracle HR SQL profile currently requires standalone serve");
+            }
+            config.sql_profile = sql_profile;
+            config.log_archive = replication.log_archive_config()?;
+            backup_command::configure(&mut config, &operator)?;
+            config.metrics_listen = operator.metrics_listen;
+            config.region = operator.region.clone();
+            config.workload = operator
+                .workload_limits
+                .as_ref()
+                .map(|path| -> Result<bicdb_pgwire::WorkloadConfig> {
+                    Ok(serde_json::from_slice(
+                        &std::fs::read(path).with_context(|| format!("read {}", path.display()))?,
+                    )?)
+                })
+                .transpose()?
+                .unwrap_or_default();
+            config.verification =
+                (operator.verify_interval_secs > 0).then(|| bicdb_pgwire::VerificationConfig {
+                    interval: Duration::from_secs(operator.verify_interval_secs),
+                    scratch_root: operator
+                        .verify_scratch
+                        .clone()
+                        .unwrap_or_else(|| std::env::temp_dir().join("bicdb-verification")),
+                });
+            config.connectors = operator
+                .connectors
+                .as_deref()
+                .map(bicdb_pgwire::ConnectorsConfig::load)
+                .transpose()?;
+            config.high_availability = replication.into_config()?;
+            let host_services = cli_host_services(&operator)?;
+            Ok(PreparedServer {
+                path,
+                cluster,
+                default_database,
+                config,
+                host_services,
+            })
+        }
+        _ => bail!("expected serve or serve-pg configuration"),
+    }
 }
 
 fn run_serve_command(

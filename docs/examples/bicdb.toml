@@ -1,0 +1,28 @@
+# Example for a native host. Provision TLS files and SQL users before exposure.
+version = 1
+
+[server]
+path = "/var/lib/bicdb/database"
+host = "0.0.0.0"
+port = 5433
+require_auth = true
+auth_method = "scram-sha-256"
+require_tls = true
+tls_cert = "/etc/bicdb/tls/server.pem"
+tls_key = "/etc/bicdb/tls/server-key.pem"
+storage_sync = "durable"
+# Size admission limits from measured workload and available memory.
+max_connections = 100
+max_active_queries = 16
+max_queued_queries = 64
+query_timeout_ms = 30000
+shutdown_grace_seconds = 30
+slow_query_log = "/var/log/bicdb/slow-query.jsonl"
+slow_query_threshold_ms = 1000
+redact_field = ["ssn", "tax_id"]
+
+[engine]
+query_work_memory_bytes = 16777216
+query_temp_space_bytes = 1073741824
+query_server_temp_space_bytes = 4294967296
+query_merge_fan_in = 16

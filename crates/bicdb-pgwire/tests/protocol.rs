@@ -13086,3 +13086,77 @@ fn cluster_branches_copy_diff_and_drop_databases() {
     server.request_shutdown();
     server_thread.join().unwrap().unwrap();
 }
+
+#[tokio::test]
+async fn startup_configuration_snapshot_requires_current_superuser_for_simple_and_prepared_queries()
+{
+    let root = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let snapshot = json!({"format":1,"server":{"port":{"value":5433}},"engine":{}});
+    let server = PgWireServer::open(
+        root.path(),
+        PgWireConfig {
+            startup_configuration: Some(Arc::new(snapshot.clone())),
+            ..PgWireConfig::default()
+        },
+    )
+    .unwrap();
+    let serving = server.clone();
+    let thread = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+    let (client, connection) = tokio_postgres::Config::new()
+        .host("127.0.0.1")
+        .port(address.port())
+        .user("bicdb")
+        .dbname("bicdb")
+        .connect(tokio_postgres::NoTls)
+        .await
+        .unwrap();
+    let task = tokio::spawn(async move {
+        let _ = connection.await;
+    });
+    let statement = client
+        .prepare("SELECT * FROM bicdb_server_configuration")
+        .await
+        .unwrap();
+    let text: String = client.query_one(&statement, &[]).await.unwrap().get(0);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&text).unwrap(),
+        snapshot
+    );
+    client
+        .batch_execute("CREATE ROLE config_reader; SET ROLE config_reader")
+        .await
+        .unwrap();
+    for prepared in [false, true] {
+        let error = if prepared {
+            client.query(&statement, &[]).await.unwrap_err()
+        } else {
+            client
+                .simple_query("SELECT * FROM bicdb_server_configuration")
+                .await
+                .unwrap_err()
+        };
+        assert_eq!(error.code().unwrap().code(), "42501");
+    }
+    client.batch_execute("RESET ROLE").await.unwrap();
+    assert_eq!(client.query(&statement, &[]).await.unwrap().len(), 1);
+    client
+        .batch_execute("SET SESSION AUTHORIZATION config_reader")
+        .await
+        .unwrap();
+    assert_eq!(
+        client
+            .query(&statement, &[])
+            .await
+            .unwrap_err()
+            .code()
+            .unwrap()
+            .code(),
+        "42501"
+    );
+    drop(client);
+    server.request_shutdown();
+    task.await.unwrap();
+    thread.join().unwrap().unwrap();
+}

@@ -1,0 +1,27 @@
+[Unit]
+Description=BicDB configured pgwire server
+Documentation=docs/production-observability.md SERVER_MODE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bicdb
+Group=bicdb
+# Provision /etc/bicdb/bicdb.toml and its referenced files for this account.
+# Inject any configured secret environment references through your secret manager.
+ExecStartPre=/usr/local/bin/bicdb config validate --file /etc/bicdb/bicdb.toml
+ExecStart=/usr/local/bin/bicdb serve --config /etc/bicdb/bicdb.toml
+# Changes require a restart; no ExecReload is configured.
+TimeoutStopSec=45
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/bicdb /var/log/bicdb
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

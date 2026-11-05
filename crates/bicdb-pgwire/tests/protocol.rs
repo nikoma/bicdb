@@ -18,6 +18,49 @@ use sqlx::{Connection as _, Row as _};
 type HmacSha256 = Hmac<Sha256>;
 
 #[test]
+fn schema_qualified_function_lists_apply_over_a_transactional_wire_session() {
+    let dir = tempfile::tempdir().unwrap();
+    drop(BicDb::open(dir.path()).unwrap());
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let path = dir.path().to_path_buf();
+    let server = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        bicdb_pgwire::handle_client(stream, path).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(15)))
+        .unwrap();
+    startup(&mut client);
+    read_until_ready(&mut client);
+    for command in [
+        "CREATE SCHEMA carrier_private", "CREATE ROLE grant_reader LOGIN",
+        "GRANT USAGE ON SCHEMA carrier_private TO grant_reader",
+        "CREATE FUNCTION carrier_private.pocket_sync_page(a uuid,b bigint,c bigint,d int) RETURNS INT LANGUAGE SQL AS $$ SELECT 11 $$",
+        "CREATE FUNCTION carrier_private.other() RETURNS INT LANGUAGE SQL AS $$ SELECT 22 $$",
+        "REVOKE EXECUTE ON FUNCTION carrier_private.pocket_sync_page(uuid,bigint,bigint,int) FROM PUBLIC",
+        "REVOKE EXECUTE ON FUNCTION carrier_private.other() FROM PUBLIC",
+        "BEGIN",
+        "DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='grant_reader') THEN GRANT EXECUTE ON FUNCTION carrier_private.pocket_sync_page(uuid,bigint,bigint,int),carrier_private.other() TO grant_reader; END IF; END $$",
+        "COMMIT",
+    ] {
+        send_query(&mut client,command);
+        let (tags,_) = read_tags_until_ready(&mut client);
+        assert!(!tags.contains(&b'E'), "wire command failed: {command}");
+    }
+    send_query(&mut client, "SET SESSION AUTHORIZATION grant_reader");
+    assert!(!read_tags_until_ready(&mut client).0.contains(&b'E'));
+    send_query(&mut client,"SELECT carrier_private.pocket_sync_page('00000000-0000-4000-8000-000000000001'::uuid,0,0,1),carrier_private.other()");
+    assert_eq!(
+        read_query_rows(&mut client),
+        vec![vec!["11".to_string(), "22".to_string()]]
+    );
+    client.write_all(b"X\0\0\0\x04").unwrap();
+    server.join().unwrap();
+}
+
+#[test]
 fn deferred_foreign_keys_survive_wire_sessions_and_check_commit_and_savepoints() {
     let dir = tempfile::tempdir().unwrap();
     drop(BicDb::open(dir.path()).unwrap());

@@ -97,7 +97,8 @@ privileges are still enforced. A redundant `WITH GRANT OPTION` is accepted for
 owners and superusers; granting that authority to other roles remains unsupported
 until dependent-grant tracking is implemented.
 Function identity lists, including commas within argument signatures, apply to
-every named routine in standalone statements and migration batches. All routine
+every named routine in standalone statements, anonymous PL/pgSQL blocks and
+migration batches. All routine
 existence, ownership and grantee checks precede any privilege changes; a missing
 or unauthorized later target cannot leave an earlier target granted.
 

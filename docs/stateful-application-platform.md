@@ -68,6 +68,59 @@ include their runtime dependencies in the explicit file set before deployment.
 return success from `/health`. It receives `BICDB_DATABASE_URL` and the scoped
 `BICDB_DATABASE_TOKEN`, using the same JSON query API as the fetch adapter.
 
+### Private process bindings and separate operating-system identities
+
+Operators can provision `DATA/apps/APP/runtime-private.json` outside the release.
+It must be a supervisor-owned regular file with no group/other access; symlinks,
+unknown fields, reserved runtime variables and oversized configurations are refused.
+The platform never includes these bindings in release digests or downloads.
+
+```json
+{
+  "format": 1,
+  "environment": { "APPLICATION_SECRET": "operator-provisioned-deployment-secret" },
+  "startup_timeout_ms": 120000,
+  "request_body_limit_bytes": 33554432,
+  "response_body_limit_bytes": 33554432,
+  "identity": {
+    "uid": 32001,
+    "gid": 32001,
+    "execution_root": "/var/lib/bicdb-exec/example"
+  }
+}
+```
+
+Environment bindings support local process execution. A custom startup deadline
+may range from 1 to 300 seconds. `PATH`, `PORT`, `HOST`, `HOSTNAME`, `HOME`,
+`TMPDIR`, `BICDB_*` and `NODE_*` (except `NODE_EXTRA_CA_CERTS`) remain supervisor
+controlled. Keep actual credentials in the private file rather than the package.
+
+`identity` additionally requires a Linux root supervisor and `node_http`.
+Provision a distinct unused UID/GID of at least 10000 for each application and
+pre-create its execution root as a protected, traversable supervisor-owned
+directory. Ancestors must also be supervisor-owned and protected (a root-owned
+sticky directory such as `/tmp` is allowed). The platform materializes a verified
+read-only release there, creates a private work directory for the child, drops
+supplementary groups and root credentials, and sets `NO_NEW_PRIVS`. `HOME` and
+`TMPDIR` refer to that work directory, which is removed after execution stops.
+
+These processes receive neither the platform database capability nor the health
+probe capability header, and cannot use the internal JSON database endpoint.
+Connect them through separately provisioned restricted SQL credentials when
+needed. Their private state must remain outside the execution root, with private
+directory permissions. This is operating-system credential separation, not a
+filesystem jail or network sandbox; use microVM execution when that is required.
+Private configuration is currently refused with remote placement or microVMs.
+
+Private HTTP limits default to 8 MiB per request and 16 MiB per buffered
+response. Operators may set either limit between 1 byte and 128 MiB for local
+process applications, with concurrency chosen to fit available memory. The
+manifest request timeout also bounds upload collection. Oversized uploads are
+rejected before invoking the application; oversized buffered responses fail
+truthfully instead of returning a truncated success. Event-stream limits retain
+their existing separate bounds. The large-body deployment regression covers a
+48 MiB upload, a rejected 112 MiB overflow and buffered-response limits.
+
 Runtime stdout and stderr go to the application log. Management log reads are
 bounded to the final 64 KiB. An operator must rotate the underlying log file.
 In the process tier the memory setting selects Node's old-space heap ceiling.

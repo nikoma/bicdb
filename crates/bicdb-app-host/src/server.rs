@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
 };
 use std::time::Duration;
@@ -52,6 +52,9 @@ pub struct Application {
     api_admission: Mutex<Arc<Semaphore>>,
     live_admission: Arc<Semaphore>,
     snapshotting: AtomicBool,
+    operator_isolated: AtomicBool,
+    request_body_limit: AtomicUsize,
+    response_body_limit: AtomicUsize,
     peers: Mutex<BTreeMap<String, crate::sync::Peer>>,
     peer_cipher: Option<crate::sync::PeerCipher>,
     sync_status: Mutex<BTreeMap<String, crate::sync::SyncStatus>>,
@@ -246,6 +249,9 @@ impl Platform {
             ))),
             live_admission: Arc::new(Semaphore::new(16)),
             snapshotting: AtomicBool::new(false),
+            operator_isolated: AtomicBool::new(false),
+            request_body_limit: AtomicUsize::new(8 * 1024 * 1024),
+            response_body_limit: AtomicUsize::new(16 * 1024 * 1024),
             deployment: Mutex::new(deployment.clone()),
             database,
             sql_listener: Mutex::new(sql_listener),
@@ -322,6 +328,16 @@ impl Platform {
         let directory = app_dir.join("releases").join(digest);
         let endpoint = format!("{}/internal/{name}", self.endpoint);
         self.validate_isolation(release)?;
+        let private_configuration = crate::app_config::Config::read(&app_dir)?;
+        private_configuration.validate_release(release)?;
+        app.request_body_limit.store(
+            private_configuration.request_body_limit_bytes,
+            Ordering::Release,
+        );
+        app.response_body_limit.store(
+            private_configuration.response_body_limit_bytes,
+            Ordering::Release,
+        );
         let token = fresh_token();
         *app.token.lock() = token.clone();
         let result = (|| -> Result<Execution> {
@@ -351,6 +367,8 @@ impl Platform {
                     .context("microVM host is not configured")?
                     .launch(release, &app_dir, &token)?,
             };
+            app.operator_isolated
+                .store(process.operator_isolated(), Ordering::Release);
             process.wait_ready(release, &token)?;
             app.require_authority()?;
             Ok(Execution::Local(process, token.clone()))
@@ -885,15 +903,18 @@ async fn forward(
     };
     let timeout = app.release.lock().manifest.resources.request_timeout_ms;
     let (parts, body) = request.into_parts();
-    let bytes = tokio::time::timeout(Duration::from_secs(30), to_bytes(body, 8 * 1024 * 1024))
-        .await
-        .map_err(|_| {
-            ApiError(
-                StatusCode::REQUEST_TIMEOUT,
-                "request body deadline exceeded".into(),
-            )
-        })?
-        .map_err(|_| ApiError(StatusCode::PAYLOAD_TOO_LARGE, "request too large".into()))?;
+    let bytes = tokio::time::timeout(
+        Duration::from_millis(timeout),
+        to_bytes(body, app.request_body_limit.load(Ordering::Acquire)),
+    )
+    .await
+    .map_err(|_| {
+        ApiError(
+            StatusCode::REQUEST_TIMEOUT,
+            "request body deadline exceeded".into(),
+        )
+    })?
+    .map_err(|_| ApiError(StatusCode::PAYLOAD_TOO_LARGE, "request too large".into()))?;
     // Preserve the original encoded path after the application prefix. Decoded
     // route captures are used only for authorization and never URL construction.
     let prefix = format!("/apps/{name}");
@@ -1000,7 +1021,8 @@ async fn forward(
         }
     })? {
         app.require_authority()?;
-        if bytes.len().saturating_add(chunk.len()) > 16 * 1024 * 1024 {
+        if bytes.len().saturating_add(chunk.len()) > app.response_body_limit.load(Ordering::Acquire)
+        {
             return Err(ApiError(
                 StatusCode::BAD_GATEWAY,
                 "application response too large".into(),
@@ -1128,8 +1150,10 @@ async fn jobs(platform: Arc<Platform>) {
             if let Some(token) = worker_token {
                 request = request.header("x-bic-worker-token", token);
             }
-            let response = request
-                .header("x-bic-internal-token", token).timeout(Duration::from_millis(timeout))
+            if !app.operator_isolated.load(Ordering::Acquire) {
+                request = request.header("x-bic-internal-token", token);
+            }
+            let response = request.timeout(Duration::from_millis(timeout))
                 .json(&json!({"id":message.message_id,"attempt":message.attempts,"payload":message.payload})).send().await;
             if response.as_ref().is_err_and(|error| error.is_timeout()) {
                 retire_execution(&app, &execution_token);
@@ -1582,7 +1606,8 @@ async fn authenticate(
             Err(error) => return error.into_response(),
         };
         let allowed = if path.starts_with("/internal/") {
-            authorized(request.headers(), &app.token.lock())
+            !app.operator_isolated.load(Ordering::Acquire)
+                && authorized(request.headers(), &app.token.lock())
         } else {
             app.peers
                 .lock()

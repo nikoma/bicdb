@@ -111,6 +111,84 @@ fn fixture() -> Release {
 }
 
 #[test]
+fn private_http_body_bounds_preserve_large_uploads_and_refuse_oversized_operations() {
+    use std::os::unix::fs::PermissionsExt;
+    let service = Service::start();
+    let app = service.root.path().join("apps/counter");
+    std::fs::create_dir_all(&app).unwrap();
+    let configuration = app.join("runtime-private.json");
+    std::fs::write(
+        &configuration,
+        serde_json::to_vec(&json!({"format":1,
+        "request_body_limit_bytes":112*1024*1024,"response_body_limit_bytes":20*1024*1024}))
+        .unwrap(),
+    )
+    .unwrap();
+    std::fs::set_permissions(&configuration, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let mut release = fixture();
+    release.manifest.runtime = bicdb_app_host::manifest::Runtime::NodeHttp;
+    release.files.insert("app.mjs".into(),base64::engine::general_purpose::STANDARD.encode(
+        "import http from 'node:http';let count=0;http.createServer((req,res)=>{if(req.url==='/health'){res.end('ok');return;}if(req.url==='/large'||req.url==='/too-large'){res.end(Buffer.alloc((req.url==='/large'?17:21)*1024*1024));return;}if(req.method==='POST'){let size=0;req.on('data',chunk=>size+=chunk.length);req.on('end',()=>{count++;res.setHeader('content-type','application/json');res.end(JSON.stringify({size}));});return;}res.setHeader('content-type','application/json');res.end(JSON.stringify({count}));}).listen(Number(process.env.PORT),process.env.HOST);"));
+    let response = service.deploy(&release);
+    assert!(
+        response.status().is_success(),
+        "{}",
+        response.text().unwrap()
+    );
+    let uploaded: Value = service
+        .client
+        .post(format!("{}/apps/counter/upload", service.base()))
+        .body(vec![1u8; 48 * 1024 * 1024])
+        .send()
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .unwrap();
+    assert_eq!(uploaded["size"], 48 * 1024 * 1024);
+    assert_eq!(
+        service
+            .client
+            .post(format!("{}/apps/counter/upload", service.base()))
+            .body(vec![1u8; 112 * 1024 * 1024 + 1])
+            .send()
+            .unwrap()
+            .status(),
+        413
+    );
+    let count: Value = service
+        .client
+        .get(format!("{}/apps/counter/count", service.base()))
+        .send()
+        .unwrap()
+        .json()
+        .unwrap();
+    assert_eq!(
+        count["count"], 1,
+        "oversized upload must never invoke the application"
+    );
+    let large = service
+        .client
+        .get(format!("{}/apps/counter/large", service.base()))
+        .send()
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .bytes()
+        .unwrap();
+    assert_eq!(large.len(), 17 * 1024 * 1024);
+    assert_eq!(
+        service
+            .client
+            .get(format!("{}/apps/counter/too-large", service.base()))
+            .send()
+            .unwrap()
+            .status(),
+        502
+    );
+}
+
+#[test]
 fn deploy_crash_restart_jobs_upgrade_and_route_authorization() {
     let mut service = Service::start();
     let package = fixture();

@@ -1154,6 +1154,8 @@ pub(crate) fn routine_exception_condition(condition: &str) -> Result<RoutineExce
         "duplicate_object" => Ok(RoutineExceptionCondition::SqlState("42710".to_string())),
         "serialization_failure" => Ok(RoutineExceptionCondition::SqlState("40001".to_string())),
         "deadlock_detected" => Ok(RoutineExceptionCondition::SqlState("40P01".to_string())),
+        "raise_exception" => Ok(RoutineExceptionCondition::SqlState("P0001".to_string())),
+        "insufficient_privilege" => Ok(RoutineExceptionCondition::SqlState("42501".to_string())),
         "too_many_rows" => Ok(RoutineExceptionCondition::SqlState("P0003".to_string())),
         "no_data_found" => Ok(RoutineExceptionCondition::SqlState("P0002".to_string())),
         "case_not_found" => Ok(RoutineExceptionCondition::SqlState("20000".to_string())),

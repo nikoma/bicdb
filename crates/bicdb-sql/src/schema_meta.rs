@@ -4683,6 +4683,17 @@ impl RoutineFrame {
 
     pub(crate) fn materialized_values(&mut self) -> Arc<BTreeMap<String, SqlValue>> {
         self.sync_values();
+        if !self.oracle_statement_rollback {
+            if let Some(error) = &self.active_exception {
+                // PostgreSQL exposes these diagnostics only while a handler
+                // runs. Keep them outside the persistent frame so nested
+                // handlers restore the outer error and no value leaks out.
+                let mut values = (*self.values).clone();
+                values.insert("sqlstate".into(), SqlValue::String(error.sqlstate().into()));
+                values.insert("sqlerrm".into(), SqlValue::String(error.to_string()));
+                return Arc::new(values);
+            }
+        }
         self.values.clone()
     }
 

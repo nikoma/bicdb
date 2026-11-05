@@ -13,6 +13,67 @@ fn session_rows(session: &mut SqlSession<'_>, sql: &str) -> Vec<Vec<SqlValue>> {
 }
 
 #[test]
+fn named_user_exception_handlers_allow_success_and_match_only_their_sqlstates() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE FUNCTION guarded_result(kind INT) RETURNS TEXT LANGUAGE plpgsql AS $$ BEGIN IF kind=1 THEN RAISE EXCEPTION 'clinical refusal'; ELSIF kind=2 THEN RAISE EXCEPTION 'access refused' USING ERRCODE='42501'; ELSIF kind=3 THEN RAISE EXCEPTION 'unrelated error' USING ERRCODE='22012'; END IF; RETURN 'saved'; EXCEPTION WHEN raise_exception OR insufficient_privilege THEN RETURN SQLSTATE || ':' || SQLERRM; END $$").unwrap();
+    for (kind, result) in [
+        (0, "saved"),
+        (1, "P0001:clinical refusal"),
+        (2, "42501:access refused"),
+    ] {
+        assert_eq!(
+            session_rows(&mut session, &format!("SELECT guarded_result({kind})")),
+            vec![vec![SqlValue::String(result.into())]]
+        );
+    }
+    assert_eq!(
+        session
+            .execute("SELECT guarded_result(3)")
+            .unwrap_err()
+            .sqlstate(),
+        "22012"
+    );
+}
+
+#[test]
+fn named_user_exception_diagnostics_restore_outer_handler_and_do_not_leak() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE FUNCTION nested_diagnostics() RETURNS TEXT LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'outer'; EXCEPTION WHEN raise_exception THEN BEGIN RAISE EXCEPTION 'inner' USING ERRCODE='42501'; EXCEPTION WHEN insufficient_privilege THEN IF SQLSTATE<>'42501' OR SQLERRM<>'inner' THEN RAISE EXCEPTION 'wrong inner diagnostics'; END IF; END; RETURN SQLSTATE || ':' || SQLERRM; END $$").unwrap();
+    assert_eq!(
+        session_rows(&mut session, "SELECT nested_diagnostics()"),
+        vec![vec![SqlValue::String("P0001:outer".into())]]
+    );
+    session.execute("CREATE FUNCTION outside_diagnostics() RETURNS TEXT LANGUAGE plpgsql AS $$ BEGIN BEGIN RAISE EXCEPTION 'private error'; EXCEPTION WHEN raise_exception THEN NULL; END; RETURN SQLERRM; END $$").unwrap();
+    assert!(session.execute("SELECT outside_diagnostics()").is_err());
+}
+
+#[test]
+fn named_user_exception_handlers_roll_back_failed_body_changes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    let mut session = SqlSession::new(&mut db);
+    session.execute("CREATE TABLE handler_rows(id INT PRIMARY KEY,value INT); INSERT INTO handler_rows VALUES(1,10); CREATE FUNCTION rollback_refusal() RETURNS TEXT LANGUAGE plpgsql AS $$ BEGIN UPDATE handler_rows SET value=99 WHERE id=1; RAISE EXCEPTION 'refused'; EXCEPTION WHEN raise_exception THEN INSERT INTO handler_rows VALUES(2,20); RETURN SQLSTATE; END $$").unwrap();
+    assert_eq!(
+        session_rows(&mut session, "SELECT rollback_refusal()"),
+        vec![vec![SqlValue::String("P0001".into())]]
+    );
+    assert_eq!(
+        session_rows(
+            &mut session,
+            "SELECT id,value FROM handler_rows ORDER BY id"
+        ),
+        vec![
+            vec![SqlValue::Int(1), SqlValue::Int(10)],
+            vec![SqlValue::Int(2), SqlValue::Int(20)]
+        ]
+    );
+}
+
+#[test]
 fn routine_row_limits_bind_named_variables_inside_ctes_and_subqueries() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

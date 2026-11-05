@@ -145,3 +145,14 @@ constraint classes fail explicitly. `SET CONSTRAINTS ALL` covers foreign keys
 and refuses when constraint triggers are present, since changing their firing
 mode through ALL is not implemented. Existing INITIALLY DEFERRED constraint
 triggers still fire at commit. Finalization grants no new mutation authority.
+
+## PostgreSQL application refusal handlers
+
+Named EXCEPTION conditions `raise_exception` and `insufficient_privilege` match
+P0001 and 42501 respectively. SQLSTATE and SQLERRM are available while their
+PostgreSQL handler runs, including embedded SQL. Nested handlers restore the
+outer diagnostics; they are not retained outside a handler or injected into
+Oracle's diagnostic namespace. Regressions cover the success path, selective
+matching, unrelated error propagation, nested diagnostics and rollback of failed
+body changes before handler writes. The Carrier compatibility suite passes all
+35 checks; the original EHR-shaped refusal wrapper fails before this support.

@@ -6029,6 +6029,9 @@ fn host_error(trace_id: &str, error: AppRuntimeError) -> HostError {
         AppRuntimeError::BicDb(bicdb_core::BicDbError::TransactionConflict(_)) => {
             ("conflict", ErrorClass::Conflict, true)
         }
+        AppRuntimeError::BicDb(bicdb_core::BicDbError::UniqueIndexConflict { .. }) => {
+            ("conflict", ErrorClass::Conflict, false)
+        }
         AppRuntimeError::BicDb(bicdb_core::BicDbError::Index(message))
             if message.contains("unique index") && message.contains("duplicate keys") =>
         {
@@ -6741,15 +6744,19 @@ pub(crate) mod tests {
 
     #[test]
     fn unique_index_violations_cross_the_host_as_conflicts() {
-        let error = host_error(
-            "trace",
-            AppRuntimeError::BicDb(bicdb_core::BicDbError::Index(
+        for cause in [
+            bicdb_core::BicDbError::Index(
                 "unique index `Doctor_external_id` has duplicate keys".to_string(),
-            )),
-        );
-        assert_eq!(error.code, "conflict");
-        assert_eq!(error.class, ErrorClass::Conflict);
-        assert!(!error.retryable);
+            ),
+            bicdb_core::BicDbError::UniqueIndexConflict {
+                index: "Doctor_external_id".into(),
+            },
+        ] {
+            let error = host_error("trace", AppRuntimeError::BicDb(cause));
+            assert_eq!(error.code, "conflict");
+            assert_eq!(error.class, ErrorClass::Conflict);
+            assert!(!error.retryable);
+        }
     }
 
     #[test]

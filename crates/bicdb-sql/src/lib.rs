@@ -2178,6 +2178,9 @@ impl SqlError {
                 }
                 fields
             }
+            Self::BicDb(BicDbError::UniqueIndexConflict { index }) => {
+                vec![SqlErrorField::Constraint(index.clone())]
+            }
             Self::BicDb(BicDbError::CollectionNotFound(collection)) => {
                 vec![SqlErrorField::Table(collection.clone())]
             }
@@ -2209,7 +2212,9 @@ fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
         BicDbError::QueryMemoryLimit(_) => "53200",
         BicDbError::CollectionNotFound(_) => "42P01",
         BicDbError::CollectionAlreadyExists(_) => "42P07",
-        BicDbError::UniqueIndexBuildConflict { .. } => "23505",
+        BicDbError::UniqueIndexBuildConflict { .. } | BicDbError::UniqueIndexConflict { .. } => {
+            "23505"
+        }
         BicDbError::InvalidCollectionName(_) => "42602",
         BicDbError::TransactionConflict(_) => "40001",
         BicDbError::TransactionDeadlock(_) => "40P01",

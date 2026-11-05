@@ -4,7 +4,7 @@
 //!
 //! Supported (what PostgreSQL schemas use for partial indexes): `col IS [NOT] NULL`, `col IS [NOT]
 //! TRUE/FALSE`, a bare boolean column and `NOT col`, `col = / <> / < / <= / > / >= literal` (either side),
-//! `col IN (...)` / `col = ANY (ARRAY[...])` / `NOT IN`, `AND`, `OR`, parentheses and casts of literals.
+//! JSONB key existence (`col ? 'key'`), `col IN (...)` / `col = ANY (ARRAY[...])` / `NOT IN`, `AND`, `OR`, parentheses and casts of literals.
 //! Comparisons are limited to columns stored as plain JSON (text, boolean, integer and float types);
 //! `IS [NOT] NULL` works on every column. Anything else is reported as unsupported rather than
 //! silently indexing every row, which would make a partial UNIQUE index reject valid rows.
@@ -23,7 +23,7 @@ pub(crate) fn partial_index_predicate(
 fn unsupported(predicate: &Expr) -> SqlError {
     SqlError::Unsupported(format!(
         "partial index predicate {predicate} is not supported; supported forms are IS [NOT] NULL, \
-         boolean columns, comparisons of a column with a constant, IN lists, AND and OR"
+         boolean columns, comparisons of a column with a constant, JSONB key existence, IN lists, AND and OR"
     ))
 }
 
@@ -388,6 +388,34 @@ fn translate(schema: &TableSchema, predicate: &Expr) -> Result<IndexPredicate> {
             op: BinaryOperator::Or,
             right,
         } => Ok(or(translate(schema, left)?, translate(schema, right)?)),
+        Expr::BinaryOp {
+            left,
+            op: BinaryOperator::Question,
+            right,
+        } => {
+            let name = match strip(left) {
+                Expr::Identifier(name) => name.value.clone(),
+                Expr::CompoundIdentifier(parts) => parts
+                    .last()
+                    .map(|name| name.value.clone())
+                    .ok_or_else(|| unsupported(predicate))?,
+                _ => return Err(unsupported(predicate)),
+            };
+            let column = schema.column(&name).ok_or_else(|| unsupported(predicate))?;
+            if column.pg_type != "jsonb" || column.user_type.is_some() {
+                return Err(unsupported(predicate));
+            }
+            let SqlValue::String(key) = eval_constant_expr(strip(right))? else {
+                return Err(unsupported(predicate));
+            };
+            let field = index_field_from_expr_for_schema(schema, strip(left))?;
+            Ok(binary(
+                IndexPredicateBinaryOperator::JsonHasKey,
+                IndexPredicate::Field { field },
+                literal(JsonValue::String(key)),
+                IndexPredicateValueType::Json,
+            ))
+        }
         Expr::BinaryOp { left, op, right } => {
             let (column, constant, operator) = if let Some(column) = column_ref(schema, left) {
                 (column, right, comparison_operator(op))

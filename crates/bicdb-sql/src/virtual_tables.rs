@@ -3844,16 +3844,24 @@ pub(crate) fn index_field_from_field_ref(field: &FieldRef) -> Result<IndexField>
         FieldRef::MetadataPath(path) => Ok(IndexField::MetadataPath(path.clone())),
         FieldRef::JsonTextPath(base, path) | FieldRef::JsonPath(base, path) => {
             match base.as_ref() {
-                FieldRef::Metadata
-                | FieldRef::Column(_)
-                | FieldRef::TypedColumn { .. }
-                | FieldRef::JsonColumn(_) => json_object_path(path)
+                FieldRef::Metadata => json_object_path(path)
                     .map(IndexField::MetadataPath)
                     .ok_or_else(|| {
                         SqlError::Unsupported(
-                            "array-index JSON expressions cannot use metadata indexes".to_string(),
+                            "array-index JSON expressions cannot use metadata indexes".into(),
                         )
                     }),
+                FieldRef::Column(column)
+                | FieldRef::TypedColumn { name: column, .. }
+                | FieldRef::JsonColumn(column) => {
+                    let mut full = vec![column.clone()];
+                    full.extend(json_object_path(path).ok_or_else(|| {
+                        SqlError::Unsupported(
+                            "array-index JSON expressions cannot use metadata indexes".into(),
+                        )
+                    })?);
+                    Ok(IndexField::MetadataPath(full))
+                }
                 other => Err(SqlError::Unsupported(format!(
                     "cannot index JSON path rooted at {}",
                     other.name()

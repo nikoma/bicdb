@@ -4591,6 +4591,7 @@ pub enum IndexPredicateBinaryOperator {
     Or,
     Implies,
     Contains,
+    JsonHasKey,
     Equal,
     NotEqual,
     Greater,
@@ -6254,10 +6255,9 @@ impl IndexState {
                     // Held by a different BRAND-NEW record in this batch?
                     let other_new = new_pks.iter().any(|pk| pk != record_id);
                     if other_existing || other_new {
-                        return Err(BicDbError::Index(format!(
-                            "unique index `{}` has duplicate keys",
-                            self.definition.name
-                        )));
+                        return Err(BicDbError::UniqueIndexConflict {
+                            index: self.definition.name.clone(),
+                        });
                     }
                     match self_rowid {
                         Some(rowid) => {
@@ -6342,10 +6342,9 @@ impl IndexState {
                 match self.store.insert_if_unique(&encoded, rowid) {
                     Some(inserted) => changed |= inserted,
                     None => {
-                        return Err(BicDbError::Index(format!(
-                            "unique index `{}` has duplicate keys",
-                            self.definition.name
-                        )));
+                        return Err(BicDbError::UniqueIndexConflict {
+                            index: self.definition.name.clone(),
+                        });
                     }
                 }
             } else {
@@ -22041,6 +22040,16 @@ fn evaluate_index_predicate(record: &Record, predicate: &IndexPredicate) -> Resu
                 }
                 IndexPredicateBinaryOperator::Implies => {
                     left.as_bool() == Some(false) || right.as_bool() == Some(true)
+                }
+                IndexPredicateBinaryOperator::JsonHasKey => {
+                    right.as_str().is_some_and(|key| match &left {
+                        Value::Object(object) => object.contains_key(key),
+                        Value::Array(values) => {
+                            values.iter().any(|value| value.as_str() == Some(key))
+                        }
+                        Value::String(value) => value == key,
+                        _ => false,
+                    })
                 }
                 IndexPredicateBinaryOperator::Contains => left
                     .as_str()

@@ -325,10 +325,9 @@ impl BicDb {
                 match shard.get(&claim_key) {
                     Some(owner) if *owner != tx.id.0 => {
                         drop(shard);
-                        return Err(BicDbError::Index(format!(
-                            "unique index `{}` has duplicate keys",
-                            state.definition.name
-                        )));
+                        return Err(BicDbError::UniqueIndexConflict {
+                            index: state.definition.name.clone(),
+                        });
                     }
                     Some(_) => {}
                     None => {
@@ -999,10 +998,9 @@ impl BicDb {
                     .get_mut(&encoded)
                     .expect("inserted durable unique key");
                 if pks.iter().any(|pk| pk != new_id) {
-                    return Err(BicDbError::Index(format!(
-                        "unique index `{}` has duplicate keys",
-                        definition.name
-                    )));
+                    return Err(BicDbError::UniqueIndexConflict {
+                        index: definition.name.clone(),
+                    });
                 }
                 pks.insert(new_id.to_string());
             }

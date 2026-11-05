@@ -15,10 +15,11 @@ Supported constraint classes:
   `SET DEFAULT` when the referencing columns have BicDB-supported constant or
   sequence defaults.
 
-Constraints are immediate. BicDB accepts explicit `NOT DEFERRABLE` metadata,
-but rejects `DEFERRABLE` and `INITIALLY ...` constraint characteristics with
-SQLSTATE `0A000` instead of pretending to support deferred transaction-time
-validation.
+Foreign keys support `DEFERRABLE INITIALLY IMMEDIATE`, `DEFERRABLE INITIALLY
+DEFERRED`, and transaction-local `SET CONSTRAINTS` timing. Savepoints restore
+timing and queued checks; invalid final references abort commit with 23503.
+Other constraint classes remain immediate. See [deferred foreign keys](postgresql-procedural.md#deferred-foreign-keys)
+for the supported timing commands and constraint-trigger limits.
 
 `ALTER TABLE ... ADD CONSTRAINT` validates existing rows before committing the
 catalog change by default. Add `NOT VALID` to skip that initial scan for
@@ -63,8 +64,34 @@ Current limits:
 - `SET DEFAULT` foreign-key actions require a supported default on each
   referencing column; otherwise the action sets `NULL`, which can still fail
   `NOT NULL` or foreign-key validation.
-- Foreign-key enforcement is immediate and non-deferrable; deferred constraint
-  transactions are explicitly unsupported.
+- Deferred timing is implemented for foreign keys. Named timing changes for
+  other constraint classes, and ALL when constraint triggers are present, fail
+  explicitly.
 - `ALTER TABLE DROP CONSTRAINT IF EXISTS` removes persisted `UNIQUE`, `CHECK`,
   and `FOREIGN KEY` table constraints by name. Dropping primary keys is not
   supported.
+
+## JSON-key partial unique indexes
+
+A JSONB column may be tested for a top-level key in a partial-index predicate:
+
+```sql
+CREATE UNIQUE INDEX monitoring_occurrence_key
+ON assignments ((payload_json->>'occurrence_key'))
+WHERE payload_json ? 'occurrence_key';
+```
+
+Object keys count even when their value is JSON null. String array elements and
+an equal scalar JSON string also match, following JSONB `?` semantics. Missing
+keys, SQL NULL, nested-only keys and other scalar values stay outside the index.
+Predicates compose with supported AND/OR, tenant comparisons and soft-delete
+checks. Index membership is updated with writes and survives reopening the DB.
+Runtime uniqueness failures return SQLSTATE 23505 and the index's constraint
+name; native host callers receive a conflict rather than an internal error.
+
+New JSON expression-index definitions retain the column root: for example,
+`payload_json->>'occurrence_key'` indexes `payload_json.occurrence_key`. Older
+builds could persist a path that omitted `payload_json`. Those existing SQL
+indexes need to be recreated from their SQL definitions under the corrected
+runtime; rebuilding stored index contents alone retains their old field paths.
+Recreating a unique index must validate existing records and refuse duplicates.

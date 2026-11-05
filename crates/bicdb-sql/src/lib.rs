@@ -3110,6 +3110,8 @@ struct ColumnSchema {
 enum PgTypeModifier {
     /// Durable Oracle BLOB provenance, independent of native BYTEA value semantics.
     OracleBlobV1,
+    /// Identity-bearing BLOB cells, fenced by durable Oracle metadata format 7.
+    OracleBlobV2,
 
     /// Compiler-local PL/SQL buffer units; never a physical table declaration.
     OracleRoutineCharacterV1 {
@@ -3160,7 +3162,7 @@ enum PgTypeModifier {
 impl PgTypeModifier {
     fn catalog_value(&self) -> i64 {
         match self {
-            Self::OracleBlobV1 => -1,
+            Self::OracleBlobV1 | Self::OracleBlobV2 => -1,
             Self::OracleNationalV1 { length, .. }
             | Self::OracleRoutineCharacterV1 { length, .. } => {
                 length.map_or(-1, |n| i64::from(n) + 4)

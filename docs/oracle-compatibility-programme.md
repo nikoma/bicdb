@@ -708,3 +708,14 @@ Durable value identity, current-owner resolution, stored-column binding,
 authorized row-backed mutation, legacy source-type reconciliation and complete
 application acceptance remain open; this prerequisite does not implement those
 operations or replace the accepted application deployment.
+
+## Persistent BLOB storage integration
+
+[Identity-bearing cells and transactional owner metadata](oracle-blob-storage.md)
+add a storage layer beneath future persistent locators. New Oracle-preview BLOB
+columns use reader-fenced metadata format 7; PostgreSQL BYTEA remains native.
+SQL copies and replacements receive independent identities, while unchanged
+values survive primary-key moves. Owner changes share native row transactions.
+This does not connect stored values to the read-version layer or implement
+persistent APPEND. DDL lifecycle coverage, legacy source-manifest reconciliation,
+full application acceptance and the remaining programme work stay open.

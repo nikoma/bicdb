@@ -86,15 +86,16 @@ impl<'db> SqlSession<'db> {
             }
             match load_schema(self.db_ref(), &table) {
                 Ok(Some(schema))
-                    if schema.constraints.iter().any(|constraint| {
-                        matches!(
-                            constraint,
-                            ConstraintSchema::ForeignKey {
-                                deferrable: true,
-                                ..
-                            }
-                        )
-                    }) =>
+                    if oracle::lob_storage::has_columns(&schema)
+                        || schema.constraints.iter().any(|constraint| {
+                            matches!(
+                                constraint,
+                                ConstraintSchema::ForeignKey {
+                                    deferrable: true,
+                                    ..
+                                }
+                            )
+                        }) =>
                 {
                     return ControlFlow::Break(Ok(true))
                 }

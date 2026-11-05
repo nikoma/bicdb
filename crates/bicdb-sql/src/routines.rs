@@ -839,7 +839,9 @@ pub(crate) fn parse_routine_param(arg: &str, index: usize) -> Result<RoutinePara
             // This is logical provenance, not a PostgreSQL length/precision
             // modifier. Discarding it would turn BLOB IN/OUT parameters back
             // into ordinary bytea values during routine compilation.
-            Some(PgTypeModifier::OracleBlobV1) => Some(PgTypeModifier::OracleBlobV1),
+            Some(PgTypeModifier::OracleBlobV1 | PgTypeModifier::OracleBlobV2) => {
+                Some(PgTypeModifier::OracleBlobV1)
+            }
             Some(PgTypeModifier::OracleNationalV1 { fixed, .. }) => {
                 Some(PgTypeModifier::OracleNationalV1 {
                     fixed,

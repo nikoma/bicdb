@@ -82,16 +82,16 @@ use bicdb_core::{
 };
 use bicdb_sql::{
     copy_cluster_role_catalog, ensure_primary_key_indexes, ensure_unique_constraint_indexes,
-    format_pg_lsn, infer_parameter_types, infer_query_result_columns_for_describe,
-    infer_query_result_types, is_role_membership_ddl, parse_database_ddl,
-    parse_pg_canonical_special, parse_transaction_control_for_profile, pg_type_from_data_type,
-    postgres_jsonb_text, routine_exception_counts_snapshot, split_sql_statements, DatabaseDdl,
-    PgBinaryCodec, PgBitString, PgCanonicalValue, PgDate, PgFloat8, PgGeometric, PgInterval,
-    PgIpAddress, PgMacAddress, PgNetwork, PgNetworkKind, PgNumeric, PgPoint, PgRange, PgRangeBound,
-    PgSnapshot, PgTime, PgTimeTz, PgTimestamp, PgTsQuery, PgTsVector, SqlError, SqlErrorField,
-    SqlResult, SqlRowStream, SqlSession, SqlSessionCatalogCache, SqlSessionDdlUndoLog,
-    SqlSessionGucState, SqlSessionRuntime, SqlValue, TransactionControl,
-    POSTGRES_COMPATIBILITY_VERSION, POSTGRES_COMPATIBILITY_VERSION_NUM,
+    format_pg_lsn, infer_parameter_types, infer_query_result_column_metadata,
+    infer_query_result_columns_for_describe, infer_query_result_types, is_role_membership_ddl,
+    parse_database_ddl, parse_pg_canonical_special, parse_transaction_control_for_profile,
+    pg_type_from_data_type, postgres_jsonb_text, routine_exception_counts_snapshot,
+    split_sql_statements, DatabaseDdl, PgBinaryCodec, PgBitString, PgCanonicalValue, PgDate,
+    PgFloat8, PgGeometric, PgInterval, PgIpAddress, PgMacAddress, PgNetwork, PgNetworkKind,
+    PgNumeric, PgPoint, PgRange, PgRangeBound, PgSnapshot, PgTime, PgTimeTz, PgTimestamp,
+    PgTsQuery, PgTsVector, SqlError, SqlErrorField, SqlResult, SqlRowStream, SqlSession,
+    SqlSessionCatalogCache, SqlSessionDdlUndoLog, SqlSessionGucState, SqlSessionRuntime, SqlValue,
+    TransactionControl, POSTGRES_COMPATIBILITY_VERSION, POSTGRES_COMPATIBILITY_VERSION_NUM,
 };
 use hmac::{Hmac, Mac};
 use pbkdf2::pbkdf2_hmac;
@@ -3792,7 +3792,11 @@ fn execute_server_sql_for_describe_inner(
         let db = server.read_db_for_transaction_progress()?;
         if let Some(columns) = infer_query_result_columns_for_describe(&db, sql)? {
             let (names, types): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
-            return Ok(SqlResult::empty(names).with_column_types(types));
+            let mut result = SqlResult::empty(names).with_column_types(types);
+            if let Some(metadata) = infer_query_result_column_metadata(&db, sql)? {
+                result = result.with_column_metadata(metadata);
+            }
+            return Ok(result);
         }
     }
     execute_server_db_sql(

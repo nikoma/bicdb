@@ -3465,3 +3465,88 @@ async fn oracle_anonymous_host_commit_boundaries_preserve_durable_work() {
     drop(client);
     connection.await.unwrap();
 }
+
+#[tokio::test]
+async fn persistent_blob_storage_keeps_pg_binary_transport_and_transaction_rollback() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "oracle-preview-v1");
+    let (client, connection) = transaction_defaults_connect(&server, "oracle-preview-v1").await;
+    client.batch_execute("CREATE TABLE blob_transport(id NUMBER PRIMARY KEY,b BLOB,n NUMBER); INSERT INTO blob_transport VALUES(1,HEXTORAW('00FF'),0)").await.unwrap();
+    let prepared = client
+        .prepare("SELECT b FROM blob_transport WHERE id=1")
+        .await
+        .unwrap();
+    assert_eq!(
+        prepared.columns()[0].type_(),
+        &tokio_postgres::types::Type::BYTEA
+    );
+    assert!(prepared.columns()[0].table_oid().is_some());
+    assert_eq!(prepared.columns()[0].column_id(), Some(2));
+    assert_eq!(
+        client
+            .query_one(&prepared, &[])
+            .await
+            .unwrap()
+            .get::<_, Vec<u8>>(0),
+        vec![0, 255]
+    );
+    client.batch_execute("BEGIN; UPDATE blob_transport SET b=HEXTORAW('AB') WHERE id=1; SAVEPOINT retained; UPDATE blob_transport SET id=3 WHERE id=1; ROLLBACK TO SAVEPOINT retained").await.unwrap();
+    assert_eq!(
+        client
+            .query_one(&prepared, &[])
+            .await
+            .unwrap()
+            .get::<_, Vec<u8>>(0),
+        vec![0xab]
+    );
+    client.batch_execute("ROLLBACK").await.unwrap();
+    assert_eq!(
+        client
+            .query_one(&prepared, &[])
+            .await
+            .unwrap()
+            .get::<_, Vec<u8>>(0),
+        vec![0, 255]
+    );
+    client.batch_execute("INSERT INTO blob_transport SELECT 2,b,n FROM blob_transport WHERE id=1; DELETE FROM blob_transport WHERE id=1").await.unwrap();
+    assert_eq!(
+        client
+            .query_one("SELECT b FROM blob_transport WHERE id=2", &[])
+            .await
+            .unwrap()
+            .get::<_, Vec<u8>>(0),
+        vec![0, 255]
+    );
+    for name in ["__bicdb_oracle_lob_owners", "__bicdb_sql_compatibility"] {
+        assert!(client
+            .simple_query(&format!("SELECT * FROM \"{name}\""))
+            .await
+            .is_err());
+    }
+    drop(client);
+    connection.await.unwrap();
+}
+
+#[tokio::test]
+async fn postgres_quoted_column_origin_metadata_preserves_distinct_case() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = Running::with_profile(directory.path(), "postgres");
+    let (client, connection) = transaction_defaults_connect(&server, "postgres").await;
+    client.batch_execute(r#"CREATE TABLE "OriginCase"("V" BYTEA,"v" BYTEA); INSERT INTO "OriginCase" VALUES('\xab'::bytea,'\xcd'::bytea)"#).await.unwrap();
+    let query = client
+        .prepare(r#"SELECT "Q"."V","Q"."v" FROM "OriginCase" AS "Q""#)
+        .await
+        .unwrap();
+    assert!(query.columns()[0].table_oid().is_some());
+    assert_eq!(
+        query.columns()[0].table_oid(),
+        query.columns()[1].table_oid()
+    );
+    assert_eq!(query.columns()[0].column_id(), Some(1));
+    assert_eq!(query.columns()[1].column_id(), Some(2));
+    let row = client.query_one(&query, &[]).await.unwrap();
+    assert_eq!(row.get::<_, Vec<u8>>(0), vec![0xab]);
+    assert_eq!(row.get::<_, Vec<u8>>(1), vec![0xcd]);
+    drop(client);
+    connection.await.unwrap();
+}

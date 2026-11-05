@@ -108,7 +108,7 @@ pub(crate) fn catalog_type(db: &BicDb, args: &[SqlValue]) -> Result<SqlValue> {
         return Ok(SqlValue::String(format!("{kind}({length} {unit})")));
     }
     let value = match column.type_modifier {
-        Some(PgTypeModifier::OracleBlobV1) => Some("BLOB".into()),
+        Some(PgTypeModifier::OracleBlobV1 | PgTypeModifier::OracleBlobV2) => Some("BLOB".into()),
         Some(PgTypeModifier::OracleTemporalV1 {
             source: Source::Date,
             ..

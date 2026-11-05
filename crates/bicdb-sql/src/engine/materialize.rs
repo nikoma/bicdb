@@ -1549,20 +1549,20 @@ impl<'db> SqlEngine<'db> {
 
         let direct_column = |expr: &Expr| -> Option<SqlColumnMetadata> {
             let (qualifier, column) = match expr {
-                Expr::Identifier(identifier) => (None, identifier.value.to_ascii_lowercase()),
+                Expr::Identifier(identifier) => (None, ident_value(identifier)),
                 Expr::CompoundIdentifier(parts) => (
                     parts
                         .get(parts.len().checked_sub(2)?)
-                        .map(|part| part.value.to_ascii_lowercase()),
-                    parts.last()?.value.to_ascii_lowercase(),
+                        .map(|part| ident_value(part)),
+                    ident_value(parts.last()?),
                 ),
                 Expr::Nested(inner) => match inner.as_ref() {
-                    Expr::Identifier(identifier) => (None, identifier.value.to_ascii_lowercase()),
+                    Expr::Identifier(identifier) => (None, ident_value(identifier)),
                     Expr::CompoundIdentifier(parts) => (
                         parts
                             .get(parts.len().checked_sub(2)?)
-                            .map(|part| part.value.to_ascii_lowercase()),
-                        parts.last()?.value.to_ascii_lowercase(),
+                            .map(|part| ident_value(part)),
+                        ident_value(parts.last()?),
                     ),
                     _ => return None,
                 },
@@ -1612,8 +1612,7 @@ impl<'db> SqlEngine<'db> {
                     let SelectItemQualifiedWildcardKind::ObjectName(qualifier) = qualifier else {
                         return None;
                     };
-                    let alias =
-                        unqualified_relation(&object_name(qualifier).ok()?).to_ascii_lowercase();
+                    let alias = unqualified_relation(&object_name(qualifier).ok()?).to_string();
                     let relation = relations.iter().find(|relation| relation.alias == alias)?;
                     metadata.extend(
                         relation
@@ -1667,7 +1666,7 @@ impl<'db> SqlEngine<'db> {
             } => {
                 let alias_name = alias
                     .as_ref()
-                    .map(|alias| alias.name.value.clone())
+                    .map(|alias| ident_value(&alias.name))
                     .unwrap_or_else(|| "subquery".to_string());
                 let columns = self.query_output_columns(subquery)?;
                 let alias_columns = alias
@@ -1679,7 +1678,7 @@ impl<'db> SqlEngine<'db> {
                     .map(|(name, _)| (name, SqlColumnMetadata::default()))
                     .collect();
                 relations.push(RelationColumnMetadata {
-                    alias: alias_name.to_ascii_lowercase(),
+                    alias: alias_name,
                     columns,
                 });
                 Some(())
@@ -1694,7 +1693,7 @@ impl<'db> SqlEngine<'db> {
                 let short = table.rsplit('.').next().unwrap_or(&table).to_string();
                 let alias_name = alias
                     .as_ref()
-                    .map(|alias| alias.name.value.clone())
+                    .map(|alias| ident_value(&alias.name))
                     .unwrap_or_else(|| short.clone());
                 let alias_columns = alias
                     .as_ref()
@@ -1708,19 +1707,18 @@ impl<'db> SqlEngine<'db> {
                         .ok()
                         .flatten()?;
                     let table_oid = table_oids(self.db_ref()).get(&resolved).copied()? as i32;
-                    typed_columns
-                        .into_iter()
-                        .map(|(name, _)| {
-                            let column = schema.column(&name)?;
-                            let attribute_number = schema
-                                .columns
-                                .iter()
-                                .position(|candidate| {
-                                    candidate.name.eq_ignore_ascii_case(&column.name)
-                                })
-                                .and_then(|index| i16::try_from(index + 1).ok())?;
+                    // Type inference folds its lookup keys. Origin metadata
+                    // must use persisted identifiers, including quoted names
+                    // that differ only in case.
+                    schema
+                        .columns
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, column)| !column.hidden)
+                        .map(|(index, column)| {
+                            let attribute_number = i16::try_from(index + 1).ok()?;
                             Some((
-                                name,
+                                column.name.clone(),
                                 SqlColumnMetadata {
                                     table_oid,
                                     attribute_number,
@@ -1736,7 +1734,7 @@ impl<'db> SqlEngine<'db> {
                         .collect()
                 };
                 relations.push(RelationColumnMetadata {
-                    alias: alias_name.to_ascii_lowercase(),
+                    alias: alias_name,
                     columns,
                 });
                 Some(())

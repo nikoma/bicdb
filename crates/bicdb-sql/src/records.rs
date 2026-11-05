@@ -450,6 +450,13 @@ pub(crate) fn validate_record_batch_local_constraints(
 }
 
 fn validate_record_columns(table: &str, schema: &TableSchema, record: &Record) -> Result<()> {
+    for column in schema
+        .columns
+        .iter()
+        .filter(|column| oracle::lob_storage::is_column(column))
+    {
+        oracle::lob_storage::read(record, table, &column.name)?;
+    }
     // One decode per column serves both the NOT NULL and the type check
     // (each used to decode every column from storage JSON on its own); the
     // checks still run in their original order so the reported violation is
@@ -1934,7 +1941,10 @@ fn rewrite_legacy_typed_record(record: &mut Record, schema: &TableSchema) -> Res
     };
     let mut replacements = Vec::new();
     for column in schema.columns.iter().filter(|column| {
-        !column.hidden && column.user_type.is_none() && uses_typed_storage(&column.pg_type)
+        !column.hidden
+            && column.user_type.is_none()
+            && !oracle::lob_storage::is_column(column)
+            && uses_typed_storage(&column.pg_type)
     }) {
         let Some((key, stored)) = metadata
             .iter()
@@ -2422,6 +2432,16 @@ pub(crate) fn record_schema_column_value(
     column: &ColumnSchema,
     use_record_id_for_primary_key: bool,
 ) -> SqlValue {
+    if oracle::lob_storage::is_column(column) {
+        return record
+            .metadata
+            .get(&column.name)
+            .map(|value| {
+                oracle::lob_storage::binary_value(value)
+                    .unwrap_or_else(|_| SqlValue::Json(value.clone().into()))
+            })
+            .unwrap_or(SqlValue::Null);
+    }
     if column.primary_key {
         if column.pg_type == "json" {
             if let Some(value) = record.metadata.get(&column.name) {
@@ -4504,6 +4524,9 @@ pub(crate) fn column_storage_envelope(
 ) -> Result<StorageEnvelope> {
     if matches!(value, SqlValue::Null) {
         return Ok(StorageEnvelope::Plain(JsonValue::Null));
+    }
+    if column.is_some_and(oracle::lob_storage::is_column) {
+        return oracle::lob_storage::storage(value).map(StorageEnvelope::Plain);
     }
     if let Some(column) = column.filter(|column| column.user_type.is_some()) {
         let composite = match &value {

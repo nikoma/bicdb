@@ -59,10 +59,12 @@ separate source results from native core/session tests. The earlier
 [ownership probe](evidence/oracle-persistent-blob-ownership-2026-11-05/README.md)
 records operation-specific copy/APPEND errors.
 
-Durable per-value IDs, current-owner lookup, stored-column read binding,
-rebinding an old locator's read snapshot for a later transaction's write,
-authorized APPEND, index/constraint maintenance without ordinary UPDATE
-triggers, and explicit legacy-column reconciliation remain integration work.
+[Identity-bearing BLOB storage](oracle-blob-storage.md) adds durable per-value
+IDs and transactional current-owner metadata as a separate layer. Stored-column
+read-version binding, rebinding an old locator's read snapshot for a later
+transaction's write, authorized APPEND, index/constraint maintenance without
+ordinary UPDATE triggers, DDL lifecycle integration and explicit legacy-column
+reconciliation remain integration work.
 The later transaction's rollback baseline must come from the current owner,
 not from an old locator's cached bytes. Cross-transaction reuse observations
 are source requirements, not implemented rebinding acceptance.

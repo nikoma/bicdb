@@ -9,7 +9,7 @@ pub(crate) fn modifier(db: &BicDb, data_type: &DataType) -> Result<Option<PgType
         return Ok(None);
     }
     match data_type {
-        DataType::Blob(None) => Ok(Some(PgTypeModifier::OracleBlobV1)),
+        DataType::Blob(None) => Ok(Some(PgTypeModifier::OracleBlobV2)),
         DataType::Blob(Some(_)) => Err(unsupported(
             "Oracle BLOB declarations do not accept a length",
         )),
@@ -19,11 +19,13 @@ pub(crate) fn modifier(db: &BicDb, data_type: &DataType) -> Result<Option<PgType
 
 pub(crate) fn validate(db: &BicDb, schema: &TableSchema) -> Result<()> {
     for column in &schema.columns {
-        if matches!(column.type_modifier, Some(PgTypeModifier::OracleBlobV1))
+        if lobs::is_modifier(column.type_modifier.as_ref())
             && (column.pg_type != "bytea"
                 || column.user_type.is_some()
                 || column.array_ndims != 0
-                || !metadata_v6_enabled(db)?)
+                || !metadata_v6_enabled(db)?
+                || (matches!(column.type_modifier, Some(PgTypeModifier::OracleBlobV2))
+                    && !metadata_v7_enabled(db)?))
         {
             return Err(unsupported(
                 "invalid or unfenced Oracle BLOB column metadata",
@@ -37,7 +39,13 @@ pub(crate) fn prepare_save(db: &mut BicDb, schema: &TableSchema) -> Result<()> {
     if schema
         .columns
         .iter()
-        .any(|c| matches!(c.type_modifier, Some(PgTypeModifier::OracleBlobV1)))
+        .any(|column| matches!(column.type_modifier, Some(PgTypeModifier::OracleBlobV2)))
+    {
+        enable_metadata_v7(db)?;
+    } else if schema
+        .columns
+        .iter()
+        .any(|column| lobs::is_modifier(column.type_modifier.as_ref()))
     {
         enable_metadata_v6(db)?;
     }
@@ -80,17 +88,17 @@ mod tests {
         .unwrap()
         .rows;
         assert_eq!(
-            expected[0],
-            vec![
-                SqlValue::String("\\x00ff".into()),
-                SqlValue::String("\\xab".into())
-            ]
+            expected[0]
+                .iter()
+                .map(SqlValue::to_cell)
+                .collect::<Vec<_>>(),
+            vec!["\\x00ff", "\\xab"]
         );
         assert_eq!(expected[1], vec![SqlValue::Null, SqlValue::Null]);
         let schema = load_schema(&db, "BINARY_VALUES").unwrap().unwrap();
         assert!(matches!(
             schema.columns[1].type_modifier,
-            Some(PgTypeModifier::OracleBlobV1)
+            Some(PgTypeModifier::OracleBlobV2)
         ));
         assert!(schema.columns[2].type_modifier.is_none());
         assert_eq!(run(&mut db,"SELECT bicdb_oracle_column_type('\"BINARY_VALUES\"','PAYLOAD'),bicdb_oracle_column_type('\"BINARY_VALUES\"','NATIVE_BYTES') FROM DUAL").unwrap().rows[0],vec![SqlValue::String("BLOB".into()),SqlValue::Null]);
@@ -154,12 +162,18 @@ mod tests {
         assert_eq!(
             run(&mut db, "SELECT payload FROM binary_values")
                 .unwrap()
-                .rows,
+                .rows
+                .iter()
+                .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
             before
+                .iter()
+                .map(|row| row.iter().map(SqlValue::to_cell).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
         );
         assert!(matches!(
             load_schema(&db, "BINARY_VALUES").unwrap().unwrap().columns[0].type_modifier,
-            Some(PgTypeModifier::OracleBlobV1)
+            Some(PgTypeModifier::OracleBlobV2)
         ));
         run(&mut db, "ALTER TABLE binary_values ADD extra BLOB").unwrap();
         assert!(matches!(
@@ -169,7 +183,7 @@ mod tests {
                 .column("EXTRA")
                 .unwrap()
                 .type_modifier,
-            Some(PgTypeModifier::OracleBlobV1)
+            Some(PgTypeModifier::OracleBlobV2)
         ));
         assert!(run(&mut db, "CREATE TABLE invalid_binary(v BLOB(10))").is_err());
     }

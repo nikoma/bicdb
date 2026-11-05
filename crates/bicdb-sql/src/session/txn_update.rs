@@ -5651,7 +5651,8 @@ impl<'db> SqlSession<'db> {
         target_alias: &str,
         schema: &TableSchema,
     ) -> Result<Option<SqlResult>> {
-        if !stored_update::enabled()
+        if oracle::lob_storage::has_columns(schema)
+            || !stored_update::enabled()
             || !ir_update_plan::enabled()
             || self.tx.is_none()
             || !ctes.is_empty()
@@ -5758,7 +5759,11 @@ impl<'db> SqlSession<'db> {
         from_rows: Option<&RowSet>,
         target_columns: &Arc<Vec<String>>,
     ) -> Result<Option<SqlResult>> {
-        if !stored_update::enabled() || self.tx.is_none() || !ctes.is_empty() {
+        if oracle::lob_storage::has_columns(schema)
+            || !stored_update::enabled()
+            || self.tx.is_none()
+            || !ctes.is_empty()
+        {
             return Ok(None);
         }
         if schema.rls_enabled

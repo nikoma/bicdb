@@ -4143,7 +4143,7 @@ pub(crate) fn row_from_record(
     SQL_ROW_FROM_RECORD_CALLS.with(|calls| *calls.borrow_mut() += 1);
 
     if let Some(schema) = schema {
-        return Ok(row_from_record_with_schema(table, alias, schema, record));
+        return row_from_record_with_schema(table, alias, schema, record);
     }
 
     let fields = FieldRef::wildcard(schema);
@@ -4178,7 +4178,7 @@ pub(crate) fn row_from_record_with_schema(
     alias: &str,
     schema: &TableSchema,
     record: &Record,
-) -> SqlRow {
+) -> Result<SqlRow> {
     let visible_column_count = schema
         .columns
         .iter()
@@ -4196,7 +4196,11 @@ pub(crate) fn row_from_record_with_schema(
             table,
             alias,
             &column.name,
-            record_schema_column_value(record, column, true),
+            if oracle::lob_storage::is_column(column) {
+                oracle::lob_storage::read(record, table, &column.name)?
+            } else {
+                record_schema_column_value(record, column, true)
+            },
         );
     }
     if let Some(geometry) = &record.geometry {
@@ -4216,7 +4220,7 @@ pub(crate) fn row_from_record_with_schema(
             insert_row_value(&mut row, table, alias, key, json_to_sql_value(value));
         }
     }
-    row
+    Ok(row)
 }
 
 pub(crate) fn row_from_virtual_row<I>(table: &str, alias: &str, source: I) -> SqlRow

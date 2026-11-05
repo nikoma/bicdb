@@ -1871,6 +1871,11 @@ pub(crate) fn cast_value_to_column_type(
     value: SqlValue,
     column: &ColumnSchema,
 ) -> Result<SqlValue> {
+    if oracle::lob_storage::is_column(column)
+        && matches!(&value,SqlValue::OracleLob(blob) if blob.stored_descriptor().is_some())
+    {
+        return Ok(value);
+    }
     if let Some(user_type) = &column.user_type {
         return cast_value_to_user_type(value, user_type);
     }

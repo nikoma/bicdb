@@ -24,6 +24,7 @@ mod function_attributes;
 pub(crate) mod hierarchy;
 pub mod host_binds;
 pub(crate) mod lob_columns;
+pub(crate) mod lob_storage;
 pub mod lobs;
 pub(crate) mod lock_waits;
 mod namespaces;
@@ -49,7 +50,7 @@ pub(crate) mod text_patterns;
 pub const ORACLE_HR_PROFILE: &str = "oracle-hr-v1";
 pub const ORACLE_PREVIEW_PROFILE: &str = "oracle-preview-v1";
 pub const POSTGRES_PROFILE: &str = "postgres";
-const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
+pub(crate) const PROFILE_COLLECTION: &str = "__bicdb_sql_compatibility";
 
 fn metadata_v2() -> JsonValue {
     serde_json::json!({"format":2,"profile":ORACLE_PREVIEW_PROFILE,"features":["oracle_temporal_columns_v1"]})
@@ -73,11 +74,50 @@ fn metadata_v6() -> JsonValue {
         .push(serde_json::json!("oracle_blob_columns_v1"));
     value
 }
+fn metadata_v7() -> JsonValue {
+    let mut value = metadata_v6();
+    value["format"] = serde_json::json!(7);
+    value["features"]
+        .as_array_mut()
+        .expect("feature array")
+        .push(serde_json::json!("oracle_blob_value_identity_v1"));
+    value
+}
+fn metadata_v7_enabled(db: &BicDb) -> Result<bool> {
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Err(BicDbError::CollectionNotFound(_)) => Ok(false),
+        Err(error) => Err(error.into()),
+        Ok(record) => Ok(record.is_some_and(|record| record.metadata == metadata_v7())),
+    }
+}
+fn enable_metadata_v7(db: &mut BicDb) -> Result<()> {
+    if !preview_routine_language_enabled(db)? {
+        return Err(unsupported(
+            "Persistent BLOB identity requires the durable Oracle preview profile",
+        ));
+    }
+    if !metadata_v7_enabled(db)? {
+        db.insert(
+            PROFILE_COLLECTION,
+            Record::new("profile").with_metadata(metadata_v7()),
+        )?;
+    }
+    if !db
+        .collections()
+        .iter()
+        .any(|collection| collection.name == lob_storage::OWNERS)
+    {
+        db.create_collection(lob_storage::OWNERS)?;
+    }
+    Ok(())
+}
 fn metadata_v6_enabled(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
         Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
-        Ok(record) => Ok(record.is_some_and(|r| r.metadata == metadata_v6())),
+        Ok(record) => Ok(
+            record.is_some_and(|r| (r.metadata == metadata_v6() || r.metadata == metadata_v7()))
+        ),
     }
 }
 fn enable_metadata_v6(db: &mut BicDb) -> Result<()> {
@@ -98,9 +138,10 @@ fn metadata_v5_enabled(db: &BicDb) -> Result<bool> {
     match db.get(PROFILE_COLLECTION, "profile") {
         Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
-        Ok(record) => {
-            Ok(record.is_some_and(|r| r.metadata == metadata_v5() || r.metadata == metadata_v6()))
-        }
+        Ok(record) => Ok(record.is_some_and(|r| {
+            r.metadata == metadata_v5()
+                || (r.metadata == metadata_v6() || r.metadata == metadata_v7())
+        })),
     }
 }
 fn enable_metadata_v5(db: &mut BicDb) -> Result<()> {
@@ -141,7 +182,7 @@ fn metadata_v3_enabled(db: &BicDb) -> Result<bool> {
         r.metadata == metadata_v3()
             || r.metadata == metadata_v4()
             || r.metadata == metadata_v5()
-            || r.metadata == metadata_v6()
+            || (r.metadata == metadata_v6() || r.metadata == metadata_v7())
     }))
 }
 fn enable_metadata_v3(db: &mut BicDb) -> Result<()> {
@@ -165,7 +206,7 @@ fn matches_profile(metadata: &JsonValue, profile: &str) -> bool {
                 || *metadata == metadata_v3()
                 || *metadata == metadata_v4()
                 || *metadata == metadata_v5()
-                || *metadata == metadata_v6())
+                || (*metadata == metadata_v6() || *metadata == metadata_v7()))
 }
 
 fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
@@ -174,7 +215,7 @@ fn metadata_v2_enabled(db: &BicDb) -> Result<bool> {
             || record.metadata == metadata_v3()
             || record.metadata == metadata_v4()
             || record.metadata == metadata_v5()
-            || record.metadata == metadata_v6()),
+            || (record.metadata == metadata_v6() || record.metadata == metadata_v7())),
         Ok(None) | Err(BicDbError::CollectionNotFound(_)) => Ok(false),
         Err(error) => Err(error.into()),
     }

@@ -22,7 +22,10 @@ pub(crate) fn enabled() -> bool {
     ENABLED.with(std::cell::Cell::get)
 }
 pub(crate) fn is_modifier(modifier: Option<&PgTypeModifier>) -> bool {
-    matches!(modifier, Some(PgTypeModifier::OracleBlobV1))
+    matches!(
+        modifier,
+        Some(PgTypeModifier::OracleBlobV1 | PgTypeModifier::OracleBlobV2)
+    )
 }
 pub(crate) fn routine_type(data_type: &DataType) -> Result<Option<RoutineTypeSchema>> {
     if !enabled() {
@@ -194,6 +197,7 @@ pub(crate) fn append(
 enum Storage {
     Empty,
     Temporary,
+    Stored(super::lob_storage::Descriptor),
 }
 
 /// An execution value with binary wire encoding and private locator provenance.
@@ -214,6 +218,7 @@ impl std::fmt::Debug for Value {
                 &match &self.storage {
                     Storage::Empty => "empty",
                     Storage::Temporary => "temporary",
+                    Storage::Stored(_) => "stored",
                 },
             )
             .field("length", &self.bytes.len())
@@ -232,6 +237,18 @@ impl Value {
         Self {
             storage: Storage::Temporary,
             bytes,
+        }
+    }
+    pub(crate) fn stored(descriptor: super::lob_storage::Descriptor, bytes: Vec<u8>) -> Self {
+        Self {
+            storage: Storage::Stored(descriptor),
+            bytes,
+        }
+    }
+    pub(crate) fn stored_descriptor(&self) -> Option<&super::lob_storage::Descriptor> {
+        match &self.storage {
+            Storage::Stored(descriptor) => Some(descriptor),
+            _ => None,
         }
     }
     pub(crate) fn bytes(&self) -> &[u8] {
@@ -261,6 +278,9 @@ impl Value {
 
 pub(crate) fn coerce(value: SqlValue) -> Result<SqlValue> {
     match value {
+        SqlValue::OracleLob(ref blob) if blob.stored_descriptor().is_some() => Err(unsupported(
+            "stored BLOB locator execution requires read-version binding",
+        )),
         SqlValue::Null | SqlValue::OracleLob(_) => Ok(value),
         _ => Err(unsupported(
             "BLOB assignment requires a qualified binary conversion",
@@ -300,6 +320,11 @@ pub(crate) fn scalar(name: &str, args: &[SqlValue]) -> Result<Option<SqlValue>> 
             match value {
                 SqlValue::Null => Ok(Some(SqlValue::Null)),
                 SqlValue::OracleLob(value) => {
+                    if value.stored_descriptor().is_some() {
+                        return Err(unsupported(
+                            "stored BLOB locator execution requires read-version binding",
+                        ));
+                    }
                     Ok(Some(SqlValue::Int(if name.ends_with("getlength") {
                         value.bytes().len() as i64
                     } else {

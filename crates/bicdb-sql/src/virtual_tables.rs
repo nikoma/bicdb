@@ -24,6 +24,8 @@ pub(crate) fn index_field_is_expression(field: &IndexField) -> bool {
 pub(crate) fn is_internal_sql_collection(name: &str) -> bool {
     [
         SCHEMA_COLLECTION,
+        oracle::PROFILE_COLLECTION,
+        oracle::lob_storage::OWNERS,
         NAMESPACE_COLLECTION,
         DATABASE_COLLECTION,
         EXTENSION_COLLECTION,
@@ -1874,6 +1876,18 @@ impl Projection {
                         type_modifier: column.catalog_typmod() as i32,
                     }
                 }
+                ProjectedRecordField::Field(FieldRef::OracleBlobColumn { name, .. }) => {
+                    SqlColumnMetadata {
+                        table_oid: relation_oid,
+                        attribute_number: schema
+                            .columns
+                            .iter()
+                            .position(|column| column.name.eq_ignore_ascii_case(name))
+                            .and_then(|index| i16::try_from(index + 1).ok())
+                            .unwrap_or_default(),
+                        type_modifier: -1,
+                    }
+                }
                 ProjectedRecordField::Field(_) => SqlColumnMetadata::default(),
             })
             .collect()
@@ -1956,6 +1970,7 @@ impl ProjectedRecordField {
             Self::SchemaColumn { column, .. } => Some(column.pg_type.clone()),
             Self::Field(FieldRef::PrimaryKey { pg_type, .. }) => Some(pg_type.clone()),
             Self::Field(FieldRef::TypedColumn { pg_type, .. }) => Some(pg_type.clone()),
+            Self::Field(FieldRef::OracleBlobColumn { .. }) => Some("bytea".into()),
             Self::Field(_) => None,
         }
     }
@@ -2047,13 +2062,18 @@ pub(crate) fn schema_projected_field(field: FieldRef, schema: Option<&TableSchem
     };
     let column = match field {
         FieldRef::Column(column) | FieldRef::JsonColumn(column) => column,
-        FieldRef::TypedColumn { name, .. } => name,
+        FieldRef::TypedColumn { name, .. } | FieldRef::OracleBlobColumn { name, .. } => name,
         other => return other,
     };
     let Some(schema_column) = schema.column(&column).filter(|column| !column.hidden) else {
         return FieldRef::Column(column);
     };
-    if schema_column.primary_key {
+    if oracle::lob_storage::is_column(schema_column) {
+        FieldRef::OracleBlobColumn {
+            name: schema_column.name.clone(),
+            collection: schema.name.clone(),
+        }
+    } else if schema_column.primary_key {
         FieldRef::PrimaryKey {
             name: schema_column.name.clone(),
             pg_type: schema_column_projected_pg_type(schema_column),
@@ -2132,7 +2152,8 @@ pub(crate) fn validate_projected_field(
         | FieldRef::Literal(_) => Ok(()),
         FieldRef::Column(column)
         | FieldRef::JsonColumn(column)
-        | FieldRef::TypedColumn { name: column, .. } => {
+        | FieldRef::TypedColumn { name: column, .. }
+        | FieldRef::OracleBlobColumn { name: column, .. } => {
             ensure_schema_column(&schema.name, schema, column)
         }
         FieldRef::MetadataPath(_) => Ok(()),
@@ -2157,6 +2178,10 @@ pub(crate) enum FieldRef {
         array_delimiter: Option<char>,
     },
     Column(String),
+    OracleBlobColumn {
+        name: String,
+        collection: String,
+    },
     TypedColumn {
         name: String,
         pg_type: String,
@@ -2173,6 +2198,7 @@ pub(crate) enum FieldRef {
 impl FieldRef {
     fn declared_pg_type(&self) -> Option<String> {
         match self {
+            Self::OracleBlobColumn { .. } => Some("bytea".into()),
             Self::PrimaryKey { pg_type, .. } | Self::TypedColumn { pg_type, .. } => {
                 Some(pg_type.clone())
             }
@@ -2237,7 +2263,16 @@ impl FieldRef {
                 .columns
                 .iter()
                 .filter(|column| !column.hidden)
-                .map(schema_column_field_ref)
+                .map(|column| {
+                    if oracle::lob_storage::is_column(column) {
+                        Self::OracleBlobColumn {
+                            name: column.name.clone(),
+                            collection: schema.name.clone(),
+                        }
+                    } else {
+                        schema_column_field_ref(column)
+                    }
+                })
                 .collect();
         }
         vec![
@@ -2342,7 +2377,7 @@ impl FieldRef {
             Self::Geometry => "geometry".to_string(),
             Self::PrimaryKey { name, .. } => name.clone(),
             Self::Column(name) | Self::JsonColumn(name) => name.clone(),
-            Self::TypedColumn { name, .. } => name.clone(),
+            Self::TypedColumn { name, .. } | Self::OracleBlobColumn { name, .. } => name.clone(),
             Self::MetadataPath(path) => format!("metadata.{}", path.join(".")),
             Self::Literal(value) => value.to_cell(),
             Self::Cast(base, _) => base.name(),
@@ -2410,6 +2445,7 @@ impl FieldRef {
                 .timestamp
                 .map(SqlValue::Int)
                 .unwrap_or(SqlValue::Null))),
+            Self::OracleBlobColumn { .. } => None,
             Self::PrimaryKey { name, pg_type, .. } => match lookup(cells, name) {
                 Some(cell) if is_json_pg_type(pg_type) => {
                     typed_json_cell_to_sql_value(cell).map(Ok)
@@ -2476,6 +2512,9 @@ impl FieldRef {
 
     pub(crate) fn value(&self, record: &Record) -> Result<SqlValue> {
         Ok(match self {
+            Self::OracleBlobColumn { name, collection } => {
+                oracle::lob_storage::read(record, collection, name)?
+            }
             Self::Id => SqlValue::String(record.id.clone()),
             Self::Metadata => SqlValue::Json(
                 record
@@ -3841,7 +3880,8 @@ pub(crate) fn index_field_from_field_ref(field: &FieldRef) -> Result<IndexField>
         )),
         FieldRef::Column(column)
         | FieldRef::JsonColumn(column)
-        | FieldRef::TypedColumn { name: column, .. } => {
+        | FieldRef::TypedColumn { name: column, .. }
+        | FieldRef::OracleBlobColumn { name: column, .. } => {
             Ok(IndexField::MetadataPath(vec![column.clone()]))
         }
         FieldRef::MetadataPath(path) => Ok(IndexField::MetadataPath(path.clone())),

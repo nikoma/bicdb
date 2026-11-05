@@ -168,6 +168,30 @@ pub fn infer_query_result_columns_for_describe(
     infer_describe_columns(db, sql, true)
 }
 
+/// Resolve direct-column origins without executing the query. Names and types
+/// alone are insufficient for an extended-protocol RowDescription. Computed
+/// expressions retain default origin metadata, and unsupported query shapes
+/// return None rather than evaluating projections or acquiring row locks.
+pub fn infer_query_result_column_metadata(
+    db: &BicDb,
+    sql: &str,
+) -> Result<Option<Vec<SqlColumnMetadata>>> {
+    if oracle::collections::declaration(db, sql)?.is_some() {
+        return Ok(None);
+    }
+    let mut statements = parse_inference_statements(db, sql)?;
+    if statements.len() != 1 {
+        return Ok(None);
+    }
+    let Statement::Query(query) = statements.remove(0) else {
+        return Ok(None);
+    };
+    let SetExpr::Select(select) = query.body.as_ref() else {
+        return Ok(None);
+    };
+    Ok(SqlEngine::new(db).select_column_metadata(select))
+}
+
 fn infer_describe_columns(
     db: &BicDb,
     sql: &str,

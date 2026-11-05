@@ -850,7 +850,8 @@ impl<'db> SqlSession<'db> {
         table: &str,
         schema: &Arc<TableSchema>,
     ) -> Result<bool> {
-        if !stored_update::enabled()
+        if oracle::lob_storage::has_columns(schema)
+            || !stored_update::enabled()
             || self.tx.is_none()
             || insert.on.is_some()
             || insert.returning.is_some()

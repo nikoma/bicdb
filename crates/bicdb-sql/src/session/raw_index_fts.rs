@@ -1675,8 +1675,33 @@ impl<'db> SqlSession<'db> {
     pub(crate) fn insert_session_records(
         &mut self,
         table: &str,
-        mut records: Vec<Record>,
+        records: Vec<Record>,
     ) -> Result<()> {
+        self.insert_session_records_with_blob_mode(table, records, false)
+    }
+
+    pub(crate) fn insert_session_records_for_key_move<'record>(
+        &mut self,
+        table: &str,
+        records: impl IntoIterator<Item = (&'record Record, Record)>,
+    ) -> Result<()> {
+        let mut prepared = Vec::new();
+        for (before, mut after) in records {
+            self.prepare_blob_records(table, std::slice::from_mut(&mut after), Some(before))?;
+            prepared.push(after);
+        }
+        self.insert_session_records_with_blob_mode(table, prepared, true)
+    }
+
+    fn insert_session_records_with_blob_mode(
+        &mut self,
+        table: &str,
+        mut records: Vec<Record>,
+        prepared: bool,
+    ) -> Result<()> {
+        if !prepared {
+            self.prepare_blob_records(table, &mut records, None)?;
+        }
         self.materialize_full_text_projections(table, &mut records)?;
         let record_count = records.len();
         // Resolve the protection check before borrowing the transaction so the
@@ -1734,6 +1759,7 @@ impl<'db> SqlSession<'db> {
     {
         let mut records = records.into_iter().collect::<Vec<_>>();
         for (record, _) in &mut records {
+            self.prepare_blob_records(table, std::slice::from_mut(record), None)?;
             self.materialize_full_text_projections(table, std::slice::from_mut(record))?;
         }
         let record_count = records.len();
@@ -1786,6 +1812,7 @@ impl<'db> SqlSession<'db> {
     {
         let mut records = records.into_iter().collect::<Vec<_>>();
         for (record, _, _) in &mut records {
+            self.prepare_blob_records(table, std::slice::from_mut(record), None)?;
             self.materialize_full_text_projections(table, std::slice::from_mut(record))?;
         }
         let record_count = records.len();
@@ -2148,6 +2175,7 @@ impl<'db> SqlSession<'db> {
         if ids.is_empty() {
             return Ok(0);
         }
+        self.remove_blob_owners(table, &ids)?;
         let protected = self.db_ref().collection_policy(table)?.is_some()
             || self
                 .db_ref()

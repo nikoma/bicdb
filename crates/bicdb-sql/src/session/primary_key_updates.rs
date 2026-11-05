@@ -122,12 +122,14 @@ impl SqlSession<'_> {
                 .columns
                 .iter()
                 .map(|column| {
-                    (
-                        column.name.clone(),
-                        record_column_value(&candidate.record, schema, &column.name),
-                    )
+                    let value = if oracle::lob_storage::is_column(column) {
+                        oracle::lob_storage::read(&candidate.record, table, &column.name)?
+                    } else {
+                        record_column_value(&candidate.record, schema, &column.name)
+                    };
+                    Ok((column.name.clone(), value))
                 })
-                .collect::<BTreeMap<_, _>>();
+                .collect::<Result<BTreeMap<_, _>>>()?;
             // All expressions read the original row, including when several
             // assignments mention a key that this same statement changes.
             for assignment in &update.assignments {
@@ -236,7 +238,10 @@ impl SqlSession<'_> {
                     false,
                     Some(&self.sql_engine()),
                 )?;
-                self.insert_session_records(table, vec![after.clone()])?;
+                self.insert_session_records_for_key_move(
+                    table,
+                    std::iter::once((&candidate.record, after.clone())),
+                )?;
             }
             pairs.push((candidate.record, after));
         }
@@ -265,7 +270,10 @@ impl SqlSession<'_> {
                 false,
                 Some(&self.sql_engine()),
             )?;
-            self.insert_session_records(table, after)?;
+            self.insert_session_records_for_key_move(
+                table,
+                pairs.iter().map(|(before, after)| (before, after.clone())),
+            )?;
         }
         self.publish_extension_database_events(
             table,

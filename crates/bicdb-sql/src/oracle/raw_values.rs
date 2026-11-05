@@ -160,8 +160,8 @@ mod tests {
         run(&mut db,"CREATE PROCEDURE save_raw_value IS BEGIN INSERT INTO raw_value VALUES(HEXTORAW('ABC')); END;").unwrap();
         run(&mut db, "CALL save_raw_value()").unwrap();
         assert_eq!(
-            run(&mut db, "SELECT payload FROM raw_value").unwrap().rows[0][0],
-            SqlValue::String("\\x0abc".into())
+            run(&mut db, "SELECT payload FROM raw_value").unwrap().rows[0][0].to_cell(),
+            "\\x0abc"
         );
     }
     #[test]

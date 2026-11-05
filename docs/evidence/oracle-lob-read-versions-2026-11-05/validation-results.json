@@ -1,0 +1,80 @@
+{
+  "format": 1,
+  "source_base_commit": "81d57faff95a3918792956274b4a464496080826",
+  "scope": "Internal origin-local read histories and SQL session cache transport, not stored-column locator execution",
+  "source_sha256": {
+    "crates/bicdb-sql/src/oracle/lobs/history.rs": "c67847a0f68cf4c77cb6b30019cdb060408e09c54747e9cc416b0e32cf050c69",
+    "crates/bicdb-sql/src/oracle/lobs.rs": "2d85420a199c7d8770754874e536c6c664455bb1ba6d28326e51f03a4e0087f0",
+    "crates/bicdb-sql/src/session.rs": "c810c7d61fe34dda4f06db14a53c8f007e1b5a61f5b6d6515fedc4708e737480",
+    "examples/oracle/reference/persistent_blob_acquisition.py": "b28ed5157e3fae2a809366c0bb85ee15179f1f9696a8f16cf7ce7de5d6129871",
+    "examples/oracle/reference/persistent_blob_ownership.py": "4a6a37d3b5f7dd2e7d21576a241ec9996099e93778d63bbf87023aa0c810367a"
+  },
+  "full_sql_library_before_retention_follow_up": {
+    "passed": 668,
+    "ignored": 3,
+    "failed": 0,
+    "note": "Completed before history-only retention changes and three additional focused tests; not a full final-tree rerun"
+  },
+  "final_focused_history_tests": {
+    "passed": 15,
+    "failed": 0,
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "oracle::lobs::history",
+      "--",
+      "--test-threads=1"
+    ]
+  },
+  "final_oracle_protocol_tests": {
+    "passed": 45,
+    "failed": 0
+  },
+  "final_general_protocol_tests": {
+    "passed": 177,
+    "failed": 0
+  },
+  "workspace_all_targets": "passed",
+  "native_acquisition_source": {
+    "version": "23.26.3.0.0",
+    "unique_cases": 11,
+    "observations": 22,
+    "matched": 22,
+    "cleanup_verified": true,
+    "compared_to_bicdb": false
+  },
+  "ownership_probe_wrapper_regression": {
+    "matched": 16,
+    "total": 16,
+    "cleanup_verified": true
+  },
+  "resource_guard": {
+    "start_gib": 18,
+    "minimum_gib": 12,
+    "interrupted_broader_run": true,
+    "interruption_exit_code": 125,
+    "completed_oracle_suite_preserved": true,
+    "remaining_protocol_and_workspace_resumed": "passed"
+  },
+  "environment": {
+    "host": "Linux x86_64",
+    "rust": "1.96.0",
+    "jobs": 1,
+    "incremental": false,
+    "test_threads": 1,
+    "native_history_test_fsync": false
+  },
+  "persistent_sql_execution_implemented": false,
+  "durable_value_identity_implemented": false,
+  "later_transaction_write_rebinding_implemented": false,
+  "source_metadata_reconciliation_applied": false,
+  "original_application_test_class_rerun": false,
+  "application_replaced": false,
+  "candidate_deployed": false,
+  "published_release": false,
+  "programme_complete": false
+}

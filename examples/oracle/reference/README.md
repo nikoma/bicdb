@@ -741,3 +741,9 @@ a BicDB target. It isolates locator reads, SQL copies and APPEND errors after
 row deletion, replacement, primary-key changes, commit and rollback. See the
 [recorded source contract](../../../docs/evidence/oracle-persistent-blob-ownership-2026-11-05/README.md)
 for the eight cases, reproduction command and remaining implementation scope.
+
+`persistent_blob_acquisition.py` complements ownership checks with ordinary and
+locked acquisition, origin commit/rollback, and later-transaction reuse. It is
+also a native source-only probe. See the
+[acquisition evidence](../../../docs/evidence/oracle-lob-read-versions-2026-11-05/README.md)
+and [read-version layer contract](../../../docs/oracle-lob-read-versions.md).

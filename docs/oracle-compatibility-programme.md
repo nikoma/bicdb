@@ -694,3 +694,17 @@ ORA-22275. Uncommitted replacement instead raises ORA-22922 for APPEND while
 retaining readable/copyable old bytes. Committing either invalidation also
 invalidates the observed old locator's reads and copies. These are implementation
 requirements, not delivered persistent-LOB support or application qualification.
+
+## Persistent BLOB read-version infrastructure
+
+[Origin-local read histories](oracle-lob-read-versions.md) use transaction/write
+receipts to preserve copied snapshots, rollback prefixes, acquisition modes and
+origin commit outcomes across short-lived SQL sessions. The registry is lazy,
+weakly held and distinct across nested transaction contexts. Completed histories
+release obsolete change versions. The
+[source acquisition probe](evidence/oracle-lob-read-versions-2026-11-05/README.md)
+records further requirements for read modes and later-transaction locator reuse.
+Durable value identity, current-owner resolution, stored-column binding,
+authorized row-backed mutation, legacy source-type reconciliation and complete
+application acceptance remain open; this prerequisite does not implement those
+operations or replace the accepted application deployment.

@@ -1,5 +1,7 @@
 //! Runtime BLOB values. Locator capabilities never cross JSON or wire boundaries.
 use super::*;
+mod history;
+pub(crate) use history::State;
 
 thread_local! { static ENABLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 

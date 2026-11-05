@@ -92,8 +92,8 @@ def observe(factory, repetitions=2):
     return report
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(observer=observe, description=__doc__):
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--oracle-config", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repetitions", type=int, default=2, choices=range(1, 11))
@@ -111,7 +111,7 @@ def main():
                                 host=config["host"], port=config["port"],
                                 service_name=config["service_name"])
 
-    report = observe(factory, args.repetitions)
+    report = observer(factory, args.repetitions)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps({name: report[name] for name in ("success", "matched", "total")}))
     return 0 if report["success"] else 1

@@ -1,0 +1,634 @@
+{
+  "format": 1,
+  "reference": "oracle",
+  "cases": [
+    {
+      "id": "old_locked_writer_rollback",
+      "repeat": 0,
+      "actual": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "old_locked_writer_savepoint",
+      "repeat": 0,
+      "actual": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "OK",
+        "rows": [
+          [
+            1,
+            "AB0102"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "OK",
+        "rows": [
+          [
+            1,
+            "AB0102"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "old_snapshot_writer_rollback",
+      "repeat": 0,
+      "actual": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "read_replace_commit",
+      "repeat": 0,
+      "actual": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "CD"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "CD"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "read_delete_commit",
+      "repeat": 0,
+      "actual": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": []
+      },
+      "expected": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": []
+      },
+      "matched": true
+    },
+    {
+      "id": "mixed_writers_commit",
+      "repeat": 0,
+      "actual": {
+        "d": "AB02",
+        "e": "AB02",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB02"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB02",
+        "e": "AB02",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB02"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "locked_after_write_rollback",
+      "repeat": 0,
+      "actual": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "read_after_write_rollback",
+      "repeat": 0,
+      "actual": {
+        "d": "AB",
+        "e": "AB01",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB",
+        "e": "AB01",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "snapshot_destination_commit",
+      "repeat": 0,
+      "actual": {
+        "d": "AB01",
+        "e": "AB",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB01",
+        "e": "AB",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "snapshot_independent_commit",
+      "repeat": 0,
+      "actual": {
+        "d": "AB",
+        "e": "AB",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB",
+        "e": "AB",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "new_value_rollback",
+      "repeat": 0,
+      "actual": {
+        "d": "CD",
+        "e": "CD",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "CD",
+        "e": "CD",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "old_locked_writer_rollback",
+      "repeat": 1,
+      "actual": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "old_locked_writer_savepoint",
+      "repeat": 1,
+      "actual": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "OK",
+        "rows": [
+          [
+            1,
+            "AB0102"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "OK",
+        "rows": [
+          [
+            1,
+            "AB0102"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "old_snapshot_writer_rollback",
+      "repeat": 1,
+      "actual": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB01",
+        "e": "AB01",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "read_replace_commit",
+      "repeat": 1,
+      "actual": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "CD"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "CD"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "read_delete_commit",
+      "repeat": 1,
+      "actual": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": []
+      },
+      "expected": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": []
+      },
+      "matched": true
+    },
+    {
+      "id": "mixed_writers_commit",
+      "repeat": 1,
+      "actual": {
+        "d": "AB02",
+        "e": "AB02",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB02"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB02",
+        "e": "AB02",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB02"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "locked_after_write_rollback",
+      "repeat": 1,
+      "actual": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB",
+        "e": "AB",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "read_after_write_rollback",
+      "repeat": 1,
+      "actual": {
+        "d": "AB",
+        "e": "AB01",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB",
+        "e": "AB01",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "snapshot_destination_commit",
+      "repeat": 1,
+      "actual": {
+        "d": "AB01",
+        "e": "AB",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB01",
+        "e": "AB",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "snapshot_independent_commit",
+      "repeat": 1,
+      "actual": {
+        "d": "AB",
+        "e": "AB",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "AB",
+        "e": "AB",
+        "x": "AB01",
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB01"
+          ]
+        ]
+      },
+      "matched": true
+    },
+    {
+      "id": "new_value_rollback",
+      "repeat": 1,
+      "actual": {
+        "d": "CD",
+        "e": "CD",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "expected": {
+        "d": "CD",
+        "e": "CD",
+        "x": null,
+        "append_code": "ORA22920",
+        "rows": [
+          [
+            1,
+            "AB"
+          ]
+        ]
+      },
+      "matched": true
+    }
+  ],
+  "cleanup_errors": [],
+  "original_objects_mutated": false,
+  "target_compared": false,
+  "application_qualified": false,
+  "implementation_qualified": false,
+  "source_version": "23.26.3.0.0",
+  "connection_closed": true,
+  "total": 22,
+  "matched": 22,
+  "success": true
+}
